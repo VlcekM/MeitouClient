@@ -84,6 +84,9 @@ commitment, not a proven single leak.
 
 ### A0. Measure the frame first
 
+The repeatable measure is now `--play-bench` on Metal with the frozen bench save ([bench](bench.md#play-benchmark)):
+per-frame interval, sections, render-thread stages, command-buffer GPU time and allocation; A/B by build or option.
+
 - Add/keep a trace that prints, per frame: total frame time, command-buffer GPU time, CPU record time, and
   `NextDrawable` wait. `MEITOU_METAL_TRACE=1` already prints CPU/GPU and resource counts.
 - Take one `dotnet-trace --profile dotnet-sampled-thread-time` capture while the window is frontmost; separate
@@ -124,9 +127,30 @@ rendering:
 - Re-run the same-window comparison after this step; it may expose the existing GPU headroom without touching the
   renderers.
 
+**Current state.** The scene's command buffer is committed first and the drawable is taken afterwards, for the present pass's own
+command buffer (`MetalContext.Present`, `MetalDisplay.TryNextDrawable`); the slot wait still reuses a slot only after its command buffer
+completed, so the constants ring is safe with the late drawable. `presentDrawable:afterMinimumDuration:` is not used: vsync frames are
+already even. A windowed vsync-off run is held to the display rate by the window server (**Observed**; not the drawable order, an opaque
+layer or the window size): benchmark in full screen.
+
+Bandwidth: render targets that are not storage images are private without `shaderWrite` or `pixelFormatView` usage, so Metal may compress
+them losslessly (`MetalContext.CreateTexture`); the GI albedo attachment and the reflection's multisampled depth are `DontCare` on store
+(`StoreActionFor`). Open: the reflection's multisampled colour is still stored and re-loaded by its resolve pass (folding the resolve into
+the pass would avoid it), the render encoders that split the scene (each reloads colour and depth) are not counted, and an `MTLResidencySet`
+(macOS 15+) is not used for the bindless table (`BindBindlessTable` batches `useResources` once per encoder).
+
+### Metal memory budget default
+
+The guard's default is `MetalMemoryBudget.DefaultMb`: a third of the Mac's memory in 256 MB steps, from 5120 to 10240 MB, never above the
+device's recommended working set (5376 on 16 GB, 8192 on 24 GB). It used to be 5120 on every Mac (chosen for a 16 GB M1 Pro), which on a
+24 GB M6 made the guard clamp the ranges to x0.15 and skip the terrain material cache. The launcher's **Auto** budget passes nothing so
+the game's default applies; its fixed Safe, Balanced and High sizes are unchanged. **Unknown:** how it behaves on a 16 GB Mac.
+
+
 ### A2. Port the GPU-side draw path
 
-The mesh/rock cull is now ported and live on Metal: `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
+The mesh/rock cull is ported but opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`; status in
+[metal-gpu-cull-plan](metal-gpu-cull-plan.md)): `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
 backend-neutral, and `MetalFrame.PreFrame` is a command buffer of its own committed before the frame. The remaining
 A2 work is grass and the other indirect draw producers; the concrete plan is in
 [metal-gpu-cull-plan](metal-gpu-cull-plan.md).
@@ -381,7 +405,8 @@ MEITOU_METAL_TRACE=1 ...
 ... --render-scale 0.83
 ... --render-scale native
 
-# Validation gate (not a performance run)
+# Validation gate (not a performance run). Observed 2026-11-12 (M6, macOS 27.2): it aborts at master bb829167 with
+# "Fragment Function(fragment_main): missing Buffer binding at index 30 for pc[0]" (a push-constant block not pushed)
 MTL_DEBUG_LAYER=1 dotnet run --project src/Meitou.Game -c Release -- \
   --renderer metal --screenshot /tmp/metal-gate.png --no-population --time 8 \
   --distance 2000 --pitch 45 --faithful clouds,cloudshadows --no-gi

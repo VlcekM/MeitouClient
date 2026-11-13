@@ -205,6 +205,11 @@ sealed class GameOptions
     /// </summary>
     public string Renderer = "vulkan";
     /// <summary>
+    /// <c>--metal-gpu-budget &lt;MB&gt;</c>: the Metal memory guard's ceiling for this run, over <c>MEITOU_METAL_GPU_BUDGET_MB</c> (the launcher's
+    /// setting); null: that, else the default.
+    /// </summary>
+    public ulong? MetalGpuBudgetMb;
+    /// <summary>
     /// With <c>--screenshot</c>: a staged scene to check behaviour offscreen (<c>--scene</c>: fight, turret, bed, acid, menu; ScreenshotScenes).
     /// </summary>
     public string? Scene;
@@ -271,7 +276,10 @@ sealed class GameOptions
           --play-bench <dir>         with --load (or a new game): the game driven by a script (idle, camera orbit, zoom, pan, a long travel, time x2 and x5, talk, trade,
                                      a container, doors, a pick-up, path requests, a walk, a fight, loot, the panels, a horizon view, the overview), every frame measured
                                      (frame, update, world tick steps and systems, render stages, GPU stages, collections); writes frames.csv and summary.md there and
-                                     quits; frame limit and vsync off; MEITOU_BENCH_ONLY=a,b keeps those segments
+                                     quits; frame limit and vsync off (a later --vsync turns vsync on); MEITOU_BENCH_ONLY=a,b keeps those segments;
+                                     works with --renderer metal too (GPU time per frame, no GPU stages)
+          --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
+                                     default a third of the Mac's memory, 5120 to 10240)
           --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
@@ -460,6 +468,10 @@ sealed class GameOptions
                 }
             case "--play-bench":
                 (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
+                break;
+            case "--metal-gpu-budget":
+                g.MetalGpuBudgetMb = ulong.Parse(Next(), CultureInfo.InvariantCulture);
+                if (g.MetalGpuBudgetMb == 0) throw new ArgumentException("--metal-gpu-budget must be a size in MB above 0");
                 break;
             case "--no-precompile":
                 g.NoPrecompile = true;

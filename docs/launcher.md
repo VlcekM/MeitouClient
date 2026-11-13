@@ -144,9 +144,11 @@ brew.sh, and **Check** re-detects the loader. Metal starts without the Vulkan lo
 `DYLD_LIBRARY_PATH`. The launcher reads the release's `settings-schema.json` `renderers` list, so a Vulkan-only release does not
 silently claim Metal support. The launcher runs installed GitHub releases, not local checkouts.
 
-On Apple silicon, Settings also has a **Metal memory budget**: Safe 5120 MB (default), Balanced 6144 MB and, on 16 GB-or-larger
-Macs, High 8120 MB. It is the game's soft `VramGuard` ceiling, not a hard VRAM reservation; Apple silicon uses unified memory
-shared with macOS and other apps. The launcher passes it as `MEITOU_METAL_GPU_BUDGET_MB` only when it starts Metal. The
+On Apple silicon, Settings also has a **Metal memory budget**: Auto (default), Safe 5120 MB, Balanced 6144 MB and, on 16 GB-or-larger
+Macs, High 8120 MB. Auto passes nothing and the game sizes the ceiling to the Mac's memory (a third of it, 5120 to 10240 MB: 5376 on 16 GB,
+8192 on 24 GB). It is the game's soft `VramGuard` ceiling, not a hard VRAM reservation; Apple silicon uses unified memory
+shared with macOS and other apps. The launcher passes a chosen size as `MEITOU_METAL_GPU_BUDGET_MB` only when it starts Metal. A
+`launcher.json` that stored 5120 before Auto existed keeps it. The
 experimental GPU foliage cull is deliberately not exposed here or in the game: it has caused GPU progress timeouts, so the
 launcher clears any inherited `MEITOU_METAL_GPU_CULL` before Play.
 

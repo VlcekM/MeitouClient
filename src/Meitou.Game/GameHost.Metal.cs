@@ -25,11 +25,6 @@ sealed partial class GameHost
     /// </summary>
     int Metal()
     {
-        if (GameOptions.PlayBench is not null)
-        {
-            Console.Error.WriteLine("metal     --play-bench is Vulkan-only (its late-pipeline and display timings are Vulkan's).");
-            return 2;
-        }
         MetalRenderer = true;
         // The banks and the output device load on a worker while the window, the world and the renderers are made; the loop reads the world on
         // another behind its loading screen.

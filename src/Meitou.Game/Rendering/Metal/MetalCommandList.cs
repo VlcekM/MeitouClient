@@ -92,6 +92,15 @@ public sealed class MetalCommandList : IGpuCommandList
     /// Counts <see cref="Invalidate"/> calls (<see cref="Epoch"/>).
     /// </summary>
     long _epoch;
+    /// <summary>
+    /// Counts the render and compute encoders this list has opened; the one open now is the last.
+    /// </summary>
+    long _encoderSerial;
+    /// <summary>
+    /// The encoder (<see cref="_encoderSerial"/>) and the bindless table version (<see cref="MetalBindlessTable.Version"/>) the encoder was last told
+    /// the table's textures at; -1 before the first. A resource made resident stays so for the encoder's life, so it is told once.
+    /// </summary>
+    long _residentSerial = -1, _residentVersion = -1;
 
     /// <summary>
     /// The redundancy filters, on by default (validated in the 2026-10-24 Metal run); <c>MEITOU_METAL_NO_STATE_CACHE=1</c> reissues every state for
@@ -205,7 +214,7 @@ public sealed class MetalCommandList : IGpuCommandList
             var attachment = attachments.Object(0);
             attachment.Texture = _ctx.ViewTexture(d.Colour.View);
             attachment.LoadAction = LoadAction(d.Colour.Load);
-            attachment.StoreAction = MTLStoreAction.Store;
+            attachment.StoreAction = _ctx.StoreActionFor(d.Colour.View, depth: false);
             attachment.ClearColor = new MTLClearColor
             {
                 red = d.Colour.Clear.R, green = d.Colour.Clear.G, blue = d.Colour.Clear.B, alpha = d.Colour.Clear.A,
@@ -220,7 +229,7 @@ public sealed class MetalCommandList : IGpuCommandList
             var extra = attachments.Object(1);
             extra.Texture = _ctx.ViewTexture(d.Extra.View);
             extra.LoadAction = LoadAction(d.Extra.Load);
-            extra.StoreAction = MTLStoreAction.Store;
+            extra.StoreAction = _ctx.StoreActionFor(d.Extra.View, depth: false);
             extra.ClearColor = new MTLClearColor { red = d.Extra.Clear.R, green = d.Extra.Clear.G, blue = d.Extra.Clear.B, alpha = d.Extra.Clear.A };
             attachments.SetObject(extra, 1);
         }
@@ -230,11 +239,12 @@ public sealed class MetalCommandList : IGpuCommandList
             var depth = descriptor.DepthAttachment;
             depth.Texture = _ctx.ViewTexture(d.Depth.View);
             depth.LoadAction = LoadAction(d.Depth.Load);
-            depth.StoreAction = MTLStoreAction.Store;
+            depth.StoreAction = _ctx.StoreActionFor(d.Depth.View, depth: true);
             depth.ClearDepth = d.Depth.DepthClear;
         }
 
         _render = _command.RenderCommandEncoder(descriptor);
+        _encoderSerial++;
         Array.Clear(_vertexBufferState);
         Array.Clear(_vertexOffsetState);
         Array.Clear(_fragmentBufferState);
@@ -696,7 +706,7 @@ public sealed class MetalCommandList : IGpuCommandList
                 if (binding.Buffer.Buffer.IsNull) continue;
 
                 var (buffer, offset) = _ctx.Buffer(binding.Buffer);
-                UseResource(buffer, MTLResourceUsage.Read, computePass);
+                UseResource(buffer, BufferUsage(binding.Kind, computePass), computePass);
                 entries[at] = buffer.GpuAddress + offset;
             }
             else
@@ -727,6 +737,14 @@ public sealed class MetalCommandList : IGpuCommandList
             BindVertexBuffer(MetalShaders.VertexBlockBase + set, argumentBuffer, constants.Offset);
         else BindFragmentBuffer(set, argumentBuffer, constants.Offset);
     }
+
+    /// <summary>
+    /// How the encoder is told a buffer of an argument buffer is used. A compute pass's storage buffers may be written (the engine's compute shaders
+    /// declare which are <c>readonly</c>, but the argument buffer hides that from Metal): declared read-only, a buffer one dispatch writes and the next
+    /// reads (the foliage cull's counts, offsets, fades and rows) gets no ordering between the encoders, and the reader runs on stale data.
+    /// </summary>
+    static MTLResourceUsage BufferUsage(GpuBindingKind kind, bool computePass) =>
+        computePass && kind == GpuBindingKind.StorageBuffer ? MTLResourceUsage.Read | MTLResourceUsage.Write : MTLResourceUsage.Read;
 
     /// <summary>
     /// Tells the current encoder a resource the argument buffer holds; the compute encoder needs it for its writes too.
@@ -775,17 +793,40 @@ public sealed class MetalCommandList : IGpuCommandList
                 BindFragmentBuffer(MslTranslator.TableBinding, fragment, 0);
         }
 
-        _ctx.BindlessTable.UseResources(this);
+        var bindless = _ctx.BindlessTable;
+        if (_residentSerial != _encoderSerial || _residentVersion != bindless.Version)
+        {
+            bindless.UseResources(this);
+            (_residentSerial, _residentVersion) = (_encoderSerial, bindless.Version);
+        }
+
         Stats.DescriptorPushes++;
     }
 
     /// <summary>
-    /// Tells the encoder a resource the shaders read through the argument buffer (not through a direct binding).
+    /// The <c>useResources:count:usage:</c> selector.
     /// </summary>
-    internal void UseResource(MTLTexture texture)
+    static readonly Selector UseResourcesSelector = new("useResources:count:usage:");
+
+    /// <summary>
+    /// <c>useResources:count:usage:</c> on an encoder: <paramref name="count"/> resources' native pointers, one usage for all.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern unsafe void UseResourcesMessage(IntPtr encoder, IntPtr selector, nint* resources, ulong count, ulong usage);
+
+    /// <summary>
+    /// Tells the open encoder, in one call, the textures the argument buffer's entries hold (the first <paramref name="count"/> native pointers of
+    /// <paramref name="textures"/>): the shaders read them through the table, not through a binding the encoder could see.
+    /// </summary>
+    internal unsafe void UseResources(nint[] textures, int count)
     {
-        if (_render.NativePtr != IntPtr.Zero) _render.UseResource(texture, MTLResourceUsage.Read);
-        else if (_compute.NativePtr != IntPtr.Zero) _compute.UseResource(texture, MTLResourceUsage.Read);
+        var encoder = _render.NativePtr != IntPtr.Zero ? _render.NativePtr : _compute.NativePtr;
+        if (count == 0 || encoder == IntPtr.Zero) return;
+
+        fixed (nint* resources = textures)
+        {
+            UseResourcesMessage(encoder, UseResourcesSelector.SelPtr, resources, (ulong)count, (ulong)MTLResourceUsage.Read);
+        }
     }
 
     /// <summary>
@@ -1164,6 +1205,7 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_render.NativePtr != IntPtr.Zero) throw new InvalidOperationException("a compute pass inside a rendering");
 
         _compute = _command.ComputeCommandEncoder();
+        _encoderSerial++;
         _pushSent.Clear();
         _lastCompute = default;
         return _compute;

@@ -26,7 +26,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--ticks <n>` | count | 0 | With `--screenshot`: run n control ticks before the picture. |
 | `--quit-after <s>` | seconds | none | Close after s seconds and print the frame rate (smoke test). |
 | `--no-precompile` | | off | Compile methods on first call, not ahead on a background thread. |
-| `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off. Works with `--load` or `--new-game`. |
+| `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off (a later `--vsync` turns vsync on). Works with `--load` or `--new-game`, on Vulkan and Metal ([bench](bench.md#play-benchmark)). |
 | `--settings-schema <file>` | path | | Writes the launcher's settings description and exits. Must be the first two arguments; no log or window. |
 | `--recommend-preset <file>` | path | | Writes the quality preset for this computer (`HardwareProbe`, [launcher](launcher.md#graphics)) as JSON and exits. Must be the first two arguments; no log or window. |
 | `--wiki-export <dir>` | folder | | Writes the agent wiki's generated JSON (zones, towns, factions, squads, NPCs, items, buildings, shops, characters, research, animals, spawns...) from the game data, mods included, and exits ([agent playtest](agent-playtest.md)). |
@@ -50,6 +50,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--fps-limit <n>` | integer | 150 (`meitou.user.json`) | Frame limit when vsync is off; 0 is unlimited. |
 | `--vsync` / `--no-vsync` | | `meitou.user.json` (off) | Vsync for this run. |
 | `--renderer <vulkan\|metal>` | vulkan or metal | vulkan | Renderer for the whole frame. Metal is macOS only; the launcher appends this. |
+| `--metal-gpu-budget <MB>` | MB above 0 | `MEITOU_METAL_GPU_BUDGET_MB`, else a third of the Mac's memory (5120 to 10240) | Metal: the memory guard's GPU allocation ceiling for this run; wins over the environment variable. |
 | `--ui <faithful\|meitou>` | | `meitou.user.json` (meitou) | UI mode, independent of graphics. |
 | `--ui-showcase` | | off | With `--screenshot`: HUD, inventory, stats, map, menus, a trade and a conversation, in either UI mode. |
 | `--ui-panel <name>` | panel name | none | With `--screenshot`: open one panel (hud, hud-expanded, inventory, stats, overview, menu, title, ...). |
@@ -264,7 +265,7 @@ The launcher takes no command-line options of its own. It passes to the game:
 - the user's launch arguments from its settings (`LauncherConfig`), split on spaces; the Graphics page warns that `--low-end` or `--benchmark-baseline` makes the game ignore the graphics sliders;
 - `--renderer <vulkan|metal>`, appended last, so it wins over a hand-written one (`MainWindow.axaml.cs`).
 
-Environment it sets for the game: `KENSHI_PATH`; on Windows with `steam_api64.dll` and **Launch as Kenshi on Steam** on, `SteamAppId` and `SteamGameId` (and a temporary `steam_appid.txt`); on macOS `MEITOU_METAL_GPU_BUDGET_MB` (Metal) or the Vulkan loader path. It removes any inherited `MEITOU_METAL_GPU_CULL` and `MEITOU_METAL_GPU_BUDGET_MB` first. It reads `DYLD_LIBRARY_PATH` on macOS (`MacSupport.cs`).
+Environment it sets for the game: `KENSHI_PATH`; on Windows with `steam_api64.dll` and **Launch as Kenshi on Steam** on, `SteamAppId` and `SteamGameId` (and a temporary `steam_appid.txt`); on macOS `MEITOU_METAL_GPU_BUDGET_MB` (Metal, unless the budget is Auto) or the Vulkan loader path. It removes any inherited `MEITOU_METAL_GPU_CULL` and `MEITOU_METAL_GPU_BUDGET_MB` first. It reads `DYLD_LIBRARY_PATH` on macOS (`MacSupport.cs`).
 
 ## Development executables
 
@@ -318,7 +319,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
 | `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
 | `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/Host/MetalGameLoop.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
-| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
+| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal video-memory budget in MB (default: a third of the Mac's memory in 256 MB steps, 5120 to 10240, never above the device's recommended working set: `MetalMemoryBudget`). The launcher sets it on macOS unless its budget is Auto; `--metal-gpu-budget` wins over it. |
 | `MEITOU_METAL_NO_TAA` | `Host/MetalGameLoop.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
 | `MEITOU_METALFX` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX upscaler (same as `--upscaler metalfx`). |
 | `MEITOU_METALFX_SPATIAL` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX spatial mode. |
@@ -337,7 +338,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_NO_FOLIAGE_MESHES` | `Host/MetalGameLoop.cs` | `1`: no foliage meshes on Metal (grass only). |
 | `MEITOU_METAL_GPU_CULL` | `Host/MetalGameLoop.cs`, `src/Meitou.Game/Rendering/Metal/MetalFrame.cs`, `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage cull (unsafe; the launcher removes it). |
 | `MEITOU_METAL_CPU_CULL` | `Host/MetalGameLoop.cs` | `1`: force the CPU foliage cull, overriding the GPU cull. |
-| `MEITOU_METAL_TRACE` | `Host/MetalGameLoop.cs` | `1`: trace output of the Metal frame loop. |
+| `MEITOU_METAL_TRACE` | `Host/MetalGameLoop.cs`, `Rendering/Metal/MetalPipelines.cs`, `MetalStage.cs` | `1`: trace output of the Metal frame loop, and each pipeline state and MSL library with its build time. |
 | `MEITOU_METAL_NO_BUILDINGS` | `Host/MetalGameLoop.cs` | `1`: skip the runtime building, ground-item and lamp updates (freeze diagnostic). |
 | `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` | `1`/`true`: particles do not write TAA's coverage alpha. |
 | `MEITOU_METAL_OVERLAY` | `Host/MetalGameLoop.cs` | `1`: add the frame-stats lines to a screenshot. |

@@ -115,7 +115,8 @@ The verified model (the MSL that spirv-cross makes, the pipeline reflection, and
 - the runtime writes the handles into one shared buffer per frame slot: a texture's handle is
   `MTLTexture.gpuResourceID`, a sampler's `MTLSamplerState.gpuResourceID`, at the members'
   offsets (`MetalBindlessTable`). A resource read only through the argument buffer must also be
-  told to the encoder (`useResource`), as `BindBindlessTable` does;
+  told to the encoder: `BindBindlessTable` does it in one batched `useResources:count:usage:` for the table's distinct
+  textures, once per encoder and table version (the residency stays for the encoder's life);
 - **every** descriptor set of a program translated with argument buffers becomes one (spirv-cross's
   `MslArgumentBuffers` is global). A set's buffer members are `constant T*` pointers, so the
   runtime fills them with the buffers' **GPU addresses** (`MTLBuffer.gpuAddress` + offset; the CPU
@@ -173,8 +174,8 @@ constant), so the Windows build compiles the game without any of it.
 `MetalContext` implements `IGpuContext` (docs/resource-layer.md), sized to the sky pass: every
 operation a later pass needs first throws (`InvalidOperationException` naming it). With it:
 
-- `MetalFrame` (the `IGpuFrame`): a slot ring of three (the layer's drawable depth) - one drawable,
-  one command buffer and one constants ring per slot (a shared `MTLBuffer`, the CPU bump-allocates
+- `MetalFrame` (the `IGpuFrame`): a slot ring of three (the layer's drawable depth) - one scene command buffer,
+  a present command buffer made at the end and one constants ring per slot (a shared `MTLBuffer`, the CPU bump-allocates
   slices; unified memory, so no staging split for the constants).
 - `MetalCommandList` (the `IGpuCommandList`): renderings (one colour + one depth attachment), the
   dynamic draw state (Metal's encoder state maps one to one: viewport, scissor, cull, winding,
@@ -189,13 +190,19 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
   blit copies from a shared staging ring, committed in order before the frame's own).
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
-  the device-local memory), views (`NewTextureView`), buffers (shared `MTLBuffer`s), persistent
-  sets (the layout and bindings recorded; the command list binds them out with dynamic offsets).
+  the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or
+  `pixelFormatView` usage, so Metal may compress it losslessly: its views are the base image), views (`NewTextureView`),
+  buffers (shared `MTLBuffer`s), persistent sets (the layout and bindings recorded; the command list binds them out with
+  dynamic offsets). A pass attachment is stored unless nothing reads it afterwards: the GI albedo target (the GI resolve is
+  not on Metal) and the reflection's multisampled depth are `DontCare`.
 - The frame loop and the present are the context's (as `GpuContext.BeginFrame`/`EndFrame` are the
   Vulkan display's): the renderers draw into an offscreen Rgba8 backbuffer (the engine's format, as
   `VulkanPresenter` has), and the present is a **flipped copy into the drawable** - Metal's blit
-  can do neither the flip nor the format, so a five-line MSL pass samples the backbuffer. The
-  host's pass model (`BeginHostPass`) mirrors `GpuContext`'s.
+  can do neither the flip nor the format, so a five-line MSL pass samples the backbuffer. The scene's command buffer is
+  committed **before** the drawable is asked for (`CAMetalLayer.nextDrawable` blocks until the display releases one); the
+  present pass and `presentDrawable` follow in a small command buffer of their own, so the GPU starts the frame while the
+  CPU waits and a late refresh no longer delays the frame's work. The host's pass model (`BeginHostPass`) mirrors
+  `GpuContext`'s.
 - The frame's timestamps are the seam's `IGpuTimestamps` now (the Vulkan `QueryArena` implements
   it); Metal's hands out slots and reads nothing - Metal's GPU counters are a sampling-point model
   of their own (MTLCounterSampleBuffer, later if wanted).
@@ -813,8 +820,8 @@ default.
 - **Tick ahead and rotors.** The live Metal loop sets the shared `tickAhead` mode (Dynamic/Always) and wraps
   `WorldFrame.Draw` in `BeginTickAhead`/`EndTickAhead`; stills, the title and the editor keep it off. `UpdateBuildings`
   also runs upstream's rotor pass, so wind generators and other `ROTATION_OUTPUT` parts turn on Metal.
-- **Play benchmark.** `--play-bench` is Vulkan-only: Metal rejects it with a message because the report's late-pipeline
-  and display timings are Vulkan's.
+- **Play benchmark.** `--play-bench` runs on Metal too (`MetalPlayBench`); what its report holds there is in
+  [bench](bench.md#play-benchmark).
 - **UI/input scope.** `MetalGameLoop` boots `PlayerInterface` for presentation (`LoadUi`, `ArrangeUi`, `Draw`),
   portraits, item icons and the map callbacks. It wires the panels' keyboard/pointer controls (I/C, M/T/Y, Esc,
   F7, F10 settings, hover/click/scroll), the strategy camera (WASD/arrows, Q/E, wheel, middle drag, edge scroll),

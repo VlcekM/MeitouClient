@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
-/// The frame being recorded, on Metal (docs/resource-layer.md): a slot ring over the display's drawables —
-/// one drawable, one command buffer and one constants buffer per slot. The constants ring is a shared buffer
-/// the CPU writes (unified memory); the frame's commands are a <see cref="MetalCommandList"/>. Begun and ended
+/// The frame being recorded, on Metal (docs/resource-layer.md): a slot ring of the frames in flight —
+/// one scene command buffer (and, once the drawable is taken, a present one) and one constants buffer per slot. The constants ring is a
+/// shared buffer the CPU writes (unified memory); the frame's commands are a <see cref="MetalCommandList"/>. Begun and ended
 /// by the context's frame loop (<see cref="MetalContext.BeginFrame"/>, <see cref="MetalContext.EndFrame"/>).
 /// </summary>
 public sealed unsafe class MetalFrame : IGpuFrame
@@ -69,20 +69,71 @@ public sealed unsafe class MetalFrame : IGpuFrame
     public IGpuTimestamps Timestamps => _ctx.Timestamps;
 
     /// <summary>
-    /// The command buffer this frame's commands are recorded into (the present pass continues it at <see cref="MetalContext.EndFrame"/>).
+    /// The command buffer this frame's commands are recorded into: the scene's work, committed by <see cref="MetalContext.EndFrame"/> before the
+    /// drawable is asked for.
     /// </summary>
-    internal MTLCommandBuffer Command { get; private set; }
+    internal MTLCommandBuffer SceneCommand { get; private set; }
 
     /// <summary>
-    /// The drawable this frame draws into (the context's <see cref="MetalDisplay.TryBeginFrame"/> gave it).
+    /// The frame's last command buffer, the one that completes last: the present's once <see cref="AdoptPresent"/> made it, else the scene's.
+    /// The queue runs them in order, so its completion covers everything the frame recorded.
+    /// </summary>
+    internal MTLCommandBuffer Command => _presentCommand.NativePtr != IntPtr.Zero ? _presentCommand : SceneCommand;
+
+    /// <summary>
+    /// The command buffer with the present pass (made once the drawable is taken); default until then and for a frame that has none.
+    /// </summary>
+    MTLCommandBuffer _presentCommand;
+
+    /// <summary>
+    /// Takes <paramref name="present"/> as the frame's present command buffer, retained like the scene's (the frame pool drains at the frame's end).
+    /// </summary>
+    internal void AdoptPresent(MTLCommandBuffer present)
+    {
+        Retain_objc_retain(present.NativePtr);
+        _presentCommand = present;
+    }
+
+    /// <summary>
+    /// Releases the frame's command buffers, logging a failed one.
+    /// </summary>
+    void ReleaseCommands()
+    {
+        if (_presentCommand.NativePtr != IntPtr.Zero) _presentCommand.Dispose();
+        _presentCommand = default;
+        if (SceneCommand.NativePtr != IntPtr.Zero) SceneCommand.Dispose();
+        SceneCommand = default;
+    }
+
+    /// <summary>
+    /// Logs the failure of the frame's scene and present command buffers, if they failed.
+    /// </summary>
+    void ReportFailure()
+    {
+        Report(SceneCommand, "scene");
+        Report(_presentCommand, "present");
+    }
+
+    /// <summary>
+    /// Logs <paramref name="command"/>'s error, if it has one.
+    /// </summary>
+    void Report(MTLCommandBuffer command, string kind)
+    {
+        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Error) return;
+
+        Console.WriteLine($"metal     frame slot {Slot} {kind} command buffer failed: {command.Error.LocalizedDescription}");
+    }
+
+    /// <summary>
+    /// The drawable this frame presents to (taken by <see cref="MetalContext.EndFrame"/>); default when none was ready.
     /// </summary>
     public CAMetalDrawable Drawable { get; internal set; }
 
     /// <summary>
-    /// Begins the slot's frame: drops the unused chunks, releases the previous command buffer (logging a failed one), binds the new command buffer
-    /// and drawable, and resets the chunks, the state tracking and the counts.
+    /// Begins the slot's frame: drops the unused chunks, releases the previous command buffers (logging a failed one), binds the new command buffer,
+    /// and resets the chunks, the state tracking and the counts.
     /// </summary>
-    internal void Begin(long number, MTLCommandBuffer command, CAMetalDrawable drawable)
+    internal void Begin(long number, MTLCommandBuffer command)
     {
         // Drop the chunks this slot did not use in its previous frame. A busy frame can grow the ring to
         // hundreds of megabytes; after the camera leaves a town those chunks would otherwise stay for the
@@ -99,17 +150,13 @@ public sealed unsafe class MetalFrame : IGpuFrame
         // one frame); the slot is reused only after the three-frame ring has advanced. A failed command is the
         // first thing to look for when the present stops advancing.
         ReleasePreFrame();
-        if (Command.NativePtr != IntPtr.Zero)
-        {
-            if (Command.Status == MTLCommandBufferStatus.Error)
-                Console.WriteLine($"metal     frame slot {Slot} command buffer failed: {Command.Error.LocalizedDescription}");
-            Command.Dispose();
-        }
+        ReportFailure();
+        ReleaseCommands();
         Number = number;
-        Command = command;
+        SceneCommand = command;
         command.Label = (NSString)$"Meitou frame {number}";
         Commands.Rebind(command);
-        Drawable = drawable;
+        Drawable = default;
         foreach (var chunk in _chunks) chunk.Used = 0;
         _current = _chunks[0];
         Commands.Invalidate();
@@ -130,8 +177,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
     {
         if (Command.NativePtr == IntPtr.Zero) return;
         Command.WaitUntilCompleted();
-        if (Command.Status == MTLCommandBufferStatus.Error)
-            Console.WriteLine($"metal     frame slot {Slot} command buffer failed: {Command.Error.LocalizedDescription}");
+        ReportFailure();
         ReleasePreFrame();
     }
 
@@ -141,8 +187,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
     /// </summary>
     internal void ForgetCommand()
     {
-        if (Command.NativePtr != IntPtr.Zero) Command.Dispose();
-        Command = default;
+        ReleaseCommands();
         ReleasePreFrame();
     }
 
@@ -192,6 +237,9 @@ public sealed unsafe class MetalFrame : IGpuFrame
     /// </summary>
     internal void ReleasePreFrame()
     {
+        if (_preCommand.NativePtr != IntPtr.Zero && _preCommand.Status == MTLCommandBufferStatus.Error)
+            Console.WriteLine($"metal     frame slot {Slot} pre-frame command buffer failed: {_preCommand.Error.LocalizedDescription}");
+
         if (_preCommand.NativePtr != IntPtr.Zero) _preCommand.Dispose();
         _preCommand = default;
     }

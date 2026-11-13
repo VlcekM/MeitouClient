@@ -107,6 +107,46 @@ and x5, talk, trade, container, doors, pick-up, paths (a squad or each member se
 fight (six spawned enemies, `--scene-npc`), loot, the panels opened cold then warm (with limbs and build), a grazing horizon view, the overview, flights (each player character in turn, twice, 6 s each, as a double click on its portrait: a character flight when they are on).
 Each interaction targets the nearest candidate within 150 m and retries every 3 s; a modal message box is closed and logged.
 `MEITOU_BENCH_ONLY=settle,zoom` keeps only the named segments (the run is deterministic from the save, so a hitch comes back at its tick).
+A later `--vsync` keeps vsync on (the frame limit stays off); the summary's run line says which.
+
+**Metal** (`--renderer metal`, `MetalPlayBench`): the same script, sections and columns, with these differences.
+- `gpu_total_ms` is the frame's command buffer (`GPUEndTime - GPUStartTime`) minus its overlap with the previous frame's
+  (consecutive frames overlap on the GPU, so whole spans over-count); it arrives when the ring slot is reused, so the last
+  three frames have none. Upload batches and the GPU-cull pre-frame are separate command buffers and not in it. No
+  `gpu_<stage>` columns: Apple silicon samples counters only at encoder boundaries ([metal-performance-memory](metal-performance-memory.md)).
+- `vram_mb` is `MTLDevice.currentAllocatedSize`. `late_pipelines` counts render pipeline states (all are made on first use);
+  `MEITOU_METAL_TRACE=1` logs each state and each MSL library with its build time.
+- `loop_begin-frame` holds the frame-slot wait; the `nextDrawable` wait comes at the end of the frame (the scene is committed
+  first, so the GPU works while it waits) and is in `loop_render` and the `driver-wait` stage, which `render cpu ms` sums:
+  with vsync on that column reads about the frame's idle time, not CPU work. `loop_view` also holds the navmesh,
+  building and interior updates (the Metal loop runs them after the audio).
+- The render-thread stages (`cpu_*`) come from the shared `WorldFrame` laps; `cpu_sim` stays 0 (`update_ms` has the ticks).
+- The summary's run line names the device, scene and window sizes, the upscaler, the pacing, the GPU budget
+  (`--metal-gpu-budget`) and the memory guard's state at the end. The saved graphics apply; `--benchmark-baseline` is
+  not applied on Metal, so its numbers do not compare with the benchmarks page.
+- The Metal loop saves vsync, frame limit, full screen, upscaler and graphics at exit whatever the run's options were:
+  point a bench run at a copy of `meitou.user.json` (the file is read from the working directory first).
+
+**Observed** (2026-11-12, Mac mini M6 12-core GPU, 24 GB, macOS 27.2; frozen save `bench-bases-2026-10-27`,
+`settle,idle,orbit,zoom,pan`; full screen 3840x2160, scene 1920x1080, MetalFX temporal 0.50, vsync off; two runs):
+
+| budget | guard | idle fps / p99 | orbit | zoom | pan | gpu ms |
+|---|---|---|---|---|---|---|
+| 5120 MB | 92% after load, ranges clamped to x0.15, terrain material cache not made | 66 / 43.1 | 66 / 27.4 | 68 / 41.2 | 74 / 18.3 | 13.6-15.0 |
+| 8120 MB | ok, 65% at the end | 65 / 41.1 | 62 / 29.0 | 66 / 19.9 | 72 / 19.1 | 13.9-16.1 |
+
+The larger budget restores the material cache and the full draw ranges at about the same frame rate (more is drawn
+for the same time); the frame is GPU-bound (busy time about equal to the frame). One pair. The game's default budget follows
+the Mac's memory ([metal-performance-memory](metal-performance-memory.md#metal-memory-budget-default)).
+
+The tail above 25 ms (10-30 frames a segment) is the world, not the renderer (**Observed**): `RagdollSystem` ticks of up to 37 ms and
+render-thread spikes of 12-45 ms in the same frames, none of them in a frame that made a pipeline.
+
+**Observed** (same machine and save, windowed 1920x1080 pixels, Medium-tier graphics, native, vsync off): every
+segment ran at 59-60 fps with p50 16.7 ms while the GPU was busy 13.0-13.5 ms and the render thread 3-3.5 ms; the rest
+was the `nextDrawable` wait (9.5-13.9 ms in `MEITOU_METAL_TRACE`). With display sync off a window (also
+`--hidden-window`) still gets drawables at the 60 Hz refresh, so windowed vsync-off Metal numbers are capped at the
+display rate; full screen is not (66-74 fps above).
 
 `frames.csv` has one row per frame: interval, loop sections (`BenchLap`), render-thread stages (`StageClock`), GPU stages, world tick steps
 and the slowest system (the world's `TickProfile`, as F12's sim rows), video memory (`vram_mb`, Vulkan, read every 30 frames), GC counts, bytes and pause (`BenchGcListener`: the

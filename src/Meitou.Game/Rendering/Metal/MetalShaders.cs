@@ -55,28 +55,31 @@ internal sealed class MetalSetLayout
 internal sealed class MetalProgram : IDisposable
 {
     /// <summary>
-    /// A graphics program: the two stages' libraries, functions and MSL, with the table and set layouts read from the MSL.
+    /// The graphics stages and the compute stage; null for the stages the program does not have.
     /// </summary>
-    public MetalProgram(ProgramInfo info, MTLLibrary vertexLibrary, MTLFunction vertexFunction, string vertexMsl,
-        MTLLibrary fragmentLibrary, MTLFunction fragmentFunction, string fragmentMsl, bool argumentBuffers)
+    readonly MetalStage? _vertex, _fragment, _compute;
+
+    /// <summary>
+    /// A graphics program: the two stages (compiling in the background) and their MSL, with the table and set layouts read from the MSL.
+    /// </summary>
+    public MetalProgram(ProgramInfo info, MetalStage vertex, string vertexMsl, MetalStage fragment, string fragmentMsl, bool argumentBuffers)
     {
         ArgumentBuffers = argumentBuffers;
         Info = info;
-        (VertexLibrary, VertexFunction, VertexMsl) = (vertexLibrary, vertexFunction, vertexMsl);
-        (FragmentLibrary, FragmentFunction, FragmentMsl) = (fragmentLibrary, fragmentFunction, fragmentMsl);
+        (_vertex, VertexMsl) = (vertex, vertexMsl);
+        (_fragment, FragmentMsl) = (fragment, fragmentMsl);
         (VertexTable, FragmentTable) = (MetalTableLayout.Parse(vertexMsl), MetalTableLayout.Parse(fragmentMsl));
         (VertexSets, FragmentSets) = (MetalSetLayout.Parse(vertexMsl), MetalSetLayout.Parse(fragmentMsl));
-
     }
 
     /// <summary>
-    /// A compute program: one entry point, its set structs and the threadgroup size the MSL was compiled with.
+    /// A compute program: one entry point (compiling in the background), its set structs and the threadgroup size the MSL was compiled with.
     /// </summary>
-    public MetalProgram(ProgramInfo info, MTLLibrary computeLibrary, MTLFunction computeFunction, string computeMsl, (uint X, uint Y, uint Z) threads)
+    public MetalProgram(ProgramInfo info, MetalStage compute, string computeMsl, (uint X, uint Y, uint Z) threads)
     {
         ArgumentBuffers = true;
         Info = info;
-        (ComputeLibrary, ComputeFunction, ComputeMsl, Threads) = (computeLibrary, computeFunction, computeMsl, threads);
+        (_compute, ComputeMsl, Threads) = (compute, computeMsl, threads);
         ComputeTable = MetalTableLayout.Parse(computeMsl);
         ComputeSets = MetalSetLayout.Parse(computeMsl);
     }
@@ -87,25 +90,17 @@ internal sealed class MetalProgram : IDisposable
     public ProgramInfo Info { get; }
     // A compute program has no graphics stage (the handles stay default); the graphics constructor fills them.
     /// <summary>
-    /// The vertex stage's library.
+    /// The vertex stage's entry point (waits for its compile; throws its error).
     /// </summary>
-    public MTLLibrary VertexLibrary { get; }
-    /// <summary>
-    /// The vertex stage's entry point.
-    /// </summary>
-    public MTLFunction VertexFunction { get; }
+    public MTLFunction VertexFunction => _vertex?.Function ?? default;
     /// <summary>
     /// The vertex stage's MSL (diagnostics: what SPIR-V became).
     /// </summary>
     public string VertexMsl { get; } = "";
     /// <summary>
-    /// The fragment stage's library.
+    /// The fragment stage's entry point (waits for its compile; throws its error).
     /// </summary>
-    public MTLLibrary FragmentLibrary { get; }
-    /// <summary>
-    /// The fragment stage's entry point.
-    /// </summary>
-    public MTLFunction FragmentFunction { get; }
+    public MTLFunction FragmentFunction => _fragment?.Function ?? default;
     /// <summary>
     /// The fragment stage's MSL (diagnostics: what SPIR-V became).
     /// </summary>
@@ -132,13 +127,9 @@ internal sealed class MetalProgram : IDisposable
     /// </summary>
     public bool ArgumentBuffers { get; }
     /// <summary>
-    /// The compute stage's library (default for a graphics program).
+    /// The compute stage's entry point (default for a graphics program; waits for its compile and throws its error).
     /// </summary>
-    public MTLLibrary ComputeLibrary { get; }
-    /// <summary>
-    /// The compute stage's entry point (default for a graphics program).
-    /// </summary>
-    public MTLFunction ComputeFunction { get; }
+    public MTLFunction ComputeFunction => _compute?.Function ?? default;
     /// <summary>
     /// The compute stage's MSL (diagnostics).
     /// </summary>
@@ -158,19 +149,16 @@ internal sealed class MetalProgram : IDisposable
     /// <summary>
     /// Whether this is a compute program.
     /// </summary>
-    public bool IsCompute => ComputeFunction.NativePtr != IntPtr.Zero;
+    public bool IsCompute => _compute is not null;
 
     /// <summary>
     /// Releases the libraries and functions the program has.
     /// </summary>
     public void Dispose()
     {
-        if (VertexFunction.NativePtr != IntPtr.Zero) VertexFunction.Dispose();
-        if (VertexLibrary.NativePtr != IntPtr.Zero) VertexLibrary.Dispose();
-        if (FragmentFunction.NativePtr != IntPtr.Zero) FragmentFunction.Dispose();
-        if (FragmentLibrary.NativePtr != IntPtr.Zero) FragmentLibrary.Dispose();
-        if (ComputeFunction.NativePtr != IntPtr.Zero) ComputeFunction.Dispose();
-        if (ComputeLibrary.NativePtr != IntPtr.Zero) ComputeLibrary.Dispose();
+        _vertex?.Dispose();
+        _fragment?.Dispose();
+        _compute?.Dispose();
     }
 }
 
@@ -418,10 +406,8 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.vert.msl"), vertexMsl);
             File.WriteAllText(Path.Combine(dump, $"{name}.frag.msl"), fragmentMsl);
         }
-        var vertexLibrary = Library(vertexMsl, name);
-        var fragmentLibrary = Library(fragmentMsl, name);
-        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
-            fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, false));
+        _programs.Add(new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
+            fragmentMsl, false));
         return new GpuProgram(info.Index, info);
     }
 
@@ -447,8 +433,7 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllBytes(Path.Combine(dump, $"{name}.comp.spv"), code);
             File.WriteAllText(Path.Combine(dump, $"{name}.comp.msl"), msl);
         }
-        var library = Library(msl, name);
-        _programs.Add(new MetalProgram(info, library, Function(library, "compute_main", name), msl, threads));
+        _programs.Add(new MetalProgram(info, Stage(msl, "compute_main", name), msl, threads));
         return new GpuProgram(info.Index, info);
     }
 
@@ -509,10 +494,8 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.vert.msl"), vertexMsl);
             File.WriteAllText(Path.Combine(dump, $"{name}.frag.msl"), fragmentMsl);
         }
-        var vertexLibrary = Library(vertexMsl, name);
-        var fragmentLibrary = Library(fragmentMsl, name);
-        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
-            fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, bindless));
+        _programs.Add(new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
+            fragmentMsl, bindless));
         return new GpuProgram(info.Index, info);
     }
 
@@ -542,28 +525,10 @@ public sealed class MetalShaders : IGpuShaders
     }
 
     /// <summary>
-    /// Compiles MSL into a library (with the fast-math override); throws with Metal's error when it does not compile.
+    /// A stage of the program <paramref name="name"/>: its MSL compiles into a library in the background (with the fast-math override); the
+    /// stage's entry point throws Metal's error when it did not compile, or when the MSL has no <paramref name="entry"/>.
     /// </summary>
-    MTLLibrary Library(string msl, string name)
-    {
-        NSError error = default;
-        var options = new MTLCompileOptions();
-        if (FastMath is { } fast) options.FastMathEnabled = fast;
-        var library = _device.NewLibrary((NSString)msl, options, ref error);
-        if (error.NativePtr != IntPtr.Zero)
-            throw new InvalidOperationException($"{name}: the MSL did not compile: {error.LocalizedDescription}");
-        return library;
-    }
-
-    /// <summary>
-    /// An entry point of a library; throws when it has none of that name.
-    /// </summary>
-    static MTLFunction Function(MTLLibrary library, string entry, string name)
-    {
-        var function = library.NewFunction((NSString)entry);
-        if (function.NativePtr == IntPtr.Zero) throw new InvalidOperationException($"{name}: no function {entry} in the MSL");
-        return function;
-    }
+    MetalStage Stage(string msl, string entry, string name) => new(_device, msl, entry, name, FastMath);
 
     #endregion
 }

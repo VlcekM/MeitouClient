@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Profiling;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
@@ -298,6 +299,19 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public double LastGpuMilliseconds { get; private set; }
 
     /// <summary>
+    /// Called with a frame's number and its command buffer's GPU milliseconds once it has completed, when its ring slot is taken by a later frame
+    /// (the play benchmark's per-frame GPU time); null by default. Only the part after the previous frame's end counts: consecutive command
+    /// buffers overlap on the GPU, so their whole spans add up to more than the GPU's busy time. The upload batches and the GPU cull's pre-frame
+    /// are command buffers of their own and are not in it.
+    /// </summary>
+    public Action<long, double>? OnGpuFrame { get; set; }
+
+    /// <summary>
+    /// The GPU end time (seconds) of the last frame reported to <see cref="OnGpuFrame"/>.
+    /// </summary>
+    double _reportedGpuEnd;
+
+    /// <summary>
     /// <c>objc_msgSend</c> for a selector that returns a double (a command buffer's GPU start and end times).
     /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
@@ -321,14 +335,37 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// The GPU time of a slot's command buffer in ms, or 0 when it has none, has not completed or reported no time.
     /// </summary>
-    double CompletedGpuMs(MetalFrame frame)
-    {
-        var command = frame.Command;
-        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Completed) return 0;
+    double CompletedGpuMs(MetalFrame frame) => TryGpuSpan(frame, out double start, out double end) ? (end - start) * 1000 : 0;
 
-        double start = Time_objc_msgSend(command.NativePtr, GpuStartTime.SelPtr);
-        double end = Time_objc_msgSend(command.NativePtr, GpuEndTime.SelPtr);
-        return end > start ? (end - start) * 1000 : 0;
+    /// <summary>
+    /// The GPU span of a completed frame in seconds: the scene command buffer's start to the last command buffer's end (the present's, when there is
+    /// one).
+    /// </summary>
+    static bool TryGpuSpan(MetalFrame frame, out double start, out double end)
+    {
+        (start, end) = (0, 0);
+        var scene = frame.SceneCommand;
+        var last = frame.Command;
+        if (scene.NativePtr == IntPtr.Zero || last.Status != MTLCommandBufferStatus.Completed) return false;
+
+        start = Time_objc_msgSend(scene.NativePtr, GpuStartTime.SelPtr);
+        end = Time_objc_msgSend(last.NativePtr, GpuEndTime.SelPtr);
+        return end > start;
+    }
+
+    /// <summary>
+    /// Tells <see cref="OnGpuFrame"/> the GPU time of the frame a slot held, before the slot takes the next frame (the slot wait has seen its
+    /// command complete).
+    /// </summary>
+    void ReportGpuFrame(MetalFrame frame)
+    {
+        if (OnGpuFrame is not { } report || frame.Number == 0) return;
+
+        if (!TryGpuSpan(frame, out double start, out double end)) return;
+
+        double own = end - Math.Max(start, Math.Min(_reportedGpuEnd, end));
+        _reportedGpuEnd = Math.Max(_reportedGpuEnd, end);
+        report(frame.Number, own * 1000);
     }
 
     /// <summary>
@@ -524,29 +561,50 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         d.ArrayLength = (ulong)(desc.Kind == TextureKind.Cube ? 1 : desc.Layers);
         d.SampleCount = (ulong)samples;
 
-        // Unified memory: shared where the CPU writes or reads, private where an external producer (MetalFX) requires it.
-        d.StorageMode = desc.Private ? MTLStorageMode.Private : MTLStorageMode.Shared;
+        // A render target nothing writes as a storage image: the GPU alone touches it (the CPU reads pictures back through buffers), so it can be
+        // private and stay eligible for lossless compression, which a shaderWrite or pixelFormatView usage (or, in effect, shared storage) rules out.
+        bool target = desc.Use.HasFlag(TextureUse.ColourTarget) || desc.Use.HasFlag(TextureUse.DepthTarget);
+        bool compressible = LosslessCompression && target && !desc.Use.HasFlag(TextureUse.Storage);
+
+        // Unified memory: shared where the CPU writes or reads, private where the GPU alone does (a compressible target) or an external producer
+        // (MetalFX) requires it.
+        bool gpuOnly = desc.Private || compressible;
+        d.StorageMode = gpuOnly ? MTLStorageMode.Private : MTLStorageMode.Shared;
         MTLTextureUsage usage = 0;
         if (desc.Use.HasFlag(TextureUse.Sampled)) usage |= MTLTextureUsage.ShaderRead;
         if (desc.Use.HasFlag(TextureUse.Storage)) usage |= MTLTextureUsage.ShaderWrite;
-        if (desc.Use.HasFlag(TextureUse.ColourTarget) || desc.Use.HasFlag(TextureUse.DepthTarget))
-            usage |= MTLTextureUsage.RenderTarget;
-        if (desc.Use.HasFlag(TextureUse.TransferDst)) usage |= MTLTextureUsage.ShaderWrite;
+        if (target) usage |= MTLTextureUsage.RenderTarget;
 
-        // A plain 2D target can be attached and sampled through its base image; only sub-ranges, layers and swizzles
+        // A blit destination needs no shaderWrite; it is kept where the texture is not a target (the uploads' own textures).
+        if (desc.Use.HasFlag(TextureUse.TransferDst) && !compressible) usage |= MTLTextureUsage.ShaderWrite;
+
+        // A plain 2D target can be attached and sampled through its base image (see <c>View</c>); only sub-ranges, layers and swizzles
         // need MTLTexture views. Omitting the flag on the plain targets lets Metal use lossless compression.
-        bool needsViews = !LosslessCompression || desc.Use.HasFlag(TextureUse.Sampled) || desc.Use.HasFlag(TextureUse.Storage) ||
-            desc.Levels > 1 || desc.Layers > 1 || desc.Kind != TextureKind.Texture2D;
+        bool plain = desc.Levels <= 1 && desc.Layers <= 1 && desc.Kind == TextureKind.Texture2D;
+        bool needsViews = !LosslessCompression || !compressible && desc.Use.HasFlag(TextureUse.Sampled) || desc.Use.HasFlag(TextureUse.Storage) || !plain;
         if (needsViews) usage |= MTLTextureUsage.PixelFormatView;
 
         d.Usage = usage;
-        d.ResourceOptions = desc.Private ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
+        d.ResourceOptions = gpuOnly ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
         var image = Device.NewTexture(d);
         if (desc.Name.Length > 0) image.Label = (NSString)desc.Name;
 
         var texture = new MetalTexture { Image = image, Desc = desc };
         _textures.Add(texture);
         return new GpuTexture(this, desc, _textures.Count - 1);
+    }
+
+    /// <summary>
+    /// The store action of a render pass attachment. Always <see cref="MTLStoreAction.Store"/> but where nothing reads the result: the GI albedo
+    /// (the lit programs write it, but the GI resolve is not on Metal) and a multisampled depth (the reflection's: cleared by its one pass and never
+    /// resolved). Those stay in tile memory.
+    /// </summary>
+    internal MTLStoreAction StoreActionFor(GpuView view, bool depth)
+    {
+        var of = _views[view.Index]!.Of;
+        bool albedo = _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
+        bool unresolvedDepth = depth && of.Desc.Samples > 1;
+        return albedo || unresolvedDepth ? MTLStoreAction.DontCare : MTLStoreAction.Store;
     }
 
     /// <inheritdoc/>
@@ -1037,15 +1095,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     #region Frame loop
 
     /// <summary>
-    /// Begins a frame: the layer's next drawable and its command buffer, and the frame's backbuffer (the
-    /// offscreen target the renderers draw into, re-made when the window's size changed). False when no
-    /// drawable is ready: the frame is skipped, as the display's own loop does.
+    /// Begins a frame: its command buffer, and the frame's backbuffer (the offscreen target the renderers
+    /// draw into, re-made when the window's size changed). The drawable is taken at the end (<see cref="EndFrame"/>).
+    /// False when the window has no pixels: the frame is skipped.
     /// </summary>
     public bool BeginFrame()
     {
         var display = this._display ?? throw new InvalidOperationException("a headless MetalContext has no frame loop");
 
-        // Every frame needs its own pool: CAMetalLayer's nextDrawable and the command buffer are autoreleased, and a
+        // Every frame needs its own pool: CAMetalLayer's nextDrawable and the command buffers are autoreleased, and a
         // pool held until quit keeps every drawable and its IOSurface alive (the travel footprint grew to 15 GB).
         if (_framePoolOpen)
         {
@@ -1061,13 +1119,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         // frame, making the whole backend one-frame-in-flight.
         WaitForSlot();
 
-        // Free what the previous rings no longer name before asking for another drawable; a frame's worth at a time.
+        // Free what the previous rings no longer name before the frame is recorded; a frame's worth at a time.
         ReleaseRetired();
         ReleaseRetiredLevelViews();
         ReleaseRetiredUploads();
         ReleaseDeferred();
 
-        if (!display.TryBeginFrame(out var command, out var drawable))
+        if (!display.TryBeginFrame(out var command))
         {
             _framePool.Dispose();
             _framePoolOpen = false;
@@ -1076,8 +1134,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
         ReadLastGpuTime();
         var size = display.Window.FramebufferSize;
-        EnsureTargets(size.X, size.Y, drawable);
-        StartSlot(command, drawable);
+        EnsureTargets(size.X, size.Y);
+        StartSlot(command);
         return true;
     }
 
@@ -1116,11 +1174,11 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// The backbuffer at the window's size, and the scene's depth and GI albedo at the render size (re-made when either changed).
     /// </summary>
-    void EnsureTargets(int width, int height, CAMetalDrawable drawable)
+    void EnsureTargets(int width, int height)
     {
         if (_backbuffer is not { } target || target.Desc.Width != width || target.Desc.Height != height)
         {
-            Console.WriteLine($"metal     backbuffer {width}x{height}, drawable {drawable.Texture.Width}x{drawable.Texture.Height}");
+            Console.WriteLine($"metal     backbuffer {width}x{height}");
             _backbuffer?.Dispose();
             _backbuffer = CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "backbuffer"));
@@ -1141,14 +1199,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// The next slot of the ring begins the frame: its command buffer and drawable, the bindless table's and the timestamps' slot.
+    /// The next slot of the ring begins the frame: its command buffer, the bindless table's and the timestamps' slot.
     /// </summary>
-    void StartSlot(MTLCommandBuffer command, CAMetalDrawable drawable)
+    void StartSlot(MTLCommandBuffer command)
     {
         _frameNumber++;
         _slot = (_slot + 1) % FrameRingDepth;
+        ReportGpuFrame(_frames[_slot]);
         Retain_objc_retain(command.NativePtr);   // the frame pool drains at the end of this frame
-        _frames[_slot].Begin(_frameNumber, command, drawable);
+        _frames[_slot].Begin(_frameNumber, command);
         _bindless.BeginFrame(_slot);
 
         if (_pendingUploadBytes > 0)
@@ -1201,7 +1260,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         _slot = (_slot + 1) % FrameRingDepth;
         var command = Queue.CommandBuffer();
         Retain_objc_retain(command.NativePtr);
-        _frames[_slot].Begin(_frameNumber, command, default);
+        _frames[_slot].Begin(_frameNumber, command);
         _bindless.BeginFrame(_slot);
         _timestamps.Begin(_slot, _frameNumber);
     }
@@ -1227,7 +1286,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// Ends the frame: the backbuffer is copied into the drawable (flipped) and the frame's commands are committed.
+    /// Ends the frame: the scene's commands are committed, then the drawable is taken and the backbuffer is copied into it (flipped) by a
+    /// small command buffer of its own that presents it.
     /// </summary>
     public void EndFrame()
     {
@@ -1245,16 +1305,40 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// The present: the backbuffer's picture into the drawable, y flipped (a five-line MSL pass; Metal's blit can do neither the flip nor the
-    /// format).
+    /// The present: the scene's work is committed first, so the GPU starts on it while the drawable is still being waited for (the layer hands
+    /// one out only when the display has released an earlier one, and a wait for it before the commit would idle the GPU and push the whole
+    /// frame behind the refresh). The backbuffer's picture then goes into the drawable, y flipped (a five-line MSL pass; Metal's blit can do
+    /// neither the flip nor the format) in a command buffer that follows the scene's on the queue. Without a drawable the frame is not shown.
     /// </summary>
     void Present(MetalFrame frame)
     {
         // The GPU cull's dispatches can leave a compute encoder open (there is no rendering to close it); the
         // present encoder cannot be created beside it.
         frame.Commands.Finish();
-        var command = frame.Command;
-        var drawable = frame.Drawable;
+        StageClock.BeginSubmission();
+        frame.CommitPreFrame();
+        frame.SceneCommand.Commit();
+        StageClock.Lap(StageClock.Submit, gpuTimestamp: false);
+
+        var display = _display ?? throw new InvalidOperationException("a headless MetalContext has no present");
+        bool shown = display.TryNextDrawable(out var drawable);
+        StageClock.Lap(StageClock.DriverWait, gpuTimestamp: false);
+        if (!shown) return;
+
+        var command = Queue.CommandBuffer();
+        frame.AdoptPresent(command);
+        frame.Drawable = drawable;
+        command.Label = (NSString)$"Meitou present {frame.Number}";
+        EncodePresent(command, drawable);
+        command.PresentDrawable(drawable);
+        command.Commit();
+    }
+
+    /// <summary>
+    /// The present pass in <paramref name="command"/>: the backbuffer drawn into <paramref name="drawable"/>.
+    /// </summary>
+    void EncodePresent(MTLCommandBuffer command, CAMetalDrawable drawable)
+    {
         var descriptor = new MTLRenderPassDescriptor(
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
         var attachments = descriptor.ColorAttachments;
@@ -1271,9 +1355,6 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         encoder.SetFragmentBytes((nint)targetSize, 8, 1);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
         encoder.EndEncoding();
-        frame.CommitPreFrame();
-        command.PresentDrawable(drawable);
-        command.Commit();
     }
 
     /// <inheritdoc/>

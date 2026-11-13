@@ -79,17 +79,17 @@ public sealed class LauncherConfig
     string _renderer = "auto";
 
     /// <summary>
-    /// macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a VramGuard ceiling, not a hard reservation;
-    /// Vulkan ignores it.
+    /// macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high), or 0 for automatic: the game sizes it to the Mac's
+    /// memory (<c>MetalMemoryBudget</c> in the game). It is a VramGuard ceiling, not a hard reservation; Vulkan ignores it.
     /// </summary>
     public int MetalMemoryBudget
     {
         get => _metalMemoryBudget;
         set
         {
-            if (value is not (5120 or 6144 or 8120))
+            if (value is not (0 or 5120 or 6144 or 8120))
             {
-                _metalMemoryBudget = 5120;
+                _metalMemoryBudget = 0;
                 return;
             }
             _metalMemoryBudget = value == 8120 && !MacSupport.CanUseHighBudget ? 5120 : value;
@@ -99,7 +99,7 @@ public sealed class LauncherConfig
     /// <summary>
     /// The stored <see cref="MetalMemoryBudget"/>.
     /// </summary>
-    int _metalMemoryBudget = 5120;
+    int _metalMemoryBudget;
 
     /// <summary>
     /// The version Play starts; null for the newest installed.

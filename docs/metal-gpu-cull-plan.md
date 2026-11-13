@@ -1,9 +1,24 @@
 # Metal GPU foliage cull plan
 
-Status: **mesh/rock cull implemented and live on Metal; grass still on the CPU** (2026-10-23). This is the
+Status: **mesh/rock cull implemented, opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`); the CPU cull is the default; grass still on the CPU**.
+The GPU progress timeouts it caused had one **Verified** cause, fixed: see "The timeout" below. The opt-in stays until a longer soak and the
+`MTL_DEBUG_LAYER` gate. Generated rock LODs and rock impostors need the GPU cull, so the default Metal path has neither. This is the
 Metal port of the existing Vulkan GPU foliage cull and grass submission. It is the A2 item in
 [metal-performance-memory](metal-performance-memory.md), not a new renderer feature; the visible result must stay
 the same.
+
+## The timeout
+
+**Verified** (bench save, `MEITOU_METAL_GPU_CULL=1`, full 52 s play-bench): before the fix 4 of 4 runs hung the GPU within 35 s
+(`Caused GPU Timeout Error` on the scene and present buffers; the frame then takes 5 s and every later buffer is "Ignored");
+after it 5 of 5 completed, and fps equals the CPU cull's (the frame is GPU-bound). Skipping only the foliage indirect draws also avoided
+the hang; skipping the terrain's did not.
+
+Cause: the compute sets bind through argument buffers, so Metal only knows a buffer from `useResource`. `BindSetStage` declared every buffer
+`Read`, though the cull kernels write the fades, counts, offsets, args and rows and the next kernel reads them. With no write declared, Metal
+did not order the encoders over those buffers (a barrier here only ends the encoder), and the scan/compact kernels or the indirect draws read
+unfinished data, which can give huge counts. A compute pass's storage buffers are now declared `Read | Write` (`MetalCommandList.BufferUsage`).
+Not tried: `MTL_DEBUG_LAYER` over the cull (the layer aborts earlier on other, pre-existing missing bindings).
 
 ## Why
 

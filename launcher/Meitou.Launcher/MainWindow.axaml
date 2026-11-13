@@ -392,7 +392,8 @@
                   <TextBlock x:Name="MetalBudgetHint" Classes="desc" TextWrapping="Wrap" Margin="0,4,0,0" />
                 </StackPanel>
                 <ComboBox x:Name="MetalBudgetBox" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-                  <ComboBoxItem Content="Safe — 5120 MB (recommended)" Tag="5120" />
+                  <ComboBoxItem Content="Auto (recommended)" Tag="0" />
+                  <ComboBoxItem Content="Safe — 5120 MB" Tag="5120" />
                   <ComboBoxItem Content="Balanced — 6144 MB" Tag="6144" />
                   <ComboBoxItem x:Name="MetalBudgetHighItem" Content="High — 8120 MB (16 GB Macs)" Tag="8120" />
                 </ComboBox>
