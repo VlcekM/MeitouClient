@@ -456,7 +456,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
 - **Assault to code 9**: the setter turns a code 5 into 9 when its victim passes `FUN_140796240(victim, 1)` (decompiles as void; **Unknown** test).
 - **Witness timing** (`FUN_1408580d0`, the perception's per-seen-character update, **Observed**): the witness function `FUN_140854d10` runs for a
   seen character when the update says it is newly seen (either of two flag arguments), or while it has a pending crime whose timer
-  (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh. A witness
+  (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh. The witness function returns at once when the seen character or the witness is imprisoned (`+0x2f8 == 2`, **Verified**, decompile), so a caged culprit's timer runs out and its status line gives way to the bounty. A witness
   that regards the culprit as friendly and sees it wrong the witness's own faction costs the culprit's faction 20 relation each time
   ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)). A reacting witness that is the crime's
   victim (for a trespass, the witness itself) goes for the culprit, which its whole squad then takes for an enemy

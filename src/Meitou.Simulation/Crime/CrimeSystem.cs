@@ -305,7 +305,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 if (p.Timer <= 0) c.Pending = null;
                 else p.Timer -= seconds;
             }
-            if (!c.CarriedBy.IsNone) continue;   // a carried suspect is not looked at (the game's witness function)
+            // A carried or imprisoned suspect is not looked at (the game's witness function): a prisoner's crime runs out and its bounty shows.
+            if (!c.CarriedBy.IsNone || c.IsImprisoned) continue;
             if (!c.IsPlayer)
             {
                 if (c.Pending is not null) Witnesses(world, s, c, false, null, seconds);
@@ -351,7 +352,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>
     /// Every awake NPC that sees the culprit, in slot order, reacts as the game's witness function does (<c>FUN_140854d10</c>, <b>Observed</b>): not
-    /// of the culprit's faction, not carried, with no pending crime of its own; nothing when its faction is hostile to the victim's, when the
+    /// of the culprit's faction, not carried, not imprisoned (nor is the culprit), with no pending crime of its own; nothing when its faction is hostile to the victim's, when the
     /// victim's is lawless, when it books bounties and the victim's is a bandit faction, or when it regards the culprit as friendly and the victim is
     /// of another faction. Theft and Looting need it to care about the victim (same faction or allied); Looting also that it does not regard the
     /// culprit as friendly; Kidnapping a victim and that care; an Assault a victim that it does not regard as an enemy; a Murder nothing more. One
@@ -373,7 +374,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         for (int w = 0; w < table.HighWater; w++)
         {
             if (w == culprit || !next[w].Alive) continue;
-            if (table.Cold(w) is not { IsPlayer: false, Medical.Incapacitated: false } wc || !wc.CarriedBy.IsNone || wc.Pending is not null) continue;
+            if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false } wc) continue;
+            if (!wc.CarriedBy.IsNone || wc.Pending is not null) continue;
             int wf = wc.Faction;
             if (wf == c.Faction || !Relations.Contains(wf)) continue;
             float range = AggroSystem.RangeOf(wc, Settings.Sight);
