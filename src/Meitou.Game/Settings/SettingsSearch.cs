@@ -106,7 +106,7 @@ sealed class SettingsSearch(SettingsMenu menu)
 
         foreach (var (name, rows) in Sections())
         {
-            var found = rows.Where(row => Matches(row, words)).ToList();
+            var found = Found(rows, words);
             if (found.Count == 0) continue;
 
             results.Add(new(name));
@@ -116,6 +116,24 @@ sealed class SettingsSearch(SettingsMenu menu)
         if (results.Count == 0) results.Add(new("No setting matches the search."));
 
         return results;
+    }
+
+    /// <summary>
+    /// The rows that match, each with the rows under it (a mode's custom value, <see cref="SettingModes"/>).
+    /// </summary>
+    static List<SettingsMenu.Entry> Found(List<SettingsMenu.Entry> rows, string[] words)
+    {
+        var found = new List<SettingsMenu.Entry>();
+        bool parentFound = false;
+
+        foreach (var row in rows)
+        {
+            bool match = Matches(row, words) || row.Depth > 0 && parentFound;
+            if (row.Depth == 0) parentFound = match;
+            if (match) found.Add(row);
+        }
+
+        return found;
     }
 
     /// <summary>
