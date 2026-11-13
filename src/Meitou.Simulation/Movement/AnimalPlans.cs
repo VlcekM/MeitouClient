@@ -10,12 +10,17 @@ sealed record AnimalPlan(int[] Movement, IReadOnlyList<(int Index, float Weight)
     AnimationLengths Lengths)
 {
     /// <summary>
-    /// The animal's own clip of record name <paramref name="name"/> (a job's, <c>eat</c>); -1 when its list has none its skeleton plays.
+    /// The animal's own clip of record name <paramref name="name"/> (a job's, <c>eat</c>), else of a record named after it with a suffix (the
+    /// skimmer's <c>eat (attack1)</c>); -1 when its list has none its skeleton plays.
     /// </summary>
     public int Action(string name)
     {
         foreach (var (n, i) in Actions)
             if (n == name) return i;
+
+        foreach (var (n, i) in Actions)
+            if (n.StartsWith(name, StringComparison.Ordinal) && n.Length > name.Length && n[name.Length] == ' ') return i;
+
         return -1;
     }
 }

@@ -308,8 +308,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Self preservation alone, whose fight or run (<see cref="SelfPreservation.Runs"/>) ends the duty's task as any fight's start does (in a fight,
     /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
     /// the fight's start), a town errand's walk but the cage walk (<see cref="Kidnap.TownDutySystem"/> waits for the fight to end and walks on; one
-    /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing
-    /// (<see cref="Kidnap.CaptiveSystem"/> gives the job up), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
+    /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing and its meal
+    /// (<see cref="InterruptibleJob"/>), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
     /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight.
     /// </summary>
     internal static Restrict Preempts(in CharacterHot n, CharacterCold cold)
@@ -319,12 +319,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return Restrict.None;
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
-        if (cold.Engaged) return Restrict.Self;
+        if (cold.Engaged) return InterruptibleJob(n, cold) ? Restrict.Combat : Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
         if (n.Task == (byte)CharacterTask.Treat) return Restrict.Combat;
         return n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run
             && (Kidnap.TownDutySystem.IsErrandRow(run.Row) || cold.Carrying.IsNone && Kidnap.CaptiveSystem.IsJobRow(run.Row))
             ? Restrict.Combat : Restrict.Self;
+    }
+
+    /// <summary>
+    /// A captive job a fight may interrupt (<see cref="Kidnap.CaptiveSystem"/> gives it up at the fight's start): its walk carrying nothing, or the
+    /// meal it stands at (220 Eating is a priority-2 goal's task, below the combat goals; a vampiric meal lasts minutes, #623).
+    /// </summary>
+    static bool InterruptibleJob(in CharacterHot n, CharacterCold cold)
+    {
+        if (!cold.Carrying.IsNone) return false;
+        if (n.Task == (byte)CharacterTask.Idle) return cold.ActionClip == Kidnap.CaptiveSystem.EatClip;
+
+        return n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run
+            && Kidnap.CaptiveSystem.IsJobRow(run.Row);
     }
 
     /// <summary>
@@ -349,11 +362,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee
     /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" (147) for a stagger
-    /// outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); null for the rest (the HUD then names the movement task).
+    /// outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); the captive goal's name on its job (<see cref="TakeCaptiveGoal"/>: "Eat
+    /// body"); null for the rest (the HUD then names the movement task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
         cold.StumbleTaskUntil > tick ? TaskBehaviours.Text(TaskType.StumbleTaskForced)
         : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
+        : cold is { Engaged: true, InCombat: false, Ai: { Behaviour: AiBehaviour.Captive, Goal: { } job } } ? TaskBehaviours.Text(job.Task.Type)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? TaskBehaviours.Text(goal.Task.Type) : null;
 
     /// <summary>

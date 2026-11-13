@@ -88,7 +88,7 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
 
 Clip filter (`FUN_14051d660`, **Verified** for the strafe list, Inferred for walk and run): a clip with `stealth mode` 1 is kept only while the animal sneaks; animals never sneak (the stealth flag is written only by the Character sneak setter), so such a clip is never picked. Meitou drops it in `AnimationLibrary.BuildAnimals`.
 
-Job clips: an animal standing in a captive job's clip (eating a body: `eat`) plays the ANIMAL_ANIMATION of that record name from its own list; the library's first record of the name is the humanoid ANIMATION `eat` (43889), which an animal skeleton cannot play. Blood Spider, Skin Spider, the dogs and raptors have it; the Skimmer's is `eat (attack1)` and the gorillos' and Land Bat's skeletons lack the clip, so they stand in an idle (**Verified** by headless check of the merged base data, #623). Meitou: `AnimalPlan.Action`.
+Job clips: an animal standing in a captive job's clip (eating a body: `eat`) plays the ANIMAL_ANIMATION of that record name from its own list; the library's first record of the name is the humanoid ANIMATION `eat` (43889), which an animal skeleton cannot play. Blood Spider, Skin Spider, the dogs and raptors have it; the Skimmer's `eat (attack1)` is taken by its name's start (engine choice); the gorillos' and Land Bat's skeletons lack the clip, so they stand in an idle (**Verified** by headless check of the merged base data, #623). Meitou: `AnimalPlan.Action`.
 
 ## Death items
 

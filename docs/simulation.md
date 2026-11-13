@@ -1815,7 +1815,7 @@ mind's request (`AiMind.FightGoal`, `FightTarget`) and stands, and `SendFights` 
 the protect goals and 32), logs it with the aggro system's fights (not 32's) and asks the starter's squad mates to think; a later starter of the same pass picks again with the fights started so far counted
 as attackers (the original's choosers run one after another). That fight is the AI's own (`AiMind.FightFrom`): `Holds` keeps its fighter, which thinks in it but acts nothing out
 (`InFight`): a combat goal or 32's fight keeps the fight, Self preservation's run or a goal 35 asks the flee step, any other goal makes `LeaveFights` (serial) end the fight, and the next tick acts it out.
-An engine duty a fight may interrupt (treating, a town errand's walk, a captive job's walk) is weighed by `Choose` with only the combat goals and 32; any other duty, and a fight the AI did not
+An engine duty a fight may interrupt (treating, a town errand's walk, a captive job's walk and its meal at a body, #623) is weighed by `Choose` with only the combat goals and 32; any other duty, and a fight the AI did not
 start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fight only its run changes anything); the fight's start ends the duty's task through its handler. Replan triggers
 (`AiMind.Replan`, engine stand-ins): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start and the end of its own fight (`CombatSystem.EndFight`); else
