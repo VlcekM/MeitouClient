@@ -59,4 +59,29 @@ public class OriginalTownRefitTests
         Assert.InRange(goonrock.Radius, 2545.56f - 30, 2545.56f + 30);
         Assert.InRange(drycoom.Radius, 2846.43f - 30, 2846.43f + 30);
     }
+    /// <summary>
+    /// The original (GOG 1.0.68, parity round 6: the same save loaded, the Drycoom Longhouse dismantled, saved) refitted Drycoom to
+    /// (82004.72, -77760.71) radius 2907.50. Without the Longhouse the centre is the plain weighted mean of the remaining houses and the gate: the
+    /// formula matches the original within one unit when that point is not inside a wall footprint (it is 0.8 units off).
+    /// </summary>
+    [Fact, Slow]
+    public void Refitting_drycoom_without_its_longhouse_matches_the_originals_centre_within_one_unit()
+    {
+        Assert.SkipWhen(InstallData.BaseGame is null || InstallData.Levels is null || FindSave() is null, "the original's save of the two outposts was not found");
+
+        var db = InstallData.BaseGame!;
+        var save = SaveGame.Load(FindSave()!);
+        var construction = new ConstructionSystem(db, BaseGame, BodyOptions.Default, new ItemFactory(db, BaseGame), [], Player, new ConstructionSettings());
+        var data = PopulationData.Create(db, InstallData.Levels!.Towns());
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 300),
+            [new PopulationSystem(data), construction]) { Player = { Faction = 2 } };
+        BuildingSave.Read(save, world, db, Player, 2, data);
+        var drycoom = world.Buildings.Towns.Single(t => t.Name.Trim() == "Drycoom");
+        world.Buildings.Remove(world.Buildings.All.Single(s => s.Id == "96-zone49.15-INGAME"));
+
+        ConstructionSystem.ReassessTown(world, drycoom);
+
+        Assert.True(Vector2.Distance(new Vector2(drycoom.Position.X, drycoom.Position.Z), new Vector2(82004.72f, -77760.71f)) < 1.5f);
+        Assert.InRange(drycoom.Radius, 2907.50f - 1, 2907.50f + 1);
+    }
 }
