@@ -452,8 +452,23 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     void AddSlot(List<UiControl> controls, MachineSnapshot m, string name, string bar, MachineSlotView view, int code)
     {
+        if (SizeSection(controls, name, bar, view.Width, view.Height) is not var (b, clip)) return;
+
+        if (view.Count <= 0 && m.Craft is not null)
+            AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
+        if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
+
+        player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
+    }
+
+    /// <summary>
+    /// Makes the section <paramref name="name"/> a grid of <paramref name="width"/> x <paramref name="height"/> cells under its progress bar;
+    /// returns its bounds and clip, null when the window has no such section.
+    /// </summary>
+    (UiRect Bounds, UiRect? Clip)? SizeSection(List<UiControl> controls, string name, string bar, int width, int height)
+    {
         int index = controls.FindIndex(c => c.Name == name);
-        if (index < 0) return;
+        if (index < 0) return null;
 
         // The original makes the section the recipe item's footprint (a box of building material is 6 x 3 cells); the grid keeps the layout's top
         // and takes the progress bar's horizontal centre (the layout slot is not centred in its column), so it stays under its label and bar. A
@@ -461,10 +476,10 @@ sealed class ProductionWindows(PlayerInterface player)
         // left.
         var slot = controls[index];
         var barRoot = controls.FirstOrDefault(c => c.Name == bar);
-        float width = view.Width * player.InventoryCell;
+        float gridWidth = width * player.InventoryCell;
         var column = barRoot?.Bounds ?? slot.Bounds;
-        float x = width <= column.Width ? column.X + (column.Width - width) / 2 : slot.Bounds.X;
-        var b = slot.Bounds with { X = x, Width = width, Height = view.Height * player.InventoryCell };
+        float x = gridWidth <= column.Width ? column.X + (column.Width - gridWidth) / 2 : slot.Bounds.X;
+        var b = slot.Bounds with { X = x, Width = gridWidth, Height = height * player.InventoryCell };
 
         // The grid and a moved bar may leave their content panel, so they clip to the window instead.
         var clip = controls.FirstOrDefault(c => c.Type == "Window")?.Bounds ?? slot.Clip;
@@ -492,11 +507,7 @@ sealed class ProductionWindows(PlayerInterface player)
             }
         }
 
-        if (view.Count <= 0 && m.Craft is not null)
-            AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
-        if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
-
-        player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
+        return (b, clip);
     }
 
     /// <summary>
@@ -534,22 +545,35 @@ sealed class ProductionWindows(PlayerInterface player)
     void AddOutputSlot(List<UiControl> controls, MachineSnapshot m)
     {
         if (m.Output is { } output) AddSlot(controls, m, "out", "OutputProgressBar", output, 8);
-        else if (m.Craft is { Done: [var made, ..] } && controls.FirstOrDefault(c => c.Name == "out") is { } outSlot
-            && !player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8))
+        else if (m.Craft is { } craft) AddCraftOutput(controls, m, craft);
+    }
+
+    /// <summary>
+    /// A bench's output: the section as large as the largest thing the bench makes (docs/game/buildings-production.md "Crafting"), with the first
+    /// finished item at its top left, or the current craft's item faded in the empty section; both at the item's footprint.
+    /// </summary>
+    void AddCraftOutput(List<UiControl> controls, MachineSnapshot m, CraftView craft)
+    {
+        if (SizeSection(controls, "out", "OutputProgressBar", craft.OutputWidth, craft.OutputHeight) is not var (ob, clip)) return;
+
+        float cell = player.InventoryCell;
+
+        if (craft.Done is [var made, ..])
         {
-            var ob = outSlot.Bounds;
-            float side = MathF.Min(ob.Width, ob.Height);
-            player.ItemCells.AddItemCell(controls, "machine-out", new(ob.X, ob.Y, side, side), made.Record, made.Material, made.Name, made.Quantity,
-                null, "MachineItem", 8, outSlot.Clip, colour: made.Colour);
+            if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8)) return;
+
+            var area = new UiRect(ob.X, ob.Y, made.Width * cell, made.Height * cell);
+            player.ItemCells.AddItemCell(controls, "machine-out", area, made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8,
+                clip, colour: made.Colour);
+            return;
         }
-        else if (m.Craft is { Done: [] } craft && CraftCurrent(craft) is { } current && controls.FirstOrDefault(c => c.Name == "out") is { } emptyOut)
-        {
-            // The empty output shows the current craft's item, faded.
-            var ob = emptyOut.Bounds;
-            float side = MathF.Min(ob.Width, ob.Height);
-            string[] key = current.Key.Split('|');
-            AddItemGhost(controls, "machine-out", new(ob.X, ob.Y, side, side), key[0], key.Length > 1 ? key[1] : "", emptyOut.Clip);
-        }
+
+        if (CraftCurrent(craft) is not { } current) return;
+
+        // The empty output shows the current craft's item, faded.
+        string[] key = current.Key.Split('|');
+        var ghost = new UiRect(ob.X, ob.Y, craft.FrontWidth * cell, craft.FrontHeight * cell);
+        AddItemGhost(controls, "machine-out", ghost, key[0], key.Length > 1 ? key[1] : "", clip);
     }
 
     /// <summary>

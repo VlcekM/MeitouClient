@@ -103,7 +103,25 @@ public enum MachinePanel : byte
 /// A crafting bench as the host shows it: the queue (the first is being made), the repeat toggle and the finished items waiting in its output.
 /// </summary>
 public sealed record CraftView(IReadOnlyList<(string Key, string Name, float Progress, float Hours)> Queue, bool Repeat,
-    IReadOnlyList<InventoryItemView> Done);
+    IReadOnlyList<InventoryItemView> Done)
+{
+    /// <summary>
+    /// The output section's width in cells (<c>CraftBench.OutputWidth</c>).
+    /// </summary>
+    public int OutputWidth { get; init; } = 1;
+    /// <summary>
+    /// The output section's height in cells (<c>CraftBench.OutputHeight</c>).
+    /// </summary>
+    public int OutputHeight { get; init; } = 1;
+    /// <summary>
+    /// The footprint width in cells of the item the queue's front makes (1 with an empty queue).
+    /// </summary>
+    public int FrontWidth { get; init; } = 1;
+    /// <summary>
+    /// The footprint height in cells of the item the queue's front makes (1 with an empty queue).
+    /// </summary>
+    public int FrontHeight { get; init; } = 1;
+}
 
 /// <summary>
 /// Something a bench can craft, with its hours and inputs per item, and whether research and the bench level allow it now.
@@ -368,6 +386,12 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         ? new CraftView([.. c.Queue.Select(j => (j.Option.Key, j.Recipe.Name, Math.Clamp(j.Progress, 0, 1), j.Recipe.Hours))], c.Repeat,
             [.. c.Done.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "out", 0, 0, item.Width, item.Height,
                 item.Quantity, item.Weight, item.Quality) { Material = item.MaterialId, Colour = item.ColourId })])
+        {
+            OutputWidth = m.Data.Craft?.OutputWidth ?? 1,
+            OutputHeight = m.Data.Craft?.OutputHeight ?? 1,
+            FrontWidth = c.Queue is [var front, ..] ? items.Info(front.Option.Item)?.Width ?? 1 : 1,
+            FrontHeight = c.Queue is [var first, ..] ? items.Info(first.Option.Item)?.Height ?? 1 : 1,
+        }
         : null;
 }
 

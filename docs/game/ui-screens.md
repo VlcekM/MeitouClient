@@ -833,7 +833,8 @@ storage has no blank heading panel over its inventory grid.
 `Kenshi_GenericBuildingWindow` (**Verified**, layout read): Window `Kenshi_WindowCX` captioned "BUILDING NAME", layer Window; `CraftingPanel`
 (`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (layout INPUTS / OUTPUT, but the constructor `FUN_140155f90` **Verified** overwrites them with the translated `Input` / `Inputs` by the input count, hidden at 0, and `Output`), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
 slot `inN`, `InputNProgressBar`), output (`out` slot, `OutputProgressBar`, `OutputText`, `OutputDataPanel`). The `inN` / `out` inventory
-sections are the recipe item's `inventory footprint width` × `inventory footprint height` cells (**Verified**, `FUN_14029e7b0` code read). The grid
+sections are the recipe item's `inventory footprint width` × `inventory footprint height` cells (**Verified**, `FUN_14029e7b0` code read); a crafting bench's `out` is as large as the largest thing it makes
+([Crafting](buildings-production.md#crafting)). The grid
 sits centred under its label and progress bar (**Observed**, owner's screenshot of an electrical workbench, 2026-10-24); the rule behind it and whether the bar
 moves for a tall grid are **Unknown**. Meitou keeps the layout's top, centres the grid on the bar (a grid wider than the bar keeps the slot's left edge)
 and pushes the bar under an overlapping grid. For a machine with only an output (a mined rock) the original's window size is **Unknown**; Meitou drops the input column and crafting row and shrinks the window around the output panel.

@@ -100,6 +100,17 @@ public sealed record CraftBench
     public bool OverridesIngredients { get; init; }
 
     /// <summary>
+    /// The <c>out</c> section's width in cells (<b>Verified</b>, <c>FUN_1402b9aa0</c>): the widest <c>inventory footprint width</c> of what the
+    /// bench's lists name, with <c>weapon crafts</c> of every WEAPON too; at least 1.
+    /// </summary>
+    public int OutputWidth { get; init; } = 1;
+
+    /// <summary>
+    /// The <c>out</c> section's height in cells: the tallest <c>inventory footprint height</c>, as <see cref="OutputWidth"/>.
+    /// </summary>
+    public int OutputHeight { get; init; } = 1;
+
+    /// <summary>
     /// The bench of BUILDING_FUNCTIONALITY <paramref name="function"/>, null when its <c>function</c> is not <see cref="CraftingFunction"/>: every
     /// listed record the database has, a weapon bench's models crossed with the <see cref="PlayerWeapons"/> weapon types, and the tech level.
     /// </summary>
@@ -130,12 +141,39 @@ public sealed record CraftBench
                         options.Add(new CraftOption(CraftKind.Weapon, type.TargetStringId, m.TargetStringId, m.Values.Value0, 1));
         }
         int tech = function.GetInt("tech level");
+        var (width, height) = OutputFootprint(db, function);
         return new CraftBench
         {
             Options = options,
             TechLevel = tech > 0 ? tech : 100,
-            OverridesIngredients = function.GetBool("overrides ingredients")
+            OverridesIngredients = function.GetBool("overrides ingredients"),
+            OutputWidth = width,
+            OutputHeight = height
         };
+    }
+
+    /// <summary>
+    /// The largest footprint width and height, each on its own, of the records in <paramref name="function"/>'s crafts lists; a bench with
+    /// <c>weapon crafts</c> counts every WEAPON of the database, not only the ones it can make.
+    /// </summary>
+    static (int Width, int Height) OutputFootprint(GameDatabase db, GameRecord function)
+    {
+        string[] lists = ["item crafts", "armour crafts", "crossbow crafts", "backpack crafts", "robotics crafts"];
+        var made = lists
+            .SelectMany(list => function.GetReferences(list))
+            .Select(r => db.Find(r.TargetStringId))
+            .OfType<GameRecord>();
+        if (function.GetReferences("weapon crafts").Count > 0) made = made.Concat(db.OfType(FcsRecordType.Weapon));
+
+        int width = 1, height = 1;
+
+        foreach (var record in made)
+        {
+            width = Math.Max(width, record.GetInt("inventory footprint width"));
+            height = Math.Max(height, record.GetInt("inventory footprint height"));
+        }
+
+        return (width, height);
     }
 
     /// <summary>

@@ -705,6 +705,9 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   (MATERIAL_SPECS_WEAPON models), `crossbow crafts`, `backpack crafts`, `robotics crafts`. A weapon bench crafts every
   WEAPON in the `PLAYER_WEAPONS` manufacturer's `weapon types` in each listed model; the model's level is that
   manufacturer's `weapon models` v0 (Rusted Junk 5 ... Edge Type 3 80). `tech level` caps the made level (0: none).
+- **Output section** (**Verified**, `FUN_1402b9aa0` code read): `out` is max `inventory footprint width` x max `inventory
+  footprint height` (each taken on its own, at least 1) over the records of the item, armour, crossbow, backpack and robotics
+  lists; a bench with `weapon crafts` adds every WEAPON record of the database. Meitou: `CraftBench.OutputWidth` / `OutputHeight`.
 - **Queue item** (`FUN_1402b5ca0`): seconds = hours x G/24, progress, critical state (2 not rolled, 1 critical, 0 none).
 - **Tick** (`CraftingBuilding::vfunc_150` `FUN_1402b5a40`), state 2 with a queue: amount = `output rate x production
   mult` (/ `max operators` when above 1, `FUN_1402b9aa0`) `x health x s x option x P x dt / seconds`. The critical is
