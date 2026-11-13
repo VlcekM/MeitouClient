@@ -38,8 +38,8 @@ static class TownRefit
 
     /// <summary>
     /// Moves the town's centre to its buildings and sizes its radius to them: the centre is the mean of the houses and wall gates (weight 4) and the
-    /// top-level refinery-function buildings (weight 1), put on the closest walkable point within <see cref="SnapReach"/> at the terrain height (slot 32 <c>FUN_140933b90</c>; the town keeps its old
-    /// position when there is none); the radius is <see cref="ConstructionSystem.TownRadiusMargin"/> beyond the farthest building that is not a wall
+    /// top-level refinery-function buildings (weight 1), put on the navmesh by the two-step 3D snap (<see cref="RefitSnap"/>, box <see cref="SnapReach"/>) at the terrain height (slot 32
+    /// <c>FUN_140933b90</c>; the town keeps its old position when there is none); the radius is <see cref="ConstructionSystem.TownRadiusMargin"/> beyond the farthest building that is not a wall
     /// piece, at least <see cref="ConstructionSystem.TownRadiusStart"/>, within [<see cref="ConstructionSystem.TownRadiusMin"/>,
     /// <see cref="ConstructionSystem.TownRadiusMax"/>]. A town with no such building keeps its centre and radius, and is removed when it has no
     /// building at all. Returns true when the town was removed.
@@ -56,12 +56,24 @@ static class TownRefit
             return true;
         }
 
-        var centre = sum / weight;
-        if (WalkableSpots.Closest(world.Walkability, new Vector2(centre.X, centre.Z), SnapReach, out var spot))
+        if (Snap(world.Walkability, sum / weight) is { } spot)
             town.Position = new Vector3(spot.X, world.Walkability.GroundHeight(spot.X, spot.Y), spot.Y);
 
         town.Override = Math.Clamp(RadiusOf(town, members, kinds), ConstructionSystem.TownRadiusMin, ConstructionSystem.TownRadiusMax);
         return false;
+    }
+
+    /// <summary>
+    /// Where the centre (X, Y and Z the weighted means of the members' world positions) lands on the navmesh: the two-step 3D snap
+    /// (<see cref="RefitSnap"/>) where the walkability knows its faces, else the 2D closest walkable point (<see cref="WalkableSpots.Closest"/>);
+    /// null when there is none (the town keeps its position).
+    /// </summary>
+    static Vector2? Snap(IWalkability walk, Vector3 centre)
+    {
+        if (walk.SurfaceFaces(centre, SnapReach) is { } faces)
+            return RefitSnap.Snap(faces, centre) is { } snapped ? new Vector2(snapped.X, snapped.Z) : null;
+
+        return WalkableSpots.Closest(walk, new Vector2(centre.X, centre.Z), SnapReach, out var spot) ? spot : null;
     }
 
     /// <summary>

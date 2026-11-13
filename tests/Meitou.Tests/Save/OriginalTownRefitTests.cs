@@ -84,4 +84,40 @@ public class OriginalTownRefitTests
         Assert.True(Vector2.Distance(new Vector2(drycoom.Position.X, drycoom.Position.Z), new Vector2(82004.72f, -77760.71f)) < 1.5f);
         Assert.InRange(drycoom.Radius, 2907.50f - 1, 2907.50f + 1);
     }
+
+    /// <summary>
+    /// A refit on the original's own saved navmesh tiles (the tiles it regenerated with the player's buildings in them, <c>zone/tileX.Y.hkt</c> of the
+    /// save) with the two-step 3D snap (docs/game/buildings-production.md "Round 8"): the 4-building Drycoom 1.39 off the original's centre (the
+    /// clearance step moves it 22 units inward), the 3-building Drycoom 2.01 off (0.78 on the formula alone: the 3D step slides it 2.2 down the slope
+    /// from the members' mean height), Goonrock 9.90 off (formula alone 20.3).
+    /// </summary>
+    [Fact, Slow]
+    public void Refitting_on_the_originals_saved_tiles_snaps_the_centres_to_within_the_known_residuals()
+    {
+        Assert.SkipWhen(InstallData.BaseGame is null || InstallData.Levels is null || FindSave() is null, "the original's save of the two outposts was not found");
+        string save = FindSave()!;
+        Assert.SkipWhen(!File.Exists(Path.Combine(save, "zone", "tile49.15.hkt")) || !File.Exists(Path.Combine(save, "zone", "tile28.30.hkt")),
+            "the save has no saved navmesh tiles of the two outposts");
+
+        var db = InstallData.BaseGame!;
+        var construction = new ConstructionSystem(db, BaseGame, BodyOptions.Default, new ItemFactory(db, BaseGame), [], Player, new ConstructionSettings());
+        var data = PopulationData.Create(db, InstallData.Levels!.Towns());
+        var walk = new SavedTileWalkability((_, _) => 300, save, (49, 15), (28, 30));
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk, [new PopulationSystem(data), construction]) { Player = { Faction = 2 } };
+        BuildingSave.Read(SaveGame.Load(save), world, db, Player, 2, data);
+        var goonrock = world.Buildings.Towns.Single(t => t.Name.Trim() == "Goonrock");
+        var drycoom = world.Buildings.Towns.Single(t => t.Name.Trim() == "Drycoom");
+
+        ConstructionSystem.ReassessTown(world, goonrock);
+        float goonrockOff = Off(goonrock, -17121.15f, -9089.42f), drycoomOff = Off(drycoom, 82078.01f, -77670.35f);
+        world.Buildings.Remove(world.Buildings.All.Single(s => s.Id == "96-zone49.15-INGAME"));
+        ConstructionSystem.ReassessTown(world, drycoom);
+        float withoutLonghouseOff = Off(drycoom, 82004.72f, -77760.71f);
+
+        Assert.True(drycoomOff < 1.5f, $"Drycoom, 4 buildings: {drycoomOff}");
+        Assert.True(withoutLonghouseOff < 2.1f, $"Drycoom, 3 buildings: {withoutLonghouseOff}");
+        Assert.True(goonrockOff < 10, $"Goonrock: {goonrockOff}");
+    }
+
+    static float Off(PlayerTown town, float x, float z) => Vector2.Distance(new Vector2(town.Position.X, town.Position.Z), new Vector2(x, z));
 }

@@ -80,6 +80,13 @@ public interface IWalkability
     }
 
     /// <summary>
+    /// The faces of the walkable surface within <paramref name="reach"/> units of <paramref name="centre"/> (a cube round it), for a 3D snap onto the
+    /// surface (<see cref="Construction.RefitSnap"/>); null when the surface there is not known (an open-ground stand-in, a zone not loaded), so the
+    /// caller falls back to the 2D walkability.
+    /// </summary>
+    IReadOnlyList<SurfaceFace>? SurfaceFaces(Vector3 centre, float reach) => null;
+
+    /// <summary>
     /// The part of a free move (root motion, combat footwork) a body of <paramref name="radius"/> at <paramref name="from"/> can make along
     /// <paramref name="step"/> (X, Z): the original's nav agent sweeps its circle against the walls of the walkable surface and slides along the one
     /// it meets (docs/game/pathfinding.md "Walls"). Default: the whole step (the caller still tests where it ends).
