@@ -57,11 +57,13 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The selected building while it still exists (a site that was cancelled or dismantled drops the selection).
+    /// The selected building while it still exists (a site that was cancelled or dismantled drops the selection; a rock's or a town building's
+    /// machine has no site).
     /// </summary>
     internal SelectedBuilding? BuildingFocus()
     {
         if (Selected is { SiteId: { } id } && !Simulation.Production.ProductionSystem.IsNatural(id)
+            && !Simulation.Production.ProductionSystem.IsTownWork(id)
             && !player.Session.CurrentSnapshot.Buildings.Any(s => s.Id == id))
             SetBuilding(null);
 

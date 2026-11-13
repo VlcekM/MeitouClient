@@ -434,6 +434,7 @@ sealed class BuildingSync(GameHost host)
         Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
         // The towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision).
         int townOfRevision = -1;
+        var machines = new Dictionary<string, bool>(StringComparer.Ordinal);
         return placement =>
         {
             var (zone, instance) = (placement.Zone, placement.InstanceId);
@@ -457,9 +458,24 @@ sealed class BuildingSync(GameHost host)
             bool destroyed = host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
                 : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
             var pieces = destroyed || host.TownChanges.IsEmptied(placement.Key) ? null : own?.Pieces;
+            bool machine = own is not null && TownMachine(db, machines, own.BuildingId);
             return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                destroyed, own?.Turret is not null, pieces);
+                destroyed, own?.Turret is not null, pieces, machine);
         };
+    }
+
+    /// <summary>
+    /// Whether a town building of record <paramref name="record"/> is a machine its workers operate (<c>ProductionSystem.TownOperate</c>: a farm or
+    /// a producer, with an output and operators), cached in <paramref name="known"/>.
+    /// </summary>
+    static bool TownMachine(Data.GameDatabase db, Dictionary<string, bool> known, string record)
+    {
+        if (known.TryGetValue(record, out bool machine)) return machine;
+
+        machine = db.Find(record) is { } r && MachineData.From(db, r) is { Output: not null, Unattended: false } data
+            && (data.IsProducer || data.Farm is not null);
+        known[record] = machine;
+        return machine;
     }
 
     /// <summary>

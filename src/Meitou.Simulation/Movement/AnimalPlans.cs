@@ -6,7 +6,19 @@ namespace Meitou.Simulation.Movement;
 /// <summary>
 /// An animal's clips with those its skeleton lacks taken out, and the fall and lying clip chosen (<see cref="AnimalPlans.Of"/>).
 /// </summary>
-sealed record AnimalPlan(int[] Movement, IReadOnlyList<(int Index, float Weight)> Idles, int Fall, int Lying, AnimationLengths Lengths);
+sealed record AnimalPlan(int[] Movement, IReadOnlyList<(int Index, float Weight)> Idles, int Fall, int Lying, (string Name, int Index)[] Actions,
+    AnimationLengths Lengths)
+{
+    /// <summary>
+    /// The animal's own clip of record name <paramref name="name"/> (a job's, <c>eat</c>); -1 when its list has none its skeleton plays.
+    /// </summary>
+    public int Action(string name)
+    {
+        foreach (var (n, i) in Actions)
+            if (n == name) return i;
+        return -1;
+    }
+}
 
 /// <summary>
 /// The animals' plans (<see cref="AnimalPlan"/>), made once per clip set on first use from the clip library and the races' skeleton lengths; read
@@ -32,7 +44,7 @@ sealed class AnimalPlans(AnimationLibrary library, AnimationLengths lengths)
     /// <summary>
     /// The plan of an animal's clip set: the race's skeleton lengths (<see cref="AnimationLengths.For"/>), and when that skeleton was read, only the
     /// clips it has (a record whose clip the skeleton lacks would pose nothing: the skimmer's <c>idle1</c>); the first fall and lying candidates it
-    /// has.
+    /// has, and its other clips it has.
     /// </summary>
     public AnimalPlan Of(AnimalClips clips) => _plans.GetOrAdd(clips.RecordId, static (_, s) =>
     {
@@ -45,6 +57,7 @@ sealed class AnimalPlans(AnimationLibrary library, AnimationLengths lengths)
             foreach (int i in list) if (Has(i)) return i;
             return -1;
         }
-        return new AnimalPlan([.. c.Movement.Where(Has)], [.. c.Idles.Where(x => Has(x.Index))], First(c.Fall), First(c.Lying), lengths);
+        return new AnimalPlan([.. c.Movement.Where(Has)], [.. c.Idles.Where(x => Has(x.Index))], First(c.Fall), First(c.Lying),
+            [.. c.Actions.Where(x => Has(x.Index))], lengths);
     }, (this, clips));
 }

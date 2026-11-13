@@ -985,7 +985,7 @@ public sealed class AnimationSystem(
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal)
-            return UpdateAnimal(a, cold, _animalPlans.Of(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
+            return UpdateAnimal(a, cold, _animalPlans.Of(animal), speed, dt, seed, key, tick, lower, fight, ragdoll, task);
 
         if (a.Rate == 0) a.Rate = cold.Appearance is { } look ? 2 - CharacterShape.MovementScaleOf(look) : 1;
 
@@ -1697,10 +1697,11 @@ public sealed class AnimationSystem(
     /// speed (unsynched: F x <c>play speed</c> x v clip seconds per second, F = 1 / its size: the humanoid F = (2 - H) / g with H = 1 and g the size,
     /// an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down,
     /// its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no
-    /// getting up (none exists: it fades back to standing). Root motion of an attack is scaled by the size.
+    /// getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body), its own clip of that name.
+    /// Root motion of an attack is scaled by the size.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
-        List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll)
+        List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll, CharacterTask task)
     {
         float size = cold.Medical?.ScaleK ?? 1;
         if (!(size > 0.01f)) size = 1;
@@ -1730,6 +1731,11 @@ public sealed class AnimationSystem(
             a.Idle = -1;
         }
         else if (technique >= 0) wanted.Add((technique, 1));
+        else if (!down && JobClip(cold, plan, task) is >= 0 and var job)
+        {
+            wanted.Add((job, 1));
+            a.Idle = -1;
+        }
         else
         {
             // Down without any lying clip (the crab, the robot spiders, gorillos: their skeletons have none) it stays in its idle rather than the
@@ -1748,6 +1754,13 @@ public sealed class AnimationSystem(
         }
         return Settle(a, wanted, 0, -1, 0, technique, fight, v, dt, plan.Lengths, size, seed, key, tick);
     }
+
+    /// <summary>
+    /// The animal's own clip for the job clip it stands in (<see cref="CharacterCold.ActionClip"/>, Task_EatPrisoner's <c>eat</c>): the library's
+    /// clip of that name is a humanoid ANIMATION, which an animal skeleton cannot play. -1: none.
+    /// </summary>
+    static int JobClip(CharacterCold cold, AnimalPlan plan, CharacterTask task) =>
+        task == CharacterTask.Idle && cold.ActionClip is { } act ? plan.Action(act) : -1;
 
     #endregion
 

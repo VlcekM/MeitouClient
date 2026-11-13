@@ -75,6 +75,7 @@ static class SaveProbe
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
+            case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
@@ -559,6 +560,23 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The machines of town buildings (<see cref="Meitou.Simulation.Production.ProductionSystem.IsTownWork"/>) within <paramref name="radius"/> of the leader: status, output,
+    /// inputs, a farm's growth, death and harvested plants, and last tick's operators.
+    /// </summary>
+    static void Machines(ProbeWorld probe, float radius)
+    {
+        foreach (var m in probe.World.Machines.All.Where(m => Meitou.Simulation.Production.ProductionSystem.IsTownWork(m.Site)))
+        {
+            if (Vector3.Distance(m.Position, probe.LeaderPosition) > radius) continue;
+
+            var inputs = string.Join(" ", m.Inputs.Select(i => $"{i.Item}:{i.Count}/{i.Level:F2}"));
+            var output = m.Output is { } o ? $"{o.Recipe.Item}:{o.Count} ({o.Progress:F2})" : "none";
+            var farm = m.Farm is { } f ? $" growth={f.Growth:F2} death={f.Death:F2} harvested={f.Harvested}/{f.Plants.Length} farm={f.Status}" : "";
+            Console.WriteLine($"{m.Site} '{m.Data.Id}' at {m.Position:F0} st={m.Status} out={output} in=[{inputs}]{farm} operators={m.LastOperators}");
+        }
+    }
+
+    /// <summary>
     /// The research state and each research bench with the factors of its rate: health, power, the research production mult and operators.
     /// </summary>
     static void Research(ProbeWorld probe)
@@ -691,6 +709,7 @@ static class SaveProbe
               talk <name>              whether a character can be talked to, and its talk roots
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
+              machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)

@@ -60,7 +60,7 @@ public sealed partial class CrimeSystem
     /// resident squad of the building the container is furniture of (<c>Building::residentSquad</c>, its active platoon), not down, those on the
     /// thief's floor first; none without a resident squad. -1: none. Engine: every squad living there counts (Meitou may house more than one).
     /// </summary>
-    static int Watcher(World world, int thief, Locks.Fixture container)
+    static int Watcher(World world, int thief, StealSource container)
     {
         var table = world.Characters;
         int floor = world.Sight.FloorOf(thief, table.Next[thief].Position);
@@ -114,7 +114,13 @@ public sealed partial class CrimeSystem
     /// is imprisoned or its pending crime's timer (+0x180) is 10 or more after the roll, so a caught thief, whose Theft has 30, gets none. Floors are
     /// the sight map's (<c>getFloor</c>).
     /// </summary>
-    public bool Steal(World world, int thief, Locks.Fixture container, CrimeCode code)
+    public bool Steal(World world, int thief, Locks.Fixture container, CrimeCode code) => Steal(world, thief, StealSource.Of(container), code);
+
+    /// <summary>
+    /// <see cref="Steal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods: a container or a town building's
+    /// machine.
+    /// </summary>
+    public bool Steal(World world, int thief, StealSource container, CrimeCode code)
     {
         var table = world.Characters;
         if (table.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container)) return false;
@@ -163,7 +169,12 @@ public sealed partial class CrimeSystem
     /// <c>InventoryGUI::isStealing</c> for a take out of a container: not one of a <c>not real</c> faction, nor a building of <c>building
     /// category</c> CAMPING.
     /// </summary>
-    public static bool IsStealing(World world, Locks.Fixture container) =>
+    public static bool IsStealing(World world, Locks.Fixture container) => IsStealing(world, StealSource.Of(container));
+
+    /// <summary>
+    /// <see cref="IsStealing(World, Locks.Fixture)"/> for any holder of goods (a container or a town building's machine).
+    /// </summary>
+    public static bool IsStealing(World world, StealSource container) =>
         !NotReal(world, container.Owner) && world.SystemOf<Construction.ConstructionSystem>()?.Data(container.RecordId)?.Category != "CAMPING";
 
     /// <summary>
@@ -261,4 +272,18 @@ public sealed partial class CrimeSystem
         SetPending(world, thief, CrimeCode.Theft, owner, CharacterId.None, MinTimer);
         if (c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp);
     }
+}
+
+/// <summary>
+/// What goods are stolen out of: a container (<see cref="Locks.Fixture"/>) or a town building's machine, the building itself (the original's
+/// inventory GUI asks the same of either): its id (the roll's seed), owner faction, the run-time key of the building it belongs to (whose residents
+/// watch it), where it stands and its BUILDING record.
+/// </summary>
+public readonly record struct StealSource(string Id, int Owner, string Building, Vector3 Position, string RecordId)
+{
+    /// <summary>
+    /// A container's.
+    /// </summary>
+    public static StealSource Of(Locks.Fixture container) =>
+        new(container.Id, container.Owner, container.Building, container.Position, container.RecordId);
 }

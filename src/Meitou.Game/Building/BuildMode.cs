@@ -987,10 +987,10 @@ sealed class BuildMode(PlayerInterface player)
     (BuildingSnapshot Site, Vector2 At, long Since)? _sitePending;
 
     /// <summary>
-    /// A storage the selection was sent to open (a quick right click) and when; it opens when one of them is near enough, or is dropped when they
-    /// stop short.
+    /// A storage (or a town building's machine) the selection was sent to open (a quick right click or Loot): its site id, where it stands, the
+    /// selection it opens as, and when; it opens when one of them is near enough, or is dropped when they stop short.
     /// </summary>
-    (BuildingSnapshot Site, long Since)? _storageOpening;
+    (string Id, Vector3 Position, BuildingSelection.SelectedBuilding Selection, long Since)? _storageOpening;
 
     /// <summary>
     /// The storage whose window shows the character's inventory beside it (opened by an order, not by selecting it).
@@ -1310,10 +1310,16 @@ sealed class BuildMode(PlayerInterface player)
     /// A finished storage or furnace of the player's: the selection walks to it, and on arrival its window opens with the character's inventory
     /// beside it (the original's order 26, LOOT_TARGET, pointer search). A left click on a storage shows its window alone.
     /// </summary>
-    void OpenStorage(BuildingSnapshot site)
+    void OpenStorage(BuildingSnapshot site) => OpenMachineWindow(site.Id, site.Position, player.BuildingSelection.SiteBuilding(site));
+
+    /// <summary>
+    /// The selection walks to the machine of site <paramref name="id"/> at <paramref name="position"/>; on arrival its window opens with the
+    /// character's inventory beside it and <paramref name="selection"/> becomes the selected building.
+    /// </summary>
+    internal void OpenMachineWindow(string id, Vector3 position, BuildingSelection.SelectedBuilding selection)
     {
-        player.Move(site.Position, false);
-        _storageOpening = (site, System.Diagnostics.Stopwatch.GetTimestamp());
+        player.Move(position, false);
+        _storageOpening = (id, position, selection, System.Diagnostics.Stopwatch.GetTimestamp());
     }
 
     /// <summary>
@@ -1324,23 +1330,24 @@ sealed class BuildMode(PlayerInterface player)
         if (_storageOpening is not { } pending) return;
         var selected = player.Selected();
         double waited = System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds;
-        if (selected.Count == 0 || waited > 120 || player.Session.CurrentSnapshot.Buildings.All(b => b.Id != pending.Site.Id))
+        bool gone = player.Session.CurrentSnapshot.Buildings.All(b => b.Id != pending.Id) && player.Production.Machine(pending.Id) is null;
+        if (selected.Count == 0 || waited > 120 || gone)
         {
             _storageOpening = null;
             return;
         }
 
-        var at = new Vector2(pending.Site.Position.X, pending.Site.Position.Z);
+        var at = new Vector2(pending.Position.X, pending.Position.Z);
         if (selected.Any(c => Vector2.Distance(new(c.Position.X, c.Position.Z), at) <= StorageArrive))
         {
             _storageOpening = null;
             // A window shown alone (a left click) or closed by the player opens again through SyncMachineScreens, with the inventory beside it,
             // as when the order opens both.
-            bool docked = StorageWithInventory == pending.Site.Id && player.FaithfulScreens?.IsOpen("inventory") == true;
-            if (!docked && player.Production.ShownMachine == pending.Site.Id) player.Production.ShownMachine = null;
-            if (player.Production.ClosedMachine == pending.Site.Id) player.Production.ClosedMachine = null;
-            StorageWithInventory = pending.Site.Id;
-            player.BuildingSelection.SetBuilding(player.BuildingSelection.SiteBuilding(pending.Site));
+            bool docked = StorageWithInventory == pending.Id && player.FaithfulScreens?.IsOpen("inventory") == true;
+            if (!docked && player.Production.ShownMachine == pending.Id) player.Production.ShownMachine = null;
+            if (player.Production.ClosedMachine == pending.Id) player.Production.ClosedMachine = null;
+            StorageWithInventory = pending.Id;
+            player.BuildingSelection.SetBuilding(pending.Selection);
         }
         // they stopped short: another order was given
         else if (waited > 2 && selected.All(c => c.Task != Simulation.Movement.CharacterTask.GoTo)) _storageOpening = null;

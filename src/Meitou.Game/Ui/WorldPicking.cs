@@ -289,12 +289,17 @@ sealed class WorldPicking(PlayerInterface player)
         /// A seat.
         /// </summary>
         Seat,
+
+        /// <summary>
+        /// A town building that is a machine (a farm, a mine).
+        /// </summary>
+        TownMachine,
     }
 
     /// <summary>
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest
-    /// along the ray of a character with a quick order, a ground item, a container, a door, a rock, a town turret and a site that is an object
-    /// (unfinished, a machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
+    /// along the ray of a character with a quick order, a ground item, a container, a door, a rock, a town turret, a town machine (a farm by its plot)
+    /// and a site that is an object (unfinished, a machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
     /// (each helper's <see cref="PlayerInterface.Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click
     /// only when nothing is (<see cref="BuildMode.SitePress"/>). Hover and click share it, as in the original.
     /// </summary>
@@ -329,6 +334,7 @@ sealed class WorldPicking(PlayerInterface player)
         Offer(Picked.Dummy, player.Furniture.PickDummyAt(p)?.T);
         Offer(Picked.Rock, player.Furniture.PickRockAt(p)?.T);
         Offer(Picked.TownTurret, player.Furniture.PickTownTurretAt(p)?.T);
+        Offer(Picked.TownMachine, player.TownMachines.PickAt(p)?.T);
         if (player.Build.PickSiteAt(p) is { } site && player.Build.SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
 
         // An item behind the container, bed or cage met first but lying inside its bounds takes the click (the original's walk, FUN_140800250: the

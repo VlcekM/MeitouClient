@@ -111,13 +111,15 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The machine of a focused site: a natural site's (a rock's, once mined, is no registry building) or a complete building's; null for any other.
+    /// The machine of a focused site: a natural site's (a rock's, once mined, is no registry building), a town building's or a complete building's;
+    /// null for any other.
     /// </summary>
     MachineSnapshot? SiteMachine(string? site)
     {
         if (site is not { } id) return null;
 
-        bool built = ProductionSystem.IsNatural(id) || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true };
+        bool built = ProductionSystem.IsNatural(id) || ProductionSystem.IsTownWork(id)
+            || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true };
         return built ? Machine(id) : null;
     }
 

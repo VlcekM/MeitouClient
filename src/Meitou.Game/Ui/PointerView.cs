@@ -197,6 +197,8 @@ sealed class PointerView(PlayerInterface player)
                 return ("mine", null);
             case WorldPicking.Picked.Site when player.Build.SitePointer(player.Mouse) is { } siteMode:
                 return (siteMode, null);
+            case WorldPicking.Picked.TownMachine when player.TownMachines.Pointer(player.Mouse) is { } machineMode:
+                return (machineMode, null);
         }
 
         return ("arrow", null);

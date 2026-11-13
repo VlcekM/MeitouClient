@@ -783,7 +783,7 @@ the [layout's plant count](#farm-plants), not `amount`.
 - **Status** (`+0x468`): 3 growing with water, 0 no water, 2 harvestable or dead, 1 output full.
 - **Save** (GAMESTATE_BUILDING, after the [production keys](#production)): floats `plant growth` (farm growth), `plant death` (d),
   `plant start`, `save time` (game hours); int `plants harvested`. A load with more than an hour since `save time`
-  simulates the gap (`FUN_1400df6e0`); with no farm keys, growth is random (`FUN_1409b1c10`).
+  simulates the gap (`FUN_1400df6e0`); with no farm keys, the farm growth (not the plants) is `rand() / 32768` (`FUN_1409b1c10`, **Verified**, `FUN_1400e3de0`), which the first tick that grows the plants takes back to the lowest of them, so such a farm is in effect freshly planted. The base game's level files carry no farm keys for town farms (**Verified**: none in `rebirth/zone.21.42.zone`, Shark). The live tick tests no owner (**Verified**, `FUN_1400e5580`): a town farm grows, draws water and is rained on as the player's; only the catch-up ignores water for it.
 
 ### Farm plants
 
@@ -1122,6 +1122,10 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
   research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)). Row 94 (`WANT_TO_FILL_MACHINE`, effect 66) and its finder `FUN_14059d9b0` (**Verified**: for each input item of the target machine in list order, `FUN_14059d000` looks for a cached earlier pick, then loose ground items, then the nearest building whose production component's output lists the item (identity for ITEM records, same record type otherwise) with some in it, the buildings split by the owner test of vfunc `0x3b0`, within the sight range of the AI's range mode) give the chain 92 at the source, 94, 93 at the machine, 87: Meitou plans it (`PlanContext.Find` row 94, states 66 / 67 on machine targets), the worker walks to the source (`AiSystem.StepBuilding`), `TownWorkers` empties it (92), fills the inputs (93, `FillInputs`) and operates. Not modelled (**Unknown** or undecoded): the cached pick, ground items, the `0x3b0` split and the building mask `0x4002436` (the town's workplaces stand in). A machine exists only once a worker has been at its building; the original's has its empty output from the start, so a source with no output yet is none in both. Unpowered: town machines draw no player grid (power held true).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
+  Town farms (#625): every town building whose record is a farm has its machine as soon as its zone is active (`ProductionSystem.TownFarms`; a ruin has none), starting as a farm with no saved keys
+  does ([farming](#farming)), so it grows whether a worker came; a worker of 87 at it harvests and tends it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
+  empties. Whether the planner sends town farmers to a ripe farm is the planner's ([farming](#farming): status 3 has no provider of 87). The player's Use and Loot on a town machine:
+  [ui-input](ui-input.md#building-picking-and-selection). Crop eaters (232) still look only in player towns (`CaptiveSystem.CropsToEat`).
 ### Hauling
 
 - **Tasks** (**Verified** classes, **Observed** meaning): `Task_EmptyMachine` (92 "Collecting resource", 284 "Looting")

@@ -383,7 +383,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             {
                 case OperateOrder order:
                     {
-                        var site = Site(world, order.Site);
+                        var site = Site(world, order.Site) ?? TownMachineSite(world, order.Site);
                         if (site is not { Complete: true } || (Ensure(world, site) is not { } machine)) break;
                         var table = world.Characters;
 
@@ -447,13 +447,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// The nearest able one of the order's characters mans the turret, the player's or a town's (<see cref="TownTurret"/>; the original's
+    /// The nearest able one of the order's characters mans the turret, the player's or a town's (<see cref="TownMachineSite"/>; the original's
     /// <c>Task_UseTurret</c>): it operates it, walking to its gunner spot (engine choice: one gunner, the original's pick among several is Unknown);
     /// someone else at it already: "is already in use".
     /// </summary>
     void UseTurret(World world, UseTurretOrder order)
     {
-        var target = Site(world, order.Site) ?? TownTurret(world, order.Site);
+        var target = Site(world, order.Site) ?? TownMachineSite(world, order.Site);
         if (target is not { Complete: true } site || TurretPostOf(site) is not { } post || Ensure(world, site) is not { } m) return;
         var spot = AiSystem.TurretSpot(world, post);
         var table = world.Characters;
@@ -896,6 +896,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var research = world.Research;
         research.Rate = 0;
         int bench = ResetOperators(world);
+        TownFarms(world);
         TownWorkers(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.
@@ -2009,18 +2010,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Site(world, take.Site) is not { Complete: true } site || world.Machines.Find(take.Site) is not { } m
             || !Near(world, take.Character, site, out var cold))
             return;
+        if (CaughtTaking(world, TownGoods(take.Site), take.Character, cold, out var mark)) return;
 
         var root = cold.Inventory!;
         if (take.Slot == -1)
         {
-            if (m.Storage is not { } storage || m.Closed || take.Index < 0 || take.Index >= storage.Items.Count) return;
-
-            // What does not fit stays in the storage.
-            if (InventoryCommands.MoveInto(storage, storage.Items[take.Index], InventoryCommands.ClickCount(storage.Items[take.Index], take.Count),
-                root, take.BagFirst, out bool worn, cold) > 0)
-                world.Machines.Touch();
-
-            if (worn) Assembly?.RefreshEquipment(cold);
+            TakeStored(world, m, cold, take, mark);
             return;
         }
 
@@ -2035,11 +2030,31 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             : take.Slot >= 0 && take.Slot < m.Inputs.Length ? (m.Inputs[take.Slot].Item, m.Inputs[take.Slot].Count) : ("", 0);
         if (take.Count > 0) held.Count = Math.Min(held.Count, take.Count);
         if (held.Count <= 0 || _items.Create(held.Item, held.Count) is not { } made) return;
+        made.Mark = mark;
         int moved = Placed(root, made);
         if (moved <= 0) return;
         if (take.Slot == -2) m.Output!.Count -= moved;
         else m.Inputs[take.Slot].Count -= moved;
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Takes an item out of a machine's storage grid into the character's inventory (what does not fit stays in the storage); the units taken get
+    /// <paramref name="mark"/> when it is a theft (<see cref="CaughtTaking"/>).
+    /// </summary>
+    void TakeStored(World world, Machine m, CharacterCold cold, TakeFromMachine take, StolenMark mark)
+    {
+        if (m.Storage is not { } storage || m.Closed || take.Index < 0 || take.Index >= storage.Items.Count) return;
+
+        var item = storage.Items[take.Index];
+        var kept = item.Mark;
+        if (mark != StolenMark.None && kept == StolenMark.None) item.Mark = mark;
+
+        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
+            out bool worn, cold);
+        if (storage.Items.Contains(item)) item.Mark = kept;   // what stayed keeps its mark
+        if (moved > 0) world.Machines.Touch();
+        if (worn) Assembly?.RefreshEquipment(cold);
     }
 
     #endregion

@@ -79,7 +79,8 @@ public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
 /// <paramref name="Type"/> the record's name when it differs; <paramref name="Town"/> and <paramref name="Owner"/> are null when it is in no town or
 /// the town gives none; <paramref name="PublicDay"/> / <paramref name="PublicNight"/> are the state's flags; <paramref name="Turret"/> marks a town's
 /// turret building (<c>TownBuilding.Turret</c>); <paramref name="Pieces"/> are the furniture standing in it that a click selects
-/// (<c>TownBuilding.Pieces</c>), none once it is bought or ruined.
+/// (<c>TownBuilding.Pieces</c>), none once it is bought or ruined; <paramref name="Machine"/> marks a town's building whose record is a machine
+/// its workers operate (a farm, a mine, a refinery: <c>ProductionSystem.TownWork</c>).
 /// </summary>
 public sealed record WorldBuildingInfo(
     string Name,
@@ -90,7 +91,8 @@ public sealed record WorldBuildingInfo(
     bool PublicNight = false,
     bool Destroyed = false,
     bool Turret = false,
-    IReadOnlyList<Data.World.TownPiece>? Pieces = null);
+    IReadOnlyList<Data.World.TownPiece>? Pieces = null,
+    bool Machine = false);
 
 /// <summary>
 /// What the game interface needs from the host to run build mode: the catalog, names, the parts of a building, the placement services and the ghost

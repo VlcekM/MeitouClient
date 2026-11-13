@@ -118,6 +118,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal FurnitureUse Furniture => field ??= new(this);
     /// <summary>
+    /// What a right click does with a town building that is a machine (a farm, a mine).
+    /// </summary>
+    internal TownMachineUse TownMachines => field ??= new(this);
+    /// <summary>
     /// Squad management (docs/game/ui-screens.md "Squads tab", the original's SquadManagementScreen).
     /// </summary>
     internal SquadPanel SquadWindows => field ??= new(this);
@@ -886,6 +890,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (kind == WorldPicking.Picked.Cage && Furniture.CageClick(p)) return;
         if (kind == WorldPicking.Picked.Dummy && Furniture.DummyPress(p)) return;
         if (kind == WorldPicking.Picked.TownTurret && Furniture.TownTurretPress(p)) return;
+        if (kind == WorldPicking.Picked.TownMachine && TownMachines.Press(p)) return;
         if (kind == WorldPicking.Picked.Rock && Furniture.RockPress(p)) return;
         if (kind is WorldPicking.Picked.Site or WorldPicking.Picked.None && Build.SitePress(p)) return;
         if (Ray(p) is { } ray && Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)

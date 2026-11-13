@@ -12,8 +12,9 @@ namespace Meitou.Simulation.Saving;
 /// Meitou's town buildings of a new game have no state record to put them in, so they are Meitou-only keys:
 /// <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c> (progress, float),
 /// <c>meitou tm&lt;i&gt; outn</c> (output items, int), <c>meitou tm&lt;i&gt; st</c> (status, int),
-/// <c>meitou tm&lt;i&gt; in&lt;k&gt;</c> (items of input k, int) and <c>meitou tm&lt;i&gt; lv&lt;k&gt;</c> (its level, float).
-/// The original ignores them (keys are read by name).
+/// <c>meitou tm&lt;i&gt; in&lt;k&gt;</c> (items of input k, int) and <c>meitou tm&lt;i&gt; lv&lt;k&gt;</c> (its level, float); a farm's the farm keys
+/// of its GAMESTATE_BUILDING as <c>meitou tm&lt;i&gt; pg</c> (<c>plant growth</c>), <c>pd</c> (<c>plant death</c>), <c>ps</c> (<c>plant start</c>),
+/// <c>pt</c> (<c>save time</c>), floats, and <c>ph</c> (<c>plants harvested</c>), int. The original ignores them (keys are read by name).
 /// </summary>
 public static class TownMachineSave
 {
@@ -40,6 +41,7 @@ public static class TownMachineSave
             if (!ProductionSystem.IsTownWork(m.Site)) continue;
             camera.Strings[Key(n)] = m.Site[ProductionSystem.TownWorkPrefix.Length..];
             WriteState(camera, Key(n), m);
+            WriteFarm(camera, Key(n), m, world.GameHours);
             n++;
         }
     }
@@ -76,6 +78,7 @@ public static class TownMachineSave
         {
             if (resolve(key) is not { } found || production.TownWork(world, found.Building, found.Owner) is not { } m) continue;
             ReadState(camera, Key(i), m);
+            ReadFarm(camera, Key(i), m);
         }
 
         world.Machines.Touch();
@@ -140,5 +143,36 @@ public static class TownMachineSave
             m.Inputs[k].Count = Math.Clamp(camera.Ints.GetValueOrDefault(entry + " in" + part), 0, m.Inputs[k].Recipe.Capacity);
             m.Inputs[k].Level = camera.Floats.GetValueOrDefault(entry + " lv" + part);
         }
+    }
+
+    /// <summary>
+    /// Writes a farm's growth, death, start, harvested plants and the hour it last grew (the game's hour when it has not grown yet) as the parts of
+    /// the entry <paramref name="entry"/>; nothing for a machine that is no farm.
+    /// </summary>
+    static void WriteFarm(FcsRecord camera, string entry, Machine m, double gameHours)
+    {
+        if (m.Farm is not { } f) return;
+
+        camera.Floats[entry + " pg"] = f.Growth;
+        camera.Floats[entry + " pd"] = f.Death;
+        camera.Floats[entry + " ps"] = f.Start;
+        camera.Floats[entry + " pt"] = (float)(double.IsNaN(f.LiveHours) ? gameHours : f.LiveHours);
+        camera.Ints[entry + " ph"] = f.Harvested;
+    }
+
+    /// <summary>
+    /// Reads a farm's keys from the parts of the entry <paramref name="entry"/>, the plants as a player farm's load sets them
+    /// (<see cref="MachineSave"/>: the harvested ones at -10, the rest at the growth); nothing without them (an older save keeps the random start).
+    /// </summary>
+    static void ReadFarm(FcsRecord camera, string entry, Machine m)
+    {
+        if (m.Farm is not { } f || !camera.Floats.TryGetValue(entry + " pg", out float growth)) return;
+
+        f.Growth = growth;
+        f.Death = camera.Floats.GetValueOrDefault(entry + " pd");
+        f.Start = camera.Floats.GetValueOrDefault(entry + " ps");
+        f.Harvested = Math.Clamp(camera.Ints.GetValueOrDefault(entry + " ph"), 0, f.Plants.Length);
+        if (camera.Floats.TryGetValue(entry + " pt", out float saved)) f.LiveHours = saved;
+        for (int i = 0; i < f.Plants.Length; i++) f.Plants[i] = i < f.Harvested ? -10 : f.Growth;
     }
 }

@@ -8,22 +8,27 @@ using Meitou.Simulation.Production;
 namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
-/// The crops of the player's farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot is laid out once per building
-/// (positions, meshes, seeded by its id) and its plants' transforms follow its <see cref="FarmView.PlantGrowth"/> and death whenever the machines
-/// change.
+/// The crops of the farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot, the player's sites' and the towns'
+/// (<see cref="ProductionSystem.IsTownWork"/>), is laid out once per building (positions, meshes, seeded by its id) and its plants' transforms follow
+/// its <see cref="FarmView.PlantGrowth"/> and death whenever the machines change.
 /// </summary>
 sealed class FarmCrops(GameHost host)
 {
     /// <summary>
-    /// A farm's crops as laid out once for its building: the site, its farm data, the plant layout and meshes, and what was last handed to
+    /// Where a farm's building stands: its site id, BUILDING record, position and rotation.
+    /// </summary>
+    readonly record struct FarmPlace(string Id, string Record, Vector3 Position, Quaternion Rotation);
+
+    /// <summary>
+    /// A farm's crops as laid out once for its building: the place, its farm data, the plant layout and meshes, and what was last handed to
     /// the renderer.
     /// </summary>
-    sealed class FarmLook(BuildingSnapshot site, FarmData data, FarmPlants plants, PlacedMesh[] meshes, float height)
+    sealed class FarmLook(FarmPlace site, FarmData data, FarmPlants plants, PlacedMesh[] meshes, float height)
     {
         /// <summary>
-        /// The site as it was when laid out: a farm moved or with another record is laid out again.
+        /// The place as it was when laid out: a farm moved or with another record is laid out again.
         /// </summary>
-        public readonly BuildingSnapshot Site = site;
+        public readonly FarmPlace Site = site;
         /// <summary>
         /// The farm's FARM data (its parts and growth look).
         /// </summary>
@@ -63,6 +68,14 @@ sealed class FarmCrops(GameHost host)
     /// </summary>
     readonly Dictionary<string, FarmData?> _farmData = new(StringComparer.Ordinal);
     /// <summary>
+    /// The towns' buildings by run-time key (<see cref="TownBuildingOf"/>), and the revision of their lists it was made from.
+    /// </summary>
+    Dictionary<string, TownBuilding>? _townBuildings;
+    /// <summary>
+    /// See <see cref="_townBuildings"/>.
+    /// </summary>
+    int _townBuildingsRevision = -1;
+    /// <summary>
     /// The snapshot's machines version and buildings revision last laid out; (-1, -1) lays out the next snapshot.
     /// </summary>
     (long Machines, long Buildings) _farmsVersion = (-1, -1);
@@ -79,9 +92,8 @@ sealed class FarmCrops(GameHost host)
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var machine in snapshot.Machines)
         {
-            if (machine.Farm is not { } view || !host.BuildingSync.ShownBuildings.TryGetValue(machine.Site, out var site)) continue;
-            if (!_farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position
-                    || look.Site.Rotation != site.Rotation)
+            if (machine.Farm is not { } view || PlaceOf(machine.Site) is not { } site) continue;
+            if (!_farms.TryGetValue(site.Id, out var look) || look.Site != site)
             {
                 if (MakeFarm(db, objects, site) is not { } made) continue;
                 _farms[site.Id] = look = made;
@@ -107,9 +119,37 @@ sealed class FarmCrops(GameHost host)
     }
 
     /// <summary>
-    /// Lays out a site's farm (its plants, meshes and height); null when its record has no farm parts or is missing.
+    /// Where the farm of a machine's site stands: a player's site shown, else a town building's; null for neither.
     /// </summary>
-    FarmLook? MakeFarm(Data.GameDatabase db, Rendering.Objects.WorldObjectRenderer objects, BuildingSnapshot site)
+    FarmPlace? PlaceOf(string id)
+    {
+        if (host.BuildingSync.ShownBuildings.TryGetValue(id, out var site)) return new(site.Id, site.Record, site.Position, site.Rotation);
+        if (!ProductionSystem.IsTownWork(id) || TownBuildingOf(id[ProductionSystem.TownWorkPrefix.Length..]) is not { } b) return null;
+
+        return new(id, b.BuildingId, b.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw));
+    }
+
+    /// <summary>
+    /// The town building of a run-time key, over the towns' lists (made again when they change); null for none.
+    /// </summary>
+    TownBuilding? TownBuildingOf(string key)
+    {
+        if (host.PopData is not { } data) return null;
+        if (_townBuildings is null || _townBuildingsRevision != data.BuildingsRevision)
+        {
+            _townBuildingsRevision = data.BuildingsRevision;
+            _townBuildings = new(StringComparer.Ordinal);
+            foreach (var town in data.Sites)
+                foreach (var b in town.Buildings) _townBuildings[b.Key] = b;
+        }
+
+        return _townBuildings.GetValueOrDefault(key);
+    }
+
+    /// <summary>
+    /// Lays out a farm (its plants, meshes and height); null when its record has no farm parts or is missing.
+    /// </summary>
+    FarmLook? MakeFarm(Data.GameDatabase db, Rendering.Objects.WorldObjectRenderer objects, FarmPlace site)
     {
         if (!_farmData.TryGetValue(site.Record, out var data))
             _farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;
