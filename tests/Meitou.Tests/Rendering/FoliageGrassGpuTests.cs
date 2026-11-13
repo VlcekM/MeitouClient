@@ -67,7 +67,7 @@ public class FoliageGrassGpuTests
 
             // A third of the ranges sit on the page's distance or a step beside it.
             float range = (i % 3) switch { 0 => d, 1 => MathF.BitIncrement(d), _ => d + (float)(random.NextDouble() * 4000 - 2000) };
-            pages[i] = new Page(new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = (uint)(i * 7),
+            pages[i] = new Page(new GrassSlot { X0 = x0, Z0 = z0, YMin = y - 2000, YMax = y + 2000, FirstBlade = (uint)(i * 7),
                     Count = (uint)prefix[^1] + (i % 11 == 0 ? 0u : 1u), Zone = (uint)i, Local = 0, Tie = (uint)(random.Next(1 << 20) << 8) },
                 prefix, range, i % 13 != 0, i % 5 == 0 ? 12u : 6u);
         }
@@ -88,7 +88,7 @@ public class FoliageGrassGpuTests
             var s = p.Slot;
             if (s.Count == 0 || !p.Active) continue;
             float d = BoxDistance(s.X0, s.Z0, PageSize, ex, ez);
-            if (!WorldCamera.Intersects(planes, new Vector3(s.X0, s.Y - 2000, s.Z0), new Vector3(s.X0 + PageSize, s.Y + 2000, s.Z0 + PageSize)))
+            if (!WorldCamera.Intersects(planes, new Vector3(s.X0, s.YMin, s.Z0), new Vector3(s.X0 + PageSize, s.YMax, s.Z0 + PageSize)))
                 continue;
             if (d >= p.Range) continue;
             int shown = FoliageGrassField.PrefixCount(p.Prefix, fraction);

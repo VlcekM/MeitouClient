@@ -22,6 +22,14 @@ Under a mod's row, a Settings group holds the settings its code registered (`Mod
 open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A group whose mod
 mods.cfg does not list comes after the list under the mod's name.
 
+Graphics techniques that exclude each other are one list each on the Lighting tab (`WorldFrame.AddChoiceSliders`), heading their feature group:
+Sun shadows (Off / Faithful cascades / Meitou cascades / Traced: Off is the shadow distance at its left end, Traced turns the global illumination on,
+whose rays it uses), Ambient occlusion (Off / SSAO / GTAO), Global illumination (Off / Probes / Probes + hybrid; Off leaves the cascades). Each reads
+and writes the switches it stands for, which keep their saved keys and get no rows of their own; the screen-space contact shadows, in the Shadows group,
+have no row where the device traces rays. The looks and the tiers set the switches, not the choices.
+
+A row whose setting is read at start-up only (`SettingsMenu.RestartKeys`: frame generation, HDR output, texture quality, the water grid and its wave resolution) carries a tag beside its name: "Needs restart", and a filled "Restart to apply" once its value is no longer the one the game started with. The Display page folds the upscaler's and the HDR output's settings under their rows, as the Graphics features. An optional effect's switch is Off | On.
+
 Graphics (`LookPresets`, `QualityTiers`, `FeatureGrouping`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:
 - **Look**: Faithful | Meitou (`faithfulLook`). Faithful is the game as it ships: every Faithful / Meitou effect switch off,
@@ -35,27 +43,49 @@ rows above its tabs:
   64 KiB inflated; names at most 40 characters, `LookPresetFile`, shared with the launcher). A preset whose file fails to write is
   not added. Unsaved `faithfulLook` is guessed from the effect switches (tier switches and bloom ignored) and not saved;
   `--faithful all` / `--meitou all` set it, a partial list leaves it guessed.
-- **Quality**: Low / Medium / High / Ultra / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider makes
-  it Custom). It sets the distance, foliage, grass, reflection, shadow, particle density, filtering, texture, ground relief quality and
-  depth (20 cm), shaft quality sliders, the fifth cascade and the relief switches (rock smoothing and outline refinement at Ultra;
-  Meitou only). High is the start default and sets render scale Quality 0.67 (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS),
-  not counted when reading the tier; Medium and Ultra leave the scale; distances that follow a switch's side (Draw distances, Shadows) are multiples of that
-  side's mark, so a tier reads the same in either look. Low is `--low-end` (`WorldOptions.LowEnd*`): also shadows and relief
-  off, quarter-size particles, no anti-aliasing at 0.83 render scale. Low holds the costly look switches off (AO, light shafts,
-  water, Meitou shadows, parallax, displacement) without changing the preset; turning one on keeps it on at Low (`keepAtLow`),
-  leaving Low gives them back. The tier's name is saved (`graphicsPreset`); a saved name the settings do not sit at (one the
-  launcher chose) is applied at start.
+- **Quality**: Low / Medium / High / Ultra / Extreme / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider
+  makes it Custom). Each tier is meant for a class of GPU: Low a GTX 1050 to an RTX 3050, Medium an RTX 3060, High an RTX 3070 to
+  4070, Ultra an RTX 4070 Ti to 4080, Extreme above. It sets the distance, foliage, grass, reflection, shadow, particle density,
+  filtering, texture, ground relief quality and depth (20 cm), shaft and GTAO quality sliders, the fifth cascade, and with the
+  Meitou look its switches (`PresetToggles`):
+
+  | Switch | Low | Medium | High | Ultra | Extreme |
+  |---|---|---|---|---|---|
+  | Advanced materials, ground trails, water contact foam, far grass cover | off | on | on | on | on |
+  | Reflections, GTAO (quality Medium; High from Ultra) | off | off | on | on | on |
+  | Fifth cascade, rock smoothing, outline refinement | off | off | start default | on | on |
+  | Hybrid GI, traced sun shadows (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
+  | Traced grass shadows | off | off | off | off | on |
+
+  Extreme has Ultra's distances: it adds effects, not range. The optional effects (lamp shadows, contact shadows, depth of
+  field, bloom, metal on buildings, rain drops and puddles) are the player's at every tier. High sets render scale Quality 0.67
+  (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS), not counted when reading the tier; Medium, Ultra and Extreme leave
+  the scale; distances that follow a switch's side (Draw distances, Shadows) are multiples of that side's mark, so a tier reads
+  the same in either look. Low is `--low-end` (`WorldOptions.LowEnd*`): also shadows and relief off, quarter-size particles, no
+  anti-aliasing at 0.83 render scale. Low holds the costly look switches off (AO, light shafts, water, Meitou shadows, parallax,
+  displacement) without changing the preset; turning one on keeps it on at Low (`keepAtLow`), leaving Low gives them back. The
+  tier's name is saved (`graphicsPreset`); a saved name the settings do not sit at (one the launcher chose, or a tier whose
+  switches changed with the build) is applied at start.
 
 Effects with a strength are a switch plus a slider that keeps its value while off (haze, heat haze, tone map and grade, night
-grading, bloom). Bloom is optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn it on. Settings layout 2
+grading, bloom). Bloom and the camera effects are optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn them on. Settings layout 2
 (`UserConfig.Migrate`) drops layout 1's strengths saved at the game's value with their switch off, and a tone map of 0 (the
 clamp is now the switch's off side). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
 
-Tabs by subject: Lighting, Sky & weather, Colour, World, Characters (`GraphicsSection`). Each lists features in `FeatureGroups`
-order (`GroupRank`, the launcher's too): a row headed by its switch or a title, its settings folded under it until opened,
-whether the look or the tier sets them (`Role`). A look row that differs from the preset has a brass name and Reset (a header for
-anything inside); a moved quality row shows as Custom. On / off settings are two-halves switches (Faithful | Meitou for an effect,
-Off | On otherwise); named values are drop-downs, amounts sliders with right = more (terrain error mirrored, `Slider.Reversed`).
+Tabs by subject, on two rows: Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour,
+Post FX, Interface (`GraphicsSection`); a feature's distances are on its own tab. Lighting starts with the Shadows feature: the
+sun's master switch heads it, the lamps' and the contact shadows are inside. Each lists features in `FeatureGroups`
+order (`GroupRank`, the launcher's too): a row headed by its master switch or a title, its settings folded under it until opened,
+whether the look or the tier sets them (`Role`). A master switch is Faithful | Meitou for an effect of the Meitou look, Off | On
+for an optional one (`Toggle.Optional`), Off | Faithful | Meitou for the sun's shadows. An effect with several techniques keeps
+them in one saved choice (`WorldFrame.ChoiceSliders`), which the menu shows as the master switch and a Technique row under it
+(`SettingsMenu.Techniques`: soft cascades or ray traced; SSAO or GTAO; probes or probes and cache); turning the effect back on
+returns to the technique last used. A row shows only while it acts (`RowShown`): an effect's settings while the effect is on, a
+technique's with that technique (map size, filter and fifth cascade with the cascades; grass shadows with the traced sun; contact
+shadows with the cascades; the cache's parts with the hybrid GI; GTAO quality with GTAO). The launcher shows the choices as
+drop-downs and hides by `ShownWhen`. A look row that differs from the preset has a brass name and Reset (a header for anything
+inside); a moved quality row shows as Custom. Named values are drop-downs, amounts sliders with right = more (terrain error
+mirrored, `Slider.Reversed`).
 The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
 Advanced (stealth counts its light). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
 `ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start

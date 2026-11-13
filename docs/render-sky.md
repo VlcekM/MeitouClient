@@ -14,6 +14,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   the game's environment BRDF. No shadows (every face towards the sun is fully lit). Every world shader ends with
   `colour = atmoApply(colour, eye, position)`, the game's haze (sky.md, "Haze"). The post-processing applies the game's auto
   exposure from the measured mean luminance, so the screen brightness follows the game's `0.55 / adapted` with the CONSTANTS band.
+  The distance where the haze is complete (`--fog`, default 250000) is `WorldOptions.FogDistance`, passed to every frame's draw; the "Full haze distance" row (Sky & weather > Haze) sets it live.
   At night the game's haze is black and hides everything past a few thousand units against a black sky; the `night` switch ("Night air", Meitou, default) gives the
   air a faint glow of its own instead (`NightAir` in `NightSky.cs`: airglow plus the planet's light scattered by the air, by the planet's phase): the haze, its ramp the game's,
   fades the far land into it (`hazeTarget`), and the sky pass adds the same colour above the horizon, falling off with the height (`atmoNightAir` in `atmoSky`, replacing SkyX's own
@@ -37,3 +38,8 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   a table lookup; the haze runs the same 4-sample integral per pixel). Earlier figures (2026-10-04, table version): the sky pass
   0.06 to 0.09 ms GPU at 1280 × 720.
   With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.34 ms (measured with the Milky Way, since removed) against 0.12 ms for the game's starfield texture (0.26 ms without the faint star layer, which an integrated GPU skips); by day the stars are skipped (0.11 ms).
+- **Draw order** (`WorldFrame.DrawSkyBehind`): the scene's sky is one full-screen triangle at the cleared depth, drawn after the opaque scene (terrain, objects,
+  foliage, characters) with the depth test at equal, so it shades only the pixels no surface covers; before the traced sun, the water and the reflections, which
+  read the scene's colour. Drawn first it shaded the whole view, also under the ground. **Observed** (one session, paused frame, alternated): 0.10 to 0.22 ms of
+  GPU on views with little or no sky, the pictures differ as two frames of the same setting do. `MEITOU_SKY_FIRST=1` draws it first, for comparing. The water's
+  reflection keeps its sky first (no depth test).

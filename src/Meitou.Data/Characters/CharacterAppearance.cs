@@ -479,7 +479,7 @@ public sealed class CharacterAppearance
         var (body, bodyFile) = ReadBody(installRoot, character, loadout, notes);
         var race = ResolveRace(db, record, character, loadout, body, random, notes);
         bool female = ResolveFemale(options, loadout, body, character, race, notes);
-        var result = CreateResult(db, race, female, body, bodyFile, loadout, character, faction, random);
+        var result = CreateResult(db, race, female, body, bodyFile, loadout, character, faction, random, notes);
         result.Notes.AddRange(notes);
         AddPoseWeights(result, body);
 
@@ -580,10 +580,18 @@ public sealed class CharacterAppearance
     /// </summary>
     static CharacterAppearance CreateResult(
         GameDatabase db, GameRecord race, bool female, AppearanceFile? body, string? bodyFile, Loadout? loadout, GameRecord? character,
-        GameRecord? faction, Random? random)
+        GameRecord? faction, Random? random, List<string> notes)
     {
         string g = female ? "female" : "male";
         string bodyMesh = character?.GetPath("mesh") is { Length: > 0 } own ? own : race.GetPath($"{g} mesh");
+        // A race with no body mesh: a mod's record left as a stub when the mod that defines it is not loaded.
+        if (bodyMesh.Length == 0)
+        {
+            // The original's Appearance::chooseBodyMesh (FUN_14052cd20): a race that names no mesh for the gender draws "human_male.mesh", whatever
+            // the gender (docs/characters.md "Characters that cannot be drawn").
+            bodyMesh = "human_male.mesh";
+            notes.Add($"race '{race.Name}' has no {g} mesh: 'human_male.mesh' is drawn, as the original does");
+        }
         var head = (body?.HeadId is { } hid ? db.Find(hid) : null)
             ?? Pick(db, race.GetReferences($"heads {g}"), random, r => Math.Max(r.Values.Value0, 1));
 
@@ -839,6 +847,24 @@ public sealed class CharacterAppearance
     #region Building an animal
 
     /// <summary>
+    /// The id of the race an ANIMAL_CHARACTER names: its first <c>race</c> reference with a positive chance, else (a list whose chances are all 0:
+    /// mods' single-race animals such as "Great Beak Thing") its first reference; null without any. docs/game/animals.md "Appearance".
+    /// </summary>
+    public static string? AnimalRaceId(GameRecord animal)
+    {
+        var refs = animal.GetReferences("race");
+        foreach (var r in refs)
+        {
+            if (r.Values.Value0 > 0)
+            {
+                return r.TargetStringId;
+            }
+        }
+
+        return refs.Count > 0 ? refs[0].TargetStringId : null;
+    }
+
+    /// <summary>
     /// An animal's look as it is made: wearing the first CONTAINER of its ANIMAL_CHARACTER's <c>backpack</c> list, as a new animal's inventory does
     /// (<c>ItemFactory.AddAnimalBackpacks</c>).
     /// </summary>
@@ -855,8 +881,10 @@ public sealed class CharacterAppearance
     /// </summary>
     public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal, GameRecord? backpack)
     {
-        var race = animal.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
-            .FirstOrDefault(r => r is { Type: FcsRecordType.Race }) ?? throw new KeyNotFoundException($"'{animal.Name}' has no race.");
+        // No race: the original logs "Missing race" and uses the Greenlander RACE by id (docs/characters.md "Generating a character").
+        var race = AnimalRaceId(animal) is { } raceId && db.Find(raceId) is { Type: FcsRecordType.Race } found ? found
+            : db.Find(CharacterGenerator.DefaultRaceId) is { Type: FcsRecordType.Race } fallback ? fallback
+            : throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
             Animal = animal,
@@ -1082,8 +1110,9 @@ public sealed class CharacterAppearance
     #region Derived looks
 
     /// <summary>
-    /// The head of this look as it falls when cut off (Meitou decapitation): the body (drawn head only, <see cref="HeadOnly"/>) with its hair, beard
-    /// and hat.
+    /// The head of this look as it falls when cut off (Meitou decapitation): the body and every worn part, drawn head only (<see cref="HeadOnly"/>:
+    /// the head bones' vertices of skinned parts, the parts attached to a head bone), so hair, beard, hat and whatever else sits on the head (goggles
+    /// in the belt slot) go with it.
     /// </summary>
     public CharacterAppearance SeveredHead()
     {
@@ -1113,7 +1142,7 @@ public sealed class CharacterAppearance
             HairColour = HairColour,
             HeadOnly = true,
         };
-        copy.Parts.AddRange(Parts.Where(p => p.Record == Hair || p.Record == Beard || p.Slot == AttachSlot.Hat));
+        copy.Parts.AddRange(Parts);
         copy.BodyLayers.AddRange(BodyLayers);
         foreach (var (name, weight) in PoseWeights) copy.PoseWeights[name] = weight;
         return copy;

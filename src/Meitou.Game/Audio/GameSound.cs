@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using Meitou.Data;
+using Meitou.Simulation;
 
 namespace Meitou.Game.Audio;
 
@@ -23,6 +24,26 @@ sealed class GameSound(GameHost host)
     /// The characters' sounds.
     /// </summary>
     internal readonly CharacterAudio Characters = new(host);
+
+    /// <summary>
+    /// The ground lookups, once made.
+    /// </summary>
+    internal GroundSurfaces? Ground => Characters.Ground;
+
+    /// <summary>
+    /// The biome and ground lookups the sounds use, shared with the ground effects.
+    /// </summary>
+    internal GroundSurfaces GroundSurfacesOf(GameDatabase db) => Characters.GroundSurfacesOf(db);
+
+    /// <summary>
+    /// The animation sound events, shared with the ground effects.
+    /// </summary>
+    internal AnimationSoundEvents AnimationSoundsOf(GameDatabase db) => Characters.AnimationSoundsOf(db);
+
+    /// <summary>
+    /// How far through its clip a layer is (<see cref="CharacterAudio.ClipFraction"/>).
+    /// </summary>
+    internal static float ClipFraction(AnimationLayer layer, bool loops) => CharacterAudio.ClipFraction(layer, loops);
 
     /// <summary>
     /// The interiors', doors' and emitters' sounds.

@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Globalization;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Bench;
@@ -39,7 +40,7 @@ static class WorldCommandLine
           --time <hour>            time of day for the sun (default 13; sunrise and sunset from the CONSTANTS record)
           --time-speed <h/min>     the viewer's clock runs on, game hours per real minute (default 0: stopped; Tab slider)
           --no-water               leave out the water
-          --water-grid <n>         the Meitou water grid's segments round the eye (default 256; 128 lower detail, 512 finer)
+          --water-grid <n>         the Meitou water grid's segments round the eye (default 1024; 256 lower detail)
           --water-ocean <n>        the Meitou water's FFT size per cascade: 64, 128 or 256 (default 256; 128 for integrated GPUs, a quarter of the work)
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour; R toggles), 1 sky and terrain, 2 + characters, 3 + buildings and features, 4 + trees, bushes and rocks (default 4; the game's own default is 2; Tab slider)
           --reflection-samples <n> samples per texel of the half-resolution reflection target (default 4; 1 disables MSAA; the device may cap it)
@@ -47,7 +48,7 @@ static class WorldCommandLine
           --shadow-quality <0|1|2> map side 1024/2048/4096 (default 2)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
           --shadow-range 0         shadows start off (the Tab slider turns them on)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
-          --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture
+          --debug-shadows <n>      1 the four cascade maps, 2 the shadow term of the surfaces by cascade, 3 the term multiplied over the picture, 4 the traced sun's share and mask
           --no-gi                  no ray-traced probe GI (default on where the GPU has ray queries; the device is then made without them)
           --gi-debug <n>           ray-traced global illumination's debug views (needs ray queries; docs/render-gi.md): 1 a bounce ray's hit distance,
                                    2 one-bounce lighting on grey surfaces, 3 the traced scene seen from the eye (normals)
@@ -62,7 +63,7 @@ static class WorldCommandLine
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,footprints,parallax,displace,weld,tracers,fog>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,footprints,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time, or render-thread time over 20 ms, is over 1.5 x its median: stage times (GPU, render thread) and what it uploaded or rebuilt
@@ -82,6 +83,8 @@ static class WorldCommandLine
           --bench-compare <a.json> <b.json>   print two bench results side by side and exit
           --crowd <n>              place n generated characters of the start town round the start point (the character renderer's test; stills pose them at 0.35 s)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
+          --sequence <n>           with --screenshot: n more frames saved after it (name-01.png ...), each one step of the motion
+          --pan-step <x>,<z>       with --screenshot: the camera's target moves this far every frame
           --terrain-sandbox [cliffs] [x,z]   the empty world round a flat spot whose ground is a field of tiles, one per terrain texture (cliffs: on a steep face)
           --field-tour <dir>       with --terrain-sandbox: a picture of every tile and an index.html (--tour-distance <u>, --tour-pitch <deg>)
           --relief <Name=value>    a GroundRelief or RockSmoothing setting for the run (repeatable), e.g. --relief TargetSlope=0.3
@@ -95,7 +98,9 @@ static class WorldCommandLine
           --render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>   render size per axis (Meitou default 0.67, Quality, with an upscaler, else 1)
           --no-fxaa                the game's FXAA off when no upscaler runs (the game's own FXAA setting, default on)
           --smaa                   SMAA instead of FXAA when no upscaler runs
+          --gtao-quality <0..2>    the gtao switch's budget (default 1): 0 half size, 2 x 4; 1 half size, 3 x 6; 2 render size, 3 x 6
           --particle-divisor <0|1|2|4>   the weather's alpha and additive particles drawn at 1/n of the render size (0, the default: by sprite size; `--faithful particles` draws them full size)
+          --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate, clouds, cache)
           --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)
           (ambient occlusion, dithering, light shafts, heat haze strength, the tone map, night grading and the rest are the switches above: --meitou / --faithful <id>; their strengths are Tab sliders)
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
@@ -322,6 +327,10 @@ static class WorldCommandLine
             case "--hidden-window": o.HiddenWindow = o.Windowed = true; break;
             case "--sway-step": o.SwayStep = r.Float(); break;
             case "--orbit-step": o.OrbitStep = r.Float() * MathF.PI / 180; break;
+            case "--sequence": o.Sequence = Math.Max(r.Int(), 0); break;
+            case "--zoom-step": o.ZoomStep = r.Float(); break;
+            case "--pan-frames": o.PanFrames = Math.Max(r.Int(), 0); break;
+            case "--pan-step": { var (px, pz) = r.Pair(); o.PanStep = new Vector2((float)px, (float)pz); break; }
             case "--ab": o.Ab = r.Next(); break;
             case "--ab-period": o.AbPeriod = Math.Max(r.Int(), 1); break;
             case "--bench-frames": o.BenchFrames = Math.Max(r.Int(), 1); break;

@@ -39,6 +39,10 @@ public sealed class GroundSurfaces
     /// </summary>
     readonly Dictionary<uint, byte[]> _biomes = [];
     /// <summary>
+    /// Each BIOMES record's five diffuse texture names (base, slope, grass, dirt, road; null: none) by its 24-bit <c>index</c>.
+    /// </summary>
+    readonly Dictionary<uint, string?[]> _textures = [];
+    /// <summary>
     /// Guards <see cref="_tiles"/> and <see cref="_clock"/> (<see cref="At"/> may run on more than one thread).
     /// </summary>
     readonly object _gate = new();
@@ -87,13 +91,23 @@ public sealed class GroundSurfaces
                 (byte)r.GetInt("road type", Concrete),
             ];
             _biomes.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, types);
+            string? Texture(string field) => r.Filenames.TryGetValue(field, out var file) && file.Length > 0 ? file : null;
+            _textures.TryAdd(
+                (uint)r.GetInt("index") & 0xFFFFFF,
+                [Texture("texture base"), Texture("texture slope"), Texture("texture grass"), Texture("texture dirt"), Texture("texture road")]);
         }
     }
 
     /// <summary>
     /// The GroundType at a world point, or -1 while the map it needs is still loading (the caller keeps what it had).
     /// </summary>
-    public int At(float x, float z)
+    public int At(float x, float z) => LayerAt(x, z).Type;
+
+    /// <summary>
+    /// The GroundType at a world point with the diffuse texture of the biome layer that gives it (the record's <c>texture base</c>, <c>grass</c>, <c>dirt</c> or
+    /// <c>road</c>; null when the record names none or the map cannot be read); the type is -1 while the map loads.
+    /// </summary>
+    public (int Type, string? Texture) LayerAt(float x, float z)
     {
         _biomeMap ??= Task.Run(() => TryLoad(() => FoliageBiomeMap.Open(_install)));
         int tx = (int)MathF.Floor((x + WorldLayout.HalfWorldSize) / (FoliageOverlay.TilePixels * FoliageOverlay.PixelSize));
@@ -110,10 +124,10 @@ public sealed class GroundSurfaces
             }
             tile.Used = ++_clock;
         }
-        if (!tile.Pixels.IsCompleted || !_biomeMap.IsCompleted) return -1;
+        if (!tile.Pixels.IsCompleted || !_biomeMap.IsCompleted) return (-1, null);
         // A map that cannot be read leaves the original's answer for "no overlay": 2 (concrete)
         // (FUN_140a16e50 returns 2 when FUN_140a16c90 finds none).
-        if (tile.Pixels.Result is not { } pixels || _biomeMap.Result is not { } map) return Concrete;
+        if (tile.Pixels.Result is not { } pixels || _biomeMap.Result is not { } map) return (Concrete, null);
 
         float x0 = tx * FoliageOverlay.TilePixels * FoliageOverlay.PixelSize - WorldLayout.HalfWorldSize;
         float z0 = tz * FoliageOverlay.TilePixels * FoliageOverlay.PixelSize - WorldLayout.HalfWorldSize;
@@ -121,7 +135,18 @@ public sealed class GroundSurfaces
         int j = Math.Clamp((int)((z - z0) / FoliageOverlay.PixelSize), 0, FoliageOverlay.TilePixels - 1);
         int o = (j * FoliageOverlay.TilePixels + i) * 4;
         int channel = pixels[o + 3] > Threshold ? 4 : pixels[o + 2] > Threshold ? 3 : pixels[o + 1] > Threshold ? 2 : pixels[o] > Threshold ? 2 : 0;
-        return _biomes.TryGetValue(map.At(x, z), out var types) ? types[channel] : Sand;
+        uint biome = map.At(x, z);
+        return _biomes.TryGetValue(biome, out var types) ? (types[channel], _textures[biome][channel]) : (Sand, null);
+    }
+
+    /// <summary>
+    /// The biome index colour at a world point (<c>biomemap.png</c>, the lookup the footsteps and the water effects share, <c>FUN_140a09630</c>);
+    /// null while the map loads or when it cannot be read.
+    /// </summary>
+    public uint? BiomeAt(float x, float z)
+    {
+        _biomeMap ??= Task.Run(() => TryLoad(() => FoliageBiomeMap.Open(_install)));
+        return _biomeMap.IsCompletedSuccessfully && _biomeMap.Result is { } map ? map.At(x, z) : null;
     }
 
     /// <summary>

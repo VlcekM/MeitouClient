@@ -148,7 +148,7 @@ sealed class SquadTour
         float across = (theta - MathF.Sin(theta)) / (2 * MathF.PI);
         float lift = (1 - MathF.Cos(theta)) / 2;
         float height = MathF.Max(LiftPerDistance * Ground(to - _from), MinLift * _distance);
-        camera.Target = Vector3.Lerp(_from, to, across);
+        camera.Target = Meitou.Simulation.Session.Interp.Lerp(_from, to, across);
         camera.Yaw = _yaw;
         camera.Pitch = _pitch + (MathF.Max(MathF.Min(_pitch + PitchLift, MaxPitch), _pitch) - _pitch) * lift;
         camera.Distance = MathF.Min(_distance + height * lift, camera.ViewDistance * 0.5f);

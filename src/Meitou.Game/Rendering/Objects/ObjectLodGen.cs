@@ -26,7 +26,7 @@ public static class ObjectLodGen
     /// <summary>
     /// Bumped when the simplifier, the steps or the error measure change (the disk cache's key).
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>
     /// The steps (share of a part's triangles), floor per part, limits and the texture-coordinate guard objects are built with.

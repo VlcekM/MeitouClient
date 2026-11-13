@@ -1,16 +1,18 @@
+using Meitou.Game.Rendering.Post;
 using System.Numerics;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>
-/// A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day.
-/// </summary>
-public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour)
+/// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day; a key may also set the depth of field's
+/// focus and f-number (null: the target's distance, the player's aperture).</summary>
+public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour,
+    float? Focus = null, float? Aperture = null)
 {
     /// <summary>
-    /// The shot camera <paramref name="c"/> is at now, at the time of day <paramref name="hour"/>.
+    /// The shot camera <paramref name="c"/> is at now, at the time of day <paramref name="hour"/>, with its focus and aperture.
     /// </summary>
-    public static CameraShot Of(WorldCamera c, float hour) => new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour);
+    public static CameraShot Of(WorldCamera c, float hour) =>
+        new(c.Eye, c.Yaw, c.Pitch, c.Distance, c.FieldOfView, hour, c.FocusDistance, c.Aperture);
 
     /// <summary>
     /// Puts the camera here: the same eye and view direction, the target <see cref="Distance"/> in front.
@@ -18,6 +20,7 @@ public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, fl
     public void Apply(WorldCamera c)
     {
         (c.Yaw, c.Pitch, c.Distance, c.FieldOfView) = (Yaw, Pitch, Distance, FieldOfView);
+        (c.FocusDistance, c.Aperture) = (Focus, Aperture);
         c.Target = Eye + c.Forward * Distance;
     }
 }
@@ -38,12 +41,13 @@ public static class CameraPath
     /// <summary>
     /// How many values a shot is interpolated as.
     /// </summary>
-    const int Dims = 8;   // eye x, y, z, yaw, pitch, log distance, field of view, hour
+    const int Dims = 10;   // eye x, y, z, yaw, pitch, log distance, field of view, hour, log focus, log f-number
 
     /// <summary>
-    /// A shot as its <see cref="Dims"/> interpolated values (the distance as its logarithm, so it eases evenly in ratio).
+    /// A shot as its <see cref="Dims"/> interpolated values (the distance, focus and f-number as their logarithms, so they ease evenly in ratio).
     /// </summary>
-    static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour];
+    static float[] Values(in CameraShot s) => [s.Eye.X, s.Eye.Y, s.Eye.Z, s.Yaw, s.Pitch, MathF.Log(MathF.Max(s.Distance, 1)), s.FieldOfView, s.Hour,
+        MathF.Log(MathF.Max(s.Focus ?? s.Distance, 1)), MathF.Log(s.Aperture ?? PostOptions.DefaultAperture)];
 
     /// <summary>
     /// The shot for interpolated values <paramref name="v"/>: the distance taken back out of its logarithm and the hour wrapped into 0..24.
@@ -51,7 +55,7 @@ public static class CameraPath
     static CameraShot Shot(float[] v)
     {
         float hour = v[7] % 24;
-        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour);
+        return new(new Vector3(v[0], v[1], v[2]), v[3], v[4], MathF.Exp(v[5]), v[6], hour < 0 ? hour + 24 : hour, MathF.Exp(v[8]), MathF.Exp(v[9]));
     }
 
     /// <summary>
@@ -117,6 +121,12 @@ public static class CameraPath
             float m2 = ease2 ? 0 : (p3![d] - p1[d]) / MathF.Max(tNext - t0, 1e-4f);
             r[d] = h00 * p1[d] + h10 * h * m1 + h01 * p2[d] + h11 * h * m2;
         }
-        return Shot(r);
+        // Focus and aperture fly only where a key sets them: a key without one stands for the target's distance or the default, a flight with none has neither.
+        var shot = Shot(r);
+        return shot with
+        {
+            Focus = keys.Any(k => k.Shot.Focus is not null) ? shot.Focus : null,
+            Aperture = keys.Any(k => k.Shot.Aperture is not null) ? shot.Aperture : null,
+        };
     }
 }

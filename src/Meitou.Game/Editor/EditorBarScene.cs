@@ -52,7 +52,7 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
     /// <summary>
     /// The editor is open in the Meitou UI with the game data loaded: the bar is wanted.
     /// </summary>
-    bool EditorBarWanted => host.Player.CharacterEditor.EditorOpen && host.Player.UiMode == UiMode.Meitou && host.PopData is not null;
+    bool EditorBarWanted => host.Player.CharacterEditor.EditorOpen && PreviewStudio.Bar && host.PopData is not null;
 
     /// <summary>
     /// What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.
@@ -61,10 +61,10 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
 
     /// <summary>
-    /// The neutral fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): a little grey light all round, so faces read in the
-    /// lamplight.
+    /// The fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): none. A grey light all round on the characters alone made them
+    /// brighter than the room, as if they glowed.
     /// </summary>
-    static readonly Vector3 EditorBarCharacterFill = new(0.04f);
+    static readonly Vector3 EditorBarCharacterFill = Vector3.Zero;
 
     /// <summary>
     /// When the bar's room was first found laid out (real seconds); null before.
@@ -114,7 +114,10 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         PlaceEditorCamera(bar, width, height);
         if (host.Gpu.Characters is { } lit) lit.Fill = EditorBarCharacterFill;
         (host.Gpu.ViewCap, host.Render.Water, host.Render.Reflections) = (EditorBarViewCap, false, false);
-        if (host.ActiveObjects is { } objects) objects.InteriorView = EditorBarView;
+
+        // Nothing of the world in this frame, drawn or traced: the frame's own pipeline and settings, over the bar alone.
+        if (host.ActiveObjects is { } objects) (objects.InteriorView, objects.Isolated) = (EditorBarView, EditorBar.Key);
+        if (host.Gpu.Gi is { } traced) traced.SkipWorld = true;
         sky.Weather = SkyWeather.Default;
         host.Gpu.Weather = null;
         host.Gpu.WeatherParticles = false;
@@ -129,6 +132,8 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
     {
         (host.Camera.Target, host.Camera.Yaw, host.Camera.Pitch, host.Camera.Distance) = (frame.Target, frame.Yaw, frame.Pitch, frame.Distance);
         (host.Gpu.Sky.Weather, host.Gpu.Weather, host.Gpu.WeatherParticles) = (frame.Sky, frame.Weather, frame.WeatherParticles);
+        if (host.ActiveObjects is { } objects) objects.Isolated = null;
+        if (host.Gpu.Gi is { } traced) traced.SkipWorld = false;
         if (host.Gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = false;
         if (host.Gpu.Characters is { } lit) lit.Fill = frame.Fill;
         (host.Gpu.ViewCap, host.Render.Water, host.Render.Reflections) = (null, frame.Water, frame.Reflections);
@@ -145,7 +150,7 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         if (host.PopData is not { } data || host.Scene.Database is not { } db || host.Scene.Objects is not { } world
             || host.ActiveObjects is not { } objects || host.Player.CharacterEditor.EditorFocus is not { } focus
             || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } shown) return null;
-        if (EditorBar.Above(host.Install, data, shown.Position, host.Scene.GroundAt) is not { } bar
+        if (EditorBar.Above(world, shown.Position, host.Scene.GroundAt) is not { } bar
                 || db.Find(bar.Placement.BuildingId) is not { } record)
         {
             _editorBarMissing = true;
@@ -154,9 +159,11 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         EditorBar = bar;
         objects.AddRuntime(bar.Placement);
         var lamps = WorldLights.ForBuilding(db, world.Levels, new ResolvedBuilding(bar.Placement, record, bar.Origin, false), world.Layouts);
-        // The room's neutral fill: a white point light under the roof at a share of the lamps' mean power, lit day and night.
+        // The room's fill: a point light under the roof in the lamps' own colour at a share of their mean power, lit day and night. White and at half their
+        // power it read as a spotlight on the character: skin that shone and seemed to glow in a warm, dim room.
         float power = lamps.Count > 0 ? lamps.Average(l => l.Intensity) * EditorBar.FillShare : 1;
-        lamps.Add(new WorldLight(bar.FillAt, Vector3.One, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
+        var fillColour = lamps.Count > 0 ? new Vector3(lamps.Average(l => l.Colour.X), lamps.Average(l => l.Colour.Y), lamps.Average(l => l.Colour.Z)) : Vector3.One;
+        lamps.Add(new WorldLight(bar.FillAt, fillColour, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
             WorldLightEffect.None, WorldLightRule.WhenBuildingOn, true, 0, "meitou:editor-fill", record.StringId, EditorBar.Key));
         host.ActiveLamps?.SetRuntime(EditorBar.Key, lamps);
         objects.Staged = bar.Ground;

@@ -574,8 +574,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             for (int w = 0; w < table.HighWater; w++)
             {
                 if (w == s || !next[w].Alive) continue;
+                // An animal looker never recognises (FUN_140856f00 returns at once, economy.md 11.8).
                 if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc
-                    || !Crimes.Relations.Contains(wc.Faction))
+                    || !Crimes.Relations.Contains(wc.Faction) || SquadRegistry.IsAnimal(wc))
                 {
                     continue;
                 }

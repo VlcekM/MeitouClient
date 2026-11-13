@@ -37,7 +37,7 @@ static class PostProcessShaders
     /// in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the frame globals' own <c>atmoApply</c>
     /// evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
     /// </summary>
-    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
+    public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + LightShaftShaders.SunShadow + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -51,6 +51,7 @@ static class PostProcessShaders
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
         uniform float uWaterY;               // the water plane's height (float min: no water)
+        uniform vec4 uContact;               // contact shadows: x strength (0 off), y reach, z thickness (world units), w eye distance where they end
         """ + DepthConvention.Glsl + """
 
         // The share of a surface's occlusion the water in front of it leaves. The water writes no depth, so the floor's occlusion fell on the
@@ -84,6 +85,62 @@ static class PostProcessShaders
             return vec3((uv * 2.0 - 1.0) * uTan * z, -z);
         }
         vec3 viewPos(vec2 uv) { return viewPosAt(ivec2(floor(uv * uSize))); }
+
+        // Contact shadows (docs/render-post.md "Contact shadows"): how much of the sun the depth hides from a point, 0 none to 1. The ray to the sun is walked on
+        // the screen a pixel at a time (two when it is longer than the steps; past twice the steps it is cut short), its depth exact at each pixel (1 / depth is
+        // linear on the screen), with no noise: one picture, the same every frame. What hides it stands above the point's own plane (the surface a point lies on
+        // never shadows it, at whatever angle it is seen) and has the ray within the thickness behind it, so a near object does not shadow all that lies far
+        // behind it on the screen. The shadow fades out over the last part of the reach.
+        float contactHit(vec3 p, vec3 l, vec3 n, float z)
+        {
+            const int N = 48;
+            float pixel = 2.0 * uTan.y * z / uSize.y;
+            vec3 a = p + n * pixel;
+            float reach = uContact.y;
+            if (l.z > 0.0) reach = min(reach, 0.9 * (-a.z - uNearFar.x) / l.z);   // the end stays in front of the eye
+            if (reach <= 0.0) return 0.0;
+            vec2 sa = (a.xy / (-a.z * uTan) * 0.5 + 0.5) * uSize;
+            vec3 b = a + l * reach;
+            vec2 span = (b.xy / (-b.z * uTan) * 0.5 + 0.5) * uSize - sa;
+            float len = max(abs(span.x), abs(span.y));
+            if (len > float(2 * N))
+            {
+                b = a + l * (reach * float(2 * N) / len);
+                span = (b.xy / (-b.z * uTan) * 0.5 + 0.5) * uSize - sa;
+                len = max(abs(span.x), abs(span.y));
+            }
+            if (len < 1.0) return 0.0;
+            int steps = min(int(ceil(len)), N);
+            float ka = -1.0 / a.z, kb = -1.0 / b.z;
+            float thickness = uContact.z + 0.01 * z, rise = 2.0 * pixel;
+            for (int i = 1; i <= steps; i++)
+            {
+                float s = float(i) / float(steps);
+                vec2 at = sa + span * s;
+                if (any(lessThan(at, vec2(0.0))) || any(greaterThanEqual(at, uSize))) return 0.0;
+                vec3 q = viewPosAt(ivec2(at));
+                float behind = 1.0 / mix(ka, kb, s) + q.z;
+                if (behind > 0.0 && behind < thickness && dot(q - p, n) > rise) return 1.0 - smoothstep(0.6, 1.0, s);
+            }
+            return 0.0;
+        }
+
+        // What a surface keeps of its light under a contact shadow that takes hit of its sun, where the sun is not written apart: 1 - (the sun's share of its
+        // light) * the hit. The sun's share keeps a contact
+        // shadow from going darker than the ambient light, and ends it under clouds and at night. Cascade shadows already took the sun away: nothing then.
+        float contactLight(vec3 p, vec3 n, float z, float hit, float noise)
+        {
+            vec3 l = normalize(vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack)));
+            float nl = dot(n, l);
+            vec3 world = uSsaoEye + p.x * uRight + p.y * uUp + p.z * uBack;
+            vec3 worldNormal = n.x * uRight + n.y * uUp + n.z * uBack;
+            vec3 weights = vec3(0.2126, 0.7152, 0.0722);
+            float sun = 3.14159265 * nl * dot(uAtmoSunLight, weights) * shaftShadow(world, noise) * atmoCloudShadow(world);
+            float ambient = dot(atmoIrradiance(worldNormal), weights) * uAtmoLight.w;
+            float share = sun / max(sun + ambient, 1e-4);
+            return 1.0 - hit * share;
+        }
+
         void main()
         {
             ivec2 c = ivec2(floor(vUv * uSize));
@@ -135,11 +192,60 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's world
-    /// offset is rebuilt from the scene depth as SSAO does (none: the sky, at the far clip D), pulled in to the water plane where that lies in front
-    /// (the water writes no depth; its own surface is what the game's G-buffer reads, and the water shader used to fog it there). The shader
-    /// accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends as <c>scene * transmittance + colour</c>
-    /// (blend one, source alpha; alpha of the scene untouched).
+    /// Contact shadows (docs/render-post.md "Contact shadows") at the render size, on their own: the <see cref="Ssao"/> source's functions with a main of their
+    /// own, so they run with SSAO, GTAO or no occlusion, keep the detail a half-size pass blurs (armour layers, hair over a face) and take none of the occlusion's
+    /// reduction on characters. With the sun written apart (<c>uTermOn</c>, <see cref="PostProcess.ContactSun"/>): writes the sun term times what the contact
+    /// shadows leave of it, through the haze, added to the scene. Without: the light kept (1: none taken), multiplied into the scene colour.
+    /// </summary>
+    public static readonly string Contact = Ssao[..(Ssao.IndexOf("\nvoid main()", StringComparison.Ordinal) + 1)] + """
+        uniform usampler2D uSurface;   // the GI surface target: bit 16 of w is set where the sun was written apart (the traced sun's pixels, or these shadows')
+        uniform float uSurfaceOn;      // 1: uSurface is bound
+        uniform sampler2D uTerm;       // the sun term written apart
+        uniform float uTermOn;         // 1: add the term (the sun is not in the scene colour); 0: multiply the scene colour
+
+        void main()
+        {
+            ivec2 c = ivec2(floor(gl_FragCoord.xy));
+            float d = texelFetch(uDepth, c, 0).r;
+            bool apart = uTermOn > 0.5;
+            bool marked = uSurfaceOn > 0.5 && (texelFetch(uSurface, c, 0).w & 65536u) != 0u;
+            // Added: only where a term was written. Multiplied: not where the traced sun lights, whose rays hold the contact.
+            if (apart ? !marked || depthIsSky(d) : marked || depthIsSky(d)) { if (apart) discard; fragColour = vec4(1.0); return; }
+            vec3 p = viewPosAt(c);
+            float z = -p.z;
+            float hit = 0.0;
+            vec3 n = vec3(0.0, 0.0, 1.0);
+            if (z < uContact.w && uContact.x > 0.0)
+            {
+                vec3 l = viewPosAt(c - ivec2(1, 0)), r = viewPosAt(c + ivec2(1, 0));
+                vec3 u = viewPosAt(c + ivec2(0, 1)), b = viewPosAt(c - ivec2(0, 1));
+                vec3 dx = abs(r.z - p.z) < abs(p.z - l.z) ? r - p : p - l;
+                vec3 dy = abs(u.z - p.z) < abs(p.z - b.z) ? u - p : p - b;
+                n = normalize(cross(dx, dy));
+                if (n.z < 0.0) n = -n;
+                vec3 sun = normalize(vec3(dot(uAtmoLight.xyz, uRight), dot(uAtmoLight.xyz, uUp), dot(uAtmoLight.xyz, uBack)));
+                if (dot(n, sun) > 0.0) hit = uContact.x * contactHit(p, sun, n, z) * (1.0 - smoothstep(0.6 * uContact.w, uContact.w, z));
+            }
+            vec3 offset = p.x * uRight + p.y * uUp + p.z * uBack;
+            if (apart)
+            {
+                vec3 hazeMul, hazeAdd;
+                atmoApplyCoefficients(uSsaoEye, uSsaoEye + offset, hazeMul, hazeAdd);
+                fragColour = vec4(texelFetch(uTerm, c, 0).rgb * (1.0 - hit) * hazeMul, 0.0);
+                return;
+            }
+            float kept = hit > 0.0 ? contactLight(p, n, z, hit, ign(gl_FragCoord.xy)) : 1.0;
+            if (kept < 0.999) kept = mix(1.0, kept, airVisibility(offset) * waterVisibility(offset));
+            fragColour = vec4(vec3(kept), 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's
+    /// world offset is rebuilt from the scene depth as SSAO does (none: the sky, at the far clip D), pulled in to
+    /// the water plane where that lies in front (the water writes no depth; its own surface is what the game's G-buffer reads, and the water
+    /// shader used to fog it there). The shader accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends
+    /// as <c>scene * transmittance + colour</c> (blend one, source alpha; alpha of the scene untouched).
     /// </summary>
     public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
         + FogVolumeShaders.Functions + """
@@ -247,9 +353,33 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels,
-    /// weighted bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)).
-    /// False where no texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
+    /// The fog volumes' sun shadow kept apart (docs/render-shafts.md "Fog shadow after the upscaler"): at half the render size as <see cref="LayersHalf"/>
+    /// (each texel the full-size pixel at twice its coordinates), what the shadow changes in the volumes' colour, shadowed minus unshadowed (rgb, mostly
+    /// negative). The merged pass then blends the volumes unshadowed and <see cref="LateFogShadow"/> adds this over the upscaler's output.
+    /// </summary>
+    public static readonly string FogShadowHalf = "#version 330 core\n#define FOG_VOLUME_DELTA\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + """
+
+        out vec4 fragColour;
+
+        void main()
+        {
+            ivec2 p = min(ivec2(gl_FragCoord.xy) * 2, ivec2(uFullSize) - 1);
+            vec3 dir;
+            bool sky;
+            float waterWeight;
+            float dist = sceneDistance(p, dir, sky, waterWeight);
+            vec3 add;
+            float trans;
+            fogVolumesAccumulate(uFogVolumeEye.xyz, dir, dist, add, trans);
+            fragColour = vec4(fogAddLit - add, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels, weighted
+    /// bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)). False where no
+    /// texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
     /// </summary>
     const string HalfUpsample = """
 
@@ -285,12 +415,71 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the
-    /// SSAO's factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as <c>scene * a +
-    /// rgb</c>; in their old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> = <c>scene * (a1 a2 ao) + (c1
-    /// a2 + c2) ao</c>, one blend of the same state (the occlusion is grey). The shafts' and the fog are computed here, or upsampled from <see
-    /// cref="LayersHalf"/> (uHalf: which of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no texel, computed here at
-    /// full size. With uHalf 0 (and the
+    /// The fog volumes' shadow (<see cref="FogShadowHalf"/>) over the upscaler's output (<c>PostProcess.CompositeLateFogShadow</c>): the target pixel's place
+    /// in the render picture (the jitter undone), the four render pixels round it each upsampled by its own distance (<see cref="HalfUpsample"/>),
+    /// weighted bilinearly; then last frame's, reprojected by the closest of the four's motion, kept within the four's range and blended in (the four
+    /// follow the jitter at a depth edge). Written to a target of its own, which <see cref="LateFogShadowApply"/> adds.
+    /// </summary>
+    public static readonly string LateFogShadow = "#version 330 core\n" + LightShaftShaders.CommonUniforms + AtmosphereShaders.WaterHorizonFunctions + SceneDistance
+        + HalfUpsample + """
+
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform vec4 uLate;          // xy render pixels per target pixel, zw the jitter (render pixels)
+        uniform vec4 uLateTarget;    // xy the target's size, z 1 with last frame's in uLateHistory, w the share of this frame's
+        uniform sampler2D uLateHistory;
+        uniform sampler2D uLateMotion;   // the motion target (rg: this frame's place minus last frame's, in 0..1 units)
+
+        void main()
+        {
+            vec2 rp = gl_FragCoord.xy * uLate.xy - 0.5 + uLate.zw;
+            vec2 b = floor(rp), f = rp - b;
+            ivec2 last = ivec2(uFullSize) - 1;
+            vec4 sum = vec4(0.0), lo = vec4(1e30), hi = vec4(-1e30);
+            float closest = 1e30;
+            ivec2 qClosest = ivec2(0);
+            for (int i = 0; i < 4; i++)
+            {
+                ivec2 q = clamp(ivec2(b) + ivec2(i & 1, i >> 1), ivec2(0), last);
+                vec3 dir;
+                bool sky;
+                float waterWeight;
+                float dist = sceneDistance(q, dir, sky, waterWeight);
+                vec4 v;
+                halfUpsampled(q, dist, v);
+                sum += v * (((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y));
+                lo = min(lo, v);
+                hi = max(hi, v);
+                if (dist < closest) { closest = dist; qClosest = q; }
+            }
+            if (uLateTarget.z < 0.5) { fragColour = sum; return; }
+            vec2 prev = gl_FragCoord.xy / uLateTarget.xy - texelFetch(uLateMotion, qClosest, 0).rg;
+            if (any(lessThan(prev, vec2(0.0))) || any(greaterThan(prev, vec2(1.0)))) { fragColour = sum; return; }
+            fragColour = mix(clamp(textureLod(uLateHistory, prev, 0.0), lo, hi), sum, uLateTarget.w);
+        }
+        """;
+
+    /// <summary>The upscaler's output plus the fog volumes' filtered shadow (<see cref="LateFogShadow"/>), into a target of its own (the TAA's output is its next history).</summary>
+    public const string LateFogShadowApply = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uScene;
+        uniform sampler2D uShadow;
+        void main()
+        {
+            ivec2 p = ivec2(gl_FragCoord.xy);
+            vec4 scene = texelFetch(uScene, p, 0);
+            fragColour = vec4(max(scene.rgb + texelFetch(uShadow, p, 0).rgb, vec3(0.0)), scene.a);
+        }
+        """;
+
+    /// <summary>
+    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the SSAO's
+    /// factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as <c>scene * a + rgb</c>; in their
+    /// old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> = <c>scene * (a1 a2 ao) + (c1 a2 + c2) ao</c>, one
+    /// blend of the same state (the occlusion is grey). The shafts' and the fog are computed here, or upsampled from <see cref="LayersHalf"/> (uHalf: which
+    /// of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no texel, computed here at full size. With uHalf 0 (and the
     /// <c>layers-lean</c> split, <see cref="SceneLayersLean"/>) it is the pass for the pixels the lean one left out.
     /// </summary>
     public static readonly string SceneLayers = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
@@ -975,6 +1164,7 @@ static class PostProcessShaders
         uniform float uExposure;
         uniform int uUseAo, uDither, uAuto, uTone, uGrade;
         uniform float uToneMix;    // hybrid (uTone 3): 0 the clamp, 1 ACES
+        uniform float uHdrPeak;    // HDR output: the highlights' ceiling (over 1); 0 SDR
         uniform float uSaturation, uContrast;
         uniform vec3 uBalance;     // a white balance on the scene before the tone map (PostOptions.Balance; 1, 1, 1 in play)
         uniform float uNight;      // Meitou night grading strength (the `nightgrade` switch): 0 off; needs the auto exposure's mean (uAuto)
@@ -1022,6 +1212,23 @@ static class PostProcessShaders
             if (m <= K) return c;
             return c * ((K + (1.0 - K) * (1.0 - exp(-(m - K) / (1.0 - K)))) / m);
         }
+        // HDR output: the shoulder with a ceiling of uHdrPeak, so the picture matches SDR below K and its highlights keep going.
+        vec3 hdrShoulder(vec3 c)
+        {
+            const float K = 0.8;
+            float m = max(c.r, max(c.g, c.b));
+            if (m <= K) return c;
+            float span = uHdrPeak - K;
+            return c * ((K + span * (1.0 - exp(-(m - K) / span))) / m);
+        }
+        // HDR output: how much the HDR shoulder leaves of a value over what the SDR shoulder leaves of it.
+        float hdrGain(float m)
+        {
+            const float K = 0.8;
+            if (m <= K) return 1.0;
+            float span = uHdrPeak - K;
+            return (K + span * (1.0 - exp(-(m - K) / span))) / (K + (1.0 - K) * (1.0 - exp(-(m - K) / (1.0 - K))));
+        }
         vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
         // Ours, not the game's (docs/render-post.md "Night grading"; the C# mirror is Meitou.Data.World.NightGrade, a test pins the constants): the scene
@@ -1065,15 +1272,20 @@ static class PostProcessShaders
             float ao = texture(uAo, vUv).r;
             if (uUseAo != 0) c *= ao;
             if (uNight > 0.0 && uAuto != 0) c = nightGrade(c, dot(raw, LUM601), adapted.g);
-            if (uTone == 1) c = shoulder(c);
+            float top = uHdrPeak > 1.0 ? uHdrPeak : 1.0;
+            // HDR output: the look's own curve, its highlights lifted by what the HDR shoulder gives over the SDR one (1 under the knee, so the picture there is the SDR one).
+            if (uHdrPeak > 1.0 && uTone == 2) c = aces(c) * hdrGain(max(c.r, max(c.g, c.b)));
+            else if (uHdrPeak > 1.0 && uTone == 3) c = mix(clamp(c, 0.0, 1.0), aces(c * 0.7), uToneMix) * hdrGain(max(c.r, max(c.g, c.b)));
+            else if (uHdrPeak > 1.0) c = hdrShoulder(c);
+            else if (uTone == 1) c = shoulder(c);
             else if (uTone == 2) c = aces(c);
             // hybrid: between the game's clip and ACES, fed 0.7 of the exposure so its mid-tones stay the clip's (0.18 -> 0.17, 0.5 -> 0.49) and only the highlights roll off
             else if (uTone == 3) c = mix(clamp(c, 0.0, 1.0), aces(c * 0.7), uToneMix);
-            c = clamp(c, 0.0, 1.0);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
+            c = clamp(c, 0.0, top);   // Kenshi has no tone curve: values over 1 clip (docs/formats/post-processing.md)
             if (uGrade != 0)
             {
                 c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
-                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
+                c = clamp((c - 0.5) * uContrast + 0.5, 0.0, top);
             }
             if (uDither != 0) c += (ign(gl_FragCoord.xy) + ign(gl_FragCoord.xy + 17.0) - 1.0) / 255.0;
             fragColour = vec4(c, 1.0);

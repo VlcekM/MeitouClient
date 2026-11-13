@@ -44,6 +44,7 @@ public static class GlConventions
         GlEnum.Rgba32Ui => Format.R32G32B32A32Uint,
         GlEnum.Rgba32I => Format.R32G32B32A32Sint,
         GlEnum.R11FG11FB10F => Format.B10G11R11UfloatPack32,
+        GlEnum.Rgb10A2 => Format.A2B10G10R10UnormPack32,
         GlEnum.Rgba8Ui => Format.R8G8B8A8Uint,
         GlEnum.DepthComponent24 or GlEnum.DepthComponent => Format.D32Sfloat,   // engine choice: 32-bit float depth for GL's 24-bit (same or finer)
         GlEnum.DepthComponent32F => Format.D32Sfloat,
@@ -747,6 +748,10 @@ public enum GlEnum : int
     /// </summary>
     Depth24Stencil8 = 0x88F0,
     /// <summary>
+    /// <c>GL_RGB10_A2</c>: 10-bit normalized RGB with 2-bit alpha.
+    /// </summary>
+    Rgb10A2 = 0x8059,
+    /// <summary>
     /// <c>GL_R11F_G11F_B10F</c>: packed unsigned float RGB.
     /// </summary>
     R11FG11FB10F = 0x8C3A,
@@ -883,6 +888,10 @@ public enum InternalFormat : int
     /// <c>GL_RG16</c>: 16-bit normalized red-green.
     /// </summary>
     Rg16 = 0x822C,
+    /// <summary>
+    /// <c>GL_RGB10_A2</c>: 10-bit normalized RGB with 2-bit alpha.
+    /// </summary>
+    Rgb10A2 = 0x8059,
     /// <summary>
     /// <c>GL_R16UI</c>: 16-bit unsigned integer red.
     /// </summary>

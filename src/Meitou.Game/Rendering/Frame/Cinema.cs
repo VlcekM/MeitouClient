@@ -1,5 +1,7 @@
+using Meitou.Game.Rendering.Post;
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game.Rendering.Frame;
@@ -166,10 +168,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// The most keys the timeline holds, and the frame rate a recorded flight's PNG frames are taken at.
     /// </summary>
     const int MaxKeys = 999, RecordFps = 60;
-
-    /// <summary>
-    /// Seconds between the keys a recorded camera path drops.
-    /// </summary>
+    /// <summary>One press of the focus and aperture buttons: half a stop's ratio.</summary>
+    const float LensStep = 1.1892f;
+    /// <summary>Seconds between the keys a recorded camera path drops.</summary>
     const float PathStep = 1;
 
     /// <summary>
@@ -544,6 +545,23 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     }
 
     /// <summary>
+    /// Changes the selected key's lens (the depth of field's focus or f-number) and shows it.
+    /// </summary>
+    void SetLens(Func<CameraShot, CameraShot> change)
+    {
+        if (_selected is not { } s)
+        {
+            Say("no key selected");
+            return;
+        }
+
+        s.Shot = change(s.Shot);
+        Save();
+        _preview = true;
+        Say($"key {s.Label}: {Describe(s.Shot)}");
+    }
+
+    /// <summary>
     /// Scales the timing by <paramref name="factor"/> from the first key: the keys' times, the spacing (kept 0.5 .. 120 s) and the playhead.
     /// </summary>
     void Scale(float factor)
@@ -767,8 +785,12 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Add key at playhead", () => SaveKey(Enumerable.Range(1, MaxKeys).First(l => Find(l) is null), (float)_time));
         Button("Set key to camera", () => { if (_selected is { } s) SaveKey(s.Label); else Say("no key selected"); });
         Button("Go to key", () => { if (_selected is { } s) { Stop(); GoTo(s); } else Say("no key selected"); });
-        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off",
-            () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
+        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off", () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
+        Button("Focus nearer", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) / LensStep }));
+        Button("Focus farther", () => SetLens(s => s with { Focus = (s.Focus ?? s.Distance) * LensStep }));
+        Button(_selected is { Shot.Focus: not null } ? "Focus: key (to target)" : "Focus: target", () => SetLens(s => s with { Focus = null }));
+        Button("Aperture wider", () => SetLens(s => s with { Aperture = (s.Aperture ?? PostOptions.DefaultAperture) / LensStep }));
+        Button("Aperture narrower", () => SetLens(s => s with { Aperture = (s.Aperture ?? PostOptions.DefaultAperture) * LensStep }));
         Button("Delete key", DeleteSelected);
         Button(setHour is null ? "Time follows: n/a" : _followTime ? "Time follows: on" : "Time follows: off", () => OnKey(CinemaKey.KeypadDivide,
             false, false));
@@ -998,15 +1020,21 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     static float Degrees(float radians) => radians * 180 / MathF.PI;
 
     /// <summary>
-    /// <paramref name="s"/> as a line: the eye, yaw, pitch, lens and time of day.
+    /// <paramref name="s"/> as a line: the eye, yaw, pitch, lens (with its focus and f-number when set) and time of day.
     /// </summary>
     static string Describe(CameraShot s)
     {
         string time = WorldFrame.TimeText(s.Hour);
         var eye = s.Eye;
         return $"eye {eye.X:0}, {eye.Y:0}, {eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, "
-            + $"lens {Degrees(s.FieldOfView):0} deg, {time}";
+            + $"lens {Degrees(s.FieldOfView):0} deg{Lens(s)}, {time}";
     }
+
+    /// <summary>
+    /// The key's focus and f-number for <see cref="Describe"/> (nothing for those unset).
+    /// </summary>
+    static string Lens(CameraShot s) =>
+        (s.Focus is { } focus ? $", focus {focus:0}" : "") + (s.Aperture is { } aperture ? $", f/{aperture:0.0}" : "");
 
     /// <summary>
     /// Writes <paramref name="text"/> to the console as a cinema line.
@@ -1014,10 +1042,11 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     static void Say(string text) => Console.WriteLine($"cinema    {text}");
 
     /// <summary>
-    /// A key as the keys file stores it (JSON); a file from before the timeline has no times.
+    /// A key as the keys file stores it (JSON); a file from before the timeline has no times. <c>Focus</c> and <c>Aperture</c> are left out while
+    /// unset, and an older build skips them, so keys stay readable both ways.
     /// </summary>
     sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null,
-        bool Ease = false);
+        bool Ease = false, float? Focus = null, float? Aperture = null);
 
     /// <summary>
     /// Writes the keys to the keys file (an I/O failure is logged, not thrown).
@@ -1028,8 +1057,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
             var list = Sorted.Select(k => new Saved(k.Label, [k.Shot.Eye.X, k.Shot.Eye.Y, k.Shot.Eye.Z], k.Shot.Yaw, k.Shot.Pitch, k.Shot.Distance,
-                k.Shot.FieldOfView, k.Shot.Hour, k.Time, k.Ease)).ToList();
-            System.IO.File.WriteAllText(_file, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+                k.Shot.FieldOfView, k.Shot.Hour, k.Time, k.Ease, k.Shot.Focus, k.Shot.Aperture)).ToList();
+            var options = new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            System.IO.File.WriteAllText(_file, JsonSerializer.Serialize(list, options));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -1050,7 +1080,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             foreach (var s in saved.OrderBy(s => s.Time ?? s.Slot))
             {
                 if (s.Slot is < 1 or > MaxKeys || s.Eye is not { Length: 3 } || Find(s.Slot) is not null) continue;
-                var shot = new CameraShot(new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]), s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour);
+                var shot = new CameraShot(new Vector3(s.Eye[0], s.Eye[1], s.Eye[2]), s.Yaw, s.Pitch, s.Distance, s.FieldOfView, s.Hour, s.Focus, s.Aperture);
                 _keys.Add(new Entry(s.Slot, shot, s.Time ?? order * _spacing, s.Ease));
                 order++;
             }

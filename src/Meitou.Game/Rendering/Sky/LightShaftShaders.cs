@@ -90,18 +90,11 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The first pass, into the atlas (RGBA16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained,
-    /// that share). The samples are stratified over the slice's depth and jittered within the cell, anew each frame (the temporal upscaler averages
-    /// them). The shadow term of a point in the air: one compare in the first cascade that holds it (no filter, no surface to offset from), with the
-    /// Meitou receiver's fade at the shadow range, its terrain term (mountains out to the horizon) and its landmark map; the Faithful receiver's
+    /// The sun's shadow at a world point, after <see cref="AtmosphereShaders.Functions"/>: one compare in the first cascade that holds it (no filter, no
+    /// surface to offset from), with the Meitou receiver's fade at the shadow range, its terrain term and its landmark map. The Faithful receiver's
     /// cascades end at the last split.
     /// </summary>
-    public static readonly string Inject = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + $$"""
-
-        out vec4 fragColour;
-        uniform int uShaftSamples;
-
-        float shaftNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+    internal static readonly string SunShadow = $$"""
 
         float shaftShadow(vec3 world, float noise)
         {
@@ -112,6 +105,7 @@ static class LightShaftShaders
             int count = int(uShadowForward.w);
             if (!meitou || depth < uMsParams.y)
             {
+                if (meitou && msVolumeOn()) lit = msVolumeAt(world);   // the traced sun's volume (no cascades)
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {
                     if (c >= count) break;
@@ -126,6 +120,19 @@ static class LightShaftShaders
             lit = mix(lit, 1.0, smoothstep(uMsParams.z, uMsParams.y, depth));
             return min(lit, min(msTerrain(world, depth), msLandmark(world, vec3(0.0), depth, noise)));
         }
+        """;
+
+    /// <summary>
+    /// The first pass, into the atlas (RGBA16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained,
+    /// that share). The samples are stratified over the slice's depth and jittered within the cell, anew each frame (the temporal upscaler averages
+    /// them). The shadow term of a point in the air is <see cref="SunShadow"/>.
+    /// </summary>
+    public static readonly string Inject = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + SunShadow + """
+
+        out vec4 fragColour;
+        uniform int uShaftSamples;
+
+        float shaftNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 
         void main()
         {
@@ -150,6 +157,19 @@ static class LightShaftShaders
             fragColour = vec4(gained * lit / float(uShaftSamples), gained, lit / float(uShaftSamples), 0.0);
         }
         """;
+
+    const string InjectSample = "lit += shaftShadow(uShaftEye + shaftRay(uv) * dist, j);";
+
+    /// <summary>
+    /// <see cref="Inject"/> with the cloud transmission map on the sun at each sample (the <c>gihybrid</c> switch's <c>clouds</c> part): a cloud's shadow on the ground
+    /// goes up the air under it (docs/render-shafts.md "Cloud cover").
+    /// </summary>
+    public static readonly string InjectClouded = Inject.Contains(InjectSample, StringComparison.Ordinal)
+        ? Inject.Replace(InjectSample, """
+            vec3 air = uShaftEye + shaftRay(uv) * dist;
+                            lit += shaftShadow(air, j) * atmoCloudShadow(air);
+            """, StringComparison.Ordinal)
+        : throw new InvalidOperationException("InjectClouded: no sample line");
 
     /// <summary>
     /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame,

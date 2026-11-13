@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
@@ -106,7 +107,7 @@ public sealed partial class ArrestSystem
             {
                 if (w == s || !next[w].Alive || next[w].Task == (byte)CharacterTask.Rest) continue;
                 if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc
-                    || wc.Faction == player || !Crimes.Relations.Contains(wc.Faction))
+                    || wc.Faction == player || !Crimes.Relations.Contains(wc.Faction) || SquadRegistry.IsAnimal(wc))
                 {
                     continue;
                 }

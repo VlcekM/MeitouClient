@@ -63,6 +63,12 @@ static class FogVolumeShaders
     public const string Functions = """
 
         // ---- placed fog volumes (fogfeatures.dat and the weather's EFFECT_FOG_VOLUME spheres) ----
+        #ifdef FOG_VOLUME_SHADOW
+        float fogLight = 1.0;          // the last volume's sun share along its path (1 unshadowed)
+        #endif
+        #ifdef FOG_VOLUME_DELTA
+        vec3 fogAddLit = vec3(0.0);    // fogVolumesAccumulate's add with the sun's shadow; add itself leaves it out (the shadow applied after the upscaler)
+        #endif
         uniform vec4 uFogVolumeEye;        // xyz the eye (for the sky pass), w the blocks' light: max(0.08, sunColour.w * 1.6 * saturate(3 sunY + 0.2))
         uniform vec4 uFogVolumeInfo;       // x the vec4s in use, y sunColour.w (the spheres' and beams' light)
         uniform vec4 uFogVolumeData[512];  // the volumes in view, farthest first (FogVolumeShaders: block 10, sphere 3, beam 4 vec4s)
@@ -109,7 +115,10 @@ static class FogVolumeShaders
             float alpha = fogVolumeCurve((far - near) * colourDensity.a * edge);
             vec4 fog = vec4(colourDensity.rgb * uFogVolumeEye.w, alpha);
             #ifdef FOG_VOLUME_SHADOW
-            fog.rgb *= fogVolumeLight(d, near, far, colourDensity.a);   // Meitou light shafts: the sun shadowed along the visible path (LightShaftShaders.FogVolumeShadow)
+            fogLight = fogVolumeLight(d, near, far, colourDensity.a);   // Meitou light shafts: the sun shadowed along the visible path (LightShaftShaders.FogVolumeShadow)
+            #ifndef FOG_VOLUME_DELTA
+            fog.rgb *= fogLight;
+            #endif
             #endif
             if (near == 0.0) return fog;
             // The eye outside: far volumes give way to the haze at their near side, then the weather's fog over it.
@@ -150,7 +159,10 @@ static class FogVolumeShaders
             vec4 colourDensity = uFogVolumeData[o + 2];
             #ifdef FOG_VOLUME_SHADOW
             vec4 fog = vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a) * shape.z);
-            if (shape.w < 0.5) fog.rgb *= fogVolumeLight(d, t0, t1, colourDensity.a);   // Meitou light shafts; additive spheres glow of their own
+            fogLight = shape.w < 0.5 ? fogVolumeLight(d, t0, t1, colourDensity.a) : 1.0;   // Meitou light shafts; additive spheres glow of their own
+            #ifndef FOG_VOLUME_DELTA
+            fog.rgb *= fogLight;
+            #endif
             return fog;
             #else
             return vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a) * shape.z);
@@ -183,7 +195,10 @@ static class FogVolumeShaders
             vec4 colourDensity = uFogVolumeData[o + 3];
             #ifdef FOG_VOLUME_SHADOW
             vec4 fog = vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a * edge) * shape.z);
-            if (shape.w < 0.5) fog.rgb *= fogVolumeLight(d, t0, t1, colourDensity.a);   // Meitou light shafts; additive beams glow of their own
+            fogLight = shape.w < 0.5 ? fogVolumeLight(d, t0, t1, colourDensity.a) : 1.0;   // Meitou light shafts; additive beams glow of their own
+            #ifndef FOG_VOLUME_DELTA
+            fog.rgb *= fogLight;
+            #endif
             return fog;
             #else
             return vec4(colourDensity.rgb * uFogVolumeInfo.y, fogVolumeCurve((t1 - t0) * colourDensity.a * edge) * shape.z);
@@ -196,6 +211,9 @@ static class FogVolumeShaders
         {
             add = vec3(0.0);
             trans = 1.0;
+            #ifdef FOG_VOLUME_DELTA
+            fogAddLit = vec3(0.0);
+            #endif
             int used = int(uFogVolumeInfo.x);
             int o = 0;
             // The game's depth never exceeds its far clip D (the sky is at D): so a volume beyond D adds nothing (FogVolumes leaves those out).
@@ -206,6 +224,9 @@ static class FogVolumeShaders
                 if (type == 1)
                 {
                     vec4 f = fogVolumeBlock(o, eye, d, dist);
+                    #ifdef FOG_VOLUME_DELTA
+                    fogAddLit = fogAddLit * (1.0 - f.a) + f.rgb * (fogLight * f.a);
+                    #endif
                     add = add * (1.0 - f.a) + f.rgb * f.a;
                     trans *= 1.0 - f.a;
                     o += 10;
@@ -216,6 +237,9 @@ static class FogVolumeShaders
                 if (type == 2) { f = fogVolumeSphere(o, eye, d, dist); additive = uFogVolumeData[o + 1].w; o += 3; }
                 else if (type == 3) { f = fogVolumeBeam(o, eye, d, dist); additive = uFogVolumeData[o + 2].w; o += 4; }
                 else break;
+                #ifdef FOG_VOLUME_DELTA
+                fogAddLit = additive > 0.5 ? fogAddLit + f.rgb * (fogLight * f.a) : fogAddLit * (1.0 - f.a) + f.rgb * (fogLight * f.a);
+                #endif
                 if (additive > 0.5) add += f.rgb * f.a;
                 else { add = add * (1.0 - f.a) + f.rgb * f.a; trans *= 1.0 - f.a; }
             }

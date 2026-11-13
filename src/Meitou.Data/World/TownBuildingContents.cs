@@ -62,6 +62,17 @@ sealed class TownBuildingContents
     }
 
     /// <summary>
+    /// The spots of a placed building's interior layout, named by its placement alone (no town or state is read); none for a ruin.
+    /// </summary>
+    public static IReadOnlyList<HomeSpot> LaySpots(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved)
+    {
+        var c = new TownBuildingContents();
+        if (!resolved.Destroyed && layouts.Find(resolved.Record, resolved.Placement.LayoutName(null, exterior: false), exterior: false) is { } interior)
+            c.LayInterior(db, layouts, resolved, interior, new(), new());
+        return c.Spots;
+    }
+
+    /// <summary>
     /// Standing alone in the town, a chair, throne or dummy is a piece of furniture itself.
     /// </summary>
     public void AddAlone(GameDatabase db, ResolvedBuilding resolved, GameRecord? functionality)

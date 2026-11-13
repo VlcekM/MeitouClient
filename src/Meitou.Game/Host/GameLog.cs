@@ -170,34 +170,37 @@ sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
     /// <inheritdoc/>
     public override Encoding Encoding => second.Encoding;
+    public override void Write(char value) { first.Write(value); second.Write(value); }
+    public override void Write(string? value) { first.Write(value); second.Write(value); }
+    public override void Write(char[] buffer, int index, int count) { first.Write(buffer, index, count); second.Write(buffer, index, count); }
+    public override void WriteLine(string? value) { first.WriteLine(value); second.WriteLine(value); }
+    public override void Flush() { first.Flush(); second.Flush(); }
+}
+/// <summary>
+/// MEITOU_LOG_TIMES=1: each line starts with the seconds since the process started (to time the phases of a start or a load from the log).
+/// </summary>
+sealed class StampWriter(TextWriter inner) : TextWriter
+{
+    static readonly DateTime ProcessStart = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+    bool _atLineStart = true;
 
-    public override void Write(char value)
+    public override Encoding Encoding => inner.Encoding;
+    string Stamp() => $"[{(DateTime.Now - ProcessStart).TotalSeconds,7:0.00}] ";
+    void Begin()
     {
-        first.Write(value);
-        second.Write(value);
+        if (!_atLineStart) return;
+        inner.Write(Stamp());
+        _atLineStart = false;
     }
-
+    public override void Write(char value) { Begin(); inner.Write(value); _atLineStart = value == '\n'; }
     public override void Write(string? value)
     {
-        first.Write(value);
-        second.Write(value);
+        if (string.IsNullOrEmpty(value)) return;
+        Begin();
+        inner.Write(value);
+        _atLineStart = value[^1] == '\n';
     }
-
-    public override void Write(char[] buffer, int index, int count)
-    {
-        first.Write(buffer, index, count);
-        second.Write(buffer, index, count);
-    }
-
-    public override void WriteLine(string? value)
-    {
-        first.WriteLine(value);
-        second.WriteLine(value);
-    }
-
-    public override void Flush()
-    {
-        first.Flush();
-        second.Flush();
-    }
+    public override void Write(char[] buffer, int index, int count) => Write(new string(buffer, index, count));
+    public override void WriteLine(string? value) { Begin(); inner.WriteLine(value); _atLineStart = true; }
+    public override void Flush() => inner.Flush();
 }

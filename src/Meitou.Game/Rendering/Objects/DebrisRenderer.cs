@@ -1,3 +1,4 @@
+using Meitou.Game.Rendering.Post;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
@@ -14,8 +15,15 @@ namespace Meitou.Game.Rendering.Objects;
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation);
 /// <paramref name="Stretch"/> lengthens it along its own z (a bolt in flight).
 /// </summary>
-public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null)
+public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null, long Id = 0)
 {
+    static long s_ids;
+
+    /// <summary>
+    /// A new identity for a piece that moves (<see cref="Id"/>): the renderer finds its last frame's place by it and writes its motion for the temporal upscalers. 0 is no identity (a piece that does not move on its own).
+    /// </summary>
+    public static long NewId() => Interlocked.Increment(ref s_ids);
+
     /// <summary>
     /// A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone,
     /// docs/game/birds.md).
@@ -116,7 +124,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             float lambert = clamp(dot(n, l), 0.0, 1.0);
             vec3 nl = vec3(dot(normalize(mix(n, geometric, 0.6)), l), dot(normalize(mix(n, geometric, 0.3)), l), dot(n, l));
             vec3 u = (nl * 0.5 + 0.5) * 0.984375 + 0.0078125;
-            float v = sqrt(clamp(curvature * 0.3, 0.0, 1.0)) * 0.984375 + 0.0078125;
+            float v = sqrt(clamp(min(curvature, 2.0) * 0.3, 0.0, 1.0)) * 0.984375 + 0.0078125;
             vec3 s = vec3(textureLod(uSkinTable, vec2(u.r, v), 0.0).r, textureLod(uSkinTable, vec2(u.g, v), 0.0).g, textureLod(uSkinTable, vec2(u.b, v), 0.0).b);
             float extra = max(max(s.r, max(s.g, s.b)) - lambert, 0.0);
             vec3 hue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 1e-3);
@@ -278,6 +286,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
         foreach (var image in _textures.Values) image?.Dispose();
         _program.Dispose();
+        _motionMeshes?.Dispose();
         _frame.Dispose();
     }
 
@@ -586,7 +595,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// <paramref name="sliceViewProjection"/> is the slice's (absolute world to clip), <paramref name="frustum"/> its planes.
     /// </summary>
     public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light,
-        Func<LimbLook, uint>? skinTable = null)
+        Func<LimbLook, uint>? skinTable = null, Matrix4x4? relative = null)
     {
         if (pieces.IsEmpty) return;
         var cmd = _gpu.BeginGuest("debris");
@@ -596,7 +605,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         // argument buffer must already name them when the encoder takes it.
         var standIn = _gpu.StandIn2D;
         UseTextures(pieces, skinTable);
-        BindView(cmd, sliceViewProjection, eye, light);
+        BindView(cmd, sliceViewProjection, eye, light, relative);
 
         var basePush = new DebrisPush
         {
@@ -659,12 +668,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// <summary>
     /// The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
     /// </summary>
-    void BindView(IGpuCommandList cmd, Matrix4x4 sliceViewProjection, Vector3 eye, in WorldLighting light)
+    void BindView(IGpuCommandList cmd, Matrix4x4 sliceViewProjection, Vector3 eye, in WorldLighting light, Matrix4x4? relative)
     {
         var view = new ViewConstants
         {
-            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too.
-            ViewProjection = Matrix4x4.CreateTranslation(eye) * sliceViewProjection,
+            // The model matrices are camera-relative (as the legacy path set them), so the view projection is too: the scene's rotation-only one when the caller has it
+            // (translation(eye) × the world view-projection cancels the eye's coordinates in float, a rounding that changes as the jitter does: a bolt stuck in a
+            // character visibly shook against it close up; docs/character-renderer.md "Precision").
+            ViewProjection = relative ?? Matrix4x4.CreateTranslation(eye) * sliceViewProjection,
             Eye = eye,
             LightDir = light.SunDirection,
             FogColour = light.FogColour,
@@ -697,6 +708,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale,
                 piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
+            if (Motion && piece.Id != 0) NoteMotion(piece, mesh, m, eye);
             for (int k = 0; k < 5; k++)
             {
                 _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle,
@@ -743,6 +755,96 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// </summary>
     static uint Pack(Vector3 c) => (uint)(Math.Clamp((int)MathF.Round(c.X * 255), 0, 255) << 16 | Math.Clamp((int)MathF.Round(c.Y * 255), 0,
         255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
+
+    #endregion
+
+    #region Motion vectors
+
+    // For the temporal upscalers: a moving piece (one with an identity) is drawn again into the motion target with this and last frame's transform.
+
+    /// <summary>
+    /// A piece's place as a frame drew it.
+    /// </summary>
+    readonly record struct Placed(Vector3 Position, Quaternion Rotation, float Stretch);
+
+    /// <summary>
+    /// A moving piece's draw into the motion target: its mesh, and its eye-relative transform now and last frame.
+    /// </summary>
+    readonly record struct MotionDraw(Mesh Mesh, Matrix4x4 Model, Matrix4x4 Previous);
+
+    /// <summary>
+    /// The motion pass's program and pipelines (made at the first moving piece).
+    /// </summary>
+    MotionMeshes? _motionMeshes;
+
+    /// <summary>
+    /// The places of the pieces drawn this frame and last frame, by identity (swapped each frame).
+    /// </summary>
+    Dictionary<long, Placed> _placedNow = [], _placedBefore = [];
+
+    /// <summary>
+    /// This frame's moving pieces.
+    /// </summary>
+    readonly List<MotionDraw> _motionDraws = [];
+
+    /// <summary>
+    /// Set each frame by the world frame when a temporal upscaler runs: <see cref="Draw"/> notes the moving pieces for <see cref="DrawMotion"/>
+    /// and keeps their places for the next frame.
+    /// </summary>
+    public bool Motion { get; private set; }
+
+    /// <summary>
+    /// Starts a frame: <paramref name="on"/> when the upscaler needs motion vectors. The pieces drawn this frame become the "last frame" of the
+    /// next.
+    /// </summary>
+    public void BeginMotion(bool on)
+    {
+        _motionDraws.Clear();
+        (_placedBefore, _placedNow) = (_placedNow, _placedBefore);
+        _placedNow.Clear();
+        Motion = on;
+        if (!on) _placedBefore.Clear();
+    }
+
+    /// <summary>
+    /// Draws the moving pieces of this frame into the motion target (red and green; the object-motion pass of the post chain): each with its
+    /// transform now and last frame, the camera of the two frames as the characters' motion has it (<paramref name="camera"/>), written where the
+    /// piece is what the scene depth shows.
+    /// </summary>
+    internal void DrawMotion(MotionTargets targets, MotionCamera camera)
+    {
+        if (!Motion || _motionDraws.Count == 0) return;
+        var m = _motionMeshes ??= new MotionMeshes(_gpu, _frame, GpuVertex.ObjectSize);
+        m.Begin(targets, camera);
+        foreach (var d in _motionDraws)
+        {
+            var mesh = d.Mesh;
+            m.Mesh(new GpuBufferBinding(mesh.Vertices.Handle, 0), new GpuBufferBinding(mesh.Vertices.Handle, 20),
+                new GpuBufferBinding(mesh.Indices.Handle, 0));
+            foreach (var part in mesh.Parts)
+            {
+                uint texture = part.Diffuse is { } diffuse ? diffuse.CachedIndex : _gpu.StandIn2D;
+                m.Draw(part.Count, part.First, part.VertexOffset, d.Model, d.Previous, texture, part.Diffuse is null ? 0 : part.AlphaThreshold);
+            }
+        }
+
+        m.End();
+        _motionDraws.Clear();
+    }
+
+    /// <summary>
+    /// A piece drawn this frame: its place is kept, and with a place from last frame that differs the draw is noted. A piece with none (new) or the
+    /// same (resting, or the host shows the same frame again) has no motion of its own.
+    /// </summary>
+    void NoteMotion(in DebrisPiece piece, Mesh mesh, in Matrix4x4 model, Vector3 eye)
+    {
+        var placed = new Placed(piece.Position, piece.Rotation, piece.Stretch);
+        _placedNow[piece.Id] = placed;
+        if (!_placedBefore.TryGetValue(piece.Id, out var before) || before == placed) return;
+        var scale = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * before.Stretch);
+        var previous = scale * Matrix4x4.CreateFromQuaternion(before.Rotation) * Matrix4x4.CreateTranslation(before.Position - eye);
+        _motionDraws.Add(new MotionDraw(mesh, model, previous));
+    }
 
     #endregion
 }

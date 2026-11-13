@@ -377,7 +377,7 @@ public sealed class WorldSession : IDisposable
         if (_aheadTicks > 0 || Simulation.IsPaused) return;
         // Rounded down (a tick short runs in the next frame; one too many holds the picture a frame), plus a hair: the average nears a steady count
         // from below.
-        int count = (int)Math.Clamp(Math.Floor(_owedPerFrame + 0.1), 1, Simulation.MaxTicksPerFrame * Simulation.Speed);
+        int count = (int)Math.Clamp(Math.Floor(_owedPerFrame + 0.1), 1, Math.Max(1, Simulation.MaxTicksPerFrame * Simulation.Speed));   // at least 1: under half speed (photo mode's slow motion) the limit fell below the least
         (_heldPrevious, _heldCurrent, _heldTick, _held) = (World.PreviousSnapshot, World.Snapshot, World.Tick, true);
         // Each tick's start, as SimulationTick sets it (the clock summed tick by tick); the game clock moves when the ticks fall due.
         var starts = new (double Hours, bool Daytime)[count];

@@ -12,8 +12,10 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
     /// <summary>
     /// A feature: the setting heading it (its switch or slider, by label) or a <see cref="Title"/> when nothing heads it, and its members' labels.
+    /// <see cref="LauncherHeader"/>: the launcher's heading where it differs (the technique choice, which the game's menu shows as the effect's
+    /// switch and a technique row).
     /// </summary>
-    internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "");
+    internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "", string? LauncherHeader = null);
 
     /// <summary>
     /// The group of the race switches (every <c>race:</c> setting is in it).
@@ -25,45 +27,77 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal static readonly FeatureGroup[] FeatureGroups =
     [
-        // Lighting
-        new("Shadows", "Shadows", [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
-            WorldFrame.FifthCascadeSwitch]),
-        new("Indirect light", "Indirect light", ["Indoor GI"]),
+        // Display
+        new("Upscaling", WorldFrame.UpscalerSliders[0], [WorldFrame.UpscalerSliders[1], WorldFrame.UpscalerSliders[2], WorldFrame.DlssPresetSlider]),
+        new("HDR output", "hdr", ["hdrPaperNits", "hdrPeakNits"]),
+
+        // Lighting: the shadows first (the sun's switch heads them; the lamps' and the contact shadows are inside)
+        new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.TracedGrassSwitch,
+            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.FifthCascadeSwitch, "Contact shadows",
+            "Lamp shadows"]),
+        new("Soft grazing sun", "Soft grazing sun", []),
+        new("Indirect light", "Indirect light", [SettingsMenu.TechniqueKey(WorldFrame.GiChoice), "Indoor GI", WorldFrame.GiRelocateSwitch,
+            WorldFrame.GiCloudShadowsSwitch, WorldFrame.GiCacheSwitch], LauncherHeader: WorldFrame.GiChoice),
+        new("Ambient occlusion", "Ambient occlusion", [SettingsMenu.TechniqueKey(WorldFrame.OcclusionChoice), WorldFrame.GtaoQualitySlider],
+            LauncherHeader: WorldFrame.OcclusionChoice),
         new("Light shafts", "Light shafts", [
             "Light shafts strength", "Light shafts air (0 = none)", "Light shafts air at dawn and dusk (x)", WorldFrame.ShaftQualitySlider]),
         new("Planetshine", "Planetshine", ["Planetshine strength (x physical)"]),
         new("Ambient light", null, ["Ambient light strength (1 = game)", "Night ambient light strength (1 = 1.2x game)"],
             "Ambient light", "The sky's light in shade, at night and indoors."),
 
+        // Water & reflections
+        new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)",
+            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider, WorldFrame.ReflectionSamplesSlider, WorldFrame.WaterGridSlider,
+            WorldFrame.WaterOceanSlider]),
+        new("Water contact foam, wakes and ripples", "Water contact foam, wakes and ripples", []),
+        new("Reflections", "Reflections", []),
+
+        // Terrain
+        new("Terrain detail", null, ["Terrain detail: error px (less = finer)", WorldFrame.MaterialDistanceSlider], "Terrain detail",
+            "How finely the ground's shape and its textures are drawn with distance."),
+        new("Terrain relief", null, ["Ground parallax", WorldFrame.GroundParallaxDepthSlider, "Ground parallax distance (m)", "Ground displacement (tessellation)",
+            "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider,
+            "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)"],
+            "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
+        new("Ground trails", "Ground trails", []),
+
+        // Vegetation
+        new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
+            "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),
+        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)", WorldFrame.ImpostorBudgetSlider]),
+        new(WorldFrame.GrassCoverSwitch, WorldFrame.GrassCoverSwitch, []),
+
+        // Objects
+        new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",
+            "Object LOD distance x"]),
+        new("Mesh welding", "Mesh welding", []),
+        new("Metal on buildings", "Metal on buildings", []),
+
+        // Characters: the skin switch, then one row per race (added by Entries)
+        new(SkinGroup, "Skin", []),
+        new("Advanced materials", "Advanced materials", [WorldFrame.MaterialHairSwitch, WorldFrame.MaterialClothSwitch, WorldFrame.MaterialSkinSwitch,
+            WorldFrame.MaterialEyesSwitch, WorldFrame.MaterialMetalSwitch, WorldFrame.MaterialBeadsSwitch]),
+        new("Blood on weapons and gear", "Blood on weapons and gear", []),
+        new("Blood cells", "Blood cells", []),
+        new("Blood on surfaces", "Blood on surfaces", []),
+        new("Bolt tracers", "Bolt tracers", []),
+
         // Sky & weather
-        new("Haze", "Haze", ["Haze strength (1 = game)"]),
+        new("Haze", "Haze", ["Haze strength (1 = game)", WorldFrame.HazeDistanceSlider]),
         new("Clouds", "Clouds", [WorldFrame.CloudHeightSlider, "Cloud shadows", "Cloud shadows in fog"]),
-        new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
         new("Weather particles", WorldFrame.ParticleSliders[0], [WorldFrame.ParticleSliders[1]]),
         new("Fog", "Fog", []),
+        new(WorldFrame.WetWorldSwitch, WorldFrame.WetWorldSwitch, []),
 
         // Colour
         new("Tone map and grade", "Tone map and grade", ["Tone map (0 = game)", "Hybrid tone map: ACES share", "Grading (0 = game)"]),
         new("Night grading", "Night grading", ["Night grading strength (0 = game)"]),
+
+        // Post FX
         new(WorldFrame.BloomSwitch, WorldFrame.BloomSwitch, [WorldFrame.BloomStrengthSlider]),
-
-        // World
-        new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",
-            "Object LOD distance x", "Terrain detail: error px (less = finer)"]),
-        new("Terrain relief", null, ["Ground parallax", "Ground parallax distance (m)", "Ground displacement (tessellation)",
-            "Ground displacement distance (m)", "Ground relief depth (cm, typical ground)", WorldFrame.GroundReliefQualitySlider,
-            "Rock smoothing (tessellation)", "Terrain outline refinement (tessellation)"],
-            "Terrain relief", "Depth on the ground and smoother rocks and hills, from tessellation and parallax."),
-        new("Foliage ranges", "Foliage ranges", ["Foliage draw distance x", "Foliage LOD distance x (lod Meitou)", "Large foliage range (F6 Meitou)",
-            "Medium foliage range", "Small foliage range", "Grass draw distance x", WorldFrame.GrassDensitySlider, "Foliage levels"]),
-        new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)"]),
-        new("Mesh welding", "Mesh welding", []),
-        new("Bolt tracers", "Bolt tracers", []),
-        new("Water", "Water", ["Water clarity x (Meitou)", "Far water clarity (Meitou)", "Water see-through distance (Meitou, game 4000)",
-            WorldFrame.WaterReflectionSlider, WorldFrame.ReflectionRangeSlider]),
-
-        // Characters: the skin switch, then one row per race (added by Entries)
-        new(SkinGroup, "Skin", []),
+        new(WorldFrame.DepthOfFieldSwitch, WorldFrame.DepthOfFieldSwitch, [WorldFrame.DofApertureSlider, WorldFrame.CameraEffectsSwitch]),
+        new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
     ];
 
     /// <summary>
@@ -81,7 +115,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return [.. FeatureGroups
             .Select(g => new global::Meitou.Settings.SettingsGroup
             {
-                Header = g.Header is { } header ? Key(header) : null,
+                Header = (g.LauncherHeader ?? g.Header) is { } header ? Key(header) : null,
                 Title = g.Title ?? g.Id,
                 Description = g.Hint,
                 Members = [.. g.Members.Select(Key).OfType<string>()],
@@ -95,7 +129,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
     /// </summary>
     internal static int GroupRank(string label)
     {
-        int i = Array.FindIndex(FeatureGroups, g => g.Header == label || InGroup(g, label));
+        int i = Array.FindIndex(FeatureGroups, g => g.Header == label || g.LauncherHeader == label || InGroup(g, label));
         return i < 0 ? FeatureGroups.Length : i;
     }
 
@@ -172,7 +206,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
             });
 
             string name = header.Label;
-            if (open) output.AddRange(members.Select(m => m with { Depth = 1, Label = WithinGroup(m.Label, name) }));
+            // A member that sits under another already (a mode's custom value) goes one step further in.
+            if (open) output.AddRange(members.Select(m => m with { Depth = m.Depth + 1, Label = WithinGroup(m.Label, name) }));
         }
 
         return output;

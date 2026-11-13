@@ -399,6 +399,24 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     /// <summary>
+    /// A move order for one character of any faction (an NPC, an animal), given straight to the world; false with the reason when it does not
+    /// exist.
+    /// </summary>
+    public bool ControlMoveCharacter(CharacterId id, float x, float z, bool queued, out string message)
+    {
+        if (ControlCharacter(id) is null)
+        {
+            message = $"refused: no character {CharacterKey(id)}";
+            return false;
+        }
+
+        var target = new Vector3(x, player.Ground(x, z), z);
+        player.Session.World.Commands.Enqueue(new MoveOrder([id], target) { Tick = player.Session.World.Tick, Queued = queued });
+        message = $"move issued to {CharacterKey(id)} at {x:0.#} {z:0.#}{(queued ? " (queued)" : "")}";
+        return true;
+    }
+
+    /// <summary>
     /// The active squad's members.
     /// </summary>
     public IReadOnlyList<CharacterId> ControlSquad() => player.ActiveSquadMembers();

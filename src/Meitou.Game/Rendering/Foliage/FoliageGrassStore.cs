@@ -90,6 +90,12 @@ sealed class FoliageGrassStore
     public FoliageNativeMesh MeshGpu;
 
     /// <summary>
+    /// The GPU path's colour program over the arena for the depth-first pair (<see cref="FoliageRenderer.GrassDepthFirst"/>): its depth draw, and
+    /// its colour draw where the depth is its own (pipelines of their own segment kinds).
+    /// </summary>
+    public FoliageNativeMesh MeshGpuDepth, MeshGpuEqual;
+
+    /// <summary>
     /// The GPU path's motion program over the arena.
     /// </summary>
     public FoliageNativeMesh MeshMotionGpu;
@@ -113,6 +119,7 @@ sealed class FoliageGrassStore
         MotionGpuProgram = new NativeProg(gpu, Frame, FoliageGrassShaders.GrassMotionVertexGpu(),
             FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
         MeshGpu = ArenaMesh(GpuProgram);
+        (MeshGpuDepth, MeshGpuEqual) = (ArenaMesh(GpuProgram), ArenaMesh(GpuProgram));
         MeshMotionGpu = ArenaMesh(MotionGpuProgram);
     }
 
@@ -192,6 +199,7 @@ sealed class FoliageGrassStore
         if (GpuProgram is not null && MotionGpuProgram is not null)
         {
             MeshGpu = ArenaMesh(GpuProgram);
+            (MeshGpuDepth, MeshGpuEqual) = (ArenaMesh(GpuProgram), ArenaMesh(GpuProgram));
             MeshMotionGpu = ArenaMesh(MotionGpuProgram);
         }
         Full = false;
@@ -334,7 +342,7 @@ sealed class FoliageGrassStore
     /// frame holds a whole page, then the slots, which make the page draw. Returns false when there was no room. (One method: the upload steps
     /// share the page's captured state.)
     /// </summary>
-    bool QueuePage(FoliageZoneState state, int key, FoliageGrassPage page, float[][] blades, int[] floats, int[][] prefixes)
+    public bool QueuePage(FoliageZoneState state, int key, FoliageGrassPage page, float[][] blades, int[] floats, int[][] prefixes)
     {
         var store = Store;
         var buffers = new FoliageGrassBuffer[blades.Length];
@@ -350,7 +358,8 @@ sealed class FoliageGrassStore
         uint zone = (uint)state.GrassZone, serial = ++_grassPageSerial;
         float x0 = state.X0 + key % FoliageRenderer.PagesPerZone * FoliageRenderer.PageSize;
         float z0 = state.Z0 + key / FoliageRenderer.PagesPerZone * FoliageRenderer.PageSize;
-        float y = state.Ground is { } ground ? ground.Height(x0 + FoliageRenderer.PageSize / 2, z0 + FoliageRenderer.PageSize / 2) : 0;
+        SpanHeights(state, page, blades, floats);
+        float pageMinY = page.MinY, pageMaxY = page.MaxY;
         for (int i = 0; i < buffers.Length; i++)
         {
             var b = buffers[i];
@@ -380,13 +389,35 @@ sealed class FoliageGrassStore
             {
                 var b = buffers[i];
                 if (b.Slot < 0) continue;
-                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone,
-                    Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
+                store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, YMin = pageMinY, YMax = pageMaxY, FirstBlade = b.FirstBlade,
+                    Count = (uint)b.Count, Zone = zone, Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
             Version++;
         });
         return true;
+    }
+
+    /// <summary>
+    /// The heights the page's blades span into <see cref="FoliageGrassPage.MinY"/> and <see cref="FoliageGrassPage.MaxY"/>: the roots' (the second
+    /// float of a blade), and the tallest quad of the patches above the highest.
+    /// </summary>
+    static void SpanHeights(FoliageZoneState state, FoliageGrassPage page, float[][] blades, int[] floats)
+    {
+        float minY = float.PositiveInfinity, maxY = float.NegativeInfinity, tallest = 0;
+        for (int i = 0; i < blades.Length; i++)
+        {
+            if (floats[i] == 0) continue;
+            var data = blades[i];
+            for (int at = 1; at < floats[i]; at += FoliageGrassField.Stride)
+            {
+                float h = data[at];
+                if (h < minY) minY = h;
+                if (h > maxY) maxY = h;
+            }
+            if (i < state.Patches.Count) tallest = MathF.Max(tallest, state.Patches[i].Grass.QuadMaxHeight);
+        }
+        (page.MinY, page.MaxY) = (minY, maxY + tallest);
     }
 
     /// <summary>

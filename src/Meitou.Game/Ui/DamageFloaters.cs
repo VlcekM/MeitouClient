@@ -31,18 +31,26 @@ sealed class DamageFloaters(PlayerInterface player)
     /// A floater on screen; <paramref name="Height"/> the units over its anchor it starts at (a machine label: 5, its point already over the
     /// building).
     /// </summary>
-    internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, long Born, FloaterMode Mode, float Height = FloaterHeight)
+    internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, FloaterMode Mode, float Height = FloaterHeight)
     {
         /// <summary>
         /// The anchor's last position (the character's as drawn).
         /// </summary>
         public Vector3 Last { get; set; }
+        /// <summary>
+        /// The units risen so far: game time, so it stands still while the game is paused and runs faster at the fast speeds (<c>FUN_1406ea9f0</c> adds the game's frame time).
+        /// </summary>
+        public float Rise { get; set; }
     }
 
     /// <summary>
     /// The floaters on screen.
     /// </summary>
     internal readonly List<Live> Floaters = [];
+    /// <summary>
+    /// The timestamp of the last draw, for the real seconds that passed since.
+    /// </summary>
+    long _lastDraw;
 
     /// <summary>
     /// Takes the world's new floaters (none when off, out of range or without text), keeps the newest 24 still rising, and moves each to its
@@ -52,6 +60,10 @@ sealed class DamageFloaters(PlayerInterface player)
     {
         var queue = player.Session.World.Floaters ??= new();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        float seconds = _lastDraw == 0 ? 0 : (float)((now - _lastDraw) / (double)System.Diagnostics.Stopwatch.Frequency);
+        _lastDraw = now;
+        float risen = seconds * (float)player.Session.Simulation.Speed * FloaterRiseSpeed;
+        foreach (var l in Floaters) l.Rise += risen;
         while (queue.TryDequeue(out var f))
         {
             if (player.Floaters == FloaterMode.Off && f.Kind is FloaterKind.Damage or FloaterKind.Building) continue;
@@ -60,14 +72,14 @@ sealed class DamageFloaters(PlayerInterface player)
 
             // A machine label starts at its own point.
             float height = f.Kind == FloaterKind.Label ? 0 : FloaterHeight;
-            var live = new Live(f.Target, text, FloaterText.Colour(f), now, FontMode(f.Kind), height);
+            var live = new Live(f.Target, text, FloaterText.Colour(f), FontMode(f.Kind), height);
             live.Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position;
             Floaters.Add(live);
         }
 
         // A long fast-forward queues many at once: only the newest are worth showing.
         if (Floaters.Count > 24) Floaters.RemoveRange(0, Floaters.Count - 24);
-        Floaters.RemoveAll(l => Rise(l, now) >= FloaterGone);
+        Floaters.RemoveAll(l => l.Rise >= FloaterGone);
         if (Floaters.Count == 0) return;
 
         var ids = Floaters.Select(l => l.Target).ToHashSet();
@@ -93,11 +105,6 @@ sealed class DamageFloaters(PlayerInterface player)
             Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f) * BuildingFloaterJitter;
 
     /// <summary>
-    /// How far floater <paramref name="l"/> has risen by <paramref name="now"/>.
-    /// </summary>
-    static float Rise(Live l, long now) => (float)((now - l.Born) / (double)System.Diagnostics.Stopwatch.Frequency) * FloaterRiseSpeed;
-
-    /// <summary>
     /// The floaters as the original draws them (<c>FUN_1406ea9f0</c>, <b>Verified</b>): a plain MyGUI text box (the <c>Kenshi_TextboxStandardText</c>
     /// template: no shadow) in <c>Kenshi_FloaterFont_Medium</c> for Simple info, <c>Kenshi_FloaterFont_Small</c> for Full info, its top left at the
     /// screen point of the rising anchor, sized to the text plus 20 pixels at the UI scale. Blows landing together print over each other, as in the
@@ -107,12 +114,11 @@ sealed class DamageFloaters(PlayerInterface player)
     {
         if (Floaters.Count == 0) return;
 
-        long now = System.Diagnostics.Stopwatch.GetTimestamp();
         float scale = player.UiScale;
         int n = 0;
         foreach (var l in Floaters)
         {
-            float rise = Rise(l, now);
+            float rise = l.Rise;
             if (rise >= FloaterGone
                 || player.Project(l.Last + new Vector3(0, l.Height + rise, 0)) is not { } at) continue;
 

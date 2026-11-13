@@ -144,6 +144,7 @@ static class Shaders
             if (uUseVertexColour) albedo *= vColour.rgb;
 
             vec3 geometricNormal = n;
+            atmoSurfaceNormal = geometricNormal;
             if (uHasNormal && !uTriplanar && dot(vTangent.xyz, vTangent.xyz) > 1e-8)
             {
                 vec3 t = normalize(vTangent.xyz - n * dot(n, vTangent.xyz));
@@ -185,10 +186,12 @@ static class Shaders
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
             vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
             // World view, game sky: the game's deferred lighting (docs/formats/lighting.md); its gloss is diffuse alpha times `specular mult`.
+            // Cut-out by the normal map's alpha (objects.hlsl TRANSPARENCY: FeatureAlpha, Building_Alpha): the nearer the cut-out's edge, the more light passes.
+            atmoTranslucency = uAlphaSource == 2 && uAlphaThreshold > 0.0 ? clamp(1.0 - (nm.a - uAlphaThreshold) / max(1.0 - uAlphaThreshold, 1e-3), 0.0, 1.0) : 0.0;
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);
             // The character editor's stage (WorldObjectRenderer.DrawStageProp, a fog distance of -2): its platform, lit as the characters on it.
             if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);
-            if (uEmissive) colour += albedo * nm.a;
+            if (uEmissive) colour += albedo * (1.0 - nm.a) * 3.2;
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colour, 1.0);
         }

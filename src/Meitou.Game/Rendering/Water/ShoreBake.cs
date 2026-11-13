@@ -10,6 +10,7 @@ namespace Meitou.Game.Rendering.Water;
 /// <item><b>Distance</b>: the signed distance to the waterline in world units, positive over water (terrain under
 /// <see cref="WorldWater.Height"/>), negative over land, clamped to ±<see cref="MaxDistance"/>.</item>
 /// <item><b>Exposure</b>: 0 (a pond, a narrow bay, a channel) to 1 (open sea), see <see cref="ExposureRule"/>.</item>
+/// <item><b>Travel</b> and <b>Swell</b>: the shore waves' arrival time and what is left of them (<see cref="ShoreTravel"/>).</item>
 /// </list>
 /// Texel (i, j) is centred on world (<see cref="X0"/> + (i + 0.5)·Texel, <see cref="Z0"/> + (j + 0.5)·Texel), so a texture of the grid sampled at
 /// uv = (p − (X0, Z0)) / (Size·Texel) with linear filtering reads the same values as <see cref="Sample"/>.
@@ -50,9 +51,10 @@ internal sealed class ShoreGrid
     /// <summary>
     /// A grid over the given arrays (not copied).
     /// </summary>
-    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
+    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure, float[] travel,
+        float[] swell)
     {
-        (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure) = (size, texel, x0, z0, maxDistance, distance, exposure);
+        (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure, Travel, Swell) = (size, texel, x0, z0, maxDistance, distance, exposure, travel, swell);
     }
 
     /// <summary>
@@ -91,6 +93,16 @@ internal sealed class ShoreGrid
     public float[] Exposure { get; }
 
     /// <summary>
+    /// The shore waves' arrival time (seconds), row-major (<see cref="ShoreTravel"/>).
+    /// </summary>
+    public float[] Travel { get; }
+
+    /// <summary>
+    /// The share of the shore waves' height left (0 to 1), row-major (<see cref="ShoreTravel"/>).
+    /// </summary>
+    public float[] Swell { get; }
+
+    /// <summary>
     /// World X of the grid's high edge.
     /// </summary>
     public float X1 => X0 + Size * Texel;
@@ -101,28 +113,28 @@ internal sealed class ShoreGrid
     public float Z1 => Z0 + Size * Texel;
 
     /// <summary>
-    /// The grid as the texture's texels: (distance, exposure) pairs, row-major.
+    /// The grid as the texture's texels: (distance, exposure, travel, swell), row-major.
     /// </summary>
     public float[] Interleaved()
     {
-        var rg = new float[Size * Size * 2];
-        InterleaveInto(rg);
-        return rg;
+        var rgba = new float[Size * Size * 4];
+        InterleaveInto(rgba);
+        return rgba;
     }
 
     /// <summary>
-    /// The same into an array of Size · Size · 2 floats the caller keeps from bake to bake.
+    /// The same into an array of Size · Size · 4 floats the caller keeps from bake to bake.
     /// </summary>
-    public void InterleaveInto(float[] rg)
+    public void InterleaveInto(float[] rgba)
     {
-        if (rg.Length != Size * Size * 2)
+        if (rgba.Length != Size * Size * 4)
         {
-            throw new ArgumentException("the array has to hold Size * Size texels", nameof(rg));
+            throw new ArgumentException("the array has to hold Size * Size texels", nameof(rgba));
         }
 
         for (int k = 0; k < Size * Size; k++)
         {
-            (rg[2 * k], rg[2 * k + 1]) = (Distance[k], Exposure[k]);
+            (rgba[4 * k], rgba[4 * k + 1], rgba[4 * k + 2], rgba[4 * k + 3]) = (Distance[k], Exposure[k], Travel[k], Swell[k]);
         }
     }
 
@@ -176,7 +188,7 @@ internal static class ShoreBake
     /// Gaussian so the gradient has no kinks. The height sampling, sign and smoothing are parallel over rows; the sweeps run on one thread.
     /// </summary>
     public static ShoreGrid Bake(Func<float, float, float> height, float cx, float cz, int size = 1024, float texel = 10f,
-        float maxDistance = ShoreGrid.DefaultMaxDistance, Scratch? scratch = null)
+        float maxDistance = ShoreGrid.DefaultMaxDistance, Scratch? scratch = null, IReadOnlyList<(Vector2 A, Vector2 B)>? walls = null)
     {
         (cx, cz) = SnapCentre(cx, cz, texel);
         float x0 = cx - size * 0.5f * texel, z0 = cz - size * 0.5f * texel;
@@ -201,7 +213,21 @@ internal static class ShoreBake
         var tmp = Scratch.Get(ref scratch.Tmp, n * n);
         Smooth(dist, tmp, n);
         var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel, scratch), Scratch.Get(ref scratch.Exposure, n * n));
-        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure);
+        Relax(dist, Scratch.Get(ref scratch.Wide, n * n), tmp, n, texel);
+        var travel = Scratch.Get(ref scratch.Travel, n * n);
+        var swell = Scratch.Get(ref scratch.Swell, n * n);
+        bool shore = dist.AsSpan().ContainsAnyExcept(dist[0]);
+        if (shore)
+        {
+            ShoreTravel.Bake(s, dist, n, texel, x0, z0, walls, travel, swell);
+        }
+        else
+        {
+            Array.Clear(travel);
+            Array.Clear(swell);
+        }
+
+        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure, travel, swell);
     }
 
     /// <summary>
@@ -425,9 +451,10 @@ internal static class ShoreBake
     internal sealed class Scratch
     {
         /// <summary>
-        /// The sign field (positive over water), the distance, the smoothing's scratch and the exposure.
+        /// The sign field (positive over water), the distance, the smoothing's scratch and the exposure; the relaxed distance's blur, and the shore
+        /// waves' travel time and swell.
         /// </summary>
-        internal float[]? S, Dist, Tmp, Exposure;
+        internal float[]? S, Dist, Tmp, Exposure, Wide, Travel, Swell;
 
         /// <summary>
         /// The nearest crossing per texel.
@@ -505,6 +532,69 @@ internal static class ShoreBake
             int jm = Math.Max(j - 1, 0), jp = Math.Min(j + 1, n - 1);
             for (int i = 0; i < n; i++)
                 a[j * n + i] = 0.25f * (tmp[jm * n + i] + 2 * tmp[j * n + i] + tmp[jp * n + i]);
+        });
+    }
+
+    /// <summary>
+    /// Offshore the distance is eased towards its blur (three box passes of <see cref="RelaxRadius"/> texels, about a 105-unit Gaussian at 10 units a texel), from
+    /// <see cref="RelaxNear"/> to <see cref="RelaxFar"/> units out, and not within <see cref="RelaxEdge"/> texels of the grid's edge (the blur's edge would bend it). The exact
+    /// distance creases where the nearest shore switches (a bay's middle, off a point or a pier's corner): the breakers' crests, which follow its lines, kinked there and
+    /// their foam's frame (the gradient) flipped along a straight seam. Eased, the crests bend round such places as refracted swell does; the waterline is unchanged.
+    /// </summary>
+    static void Relax(float[] dist, float[] wide, float[] tmp, int n, float texel)
+    {
+        Array.Copy(dist, wide, n * n);
+        for (int pass = 0; pass < 3; pass++)
+        {
+            BoxRows(wide, tmp, n);
+            BoxColumns(tmp, wide, n);
+        }
+        float near = RelaxNear, far = RelaxFar;
+        Parallel.For(0, n, j =>
+        {
+            int ej = Math.Min(j, n - 1 - j);
+            for (int i = 0; i < n; i++)
+            {
+                int k = j * n + i;
+                float w = SmoothStep(near, far, dist[k]) * SmoothStep(0, RelaxEdge, Math.Min(ej, Math.Min(i, n - 1 - i)));
+                if (w > 0) dist[k] += (wide[k] - dist[k]) * w;
+            }
+        });
+    }
+
+    const int RelaxRadius = 10, RelaxEdge = 32;
+    const float RelaxNear = 40, RelaxFar = 250;
+
+    /// <summary>One box pass of <see cref="RelaxRadius"/> along the rows (edge texels repeated), a running sum.</summary>
+    static void BoxRows(float[] a, float[] b, int n)
+    {
+        const int r = RelaxRadius;
+        Parallel.For(0, n, j =>
+        {
+            int row = j * n;
+            float sum = 0;
+            for (int k = -r; k <= r; k++) sum += a[row + Math.Clamp(k, 0, n - 1)];
+            for (int i = 0; i < n; i++)
+            {
+                b[row + i] = sum / (2 * r + 1);
+                sum += a[row + Math.Min(i + r + 1, n - 1)] - a[row + Math.Max(i - r, 0)];
+            }
+        });
+    }
+
+    /// <summary>The same along the columns.</summary>
+    static void BoxColumns(float[] a, float[] b, int n)
+    {
+        const int r = RelaxRadius;
+        Parallel.For(0, n, i =>
+        {
+            float sum = 0;
+            for (int k = -r; k <= r; k++) sum += a[Math.Clamp(k, 0, n - 1) * n + i];
+            for (int j = 0; j < n; j++)
+            {
+                b[j * n + i] = sum / (2 * r + 1);
+                sum += a[Math.Min(j + r + 1, n - 1) * n + i] - a[Math.Max(j - r, 0) * n + i];
+            }
         });
     }
 

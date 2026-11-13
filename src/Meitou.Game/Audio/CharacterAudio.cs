@@ -40,9 +40,24 @@ sealed class CharacterAudio(GameHost host)
     GroundSurfaces? _groundSurfaces;
 
     /// <summary>
+    /// The ground lookups, once made.
+    /// </summary>
+    internal GroundSurfaces? Ground => _groundSurfaces;
+
+    /// <summary>
     /// The animation events of the ANIMATION and functionality records.
     /// </summary>
     AnimationSoundEvents? _animationSounds;
+
+    /// <summary>
+    /// The biome and ground lookups the sounds use, shared with the ground effects.
+    /// </summary>
+    internal GroundSurfaces GroundSurfacesOf(GameDatabase db) => _groundSurfaces ??= new GroundSurfaces(host.Install, db);
+
+    /// <summary>
+    /// The animation sound events, shared with the ground effects.
+    /// </summary>
+    internal AnimationSoundEvents AnimationSoundsOf(GameDatabase db) => _animationSounds ??= AnimationSoundEvents.FromDatabase(db);
 
     /// <summary>
     /// Each clip definition's events.
@@ -211,7 +226,7 @@ sealed class CharacterAudio(GameHost host)
         _definitionWeapons = weapons;
         _definitionLoops = [.. library.Definitions.Select(d => d.Loop)];
         _workEvents.Clear();
-        Sounds = new CharacterSounds(sound.Player, _groundSurfaces) { Floor = FloorSurface };
+        Sounds = new CharacterSounds(sound.Player, _groundSurfaces) { Floor = FloorSurface, Puddle = host.InPuddle };
     }
 
     /// <summary>
@@ -241,7 +256,7 @@ sealed class CharacterAudio(GameHost host)
             float yaw = c.Yaw, speed = 0;
             if (host.PreviousById.TryGetValue(c.Id, out var before))
             {
-                position = Vector3.Lerp(before.Position, c.Position, alpha);
+                position = Simulation.Session.Interp.Lerp(before.Position, c.Position, alpha);
                 yaw = Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
                 speed = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z).Length() / tick;
             }
@@ -332,7 +347,7 @@ sealed class CharacterAudio(GameHost host)
     /// so it is wrapped here: a looping clip's events fire on every pass, as the exe's cursor does when the clip loops (<c>FUN_140064690</c>). A
     /// one-shot clip holds below its length.
     /// </summary>
-    static float ClipFraction(AnimationLayer layer, bool loops)
+    internal static float ClipFraction(AnimationLayer layer, bool loops)
     {
         if (layer.Length <= 0) return 0;
         float fraction = layer.Time / layer.Length;

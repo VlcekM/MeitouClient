@@ -64,9 +64,10 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
 
         /// <summary>
         /// The view's tangents, planes and size, the occlusion's radius, strength and fade, the view's axes and eye, the characters' weight and
-        /// the water height.
+        /// the water height, and the contact shadows' terms (none here: they are their own pass, PostProcess.ApplyContactShadows).
         /// </summary>
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY,
+            Contact;
 
         /// <summary>
         /// Compiles the program and resolves its handles.
@@ -78,12 +79,18 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+            Contact = P.Uniform("uContact");
         }
     }
 
     #endregion
 
     #region Occlusion
+
+    /// <summary>
+    /// The blur pass (GTAO's gather takes it too, PostProcess.Gtao).
+    /// </summary>
+    internal BlurPass Blur => blur;
 
     /// <summary>
     /// <c>MEITOU_SSAO_STAMPS=1</c>: GPU timestamps between the SSAO's passes (and the merged layers').
@@ -93,12 +100,12 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
     /// <summary>
     /// The occlusion's two half-size targets (the blur ping-pongs between them; after <see cref="Run"/> the result is in <see cref="B"/>).
     /// </summary>
-    public Target2D? A { get; private set; }
+    public Target2D? A { get; internal set; }
 
     /// <summary>
     /// The finished occlusion after <see cref="Run"/> (the composite and the scene layers read it).
     /// </summary>
-    public Target2D? B { get; private set; }
+    public Target2D? B { get; internal set; }
 
     /// <summary>
     /// The characters' mask at the half size.
@@ -184,6 +191,7 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         s.P.Set(s.Back, ViewWindow.BackFor(r, post.FovY, post.Aspect));
         s.P.Set(s.Eye, eye.X, eye.Y, eye.Z);
         s.P.Set(s.WaterY, post.WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
+        s.P.Set(s.Contact, default(System.Numerics.Vector4));   // the contact shadows are their own pass (ApplyContactShadows)
         s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         post.Draw(s.P, a);
         if (Stamps) post.Stamp("ssao gen");

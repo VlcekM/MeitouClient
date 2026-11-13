@@ -81,6 +81,14 @@ sealed class InteriorView(GameHost host)
     /// <summary>
     /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to 0..3.
     /// </summary>
+    /// <summary>
+    /// Puts a building in the view at the current floor (the agent channel's <c>interior-view</c>).
+    /// </summary>
+    internal void AddViewed(InteriorVolume room)
+    {
+        if (InteriorFloors.TryAdd(room.PlacementId, ViewedFloorValue)) _viewed.Add(room);
+    }
+
     internal void StepFloor(int step) => ViewedFloor = ViewedFloorValue + step;
 
     /// <summary>
@@ -101,6 +109,7 @@ sealed class InteriorView(GameHost host)
             if (c.IsPlayer && objects.InteriorAt(host.DrawnPosition(c), InsideMargin) is { } building
                     && InteriorFloors.TryAdd(building.PlacementId, ViewedFloorValue))
                 _viewed.Add(building);
+        host.ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
         objects.InteriorView = InteriorFloors;
         objects.CutIntoViewed = host.Config.FixPartsInBuildings;
@@ -108,7 +117,7 @@ sealed class InteriorView(GameHost host)
         host.Session.Camera.Floors ??= CameraFloor;
         foreach (var c in characters)
         {
-            var at = host.DrawnPosition(c);
+            var at = host.TrackedPosition(c);
             if (ViewedAt(at) is { } inView)
             {
                 int shown = InteriorFloors[inView.PlacementId];

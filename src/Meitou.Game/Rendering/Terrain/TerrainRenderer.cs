@@ -652,6 +652,28 @@ public sealed unsafe class TerrainRenderer : IDisposable
     Frame _lateFrame;
 
     /// <summary>
+    /// That draw wrote the resolve's inputs: <see cref="Resolve"/> shades it, not <see cref="DrawDeferred"/>.
+    /// </summary>
+    bool _lateResolve;
+
+    /// <summary>
+    /// The resolve's pipelines by program and target formats.
+    /// </summary>
+    readonly Dictionary<(GpuProgram Program, AttachmentFormats Formats), GpuPipeline> _resolvePipelines = [];
+
+    /// <summary>
+    /// Set by the world frame around the main view's <see cref="Draw"/> with <c>defer</c> (null otherwise): the prepass then also writes the
+    /// resolve's inputs into its colour target (bindless <c>G</c>), and <see cref="Resolve"/> shades the patches over the picture from it and the
+    /// scene's depth (bindless <c>Depth</c>), in place of <see cref="DrawDeferred"/>'s second pass over the patches' triangles.
+    /// </summary>
+    internal (uint G, uint Depth)? ResolveInputs { get; set; }
+
+    /// <summary>
+    /// The last deferred <see cref="Draw"/> waits for <see cref="Resolve"/>.
+    /// </summary>
+    public bool ResolvePending => _latePending && _lateResolve;
+
+    /// <summary>
     /// The patches that overlap a building of the interior cut, nearest first.
     /// </summary>
     PatchDraw[] _cutDraws = new PatchDraw[64];
@@ -713,9 +735,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
     bool _depthReady;
 
     /// <summary>
-    /// A view's matrix, eye, options and lighting.
+    /// A view's matrix, eye, options and lighting, and the precise eye-relative view-projection when the caller has it (RenderOrigin).
     /// </summary>
-    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
+    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light, Matrix4x4? Relative = null);
 
     /// <summary>
     /// Levels of the quadtree.
@@ -764,12 +786,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light,
-        float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
+        float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false, Matrix4x4? relative = null)
     {
-        _programs.UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality);
+        _programs.UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, Trails is not null);
         _current = secondary ? _spare : _quadtree;
         _current.SetRanges(options.TerrainLod);
-        _frame = new Frame(viewProjection, eye, options, light);
+        _frame = new Frame(viewProjection, eye, options, light, relative);
         var fog = FogCull;
         _current.Select(eye, _bounds,
             (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) &&
@@ -795,6 +817,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
     {
         if (!_latePending) return;
         _latePending = false;
+        _lateResolve = false;
         _frame = _lateFrame;
         PrepareConstants(material: true, patches: true);
         RecordPatches(PatchColour, "terrain", PatchMode.Late, _plainCount);
@@ -807,6 +830,44 @@ public sealed unsafe class TerrainRenderer : IDisposable
             RecordPatches(PatchColour, "terrain interior cut", PatchMode.LateEqual, _cutCount, _cutDraws);
         if (_cutReliefCount > 0)
             RecordPatches(_programs.PatchColourTess!, "terrain relief interior cut", PatchMode.LateEqual, _cutReliefCount, _cutReliefDraws);
+    }
+
+    /// <summary>
+    /// The terrain colour of a deferred <see cref="Draw"/> that wrote the resolve's inputs (<see cref="ResolveInputs"/>), over the picture: one
+    /// triangle into <paramref name="targets"/> (the scene's colour targets, no depth), outside any pass. Each pixel that still shows a patch (its
+    /// depth is the prepass's) is shaded once: the patches' triangles are not drawn again, and no pixel is shaded for a neighbour's derivatives
+    /// (docs/render-terrain.md "Resolved colour").
+    /// </summary>
+    public void Resolve(PassTargets targets)
+    {
+        if (!ResolvePending) return;
+        (_latePending, _lateResolve) = (false, false);
+        _frame = _lateFrame;
+        PrepareConstants(material: true, patches: true);
+        var p = _programs.ResolveProgram(NormalMapsOn);
+        var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
+        if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
+        {
+            var desc = state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, targets.Formats, "terrain resolve");
+            _resolvePipelines[(p.P, targets.Formats)] = pipeline = _gpu.Pipelines.Get(desc);
+        }
+
+        var cmd = _gpu.BeginNative("terrain resolve");
+        cmd.Order();   // the scene's passes wrote the depth and the targets
+        cmd.BeginRendering(targets.Rendering);
+        state.Record(cmd, targets);
+        cmd.BindPipeline(pipeline);
+        var view = View();
+        var binding = _nativeFrame.Prepare(in view);
+        NativeFrame.Record(cmd, p.P, in binding);
+        var (set, offset) = PrepareConstantsBinding();
+        cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
+        cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
+        cmd.SetScissor(new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
+        cmd.Draw(3, 1);
+        cmd.EndRendering();
+        cmd.Order();
+        _gpu.EndNative(cmd);
     }
 
     /// <summary>
@@ -857,14 +918,21 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     void RecordPrepass()
     {
-        RecordPatches(_programs.PatchPrepass, "terrain prepass", PatchMode.Prepass, _plainCount);
+        // With the resolve's inputs (ResolveInputs) the pass also writes them, into the colour target the frame opened for it.
+        bool resolve = ResolveInputs is not null;
+        var p = _programs;
+        var mode = resolve ? PatchMode.PrepassResolve : PatchMode.Prepass;
+        RecordPatches(resolve ? p.PatchPrepassResolve : p.PatchPrepass, "terrain prepass", mode, _plainCount);
         if (_reliefCount > 0)
-            RecordPatches(_programs.PatchPrepassTess!, "terrain relief prepass", PatchMode.Prepass, _reliefCount, _reliefDraws);
+            RecordPatches((resolve ? p.PatchPrepassResolveTess : p.PatchPrepassTess)!, "terrain relief prepass", mode, _reliefCount, _reliefDraws);
         if (_cutCount > 0)
-            RecordPatches(_programs.PatchPrepassCut, "terrain prepass interior cut", PatchMode.Prepass, _cutCount, _cutDraws);
+            RecordPatches(resolve ? p.PatchPrepassResolveCut : p.PatchPrepassCut, "terrain prepass interior cut", mode, _cutCount, _cutDraws);
         if (_cutReliefCount > 0)
-            RecordPatches(_programs.PatchPrepassCutTess!, "terrain relief prepass interior cut", PatchMode.Prepass, _cutReliefCount, _cutReliefDraws);
-        (_latePending, _lateFrame) = (true, _frame);
+        {
+            var cutRelief = (resolve ? p.PatchPrepassResolveCutTess : p.PatchPrepassCutTess)!;
+            RecordPatches(cutRelief, "terrain relief prepass interior cut", mode, _cutReliefCount, _cutReliefDraws);
+        }
+        (_latePending, _lateFrame, _lateResolve) = (true, _frame, resolve);
     }
 
     /// <summary>
@@ -891,6 +959,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         RecordPatches(PatchColour, "terrain wireframe", PatchMode.Wireframe, _plainCount);
         RecordPatches(PatchColour, "terrain wireframe", PatchMode.Wireframe, _cutCount, _cutDraws);
     }
+
+    /// <summary>
+    /// The ground trails the patches read (docs/render-terrain.md "Ground trails"; null: none, and the colour programs carry none of their code). Set before the scene.
+    /// </summary>
+    public TerrainTrailRenderer? Trails { get; set; }
 
     /// <summary>
     /// Moves the patches whose square overlaps a building of <paramref name="cut"/>'s (when it drew any) out of <see cref="_patchDraws"/> into
@@ -1010,6 +1083,11 @@ public sealed unsafe class TerrainRenderer : IDisposable
         Prepass,
 
         /// <summary>
+        /// The prepass that also writes the resolve's inputs (<see cref="ResolveInputs"/>) into its colour target.
+        /// </summary>
+        PrepassResolve,
+
+        /// <summary>
         /// The colour after the occluders: depth tested, not written.
         /// </summary>
         Late,
@@ -1044,6 +1122,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             PatchMode.Wireframe => _lastWireState!,
             PatchMode.Prepass => _lastPrepassState!,
+            PatchMode.PrepassResolve => _lastPatchState! with { ColourMask = DrawState.Rgba },   // the resolve's inputs: every channel
             PatchMode.Late => _lastLateState!,
             PatchMode.LateEqual => _lastLateEqualState!,
             _ => _lastPatchState!,
@@ -1402,6 +1481,12 @@ public sealed unsafe class TerrainRenderer : IDisposable
     {
         var c = HeightConstants();
         if (material) ApplyMaterial(ref c, patches);
+        if (material && patches) Trails?.Apply(ref c);
+        if (patches && ResolveInputs is { } inputs
+            && Matrix4x4.Invert(RenderOrigin.ViewProjection(_frame.ViewProjection, _frame.Eye, _frame.Relative), out var fromClip))
+        {
+            (c.ResolveG, c.ResolveDepth, c.ResolveInverse) = (inputs.G, inputs.Depth, fromClip);
+        }
         _constants = c;
     }
 
@@ -1438,6 +1523,9 @@ public sealed unsafe class TerrainRenderer : IDisposable
             RockRound = RockSmoothing.Roundness,   // the tessellation stages, the casters' too
             ReliefQuality = GroundRelief.Quality,
             FieldTiles = _standInUInt,
+            Trails = _standIn2D,
+            TrailFine = _standIn2D,
+            TrailCells = _standIn2D,
         };
     }
 
@@ -1493,7 +1581,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         c.FarLod = set.FarLod;
         c.Height = Index(set.Height, BindlessKind.Texture2DArray, _standInArray);
         c.Relief = Index(set.Relief, BindlessKind.Texture2D, _standIn2D);
-        c.Parallax = textured && GroundRelief.ParallaxActive && set.Height is not null ? GroundRelief.Depth : 0;
+        c.Parallax = textured && GroundRelief.ParallaxActive && set.Height is not null ? GroundRelief.Depth * GroundRelief.ParallaxScale : 0;
         c.Displace = patches && textured && GroundRelief.DisplaceActive && _programs.PatchColourTess is not null && set.Height is not null
             ? GroundRelief.Depth : 0;
         (c.DisplaceEnd, c.ParallaxEnd) = (GroundRelief.DisplaceDistance, GroundRelief.ParallaxDistance);
@@ -1522,7 +1610,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
         var light = _frame.Light;
         return new ViewConstants
         {
-            ViewProjection = _frame.ViewProjection,
+            // The vertex stages project relative to the eye (RenderOrigin): the main view's precise matrix, else translation(eye) × the pass's.
+            ViewProjection = RenderOrigin.ViewProjection(_frame.ViewProjection, _frame.Eye, _frame.Relative),
             Eye = _frame.Eye,
             LightDir = light.SunDirection,
             FogColour = light.FogColour,

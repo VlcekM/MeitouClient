@@ -91,6 +91,10 @@ sealed class Debris(GameHost host)
         /// </summary>
         public long Born;
         /// <summary>
+        /// The piece's identity for the frame's draw (a fixed handle across frames).
+        /// </summary>
+        public readonly long Id = DebrisPiece.NewId();
+        /// <summary>
         /// The blood decal colour of its landing (opaque ABGR); 0 for a race that does not bleed.
         /// </summary>
         public uint Colour;
@@ -126,7 +130,7 @@ sealed class Debris(GameHost host)
         foreach (var p in Pieces)
         {
             for (int s = 0; s < steps && !p.Resting && h > 0; s++) Step(p, h);
-            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position));
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position, Id: p.Id));
         }
     }
 
@@ -338,6 +342,10 @@ sealed class Debris(GameHost host)
         /// </summary>
         public Vector3? Start;
         /// <summary>
+        /// The limb's identity for the frame's draw (a fixed handle across frames).
+        /// </summary>
+        public readonly long Id = DebrisPiece.NewId();
+        /// <summary>
         /// The seconds the fall takes from <see cref="Start"/> to <see cref="RestY"/>.
         /// </summary>
         public float Flight;
@@ -387,13 +395,13 @@ sealed class Debris(GameHost host)
             if (elapsed < f.Flight)
             {
                 var at = new Vector3(start.X + f.Drift.X * elapsed, start.Y - 0.5f * FallGravity * elapsed * elapsed, start.Z + f.Drift.Y * elapsed);
-                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look));
+                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look, f.Id));
             }
             else
             {
                 float s = Math.Min(1, (elapsed - f.Flight) / FallTipTime), eased = s * s * (3 - 2 * s);
                 var turned = Quaternion.Slerp(f.Hanging, f.Lying, eased);
-                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look));
+                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look, f.Id));
             }
         }
     }
@@ -500,7 +508,7 @@ sealed class Debris(GameHost host)
         foreach (var p in now)
         {
             if (p.Mesh.Length == 0 || debris.Extent(p.Mesh, null) is null) continue;
-            var at = !p.Stuck && _boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Vector3.Lerp(b.Position, p.Position, alpha) : p.Position;
+            var at = !p.Stuck && _boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Meitou.Simulation.Session.Interp.Lerp(b.Position, p.Position, alpha) : p.Position;
             // A bolt leaves the crossbow: drawn from the muzzle, it joins its simulated flight over LaunchBlend units.
             if (!p.Stuck)
             {
@@ -512,7 +520,8 @@ sealed class Debris(GameHost host)
                 _boltHeads[p.Id] = (at, launch.From + launch.Gap);
             }
             else _boltLaunches.Remove(p.Id);
-            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch));
+            // A bolt's identity is the negative of its id (the others count up).
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch, Id: -1 - p.Id));
         }
         if (_boltLaunches.Count > now.Count)
             foreach (int id in _boltLaunches.Keys.ToArray())

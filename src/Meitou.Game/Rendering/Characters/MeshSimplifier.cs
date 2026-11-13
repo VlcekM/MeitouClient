@@ -12,11 +12,18 @@ namespace Meitou.Game.Rendering.Characters;
 internal static class MeshSimplifier
 {
     /// <summary>
+    /// With the texture guard: the most a corner's texture coordinate may differ from what its triangle's mapping gives at the corner's new position
+    /// (texture units).
+    /// </summary>
+    const float UvTolerance = 0.01f;
+
+    /// <summary>
     /// The triangle lists after reducing to each of <paramref name="fractions"/> of the input triangles (descending), in one run: a list is a
     /// snapshot, so each is the previous one reduced further. Stops early at <paramref name="floor"/> triangles (the remaining lists then repeat the
-    /// last). With <paramref name="uvPerWorld"/> above 0 (texture-coordinate units per world unit of the part's surface, <see cref="UvPerWorld"/>) a
-    /// collapse is refused when a corner it moves has no vertex at the new point whose texture coordinate is about as far from its own as the move is
-    /// long: that is a jump to another UV island, which a texture would show as a smear.
+    /// last). With <paramref name="uvPerWorld"/> above 0 (a switch; <see cref="UvPerWorld"/> gives the part's value) a collapse is refused when a
+    /// corner it moves has no vertex at the new point whose texture coordinate is within <see cref="UvTolerance"/> of what the corner's triangle
+    /// mapping gives there, and the corner takes the best such vertex: a texture would show a jump to another UV island, or a stretched mapping, as a
+    /// smear.
     /// </summary>
     public static uint[][] Chain(Vertex[] vertices, uint[] indices, float[] fractions, int floor, float uvPerWorld = 0)
     {
@@ -49,11 +56,6 @@ internal static class MeshSimplifier
         readonly Vertex[] _vertices;
 
         /// <summary>
-        /// Texture-coordinate units per world unit of the surface; above 0 turns the UV guard on.
-        /// </summary>
-        readonly float _uvPerWorld;
-
-        /// <summary>
         /// The input's triangle count.
         /// </summary>
         readonly int _triCount;
@@ -84,6 +86,11 @@ internal static class MeshSimplifier
         readonly int[] _tv;
 
         /// <summary>
+        /// With the texture guard: each triangle corner's vertex now (moved with its corner, <see cref="MoveCorner"/>); null without it.
+        /// </summary>
+        readonly int[]? _cv;
+
+        /// <summary>
         /// Whether a triangle survives (degenerate ones on welded points never do).
         /// </summary>
         readonly bool[] _alive;
@@ -109,7 +116,6 @@ internal static class MeshSimplifier
         public Collapses(Vertex[] vertices, uint[] indices, float uvPerWorld)
         {
             _vertices = vertices;
-            _uvPerWorld = uvPerWorld;
             _triCount = indices.Length / 3;
             _groupOf = new int[vertices.Length];
             var points = new Dictionary<Vector3, int>();
@@ -134,6 +140,7 @@ internal static class MeshSimplifier
             _incident = new List<int>[_groups];
             for (int g = 0; g < _groups; g++) _incident[g] = [];
             AddTriangles(indices);
+            if (uvPerWorld > 0) _cv = (int[])_tv.Clone();
             _q = new Quadric[_groups];
             _version = new int[_groups];
             _valid = new bool[_groups];
@@ -298,9 +305,9 @@ internal static class MeshSimplifier
         #region Collapse
 
         /// <summary>
-        /// The vertices whose corners sit on each point now (the point's own and those of the points collapsed into it), for the UV check.
+        /// The point being collapsed (<see cref="CanCollapse"/>, <see cref="Collapse"/>): its corners are the ones the texture guard moves.
         /// </summary>
-        List<int>[]? _members;
+        int _moving = -1;
 
         /// <summary>
         /// With the texture guard (buildings: front and back of a sheet sit on one point with the same UV and opposite normals) the normal
@@ -349,17 +356,20 @@ internal static class MeshSimplifier
                 }
 
                 for (int k = 0; k < 3; k++)
-                    if (_tg[t * 3 + k] == from) _tg[t * 3 + k] = to;
+                {
+                    if (_tg[t * 3 + k] != from) continue;
+                    if (_cv is not null)
+                    {
+                        _moving = from;
+                        _cv[t * 3 + k] = MoveCorner(t, k, to).Vertex;
+                    }
+                    _tg[t * 3 + k] = to;
+                }
                 _incident[to].Add(t);
             }
 
             _incident[from] = [];
             _valid[from] = false;
-            if (_members is not null)
-            {
-                _members[to].AddRange(_members[from]);
-                _members[from] = [];
-            }
 
             _q[to].Add(_q[from]);
             _version[to]++;
@@ -379,7 +389,7 @@ internal static class MeshSimplifier
         /// </summary>
         bool CanCollapse(int from, int to)
         {
-            if (_uvPerWorld > 0 && !UvConsistent(from, to)) return false;
+            _moving = from;
             foreach (int t in _incident[from])
             {
                 if (!_alive[t]) continue;
@@ -387,6 +397,7 @@ internal static class MeshSimplifier
                 for (int k = 0; k < 3; k++)
                     if (_tg[t * 3 + k] == to) both = true;
                 if (both) continue;
+                if (_cv is not null && !UvHolds(t, to)) return false;
                 Vector3 p0 = _position[_tg[t * 3]], p1 = _position[_tg[t * 3 + 1]], p2 = _position[_tg[t * 3 + 2]];
                 Vector3 m0 = _tg[t * 3] == from ? _position[to] : p0;
                 Vector3 m1 = _tg[t * 3 + 1] == from ? _position[to] : p1;
@@ -401,25 +412,61 @@ internal static class MeshSimplifier
         }
 
         /// <summary>
-        /// Whether every vertex on <paramref name="from"/> (the first 32) has one on <paramref name="to"/> about as near in UV as the move
-        /// is long.
+        /// The texture guard: a corner moved onto point <paramref name="to"/> takes the vertex there whose texture coordinate best matches what the
+        /// triangle's own mapping (extended over its plane) gives at that position, and the collapse is refused when even that one is further off
+        /// than <see cref="UvTolerance"/>.
         /// </summary>
-        bool UvConsistent(int from, int to)
+        (int Vertex, float Error) MoveCorner(int t, int k, int to)
         {
-            _members ??= [.. _groupVertices.Select(g => new List<int>(g))];
-            float allow = _uvPerWorld * (_position[from] - _position[to]).Length() * 1.5f + 0.004f;
-            float allowSquared = allow * allow;
-            var targets = _groupVertices[to];
-            var list = _members[from];
-            for (int i = 0; i < list.Count && i < 32; i++)
+            var own = _vertices[_cv![t * 3 + k]];
+            var expected = ExpectedUv(t, to, own.Uv);
+            int best = _groupVertices[to][0];
+            float bestKey = float.MaxValue, bestError = float.MaxValue;
+            foreach (int c in _groupVertices[to])
             {
-                float best = float.MaxValue;
-                foreach (int c in targets) best = Math.Min(best, Vector2.DistanceSquared(_vertices[c].Uv, _vertices[list[i]].Uv));
-                if (best > allowSquared) return false;
+                float error = Vector2.Distance(_vertices[c].Uv, expected);
+                float key = (error > UvTolerance ? 1000f + error : 0f) + Vector3.DistanceSquared(_vertices[c].Normal, own.Normal);
+                if (key >= bestKey) continue;
+                (bestKey, best, bestError) = (key, c, error);
             }
 
+            return (best, bestError);
+        }
+
+        /// <summary>
+        /// The texture coordinate triangle <paramref name="t"/>'s mapping, extended over its plane, gives at point <paramref name="to"/>'s position
+        /// (<paramref name="fallback"/> for a degenerate triangle).
+        /// </summary>
+        Vector2 ExpectedUv(int t, int to, Vector2 fallback)
+        {
+            var p0 = _position[_tg[t * 3]];
+            var e1 = _position[_tg[t * 3 + 1]] - p0;
+            var e2 = _position[_tg[t * 3 + 2]] - p0;
+            var q = _position[to] - p0;
+            float d00 = Vector3.Dot(e1, e1), d01 = Vector3.Dot(e1, e2), d11 = Vector3.Dot(e2, e2);
+            float den = d00 * d11 - d01 * d01;
+            if (den <= 1e-20f * Math.Max(1f, d00 * d11)) return fallback;
+
+            float d20 = Vector3.Dot(q, e1), d21 = Vector3.Dot(q, e2);
+            float s = (d11 * d20 - d01 * d21) / den, u = (d00 * d21 - d01 * d20) / den;
+            var uv0 = _vertices[_cv![t * 3]].Uv;
+            return uv0 + s * (_vertices[_cv[t * 3 + 1]].Uv - uv0) + u * (_vertices[_cv[t * 3 + 2]].Uv - uv0);
+        }
+
+        /// <summary>
+        /// Whether every corner of triangle <paramref name="t"/> on the moving point finds a vertex on <paramref name="to"/> within the tolerance.
+        /// </summary>
+        bool UvHolds(int t, int to)
+        {
+            for (int k = 0; k < 3; k++)
+                if (_tg[t * 3 + k] != to && _alive[t] && IsFrom(t, k) && MoveCorner(t, k, to).Error > UvTolerance) return false;
             return true;
         }
+
+        /// <summary>
+        /// Whether corner <paramref name="k"/> of triangle <paramref name="t"/> is on the moving point.
+        /// </summary>
+        bool IsFrom(int t, int k) => _tg[t * 3 + k] == _moving;
 
         #endregion
 
@@ -438,8 +485,8 @@ internal static class MeshSimplifier
                 int c0 = 0, c1 = 0, c2 = 0;
                 for (int k = 0; k < 3; k++)
                 {
-                    int g = _tg[t * 3 + k], v = _tv[t * 3 + k];
-                    if (_groupOf[v] != g)
+                    int g = _tg[t * 3 + k], v = _cv is null ? _tv[t * 3 + k] : _cv[t * 3 + k];
+                    if (_cv is null && _groupOf[v] != g)
                     {
                         if (!pick.TryGetValue((v, g), out int chosen))
                             pick[(v, g)] = chosen = Nearest(_vertices[v], _groupVertices[g]);

@@ -17,6 +17,12 @@ sealed class Birds(GameHost host)
     /// The flocks, made on the first frame with game data (<see cref="CreateFlocks"/>).
     /// </summary>
     BirdFlocks? _flocks;
+
+    /// <summary>
+    /// The flocks, once made (the agent channel's <c>birds</c>).
+    /// </summary>
+    internal BirdFlocks? Flocks => _flocks;
+
     /// <summary>
     /// The weather areas' BIOME_GROUPs by cell; null when their file is missing or broken (no cell lists a kind, so no birds spawn).
     /// </summary>
@@ -118,7 +124,7 @@ sealed class Birds(GameHost host)
     /// </summary>
     void SetStepInputs(float aspect)
     {
-        double now = host.RealTime.Elapsed.TotalSeconds;
+        double now = host.EffectSeconds;   // still in a paused photo
         _dt = double.IsNaN(_clock) ? 0 : (float)(now - _clock);
         _clock = now;
 

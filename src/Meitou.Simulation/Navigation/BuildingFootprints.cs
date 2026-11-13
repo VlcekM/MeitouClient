@@ -514,6 +514,68 @@ public sealed class BuildingFootprints
     }
 
     /// <summary>
+    /// Where the collision of the level data's buildings placed within <paramref name="radius"/> of <paramref name="centre"/> cuts the horizontal
+    /// plane at <paramref name="y"/>: X/Z segments (walls, piers and posts standing in the water at the water's height). Reads the records' collision
+    /// as it goes (any thread); a building with no collision has none.
+    /// </summary>
+    public List<(Vector2 A, Vector2 B)> PlaneCut(Vector2 centre, float radius, float y)
+    {
+        var segments = new List<(Vector2, Vector2)>();
+        var map = Index();
+        const float reach = 200;
+        var home = WorldLayout.ZoneOf(centre.X, centre.Y);
+        int span = (int)MathF.Ceiling((radius + reach) / WorldLayout.ZoneSize);
+        for (int dz = -span; dz <= span; dz++)
+        {
+            for (int dx = -span; dx <= span; dx++)
+            {
+                if (!map.TryGetValue(new ZoneCoordinate(home.X + dx, home.Y + dz), out var list)) continue;
+
+                foreach (var b in list)
+                {
+                    if (b.TargetsZoneRecord || b.Position == Vector3.Zero
+                        || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach))
+                        continue;
+
+                    if (Wait(b.BuildingId) is not { } footprint || y < b.Position.Y + footprint.YMin - 1 || y > b.Position.Y + footprint.YMax + 1) continue;
+
+                    Cut(Mesh(b.BuildingId), b.Position, b.Rotation, y, segments);
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    /// <summary>
+    /// The segments where the triangles, placed at <paramref name="position"/> turned by <paramref name="rotation"/>, cross the plane at
+    /// <paramref name="y"/>.
+    /// </summary>
+    static void Cut(IReadOnlyList<(Vector3[] Vertices, int[] Indices)> shapes, Vector3 position, Quaternion rotation, float y, List<(Vector2, Vector2)> into)
+    {
+        var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
+        Span<Vector2> hits = stackalloc Vector2[3];
+        foreach (var (vertices, indices) in shapes)
+        {
+            for (int t = 0; t + 2 < indices.Length; t += 3)
+            {
+                int n = 0;
+                for (int e = 0; e < 3; e++)
+                {
+                    var a = Vector3.Transform(vertices[indices[t + e]], q) + position;
+                    var b = Vector3.Transform(vertices[indices[t + (e + 1) % 3]], q) + position;
+                    if ((a.Y - y) * (b.Y - y) > 0 || a.Y == b.Y) continue;
+
+                    float s = (y - a.Y) / (b.Y - a.Y);
+                    if (n < 3) hits[n++] = new Vector2(a.X + s * (b.X - a.X), a.Z + s * (b.Z - a.Z));
+                }
+
+                if (n >= 2) into.Add((hits[0], hits[1]));
+            }
+        }
+    }
+
+    /// <summary>
     /// The level data's building placements within <paramref name="radius"/> of <paramref name="centre"/> (X, Z); no footprint is waited for (the
     /// agent control channel lists them).
     /// </summary>

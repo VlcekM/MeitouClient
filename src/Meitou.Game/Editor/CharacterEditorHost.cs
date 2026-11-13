@@ -137,6 +137,9 @@ sealed class CharacterEditorHost(GameHost host)
             view.Head, host.Camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, host.Camera.FieldOfView);
         if (!posed) characters.Update(host.DrawnPosition(c));
+
+        // The platform casts into the studio's maps (Meitou, previewsun), as the character does.
+        characters.StageCasters = host.ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
         characters.ResolveStage();
@@ -159,7 +162,7 @@ sealed class CharacterEditorHost(GameHost host)
             objects.SetStageProp(WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet));
         }
         objects.Update(stage.Eye);
-        objects.DrawStageProp(target.Colour, target.Depth, stage.ViewProjection, stage.Eye, stage.Light, target.FogDistance);
+        objects.DrawStageProp(target.Colour, target.Depth, stage.ViewProjection, stage.Eye, stage.Light, target.FogDistance, characters);
     }
 
     /// <summary>

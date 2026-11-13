@@ -40,6 +40,11 @@ internal sealed class AssetPart
     /// </summary>
     public int Bone = -1;
     /// <summary>
+    /// Placed on a head bone (not shared): hidden on a decapitated body, kept on its cut-off head (<see cref="CharacterContent.MarkWorn"/> for the
+    /// skinned parts).
+    /// </summary>
+    public bool OnHead;
+    /// <summary>
     /// The part's transform relative to <see cref="Bone"/>: the attachment point's rotation and position, times the part's own local transform.
     /// </summary>
     public Matrix4x4 Offset = Matrix4x4.Identity;
@@ -194,6 +199,16 @@ internal sealed class PartMaterial
     /// </summary>
     public bool Worn;
     /// <summary>
+    /// A person's hair or beard: the strand highlights of the <c>chars2</c> switch.
+    /// </summary>
+    public bool Strands;
+
+    /// <summary>
+    /// The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. Sent in the record's <c>DiffuseChannel</c>, which only hair reads.
+    /// </summary>
+    public Vector4 Sheen;
+
+    /// <summary>
     /// A person's body (not an animal's): its bare skin may scatter light under the <c>skin</c> switch (<see cref="CharacterShaders.Skin"/>), by its
     /// race's choice (<see cref="CharacterRenderer.SkinRaces"/>, else <see cref="SkinDefault"/>).
     /// </summary>
@@ -246,10 +261,35 @@ internal sealed class PartMaterial
     /// </summary>
     public bool Bloody, BloodFull;
     /// <summary>
+    /// Takes the gear blood (<see cref="CharacterShaders.GearBloody"/>, docs/game/blood-decals.md "On weapons and gear"): a worn item shows the wearer's body blood, in <see cref="GearColour"/> (the race's blood colour) and
+    /// <see cref="GearScale"/> (its <c>blood horizontal</c> and <c>blood vertical</c>); a weapon's blade is described by <see cref="BladeAxis"/> (towards the tip), <see cref="BladeLow"/> (the axis value at the hilt end),
+    /// <see cref="BladeScale"/> (one over the length) and <see cref="SplatScale"/>. Sent in the record's hair fields, which an item does not use.
+    /// </summary>
+    public bool GearBlood;
+    public Vector3 GearColour, BladeAxis;
+    public Vector2 GearScale;
+    public float BladeLow, BladeScale, SplatScale;
+    /// <summary>
     /// A headless body's neck cap (<see cref="CharacterShaders.Wound"/>): <see cref="Colour1"/> the race's blood colour, the diffuse slot the
     /// splatter map; <see cref="Mechanical"/> a robot race's.
     /// </summary>
     public bool Wound, Mechanical;
+    /// <summary>
+    /// A weapon's scabbard (<see cref="IsScabbard"/>).
+    /// </summary>
+    public bool Scabbard;
+    /// <summary>
+    /// <see cref="CharacterShaders.SlotColourMap"/> holds the material's metalness map.
+    /// </summary>
+    public bool MetalMap;
+    /// <summary>
+    /// A worn item of chain or plate (<see cref="CharacterShaders.ArmourMetal"/>).
+    /// </summary>
+    public bool ArmourMetal;
+    /// <summary>
+    /// A prosthetic with its own material (<see cref="CharacterShaders.LimbMetal"/>).
+    /// </summary>
+    public bool LimbMetal;
     /// <summary>
     /// The body's normal blend weight towards <see cref="CharacterShaders.SlotBlendNormal"/> (the original's <c>muscleBlend</c>).
     /// </summary>
@@ -577,11 +617,11 @@ internal sealed class CharacterContent : IDisposable
     /// preparing it.
     /// </summary>
     LoadedMesh? Mesh(string path, int? boneCount, float lodScale = 1, bool shadowLevels = false, LimbHide? limbs = null, bool close = false,
-        bool icon = false, string? partMap = null)
+        bool icon = false, string? partMap = null, bool worn = false)
     {
         var key = (path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant());
         if (_meshes.TryGetValue(key, out var cached)) return cached;
-        var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap).Value;
+        var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap, worn).Value;
         _prepared[key] = new Lazy<Prepared>(Uploaded);
         Messages.AddRange(messages);
         return _meshes[key] = ready is null ? null : Upload(ready);
@@ -591,9 +631,9 @@ internal sealed class CharacterContent : IDisposable
     /// The preparation of a mesh, made once (any thread; the first caller's level settings stand).
     /// </summary>
     Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null,
-        bool close = false, bool icon = false, string? partMap = null) =>
+        bool close = false, bool icon = false, string? partMap = null, bool worn = false) =>
         _prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()),
-                _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap)));
+                _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap, worn)));
 
     /// <summary>
     /// Reads a mesh file and makes its levels and index buffers (no GPU work, any thread): with its skinning weights for a skeleton of
@@ -602,7 +642,7 @@ internal sealed class CharacterContent : IDisposable
     /// time a mesh takes (a hair 1 to 2 s), and the editor shows one character up close.
     /// </summary>
     static Prepared PrepareMesh(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs, bool close,
-        bool icon = false, string? partMap = null)
+        bool icon = false, string? partMap = null, bool worn = false)
     {
         var messages = new List<string>();
         try
@@ -611,8 +651,14 @@ internal sealed class CharacterContent : IDisposable
             if (MeshWeld.Enabled) OgreMeshWeld.Apply(mesh);
             var model = Model.Build(mesh, boneCount, gameBinormals: !icon, tangentSign: icon);
             var morphs = MeshMorphs.From(mesh, model, messages, Path.GetFileName(path));
-            if (limbs is not null || partMap is not null)
+            if (worn)
+            {
+                if (limbs is not null) MarkWorn(model, limbs);
+            }
+            else if (limbs is not null || partMap is not null)
+            {
                 MarkBody(model, limbs, partMap is null ? null : PartMapImage(partMap, messages));
+            }
 
             // Not an icon's: its colour is the mesh's own vertex colour (CharacterShaders.VertexColoured), and icons take no skin.
             if (!icon) MarkCurvature(model);
@@ -681,8 +727,10 @@ internal sealed class CharacterContent : IDisposable
 
             // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a
             // spike from its bind pose (VlcekM/MeitouClient#168).
-            var vertices = DeviceBuffer.Create(_gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex, AllocationName);
-            var indices = DeviceBuffer.Create(_gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
+            // Read by address where the device traces rays: the traced scene skins them (Gi.TracedCharacters).
+            var rays = _gpu.HasRayQuery ? BufferUse.RayInput : 0;
+            var vertices = DeviceBuffer.Create(_gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex | rays, AllocationName);
+            var indices = DeviceBuffer.Create(_gpu, (ulong)indexBytes, BufferUse.Index | rays, AllocationName);
             uploads.Write(vertices, 0, packed);
             uploads.Write(indices, 0, MemoryMarshal.AsBytes(made.All.AsSpan()));
             var gp = new GpuObjectPart
@@ -888,9 +936,10 @@ internal sealed class CharacterContent : IDisposable
             try
             {
                 if (BodySkeletonName(bodyPath) is not { } name || Rig(name) is not { } rig) return true;
-                _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, LimbHideOf(c, rig), close, partMap: partMap).Value;
+                var limbs = LimbHideOf(c, rig);
+                _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, limbs, close, partMap: partMap).Value;
                 foreach (var (path, shared, scale) in parts) _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels,
-                        close: close).Value;
+                        shared ? limbs : null, close, worn: shared).Value;
             }
             catch (Exception)
             {
@@ -1061,6 +1110,40 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>
+    /// A worn item skinned to the body's skeleton (clothing, armour, goggles in any slot): bit 14 (<see cref="HeadBit"/>) on the vertices of the head's bones, nothing else, so a
+    /// decapitation hides them with the head and the cut-off head carries them (the hat slot alone was dropped before, and a belt-slot item over the eyes stayed on the neck); and bits 16 to 19, the part (as MarkBody) whose blood the item shows;
+    /// the mesh's own vertex colour no longer stands in the hide bits (a white vertex read as the left arm's).
+    /// </summary>
+    static void MarkWorn(Model model, LimbHide hide)
+    {
+        foreach (var part in model.Parts)
+        {
+            for (int i = 0; i < part.Vertices.Length; i++)
+            {
+                ref var v = ref part.Vertices[i];
+                int bone = -1;
+                float best = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    float w = v.Weights[k];
+                    if (w > best)
+                    {
+                        best = w;
+                        bone = (int)((v.Bones >> (8 * k)) & 0xFF);
+                    }
+                }
+
+                int bits = (uint)bone < (uint)hide.LimbOfBone.Length && hide.LimbOfBone[bone] == HeadLimb ? HeadBit : 0;
+
+                // The part of the heaviest bone, as the body's vertices have it (MarkBody): the blood of the gear (bits 16 to 19, its index + 1).
+                int owner = (uint)bone < (uint)hide.PartOfBone.Length ? hide.PartOfBone[bone] : -1;
+                if ((uint)owner < 8) bits |= (owner + 1) << 16;
+                v.Colour.Y = bits;
+            }
+        }
+    }
+
+    /// <summary>
     /// The part-map bit of a colour (docs/characters.md "Hidden body parts"); 0 for black and for a colour not in the table (the original logs it as
     /// invalid).
     /// </summary>
@@ -1121,6 +1204,69 @@ internal sealed class CharacterContent : IDisposable
                 var s = byPosition[Key(v[i].Position)];
                 v[i].Colour.Z = s.Count > 0 ? s.Sum / s.Count : 0;
             }
+            MarkThickness(part);
+        }
+    }
+
+    /// <summary>The thickness a <see cref="MarkThickness"/> ray looks for: anything thicker lets no light through.</summary>
+    const float MaxThickness = 2;
+
+    /// <summary>
+    /// Writes each tightly curved vertex's thickness (world units) into its colour's W: how far a ray straight in from it goes before leaving the mesh by the back of a surface. An ear or a
+    /// finger is thin; a nose or an eyelid over the head behind it is not, whatever its curvature. <see cref="MaxThickness"/> for the rest.
+    /// </summary>
+    static void MarkThickness(ModelPart part)
+    {
+        var v = part.Vertices;
+        var idx = part.Indices;
+        const float cell = 1f;
+        static (int, int, int) CellOf(Vector3 p) => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        for (int t = 0; t + 2 < idx.Length; t += 3)
+        {
+            var (a, b, c) = (v[idx[t]].Position, v[idx[t + 1]].Position, v[idx[t + 2]].Position);
+            var lo = CellOf(Vector3.Min(a, Vector3.Min(b, c)));
+            var hi = CellOf(Vector3.Max(a, Vector3.Max(b, c)));
+            for (int x = lo.Item1; x <= hi.Item1; x++)
+                for (int y = lo.Item2; y <= hi.Item2; y++)
+                    for (int z = lo.Item3; z <= hi.Item3; z++)
+                    {
+                        if (!grid.TryGetValue((x, y, z), out var list)) grid[(x, y, z)] = list = [];
+                        list.Add(t);
+                    }
+        }
+        var tested = new HashSet<int>();
+        for (int i = 0; i < v.Length; i++)
+        {
+            v[i].Colour.W = MaxThickness;
+            if (v[i].Colour.Z < 2 || v[i].Normal.LengthSquared() < 1e-8f) continue;
+            var dir = -Vector3.Normalize(v[i].Normal);
+            var from = v[i].Position + dir * 0.01f;
+            float best = MaxThickness;
+            tested.Clear();
+            for (float along = 0; along < best + cell; along += cell * 0.5f)
+            {
+                if (!grid.TryGetValue(CellOf(from + dir * MathF.Min(along, best)), out var list)) continue;
+                foreach (int t in list)
+                {
+                    if (!tested.Add(t)) continue;
+                    var (p0, p1, p2) = (v[idx[t]], v[idx[t + 1]], v[idx[t + 2]]);
+                    if (Vector3.Dot(p0.Normal + p1.Normal + p2.Normal, dir) <= 0) continue;   // the front of something inside (an eyeball, a mouth): the ray has not left
+                    var (e1, e2) = (p1.Position - p0.Position, p2.Position - p0.Position);
+                    var h = Vector3.Cross(dir, e2);
+                    float det = Vector3.Dot(e1, h);
+                    if (MathF.Abs(det) < 1e-9f) continue;
+                    var s = from - p0.Position;
+                    float u = Vector3.Dot(s, h) / det;
+                    if (u < 0 || u > 1) continue;
+                    var q = Vector3.Cross(s, e1);
+                    float w = Vector3.Dot(dir, q) / det;
+                    if (w < 0 || u + w > 1) continue;
+                    float hit = Vector3.Dot(e2, q) / det;
+                    if (hit > 0 && hit < best) best = hit;
+                }
+            }
+            v[i].Colour.W = best;
         }
     }
 
@@ -1353,6 +1499,7 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     void AddItemParts(CharacterAsset asset, CharacterAppearance c, SkeletonRig rig, bool close)
     {
+        var partLimbs = LimbHideOf(c, rig);
         foreach (var part in c.Parts)
         {
             var path = FindMesh(part.Mesh);
@@ -1361,14 +1508,15 @@ internal sealed class CharacterContent : IDisposable
 
             // An animal's fur is a shell over the whole body (5.5k triangles on the bonedog, more than its body), not a few hair cards: it takes the
             // rule's own distances.
-            var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), close: close);
+            var limbs = shared ? partLimbs : null;
+            var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs: limbs, close: close, worn: shared);
             if (loaded is null || loaded.Gpu.Parts.Count == 0) continue;
             var ap = new AssetPart
             {
                 Label = $"{part.Record.Type} '{part.Record.Name}' .{part.Field}",
                 Mesh = loaded.Gpu,
                 Shared = shared,
-                Material = ItemMaterial(c, part, path, loaded),
+                Material = MarkGear(MarkScabbard(ItemMaterial(c, part, path, loaded), part), c, part, loaded),
                 BoundsCentre = loaded.Centre,
                 BoundsRadius = loaded.Radius,
                 Shown = part.Shown,
@@ -1380,20 +1528,22 @@ internal sealed class CharacterContent : IDisposable
                 FileFirst = loaded.FileFirst,
                 FileRadius = loaded.FileRadius,
             };
-            if (!shared) AttachToBone(asset, ap, c, part, rig);
+            if (!shared) AttachToBone(asset, ap, c, part, rig, partLimbs);
             asset.Parts.Add(ap);
         }
     }
 
     /// <summary>
-    /// Mode 0: attachObjectToBone at the attachment point; a bone the skeleton lacks falls back to the root.
+    /// Mode 0: attachObjectToBone at the attachment point; a bone the skeleton lacks falls back to the root. <paramref name="limbs"/>: the body's
+    /// limbs by bone, which tell a part on the head (<see cref="AssetPart.OnHead"/>).
     /// </summary>
-    static void AttachToBone(CharacterAsset asset, AssetPart ap, CharacterAppearance c, CharacterPart part, SkeletonRig rig)
+    static void AttachToBone(CharacterAsset asset, AssetPart ap, CharacterAppearance c, CharacterPart part, SkeletonRig rig, LimbHide? limbs)
     {
         var point = part.Point is { } pn && c.AttachmentPoints.TryGetValue(pn, out var a) ? a : null;
         int bone = point is null ? -1 : rig.Handle(point.Bone) ?? -1;
         if (bone < 0) bone = rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Handle ?? 0;
         ap.Bone = bone;
+        ap.OnHead = limbs is not null && (uint)bone < (uint)limbs.LimbOfBone.Length && limbs.LimbOfBone[bone] == HeadLimb;
         if (point is not null)
             ap.Offset = Matrix4x4.CreateFromQuaternion(point.Rotation) * Matrix4x4.CreateTranslation(point.Position + part.PointOffset);
         if (part.Local is { } local) ap.Offset = local * ap.Offset;
@@ -1506,6 +1656,7 @@ internal sealed class CharacterContent : IDisposable
             HasShirtColour = colour is not null,
             // Animals: fur and hide; a robot race (RACE `is robot`, skeletons) is off by default (docs/character-renderer.md "Skin").
             Skin = c.Animal is null,
+            Mechanical = c.Race.GetBool("is robot"),
             SkinDefault = CharacterRenderer.SkinByDefault(c.Race),
             Race = c.Race.StringId,
         };
@@ -1529,10 +1680,85 @@ internal sealed class CharacterContent : IDisposable
             m.Tex[CharacterShaders.SlotVest + 3 * i + 2] = Texture(layer.ColourMap, true);
             m.VestCount = i + 1;
             m.VestColoured[i] = layer.ColourMap is not null && layer.Colour is not null;
+            m.Sheen[i] = ClothSheen(layer.Record);
         }
         m.Swizzled = true;
         BodyBlood(m, c);
         return m;
+    }
+
+    /// <summary>
+    /// How much of a sheen a worn item takes: there is no cloth mask, so the item's own class decides, ARMOUR <c>material type</c>
+    /// (docs/game/economy.md): CLOTH all, LEATHER a third (a broad gloss more than a sheen), CHAIN and METAL_PLATE none, as anything that is not
+    /// ARMOUR. The shader leaves out what the colour map marks as metal.
+    /// </summary>
+    static float ClothSheen(GameRecord item) =>
+        item.Type != FcsRecordType.Armour ? 0 : item.GetInt("material type") switch { 0 => 1, 1 => 0.35f, _ => 0 };
+
+    /// <summary>
+    /// A weapon's <c>sheath</c> mesh, or its sheathed <c>mesh</c> when the record has a <c>sheath</c> (that mesh is the weapon in its scabbard).
+    /// </summary>
+    static bool IsScabbard(CharacterPart part) =>
+        part.Slot == AttachSlot.Weapon
+        && (part.Field == "sheath" || part.Field.StartsWith("mesh", StringComparison.Ordinal) && part.Record.GetPath("sheath").Length > 0);
+
+    /// <summary>
+    /// Marks a weapon's scabbard (<see cref="PartMaterial.Scabbard"/>).
+    /// </summary>
+    static PartMaterial MarkScabbard(PartMaterial m, CharacterPart part)
+    {
+        m.Scabbard = IsScabbard(part);
+        return m;
+    }
+
+    /// <summary>
+    /// Opts the part into the gear blood (<see cref="CharacterShaders.GearBloody"/>): a worn item of a bleeding person's, a melee weapon's drawn
+    /// blade or bare item. The weapon's blade is the mesh's long axis, towards the end farther from the mesh origin (the hand's grip), whose extent
+    /// the picking box gives (<see cref="PartMaterial.BladeAxis"/>).
+    /// </summary>
+    PartMaterial MarkGear(PartMaterial m, CharacterAppearance c, CharacterPart part, LoadedMesh loaded)
+    {
+        if (m.Shading != CharacterShaders.ShadeItem || m.Bloody || m.Wound) return m;
+        var item = part.Record;
+        if (part.Mode == AttachMode.SharedSkeleton)
+        {
+            if (c.Animal is not null || item.Type is FcsRecordType.LimbReplacement || c.Race.GetFloat("bleed rate", 1) <= 0) return m;
+            m.GearColour = CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF);
+            m.GearScale = new Vector2(c.Race.GetFloat("blood horizontal", 1), c.Race.GetFloat("blood vertical", 0.15f));
+        }
+        else if (!MarkBlade(m, part, loaded))
+        {
+            return m;
+        }
+
+        m.GearBlood = true;
+        m.Tex[CharacterShaders.SlotBlood] = Texture("bloody.png", false);
+        return m;
+    }
+
+    /// <summary>
+    /// A held melee weapon's blade for the gear blood (<see cref="MarkGear"/>): false for anything else (a scabbard, a ranged weapon, no picking
+    /// box, a mesh too short).
+    /// </summary>
+    static bool MarkBlade(PartMaterial m, CharacterPart part, LoadedMesh loaded)
+    {
+        var item = part.Record;
+        if (part.Slot != AttachSlot.Weapon || item.Type != FcsRecordType.Weapon || m.Scabbard || loaded.PickBoxes is not { Length: > 0 } boxes)
+            return false;
+        if (part.Field is not ("bare sword" or "mesh" or "mesh female")) return false;
+
+        var min = boxes.Aggregate(new Vector3(float.MaxValue), (a, b) => Vector3.Min(a, b.Min));
+        var max = boxes.Aggregate(new Vector3(float.MinValue), (a, b) => Vector3.Max(a, b.Max));
+        var size = max - min;
+        int axis = size.X >= size.Y && size.X >= size.Z ? 0 : size.Y >= size.Z ? 1 : 2;
+        float lo = min[axis], hi = max[axis];
+        float sign = hi >= -lo ? 1 : -1;
+        if (sign < 0) (lo, hi) = (-hi, -lo);
+        if (hi - lo < 1e-4f) return false;
+
+        m.BladeAxis = axis == 0 ? new Vector3(sign, 0, 0) : axis == 1 ? new Vector3(0, sign, 0) : new Vector3(0, 0, sign);
+        (m.BladeLow, m.BladeScale, m.SplatScale) = (lo, 1 / (hi - lo), 5 / (hi - lo));
+        return true;
     }
 
     /// <summary>
@@ -1549,6 +1775,10 @@ internal sealed class CharacterContent : IDisposable
         m.Shading = CharacterShaders.ShadeItem;
         bool worn = part.Mode == AttachMode.SharedSkeleton;
         m.Worn = worn;
+        if (worn) m.Sheen.X = ClothSheen(item);
+        m.ArmourMetal = worn && item.Type == FcsRecordType.Armour && item.GetInt("material type") >= 2;
+        m.LimbMetal = item.Type == FcsRecordType.LimbReplacement;
+
         var spec = ClothingSpec(c, part, item);
         if (spec is not null) return SpecMaterial(m, part, item, spec, worn);
 
@@ -1563,6 +1793,7 @@ internal sealed class CharacterContent : IDisposable
             m.Description = $"MATERIAL_SPECS_WEAPON '{model.Name}' (loadout model)";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(modelTexture, false);
             m.Tex[CharacterShaders.SlotNormal] = Texture(Tex(model, "normal map"), false);
+            SetMetalMap(m, Tex(model, "metalness map"));
             return m;
         }
 
@@ -1572,6 +1803,7 @@ internal sealed class CharacterContent : IDisposable
         m.Description = candidate?.Description ?? "untextured";
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
         m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
+        SetMetalMap(m, candidate?.Metal);
         m.DoubleSided = candidate?.DoubleSided ?? false;
         return m;
     }
@@ -1582,6 +1814,7 @@ internal sealed class CharacterContent : IDisposable
     PartMaterial HairMaterial(PartMaterial m, CharacterAppearance c, GameRecord item, string f)
     {
         m.Shading = CharacterShaders.ShadeHair;
+        m.Strands = c.Animal is null;
         m.GlossMult = item.GetFloat("specular");
         m.MipmapBias = item.GetFloat("mipmap bias");
         string? diffuse = Tex(item, "texture map" + f) ?? Tex(item, "texture map");
@@ -1648,6 +1881,16 @@ internal sealed class CharacterContent : IDisposable
         // (docs/game/blood-decals.md "On the body").
         body.BloodFull = body.Bloody;
         return body;
+    }
+
+    /// <summary>
+    /// A material's metalness map into <see cref="CharacterShaders.SlotColourMap"/> (<see cref="PartMaterial.MetalMap"/>; nothing without one).
+    /// </summary>
+    void SetMetalMap(PartMaterial m, string? map)
+    {
+        if (map is null) return;
+        m.Tex[CharacterShaders.SlotColourMap] = Texture(map, false);
+        m.MetalMap = true;
     }
 
     #endregion

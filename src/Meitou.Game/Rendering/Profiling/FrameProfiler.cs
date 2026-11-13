@@ -45,7 +45,7 @@ public sealed class FrameProfiler : IDisposable
     /// The frames in flight timed at once (each a slot of stamps), the most stage stamps and pre-frame stamps a frame takes, and the <see
     /// cref="StageClock"/> stages.
     /// </summary>
-    internal const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 28;
+    internal const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 29;
 
     /// <summary>
     /// The series: the stages by <see cref="StageClock"/> index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
@@ -71,7 +71,7 @@ public sealed class FrameProfiler : IDisposable
         ("sim", [StageClock.Sim]),
         ("update", [StageClock.Host, StageClock.Blood, StageClock.Birds, 0, 1, 2, StageClock.UpdChars, 3]),
         ("pre-frame", [StageClock.Uploads, StageClock.Cull, StageClock.Bake]),
-        ("shadows", [12]), ("gi", [14]), ("reflection", [4]),
+        ("shadows", [12]), ("gi", [14, StageClock.LampShadows]), ("reflection", [4]),
         ("scene", [5, 6, 7, 8, StageClock.Characters, 9, StageClock.Shafts, StageClock.Fog, 13]),
         ("post", [10]),
         ("present", [StageClock.Ui, StageClock.Submit, StageClock.DriverWait]),
@@ -98,6 +98,7 @@ public sealed class FrameProfiler : IDisposable
         new(0.30f, 0.80f, 0.70f, 1), new(0.90f, 0.65f, 0.35f, 1),
         new(0.75f, 0.75f, 0.55f, 1), new(0.85f, 0.15f, 0.15f, 1), new(0.20f, 0.95f, 0.60f, 1),
         new(0.95f, 0.90f, 0.55f, 1),
+        new(0.95f, 0.55f, 0.20f, 1),
         new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 
@@ -198,6 +199,25 @@ public sealed class FrameProfiler : IDisposable
     /// The timestamps the newest frame took for the profiler (the stage laps and the pre-frame buffer's), to say what the profiler costs.
     /// </summary>
     public int StampsLastFrame { get; private set; }
+
+    /// <summary>
+    /// The GPU's mean ms per stage over the newest <paramref name="frames"/> frames read, largest first, on one line.
+    /// </summary>
+    public string GpuMeans(int frames)
+    {
+        int n = Math.Min(frames, _gpuCount);
+        if (n == 0) return "no frames read";
+
+        var means = new List<(string Name, double Ms)>();
+        for (int k = 0; k < Series; k++)
+        {
+            double sum = 0;
+            for (int i = 1; i <= n; i++) sum += _gpu[k][(_gpuHead - i + History) % History];
+            means.Add((k == Other ? "other" : k == Total ? "total" : StageClock.Names[k], sum / n));
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"{n} frames: ") + string.Join(" ", means.Where(m => m.Ms >= 0.005).OrderByDescending(m => m.Ms).Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Name}={m.Ms:0.00}")));
+    }
 
     /// <summary>
     /// Called when a frame's GPU times have been read: its <see cref="Tag"/>, the ms per <see cref="StageClock"/> stage (do not keep the array), and

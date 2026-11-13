@@ -11,6 +11,13 @@ public static class Interp
     public static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
     /// <summary>
+    /// Between two world positions as a + (b - a) t: exactly a when they are equal, whatever t. <c>Vector3.Lerp</c> computes a (1 - t) + b t, which far
+    /// from the origin lands a float step off a point that does not move, by an amount that changes with t: drawn between two ticks, a still camera or
+    /// character jumped a step (0.004 units at 50000) as the frame's alpha changed, a pixel or two close up (docs/character-renderer.md "Precision").
+    /// </summary>
+    public static System.Numerics.Vector3 Lerp(System.Numerics.Vector3 a, System.Numerics.Vector3 b, float t) => a + (b - a) * t;
+
+    /// <summary>
     /// Wraps an angle in radians to (-pi, pi].
     /// </summary>
     public static float WrapAngle(float a)

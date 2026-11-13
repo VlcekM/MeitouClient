@@ -104,6 +104,7 @@ not the game speed, so the camera works while the game is paused. Several inputs
   with no ground smoothing; the eye clearance still lifts it. Panning, `focus_char` and the free camera clear it; zoom and turn keep it.
   While tracking, the pointer at an edge turns the camera instead of panning (**Observed**: x edge ∓3 yaw input, y edge ∓1 tilt input
   per frame). Edge scrolling is also suppressed after some events until the pointer moves right (a quirk, **Observed**).
+- **Whom the camera tracks** (**Verified**, `FUN_1406b0f90` mode 1 asks the handle's object for its position through vtable `+0x40`, which for a character is `FUN_1405ce680`): a character in a bed or cage (`+0x2f8` set) answers its bed's or cage's position, a **carried** one (`+0x3d4`) answers its **carrier's** position (the carrier handle at `+0x388`, resolved and asked the same way, so a chain of carriers ends at the first one carried by no one), and only otherwise its own (the ragdoll root body's or `+0x48`). So following or centring on a knocked-out character that someone carries keeps the camera on the carrier, at the carrier's position + 10, never on the body on the shoulder (its drawn offset is not used). Meitou: `GameHost.Tracked` / `PlayerInterface.Carrier` for follow, centre (F, portrait), flights and the followed floor; the bed and cage case is not modelled (the body keeps its own place there).
 - The save's `CAMERA` record keeps the pivot position and orientation, the boom and the tracked handle ([saved camera](#saved-camera)).
 
 ## Saved camera

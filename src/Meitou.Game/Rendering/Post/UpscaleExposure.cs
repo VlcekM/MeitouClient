@@ -71,7 +71,7 @@ sealed unsafe class UpscaleExposure(PostProcess post)
         var bindings = stackalloc GpuBinding[2];
         bindings[0] = GpuBinding.Sampled(0, new SampledTexture(post.Point(), sampled.View));
         bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _upscaleExposure.Texture.View()));
-        var push = new UpscaleExposurePush { Exposure = post.Options.Exposure, Key = ExposureKey, Auto = auto ? 1 : 0 };
+        var push = new UpscaleExposurePush { Exposure = post.Options.ExposureApplied, Key = ExposureKey, Auto = auto ? 1 : 0 };
         cmd.Order();
         cmd.BindPipeline(_upscaleExposurePipeline!.Value);
         cmd.BindProgramResources(_upscaleExposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));

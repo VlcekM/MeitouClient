@@ -46,6 +46,30 @@ internal sealed class WeatherSurfaces : IDisposable
     /// The water shader's <c>gameTime</c> (game hours); the frame sets it.
     /// </summary>
     public float GameTime;
+    /// <summary>
+    /// Game seconds wrapping at 4096, exact to under a millisecond (<see cref="GameTime"/>'s float steps by more than a second late in a game): the
+    /// characters' water beads move by it (<c>uWetClock</c>); the host sets it.
+    /// </summary>
+    public float Seconds;
+    /// <summary>
+    /// The world's surfaces show their wetness (Meitou, the "Rain drops and puddles" row; docs/formats/weather.md "Wet world"): drops and runs on
+    /// objects, puddles on the ground. Off: the game's wet look only.
+    /// </summary>
+    public bool WetWorld = true;
+
+    /// <summary>
+    /// The last feet that stepped in a puddle (<c>uWetSplash</c>): x, z, <see cref="Seconds"/> at the step, the strength (0: none). The terrain draws
+    /// their rings for <see cref="SplashSeconds"/>; an older one is cleared, so the wrapping clock cannot play it again.
+    /// </summary>
+    readonly Vector4[] _splashes = new Vector4[8];
+    int _nextSplash;
+    public const float SplashSeconds = 3;
+
+    public void AddSplash(Vector2 at, float strength)
+    {
+        _splashes[_nextSplash] = new Vector4(at.X, at.Y, Seconds, strength);
+        _nextSplash = (_nextSplash + 1) % _splashes.Length;
+    }
 
     /// <summary>
     /// The shader's <c>rainAmount</c>.
@@ -63,7 +87,10 @@ internal sealed class WeatherSurfaces : IDisposable
                     "weather dust noise");
         }
         var g = gpu.Globals;
-        g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
+        g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, Meitou.Data.World.WorldWater.Height));
+        g.PublishUniform("uWetClock", () => Seconds);
+        g.PublishUniform("uWetWorld", () => WetWorld ? 1f : 0f);
+        g.PublishUniformArray("uWetSplash", _splashes, () => _splashes.Length);
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }
@@ -84,6 +111,8 @@ internal sealed class WeatherSurfaces : IDisposable
     public void Apply(Data.World.WeatherState state)
     {
         Wetness = WetnessOverride ?? state.Wetness;
+        for (int i = 0; i < _splashes.Length; i++)
+            if (_splashes[i].W > 0 && (Seconds - _splashes[i].Z + 4096) % 4096 > SplashSeconds) _splashes[i].W = 0;
         Rain = RainOverride ?? state.Rain;
         var d = state.DustAmount;
         if (DustOverride is { } o) d = new Vector3(o.X, float.IsNaN(o.Y) ? d.Y : o.Y, float.IsNaN(o.Z) ? d.Z : o.Z);
@@ -112,6 +141,10 @@ static class MeshSurface
     /// </summary>
     public const uint Foliage = 2;
 
+    /// <summary>
+    /// The diffuse is one of the named metal textures (<see cref="MetalTextures"/>): what has no colour of its own is bare metal.
+    /// </summary>
+    public const uint MetalByTexture = 32;
     /// <summary>
     /// An impostor bake: neither dust nor wetness is baked in.
     /// </summary>

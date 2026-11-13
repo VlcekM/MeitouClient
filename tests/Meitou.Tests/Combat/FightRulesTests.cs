@@ -33,9 +33,10 @@ public class FightRulesTests
     }
 
     /// <summary>
-    /// A, ordered onto B (its task target), with C attacking it from the other side; each of another faction, standing where it is put.
+    /// A, ordered onto B (its task target; <paramref name="picked"/>: by the player's pick, a focused attack), with C attacking it from the other side; each of
+    /// another faction, standing where it is put.
     /// </summary>
-    static (CharacterId A, CharacterId B, CharacterId C) Three(SimWorld world, float far)
+    static (CharacterId A, CharacterId B, CharacterId C) Three(SimWorld world, float far, bool picked = false)
     {
         CharacterId Put(int faction, float x)
         {
@@ -46,26 +47,26 @@ public class FightRulesTests
         CharacterId a = Put(0, 0);
         CharacterId b = Put(1, far);
         CharacterId c = Put(2, -14);
-        world.Commands.Enqueue(new AttackOrder([a], b) { Tick = world.Tick });
+        world.Commands.Enqueue(new AttackOrder([a], b) { Picked = picked, Tick = world.Tick });
         world.Commands.Enqueue(new AttackOrder([c], a) { Tick = world.Tick });
         return (a, b, c);
     }
 
     /// <summary>
-    /// The fight's own target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0): the fight ends once a swing in
-    /// progress reaches its end marker ("Pacing"), though another still attacks the fighter.
+    /// A picked attack's target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0: only a focused fight, rows 5 and 61, ends with its
+    /// target): the fight ends once a swing in progress reaches its end marker ("Pacing"), though another still attacks the fighter.
     /// </summary>
     [Fact]
-    public void A_fighter_whose_task_target_drops_ends_its_fight_at_once()
+    public void A_picked_attack_whose_target_drops_ends_its_fight_at_once()
     {
         using var world = NewWorld(6, 1, out var combat, new CombatOptions { TickMedical = false });
-        var (a, b, c) = Three(world, 14);
+        var (a, b, c) = Three(world, 14, picked: true);
         world.RunTicks(10);
         Assert.Equal(b.Slot, combat.StateOf(a).TargetSlot);
         world.Characters.Cold(b.Slot)!.Medical!.KnockOut(600);
         for (int k = 0; k < 120 && combat.StateOf(a).AttackTech >= 0; k++) world.RunTicks(1);
         world.RunTicks(1);
-        Assert.False(world.Characters.Cold(a.Slot)!.InCombat, "the task target is down: the fight ends");
+        Assert.False(world.Characters.Cold(a.Slot)!.InCombat, "the picked target is down: the fight ends");
         Assert.Equal(a.Slot, combat.StateOf(c).TargetSlot);
     }
 }

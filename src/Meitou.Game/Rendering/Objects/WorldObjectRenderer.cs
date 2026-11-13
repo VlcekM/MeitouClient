@@ -280,6 +280,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public float LodPixelsPerRadian { get; set; }
 
     /// <summary>
+    /// The lens's share of the LOD value (<see cref="MeshLod.LensFactor"/>, set each frame by the world frame): under 1 through a lens longer than the game's.
+    /// </summary>
+    public float LensLod { get; set; } = 1;
+
+
+    /// <summary>
     /// Colour batches are drawn nearest first (Meitou, with the reach switch: early depth rejection of the shading of what a nearer batch covers);
     /// off: in the order they were first met.
     /// </summary>
@@ -388,6 +394,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public int Pending => _streamer.Pending + _meshes.Pending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount
         + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
+
+    /// <summary>
+    /// <see cref="Pending"/> as the loading screen waits for it (<see cref="ObjectMeshCache.LoadingPending"/>).
+    /// </summary>
+    public int LoadingPending => _streamer.Pending + _meshes.LoadingPending + _uploads.Count + _textureCache.AwaitedCount
+        + _textureCache.UnresidentUsedCount + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
 
     /// <summary>
     /// What <see cref="Pending"/> is made of, for the loading log.
@@ -695,6 +707,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     const float CutDistance = 10000;
 
+    /// <summary>What cuts a ray-traced part as the draws cut it, for the traced sun: its map's bindless index (0: none or not resident) and threshold.</summary>
+    internal (uint Map, float Threshold) RayCut(ObjectMaterialSet materials, int part)
+    {
+        if (materials.Parts.Length == 0) return default;
+        var pm = materials.Parts[Math.Min(part, materials.Parts.Length - 1)];
+        if (pm.Material is not { AlphaThreshold: > 0 } m) return default;
+        uint key = m.Alpha switch { AlphaSource.NormalAlpha => pm.Normal, AlphaSource.DiffuseAlpha => pm.Diffuse, _ => 0 };
+        return key == 0 ? default : (_textureCache.Index(key, Gpu.LodBias, 0), m.AlphaThreshold);
+    }
+
     /// <summary>
     /// The landmarks being collected (all zones laid out once on a worker, about a second), the class that tells them, and what they cost.
     /// </summary>
@@ -875,7 +897,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         _selectionDraws.Clear();   // kept for one frame's outline at most: the meshes they name may go now
         _eyeNow = eye;
-        _meshes.LodBias = LodBias;
+        _meshes.LodBias = LodBias * LensLod;
         if (LodPixelsPerRadian > 0) _meshes.PixelsPerRadian = LodPixelsPerRadian;
         _meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
@@ -1215,7 +1237,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null,
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
-            { Dust = placed.Kind == PlacedKind.BuildingPart };
+            { Dust = placed.Kind == PlacedKind.BuildingPart, MetalMap = m?.Metal is null ? null : _textureCache.Get(m.Metal, border, deferred: true) };
         }
         return new ObjectMaterialSet(result);
     }
@@ -1247,13 +1269,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
             foreach (var inst in zone.Real)
                 if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre,
-                        eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
+                        eye) - inst.Radius <= range && !LeftOutOfRays(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
                     yield return inst;
         }
         if (_streamer.LandmarkZone is { } landmarks)
             foreach (var inst in landmarks.Real)
                 if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre,
-                        eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst)) yield return inst;
+                        eye) - inst.Radius <= range && !LeftOutOfRays(inst.Placed) && !ClosedAround(inst)) yield return inst;
     }
 
     /// <summary>
@@ -1292,6 +1314,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// game each frame.
     /// </summary>
     public IReadOnlyDictionary<string, int> InteriorView { get; set; } = new Dictionary<string, int>();
+
+    /// <summary>
+    /// While set, only placements whose id starts with this are drawn, cast or traced (the character editor's bar: the frame holds nothing of the world).
+    /// </summary>
+    public string? Isolated { get; set; }
+
+    bool OutOfIsolation(PlacedMesh p) => Isolated is { } only && !p.PlacementId.StartsWith(only, StringComparison.Ordinal);
 
     /// <summary>
     /// The loose items (placement ids) above the shown floor of their building in the interior view: not drawn. Set by the game, which picks by the
@@ -1491,7 +1520,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             {
                 if (!InteriorView.ContainsKey(room.PlacementId) || _construction is { } sites && sites.ContainsKey(room.PlacementId)) continue;
                 var p = new Vector3(target.X, Math.Clamp(target.Y, room.YMin, room.YMax), target.Z);
-                if (room.Contains(p, 64) && room.Covered(p)) return p;
+                if (room.Contains(p, 64) && room.Covered(p, InteriorDebug.CoverIgnoresHiddenFloors && InteriorView.TryGetValue(room.PlacementId, out int shown) ? shown : int.MaxValue)) return p;
             }
         return null;
     }
@@ -1510,8 +1539,24 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var p = inst.Placed;
         if (p.Interior) return true;
+
+        // A part of an upper floor of a building in the interior view, at or below the viewed floor: its floor slab is seen from inside the cut-away
+        // room (the game lights it with the one ambient, docs/render-gi.md "Indoor"), not an outer wall of a closed building, so a hidden floor or a
+        // ceiling plane over it does not leave it black. Floor 0 too: the top of a wall the view cuts open sits under the hidden wall above it, its
+        // rays start among hidden geometry and the hybrid GI's cache flickered there, black, even paused. Its doors too, whatever floor they name: a
+        // door is shown on every viewed floor (InteriorHidden), and as an outside part it took the outdoor probes, dark inside the walls, and none of
+        // the room's floor: a black door from inside with the GI on.
+        if (p.Kind == PlacedKind.BuildingPart && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor)
+            && (p.Floor <= shownFloor || p.DoorIndex >= 0))
+        {
+            return true;
+        }
         if (p.ParentPlacementId is not null) return InInterior(inst);
-        return p.Kind == PlacedKind.BuildingPart && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
+
+        // A loose item on a shelf or a floor indoors is lit as the room is: the hybrid GI's cache gave it nothing and, without the indoor floor, it
+        // read pitch black.
+        return (p.Kind == PlacedKind.BuildingPart || p.Kind == PlacedKind.Item) && InteriorOf(inst) is { Inside: true, Building: { } holder }
+            && holder != p.PlacementId;
     }
 
     /// <summary>
@@ -1598,6 +1643,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     bool InteriorHidden(PlacedMesh p)
     {
+        if (OutOfIsolation(p)) return true;
+        if (InteriorDebug.HideMesh is { } hide && p.Kind == PlacedKind.BuildingPart && p.MeshPath.Contains(hide, StringComparison.OrdinalIgnoreCase)) return true;
         if (p.Kind != PlacedKind.BuildingPart) return false;
         if (p.DoorIndex >= 0 && !p.Interior) return false;
         if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
@@ -1608,10 +1655,27 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// Meitou's shadows: the parts the floor view hides still cast (<c>docs/render-objects.md</c> "Closed interiors"). The original's do not:
+    /// <c>Building::setFloorVisibility</c> hides the floor's scene nodes, which leaves them out of every camera's queue, the shadows' too. Faithful shadows keep that.
+    /// </summary>
+    public bool HiddenFloorsCast { get; set; } = true;
+
+    /// <summary>
+    /// Meitou's shadows: a building part casts with both its sides. Drawn like the colour pass, its faces turned from the sun culled, the parts that are
+    /// not closed meshes let the sun through at their feet (docs/render-shadows.md "Meitou bias").
+    /// </summary>
+    public bool CastersBothSides { get; set; } = true;
+
+    /// <summary>
+    /// What the traced scene leaves out: the rays stand for the shadows and the light in the room, so the roof a floor view hides still blocks the sun and the sky.
+    /// </summary>
+    bool LeftOutOfRays(PlacedMesh p) => InteriorDebug.ShadowsLeaveOutHidden ? InteriorHidden(p) : OutsideHidden(p);
+
+    /// <summary>
     /// What <see cref="InteriorHidden"/> leaves out whatever the viewed floor: an interior part of a building not in the interior view.
     /// </summary>
     bool OutsideHidden(PlacedMesh p) =>
-        p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
+        OutOfIsolation(p) || p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
 
     /// <summary>
     /// A point's last <see cref="InteriorAt(Vector3, ref InteriorMemo)"/> answer, kept by the asker (a character): good while the interiors are the
@@ -1688,10 +1752,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal Func<Vector3, float, bool>? MirrorCull { get; set; }
 
     /// <summary>
-    /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>.
+    /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>. The vertices are projected relative to the eye
+    /// (BuildingLodShaders.Vertex): <paramref name="relative"/> is the view-projection without the eye's translation when the caller has it
+    /// formed precisely (the scene's, WorldFrame), else translation(eye) x <paramref name="viewProjection"/>.
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour,
-        float fogDistance, TerrainRenderer terrain)
+        float fogDistance, TerrainRenderer terrain, Matrix4x4? relative = null)
     {
         var cpu = Stopwatch.StartNew();
         long now = Environment.TickCount64;
@@ -1725,7 +1791,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no
         // shading to save).
-        if (SortNearestFirst && !_depthPass) _active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
+        if (SortNearestFirst && !InteriorDebug.NoObjectSort && !_depthPass) _active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
 
         // 2. The instances.
         UploadInstances();
@@ -1735,8 +1801,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int wireMode = _debugLevels == 2 ? 2 : options.Wireframe;
         if (_active.Count > 0)
         {
-            var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour,
-                FogDistance = fogDistance };
+            var view = new ViewConstants { ViewProjection = relative ?? Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = eye, LightDir = light,
+                FogColour = fogColour, FogDistance = fogDistance };
             if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
             var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);
@@ -1860,7 +1926,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling
         // (docs/render-objects.md "Closed interiors"): only a closed building's interior parts stay out.
-        if ((_depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        bool castHidden = _depthPass && HiddenFloorsCast && !InteriorDebug.ShadowsLeaveOutHidden;
+        if ((castHidden ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) Doors.Pose(inst, gpu);
         if (inst.Placed.Joints is not null) Joints.Pose(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
@@ -1877,6 +1944,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float lodValue = _shadowLodFloor > 0 ? Math.Max(value, _shadowLodFloor) : value;
         inst.Mesh.LastUsed = now;
         DrawnInstances++;
+        if (Motion && !_depthPass && eye == _motionEye && (inst.Placed.DoorIndex >= 0 || inst.Placed.Joints is not null)) NoteMotion(inst, gpu, lodValue);
         if (inst.TerrainMode && options.Textures)
         {
             // The terrain shader's path: one draw each, no fading, the level the game would pick.
@@ -1960,11 +2028,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// Whether a placement's back faces are culled: a building part's in the colour passes (the game's <c>objects.material</c> keeps Ogre's
-    /// default clockwise culling, so a single-sided wall between the camera and an opened floor is not seen, docs/render-objects.md), an interior
-    /// part's in the shadow passes too.
+    /// Whether a placement's back faces are culled: a building part's and an interior part's, in colour and in the shadow passes as the game does
+    /// (docs/render-objects.md "Back faces"; a double-sided material is drawn both sides, and <see cref="CastersBothSides"/> draws the casters
+    /// both sides).
     /// </summary>
-    bool BackCulled(PlacedMesh p) => p.Interior || !_depthPass && p.Kind == PlacedKind.BuildingPart;
+    bool BackCulled(PlacedMesh p) => p.Interior || p.Kind == PlacedKind.BuildingPart;
 
     /// <summary>
     /// Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w,
@@ -2070,8 +2138,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public required bool Town;
 
         /// <summary>
-        /// Back faces culled: the instances are <c>interior</c> parts (docs/formats/zones.md "Interior view"; the game culls building parts' back
-        /// faces, so a room's ceiling vanishes seen from above).
+        /// Back faces culled: the instances are building parts (docs/render-objects.md "Back faces"; the game culls every building part but a
+        /// FOLIAGE material, so a room's ceiling vanishes seen from above).
         /// </summary>
         public bool BackCull;
 
@@ -2345,7 +2413,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 d.Push.FadeMode = fade | (b.Cut ? 2 : 0);
                 if (wire || _debugLevels == 1)
                 {
-                    d.Push.Wireframe = 1;
+                    d.Push.Spare |= 64u;
                     d.Push.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, _distantMaterial));
                 }
                 else
@@ -2361,7 +2429,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
                     d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
-                    d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true };
+                    d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true } && !(_depthPass && CastersBothSides);
                 }
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
@@ -2401,6 +2469,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         d.Normal = normalId;
         d.Diffuse2 = dual ? diffuse2 : 0;
         d.Normal2 = dual ? pm.Normal2 : 0;
+        d.Metal = textured ? pm.Metal : 0;
         var alpha = m?.Alpha ?? AlphaSource.None;
         if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
 
@@ -2422,8 +2491,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;
-        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u)
-            | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u);
+        pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u) | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u)
+            | (textured && MetalTextures.Enabled && MetalTextures.Holds(m?.Diffuse) ? MeshSurface.MetalByTexture : 0u);
     }
 
     /// <summary>
@@ -2479,6 +2548,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             pc.Normal = Texture(d.Normal);
             pc.Diffuse2 = Texture(d.Diffuse2);
             pc.Normal2 = Texture(d.Normal2);
+            pc.MetalMap = d.Metal == 0 ? 0 : Texture(d.Metal) + 1;
             pc.Spare = (pc.Spare & 0xFFu) | (_scaffoldGrid is { Key: not 0 } grid ? (Texture(grid.Key) + 1) << 8 : 0);
             var part = d.Part;
             bool solid = d.Solid && solidSegment != 0;
@@ -2580,10 +2650,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public uint FirstInstance, Instances;
 
         /// <summary>
-        /// The texture keys (<see cref="WorldTexture.Key"/>, 0: none) of the diffuse and normal maps and of the second set; <see cref="RecordDraws"/>
-        /// turns them into bindless indices.
+        /// The texture keys (<see cref="WorldTexture.Key"/>, 0: none) of the diffuse and normal maps, of the second set and of the metalness map;
+        /// <see cref="RecordDraws"/> turns them into bindless indices.
         /// </summary>
-        public uint Diffuse, Normal, Diffuse2, Normal2;
+        public uint Diffuse, Normal, Diffuse2, Normal2, Metal;
 
         /// <summary>
         /// The push constants (the texture indices patched in when recorded).
@@ -2892,6 +2962,94 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             key = key * 31 + i + 1;
         }
         return key;
+    }
+
+    #endregion
+
+    #region Motion vectors (doors, turret joints, rotors)
+
+    // For the temporal upscalers: the animated instances are drawn again into the motion target with this and last frame's transform.
+
+    /// <summary>
+    /// An animated instance's draw into the motion target: a mesh part, its index count, and its eye-relative transform now and last frame.
+    /// </summary>
+    readonly record struct MotionDraw(MeshBindings Mesh, int IndexCount, Matrix4x4 Model, Matrix4x4 Previous);
+
+    /// <summary>
+    /// This frame's noted animated instances.
+    /// </summary>
+    readonly List<MotionDraw> _motionDraws = [];
+
+    /// <summary>
+    /// The motion pass's program and pipelines (made at the first noted draw).
+    /// </summary>
+    MotionMeshes? _motionMeshes;
+
+    /// <summary>
+    /// The scene camera's eye this frame (only its view writes motion).
+    /// </summary>
+    Vector3 _motionEye;
+
+    /// <summary>
+    /// Counts the frames (<see cref="BeginMotion"/>): an instance drawn last frame carries the frame before this one.
+    /// </summary>
+    long _motionFrame;
+
+    /// <summary>
+    /// Set each frame by the world frame when a temporal upscaler runs (<see cref="BeginMotion"/>).
+    /// </summary>
+    public bool Motion { get; private set; }
+
+    /// <summary>
+    /// Starts a frame for the scene camera at <paramref name="eye"/> (the only view that writes motion).
+    /// </summary>
+    public void BeginMotion(bool on, Vector3 eye)
+    {
+        _motionDraws.Clear();
+        Motion = on;
+        _motionEye = eye;
+        _motionFrame++;
+    }
+
+    /// <summary>
+    /// Draws the noted instances into the motion target (the post chain's object-motion pass).
+    /// </summary>
+    internal void DrawMotion(Post.MotionTargets targets, MotionCamera camera)
+    {
+        if (!Motion || _motionDraws.Count == 0) return;
+
+        var m = _motionMeshes ??= new MotionMeshes(Gpu, _nativeFrame, GpuVertex.ObjectSize);
+        m.Begin(targets, camera);
+        foreach (var d in _motionDraws)
+        {
+            if (d.Mesh.Attributes[0] is not { } position || d.Mesh.Attributes[2] is not { } uv) continue;
+            m.Mesh(position.Buffer, uv.Buffer, d.Mesh.Elements);
+            m.Draw((uint)d.IndexCount, 0, 0, d.Model, d.Previous, Gpu.StandIn2D, 0);
+        }
+
+        m.End();
+        _motionDraws.Clear();
+    }
+
+    /// <summary>
+    /// An animated instance drawn in the scene view: with a transform from the last frame that differs from this frame's, its meshes are noted with
+    /// both, relative to the eye. One that was not drawn last frame (new, or back from out of range) has no motion from before.
+    /// </summary>
+    void NoteMotion(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float lodValue)
+    {
+        var now = inst.Transform;
+        var before = inst.LastDrawnFrame == _motionFrame - 1 ? inst.LastDrawn : now;
+        if (inst.LastDrawnFrame != _motionFrame) (inst.LastDrawn, inst.LastDrawnFrame) = (now, _motionFrame);
+        if (before == now) return;
+
+        var toEye = Matrix4x4.CreateTranslation(-_motionEye);
+        int level = gpu.Curve.Select(lodValue * LodBias);
+        var g = gpu.Manual[level] ?? gpu;
+        int lv = gpu.Manual[level] is null ? level : 0;
+        foreach (var gp in g.Parts)
+        {
+            if (gp.Count[lv] > 0) _motionDraws.Add(new MotionDraw(_meshes.PlainMesh(gp, lv), gp.Count[lv], now * toEye, before * toEye));
+        }
     }
 
     #endregion

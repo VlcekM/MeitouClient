@@ -313,7 +313,7 @@ internal sealed unsafe partial class CharacterRenderer
             _previousBones.Binding]);
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, 0),
+        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
             SkinLut = SkinShading ? _skinScattering.Index : 0 };
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
@@ -429,18 +429,19 @@ internal sealed unsafe partial class CharacterRenderer
                 level = FileLevel(part, MeshLod.Value(eye - origin, centre, part.FileRadius * modelScale));
             else
             {
-                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, _depthPass ? LodBias * ShadowLodBias : LodBias);
+                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, (_depthPass ? LodBias * ShadowLodBias : LodBias) * LensLod);
                 if (_depthPass)
                     value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
                 level = GeneratedLevel(part, value, _depthPass);
             }
 
+            uint gearFlags = 0;
             var instance = new CharInstance
             {
-                Model = part.IsBody ? WithBlood(model, l.Blood) : model,
+                Model = part.IsBody ? WithBlood(model, l.Blood) : GearModel(part, in l, model, ref gearFlags),
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
-                Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+                Flags = (interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
             _staleCheck?.Check(part, Gpu.Frame.Number, _materialEpoch, _updateStamp, PassName(_depthPass, _motionPass));
@@ -502,10 +503,15 @@ internal sealed unsafe partial class CharacterRenderer
     static uint HiddenFlags(AssetPart part, CharacterAsset asset)
     {
         uint flags = (uint)part.HideSide << 16;
-        if (!part.IsBody || asset.Appearance is not { } look) return flags;
+        if (asset.Appearance is not { } look) return flags;
+        // Headless and head only reach the worn items skinned to the body too: their head-bone vertices carry bit 14 (CharacterContent.MarkWorn).
+        if (part.IsBody || part.Shared)
+        {
+            if (look.Headless) flags |= CharacterShaders.Headless;
+            if (look.HeadOnly) flags |= CharacterShaders.HeadOnly;
+        }
+        if (!part.IsBody) return flags;
         flags |= (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18;
-        if (look.Headless) flags |= CharacterShaders.Headless;
-        if (look.HeadOnly) flags |= CharacterShaders.HeadOnly;
         return flags;
     }
 
@@ -567,6 +573,8 @@ internal sealed unsafe partial class CharacterRenderer
             var part = parts[p];
             ref var f = ref _partFrames[l.PartBase + p];
             f.Shows = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
+            // Decapitation: a part on a head bone leaves the body with the head; the cut-off head keeps only those (skinned parts: their head vertices, by the shader).
+            if (f.Shows && !part.Shared && !part.IsBody && l.Asset.Appearance is { } look && (look.Headless && part.OnHead || look.HeadOnly && !part.OnHead)) f.Shows = false;
             if (!f.Shows) continue;
             f.Model = part.Shared ? world : _attach[l.AttachBase + part.AttachIndex] * world;
             f.Scale = part.Shared ? worldScale : f.Model.ScaleLength();
@@ -661,7 +669,7 @@ internal sealed unsafe partial class CharacterRenderer
             chunk.Count = chunk.Characters = chunk.Parts = 0;
         }
 
-        float bias = depth ? LodBias * ShadowLodBias : LodBias;
+        float bias = (depth ? LodBias * ShadowLodBias : LodBias) * LensLod;
         for (int i = from; i < to; i++)
         {
             ref var l = ref _live[i];
@@ -700,12 +708,13 @@ internal sealed unsafe partial class CharacterRenderer
     void GatherPart(in Live l, AssetPart part, in PartFrame f, int c, uint seen, GatherView[] views, int viewCount, bool depth, bool motion,
         float bias)
     {
+        uint gearFlags = 0;
         var instance = new CharInstance
         {
-            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : f.Model,
+            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : GearModel(part, in l, f.Model, ref gearFlags),
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
-            Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
+            Flags = (l.Interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,
             MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };

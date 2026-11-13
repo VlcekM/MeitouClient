@@ -5,7 +5,7 @@ namespace Meitou.Game.Rendering.Water;
 /// <summary>
 /// The Meitou water's clock-driven parameters besides the open waves (<see cref="OceanWaves"/>; <see cref="WaterRenderer"/>, docs/render-water.md
 /// "Meitou water"): the shore's breakers and the normal maps' scrolling. Visual only: the game's water stays a flat plane at Y = 100.
-/// Everything runs on the game clock, so it stands still while paused and speeds up with the game speed. The breakers' phase is integrated
+/// Everything runs on the game clock, so it stands still while paused and speeds up with the game speed. The shore waves follow the game clock
 /// frame by frame and their size follows the wind over about ten seconds, so a change of weather never makes them jump.
 /// Units are the world's (1 unit = 1 dm); seconds are game seconds at speed 1 (1 game hour = 109.09 s, docs/game/game-loop.md).
 /// </summary>
@@ -17,9 +17,9 @@ public sealed class WaveSet
     public const double SecondsPerGameHour = 1200.0 / 11.0;
 
     /// <summary>
-    /// The breakers: one every <see cref="BreakerPeriod"/> seconds, <see cref="BreakerLength"/> units apart.
+    /// The shore waves: one every <see cref="BreakerPeriod"/> seconds on average (in sets of seven; the shader's waveCount, docs/render-water.md "Shore waves").
     /// </summary>
-    public const float BreakerPeriod = 8, BreakerLength = 110;
+    public const float BreakerPeriod = 8;
 
     /// <summary>
     /// The game hours of the last <see cref="Step"/> (null: none yet, the next takes its values at once).
@@ -32,18 +32,12 @@ public sealed class WaveSet
     float _wind;
 
     /// <summary>
-    /// The breakers' wave count (see <see cref="Shore"/>).
+    /// The shore waves' clock wraps here: 4096 sets of seven waves, so a wave's number (mod 4096, the shader's per-wave noise) and its set do not jump.
     /// </summary>
-    double _shorePhase;
+    public const double ClockWrap = 4096.0 * 7 * BreakerPeriod;
 
     /// <summary>
-    /// The wave count wraps here; the shader's per-wave noise and drift are periodic in it (a wave's number is the count at its place).
-    /// </summary>
-    public const double PhaseWrap = 4096;
-
-    /// <summary>
-    /// x the breakers' wave count (cycles since the start, below <see cref="PhaseWrap"/>; the shader takes its fraction as the phase), y the run-up
-    /// height, z the breakers' wavelength, w their height (units).
+    /// x the shore waves' clock (game seconds, below <see cref="ClockWrap"/>), y the run-up height, z the mean wave period (s), w the waves' height (units).
     /// </summary>
     public Vector4 Shore;
 
@@ -82,11 +76,7 @@ public sealed class WaveSet
 
         float target = WindFactor(windSpeed);
         _wind = first ? target : _wind + (target - _wind) * (float)(1 - Math.Exp(-dt / 10));
-
-        // The first frame starts from the clock itself (so a still picture shows the same moment every time), later ones integrate.
-        _shorePhase = (first ? seconds / BreakerPeriod : _shorePhase + dt / BreakerPeriod) % PhaseWrap;
-
         float swell = 0.6f + 0.6f * MathF.Min(_wind, 1.5f);
-        Shore = new Vector4((float)_shorePhase, 2.2f * swell, BreakerLength, 3.5f * swell);
+        Shore = new Vector4((float)(seconds % ClockWrap), 2.2f * swell, BreakerPeriod, 3.5f * swell);
     }
 }

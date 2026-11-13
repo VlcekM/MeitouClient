@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Game.DevTools;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Host.Photo;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Foliage;
@@ -64,6 +65,10 @@ sealed class GameLoop(GameHost host)
     /// Read at start-up only: a change in the settings waits for a restart.
     /// </summary>
     FrameGenerationMethod _frameGenerationAtStart;
+    /// <summary>
+    /// Whether the run draws in HDR (read at start-up only).
+    /// </summary>
+    bool _hdrAtStart;
 
     // The debug overlay the interface draws through, the Faithful / Meitou switches and the settings panel (null without an overlay).
     /// <summary>
@@ -100,9 +105,18 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     Cinema _cinema = null!;
     /// <summary>
+    /// The settings window, once made (the agent channel's <c>gfx</c>).
+    /// </summary>
+    internal SettingsMenu? Panel => _panel;
+
+    /// <summary>
     /// The cinema (or the tour) holds the drawn camera: the rig's state is not applied until a camera input takes it back.
     /// </summary>
     bool _cinemaHolds;
+    /// <summary>
+    /// Photo mode (docs/viewer.md "Photo mode"): while it is on it owns the camera, the interface's visibility and the pause.
+    /// </summary>
+    PhotoMode _photo = null!;
     /// <summary>
     /// The squad tour (numpad /) and the character flights.
     /// </summary>
@@ -326,7 +340,9 @@ sealed class GameLoop(GameHost host)
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         _sceneRead = host.LoadScene is { } readScene ? Task.Run(readScene) : null;
         host.Sound.BeginAudio();
-        _frameGenerationAtStart = host.Config.FrameGenerationMethod;
+        _hdrAtStart = host.GameOptions.Hdr ?? host.Config.Hdr;   // read at start-up only
+        // Read at start-up only; HDR output keeps the plain swapchain.
+        _frameGenerationAtStart = _hdrAtStart ? FrameGenerationMethod.Off : host.Config.FrameGenerationMethod;
 
         // Load before the device so the settings panel can switch to DLSS without restarting.
         _display = new VulkanDisplay(_headless ? null : WindowOptions.Default with
@@ -337,7 +353,7 @@ sealed class GameLoop(GameHost host)
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, _vsync, dlss: true, frameGeneration: _headless ? FrameGenerationMethod.Off : _frameGenerationAtStart);
+        }, _vsync, dlss: true, frameGeneration: _headless ? FrameGenerationMethod.Off : _frameGenerationAtStart, hdr: _hdrAtStart);
         host.Streamline = _display.Streamline;
         host.Ngx = _display.Ngx;
         _window = _headless ? null : _display.Window!;
@@ -568,6 +584,9 @@ sealed class GameLoop(GameHost host)
                 if (!LookPresets.HiddenSwitch(toggle.Label) && !_runOnly.Contains(SwitchKey(toggle.Label))
                         && host.Config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get())
                     toggle.Set(v >= 0.5f);
+            // The technique choices after the switches they stand for: the launcher writes the choice alone, and it wins (a file of switches only keeps them).
+            foreach (var choice in _panel.Sliders.Where(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+                if (host.Config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get())) choice.Set(Math.Clamp(c, choice.Min, choice.Max));
             _panel.Tiers.ApplySavedPreset();
         }
         if (host.GameOptions.BenchmarkBaseline) _panel?.Tiers.ApplyBenchmarkBaseline();
@@ -593,6 +612,11 @@ sealed class GameLoop(GameHost host)
         _cinema.LensKeys = () => host.Session.Camera.IsFree || _cinemaHolds;
         _cinema.Load();
         _tour = new SquadTour();
+        _photo = host.Photo = new PhotoMode(host)
+        {
+            Allowed = PhotoAllowed,
+            Entering = () => _cinemaHolds = false,
+        };
         // A double click on a squad member more than FlightDistance from the view flies there (Advanced settings "Character flights").
         host.Player.FlyTo = id =>
         {
@@ -614,12 +638,17 @@ sealed class GameLoop(GameHost host)
             EndTour();
         };
     }
+    /// <summary>
+    /// Photo mode starts only over a running game scene: not the title, a loading cover, a duel, a flight of the cinema or a squad tour.
+    /// </summary>
+    bool PhotoAllowed() => !host.Covered && !host.TitleScreen.TitleVisible && !host.Duel.IsDuel && host.SkyArrival is null
+        && !host.GameOptions.NoPopulation && !_cinema.Playing && !_cinema.Recording && !_tour.Active;
 
     /// <summary>
-    /// Where a character is drawn now; null when it is not in the snapshot.
+    /// Where a character is drawn now (the tracked position, which photo mode freezes); null when it is not in the snapshot.
     /// </summary>
     Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c
-        ? host.DrawnPosition(c) : null;
+        ? host.TrackedPosition(c) : null;
 
     /// <summary>
     /// Ends the tour or flight: the rig takes the drawn camera back (as the strategy camera), and a flown-to member is followed.
@@ -845,6 +874,7 @@ sealed class GameLoop(GameHost host)
         else if (_panel?.Visible == true) _panel.TextInput(value);
         else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
         else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
+        else if (_photo.TextInput(value)) { }   // a preset's name being typed
         else host.Player.UiText(value);
     }
 
@@ -869,7 +899,7 @@ sealed class GameLoop(GameHost host)
             host.Loading?.SkipSplash();
             return;
         }
-        if (ModalKey(keyboard, k) || InterfaceKey(keyboard, k)) return;
+        if (ModalKey(keyboard, k) || PhotoKey(k) || InterfaceKey(keyboard, k)) return;
         if (KeyMap.Map(k) is { } uiKey && host.Player.UiKey(uiKey, CtrlDown(keyboard), _shiftDown)) return;
         GameKey(keyboard, k);
     }
@@ -932,6 +962,18 @@ sealed class GameLoop(GameHost host)
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// A key while photo mode is on or starts it (see <see cref="PhotoMode.KeyDown"/>); not while a text field has the keyboard, not in the terrain
+    /// sandbox (P is its patrol key) or with a window open over the game.
+    /// </summary>
+    bool PhotoKey(SilkKey k)
+    {
+        if (host.Player.UiEditing || host.GameOptions.NoPopulation) return false;
+        if (ModalKeyOf(k) is not { } key) return _photo.Active;
+        if (!_photo.Active && (host.Sandbox.IsSandbox || host.Player.ModalOpen)) return false;
+        return _photo.KeyDown(key, k == SilkKey.Escape);
     }
 
     /// <summary>
@@ -1102,6 +1144,12 @@ sealed class GameLoop(GameHost host)
         mouse.Scroll += (m, wheel) =>
         {
             if (host.Covered || PanelLive() && _panel?.Scroll(wheel.Y) == true) return;
+            if (_photo.Active)
+            {
+                // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
+                if (!_photo.Panel.Wheel(Pixels(_orbitAnchor ?? m.Position), wheel.Y)) _photo.Wheel(wheel.Y, Held(SilkKey.ControlLeft, SilkKey.ControlRight));
+                return;
+            }
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
@@ -1114,6 +1162,11 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void PointerDown(EngineButton? physical, Vector2 at)
     {
+        if (_photo.Active)
+        {
+            PhotoPointerDown(physical, at);
+            return;
+        }
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
         bool select = physical is { } pressed && host.PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
         if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true)
@@ -1149,10 +1202,40 @@ sealed class GameLoop(GameHost host)
     }
 
     /// <summary>
+    /// Photo mode's press: the panel takes the left button (the right one steps a choice back), a left click on the picture sets the focus point; no
+    /// click reaches the world (no selecting, no orders), the camera sees the other buttons.
+    /// </summary>
+    void PhotoPointerDown(EngineButton? physical, Vector2 at)
+    {
+        if (physical == EngineButton.Left && _photo.Panel.MouseDown(at)) return;
+        if (_photo.Panel.Contains(at))
+        {
+            if (physical == EngineButton.Right) _photo.Panel.MouseDown(at, back: true);   // a choice steps back
+            return;
+        }
+
+        if (physical == EngineButton.Left)
+        {
+            // A click on the picture is where the lens focuses.
+            var size = FramebufferSizeNow();
+            _photo.FocusAt(new Vector2(at.X / Math.Max(size.X, 1), at.Y / Math.Max(size.Y, 1)));
+            return;
+        }
+
+        if (physical is { } button) host.Session.Input.SetMouseButton(button, true);
+    }
+
+    /// <summary>
     /// The release of a pointer button (see <see cref="PointerDown"/>).
     /// </summary>
     void PointerUp(EngineButton? physical, Vector2 at)
     {
+        if (_photo.Active)
+        {
+            _photo.Panel.MouseUp();
+            if (physical is { } photoButton) host.Session.Input.SetMouseButton(photoButton, false);
+            return;
+        }
         bool cinemaDrag = _cinema.MouseUp();
         if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
@@ -1186,7 +1269,7 @@ sealed class GameLoop(GameHost host)
             _lastMouse = p;
             return;
         }
-        if (_cinema.MouseMove(Pixels(p)))
+        if (_cinema.MouseMove(Pixels(p)) || _photo.Active && !host.OrbitHeld() && _photo.Panel.MouseMove(Pixels(p)))
         {
             _lastMouse = p;
             return;
@@ -1362,8 +1445,12 @@ sealed class GameLoop(GameHost host)
     void MoveCamera(double dt)
     {
         host.AgentWorld.ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
+        if (_photo.Active && (host.Covered || host.TitleScreen.TitleVisible)) _photo.Abandon();   // its world is gone
         if (!_cinemaHolds) host.ApplyCamera(host.Session.CameraAt());
         _cinema.Advance(_cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
+        // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
+        host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
+        _photo.Apply();
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
         host.Session.ViewEye = _cinemaHolds ? host.Camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
@@ -1414,7 +1501,9 @@ sealed class GameLoop(GameHost host)
         if (host.SkyArrival is not null || host.TitleScreen.TitleVisible || !(_tour.Active || !host.Session.Camera.IsFree && !_cinemaHolds)) return;
         var eye = host.Camera.Eye;
         float shortfall = host.Session.Camera.EyeGroundAt(eye.X, eye.Z) + Data.World.KenshiCamera.EyeClearance(host.Camera.Distance) - eye.Y;
-        if (shortfall > 0) host.Camera.Target += new Vector3(0, shortfall, 0);
+        // Over a hair only: at the clearance's edge the ground read under the eye wavers by a few ten-thousandths frame to frame, and lifting by
+        // that moved the eye by a float step now and then, a jump of a pixel or two for a character close to it.
+        if (shortfall > 1e-3f) host.Camera.Target += new Vector3(0, shortfall, 0);
     }
 
     #endregion
@@ -1448,7 +1537,8 @@ sealed class GameLoop(GameHost host)
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered
             && !host.GameOptions.NoPopulation
             && !(PanelLive() && _panel?.Visible == true) && !_cinema.Contains(pointerAt);
-        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen;
+        // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
+        bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen && (!_photo.Active || !_photo.PanelShown || host.OrbitHeld());
         Outline(takeFile, highlighting, pointerWorld);
         return new FramePointer(pointerMouse, pointerAt, pointerWorld, freeLook);
     }
@@ -1558,7 +1648,7 @@ sealed class GameLoop(GameHost host)
         StageClock.UiPart(StageClock.UiLoading);
         if (!shot && !take && !feedbackShot) DrawPointer(size, pointer);
         StageClock.UiPart(StageClock.UiPointer);
-        var finalPicture = Present(backbuffer, uiTarget);
+        var finalPicture = Present(backbuffer, uiTarget, shot || take || feedbackShot);
         host.PlayBench.PlayBenchRendered(Stopwatch.GetElapsedTime(t0).TotalMilliseconds, _display.Context.Pipelines.LatePipelines);
         TallyFrame();
         SavePictures(size, takeFile, shot, feedbackShot, finalPicture ?? backbuffer, topDown: finalPicture is not null);
@@ -1574,6 +1664,7 @@ sealed class GameLoop(GameHost host)
             ?? (_headlessTarget ??= _display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
             Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
         host.Gpu.Post!.Target = backbuffer;
+        host.Gpu.Post.Options.HdrPeak = _display.HdrActive ? PostOptions.HdrPeakFor(host.Config.HdrPeakNits, host.Config.HdrPaperNitsNow) : 0;
         // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
         if (_frameGen is FrameGeneration && _display.FrameGenerationLayer is null)
                 {
@@ -1651,6 +1742,11 @@ sealed class GameLoop(GameHost host)
         if (_overlay is not null && !covered)
             _cinema.Draw(_overlay, size.X, size.Y,
                 shot || take || feedbackShot || (host.AgentChannel.InterfaceHidden && !_cinema.EditorVisible), showStatus: false);
+        if (_overlay is not null && !covered && _photo.Active)
+        {
+            _photo.Panel.Draw(_overlay, size.X, size.Y, shot || take || feedbackShot);
+            _overlay.Flush(size.X, size.Y);
+        }
         // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics
         // hidden too.
         if (ui && _overlay is not null && !covered && !shot && !feedbackShot)
@@ -1757,7 +1853,7 @@ sealed class GameLoop(GameHost host)
         var cursorMode = _orbitAnchor is not null ? Silk.NET.Input.CursorMode.Disabled
             : (host.Config.HardwareMouse || byWindow) && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
         if (cursorMode != _windowCursor) pointerMouse.Cursor.CursorMode = _windowCursor = cursorMode;
-        string pointerName = pointer.OverWorld ? host.Player.PointerPanel.PointerName : "arrow";
+        string pointerName = pointer.OverWorld && !_photo.Active ? host.Player.PointerPanel.PointerName : "arrow";
         bool enhanced = host.Config.HardwareMouse && host.Config.EnhancedHardwareMouse && !freeLook;
         bool hand = enhanced
             && (pointer.OverWorld ? host.Player.PointerPanel.PointsAtClickable(pointerName) : _panel?.OverClickable(pointer.At) == true);
@@ -1776,13 +1872,17 @@ sealed class GameLoop(GameHost host)
     /// window shows the world alone (the backbuffer, flipped by the present) and the layer lays the interface over every frame, generated ones too:
     /// then null.
     /// </summary>
-    GpuTexture? Present(GpuTexture backbuffer, GpuTexture uiTarget)
+    GpuTexture? Present(GpuTexture backbuffer, GpuTexture uiTarget, bool capturing)
     {
         bool generating = _frameGen is not null && _frameGen.Finish(backbuffer, uiTarget);
-        var finalPicture = generating && _frameGen!.PresentsWorldAlone ? null : _uiLayer!.Composite(backbuffer);
+        bool worldAlone = generating && _frameGen!.PresentsWorldAlone, hdrShown = _display.HdrActive && !worldAlone;
+
+        // Pictures saved from an HDR frame are the SDR composite, the shown one the PQ composite.
+        var finalPicture = worldAlone ? null : !hdrShown || capturing ? _uiLayer!.Composite(backbuffer) : null;
+        var shownPicture = hdrShown ? _uiLayer!.CompositeHdr(backbuffer, host.Config.HdrPaperNitsNow) : finalPicture;
         StageClock.UiPart(StageClock.UiComposite);
         if (GpuContext.DiagSubmit) _display.Context.SubmitAndWait();
-        _display.Present(finalPicture);
+        _display.Present(shownPicture);
         host.DebugMenu.Profiler?.EndFrame();
         host.PlayBench.BenchLap(7);
         return finalPicture;
@@ -1824,8 +1924,11 @@ sealed class GameLoop(GameHost host)
             FramebufferCapture.SavePng(_display.Context, picture, takeFile, size.X, size.Y, topDown: topDown);
             _cinema.FrameDone();
         }
-        else if (shot && host.AgentChannel.ShotPath is not null)
+        else if (shot && host.AgentChannel.ShotPath is { } shotPath)
+        {
             host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
+            host.Photo?.PictureSaved(shotPath);
+        }
         else if (shot && GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)
             SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
         else if (shot) SaveScreenshot(_display.Context, picture, size.X, size.Y, topDown: topDown);
@@ -2102,9 +2205,9 @@ sealed class GameLoop(GameHost host)
         if (_panel is not null && !_lowEnd)
         {
             foreach (var slider in _panel.Sliders)
-                if (!_runOnly.Contains(slider.Label)) host.Config.Graphics[slider.Label] = slider.Get();
+                if (!_runOnly.Contains(slider.Label) && !host.GfxRunOnly.Contains(slider.Label)) host.Config.Graphics[slider.Label] = slider.Get();
             foreach (var toggle in _panel.Toggles)
-                if (!_runOnly.Contains(SwitchKey(toggle.Label))) host.Config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
+                if (!_runOnly.Contains(SwitchKey(toggle.Label)) && !host.GfxRunOnly.Contains(toggle.Label)) host.Config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
             _panel.Tiers.SavePreset();
         }
         host.Config.Bindings = host.Session.Bindings.ToDictionary();

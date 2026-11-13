@@ -71,6 +71,10 @@ public sealed class SaveWriter(SaveGame game)
         if (_game.Portraits is not null) File.WriteAllBytes(Path.Combine(work, SaveFolder.PortraitName), _game.Portraits);
         WriteModData(work);
         WriteLevelEdits(work);
+        if (_game.WeaponBlood is not null)
+        {
+            File.WriteAllBytes(Path.Combine(work, SaveFolder.WeaponBloodName), _game.WeaponBlood);
+        }
     }
 
     /// <summary>

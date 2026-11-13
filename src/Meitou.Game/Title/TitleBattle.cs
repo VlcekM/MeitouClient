@@ -126,12 +126,8 @@ sealed class TitleBattle : IDisposable
             var oldMiddle = (previous[pair].Position + previous[pair + 1].Position) / 2;
             position = _centres[i / 2] + (position - Vector3.Lerp(oldMiddle, middle, alpha)) * DisplayScale;
             position.Y = _world.Walkability.GroundHeight(position.X, position.Z);
-            var poses = c.Animations.Select(layer =>
-            {
-                var old = before.Animations.FirstOrDefault(p => p.Name == layer.Name);
-                return new CharacterPose(layer.Name, old.Name is null ? layer.Time : GameHost.LayerTime(old, layer, alpha),
-                    old.Weight + (layer.Weight - old.Weight) * alpha);
-            }).ToArray();
+            var poses = new CharacterPose[GameHost.DrawnLayerCount(before, c)];
+            GameHost.BlendLayers(before, c, alpha, poses);
             list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position,
                 Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
             {

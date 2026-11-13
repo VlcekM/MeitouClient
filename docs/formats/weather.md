@@ -273,3 +273,27 @@ Evidence scopes below apply only to their named sources/checks.
 - Effect placers on the map (Verified: records and `features.dat`); a hidden MAP_FEATURES record still makes its effects: [zones.md](zones.md#placement-files-and-assembly)
 - Base-game data (Verified: merged base records, 2026-10-05)
 - Effects on characters (Verified (decompiled), FUN_1405cf790 and the functions named there; Verified probe of the merged data, 2026-10-23)
+
+## Wet world (Meitou)
+
+**Verified** (install `data/materials`: `common/wet.hlsl`, grep `makeWet`): the original wets bodies (`character.hlsl`), creatures, worn items (`skin.hlsl`),
+objects and buildings (`objects.hlsl`), foliage and the terrain (`terrainfp4.hlsl`) with the one `makeWet`: a darkening and a gloss towards 0.5. Nothing else.
+
+The optional row "Rain drops and puddles" (`WeatherSurfaces.WetWorld`, `uWetWorld`, on; off: the original's look) adds, in `AtmosphereShaders`:
+- `wetDrops` (shared by characters and objects): drops in cells of a position that stays with the surface, in world units; two sizes (cells 11 mm, radius
+  1.1 to 3.7 mm; cells 3.5 mm, radius 0.4 to 1 mm, only where a pixel is under 0.6 mm), one at most per cell, placed anywhere in it by an integer hash (a
+  float hash repeated over large surfaces); how many stand varies with two noises (7 cm, 40 cm). Shape: a wobbling outline, a tail up the slope, a flat cap
+  (about 40 degrees at the rim), brighter away from the sun. Without rain they stand still. In the rain a drop grows from nothing over 72 % of its period (9
+  to 32 s by `uWetClock`), then on a slope runs down up to two cells, thinning, leaving a narrow track, and is gone as the next starts; on the flat it spreads
+  out. Gone where a pixel is over 2 mm of surface.
+- `wetObject` (world objects, `BuildingLodShaders`; position = the vertex less the instance's origin, `vWetPos`): on walls, uneven darker and shinier tracks
+  (the dust noise stretched down the wall, drifting in the rain); a film on what faces the sky (gloss to 0.8); the drops. Scaled by how little the surface
+  absorbs (its dry gloss).
+- **Observed** (hidden run, t_flats_shore, forced wetness 1 rain 40, a placed Small Shack): the wall darker with vertical variation at 70 units.
+- `wetGround` (the terrain, above the water line): puddles where level ground (slope under about 10 degrees) lies low. "Low" is three noises of the place (8 m, 1.5 m, and 30 cm for the outline), not the terrain's own hollows; the water's level rises with the wetness (none under 0.2; at 1 about a third of level ground, less where the layers' absorbance is high). In a puddle: the ground darker (x 0.8 to 0.5 with depth), gloss 0.95, the normal level; a rim of soaked ground round it (gloss at least 0.6); in the rain `wetRings`, one impact per 16 cm cell 1 to 1.75 times a second, its ring widening to 11 cm (off where a pixel covers over 15 cm).
+- **Observed** (hidden run, t_flats_shore, forced wetness 0.6 and 1 with rain 40, three camera distances): puddles with the sky and the characters reflected, rings in the rain, dark patches from afar; none dry.
+- Feet in puddles (`GameHost.PuddleSplash`, from the clips' ground events as the water's splashes, `GameHost.Splashes`): a foot bone's event on ground that `WetPuddles.Under` finds under water (the shader's rule on the CPU: same hash and noises, the terrain's normal from four heights, a fixed absorbance of 0.6 for the layers' the CPU does not have) bursts the biome's shallowest `water effects` system at the ground and adds a step to `uWetSplash[8]` (`WeatherSurfaces.AddSplash`: x, z, the wet clock, strength by speed); `wetSteps` draws a train of ripples running out from it at 0.5 m/s for 3 s. **Observed** (hidden run, t_flats_shore, wetness 1, the squad ordered across the puddle it stood in): droplets at a foot and rings round it.
+- Real relief: `wetGround` takes `hollow`, how far the ground lies under what is round it (`TerrainShaders` `wetHollow`: the mean height of six points 1.2 m and six 4 m away less the height here; 12 cm and 40 cm count as full, 0.25 each), plus, where the ground is displaced, the depth of the relief's trough (the height map less the fragment's height, / 1.5, within 0.3); "low" is the noises less it, so dips fill first and rises stay dry. `WetPuddles.Hollow` is the same on the CPU (without the displaced relief). **Observed** (same run): the sand ripples' crests stand out of the water as islands.
+- `wetFoliage` (grass, foliage meshes): the game's wetness is left as it is (darkening, gloss to 0.3 on grass and 0.5 on leaves) and glints of drops are added in cells of the leaf's own texture coordinates (40 across, a fifth filled when wet through, gloss 0.95, the normal leaning a way of its own), gone where a pixel covers over a cell. **Observed** (hidden runs, mean colour of a grass patch, dry 118 84 68): under rain the game's wetness alone 103 76 68 (a slight greying); an added film of gloss 0.62 looked frosted and one of 0.36 gave 104 79 74, both dropped on the user's report; the dry gloss kept instead gave 97 70 61, dropped too (the game's look is to stay).
+- Footsteps: a character standing in a puddle (`GameHost.InPuddle`, `CharacterSounds.Puddle`) walks on the Water surface (`Surface_Material`), as under the water line. **Unknown**: not listened to.
+- **Unknown**: the look on metal buildings, at night, and on other biomes than sand.

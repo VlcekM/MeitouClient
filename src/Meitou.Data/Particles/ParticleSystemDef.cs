@@ -342,9 +342,10 @@ public sealed class PuAffectorDef
     /// </summary>
     public IReadOnlyList<string> ExcludedEmitters { get; init; } = [];
     /// <summary>
-    /// <c>mass_affector</c>; default 0.
+    /// The affector's own mass (<c>mass_affector</c>, default 1): the Gravity affector's pull is proportional to it (the plugin's
+    /// <c>GravityAffector::_affect</c>, Verified).
     /// </summary>
-    public float MassAffector { get; init; }
+    public float MassAffector { get; init; } = 1;
     // Colour
     /// <summary>
     /// Colour: the <c>time_colour</c> keys (life fraction, colour), sorted by time.
@@ -423,6 +424,10 @@ public sealed class PuAffectorDef
     /// Randomiser: <c>time_step</c>.
     /// </summary>
     public float TimeStep { get; init; }
+    /// <summary>
+    /// Randomiser: <c>random_direction</c> (default true, no script sets it): it kicks the velocity; false moves the position.
+    /// </summary>
+    public bool RandomDirection { get; init; } = true;
     /// <summary>
     /// The affector's block as parsed, with every raw attribute.
     /// </summary>
@@ -872,7 +877,7 @@ public sealed class PuSystemDef
             Enabled = a.Bool("enabled", true),
             Position = a.Vec3("position") ?? Vector3.Zero,
             ExcludedEmitters = [.. a.All("exclude_emitter").Where(p => p.Values.Length > 0).Select(p => p.Values[0])],
-            MassAffector = a.Float("mass_affector"),
+            MassAffector = a.Float("mass_affector", 1),
             TimeColours = colours,
             MultiplyColour = a.Word("colour_operation") == "multiply",
             ScaleX = a.Dynamic("x_scale"),
@@ -891,6 +896,7 @@ public sealed class PuSystemDef
             Axis = a.Vec3("rotation_axis") ?? Vector3.UnitY,
             MaxDeviation = new Vector3(a.Float("max_deviation_x"), a.Float("max_deviation_y"), a.Float("max_deviation_z")),
             TimeStep = a.Float("time_step"),
+            RandomDirection = a.Bool("random_direction", true),
         };
     }
 

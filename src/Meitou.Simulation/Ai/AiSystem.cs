@@ -1185,6 +1185,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool fresh = TakeUp(world, slot, mind, goal, type, profile);
         behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
 
+        // An animal in a bed has no row that gets it out (116, 208, 257 are not registered for its repertoire): every goal that moves or fights fails
+        // to plan, so it lies on with no goal (docs/game/ai-tasks.md "Animals in beds", Verified).
+        if (behaviour != AiBehaviour.Sleep && Repertoire.StuckInBed(world, table.Cold(slot)!))
+        {
+            mind.Plan.Clear();
+            mind.Goal = null;
+            mind.Behaviour = AiBehaviour.None;
+            mind.Version = board.Version;
+            return;
+        }
+
         // Another goal gets it out of its bed (the get-up step's own think, or the goal's act-out where the plan has none); it stands where it lay.
         if (behaviour != AiBehaviour.Sleep && table.Cold(slot)!.InSomething == Locks.HeldState.Bed
             && !world.Fixtures.GetOutOfBed(world, table.IdOf(slot)))

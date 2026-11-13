@@ -18,6 +18,11 @@ namespace Meitou.Game.Rendering.Frame;
 public sealed class WorldTexture
 {
     /// <summary>
+    /// Above 0: the alpha cut this cut-out mask is drawn with; its mips are loaded keeping the top level's cover (<see cref="AlphaCover"/>).
+    /// </summary>
+    public float Cut { get; init; }
+
+    /// <summary>
     /// The texture's number in its cache (1-based, never reused): what <see cref="Key"/> returns while resident.
     /// </summary>
     internal uint Number;
@@ -560,10 +565,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
     /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
-    public WorldTexture? Get(string? name, bool border, bool deferred = false)
+    /// <param name="cut">Above 0: a cut-out mask drawn with this alpha cut, whose mips keep the top level's cover (<see cref="AlphaCover"/>); a
+    /// texture of its own, apart from the same file loaded plain.</param>
+    public WorldTexture? Get(string? name, bool border, bool deferred = false, float cut = 0)
     {
         if (name is null) return null;
         string key = border ? name + "|border" : name;
+        if (cut > 0) key += "|cut";
         if (_cache.TryGetValue(key, out var t))
         {
             if (!deferred)
@@ -573,7 +581,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             }
             return t;
         }
-        _cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
+        _cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, Cut = cut, LastUsed = Environment.TickCount64 };
         _byNumber.Add(t);
         t.Number = (uint)_byNumber.Count;
 
@@ -708,16 +716,14 @@ public sealed unsafe class WorldTextureCache : IDisposable
         bool enabled = Mips.Enabled;
         float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
         int extra = Mips.Extra, leanSize = lean ? LeanSize : 0;
+        float cut = t.Cut;
         t.Lean = lean;
         if (replacing) t.Replacing = true;
         else t.State = WorldTexture.Residency.Loading;
         Func<TextureData?> load = () =>
         {
             TextureData data;
-            try
-            {
-                data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize);
-            }
+            try { data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize, cut); }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
@@ -742,6 +748,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     /// <summary>
+    /// What a texture's image is shared under: its file, and apart from that file loaded plain when its mips keep a cut-out's cover.
+    /// </summary>
+    static string ShareKey(WorldTexture t) => t.Cut > 0 ? t.Path! + "|cut" : t.Path!;
+
+    /// <summary>
     /// An image of <paramref name="t"/>'s file another user already holds at the current quality level, with no more top levels dropped than mip
     /// streaming would drop at <paramref name="need"/> (exactly as many when <paramref name="exact"/>), the one with the most dropped of those; null
     /// when none (or no <see cref="Share"/>).
@@ -750,7 +761,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         if (Share is null) return null;
         TextureShare.Image? best = null;
-        foreach (var e in Share.Of(t.Path!))
+        foreach (var e in Share.Of(ShareKey(t)))
         {
             if (e.QualityLevel != TextureQuality.Level || e == t.Shared) continue;
             int target = Math.Max(Mips.Drop(e.FileWidth, e.FileHeight, need), t.QualityDrop);
@@ -795,7 +806,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         {
             t.Shared = new TextureShare.Image
             {
-                Path = t.Path!,
+                Path = ShareKey(t),
                 Texture = texture,
                 ViewLevels = viewLevels,
                 ViewSwizzle = swizzle,
@@ -994,7 +1005,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// are stored (BC4 through a swizzle that shows it as grey); the rest is decoded to RGBA8 on the CPU.
     /// </summary>
     /// <param name="leanSize">0, or the largest top side to keep (a lean load under the guard's pressure).</param>
-    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0)
+    static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0, float cut = 0)
     {
         using var file = File.OpenHandle(Content.GameFiles.Resolve(path), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
         Span<byte> magic = stackalloc byte[4];
@@ -1011,6 +1022,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             try
             {
                 int dropped = whole.MipCount - dds.MipCount;
+                AlphaCover.Apply(path, dds, whole, cut);   // before anything reads the levels: a cut-out's mips keep its cover
                 bool droppable = TextureQuality.DropTopMips(whole, 1).MipCount < whole.MipCount;
                 if (CanUploadCompressed(dds))
                 {

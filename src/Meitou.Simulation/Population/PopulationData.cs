@@ -31,6 +31,11 @@ public interface IAppearanceSource
     CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId) => Create(recordId, factionId, seed);
 
     /// <summary>
+    /// As the 4-argument <c>Create</c>, the race forced to <paramref name="raceId"/> when given (debug: control channel <c>spawn-at --race</c>).
+    /// </summary>
+    CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId, string? raceId) => Create(recordId, factionId, seed, templateId);
+
+    /// <summary>
     /// The look of a CHARACTER record drawn from a given loadout (a saved character's appearance and worn items); nothing is rolled. Null: no look.
     /// </summary>
     CharacterAppearance? Create(string recordId, Loadout loadout) => null;
@@ -75,10 +80,24 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
     public CharacterAppearance? Create(string recordId, string? factionId, int seed) => Create(recordId, factionId, seed, null);
 
     /// <summary>
+    /// As the 4-argument <c>Create</c>, the race forced to <paramref name="raceId"/> when given (debug: control channel <c>spawn-at --race</c>).
+    /// </summary>
+    public CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId, string? raceId) =>
+        raceId is null
+            ? Create(recordId, factionId, seed, templateId)
+            : Create(recordId, factionId, seed, templateId, [new GameReference(raceId, new ReferenceValues(1, 0, 0))]);
+
+    /// <summary>
     /// The look of a CHARACTER record rolled from <paramref name="seed"/> (<paramref name="templateId"/>: the squad template it is made for); an
     /// animal's is its species' one look. Null, with a warning once per record, when the look cannot be built.
     /// </summary>
-    public CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId)
+    public CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId) =>
+        Create(recordId, factionId, seed, templateId, db.Find(templateId ?? "")?.GetReferences("race override"));
+
+    /// <summary>
+    /// The look with <paramref name="raceOverride"/> (RACE references, the value 0 the weight) winning over the CHARACTER's races when it has any.
+    /// </summary>
+    CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId, IReadOnlyList<GameReference>? raceOverride)
     {
         try
         {
@@ -92,7 +111,7 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
             {
                 Seed = seed,
                 Faction = factionId,
-                RaceOverride = templateId is null ? null : db.Find(templateId)?.GetReferences("race override"),
+                RaceOverride = raceOverride,
             };
             return CharacterAppearance.Build(db, installRoot, recordId, options);
         }

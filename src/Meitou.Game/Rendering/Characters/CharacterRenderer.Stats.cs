@@ -1,3 +1,4 @@
+using Meitou.Data.Characters;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Game.Rendering.Frame;
@@ -138,4 +139,46 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     string LevelSummary() =>
         string.Join(", ", Enumerable.Range(0, 5).Where(l => LevelParts[l] > 0).Select(l => $"L{l} {LevelParts[l]} parts {LevelTriangles[l] / 1000}k"));
+
+    /// <summary>
+    /// Debug (control command <c>draw-state</c>): what the last update did with the character: not listed, culled tiny, out of reach or not built, or live with its culling tests, palette and shown parts.
+    /// </summary>
+    public string DrawReport(long key)
+    {
+        if (_tinyNow.Contains(key)) return "tiny-culled";
+        int found = -1;
+        for (int i = 0; i < _liveCount; i++)
+        {
+            if (_live[i].Key == key)
+            {
+                found = i;
+                break;
+            }
+        }
+
+        if (found < 0) return _states.ContainsKey(key) ? "not live (far, hidden or asset not built)" : "never seen by the renderer";
+        ref var l = ref _live[found];
+        int nan = 0, shown = 0, partCount = l.Asset.Parts.Count;
+        var bones = l.State.Bones;
+        for (int b = 0; b < bones.Length; b++)
+        {
+            var m = bones[b];
+            float sum = m.M11 + m.M12 + m.M13 + m.M21 + m.M22 + m.M23 + m.M31 + m.M32 + m.M33 + m.M41 + m.M42 + m.M43;
+            if (!float.IsFinite(sum) || MathF.Abs(m.M41) > 1e5f || MathF.Abs(m.M42) > 1e5f || MathF.Abs(m.M43) > 1e5f) nan++;
+        }
+
+        for (int p = 0; p < partCount; p++)
+        {
+            if (_partFrames[l.PartBase + p].Shows) shown++;
+        }
+
+        bool frustum = _countedFrustum is { } f && FrustumTests.SphereVisible(f, l.Centre, l.Radius);
+        bool fog = _countedFog?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true;
+        return $"live portraitOnly={l.PortraitOnly} offScreen={l.OffScreen} frozen={l.Frozen} repose={l.Repose} interior={l.Interior} centre=({l.Centre.X:F1},{l.Centre.Y:F1},{l.Centre.Z:F1}) radius={l.Radius:F1} inFrustum={frustum} fogHidden={fog} badBones={nan}/{bones.Length} partsShown={shown}/{partCount} ragdoll={l.Bones is not null} world.finite={float.IsFinite(l.World.M41 + l.World.M42 + l.World.M43)}";
+    }
+
+    /// <summary>
+    /// Debug (<c>draw-state</c>): whether the look's asset is built, failed to build (cached as null: the character is never drawn, silently) or not built yet.
+    /// </summary>
+    public string AssetState(CharacterAppearance look) => _assets.TryGetValue(look, out var a) ? a is null ? "FAILED" : "built" : "unbuilt";
 }

@@ -80,13 +80,25 @@ c help                                # one usage line per command; `c help <nam
 | `find-item` | `find-item <text> [--type armour\|weapon\|item\|crossbow\|container] [--limit n] [--stats]` |
 | `firstaid` | `firstaid <id>` |
 | `follow` | `follow <id> [--guard]` |
-| `give` | `give "<item record>" [qty] [quality] [--equip]` |
+| `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the highlighted row and its value) |
+| `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
+| `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id or name>] [--model <id or name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |
+| `editor` | `editor [yawDegrees]` opens the character editor (the recruit form, appearance only) on the player squad's leader, or with it open turns its camera (0 in front, 180 behind): pictures of the editor's stage |
+| `draw-state` | `draw-state [--missing]` (every character: race, body mesh, whether its look built (`built`, `FAILED` = never drawn, `unbuilt`), hidden indoors, and what the renderer did with it last update: tiny-culled, not live, or live with its frustum/fog tests, off-screen, bad bones, parts shown) |
 | `heal` | `heal` |
 | `help` | `help [command]` |
 | `hud` | `hud hide\|show` |
 | `hurt` | `hurt <damage> [part id] [--id <c:slot.gen>]` |
+| `interior-hide` | `interior-hide <mesh text | off>` (debug: building parts whose mesh path contains the text count as hidden by the floor view) |
+| `interior-debug` | `interior-debug <cover|shadow> <on|off>` (interior lighting debug switches; cover: the room-grid focus ignores surfaces above the viewed floor; shadow: shadow passes leave out what the view hides) |
+| `interior-view` | `interior-view <floor 0..3 | off>` (holds the interior view of the building over the camera target at a floor with no character inside; `state` lists it under `interior`) |
+| `object-sort` | `object-sort <on|off>` (debug: colour batches of objects drawn nearest first, the default, or in the order met) |
 | `kill` | `kill [--id <c:slot.gen>] \| kill --radius <m> [<x> <z>] [--animals]` |
+| `spawn-trace` | `spawn-trace on\|off\|clear\|summary\|dump <tsv path>` (every squad the population makes: source, template, leader record, position, terrain height, water depth, walkability, distance to the nearest player character) |
+| `birds` | `birds [near <m>]` (per bird kind: alive, near the camera, the spawn rule's cell sum, listing cells, distance, flock size) |
+| `weather-sim` | `weather-sim <none|dust|acid|off>` (the weather the simulation reads everywhere; the sky keeps its own) |
+| `flies` | `flies` (each dead character: flies, effect shown, the weather there) |
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
 | `layouts` | `layouts <building record id or name> [exterior]` |
 | `loot` | `loot <id>` |
@@ -95,30 +107,35 @@ c help                                # one usage line per command; `c help <nam
 | `mouse` | `mouse <x> <y>` |
 | `observe` | `observe [--radius <m>] [--full] \| observe --brief [--changed]` |
 | `operate` | `operate <building id>` |
-| `order` | `order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] \| order attack <id>` |
+| `order` | `order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] [--id <c:slot.gen>] \| order attack <id>` (`--id`: that one character, whatever its faction, an NPC or an animal, instead of the selection; not with `--wait`) |
 | `path-check` | `path-check <x1> <z1> <x2> <z2> \| path-check --id <c:slot.gen> <x> <z>` |
 | `pause` | `pause` |
 | `pickup` | `pickup <item id \| nearest>` |
 | `place-building` | `place-building <building record id or name> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]` |
-| `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty]` |
+| `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty] [--maker <id or name>] [--model <id or name>] [--level <n>]` (same grade flags as `give`) |
+| `root-probe` | `root-probe [--id c:slot.gen] [--at x z] [length] [directions]` (read-only: root-motion step from a spot in N headings, wall slide and end-point refusal) |
+| `root-log` | `root-log on\|off\|dump` (log of every shortened root-motion step) |
+| `root-scan` | `root-scan <x> <z> <radius> [spacing] [length]` (counts free/slid/cut/refused root steps over a grid) |
 | `prospect` | `prospect` |
 | `putdown` | `putdown` |
 | `quickload` | `quickload [name]` |
 | `quicksave` | `quicksave [name]` |
 | `quit` | `quit` |
+| `ragdoll-dump` | `ragdoll-dump [--id <c:slot.gen>]` (the first selected character's ragdoll: each body's world place and each joint's twist and swing against its limits, degrees) |
 | `research` | `research [list \| queue <tech>]` |
 | `resume` | `resume` |
 | `say` | `say <text> [--id <c:slot.gen>]` |
 | `screenshot` | `screenshot <png path>` |
 | `select` | `select <id...> \| select --squad \| select --none  [--add]` |
 | `spawn` | `spawn "<character record>"` |
-| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead]` |
+| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|id\|name>] [--race <race name\|id>]` (`--race` draws it as that RACE, e.g. a stub race with no meshes; faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; an id or a name forces that faction) |
 | `speed` | `speed <0\|1\|2\|5>` |
 | `stance` | `stance block\|hold\|passive\|ranged\|taunt\|sneak\|jobs [on\|off]` |
 | `state` | `state` |
 | `step` | `step <n>` |
 | `stop` | `stop` |
 | `task` | `task <text>` |
+| `vram` | `vram` (debug: device-local memory in use and the budget, MB) |
 | `terrain-height` | `terrain-height <x> <z> [radius step]` |
 | `tp` | `tp <x> <z> \| tp <town name>` |
 | `tpcursor` | `tpcursor` |

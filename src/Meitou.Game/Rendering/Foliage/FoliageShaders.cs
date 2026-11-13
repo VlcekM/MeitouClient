@@ -41,6 +41,7 @@ static class FoliageShaders
             layout(location = 9) in vec4 aInstance2;
             layout(location = 10) in vec4 aInstance3;
             out float vFade;
+            uniform vec3 uEye;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """, required: true);
         // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass
@@ -50,6 +51,12 @@ static class FoliageShaders
             void main()
             {
                 vFade = aInstance0.w;
+            """, required: true);
+        // Projected relative to the eye (docs/renderer-native.md "Render origin"): the instance's origin less the eye, exact, where the world
+        // position at tens of thousands of units steps by 0.004 and a swaying leaf near the camera shook with it.
+        v = Replace(v, @"gl_Position\s*=\s*uViewProjection\s*\*\s*p\s*;", """
+                vec4 local = skin * vec4(aPosition, 1.0);
+                gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """, required: true);
         return v;
     }
@@ -128,6 +135,11 @@ static class FoliageShaders
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
+        // The wet world (Meitou): the drops' glints on the leaves, over the game's wetness as it is.
+        f = Replace(f, @"glossLit\s*=\s*wetSurface\.a\s*;", """
+            glossLit = wetSurface.a;
+            if (uWetWorld > 0.5 && uFogDistance > 0.0) wetFoliage(uv, max(length(dFdx(uv)), length(dFdy(uv))) * 40.0, uWeatherWet.x, uWeatherWet.y, n, glossLit);
+            """, required: true);
         // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
         // no cut-out.)
         f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;",
@@ -144,6 +156,7 @@ static class FoliageShaders
             }
             """, required: true);
         f = Replace(f, @"fragColour\s*=\s*vec4\s*\(\s*colour\s*,\s*1\.0\s*\)\s*;", "fragColour = vec4(colour, foliageCoverage);", required: false);
+        f = Replace(f, @"if\s*\(\s*uFogDistance\s*>\s*0\.0\s*&&\s*uAtmoParams\.x\s*>\s*0\.5\s*\)\s*colour\s*=\s*kenshiLight", "atmoReceiver = 2;\n            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight", required: true);
         return f;
     }
 
@@ -178,17 +191,20 @@ static class FoliageShaders
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
             float s = aBlade.w;
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
+            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
-            vec3 p = aBlade.xyz + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
-            if (v == 0.0) p.x += uSway * sin(uTime + aBlade.x * uFrequency);
+            // The blade's own offsets, then its root less the eye (exact): projected relative to the eye (docs/renderer-native.md "Render origin").
+            vec3 o = side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            if (v == 0.0) o.x += uSway * sin(uTime + aBlade.x * uFrequency);
             float dist = distance(uEye.xz, aBlade.xz);
-            p.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
+            o.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
+            vec3 p = aBlade.xyz + o;
             vWorld = p;
             vUv = vec2(u, v);
             vFade = 1.0;
-            gl_Position = uViewProjection * vec4(p, 1.0);
+            gl_Position = uViewProjection * vec4((aBlade.xyz - uEye) + o, 1.0);
             vHazeMul = vec3(1.0);
             vHazeAdd = vec3(0.0);
             if (uFogDistance > 0.0) atmoApplyCoefficients(uEye, p, vHazeMul, vHazeAdd);
@@ -215,6 +231,8 @@ static class FoliageShaders
         uniform vec3 uFogColour;
         uniform float uFogDistance;
         uniform bool uWireframe;
+        uniform float uGrassRayReach;   // how far the traced sun's rays see grass (0: they see none)
+        uniform bool uGrassDepthOnly;   // the depth-first draw (FoliageRenderer.GrassDepthFirst): nothing after the cut
         out vec4 fragColour;
         void main()
         {
@@ -228,6 +246,7 @@ static class FoliageShaders
                 if (coverage <= 0.0) discard;
             }
             else if (d.a < threshold) discard;
+            if (uGrassDepthOnly) { fragColour = vec4(0.0); return; }
             vec3 albedo = d.rgb;
             if (uHasColourMap)
             {
@@ -236,6 +255,7 @@ static class FoliageShaders
             }
             // The weather's wetness (foliage.hlsl: gloss 0, then makeWet with the absorbance 0.9; the gloss is written × 0.6).
             float grassGloss = 0.0;
+            vec3 grassNormal = vec3(0.0, 1.0, 0.0);
             if (uWeatherWet.x > 0.0)
             {
                 vec4 wetSurface = vec4(albedo, 0.0);
@@ -243,6 +263,9 @@ static class FoliageShaders
                 albedo = wetSurface.rgb;
                 grassGloss = wetSurface.a * 0.6;
             }
+            // The wet world (Meitou, the "Rain drops and puddles" row): the drops' glints on the blades, over the game's wetness as it is.
+            if (uWetWorld > 0.5 && uFogDistance > 0.0)
+                wetFoliage(vUv, max(length(dFdx(vUv)), length(dFdy(vUv))) * 40.0, uWeatherWet.x, uWeatherWet.y, grassNormal, grassGloss);
             // Lit as the shared mesh shader lights a surface facing straight up (foliage.hlsl writes the normal (0, 1, 0)).
             vec3 l = normalize(uLightDir);
             float diff = max(l.y, 0.0);
@@ -251,7 +274,18 @@ static class FoliageShaders
             vec3 colour = albedo * (ambient + diff * sunLight);
             // World view, game sky: the game's deferred lighting of what foliage.hlsl writes for grass: normal straight up, gloss 0 (grass_fs zeroes the
             // diffuse alpha before writing it × 0.6; only rain would raise it).
-            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, vec3(0.0, 1.0, 0.0), normalize(uEye - vWorld), grassGloss, vWorld);
+            atmoReceiver = 1;
+            // Past the reach of the traced sun's rays no blade shades another, and the grass read flat and bright beside the near, shaded grass. There the sun on a blade is
+            // what the grass over it lets down: all of it at the tip, less towards the root and under a low sun (Beer's law through the blades above); the sky's light a
+            // little less towards the root too. It comes in over the band where the rays' grass fades out (TracedSunShaders: the last quarter of the reach).
+            if (uGrassRayReach > 0.0)
+            {
+                float far = smoothstep(0.7, 1.0, distance(uEye.xz, vWorld.xz) / uGrassRayReach);
+                float depth = clamp(vUv.y, 0.0, 1.0);   // 0 at the tip, 1 at the root
+                atmoSelfShadow = mix(1.0, exp(-0.55 * depth / max(l.y, 0.4)), far);
+                albedo *= mix(1.0, 1.0 - 0.25 * depth, far);
+            }
+            if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, grassNormal, normalize(uEye - vWorld), grassGloss, vWorld);
             colour = colour * vHazeMul + vHazeAdd;
             fragColour = vec4(colour, coverage);
         }
@@ -280,10 +314,12 @@ static class FoliageShaders
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
             float s = aBlade.w;
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
+            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
-            vec3 p = aBlade.xyz + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            // Relative to the eye, both frames (the previous view-projection is last frame's camera seen from this frame's eye).
+            vec3 p = (aBlade.xyz - uEye) + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
             vec3 q = p;
             if (v == 0.0)
             {
@@ -384,6 +420,7 @@ static class FoliageShaders
         ["uHasColourMap"] = "pc.hasColourMap",
         ["uCoverage"] = "pc.coverage",
         ["uWireframe"] = "pc.wireframe",
+        ["uGrassDepthOnly"] = "(view.previousTime < -0.5)",
         ["uSprite"] = "textures2D[pc.sprite]",
         ["uColourMap"] = "textures2D[pc.colourMap]",
         ["uNearDepth"] = "textures2D[pc.nearDepth]",

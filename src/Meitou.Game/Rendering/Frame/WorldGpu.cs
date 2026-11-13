@@ -35,6 +35,11 @@ internal sealed class WorldGpu : IDisposable
     public WaterRenderer? Water;
 
     /// <summary>
+    /// The options the world was made from (the settings panel's rows for the start-up sizes and the haze distance read and write them; null in tests).
+    /// </summary>
+    public WorldOptions? Options;
+
+    /// <summary>
     /// The weather's wetness, dust and rain for every surface shader (null without a game database).
     /// </summary>
     public WeatherSurfaces? Surfaces;
@@ -69,6 +74,11 @@ internal sealed class WorldGpu : IDisposable
     /// The host's decals <see cref="Decals"/> draws.
     /// </summary>
     public TerrainDecalStore? DecalStore;
+
+    /// <summary>
+    /// The ground trails (null until the host's <c>trails</c> switch first asks for them; docs/render-terrain.md "Ground trails").
+    /// </summary>
+    public TerrainTrailRenderer? Trails;
 
     /// <summary>
     /// luckyren Mode's flying bones and limbs (null until the host makes it; docs/game/luckyren.md).
@@ -185,6 +195,11 @@ internal sealed class WorldGpu : IDisposable
     internal Gi.GiProbes? Probes;
 
     /// <summary>
+    /// The hybrid GI's radiance cache (the <c>gihybrid</c> switch's <c>cache</c> part; null without probes).
+    /// </summary>
+    internal Gi.GiCache? GiCache;
+
+    /// <summary>
     /// A backend-owned probe GI (Metal's native ray tracing); Vulkan uses <see cref="Gi"/> and <see cref="Probes"/> instead.
     /// </summary>
     internal Gi.IProbeGi? ProbeGi;
@@ -215,11 +230,16 @@ internal sealed class WorldGpu : IDisposable
     /// "Resolve").
     /// </summary>
     public int GiResolve = 2;
-
-    /// <summary>
-    /// The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.
-    /// </summary>
+    /// <summary>Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").</summary>
+    public bool Traced;
+    internal Gi.TracedSunPass? TracedSun;
+    internal Gi.LampTiles? LampTiles;
+    /// <summary>The pass of the terrain patches' prepass when their colour is resolved over the picture (WorldFrame.DrawSceneTerrain).</summary>
+    internal SceneHost? TerrainPrepass;
+    internal Gi.TracedSunVolume? TracedSunVolume;
+    /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
     public PostProcess? Post;
+
 
     /// <summary>
     /// The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on
@@ -328,6 +348,9 @@ internal sealed class WorldGpu : IDisposable
     public void Dispose()
     {
         GiDebugPass?.Dispose();
+        GiCache?.Dispose();
+        TracedSun?.Dispose();
+        TracedSunVolume?.Dispose();
         ProbeGi?.Dispose();
         Probes?.Dispose();
         Lamps?.Dispose();
@@ -339,6 +362,7 @@ internal sealed class WorldGpu : IDisposable
         Particles?.Dispose();
         Markers?.Dispose();
         Decals?.Dispose();
+        Trails?.Dispose();
         Debris?.Dispose();
         InteriorMask?.Dispose();
         NavmeshOverlay?.Dispose();

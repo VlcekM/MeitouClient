@@ -626,6 +626,7 @@ sealed class AgentChannel(GameHost host)
         w.WriteNumber("x", Math.Round(host.Camera.Target.X, 1));
         w.WriteNumber("z", Math.Round(host.Camera.Target.Z, 1));
         w.WriteEndObject();
+        host.WriteInteriorState(w);
     }
 
     /// <summary>
@@ -646,6 +647,9 @@ sealed class AgentChannel(GameHost host)
         Add("screenshot", "screenshot <png path>", "save the next frame (interface included, no debug overlays or pointer) "
             + "to the file", ControlScreenshot);
 
+        Add("photo", "photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off | key <name> [up] | shot [file] [--ui]",
+            "photo mode (docs/viewer.md): the free camera with lens, roll, exposure, drawn time of day, grids and frames; shot saves a picture without the panel "
+            + "and grid (--ui keeps them)", ControlPhoto);
         Add("quit", "quit", "end the interactive loop and exit cleanly (as closing the window does)",
             (_, con) => { host.DevConsoleHost.ControlQuit = true; con.Print("quitting"); });
 
@@ -697,6 +701,21 @@ sealed class AgentChannel(GameHost host)
         host.ScreenshotRequested = true;
         ShotWaitId = CurrentControlId;
         con.Print($"queued {path}");
+    }
+
+    /// <summary>
+    /// The <c>photo</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlPhoto(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (host.Photo is { } photo)
+        {
+            photo.Command(args, con);
+        }
+        else
+        {
+            con.Error("photo mode is not available here");
+        }
     }
 
     /// <summary>

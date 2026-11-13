@@ -72,6 +72,8 @@
     <EmbeddedResource Include="../../assets/branding/kenshi-logo.png" LogicalName="kenshi-logo.png" Link="Assets/kenshi-logo.png" />
     <!-- The picture under the luckyren Mode setting (SettingsMenuArt). -->
     <EmbeddedResource Include="../../assets/luckyren-mode.png" LogicalName="luckyren-mode.png" Link="Assets/luckyren-mode.png" />
+    <!-- How soft each ground texture is, for the ground trails (GroundSoftness). -->
+    <EmbeddedResource Include="../../assets/ground-softness.cfg" LogicalName="ground-softness.cfg" Link="Assets/ground-softness.cfg" />
   </ItemGroup>
 
   <Target Name="ReadBuildRevision" BeforeTargets="GetAssemblyAttributes">

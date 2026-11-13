@@ -66,13 +66,39 @@ static class MeitouShadowShaders
             vec4 uMsParams;        // x: noise offset (changes per frame under a temporal upscaler), y: shadow range, z: fade start, w: terrain term fade start
             vec4 uMsTerrain;       // xy: world x, z of the first sample, z: samples per world unit, w: 1 when the terrain term is on
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
-            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier)
+            vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier), w: cascades with character layers (the traced sun)
             mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
-            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), w: 1 when the landmark map is on
+            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: unused, w: 1 when the landmark map is on
         };
+        // While set (kenshiLight, the traced sun's term): the cascades are left out; the rays hold their casters.
+        bool msTraced = false;
         uniform sampler2D uShadowTerrain;   // per world grid sample: (height of the shadow's top, distance to the occluder)
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
+
+        // The traced sun's depth map (ShadowPass.RenderTraced): no cascade (uShadowForward.w 0) and uMsSlice[0].w 1. Tile l takes the position relative to the eye to layer l's (u, v, distance
+        // from its plane), uMsSlice[0].x the layers, uMsSlice[1].xyz towards the sun, uMsSlice[2] each layer's texel; the layers are uShadowBlocker's (Gi.TracedSunVolume). Outside: lit.
+        bool msVolumeOn() { return int(uShadowForward.w) == 0 && uMsSlice[0].w > 0.5 && uShadowOrigin.w > 0.5; }
+        float msVolumeAt(vec3 world)
+        {
+            vec3 rel = world - uShadowOrigin.xyz;
+            for (int l = 0; l < int(uMsSlice[0].x); l++)
+            {
+                vec3 c = (uShadowTile[l] * vec4(rel, 1.0)).xyz;
+                ivec2 size = textureSize(uShadowBlocker, 0).xy;
+                vec2 f = c.xy * vec2(size) - 0.5;
+                ivec2 i = ivec2(floor(f));
+                if (i.x < 0 || i.y < 0 || i.x >= size.x - 1 || i.y >= size.y - 1) continue;
+                vec2 a = f - vec2(i);
+                float reach = c.z - uMsSlice[2][l] * 1.5;
+                vec4 lit = vec4(texelFetch(uShadowBlocker, ivec3(i, l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 0), l), 0).r >= reach ? 1.0 : 0.0,
+                    texelFetch(uShadowBlocker, ivec3(i + ivec2(0, 1), l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 1), l), 0).r >= reach ? 1.0 : 0.0);
+                return mix(mix(lit.x, lit.y, a.x), mix(lit.z, lit.w, a.x), a.y);
+            }
+            return 1.0;
+        }
+        // A surface's: looked up a little towards the sun, so that it does not shade itself.
+        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[1].xyz * 2.0); }
 
         // The terrain's own shadow beyond the cascades: a world point is shadowed by the land towards the sun when it lies below the
         // top of that land's shadow (precomputed per sun direction, TerrainShadowMap), softened by the occluder's distance.
@@ -99,15 +125,16 @@ static class MeitouShadowShaders
         // Interleaved gradient noise (Jimenez 2014): a per-pixel angle whose neighbours differ, so a few taps look like many.
         float msNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 
-        // One cascade: the point moved off its surface by a texel-sized normal offset, a blocker search in the half-resolution map
+        // One cascade: the point moved off its surface by a normal offset of a quarter to half a texel, a blocker search in the half-resolution map
         // (when there is one) for the penumbra's width, then a rotated Vogel disk of bilinear comparisons whose depths follow the
         // receiver's plane. -1 when the point (with the filter) is not in the cascade's box, e.g. one drawn some frames ago. (No out
         // parameters: the interface scan of the Vulkan layer would take a global-scope "out" for a stage output.)
         float msCascade(int c, vec3 world, vec3 ng, vec3 nl, float noise)
         {
+            int layer = c;
             float texel = uMsSlice[c].w;
             float cosL = clamp(-nl.z, 0.0, 1.0);
-            vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.5 + 1.5 * sqrt(1.0 - cosL * cosL)));
+            vec3 p = world - uShadowOrigin.xyz + ng * (texel * (0.25 + 0.25 * sqrt(1.0 - cosL * cosL)));
             vec3 t = (uShadowTile[c] * vec4(p, 1.0)).xyz;
             float radius = uMsSlice[c].z;
             float reach = uMsBox[c].z + uShadowExtent[c].y * 2.0;
@@ -115,6 +142,10 @@ static class MeitouShadowShaders
             // The receiver's plane in tile units: depth change per unit of tile UV (steep planes clamped).
             float nz = max(cosL, 0.25);
             vec2 slope = vec2(nl.x, nl.y) * (uMsBox[c].x / (nz * uMsBox[c].y));
+            // The bias, all of it the receiver's (the casters are drawn with none): its plane's depth change over one texel each way (a bilinear
+            // compare reads the four texels round its point, each up to a texel off it) and a quarter texel. A caster's bias by its own slope left
+            // every shadow short of its caster's foot by up to ten texels along the light: lit bands under stair treads and cart sides.
+            t.z -= (abs(slope.x) + abs(slope.y)) * (texel / uMsBox[c].x) + 0.25 * texel / uMsBox[c].y;
             float angle = noise * 6.2831853;
             vec2 rot = vec2(cos(angle), sin(angle));
             // The filter tier: the nearest cascades in full, the others half the taps at the least radius (no blocker search).
@@ -130,7 +161,7 @@ static class MeitouShadowShaders
                     vec2 d = msDisk8[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * search;
                     vec2 uv = clamp(t.xy + o, vec2(0.0), vec2(1.0));
-                    float z = textureLod(uShadowBlocker, vec3(uv, float(c)), 0.0).r;
+                    float z = textureLod(uShadowBlocker, vec3(uv, float(layer)), 0.0).r;
                     float limit = t.z + dot(o, slope) - 0.0005;
                     if (z < limit) { sum += z; found += 1.0; }
                 }
@@ -148,14 +179,14 @@ static class MeitouShadowShaders
                 {
                     vec2 d = msDisk16[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                    lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                    lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
                 }
                 if (lit == 0.0 || lit == {{F(FilterTaps / 2)}}) return lit / {{F(FilterTaps / 2)}};
                 for (int k = 1; k < {{FilterTaps}}; k += 2)
                 {
                     vec2 d = msDisk16[k];
                     vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                    lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                    lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
                 }
                 return lit / {{F(FilterTaps)}};
             }
@@ -163,7 +194,7 @@ static class MeitouShadowShaders
             {
                 vec2 d = msDisk8[k];
                 vec2 o = vec2(rot.x * d.x - rot.y * d.y, rot.y * d.x + rot.x * d.y) * radius;
-                lit += shadowLayer(t.xy + o, c, t.z + dot(o, slope));
+                lit += shadowLayer(t.xy + o, layer, t.z + dot(o, slope));
             }
             return lit / {{F(FilterTaps / 2)}};
         }
@@ -201,8 +232,10 @@ static class MeitouShadowShaders
             float noise = msNoise(gl_FragCoord.xy + uMsParams.x);
             float depth = dot(world - uShadowOrigin.xyz, uShadowForward.xyz);
             float csm = 1.0;
-            if (depth < uMsParams.y)
+            // The traced sun's term (ShadowPass.TracedWhole) takes no cascade: the rays hold everything the cascades held, the terrain and landmark maps stay.
+            if (depth < uMsParams.y && !msTraced)
             {
+                if (msVolumeOn()) csm = msVolumeSurface(world, depth);   // traced, for what draws no traced pixel (impostors, the reflection, foam, skin entry)
                 int count = int(uShadowForward.w);
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {

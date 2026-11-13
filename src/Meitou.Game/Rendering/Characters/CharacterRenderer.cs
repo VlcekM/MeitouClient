@@ -172,6 +172,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     public float LodBias { get; set; } = 1;
     /// <summary>
+    /// The lens's share of the LOD value (<see cref="MeshLod.LensFactor"/>, set with the view): under 1 through a lens longer than the game's.
+    /// </summary>
+    public float LensLod { get; private set; } = 1;
+    /// <summary>
     /// Further factor on the LOD value in the shadow cascades (a shadow hides detail: coarser levels sooner).
     /// </summary>
     public float ShadowLodBias { get; set; } = 2;
@@ -200,6 +204,40 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// Backing field of <see cref="SkinShading"/>.
     /// </summary>
     bool _skinShading = true;
+
+    /// <summary>
+    /// The <c>chars2</c> shading (<see cref="CharacterSurface"/>, off by default). A change redraws the portraits.
+    /// </summary>
+    public bool Chars2
+    {
+        get => _chars2;
+        set
+        {
+            if (_chars2 == value) return;
+            _chars2 = value;
+            _portraitShown.Clear();
+        }
+    }
+
+    bool _chars2;
+
+    /// <summary>
+    /// Which parts of the <c>chars2</c> shading are on (the settings' rows under Advanced materials): 1 hair highlights, 2 cloth sheen, 4 skin,
+    /// 8 eyes, 16 metal, 32 water beads. A change redraws the portraits.
+    /// </summary>
+    public int SurfaceParts
+    {
+        get => _surfaceParts;
+        set
+        {
+            if (_surfaceParts == value) return;
+            _surfaceParts = value;
+            _portraitShown.Clear();
+        }
+    }
+
+    public const int SurfaceHair = 1, SurfaceCloth = 2, SurfaceSkin = 4, SurfaceEyes = 8, SurfaceMetal = 16, SurfaceBeads = 32, SurfaceAll = 63;
+    int _surfaceParts = SurfaceAll;
 
     /// <summary>
     /// The skin scattering table's bindless index while the Skin switch is on, else 0 (a severed limb's skin: <see cref="DebrisRenderer"/>).
@@ -427,6 +465,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public float Radius;
         /// <summary>
+        /// The water's mark on the character, as its instances' flags carry it (<see cref="SoakBits"/>).
+        /// </summary>
+        public uint Soak;
+        /// <summary>
         /// Where its bones start in this frame's palette, where its attach matrices start in <see cref="CharacterRenderer._attach"/>, and the range
         /// of its animation layers in <see cref="CharacterRenderer._layers"/>.
         /// </summary>
@@ -448,6 +490,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// The blood of its first 8 body parts, a byte each (<see cref="CharacterInstance.Blood"/>).
         /// </summary>
         public ulong Blood;
+        /// <summary>
+        /// Its weapon's blood this frame (<see cref="GearBlood"/>): the colour as 24 bits, the amount and wetness as two bytes; which of its weapons took it.
+        /// </summary>
+        public float GearColour, GearAmounts;
+        public bool GearBack;
         /// <summary>
         /// Posed this frame whatever the thinning (the player's, a ragdoll, a new asset or a first pose).
         /// </summary>
@@ -561,6 +608,55 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// Off screen at the last update (<see cref="Live.OffScreen"/>).
         /// </summary>
         public bool OffScreen;
+        /// <summary>
+        /// The water's mark (<see cref="Soaked"/>): how high it reaches up the body's own mesh, its strength (1 down to 0), the seconds left before
+        /// it fades, and the clock it was last stepped at (NaN: never).
+        /// </summary>
+        public float SoakHeight = -1, SoakStrength, SoakTimer;
+        public double SoakAt = double.NaN;
+    }
+
+    /// <summary>The game's seconds (stopped while paused, faster at the fast speeds): what the water's mark dries by. The pose clock without one.</summary>
+    public Func<double>? SoakClock { get; set; }
+
+    /// <summary>
+    /// The mark the water leaves on a character (docs/character-renderer.md "Wetness"; the game's <c>waterLine</c>): it reaches 1.1 times as high up
+    /// the body as the water was deep over the character's place, at full strength for 300 s after the deepest wade, the last 40 fading; while it
+    /// fades in shallower water its height comes down a unit a second. A character first seen is marked by the water it stands in.
+    /// </summary>
+    void Soaked(ref Live l, CharState state)
+    {
+        const float lasts = 300, fades = 40;
+        double now = SoakClock?.Invoke() ?? _poseSeconds;
+        float depth = 1.1f * (Meitou.Data.World.WorldWater.Height - l.World.Translation.Y);
+        if (double.IsNaN(state.SoakAt))
+        {
+            (state.SoakHeight, state.SoakStrength, state.SoakTimer) = depth > 0 ? (depth, 1, lasts) : (-1, 0, 0);
+        }
+        else if (depth >= state.SoakHeight)
+        {
+            (state.SoakHeight, state.SoakStrength, state.SoakTimer) = (MathF.Max(depth, -1), 1, lasts);
+        }
+        else if (state.SoakStrength > 0)
+        {
+            float dt = (float)Math.Clamp(now - state.SoakAt, 0, 1);
+            state.SoakTimer -= dt;
+            if (state.SoakTimer < fades) state.SoakStrength = MathF.Max(state.SoakStrength - dt / fades, 0);
+            if (state.SoakStrength < 0.9f && depth > 0) state.SoakHeight -= dt;
+        }
+
+        state.SoakAt = now;
+        l.Soak = SoakBits(state.SoakHeight, state.SoakStrength);
+    }
+
+    /// <summary>
+    /// A mark in the instance flags' bits 1 to 11 (CharacterShaders.Vertex): its height in half units (6 bits: 31.5 units and up is the whole body),
+    /// then its strength (5 bits).
+    /// </summary>
+    internal static uint SoakBits(float height, float strength)
+    {
+        uint h = (uint)Math.Clamp(MathF.Round(height * 2), 0, 63), s = (uint)MathF.Round(Math.Clamp(strength, 0, 1) * 31);
+        return h == 0 || s == 0 ? 0 : (h | s << 6) << 1;
     }
 
     /// <summary>
@@ -744,9 +840,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public void SetView(int width, int height, float fieldOfView)
     {
         _content.Textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
-        _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height,
-            fieldOfView);   // the generated levels are placed by their deviation in rendered pixels
-        _viewPixelsPerRadian = _content.LodPixelsPerRadian;
+        // The generated levels are placed by their deviation in rendered pixels, at the game's lens at the narrowest: a longer lens (photo mode, the cinema's
+        // zoom) draws a far character large, and the levels, picked by distance, then come as much sooner as the lens is narrower (LensLod).
+        _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, MathF.Max(fieldOfView, MeshLod.GameLens));
+        _viewPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height, fieldOfView);
+        LensLod = MeshLod.LensFactor(fieldOfView);
         _viewKnown = true;
     }
 
@@ -1063,6 +1161,12 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         asset = _content.Build(inst.Appearance);
         buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
         _assets[inst.Appearance] = asset;
+        if (asset is null)
+        {
+            Console.WriteLine($"characters a look failed to build and its characters are not drawn: {string.Join("; ", Messages.TakeLast(3))}");
+            Messages.Clear();
+        }
+
         if (asset is not null && inst.Appearance?.BodyMesh is { Length: > 0 } body)
             _bodyHeights[body] = Math.Max(_bodyHeights.GetValueOrDefault(body), asset.Height);
         built++;
@@ -1159,6 +1263,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         (state.InWorld, state.Centre, state.Radius) = (!far, l.Centre, l.Radius);
         state.PreviousWorld = state.HasWorld ? state.World : l.World;
         (state.World, state.HasWorld) = (l.World, true);
+        if (far) l.Soak = 0; else Soaked(ref l, state);
+        if (far) (l.GearColour, l.GearAmounts) = (0, 0); else WeaponBloodOf(ref l);
 
         // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the
         // same bones). A new asset (other gear, another rig) is posed at once: its parts' attach matrices and its arrays' sizes come from it. The
@@ -1254,6 +1360,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (_liveCount > 0)
             Parallel.For(0, _liveCount, i => PoseOne(ref _live[i], bonePointer, previousPointer, motion, eye));
         (_partStamp, _partOrigin, _partMotion) = (_updateStamp, eye, motion);
+        _paletteFrame = Gpu.Frame.Number;
         LastPoseMs = watch.Elapsed.TotalMilliseconds;
     }
 
@@ -1497,6 +1604,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var (key, state) in _states)
             if (_updateStamp - state.Seen > (state.Frozen ? 600 : 60)) _staleKeys.Add(key);   // a held pose waits longer for its look to be ready
         foreach (var key in _staleKeys) _states.Remove(key);
+        if (_weaponBlood.Count > 0 && !GearBlood.Enabled) _weaponBlood.Clear();
     }
 
     /// <summary>
@@ -1587,9 +1695,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (m.Worn) flags |= CharacterShaders.Worn;
         if (m.Skin && SkinFor(m)) flags |= CharacterShaders.Skin;
         if (m.VertexColoured) flags |= CharacterShaders.VertexColoured;
+        if (m.Strands) flags |= CharacterShaders.Strands;
         if (m.Bloody && has[CharacterShaders.SlotBlood])
             flags |= CharacterShaders.Bloody | (m.BloodFull ? CharacterShaders.BloodFull : 0);
-        if (m.Wound) flags |= CharacterShaders.Wound | (m.Mechanical ? CharacterShaders.Mechanical : 0);
+        if (m.GearBlood && has[CharacterShaders.SlotBlood]) flags |= CharacterShaders.GearBloody;
+        if (m.Wound) flags |= CharacterShaders.Wound;
+        if (m.Mechanical) flags |= CharacterShaders.Mechanical;
+        if (m.Scabbard) flags |= CharacterShaders.Scabbard;
+        if (m.ArmourMetal) flags |= CharacterShaders.ArmourMetal;
+        if (m.LimbMetal) flags |= CharacterShaders.LimbMetal;
+        if (m.MetalMap && has[CharacterShaders.SlotColourMap]) flags |= CharacterShaders.HasMetalMap;
 
         // Textures assigned but not resident yet: a hair's diffuse (its cut-out), a clipped item's normal map, the head's maps.
         if (m.Shading == CharacterShaders.ShadeHair && m.Tex[CharacterShaders.SlotDiffuse] is not null && !has[CharacterShaders.SlotDiffuse]
@@ -1616,10 +1731,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         r.HairAlpha = m.HairAlpha;
         r.HairMult = m.HairMult;
         r.BeardAlpha = m.BeardAlpha;
-        r.DiffuseChannel = m.DiffuseChannel;
+        r.DiffuseChannel = m.Shading == CharacterShaders.ShadeHair ? m.DiffuseChannel : m.Sheen;
         r.AlphaChannel = m.AlphaChannel;
         r.Colour1 = m.Colour1;
         r.Colour2 = m.Colour2;
+        if (m.GearBlood)
+        {
+            // An item has no hair: the gear blood's values ride in its hair fields (CharacterShaders, "Blood on gear").
+            r.HairColour = new Vector4(m.GearColour, 0);
+            r.HairAlpha = m.Worn ? new Vector4(m.GearScale, 0, 0) : new Vector4(m.BladeAxis, 0);
+            r.HairMult = new Vector4(m.BladeLow, m.BladeScale, m.SplatScale, 0);
+        }
     }
 
     /// <summary>
@@ -1669,6 +1791,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _skinScattering.Dispose();
         DisposePortraits();
         DisposeStage();
+        DisposeStudio();
         DisposeHover();
         DisposeIcons();
     }

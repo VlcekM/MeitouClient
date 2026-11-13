@@ -99,7 +99,7 @@ it is taken is **Unknown**. Meitou: `WorldObjectLayout.PlaceLight` (−Y for eve
 **Verified** (decompilation; constants read from the binary): a building part whose material has `material type` 4 (EMISSIVE) takes its shader `brightness`
 (custom parameter 0) from the building's lights. At creation (`FUN_140558b40`) it is 1, or 0 when the building has lights and is not on (slot 100) or its
 power factor (slot 109) is at most 0. The lights switch (slot 140, `FUN_14029aa10`) then sets every emissive part to 1 when switching on and 0 when
-switching off. So a lamp's glowing glass is dark whenever its lights are off (a night lamp by day), and a building with no lights always glows.
+switching off. So a lamp's glowing glass is dark whenever its lights are off (a night lamp by day), and a building with no lights always glows. What glows: **Verified** (`objects.hlsl` EMISSIVE, `deferred.hlsl`): light added = albedo x brightness x (1 - the normal map's alpha) x 3.2, so an opaque alpha does not glow (the lens has a low alpha, the housing 1).
 Meitou: `WorldLamps.EmissiveDark`, passed per instance to the object shader (`WorldObjectRenderer.Emit`, `BuildingLodShaders`); a night lamp counts as
 on while the daylight factor is 0 (the switch follows slot 164's "not daytime"). In Hub and Stack at noon no lamp building has an EMISSIVE material
 (**Observed**: the switch changes no pixel there).

@@ -1,3 +1,5 @@
+using Meitou.Data.World;
+using Meitou.Simulation.Movement;
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
@@ -89,8 +91,16 @@ sealed class AgentPlay(GameHost host)
         add("hurt", "hurt <damage> [part id] [--id <c:slot.gen>]", "debug: one cut of that much damage to each selected character (or the one given "
             + "by --id; a random body part, or the part with that template id) so first aid, bleeding and knock-outs can be tested", ControlHurt);
 
+        add("bloody", "bloody <hits> [colour RRGGBB] [--id <c:slot.gen>]", "debug: the weapon of each selected character (or the one given by --id) takes "
+            + "that many wounding hits of blood, in the colour (default 8A0303), as if it had wounded something; needs the 'Blood on weapons and gear' "
+            + "row on", ControlBloody);
+
+        add("bloodmark", "bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]", "debug: one blood mark of the "
+            + "'Blood on surfaces' row at that place (a splash is centred there, the others lie on a floor at that height)", ControlBloodMark);
+
         RegisterControlPlayMoreCommands(add);
         RegisterControlCombatCommands(add);
+        host.RegisterControlSpawnCommands(add, Loaded);
         RegisterControlAskCommands(add);
         RegisterControlPersonaCommands(add);
     }
@@ -314,6 +324,94 @@ sealed class AgentPlay(GameHost host)
         host.AgentChannel.ControlData = JsonSerializer.Serialize(new { ticksRun = after - before, tick = after,
             gameHours = Math.Round(host.Session.World.GameHours, 3) });
         con.Print($"stepped {after - before} ticks to {after}");
+    }
+
+    /// <summary>
+    /// The <c>bloody</c> command (usage and help at its registration in <see cref="RegisterControlPlayCommands"/>).
+    /// </summary>
+    void ControlBloody(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (!ControlTargets(args, con, "bloody", out var who, out var rest)) return;
+        uint colour = 0x8A0303;
+        if (rest.Count is < 1 or > 2 || !int.TryParse(rest[0], NumberStyles.None, CultureInfo.InvariantCulture, out int hits) || hits < 1 || hits > 20
+            || rest.Count == 2 && !uint.TryParse(rest[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out colour))
+        {
+            con.Error("usage: bloody <hits 1..20> [colour RRGGBB] [--id <c:slot.gen>]");
+            return;
+        }
+
+        if (host.Gpu.Characters is not { } crowd)
+        {
+            con.Error("bloody: no character renderer");
+            return;
+        }
+
+        foreach (var id in who)
+        {
+            for (int i = 0; i < hits; i++) crowd.WeaponHit(host.DrawKey(id), colour, 0.3f);
+        }
+
+        con.Print($"bloodied the weapons of {who.Length}");
+    }
+
+    /// <summary>
+    /// The <c>bloodmark</c> command (usage and help at its registration in <see cref="RegisterControlPlayCommands"/>).
+    /// </summary>
+    void ControlBloodMark(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        int count = 1;
+        int at = args.ToList().IndexOf("--count");
+        if (at >= 0 && at + 1 < args.Count && int.TryParse(args[at + 1], out count)) args = [.. args.Take(at), .. args.Skip(at + 2)];
+        if (host.Gpu.Decals is not { Surfaces: true } surfaces)
+        {
+            con.Error("bloodmark: needs the 'Blood on surfaces' row on");
+            return;
+        }
+
+        var type = args.Count > 0
+            ? args[0].ToLowerInvariant() switch
+            {
+                "splash" => (TerrainDecalType?)TerrainDecalType.Splash,
+                "pool" or "drip" => TerrainDecalType.Pool,
+                "smear" => TerrainDecalType.Smear,
+                _ => null,
+            }
+            : null;
+        if (type is null || args.Count < 4 || !AgentWorld.Num(args[1], out float x) || !AgentWorld.Num(args[2], out float y) || !AgentWorld.Num(args[3], out float z))
+        {
+            con.Error("usage: bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]");
+            return;
+        }
+
+        float size = 0.4f;
+        uint colour = 0x8A0303;
+        if (args.Count > 4 && !AgentWorld.Num(args[4], out size))
+        {
+            con.Error("bloodmark: bad size");
+            return;
+        }
+
+        if (args.Count > 5 && !uint.TryParse(args[5], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out colour))
+        {
+            con.Error("bloodmark: bad colour");
+            return;
+        }
+
+        var dir = new System.Numerics.Vector2(0, 1);
+        if (args.Count > 7 && AgentWorld.Num(args[6], out float dx) && AgentWorld.Num(args[7], out float dz)) dir = new Vector2(dx, dz);
+        uint abgr = 0xFF000000 | (colour & 0xFF) << 16 | (colour >> 8 & 0xFF) << 8 | colour >> 16 & 0xFF;
+        for (int i = 0; i < count; i++)
+        {
+            // More than one: spread over 60 x 60 units round the place (a crowd of marks, for the caps).
+            var spread = count > 1
+                ? new Vector3(host.BloodDecals.BloodRandom.NextSingle() * 60 - 30, 0, host.BloodDecals.BloodRandom.NextSingle() * 60 - 30)
+                : default;
+            surfaces.AddSurface(type.Value, new Vector3(x, y, z) + spread, dir, size, abgr, host.BloodDecals.BloodRandom);
+        }
+
+        con.Print($"{surfaces.SurfaceCount} surface marks kept");
     }
 
     /// <summary>
@@ -562,6 +660,9 @@ sealed class AgentPlay(GameHost host)
         add("ko", "ko [seconds] [--id <c:slot.gen>]", "debug: knock the selected characters (or the one given) out for that many character seconds "
             + "(default 600), so loot, carry and first aid can be tested on a body", ControlKo);
 
+        add("ragdoll-dump", "ragdoll-dump [--id <c:slot.gen>]", "debug, paused game only: the first selected character's (or the one given) ragdoll "
+            + "bodies in world space and each joint's twist and swing against its limits (degrees)", ControlRagdollDump);
+
         add("wake", "wake [--id <c:slot.gen>]", "debug: bring the selected characters (or the one given) out of a knock-out at once, "
             + "conscious and controllable, without healing them (heal first for a wounded vital part, which would put them down again); "
             + "dead characters are refused, conscious ones skipped (error if none was unconscious)", ControlWake);
@@ -569,7 +670,10 @@ sealed class AgentPlay(GameHost host)
         add("bandits-loot", "bandits-loot [on|off]", "read the New game option \"Bandits loot the player\" (CAMERA bl) of the running world; "
             + "on/off sets it (test aid)", ControlBanditsLoot);
 
-        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]", "--aggro: also arm the spawn (weapon item, default Katana) "
+        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>] [--race <race name|id>]",
+            "--race: draws the character's race as that RACE (a stub race with no meshes tests the undrawable look); --faction: the faction of the spawn "
+            + "(default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; a "
+            + "faction id or name); --aggro: also arm the spawn (weapon item, default Katana) "
             + "and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') "
             + "at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); "
             + "--ko / --dead leave a body to test loot, carry and first aid on", ControlSpawnAt);
@@ -762,6 +866,31 @@ sealed class AgentPlay(GameHost host)
     }
 
     /// <summary>
+    /// The <c>ragdoll-dump</c> command (usage and help at its registration in <see cref="RegisterControlPlayMoreCommands"/>).
+    /// </summary>
+    void ControlRagdollDump(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (!ControlTargets(args, con, "ragdoll-dump", out var who, out _) || who.Length == 0) return;
+        if (!host.Session.Simulation.IsPaused)
+        {
+            con.Error("ragdoll-dump: the game is running; pause first");
+            return;
+        }
+
+        var rag = host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault();
+        string? text = rag?.Describe(who[0]);
+        if (text is null)
+        {
+            con.Error("ragdoll-dump: no ragdoll");
+            return;
+        }
+
+        host.AgentChannel.ControlData = JsonSerializer.Serialize(new { text });
+        con.Print(text);
+    }
+
+    /// <summary>
     /// The <c>wake</c> command (usage and help at its registration in <see cref="RegisterControlPlayMoreCommands"/>).
     /// </summary>
     void ControlWake(IReadOnlyList<string> args, DevConsole con)
@@ -825,6 +954,7 @@ sealed class AgentPlay(GameHost host)
         bool dead = args.Contains("--dead", StringComparer.OrdinalIgnoreCase), ko = false;
         var plain = new List<string>();
         bool aggro = false;
+        string? factionName = null, raceName = null;
         string weapon = "Katana";
         for (int a = 0; a < args.Count; a++)
         {
@@ -842,12 +972,24 @@ sealed class AgentPlay(GameHost host)
                 continue;
             }
 
+            if (args[a].Equals("--faction", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count)
+            {
+                factionName = args[++a];
+                continue;
+            }
+
+            if (args[a].Equals("--race", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count)
+            {
+                raceName = args[++a];
+                continue;
+            }
+
             plain.Add(args[a]);
         }
         if (plain.Count < 2 || !AgentWorld.Num(plain[0], out float x) || !AgentWorld.Num(plain[1], out float z) || (ko && dead)
             || (aggro && (ko || dead)))
         {
-            con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]");
+            con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>] [--race <race name|id>]");
             return;
         }
 
@@ -869,8 +1011,22 @@ sealed class AgentPlay(GameHost host)
 
             weaponId = w.Id;
         }
+
+        string? raceId = null;
+        if (raceName is not null)
+        {
+            if (host.Scene.Database is not { } raceDb
+                || Meitou.Data.Characters.CharacterAppearance.Find(raceDb, raceName, FcsRecordType.Race) is not { } race)
+            {
+                con.Error($"spawn-at: no race matches '{raceName}'");
+                return;
+            }
+
+            raceId = race.StringId;
+        }
+
         var before = new HashSet<CharacterId>(host.Player.AgentOrders.ControlCharactersNear(x, z).Select(c => c.Id));
-        host.Session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(x, z)) { Tick = host.Session.World.Tick });
+        host.Session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z), factionName, raceId) { Tick = host.Session.World.Tick });
         var pending = new ControlSpawn(host.AgentChannel.CurrentControlId ?? "0", before, x, z, ko, dead,
             Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
         if (host.Session.Simulation.IsPaused)
@@ -901,7 +1057,7 @@ sealed class AgentPlay(GameHost host)
         error = "the character did not appear";
         if (s.Found.IsNone)
         {
-            var hits = host.Player.AgentOrders.ControlCharactersNear(s.X, s.Z).Where(c => !c.Player && !s.Before.Contains(c.Id) && c.Dist < 300)
+            var hits = host.Player.AgentOrders.ControlCharactersNear(s.X, s.Z).Where(c => !s.Before.Contains(c.Id) && c.Dist < 300)
                 .OrderBy(c => c.Dist)
                 .ToList();
             if (hits.Count == 0) return false;
@@ -1028,6 +1184,124 @@ sealed class AgentPlay(GameHost host)
             + "/ ko / dead), target, nearest hostile, damage dealt and taken over 5 s and 30 s (approximate, see its note), "
             + "blows over 30 s (thrown landed takenHits blocks parried evaded dodges) and warn lines (block on while attacking, "
             + "no damage dealt in 30 s with a hostile within 30 m, passive/hold set)", ControlCombatStatus);
+
+        add("root-probe", "root-probe [--id c:slot.gen] [--at x z] [length] [directions]", "debug the root-motion wall guard: from the character's spot "
+            + "(default the first squad member) step <length> units (default 6) in <directions> headings (default 16) and print how far each gets "
+            + "(wall slide, end-point refusal); read-only", ControlRootProbe);
+
+        add("root-scan", "root-scan <x> <z> <radius> [spacing] [length]", "debug the root-motion wall guard over an area: probe 8 steps of <length> "
+            + "(default 3) from every walkable grid spot (default spacing 4) and count free / slid / cut / refused ones; read-only", ControlRootScan);
+
+        add("root-log", "root-log on|off|dump", "log every root-motion step that was shortened (wall slide, body, end-point refusal) by character, "
+            + "then dump and clear the log", ControlRootLog);
+    }
+
+    /// <summary>
+    /// The shortened root-motion steps <c>root-log</c> collected.
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentQueue<string> _rootLog = new();
+
+    /// <summary>
+    /// The <c>root-probe</c> command (usage and help at its registration in <see cref="RegisterControlCombatCommands"/>).
+    /// </summary>
+    void ControlRootProbe(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        CharacterId? id = null;
+        System.Numerics.Vector2? at = null;
+        var nums = new List<string>();
+        for (int a = 0; a < args.Count; a++)
+        {
+            if (args[a] == "--id" && a + 1 < args.Count && AgentOrders.TryParseCharacter(args[a + 1], out var parsed))
+            {
+                id = parsed;
+                a++;
+            }
+            else if (args[a] == "--at" && a + 2 < args.Count && AgentWorld.Num(args[a + 1], out float ax) && AgentWorld.Num(args[a + 2], out float az))
+            {
+                at = new System.Numerics.Vector2(ax, az);
+                a += 2;
+            }
+            else
+            {
+                nums.Add(args[a]);
+            }
+        }
+
+        float length = nums.Count > 0 && AgentWorld.Num(nums[0], out float l) ? l : 6;
+        int n = nums.Count > 1 && int.TryParse(nums[1], out int d) ? d : 16;
+        id ??= host.Player.AgentOrders.ControlSquad() is { Count: > 0 } squad ? squad[0] : null;
+        if (id is not { } who)
+        {
+            con.Error("root-probe: no character");
+            return;
+        }
+
+        foreach (string line in AnimationSystem.ProbeRoot(host.Session.World, who, length, n, at)) con.Print(line);
+    }
+
+    /// <summary>
+    /// The <c>root-scan</c> command (usage and help at its registration in <see cref="RegisterControlCombatCommands"/>).
+    /// </summary>
+    void ControlRootScan(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (args.Count < 3 || !AgentWorld.Num(args[0], out float x) || !AgentWorld.Num(args[1], out float z) || !AgentWorld.Num(args[2], out float r))
+        {
+            con.Error("usage: root-scan <x> <z> <radius> [spacing] [length]");
+            return;
+        }
+
+        float spacing = args.Count > 3 && AgentWorld.Num(args[3], out float s1) ? s1 : 4;
+        float length = args.Count > 4 && AgentWorld.Num(args[4], out float l1) ? l1 : 3;
+        if (host.Player.AgentOrders.ControlSquad() is not { Count: > 0 } squad)
+        {
+            con.Error("root-scan: no character");
+            return;
+        }
+
+        foreach (string line in AnimationSystem.ScanRoot(host.Session.World, squad[0], x, z, r, spacing, length)) con.Print(line);
+    }
+
+    /// <summary>
+    /// The <c>root-log</c> command (usage and help at its registration in <see cref="RegisterControlCombatCommands"/>).
+    /// </summary>
+    void ControlRootLog(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (args.Count == 1 && args[0] == "on")
+        {
+            AnimationSystem.RootClamp = (who, at, want, got, why, refused) =>
+            {
+                if (why == AnimationSystem.RootBlock.None && !refused) return;
+                if (_rootLog.Count < 4000)
+                {
+                    _rootLog.Enqueue($"t{host.Session.World.Tick} c{who} at {at.X:0.0},{at.Z:0.0} want {want.Length():0.00} got {got.Length():0.00} "
+                        + $"{(refused ? "REFUSED-END" : why)}");
+                }
+            };
+            con.Print("root-log on");
+        }
+        else if (args.Count == 1 && args[0] == "off")
+        {
+            AnimationSystem.RootClamp = null;
+            con.Print("root-log off");
+        }
+        else if (args.Count == 1 && args[0] == "dump")
+        {
+            int k = 0;
+            while (_rootLog.TryDequeue(out string? line))
+            {
+                con.Print(line);
+                k++;
+            }
+
+            con.Print($"{k} lines");
+        }
+        else
+        {
+            con.Error("usage: root-log on|off|dump");
+        }
     }
 
     /// <summary>

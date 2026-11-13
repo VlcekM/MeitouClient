@@ -1180,12 +1180,28 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     }
 
     /// <summary>
+    /// The character the camera centres on for <paramref name="c"/>: a carried body is centred where its carrier stands, however deep the chain.
+    /// </summary>
+    CharacterSnapshot Carrier(CharacterSnapshot c)
+    {
+        for (int depth = 0; depth < 8 && !c.CarriedBy.IsNone; depth++)
+        {
+            if (Session.CurrentSnapshot.Characters.FirstOrDefault(k => k.Id == c.CarriedBy) is not { } carrier) break;
+
+            c = carrier;
+        }
+
+        return c;
+    }
+
+    /// <summary>
     /// Places the camera's pivot on a character, keeping the view, and follows it (unless <paramref name="follow"/> is false).
     /// </summary>
     internal void CentreOn(CharacterId id, bool follow = true)
     {
         if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return;
         var view = Session.Camera.Current;
+        c = Carrier(c);
         Session.Camera.Place(new Vector2(c.Position.X, c.Position.Z), view.Yaw, view.Pitch, view.Distance);
         Follow = follow ? id : null;
     }

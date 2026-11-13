@@ -30,7 +30,7 @@ internal static class NeckCap
         {
             var edges = group.ToList();
             if (edges.Count < 3) continue;
-            AddFan(all, edges, vertices, indices);
+            AddFan(all, edges, vertices, indices, head);
         }
 
         if (indices.Count == 0) return null;
@@ -107,8 +107,9 @@ internal static class NeckCap
 
     /// <summary>
     /// One rim fanned to its centre: the rim's vertices with their skinning, the centre with the rim's weights; nothing for a degenerate rim.
+    /// <paramref name="head"/>: the cut-off head's cap, whose vertices are marked the head's (a cut-off head draws its head vertices only).
     /// </summary>
-    static void AddFan(List<Vertex> all, List<(int A, int B)> edges, List<Vertex> vertices, List<uint> indices)
+    static void AddFan(List<Vertex> all, List<(int A, int B)> edges, List<Vertex> vertices, List<uint> indices, bool head)
     {
         var centre = Vector3.Zero;
         foreach (var (a, _) in edges) centre += all[a].Position;
@@ -129,7 +130,7 @@ internal static class NeckCap
             return source with
             {
                 Position = at, Normal = normal, Uv = new Vector2(Vector3.Dot(d, u), Vector3.Dot(d, w)), Tangent = new Vector4(u, 1),
-                Colour = source.Colour with { Y = 0, Z = 0 },
+                Colour = source.Colour with { Y = head ? CharacterContent.HeadBit : 0, Z = 0 },
             };
         }
 

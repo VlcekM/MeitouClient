@@ -116,6 +116,11 @@ public sealed partial class SaveGame
     public byte[]? ModEnvironment { get; set; }
 
     /// <summary>
+    /// The bytes of <c>meitou-weapon-blood.json</c> (the blood on the characters' weapons, <see cref="SaveWeaponBlood"/>); null when the save has none.
+    /// </summary>
+    public byte[]? WeaponBlood { get; set; }
+
+    /// <summary>
     /// What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.
     /// </summary>
     public List<string> Problems { get; } = [];
@@ -158,6 +163,7 @@ public sealed partial class SaveGame
         foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
         if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
         foreach (var (zone, name) in folder.LevelEditFiles) game.LevelEdits[zone] = folder.ReadAllBytes(name);
+        if (folder.Exists(SaveFolder.WeaponBloodName)) game.WeaponBlood = folder.ReadAllBytes(SaveFolder.WeaponBloodName);
         game.Reindex();
         game.CheckZoneFiles();
         return game;
@@ -285,6 +291,7 @@ public sealed partial class SaveGame
         foreach (var (id, bytes) in ModData) copy.ModData[id] = bytes.ToArray();
         copy.ModEnvironment = ModEnvironment?.ToArray();
         foreach (var (zone, bytes) in LevelEdits) copy.LevelEdits[zone] = bytes.ToArray();
+        copy.WeaponBlood = WeaponBlood?.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;

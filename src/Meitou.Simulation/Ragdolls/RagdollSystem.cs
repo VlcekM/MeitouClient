@@ -365,6 +365,35 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public bool WasWhole(CharacterId id) => _ragdolls.TryGetValue(id, out var r) && (r.Mask & RagdollPart.Whole) != 0;
 
     /// <summary>
+    /// Debug (the console's <c>ragdoll-dump</c>): the character's bodies in world space and each joint's twist angle against its limits, one line each; null without a ragdoll.
+    /// </summary>
+    public string? Describe(CharacterId id)
+    {
+        if (!_ragdolls.TryGetValue(id, out var r) || r.Pose.Length != r.Definition.Bodies.Length) return null;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"mask {r.Mask} tone {r.Tone} frozen {r.Frozen} age {r.Age:0.00}"));
+        var d = r.Definition;
+        for (int b = 0; b < d.Bodies.Length; b++)
+        {
+            var p = r.Pose[b];
+            var up = Vector3.Transform(Vector3.UnitY, p.Rotation);
+            sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"body {d.Bodies[b].Name} dyn={(b < r.Dynamic.Length && r.Dynamic[b])} pos=({p.Position.X:0.00},{p.Position.Y:0.00},{p.Position.Z:0.00}) localY=({up.X:0.00},{up.Y:0.00},{up.Z:0.00})"));
+        }
+        float deg = 180 / MathF.PI;
+        foreach (var j in d.Joints)
+        {
+            var qa = r.Pose[j.A].Rotation * j.BasisA;
+            var qb = r.Pose[j.B].Rotation * j.BasisB;
+            var rel = Quaternion.Conjugate(qa) * qb;
+            if (rel.W < 0) rel = new Quaternion(-rel.X, -rel.Y, -rel.Z, -rel.W);
+            float twist = 2 * MathF.Atan2(rel.Z, rel.W) * deg;
+            float swing = 2 * MathF.Asin(Math.Clamp(MathF.Sqrt(rel.X * rel.X + rel.Y * rel.Y), 0, 1)) * deg;
+            sb.AppendLine(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"joint {d.Bodies[j.A].Name} -> {d.Bodies[j.B].Name} {j.Type} twist={twist:0.0} swing={swing:0.0} limits=[{j.Low * deg:0},{j.High * deg:0}] swingMax={j.Swing * deg:0}"));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// The bones the character's ragdoll last published; null without one.
     /// </summary>
     public BonePose? Publish(CharacterId id) => _ragdolls.TryGetValue(id, out var r) ? r.Published : null;
@@ -1154,14 +1183,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     }
 
     /// <summary>
-    /// Soft limits: each limit gets an inner one this share of its range in from either end, a soft overdamped spring that brakes the joint as it
-    /// nears the hard stop (engine choice, tuned by eye).
+    /// Soft limits: each limit gets an inner one this share of its range in from either end, a firm spring (20 Hz, critically damped) that stops the joint a quarter of its range short of the
+    /// hard stop (engine choice). A weak overdamped one (5 Hz, ratio 3) lets a collapsing back creep into the file's lumbar and thoracic stops (docs/game/ragdolls.md "Rest poses of the spine").
     /// </summary>
     const float SoftBand = 0.25f;
     /// <summary>
     /// The spring of the soft limits (see <see cref="SoftBand"/>).
     /// </summary>
-    static readonly SpringSettings SoftLimit = new(5, 3);
+    static readonly SpringSettings SoftLimit = new(20, 1);
     /// <summary>
     /// The relaxed angle of a hinge: this share of the way from the binding pose (0) to the middle of its range (a knee bent about 50 degrees, an
     /// elbow about 45).

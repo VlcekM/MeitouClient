@@ -280,9 +280,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     }
 
     /// <summary>
-    /// The main camera for the exposure, fog volumes, shafts and reprojection.
+    /// The main camera for the exposure, fog volumes, shafts and reprojection (<paramref name="eyeResidual"/>: unused here).
     /// </summary>
-    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect)
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspect, Vector3 eyeResidual = default)
     {
         this._eye = eye;
         this._view = view;
@@ -314,7 +314,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// <summary>
     /// Nothing: Metal has no GI resolve.
     /// </summary>
-    public void RunGiResolve() { }
+    public void RunGiResolve(bool early = false) { }
 
     /// <summary>
     /// Darkens the haze where the sun is shadowed along the view (the composite's light shafts).
@@ -345,7 +345,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     {
         if (_sceneColour is null || (!_volumesPending && !Options.Ssao)) return;
         var cmd = (MetalCommandList)_ctx.BeginNative("post scene effects");
-        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao);
+        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams);
         _ctx.EndNative(cmd);
         _volumesPending = false;
     }

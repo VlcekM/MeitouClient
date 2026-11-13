@@ -47,6 +47,11 @@ public sealed partial class SaveFolder
     public const string ModEnvironmentName = ModDataDirectory + "/environment.json";
 
     /// <summary>
+    /// Meitou's weapon-blood file at the save's root (docs/game/blood-decals.md "On weapons and gear"); the original ignores it.
+    /// </summary>
+    public const string WeaponBloodName = "meitou-weapon-blood.json";
+
+    /// <summary>
     /// Meitou's own folder of the level editor's session edits (docs/game/level-editor.md "In the game save"); the original ignores it.
     /// </summary>
     public const string LevelEditsDirectory = "meitou-level-edits";

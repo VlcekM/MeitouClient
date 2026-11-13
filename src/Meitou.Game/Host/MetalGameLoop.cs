@@ -984,7 +984,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// Where a character is drawn (null when it is not in the snapshot).
     /// </summary>
     Vector3? TourPosition(CharacterId id) =>
-        host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? host.DrawnPosition(c) : null;
+        host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? host.TrackedPosition(c) : null;
 
     /// <summary>
     /// Stops the tour and hands the view back to the rig.
@@ -1401,10 +1401,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 v => _foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
             sliders.Add(new Slider("Large impostor distance (F7 Meitou)", 500, 40000, () => _foliage.LargeImpostorDistance,
                 v => _foliage.LargeImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
+            sliders.Add(WorldFrame.ImpostorBudget(_foliage));
         }
         sliders.Add(new Slider("Terrain detail: error px (less = finer)", 1, 32, () => host.Render.TerrainPixelError,
             v => host.Render.TerrainPixelError = v, "0.0", Logarithmic: true,
             Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
+        sliders.Add(WorldFrame.MaterialDistance(host.Render, _streamer, host.WorldOptions));
     }
 
     /// <summary>
@@ -1434,6 +1436,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         sliders.Add(new Slider("Haze strength (1 = game)", 0, 3, () => _sky.HazeStrength,
             v => _sky.HazeStrength = v, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHazeStrength));
+        sliders.Add(WorldFrame.HazeDistance(host.WorldOptions));
         sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => _sky.PlanetshineStrength,
             v => _sky.PlanetshineStrength = MathF.Round(v), "0"));
         sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom,
@@ -1474,6 +1477,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 Text: v => GroundRelief.QualityName((int)MathF.Round(v))));
             sliders.Add(new Slider("Ground relief depth (cm, typical ground)", 0, 40, () => GroundRelief.Depth * 10,
                 v => GroundRelief.Depth = MathF.Round(v * 2) / 20, "0.0"));
+            sliders.Add(new Slider(WorldFrame.GroundParallaxDepthSlider, 10, 200, () => GroundRelief.ParallaxScale * 100,
+                v => GroundRelief.ParallaxScale = MathF.Round(v / 5) / 20, "0"));
             sliders.Add(new Slider("Ground parallax distance (m)", 10, 150, () => GroundRelief.ParallaxDistance / 10,
                 v => GroundRelief.ParallaxDistance = MathF.Round(v) * 10, "0"));
             toggles.Add(new Toggle("Ground parallax", () => GroundRelief.ParallaxActive, v => GroundRelief.ParallaxActive = v, OnOff: true));
@@ -1494,6 +1499,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                     3 => "3 buildings", _ => "4 everything" }));
             sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range,
                 v => reflection.Range = v, "0.00", Logarithmic: true));
+            sliders.Add(WorldFrame.ReflectionSamples(reflection, host.WorldOptions));
         }
         // Water: the Meitou clarity controls only mean something on the Meitou surface; the faithful surface keeps them hidden.
         if (_water is { Meitou: true })
@@ -1504,6 +1510,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 v => _water.FarClarity = v, "0.00", Text: v => v <= 0 ? "0 (true slant)" : v.ToString("0.00", CultureInfo.InvariantCulture)));
             sliders.Add(new Slider("Water see-through distance (Meitou, game 4000)", 1000, 100000,
                 () => _water.ClearDistance, v => _water.ClearDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
+            WorldFrame.AddWaterSizeSliders(sliders, host.WorldOptions);
         }
     }
 
@@ -2551,7 +2558,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             var clearEye = host.Camera.Eye;
             float shortfall = host.Session.Camera.EyeGroundAt(clearEye.X, clearEye.Z) +
                 Meitou.Data.World.KenshiCamera.EyeClearance(host.Camera.Distance) - clearEye.Y;
-            if (shortfall > 0) host.Camera.Target += new Vector3(0, shortfall, 0);
+            // Over a hair only.
+            if (shortfall > 1e-3f) host.Camera.Target += new Vector3(0, shortfall, 0);
         }
     }
 

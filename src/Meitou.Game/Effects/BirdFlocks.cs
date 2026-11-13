@@ -60,6 +60,10 @@ public sealed class BirdFlocks
     sealed class Bird
     {
         /// <summary>
+        /// The bird's identity for the frame's draw (a fixed handle across frames).
+        /// </summary>
+        public readonly long Id = DebrisPiece.NewId();
+        /// <summary>
         /// Where the bird is, its unit heading, and the point it returns to or circles.
         /// </summary>
         public Vector3 Position, Forward, Target;
@@ -214,6 +218,17 @@ public sealed class BirdFlocks
     /// The birds alive.
     /// </summary>
     public int BirdCount => _groups.Sum(g => g.Birds.Count);
+
+    /// <summary>
+    /// Per kind (debug aid, the control channel's <c>birds</c>): the birds alive, those within <paramref name="near"/> units of <paramref name="eye"/>,
+    /// the spawn rule's cell sum and listing cells in range, and the kind's data.
+    /// </summary>
+    public IEnumerable<(string Kind, int Alive, int Near, int Total, int Cells, float Distance, int SpawnCount)> Stats(Vector3 eye, float near) =>
+        _groups.Select(g =>
+        {
+            var range = CellsAround(g, eye);
+            return (g.Kind.Id, g.Birds.Count, g.Birds.Count(b => Vector3.Distance(b.Position, eye) <= near), range.Total, range.Matches, g.Kind.Distance, g.Kind.SpawnCount);
+        });
 
     /// <summary>
     /// The birds in state <paramref name="state"/>.
@@ -620,7 +635,7 @@ public sealed class BirdFlocks
             foreach (var b in g.Birds)
             {
                 var rotation = Orientation(b.Forward);
-                pieces.Add(new DebrisPiece(g.Mesh, b.Scale, rotation, b.Position + Vector3.Transform(centre * b.Scale, rotation)));
+                pieces.Add(new DebrisPiece(g.Mesh, b.Scale, rotation, b.Position + Vector3.Transform(centre * b.Scale, rotation), Id: b.Id));
             }
         }
     }

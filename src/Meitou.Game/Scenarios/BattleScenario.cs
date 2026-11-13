@@ -183,9 +183,7 @@ sealed class BattleScenario(GameHost host)
             // Bigger bodies stand further apart: BattleSpacing is a human's (footprint 4), scaled by the race's footprint, never closer; the front
             // rank at least that far off the middle.
             var db = host.Scene.Database!;
-            var race = db.Find(record)?.GetReferences("race").FirstOrDefault(r => r.Values.Value0 > 0) is { TargetStringId: { } raceId }
-                ? db.Find(raceId)
-                : null;
+            var race = db.Find(record) is { } battleRecord ? db.Find(BattleRaceId(battleRecord) ?? "") : null;
             float footprint = race?.GetFloat("pathfind footprint radius", CombatTuning.DefaultFootprint) ?? CombatTuning.DefaultFootprint;
             float spacing = Math.Max(BattleSpacing, BattleSpacing * footprint / CombatTuning.DefaultFootprint);
             float front = Math.Max(BattleGap / 2, spacing);
@@ -336,4 +334,9 @@ sealed class BattleScenario(GameHost host)
         host.Player.Reset();
         host.Player.Notice("Battle restarted (Backspace)");
     }
+
+    /// <summary>The race a record's <c>race</c> list names (an animal's: <see cref="Meitou.Data.Characters.CharacterAppearance.AnimalRaceId"/>).</summary>
+    static string? BattleRaceId(Meitou.Data.GameRecord record) => record.Type == Meitou.Data.Fcs.FcsRecordType.AnimalCharacter
+        ? Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(record)
+        : record.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => r.TargetStringId).FirstOrDefault();
 }

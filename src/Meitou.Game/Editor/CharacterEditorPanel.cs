@@ -279,6 +279,15 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         EditorOpen && !Editor!.Animals.Contains(id) && Editor.Drafts.TryGetValue(id, out var draft)
             && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
 
+    /// <summary>Debug: turns the open editor's camera (false when it is closed).</summary>
+    public bool TurnEditor(float yaw, float? elevation = null)
+    {
+        if (EditorView() is null) return false;
+        Editor!.Orbit.SetYaw(yaw);
+        if (elevation is { } height) Editor.Orbit.SetElevation(height);
+        return true;
+    }
+
     /// <summary>
     /// The editor's camera for the host: the character, the orbit and whether it is on the head. The orbit starts over when the tab changes between
     /// the body and the head (FACE and HAIR share one view) or the character changes, as the original's camera resets then.

@@ -22,14 +22,10 @@ public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Lo
     public bool IsNull => View.IsNull;
 }
 
-/// <summary>
-/// What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour
-/// attachment (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment
-/// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been
-/// made for it, <see cref="AttachmentFormats.ShadingRate"/>).
-/// </summary>
-public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0,
-    GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
+/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour attachment
+/// (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment (<c>ShadingRate</c>, an R8_UINT view in GENERAL
+/// layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
+public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0, GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default, RenderTarget Extra2 = default);
 
 /// <summary>
 /// A command buffer being recorded (docs/renderer-native.md 2.7). Thin: every method records what it says. It keeps only a redundancy
@@ -214,7 +210,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         // The colour attachments: the main one, then the extra one (location 1) when there is one.
-        var colours = stackalloc RenderingAttachmentInfo[2];
+        var colours = stackalloc RenderingAttachmentInfo[3];
         colours[0] = new RenderingAttachmentInfo
         {
             SType = StructureType.RenderingAttachmentInfo,
@@ -233,7 +229,13 @@ public sealed unsafe class CommandList : IGpuCommandList
             StoreOp = AttachmentStoreOp.Store,
             ClearValue = new ClearValue(new ClearColorValue(d.Extra.Clear.R, d.Extra.Clear.G, d.Extra.Clear.B, d.Extra.Clear.A)),
         };
-        uint colourCount = d.Colour.IsNull ? 0u : d.Extra.IsNull ? 1u : 2u;
+        colours[2] = new RenderingAttachmentInfo
+        {
+            SType = StructureType.RenderingAttachmentInfo, ImageView = _device.ViewAt(d.Extra2.View.Index), ImageLayout = ImageLayout.General,
+            LoadOp = GlConventions.VkLoadOp(d.Extra2.Load), StoreOp = AttachmentStoreOp.Store,
+            ClearValue = new ClearValue(new ClearColorValue(d.Extra2.Clear.R, d.Extra2.Clear.G, d.Extra2.Clear.B, d.Extra2.Clear.A)),
+        };
+        uint colourCount = d.Colour.IsNull ? 0u : d.Extra.IsNull ? 1u : d.Extra2.IsNull ? 2u : 3u;
         var depth = new RenderingAttachmentInfo
         {
             SType = StructureType.RenderingAttachmentInfo,
@@ -292,14 +294,12 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     internal void BeginSecondary(in AttachmentFormats formats)
     {
-        var colours = stackalloc Format[2] { GlConventions.VkFormatOrUndefined(formats.Colour), GlConventions.VkFormatOrUndefined(formats.Extra) };
+        var colours = stackalloc Format[3] { GlConventions.VkFormatOrUndefined(formats.Colour), GlConventions.VkFormatOrUndefined(formats.Extra), GlConventions.VkFormatOrUndefined(formats.Extra2) };
         var rendering = new CommandBufferInheritanceRenderingInfo
         {
             SType = StructureType.CommandBufferInheritanceRenderingInfo,
-            ColorAttachmentCount = formats.Colour == InternalFormat.None ? 0u : formats.Extra == InternalFormat.None ? 1u : 2u,
-            PColorAttachmentFormats = colours,
-            DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(formats.Depth),
-            StencilAttachmentFormat = Format.Undefined,
+            ColorAttachmentCount = formats.ColourCount, PColorAttachmentFormats = colours,
+            DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(formats.Depth), StencilAttachmentFormat = Format.Undefined,
             RasterizationSamples = (SampleCountFlags)Math.Max(formats.Samples, 1),
         };
         var inheritance = new CommandBufferInheritanceInfo { SType = StructureType.CommandBufferInheritanceInfo, PNext = &rendering };

@@ -21,6 +21,19 @@ static class Program
     internal const string HardwareProbeFlag = "--recommend-preset";
 
     /// <summary>
+    /// The saved water grid and FFT size before the world loads: the water is made once with them. <c>--water-grid</c> and <c>--water-ocean</c> choose
+    /// them for this run instead.
+    /// </summary>
+    static void ReadSavedWaterSizes(WorldOptions world, UserConfig config, string[] args)
+    {
+        if (!args.Contains("--water-grid") && config.Graphics.TryGetValue(WorldFrame.WaterGridSlider, out float grid))
+            world.WaterGrid = Math.Clamp((int)MathF.Round(grid / 64) * 64, 64, 1024);
+
+        if (!args.Contains("--water-ocean") && config.Graphics.TryGetValue(WorldFrame.WaterOceanSlider, out float ocean))
+            world.WaterOcean = 64 << Math.Clamp((int)MathF.Round(ocean), 0, 2);
+    }
+
+    /// <summary>
     /// Runs the game from the command line: the launcher's settings schema and hardware probe first, then the options, the install, the data check
     /// and the other one-shot modes, then the window and the game loop; returns the process's exit code (2 for bad options, 1 without an install).
     /// </summary>
@@ -161,6 +174,7 @@ static class Program
         if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline
             && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
             world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
+        ReadSavedWaterSizes(world, config, args);
     }
 
     /// <summary>

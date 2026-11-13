@@ -443,6 +443,13 @@ public static class TownBuildings
     public static bool IsGenerator(GameRecord building) => building.GetInt("power capacity") <= 0 && building.GetInt("power output") > 0;
 
     /// <summary>
+    /// The spots (seats, nodes, beds) of <paramref name="resolved"/>'s interior layout, named by its placement: no town or state is read (the
+    /// character editor's bar).
+    /// </summary>
+    public static IReadOnlyList<HomeSpot> InteriorSpots(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved) =>
+        TownBuildingContents.LaySpots(db, layouts, resolved);
+
+    /// <summary>
     /// The generators a placed building is and its interior and exterior layouts hold, whether it stands or not.
     /// </summary>
     internal static int GeneratorCount(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord? state)

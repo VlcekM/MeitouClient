@@ -211,7 +211,8 @@ public static class WorldObjectLayout
 
     /// <summary>
     /// A loose item on the ground (docs/simulation.md "Ground items"): its <see cref="ItemMesh"/> at <paramref name="worldPosition"/> turned by
-    /// <paramref name="rotation"/>; its look is the material resolver's pick for the record (its <c>material</c> list).
+    /// <paramref name="rotation"/>; its look is the material resolver's pick for the record (its <c>material</c> list), or
+    /// <paramref name="material"/> (a weapon's model, MATERIAL_SPECS_WEAPON) when given.
     /// </summary>
     public static PlacedMesh? Item(
         GameRecord item,
@@ -219,13 +220,14 @@ public static class WorldObjectLayout
         Vector3 worldPosition,
         Quaternion rotation,
         string? mesh = null,
-        float scale = 1)
+        float scale = 1,
+        GameRecord? material = null)
     {
         mesh ??= ItemMesh(item);
         if (mesh.Length == 0) return null;
 
         var transform = InstanceTransform(worldPosition, rotation, new Vector3(scale));
-        return new PlacedMesh(mesh, transform, item, item, placementId, PlacedKind.Item);
+        return new PlacedMesh(mesh, transform, item, item, placementId, PlacedKind.Item) { Material = material };
     }
 
     /// <summary>

@@ -24,6 +24,7 @@ static class BuildingMaterial
             Normal = Tex(spec, "normal map"),
             Diffuse2 = type == 3 ? Tex(spec, "texture map 2") : null,
             Normal2 = type == 3 ? Tex(spec, "normal map 2") : null,
+            Metal = Tex(spec, "metalness map"),
             Alpha = alpha ? AlphaSource.NormalAlpha : AlphaSource.None,
             AlphaThreshold = alpha ? spec.GetInt("alpha threshold", 128) / 255f : 0,
             DoubleSided = type == 2,

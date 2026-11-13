@@ -29,14 +29,21 @@ internal sealed class WorldLamps : IDisposable
     public const float CellSize = 128;
 
     /// <summary>
-    /// The most footprint edges an interior lamp's room may have, and the texels of a lamp's row in the data texture (five, then the edges).
+    /// The most footprint edges an interior lamp's room may have, and the texels of a lamp's row in the data texture (six, then the edges).
     /// </summary>
-    internal const int MaxRoomEdges = 32, DataWidth = 5 + MaxRoomEdges;
+    internal const int MaxRoomEdges = 32, DataWidth = 6 + MaxRoomEdges;
 
     /// <summary>
-    /// How far a room's clip planes and height band are widened: the small offset between collision masks and the visible wall and floor surfaces.
+    /// How far a room's clip planes and height band are widened: the small offset between collision masks and the visible wall and floor surfaces;
+    /// and the margin while the lamps are traced (their shadows stop the light instead).
     /// </summary>
-    const float RoomSurfaceMargin = 0.5f;
+    internal const float RoomSurfaceMargin = 0.5f, TracedRoomMargin = 100000f;
+
+    /// <summary>
+    /// How far past an interior lamp's room hull its light still reaches (set each frame): <see cref="RoomSurfaceMargin"/>, or
+    /// <see cref="TracedRoomMargin"/> when the lamps are traced.
+    /// </summary>
+    public float RoomMargin { get; set; } = RoomSurfaceMargin;
 
     /// <summary>
     /// The context the textures are made and uploaded with.
@@ -77,6 +84,16 @@ internal sealed class WorldLamps : IDisposable
     /// The cell, index and lamp-row textures, one of each per frame in flight.
     /// </summary>
     readonly GpuTexture[] _cells, _index, _data;
+
+    /// <summary>
+    /// A one-texel stand-in for the lamp tiles while there are none.
+    /// </summary>
+    readonly GpuTexture _noTiles;
+
+    /// <summary>
+    /// The lamps' visibility cache while the lamps are shadowed; null: none (each lamp's tile reads as none).
+    /// </summary>
+    internal Gi.LampTiles? Tiles { get; set; }
 
     /// <summary>
     /// The nearest-filtering, edge-clamped sampler the shaders read the textures with.
@@ -128,9 +145,7 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
 
-    /// <summary>
-    /// Whether the lamps light the world (the bench's <c>lights</c> switch).
-    /// </summary>
+    /// <summary>Whether the lamps light the world (the bench's <c>lights</c> switch).</summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -147,6 +162,60 @@ internal sealed class WorldLamps : IDisposable
     /// The lamps binned in this frame's grid.
     /// </summary>
     public int InGrid { get; private set; }
+
+    /// <summary>
+    /// Debug (the console's <c>lamps tiles</c>): the cached tiles, or the per-pixel rays when off.
+    /// </summary>
+    public bool TilesEnabled { get => Gi.LampTiles.Enabled; set => Gi.LampTiles.Enabled = value; }
+
+    /// <summary>
+    /// Debug: the cache's state.
+    /// </summary>
+    public string TilesDescription => Tiles?.Describe() ?? "none";
+
+    /// <summary>
+    /// Debug (the console's <c>lamps carry</c>): a lamp treated as a carried one, wherever the console last put it.
+    /// </summary>
+    public WorldLight? DebugCarried { get; set; }
+
+    /// <summary>
+    /// Debug (the console's <c>lamps refview</c>): the lamp whose visibility is shown over the scene, as its tile gives it or as the truth of many
+    /// rays.
+    /// </summary>
+    public (int Lamp, int Truth)? DebugReference { get; set; }
+
+    /// <summary>
+    /// How far from the eye the lamps can hold a tile: the traced scene's range.
+    /// </summary>
+    public float TileReach { get; set; } = float.MaxValue;
+
+    /// <summary>
+    /// Debug (the console's <c>lamps</c>): the lamps left out of the grid, by index.
+    /// </summary>
+    public HashSet<int> DebugOff { get; } = [];
+
+    /// <summary>
+    /// The row of this frame's data that holds lamp <paramref name="lamp"/>, if any.
+    /// </summary>
+    internal int? RowOf(int lamp)
+    {
+        for (int k = 0; k < InGrid; k++)
+            if (_near[k].Lamp == lamp) return k;
+        return null;
+    }
+
+    /// <summary>
+    /// Debug: the lamps whose reach touches <paramref name="at"/>, within <paramref name="radius"/> more, with their indices.
+    /// </summary>
+    public IEnumerable<(int Index, WorldLight Light)> Around(Vector3 at, float radius)
+    {
+        int count = (_lamps?.Length ?? 0) + Moving.Count;
+        for (int i = 0; i < count; i++)
+        {
+            var l = Lamp(i);
+            if (new Vector2(l.Position.X - at.X, l.Position.Z - at.Z).Length() <= l.Radius + radius) yield return (i, l);
+        }
+    }
 
     /// <summary>
     /// Starts loading the world's lamps on a worker, makes the per-frame textures and publishes them and the grid as the shaders' globals.
@@ -172,6 +241,9 @@ internal sealed class WorldLamps : IDisposable
         g.Publish("uLightCells", () => Sampled(_cells[_slot]));
         g.Publish("uLightIndex", () => Sampled(_index[_slot]));
         g.Publish("uLightData", () => Sampled(_data[_slot]));
+        _noTiles = _ctx.CreateTexture(new TextureDesc(InternalFormat.R16, 1, 1, Use: use, Name: "lamp tiles none"));
+        using (var batch = _ctx.Uploads.Begin()) batch.Write(_noTiles, 0, 0, new PixelRect(0, 0, 1, 1), stackalloc byte[2]);
+        g.Publish("uLampTiles", () => Sampled(Tiles?.Atlas ?? _noTiles));
     }
 
     /// <summary>
@@ -179,19 +251,18 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     SampledTexture Sampled(GpuTexture t) => new(_nearest, t.View());
 
-    /// <summary>
-    /// The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).
-    /// </summary>
+    /// <summary>The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).</summary>
     internal (GpuTexture Cells, GpuTexture Index, GpuTexture Data) Current => (_cells[_slot], _index[_slot], _data[_slot]);
 
     /// <summary>
     /// The sampler for <see cref="Current"/>'s textures.
     /// </summary>
     internal GpuSampler NearestSampler => _nearest;
-
-    /// <summary>
-    /// This frame's <c>uLightGrid</c> (w 0: no lamps).
-    /// </summary>
+    /// <summary>The lamp in row <paramref name="k"/> of this frame's data (<see cref="InGrid"/> rows).</summary>
+    internal WorldLight RowLamp(int k) => Lamp(_near[k].Lamp);
+    /// <summary>The lamps' tiles, for a compute pass that binds them itself.</summary>
+    internal GpuTexture TilesTexture => Tiles?.Atlas ?? _noTiles;
+    /// <summary>This frame's <c>uLightGrid</c> (w 0: no lamps).</summary>
     internal Vector4 Grid => _grid;
 
     /// <summary>
@@ -391,6 +462,7 @@ internal sealed class WorldLamps : IDisposable
         _near.Clear();
         for (int i = 0; i < count && _near.Count < MaxLamps; i++)
         {
+            if (DebugOff.Contains(i)) continue;
             var l = Lamp(i);
             if (l.Position.X + l.Radius < x0 || l.Position.X - l.Radius > x1
                 || l.Position.Z + l.Radius < z0 || l.Position.Z - l.Radius > z1) continue;
@@ -421,8 +493,11 @@ internal sealed class WorldLamps : IDisposable
             _dataValues[row] = new Vector4(l.Position, l.Radius);
             _dataValues[row + 1] = new Vector4(l.Colour * power, l.Type == WorldLightType.Spot ? 1 : 0);
             _dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
-            float falloff = l.Falloff > 0 ? l.Falloff : 1;
-            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), falloff, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
+            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), l.Falloff > 0 ? l.Falloff : 1, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
+            // The lamp's place in the cache: a carried lamp's is traced whole each frame.
+            var tile = Tiles is not { } shadows ? default : lamp < _lamps!.Length ? shadows.Place(l, TileReach) : shadows.PlaceMoving(l);
+            _dataValues[row + 4] = new Vector4(room is null ? 0 : room.YMin - RoomMargin, room is null ? 0 : room.YMax + RoomMargin, tile.X, tile.Y);
+            _dataValues[row + 5] = new Vector4(Gi.LampTiles.SourceRadius(l), 0, 0, 0);
             if (room is not null) FillRoomEdges(row, room);
         }
     }
@@ -432,13 +507,12 @@ internal sealed class WorldLamps : IDisposable
     /// </summary>
     void FillRoomEdges(int row, InteriorVolume room)
     {
-        _dataValues[row + 4] = new Vector4(room.YMin - RoomSurfaceMargin, room.YMax + RoomSurfaceMargin, 0, 0);
         for (int e = 0; e < room.Footprint.Length; e++)
         {
             var at = room.Footprint[e];
             var edge = room.Footprint[(e + 1) % room.Footprint.Length] - at;
             var inward = Vector2.Normalize(new Vector2(-edge.Y, edge.X));
-            _dataValues[row + 5 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomSurfaceMargin, 0);
+            _dataValues[row + 6 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomMargin, 0);
         }
     }
 
@@ -520,5 +594,6 @@ internal sealed class WorldLamps : IDisposable
     public void Dispose()
     {
         foreach (var t in _cells.Concat(_index).Concat(_data)) t.Dispose();
+        _noTiles.Dispose();
     }
 }

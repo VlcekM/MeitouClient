@@ -116,6 +116,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly Dictionary<ZoneCoordinate, FoliageZoneState> _zones = [];
 
     /// <summary>
+    /// The alpha cut the grass fragment tests its sprite with (FoliageShaders, the game's 0.6).
+    /// </summary>
+    const float GrassCut = 0.6f;
+
+    /// <summary>
+    /// The field behind <see cref="GrassFarCover"/>.
+    /// </summary>
+    bool _grassFarCover = true;
+
+    /// <summary>
+    /// Bumped by each <see cref="GrassFarCover"/> change: a patch buffer whose <see cref="FoliageGrassBuffer.SpriteVersion"/> differs looks its sprite
+    /// up again.
+    /// </summary>
+    int _grassSpriteVersion;
+
+    /// <summary>
     /// The meshes by their record.
     /// </summary>
     readonly Dictionary<FoliageMesh, FoliageMeshAsset> _assetsByMesh = [];
@@ -1095,7 +1111,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int i = 0; i < state.Patches.Count; i++)
         {
             var p = state.Patches[i];
-            state.PatchTextures[i] = (_textures.Get(p.Grass.Sprite, false), _textures.Get(p.Grass.ColourMap,
+            state.PatchTextures[i] = (GrassSprite(p.Grass.Sprite), _textures.Get(p.Grass.ColourMap,
                 false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
@@ -1236,6 +1252,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// made from: while those stay within <see cref="GrassWalkSlack"/> the walk would decide the same, so it is skipped.
     /// </summary>
     bool _grassSettled;
+
+    /// <summary>
+    /// The last walk changed nothing and had nothing in progress, though pages still wait (a full store whose farthest held page is nearer than the
+    /// nearest waiting one): until the eye, a kept point, the range or the pages change (<see cref="GrassWalkCurrent"/>) a walk would do the same
+    /// again. Without it a full store walked every page of every zone each frame (3.4 ms at grass distance x16, docs/render-foliage.md).
+    /// </summary>
+    bool _grassStalled;
+
     /// <summary>
     /// What the last page walk was made from: the eye, the ground under it, the grass range, whether streaming was allowed, and the store's version.
     /// </summary>
@@ -1251,12 +1275,28 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const float GrassWalkSlack = PageSize / 4;
 
     /// <summary>
+    /// How many pages may move in and out of a full store per frame, and how many generated pages may wait for room.
+    /// </summary>
+    const int GrassMovesPerFrame = 16, MaxGrassWaiting = 64;
+
+    /// <summary>
+    /// A page the store-full exchange may move: its distance from the eye, its zone, key and page.
+    /// </summary>
+    readonly record struct GrassCandidate(float Distance, FoliageZoneState State, int Key, FoliageGrassPage Page);
+
+    /// <summary>
+    /// This walk's nearest eye pages waiting for room and farthest pages held by a full store (<see cref="GrassMovesPerFrame"/> of each at most).
+    /// </summary>
+    readonly List<GrassCandidate> _grassNearestWaiting = [], _grassFarthestHeld = [];
+
+    /// <summary>
     /// A grass layer's range now (its data's, times the range setting and the memory guard's scale).
     /// </summary>
     float GrassRange(FoliageGrassPatch patch) => patch.Layer.Range * GrassRangeSetting * Scale;
 
     /// <summary>
-    /// Whether the last settled page walk still stands (<see cref="_grassSettled"/>): nothing it read has changed beyond the slack.
+    /// Whether the last settled or stalled page walk still stands (<see cref="_grassSettled"/>, <see cref="_grassStalled"/>): nothing it read has
+    /// changed beyond the slack.
     /// </summary>
     bool GrassWalkCurrent(Vector3 eye, IReadOnlyList<Vector3> kept)
     {
@@ -1292,6 +1332,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public bool EyeWaiting;
 
         /// <summary>
+        /// The pages the eye wants that wait for room in the store.
+        /// </summary>
+        public int WaitingPages;
+
+        /// <summary>
+        /// A page's job finished in the walk.
+        /// </summary>
+        public bool Completed;
+
+        /// <summary>
         /// The kept page to free for a waiting eye page, its zone and key.
         /// </summary>
         public FoliageGrassPage? Victim;
@@ -1315,39 +1365,43 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// Makes and frees grass pages round the eye and the kept points (<see cref="Kept"/>). A kept point's pages rank after every page the eye wants,
     /// and they give way to the eye's: while an eye page waits for room in the full store, the kept page farthest from its point is freed (one a
-    /// frame).
+    /// frame). A full store holds the pages nearest the eye (<see cref="MakeRoomForNearest"/>).
     /// </summary>
     void UpdateGrass(Vector3 eye, IReadOnlyList<Vector3> kept, bool settling)
     {
         _grass.Grow(GrassRangeSetting, _areas, _guard, _zones);
 
-        // Nothing moving and nothing in progress since the last walk: it would decide the same (its results, NearestMissingGrass and the counts,
-        // stand).
-        if (!settling && _grassSettled && GrassWalkCurrent(eye, kept)) return;
+        // Nothing moving and nothing in progress since the last walk, or a stalled one: it would decide the same (its results,
+        // NearestMissingGrass and the counts, stand).
+        if (!settling && (_grassSettled || _grassStalled) && GrassWalkCurrent(eye, kept)) return;
 
+        int versionBefore = _grass.Version;
         _grassWanted.Clear();
         _grassNear = 0;
         _grass.TriedFull = false;
         NearestMissingGrass = float.PositiveInfinity;
+        _grassNearestWaiting.Clear();
+        _grassFarthestHeld.Clear();
         var walk = new GrassWalkTally { VictimDistance = float.NegativeInfinity };
         foreach (var state in _zones.Values) walk.InFlight += state.GrassRunning;
         foreach (var state in _zones.Values) WalkZonePages(state, eye, kept, ref walk);
 
         _grassEyeWaited = walk.EyeWaiting;
         _grassSettled = !walk.Unsettled && !walk.EyeWaiting && _grassWanted.Count == 0 && walk.InFlight == 0;
-        if (_grassSettled)
-        {
-            _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grass.Version);
-            if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
-            for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
-        }
+        if (_grassSettled) RememberGrassWalk(eye, kept);
         if (walk.EyeWaiting && _grass.Full && walk.Victim is not null)
         {
             _grass.FreePage(walk.Victim);
             walk.VictimState!.Pages.Remove(walk.VictimKey);
             _grass.Full = false;   // the waiting page tries the room next frame
         }
-        StartGrassPages(walk.InFlight);
+
+        MakeRoomForNearest();
+        int picked = StartGrassPages(walk.InFlight, walk.WaitingPages);
+
+        // Nothing made, freed, queued or finished, and nothing in flight: the next walk would be this one again.
+        _grassStalled = !_grassSettled && !settling && !walk.Completed && picked == 0 && walk.InFlight == 0 && _grass.Version == versionBefore;
+        if (_grassStalled) RememberGrassWalk(eye, kept);
     }
 
     /// <summary>
@@ -1395,7 +1449,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             return;
         }
 
-        if (eyeWants && page.PendingBlades is not null) walk.EyeWaiting = true;
+        if (eyeWants && page.PendingBlades is not null)
+        {
+            walk.EyeWaiting = true;
+            walk.WaitingPages++;
+            KeepBest(_grassNearestWaiting, new(d, state, key, page), 1);
+        }
+        if (HeldCandidate(page, d)) KeepBest(_grassFarthestHeld, new(d, state, key, page), -1);
         if (page.Job is not null || page.PendingBlades is not null || page.Buffers is null)
             walk.Unsettled = true;
         if (!eyeWants && page.Buffers is not null && page.Job is null && dk > walk.VictimDistance && dk <= range + PageSize * 2)
@@ -1410,6 +1470,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             state.GrassRunning--;
             walk.InFlight--;   // its slot is free for this frame's picks
+            walk.Completed = true;
             page.Job = null;
             var result = job.Result;
 
@@ -1418,21 +1479,89 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (result.Blades, result.Floats, result.Prefixes);
             else _grass.TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
         }
-        else if (page.PendingBlades is not null && (eyeWants || !_grassEyeWaited)) _grass.TryQueuePage(state, key, page, page.PendingBlades,
-                page.PendingFloats!, page.PendingPrefixes!);   // no room last time
+        else if (page.PendingBlades is not null && !_grass.Full && (eyeWants || !_grassEyeWaited))
+        {
+            _grass.TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
+        }
     }
 
     /// <summary>
-    /// Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting, so changing the setting never
-    /// regenerates them (Draw shows a prefix). Only the nearest free jobs' worth is picked: sorting every missing page (tens of thousands at a long
-    /// grass range) took milliseconds a frame.
+    /// Whether a page of a full store, <paramref name="d"/> from the eye, may give way to a nearer waiting one: it holds blades, has no job, and is
+    /// farther than the farthest kept so far (or fewer than <see cref="GrassMovesPerFrame"/> are kept).
     /// </summary>
-    void StartGrassPages(int inFlight)
+    bool HeldCandidate(FoliageGrassPage page, float d)
+    {
+        if (!_grass.Full || page.Buffers is null || page.Job is not null) return false;
+        if (_grassFarthestHeld.Count >= GrassMovesPerFrame && d <= _grassFarthestHeld[^1].Distance) return false;
+        return page.Buffers.Any(b => b.Count > 0);
+    }
+
+    /// <summary>
+    /// Into <paramref name="list"/>, sorted with the best first (sign 1: the smallest distance, -1: the largest), at most
+    /// <see cref="GrassMovesPerFrame"/>.
+    /// </summary>
+    static void KeepBest(List<GrassCandidate> list, GrassCandidate c, int sign)
+    {
+        int at = list.Count;
+        while (at > 0 && (list[at - 1].Distance - c.Distance) * sign > 0) at--;
+        if (at >= GrassMovesPerFrame) return;
+        list.Insert(at, c);
+        if (list.Count > GrassMovesPerFrame) list.RemoveAt(list.Count - 1);
+    }
+
+    /// <summary>
+    /// The store holds the grass nearest the eye: farther pages give way to nearer ones, the nearest waiting first (the walk's order would leave
+    /// holes round the camera).
+    /// </summary>
+    void MakeRoomForNearest()
+    {
+        if (_grassNearestWaiting.Count == 0) return;
+
+        float nearest = _grassNearestWaiting[0].Distance;
+        if (_grass.Full)
+        {
+            foreach (var held in _grassFarthestHeld)
+            {
+                if (held.Distance <= nearest + PageSize) break;
+                _grass.FreePage(held.Page);
+                held.State.Pages.Remove(held.Key);
+            }
+        }
+
+        _grass.Full = false;
+        foreach (var waiting in _grassNearestWaiting)
+        {
+            var page = waiting.Page;
+            if (page.PendingBlades is null) continue;
+            if (_grass.QueuePage(waiting.State, waiting.Key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!)) continue;
+            _grass.Full = true;
+            break;
+        }
+    }
+
+    /// <summary>
+    /// Missing pages nearest first, a bounded number at a time; returns how many were started. Pages hold the blades of the highest density
+    /// setting, so changing the setting never regenerates them (Draw shows a prefix). Only the nearest free jobs' worth is picked: sorting every
+    /// missing page (tens of thousands at a long grass range) took milliseconds a frame.
+    /// </summary>
+    int StartGrassPages(int inFlight, int waitingPages)
     {
         _grassWaiting = _grassWanted.Count;
         int free = _guard is { Streaming: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
+
+        // With a full store and pages of the eye's waiting, only a page nearer than they are is worth making: the others would only hold their
+        // blades in memory. The store then holds what it can: a loading screen does not wait for pages it has no room for.
+        bool noRoom = _grass.Full && waitingPages >= MaxGrassWaiting && _grassNearestWaiting.Count > 0;
+        float makeWithin = noRoom ? _grassNearestWaiting[^1].Distance : float.PositiveInfinity;
+        if (noRoom) _grassNear = 0;
         foreach (var wanted in _grassWanted)
         {
+            // no room for it: nothing waits for it (the title's Pending)
+            if (wanted.Distance >= makeWithin)
+            {
+                _grassWaiting--;
+                continue;
+            }
             if (picked == free && (free == 0 || wanted.Distance >= _grassPicks[picked - 1].Distance)) continue;
 
             int at = picked < free ? picked++ : picked - 1;
@@ -1445,6 +1574,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             _grassPicks[i] = default;
             StartGrassPage(state, key);
         }
+        return picked;
+    }
+
+    /// <summary>
+    /// What the walk just made saw, for <see cref="GrassWalkCurrent"/>.
+    /// </summary>
+    void RememberGrassWalk(Vector3 eye, IReadOnlyList<Vector3> kept)
+    {
+        _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grass.Version);
+        if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
+        for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
     }
 
     /// <summary>
@@ -1949,8 +2089,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// for a reflection). <paramref name="maxRange"/> caps every layer's range (the reflection).
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour,
-        float fogDistance, TerrainRenderer terrain, bool grass = true, float maxRange = float.PositiveInfinity)
+        float fogDistance, TerrainRenderer terrain, bool grass = true, float maxRange = float.PositiveInfinity, Matrix4x4? relative = null)
     {
+        _drawRelative = _depthPass ? null : relative;
         DrawnInstances = 0;
         DrawnBlades = 0;
         DrawCalls = 0;
@@ -2987,9 +3128,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// The kinds of segment whose pipeline state <see cref="SegmentId"/> remembers: the colour, depth, grass, motion, solid, prepass, solid prepass
-    /// and EQUAL passes.
+    /// and EQUAL passes, and the grass's depth-first pair (its depth, then its colour EQUAL).
     /// </summary>
-    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4, PrepassKind = 5, PrepassSolidKind = 6, EqualKind = 7;
+    const int ColourKind = 0, DepthKind = 1, GrassKind = 2, MotionKind = 3, SolidKind = 4, PrepassKind = 5, PrepassSolidKind = 6, EqualKind = 7,
+        GrassDepthKind = 8, GrassEqualKind = 9;
+
     /// <summary>
     /// The first location the per-instance rows (the batch matrices) take; the mesh's own inputs are below it.
     /// </summary>
@@ -3013,11 +3156,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// The last pipeline state of each kind (with <see cref="_segmentIds"/>, so a repeat costs one compare).
     /// </summary>
-    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[8];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[10];
     /// <summary>
     /// The id of each kind's last state (0: none yet).
     /// </summary>
-    readonly int[] _segmentIds = new int[8];
+    readonly int[] _segmentIds = new int[10];
     /// <summary>
     /// The ids handed out so far.
     /// </summary>
@@ -3176,6 +3319,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     uint Texture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, _textureBias, _textureStandIn);
 
     /// <summary>
+    /// A grass sprite, sampled without the upscaler's LOD bias (docs/render-foliage.md "Grass under the upscalers"): a level sharper, its strands
+    /// are thinner than a pixel, which the temporal upscalers smear into a veil as soon as the camera moves.
+    /// </summary>
+    uint GrassTexture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, 0, _textureStandIn);
+
+    /// <summary>
     /// A texture's key, 0 for none.
     /// </summary>
     static uint IdOf(WorldTexture? t) => t?.Key ?? 0;
@@ -3285,7 +3434,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         int segment = SegmentId(depth ? DepthKind : prepass ? PrepassKind : equal ? EqualKind : ColourKind, p, targets, state);
         var job = _meshJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour,
+        var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour,
             FogDistance = fogDistance };
         if (!depth) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         job.Frame = _nativeFrame.Prepare(in view);
@@ -3681,14 +3830,39 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly JobPool<GrassJob> _grassJobs = new();
 
     /// <summary>
+    /// Grass keeps its cover at a distance (docs/render-foliage.md "Far grass"): its sprites are loaded with mips that keep the share of texels the
+    /// top level keeps at the cut (WorldTextureCache's alpha cover); off, the files' own mips, with which thin grass fades out a short way from the
+    /// eye, as in the game. A change takes every patch's sprite again.
+    /// </summary>
+    public bool GrassFarCover
+    {
+        get => _grassFarCover;
+        set
+        {
+            if (_grassFarCover == value) return;
+            _grassFarCover = value;
+            _grassSpriteVersion++;
+            foreach (var state in _zones.Values)
+                for (int i = 0; i < state.PatchTextures.Length && i < state.Patches.Count; i++)
+                    state.PatchTextures[i] = (GrassSprite(state.Patches[i].Grass.Sprite), state.PatchTextures[i].ColourMap);
+        }
+    }
+
+    /// <summary>
+    /// A grass sprite by name, with the far cover's mips while <see cref="GrassFarCover"/> is on.
+    /// </summary>
+    WorldTexture? GrassSprite(string? name) => _textures.Get(name, false, cut: _grassFarCover ? GrassCut : 0);
+
+    /// <summary>
     /// The blade buffer's patch textures (looked up by name once per patch, not per draw) and the blades the density setting shows.
     /// </summary>
     FoliageGrassBuffer Patch(FoliageGrassBuffer b, FoliageGrassPatch patch)
     {
-        if (!ReferenceEquals(b.Patch, patch))
+        if (!ReferenceEquals(b.Patch, patch) || b.SpriteVersion != _grassSpriteVersion)
         {
             b.Patch = patch;
-            b.Sprite = _textures.Get(patch.Grass.Sprite, false);
+            b.SpriteVersion = _grassSpriteVersion;
+            b.Sprite = GrassSprite(patch.Grass.Sprite);
             b.ColourMap = _textures.Get(patch.Grass.ColourMap, false);
             b.ShownDensity = float.NaN;
         }
@@ -3727,9 +3901,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var (d, state, key, page) in _grassOrder)
         {
             float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
-            float y = eye.Y;
-            if (state.Ground is { } ground) y = ground.Height(x0 + PageSize / 2, z0 + PageSize / 2);
-            if (!WorldCamera.Intersects(frustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize)))
+            if (!WorldCamera.Intersects(frustum, new Vector3(x0, page.MinY, z0), new Vector3(x0 + PageSize, page.MaxY, z0 + PageSize)))
                 continue;
             if (page.Buffers is null) continue;
             for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
@@ -3779,8 +3951,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
         int segment = SegmentId(GrassKind, p, targets, state);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance,
-            Time = SwayPhase() };
+        var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour,
+            FogDistance = fogDistance, Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         var job = _grassJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
@@ -3796,7 +3968,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (ref readonly var d in CollectionsMarshal.AsSpan(_grassDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(d.Sprite);
+            pc.Sprite = GrassTexture(d.Sprite);
             pc.ColourMap = Texture(d.Colour);
             var buffer = d.Buffer;
             job.Draws[job.Count++] = new GrassJob.Draw { Push = pc, Vertices = d.Vertices, Instances = (uint)buffer.Shown,
@@ -3946,10 +4118,40 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// The scene camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.
     /// </summary>
-    public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
+    public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum, Matrix4x4 relative,
+        Matrix4x4 relativeUnjittered)
     {
         (_motionViewProjection, _motionUnjittered, _motionEye, _motionFrustum) = (viewProjection, unjittered, eye, frustum);
+        (_motionRelative, _motionRelativeUnjittered) = (relative, relativeUnjittered);
         _motionCamera = true;
+    }
+
+    /// <summary>
+    /// The scene's view-projection for positions less <paramref name="eye"/> (the vertex stages project relative to the eye, docs/renderer-native.md
+    /// "Render origin"): the frame's precise one for the main view, else translation(eye) × <paramref name="viewProjection"/> (shadow casters, previews).
+    /// </summary>
+    Matrix4x4 Projected(Matrix4x4 viewProjection, Vector3 eye) => _drawRelative ?? Matrix4x4.CreateTranslation(eye) * viewProjection;
+
+    /// <summary>
+    /// The main view's relative view-projection for this <see cref="Draw"/> (null: a depth pass, which projects from its own camera).
+    /// </summary>
+    Matrix4x4? _drawRelative;
+
+    Matrix4x4 _motionRelative, _motionRelativeUnjittered, _previousRelativeUnjittered;
+    Vector3 _previousMotionEye;
+
+    /// <summary>
+    /// Last frame's unjittered relative view-projection seen from this frame's eye (the eye's move put back in, in double).
+    /// </summary>
+    Matrix4x4 PreviousRelative(bool havePreviousCamera)
+    {
+        var move = havePreviousCamera
+            ? new Vector3((float)((double)_motionEye.X - _previousMotionEye.X), (float)((double)_motionEye.Y - _previousMotionEye.Y),
+                (float)((double)_motionEye.Z - _previousMotionEye.Z))
+            : Vector3.Zero;
+        var previous = Matrix4x4.CreateTranslation(move) * (havePreviousCamera ? _previousRelativeUnjittered : _motionRelativeUnjittered);
+        (_previousRelativeUnjittered, _previousMotionEye) = (_motionRelativeUnjittered, _motionEye);
+        return previous;
     }
 
     /// <summary>
@@ -3967,7 +4169,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             return;
         }
         float time = SwayPhase(), previousTime = _previousSwayPhase ?? time;
-        var previous = _havePrevious ? _previousUnjittered : _motionUnjittered;
+        var previous = PreviousRelative(_havePrevious);
         (_previousSwayPhase, _previousUnjittered, _havePrevious) = (time, _motionUnjittered, true);
         var eye = _motionEye;
 
@@ -4003,8 +4205,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (page.Buffers is null) continue;
                 float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
                 float d = BoxDistance(x0, z0, PageSize, eye);
-                float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : eye.Y;
-                if (!WorldCamera.Intersects(_motionFrustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize)))
+                if (!WorldCamera.Intersects(_motionFrustum, new Vector3(x0, page.MinY, z0), new Vector3(x0 + PageSize, page.MaxY, z0 + PageSize)))
                     continue;
                 for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
                 {
@@ -4051,7 +4252,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = _motionViewProjection,
+            ViewProjection = _motionRelative,
             PreviousViewProjection = previous,
             Eye = eye,
             Time = time,
@@ -4069,7 +4270,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (ref readonly var d in CollectionsMarshal.AsSpan(_motionDraws))
         {
             var pc = d.Push;
-            pc.Sprite = Texture(d.Sprite);
+            pc.Sprite = GrassTexture(d.Sprite);
             pc.NearDepth = nearDepth;
             var buffer = d.Buffer;
             Push(cmd, p, in pc, ref last, ref pushed);
@@ -4183,15 +4384,82 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Adds every laid-out instance whose bounding radius is at least <paramref name="minRadius"/> and whose bounding sphere comes within
-    /// <paramref name="range"/> of <paramref name="eye"/> (<see cref="FoliageRayScene.Instances"/>). Render thread.
+    /// <paramref name="range"/> of <paramref name="eye"/> (<see cref="FoliageRayScene.Instances"/>, with its <paramref name="belowRadius"/> and
+    /// <paramref name="minAngle"/>). Render thread.
     /// </summary>
-    internal void RayInstances(Vector3 eye, float range, float minRadius, List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into) =>
-        _rays.Instances(eye, range, minRadius, into);
+    internal void RayInstances(Vector3 eye, float range, float minRadius, List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into,
+        float belowRadius = float.PositiveInfinity, float minAngle = 0) =>
+        _rays.Instances(eye, range, minRadius, into, belowRadius, minAngle);
 
     /// <summary>
     /// Sets <paramref name="mesh"/>'s textures for this frame (<see cref="FoliageRayScene.RefreshTextures"/>). Render thread.
     /// </summary>
     internal void RefreshRayTextures(FoliageRayMesh mesh) => _rays.RefreshTextures(mesh);
+
+    /// <summary>
+    /// A grass page's patch for the traced sun (<see cref="Gi.TracedGrass"/>): its identity (a dropped page's buffer is never seen again), where its
+    /// blades are in the arena, those the density shows, the page's corner and the patch's card sizes (min width, max width, min height, max
+    /// height), and this frame's sprite.
+    /// </summary>
+    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, Vector4 Size, bool Cross, uint Sprite,
+        float Distance, float Sway);
+
+    /// <summary>
+    /// The arena holding the blades (read by <see cref="Gi.TracedGrass"/>'s kernel).
+    /// </summary>
+    internal (GpuBuffer Buffer, ulong Bytes) RayGrassBlades => (_grass.Store.BladeBuffer, _grass.Store.ArenaBytes);
+
+    /// <summary>
+    /// This frame's sway phase, as the blade program's (<see cref="Gi.TracedGrass"/>'s near cards follow it).
+    /// </summary>
+    internal float RayGrassPhase => SwayPhase();
+
+    /// <summary>
+    /// The sway's frequency the blade program uses.
+    /// </summary>
+    internal const float RayGrassFrequency = 2f;
+
+    /// <summary>
+    /// A grass page's side.
+    /// </summary>
+    internal const float RayGrassPageSize = PageSize;
+
+    /// <summary>
+    /// The drawn grass patches of the pages within <paramref name="range"/> of <paramref name="eye"/> across the ground, nearest first. Render thread.
+    /// </summary>
+    internal void RayGrass(Vector3 eye, float range, List<RayGrassPatch> into)
+    {
+        into.Clear();
+        foreach (var state in _zones.Values)
+        {
+            if (state.Pages.Count == 0 || state.Patches.Count == 0) continue;
+            foreach (var (key, page) in state.Pages)
+            {
+                float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
+                float d = BoxDistance(x0, z0, PageSize, eye);
+                if (page.Buffers is not null && d < range) AddRayGrassPage(state, page, new Vector3(x0, 0, z0), d, into);
+            }
+        }
+
+        into.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+    }
+
+    /// <summary>
+    /// One page's drawn patches for <see cref="RayGrass"/>: those with blades shown, within their grass range and with a sprite.
+    /// </summary>
+    void AddRayGrassPage(FoliageZoneState state, FoliageGrassPage page, Vector3 corner, float distance, List<RayGrassPatch> into)
+    {
+        for (int i = 0; i < page.Buffers!.Length && i < state.Patches.Count; i++)
+        {
+            var patch = state.Patches[i];
+            var b = Patch(page.Buffers[i], patch);
+            if (b.Shown == 0 || distance >= GrassRange(patch) || b.Sprite is not { Key: not 0 } sprite) continue;
+            var g = patch.Grass;
+            var size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
+            float sway = patch.Layer.Wind ? g.SwayLength : 0f;
+            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, size, g.CrossQuads, _rays.Texture(sprite), distance, sway));
+        }
+    }
 
     #endregion
 

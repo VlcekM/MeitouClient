@@ -69,16 +69,24 @@ public sealed class PostOptions
     /// shadows cast light shafts through the air; Faithful leaves the haze lit everywhere, as the game does.
     /// </summary>
     public bool LightShafts = true;
-
-    /// <summary>
-    /// Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the particle sprites fade out where they meet a surface instead of cutting into it;
-    /// Faithful draws them hard-edged, as the game's particle materials are but its mist and steam (which fade; not drawn so yet).
-    /// </summary>
+    /// <summary>Meitou switch (<c>traced</c>, off by default; docs/render-shadows.md "Traced sun"): near the eye the sun's shadow is traced, grass included, where the device
+    /// has ray queries and the GI resolve runs; everywhere else, and off, the cascades.</summary>
+    public bool TracedSun;
+    /// <summary>Meitou switch (<c>fog</c>; docs/render-post.md "Fog"): the particle sprites fade out where they meet a surface instead of cutting into it; Faithful
+    /// draws them hard-edged, as the game's particle materials are but its mist and steam (which fade; not drawn so yet).</summary>
     public bool MeitouFog = true;
-
-    /// <summary>
-    /// How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).
-    /// </summary>
+    /// <summary>Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU. <c>--gi-hybrid</c> picks among its parts.</summary>
+    public bool GiHybrid;
+    /// <summary>The parts of <see cref="GiHybrid"/>: <c>relocate</c>, probes moved out of geometry; <c>clouds</c>, the cloud shadows at the probes' hits and in the light shafts;
+    /// <c>cache</c>, the traced world-space radiance cache (<c>Gi.GiCache</c>).</summary>
+    public bool GiRelocate = true, GiCloudShadows = true, GiCache = true;
+    public bool GiRelocating => GiHybrid && GiRelocate;
+    public bool GiCloudShadowing => GiHybrid && GiCloudShadows;
+    public bool GiCaching => GiHybrid && GiCache;
+    /// <summary>Meitou switch (<c>ssr</c>; docs/render-gi.md "Reflections"): the sky's reflection on glossy surfaces replaced by what they mirror, and occluded on all that take the
+    /// GI resolve; off by default, also in the Meitou preset.</summary>
+    public bool Ssr;
+    /// <summary>How much of the haze in shadow goes, before the sun's share of the light (1: all of it; the sky's ambient light keeps the rest).</summary>
     public float ShaftStrength = 0.8f;
 
     /// <summary>
@@ -261,11 +269,57 @@ public sealed class PostOptions
     /// 0.1%, specular spikes far above scatter as if they were it.
     /// </summary>
     public const float BloomFirefly = 64;
+    /// <summary>HDR output's highlight ceiling in the composite's gamma-encoded units (docs/render-post.md "HDR output"); 0 is SDR. Set each frame by the host, not a saved setting.</summary>
+    public float HdrPeak;
+    /// <summary>The <see cref="HdrPeak"/> for a display's peak and the picture's paper white, both in nits.</summary>
+    public static float HdrPeakFor(float peakNits, float paperNits) => MathF.Pow(MathF.Max(peakNits / paperNits, 1), 1 / 2.2f);
+    /// <summary>The Meitou <c>dof</c> switch (docs/render-post.md "Depth of field"), off by default even in the Meitou look.</summary>
+    public bool DepthOfField;
+    /// <summary>The lens's f-number where the shot does not set one (the Tab slider; <see cref="DefaultAperture"/> by default).</summary>
+    public float DofAperture = DefaultAperture;
+    public const float DefaultAperture = 1;
+    /// <summary>The largest CoC: a share of the picture's height in half-size pixels, and at most that many pixels (the gathers' four rings thin out past it).</summary>
+    public const float DofMaxCocShare = 0.015f, DofMaxCocPixels = 24;
+    /// <summary>The focus distance (world units) and f-number of the frame's camera, set by the world frame.</summary>
+    public float LensFocus = 1000, LensAperture = DefaultAperture;
+    /// <summary>
+    /// The lens focuses by itself on what the picture's centre shows (docs/render-post.md "Depth of field"): set per frame, while no cinema key
+    /// names a focus. <see cref="LensFocus"/> is then what it falls back to on the sky.
+    /// </summary>
+    public bool LensAutoFocus;
+    /// <summary>
+    /// Half the depth of a zone round the focus that is wholly sharp, world units (photo mode's Sharp zone; 0: a thin lens, sharp at the focus alone).
+    /// </summary>
+    public float LensSharpZone;
+    /// <summary>
+    /// Where in the picture the autofocus looks (0..1 from its top left): the centre, or the point photo mode's click chose.
+    /// </summary>
+    public System.Numerics.Vector2 LensFocusSpot = new(0.5f);
+    /// <summary>The camera effects in the strategy camera as well (the player's choice, off by default): otherwise only with <see cref="CinematicView"/>.</summary>
+    public bool CameraEffectsEverywhere;
+    /// <summary>Set by the game each frame: the free camera or the cinematic one holds the view. A host without a strategy camera leaves it on.</summary>
+    public bool CinematicView = true;
+    /// <summary>Set for a frame that is no world (the loading sky): the camera effects leave it alone.</summary>
+    public bool CameraEffectsHeld;
+    /// <summary>Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the game's: lamps cast no shadows.</summary>
+    public bool LampShadows;
+    /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
+    public float Exposure = 1;
 
     /// <summary>
-    /// Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).
+    /// Photo mode's exposure compensation, a linear factor on top of <see cref="Exposure"/> (the player's saved brightness is left alone; 1 outside it).
     /// </summary>
-    public float Exposure = 1;
+    public float PhotoExposure = 1;
+
+    /// <summary>
+    /// Photo mode's depth of field: on or off whatever <see cref="DepthOfField"/> says; null outside it.
+    /// </summary>
+    public bool? PhotoDepthOfField;
+
+    /// <summary>
+    /// The exposure the passes apply: <see cref="Exposure"/> with photo mode's compensation.
+    /// </summary>
+    public float ExposureApplied => Exposure * PhotoExposure;
 
     /// <summary>
     /// Presentation-only white balance: the scene's linear colour is multiplied by it before the tone map (the Meitou title warms its light with it);
@@ -304,10 +358,37 @@ public sealed class PostOptions
     /// dark halo as wide as itself (radius 6, strength 4) with a light seam where the half-size mask met it.
     /// </summary>
     public const float SsaoCharacterOccluder = 0.3f;
-
-    /// <summary>
-    /// The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.
-    /// </summary>
+    /// <summary>Meitou switch (<c>contact</c>; docs/render-post.md "Contact shadows"): short sun shadows marched in the scene depth, taken from the sun's light alone where the GI resolve runs. Off by default
+    /// (what the screen does not show casts nothing); the traced sun does the same exactly where the device has ray queries.</summary>
+    public bool ContactShadows;
+    /// <summary>How much of a surface's sun a contact shadow takes; its reach and thickness in world units; the eye distance where it has faded out.</summary>
+    public const float ContactStrength = 1, ContactReach = 8, ContactThickness = 0.6f, ContactEnd = 2500;
+    /// <summary>The contact shadows' parameters for their pass; a strength of 0 turns them off.</summary>
+    public System.Numerics.Vector4 ContactParams =>
+        new(ContactShadows ? ContactStrength : 0, ContactReach, ContactThickness, ContactEnd);
+    /// <summary>The traced sun's grass shadows (docs/render-shadows.md "Traced sun shadows"): off, its rays see no grass, the larger part of its cost in grassland.</summary>
+    public bool TracedGrass = true;
+    /// <summary>The <c>gtao</c> switch (docs/render-post.md "GTAO"): with <see cref="Ssao"/> on, the occlusion is the horizon search instead; off by default in every preset.</summary>
+    public bool Gtao;
+    /// <summary>GTAO's budget: 0 low, 1 medium, 2 high (the Tab panel's slider). It sets the slices, the steps and whether the gather runs at the render size.</summary>
+    public int GtaoQuality = 1;
+    public int GtaoSlices => GtaoQuality switch { 0 => 2, _ => 3 };
+    public int GtaoSteps => GtaoQuality switch { 0 => 4, _ => 6 };
+    public bool GtaoFullSize => GtaoQuality >= 2;
+    /// <summary>GTAO's search radius in world units, and the bounds on what it spans as shares of the render height (the world radius gives way to them).</summary>
+    public const float GtaoRadius = 20, GtaoMaxPixels = 96f / 1440, GtaoMinPixels = 12f / 1440;
+    /// <summary>The share of the radius at full weight, and how much of a passed horizon each further tap keeps (1: every occluder is solid behind).</summary>
+    public const float GtaoFalloff = 0.17f, GtaoThickness = 0.9f;
+    /// <summary>GTAO's curve after the blur (KenshiNative's defaults): the visibility to this power, then this much of it reaches the picture.</summary>
+    public const float GtaoPower = 1.6f, GtaoStrength = 0.55f;
+    /// <summary>The characters' traced occlusion on (docs/render-post.md "Traced occlusion on characters"). Off: not calibrated against a reference yet, a hooded face
+    /// came out too dark and blotched round the eyes.</summary>
+    public bool CharacterOcclusion;
+    /// <summary>The characters' traced occlusion (<c>Gi.CharacterOcclusionPass</c>): how far its rays look, world units, and how much of the blocked ambient light is taken back.</summary>
+    public const float CharacterOcclusionRadius = 8f, CharacterOcclusionStrength = 1f;
+    /// <summary>The albedo of GTAO's multi-bounce term where no lit fragment wrote one to the surface target.</summary>
+    public const float GtaoAlbedo = 0.35f;
+    /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
     public readonly UpscaleOptions Upscale = new();
 
     #endregion
@@ -322,17 +403,11 @@ public sealed class PostOptions
         var o = new PostOptions { Preset = preset };
         switch (preset)
         {
-            case "meitou":
-                break;
-            case "off":
-                o.Fxaa = o.HeatHaze = false;
-                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false;
-                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false;
-                break;
+            case "meitou": break;
+            case "off": o.Fxaa = o.HeatHaze = false; o.ContactShadows = false; o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false; break;
             case "kenshi":
-                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false;
-                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = false;
-
+                o.ContactShadows = false;
+                o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false; o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false;
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
                 break;
@@ -348,31 +423,35 @@ public sealed class PostOptions
     /// </summary>
     public void CopyFrom(PostOptions other)
     {
-        Preset = other.Preset;
-        Fxaa = other.Fxaa;
-        Smaa = other.Smaa;
-        HeatHaze = other.HeatHaze;
-        Ssao = other.Ssao;
-        Dither = other.Dither;
-        LowResParticles = other.LowResParticles;
-        LightShafts = other.LightShafts;
-        MeitouFog = other.MeitouFog;
-        ShaftQuality = other.ShaftQuality;
-        ShaftStrength = other.ShaftStrength;
-        ShaftAir = other.ShaftAir;
-        ShaftAirDawn = other.ShaftAirDawn;
-        ParticleDivisor = other.ParticleDivisor;
-        Exposure = other.Exposure;
-        ToneMap = other.ToneMap;
-        ToneMix = other.ToneMix;
-        Grade = other.Grade;
-        HeatHazeStrength = other.HeatHazeStrength;
-        NightGradeStrength = other.NightGradeStrength;
-        BloomStrength = other.BloomStrength;
-        MeitouHeatHaze = other.MeitouHeatHaze;
-        ToneMapping = other.ToneMapping;
-        NightGrade = other.NightGrade;
-        Bloom = other.Bloom;
+        Preset = other.Preset; Fxaa = other.Fxaa; Smaa = other.Smaa; HeatHaze = other.HeatHaze; Ssao = other.Ssao; ContactShadows = other.ContactShadows;
+        Dither = other.Dither; LowResParticles = other.LowResParticles; LightShafts = other.LightShafts; TracedSun = other.TracedSun; MeitouFog = other.MeitouFog; ShaftQuality = other.ShaftQuality;
+        ShaftStrength = other.ShaftStrength; ShaftAir = other.ShaftAir; ShaftAirDawn = other.ShaftAirDawn;
+        ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
+        HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
+        MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom; Ssr = other.Ssr;
+        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiCache = other.GiCache;
+        CameraEffectsEverywhere = other.CameraEffectsEverywhere;
+        DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
+        Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
+        LampShadows = other.LampShadows;
+        TracedGrass = other.TracedGrass; CharacterOcclusion = other.CharacterOcclusion;
+    }
+
+    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>cache</c>).</summary>
+    void SetGiHybrid(string parts)
+    {
+        GiRelocate = GiCloudShadows = GiCache = false;
+        foreach (var part in parts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            switch (part)
+            {
+                case "relocate": GiRelocate = true; break;
+                case "clouds": GiCloudShadows = true; break;
+                case "cache": GiCache = true; break;
+                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate, clouds, cache)");
+            }
+        }
+        GiHybrid = true;
     }
 
     #endregion
@@ -386,25 +465,14 @@ public sealed class PostOptions
     {
         switch (a)
         {
-            case "--post":
-                CopyFrom(Create(next()));
-                return true;
-            case "--particle-divisor":
-                ParticleDivisor = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 4);
-                return true;
-            case "--no-fxaa":
-                Fxaa = false;
-                return true;
-            case "--smaa":
-                Smaa = true;
-                return true;
-            case "--no-heat-haze":
-                HeatHaze = false;
-                return true;
-            case "--bloom":
-                BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f);
-                Bloom = BloomStrength > 0;
-                return true;
+            case "--post": CopyFrom(Create(next())); return true;
+            case "--particle-divisor": ParticleDivisor = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 4); return true;
+            case "--no-fxaa": Fxaa = false; return true;
+            case "--smaa": Smaa = true; return true;
+            case "--no-heat-haze": HeatHaze = false; return true;
+            case "--gi-hybrid": SetGiHybrid(next()); return true;
+            case "--gtao-quality": GtaoQuality = Math.Clamp(int.Parse(next(), CultureInfo.InvariantCulture), 0, 2); return true;
+            case "--bloom": BloomStrength = Math.Clamp(float.Parse(next(), CultureInfo.InvariantCulture), 0, 0.25f); Bloom = BloomStrength > 0; return true;
             case "--upscaler":
                 Upscale.Explicit = true;
                 Upscale.Kind = ParseUpscaler(next());
@@ -437,15 +505,21 @@ public sealed class PostOptions
     {
         string aa = Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off";
         string heatHaze = HeatHaze ? "weather" + (HeatHazeScale != 1 ? $" strength {HeatHazeScale:0.##}" : "") : "off";
+        string ssao = !Ssao ? "off" : Gtao ? $"gtao {GtaoSlices}x{GtaoSteps}{(GtaoFullSize ? " full" : "")}" : "on";
         string shafts = LightShafts ? $"{ShaftStrength:0.##} ({ShaftCells}x{ShaftSlices}x{ShaftSamples})" : "off";
         string tonemap = ToneMapUsed.ToString().ToLowerInvariant();
         string mix = ToneMapUsed == ToneMapOperator.Hybrid ? $" {ToneMix:0.##}" : "";
         string grade = GradeUsed ? $"saturation {Saturation:0.##} contrast {Contrast:0.##}" : "off";
         string nightGrade = NightGradeAmount > 0 ? NightGradeAmount.ToString("0.##", CultureInfo.InvariantCulture) : "off";
         string bloom = BloomAmount > 0 ? BloomAmount.ToString("0.###", CultureInfo.InvariantCulture) : "off";
-        return $"{Preset}: aa {aa}, heat haze {heatHaze}, ssao {(Ssao ? "on" : "off")}, shafts {shafts}, exposure x{Exposure:0.##}, " +
-            $"tonemap {tonemap}{mix}, grade {grade}, night grade {nightGrade}, bloom {bloom}, upscaler {Upscale.Describe()}";
+        string focus = DepthOfField ? "f/" + DofAperture.ToString("0.##", CultureInfo.InvariantCulture) : "off";
+        string lamps = LampShadows ? "on" : "off";
+        return $"{Preset}: aa {aa}, heat haze {heatHaze}, ssao {ssao}, contact {(ContactShadows ? "on" : "off")}, reflections {(Ssr ? "on" : "off")}, " +
+            $"traced sun {(TracedSun ? "on" : "off")}, shafts {shafts}, exposure x{Exposure:0.##}, tonemap {tonemap}{mix}, grade {grade}, night grade {nightGrade}, " +
+            $"bloom {bloom}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
     }
+
+    string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiCache ? "cache" : "" }.Where(p => p.Length > 0));
 
     #endregion
 }

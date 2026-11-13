@@ -185,14 +185,16 @@ static partial class WorldApp
 
         FieldTour(gpu, scene, camera, render, o, w, h, context, target);
         // With --orbit-step and weather particles the frame clock runs at 1/60 s a frame (the draw's time unit is 600 s), so they move as in play.
-        int orbitFrames = 0;
+        int orbitFrames = 0, sequenceFrame = 0;
         float Clock() => o.OrbitStep != 0 && gpu.Particles is { Groups.Count: > 0 } ? (float)(orbitFrames / 60.0 / 600) : 0;
         void Step()
         {
             orbitFrames++;
-            camera.Yaw += o.OrbitStep;
-            if (o.SwayStep > 0 && gpu.Foliage is { } swaying)
-                swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
+            bool moving = o.PanFrames == 0 || sequenceFrame <= o.PanFrames;
+            if (moving) camera.Yaw += o.OrbitStep;
+            if (moving && o.ZoomStep != 0) camera.Distance *= 1 + o.ZoomStep;
+            if (moving && o.PanStep != Vector2.Zero) camera.Target += new Vector3(o.PanStep.X, 0, o.PanStep.Y);
+            if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
         }
         DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
@@ -229,6 +231,15 @@ static partial class WorldApp
         if (o.ShowKeys) DrawKeysOverlay(context, assets, gpu, render, o, target, w, h);
         FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
+        for (int i = 1; i <= o.Sequence; i++)
+        {
+            sequenceFrame = i;
+            Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context);
+            string file = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(o.Screenshot!))!, $"{Path.GetFileNameWithoutExtension(o.Screenshot!)}-{i:00}.png");
+            FramebufferCapture.SavePng(context, target, file, w, h);
+            if (o.PanStep != Vector2.Zero) Console.WriteLine($"sequence  {i:00}: target {camera.Target.X:R},{camera.Target.Y:R},{camera.Target.Z:R}");
+        }
+        if (o.Sequence > 0) Console.WriteLine($"saved     {o.Sequence} more frames");
         return 0;
     }
 

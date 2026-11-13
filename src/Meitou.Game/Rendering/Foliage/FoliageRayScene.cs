@@ -81,25 +81,61 @@ sealed class FoliageRayScene(IGpuContext gpu, WorldTextureCache textures, Dictio
     /// Adds every laid-out instance whose bounding radius is at least <paramref name="minRadius"/> and whose bounding sphere comes within
     /// <paramref name="range"/> of <paramref name="eye"/>, with its mesh, transform and distance. Render thread (it may register bindless entries).
     /// </summary>
-    public void Instances(Vector3 eye, float range, float minRadius, List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into)
+    /// <param name="belowRadius">Instances of this radius and up are left out (the traced sun's small foliage, past what the probes hold).</param>
+    /// <param name="minAngle">Above 0: only the instances whose radius is at least this share of their distance (their size on screen), and the
+    /// list's distance is then the distance over the radius (the largest on screen sorts first).</param>
+    public void Instances(Vector3 eye, float range, float minRadius, List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into,
+        float belowRadius = float.PositiveInfinity, float minAngle = 0)
     {
         foreach (var zone in zones.Values)
         {
             if (!zone.Ready) continue;
             foreach (var g in zone.Groups)
             {
-                if (!g.BoundsReady || !g.SpheresReady || g.MaxRadius < minRadius) continue;
+                if (!Bounded(g) || g.MaxRadius < minRadius) continue;
                 var nearest = Vector3.Clamp(eye, g.BoundMin, g.BoundMax);
-                if (Vector3.Distance(nearest, eye) > range) continue;
+                float groupDistance = Vector3.Distance(nearest, eye);
+                if (groupDistance > range || (minAngle > 0 && g.MaxRadius < minAngle * groupDistance)) continue;
                 if (MeshFor(g.Asset) is not { } mesh) continue;
-                foreach (ref readonly var r in g.Instances.AsSpan())
-                {
-                    if (r.Sphere.W < minRadius) continue;
-                    float d = Vector3.Distance(new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z), eye) - r.Sphere.W;
-                    if (d <= range) into.Add((mesh, r.Transform, d));
-                }
+                AddInstances(g, mesh, eye, (range, minRadius, belowRadius, minAngle), into);
             }
         }
+    }
+
+    /// <summary>
+    /// One group's instances for <see cref="Instances"/> (<paramref name="limits"/>: its range, radius limits and minimum angle).
+    /// </summary>
+    static void AddInstances(FoliageGroup g, FoliageRayMesh mesh, Vector3 eye, (float Range, float MinRadius, float BelowRadius, float MinAngle) limits,
+        List<(FoliageRayMesh Mesh, Matrix4x4 Transform, float Distance)> into)
+    {
+        var (range, minRadius, belowRadius, minAngle) = limits;
+        foreach (ref readonly var r in g.Instances.AsSpan())
+        {
+            if (r.Sphere.W < minRadius || r.Sphere.W >= belowRadius) continue;
+            float d = Vector3.Distance(new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z), eye) - r.Sphere.W;
+            if (d > range) continue;
+            if (minAngle <= 0) into.Add((mesh, r.Transform, d));
+            else if (r.Sphere.W >= minAngle * d) into.Add((mesh, r.Transform, MathF.Max(d, 0) / r.Sphere.W));
+        }
+    }
+
+    /// <summary>
+    /// A group's instance spheres and bounds, filled here when its mesh is resident and no cull has filled them yet (as the culls do: the mesh's
+    /// bounds never change). The culls fill them only for groups they draw, so right after a load or a jump the traced scene found no group ready
+    /// and held no foliage until its next rebuild.
+    /// </summary>
+    static bool Bounded(FoliageGroup g)
+    {
+        if (g.BoundsReady && g.SpheresReady) return true;
+        if (!g.Asset.Resident || g.Asset.Main is null) return false;
+        if (!g.SpheresReady)
+        {
+            FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);
+            g.SpheresReady = true;
+        }
+
+        if (!g.BoundsReady) g.ComputeBounds();
+        return true;
     }
 
     /// <summary>
@@ -146,7 +182,7 @@ sealed class FoliageRayScene(IGpuContext gpu, WorldTextureCache textures, Dictio
     /// <summary>
     /// A texture's bindless index at the context's LOD bias (0: none, or not resident).
     /// </summary>
-    uint Texture(WorldTexture? t) => t is { Key: > 0 } ? textures.Index(t.Key, gpu.LodBias, 0) : 0;
+    public uint Texture(WorldTexture? t) => t is { Key: > 0 } ? textures.Index(t.Key, gpu.LodBias, 0) : 0;
 
     #endregion
 }

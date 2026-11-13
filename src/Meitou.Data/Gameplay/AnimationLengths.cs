@@ -110,7 +110,7 @@ public sealed class AnimationLengths
     void LoadAnimals(string installRoot, GameDatabase db, Func<string, string?>? find)
     {
         var races = db.OfType(FcsRecordType.AnimalCharacter)
-            .SelectMany(a => a.GetReferences("race").Where(r => r.Values.Value0 > 0).Take(1).Select(r => db.Find(r.TargetStringId)))
+            .Select(a => CharacterAppearance.AnimalRaceId(a) is { } id ? db.Find(id) : null)
             .OfType<GameRecord>().Where(r => r.Type == FcsRecordType.Race).DistinctBy(r => r.StringId).ToList();
         var keyOf = new System.Collections.Concurrent.ConcurrentDictionary<string, (string File, string[] Linked)?>(StringComparer.Ordinal);
         Parallel.ForEach(races, race =>

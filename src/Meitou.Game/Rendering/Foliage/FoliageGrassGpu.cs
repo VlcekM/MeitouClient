@@ -53,6 +53,18 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     /// Each kernel's storage-buffer bindings at set 0, in order (<see cref="Bindings"/>).
     /// </summary>
     readonly uint[] _cullBindings = [], _orderBindings = [];
+
+    /// <summary>
+    /// The pages hidden behind the last frame's surfaces are left out of the main view (docs/render-foliage.md; <c>MEITOU_GRASS_OCCLUSION=0</c>
+    /// turns it off, for comparing).
+    /// </summary>
+    public static bool OcclusionCull { get; set; } = Environment.GetEnvironmentVariable("MEITOU_GRASS_OCCLUSION") != "0";
+
+    /// <summary>
+    /// The view block of the kernels: the planes, the eye and the counts (160 bytes), then the depth pyramid's vectors.
+    /// </summary>
+    const int ViewBytes = 160 + HizPyramid.ViewVectors * 16;
+
     /// <summary>
     /// Whether the cull kernels exist (<see cref="Supported"/>): without them the store is only the blade arena and the CPU chooses the draws.
     /// </summary>
@@ -78,7 +90,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
             _scratch = new FrameScratch(vk, "foliage grass scratch",
                 BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst, 64ul << 20);
         }
-        _arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst, "foliage grass blades");
+        // Storage: the traced sun's kernel reads the blades (Gi.TracedGrass).
+        _arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst | (ctx is GpuContext ? BufferUse.Storage : 0), "foliage grass blades");
         _slots = DeviceBuffer.Create(ctx, (ulong)slotCapacity * GrassSlot.Size, BufferUse.Storage | BufferUse.TransferDst, "foliage grass slots");
         _prefixes = DeviceBuffer.Create(ctx, (ulong)slotCapacity * PrefixStride * 4, BufferUse.Storage | BufferUse.TransferDst,
             "foliage grass prefixes");
@@ -269,9 +282,9 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         {
             uint zero = 0;
 
-            // The count is the fifth field of the record.
+            // The count is the sixth field of the record.
             using var batch = _ctx.Uploads.Begin();
-            batch.Write(_slots, (ulong)slot * GrassSlot.Size + 16, MemoryMarshal.AsBytes(new ReadOnlySpan<uint>(in zero)));
+            batch.Write(_slots, (ulong)slot * GrassSlot.Size + 20, MemoryMarshal.AsBytes(new ReadOnlySpan<uint>(in zero)));
         }
         _ctx.DeferDelete(() =>
         {
@@ -360,10 +373,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     /// <summary>
     /// Records the cull of one view into <see cref="GpuFrame.PreFrame"/>: <paramref name="planes"/> (at most 8), the eye along the ground, the page
     /// size, the density as the prefix step and the fraction into it (<see cref="DensityStep"/>); for the motion pass <paramref name="motionScale"/>
-    /// (<see cref="GrassMotionReach"/>, 0: the patches' ranges only). The draws are read by this frame's draw.
+    /// (<see cref="GrassMotionReach"/>, 0: the patches' ranges only); <paramref name="occlusion"/>: the last frame's depth pyramid (empty: no
+    /// occlusion test). The draws are read by this frame's draw.
     /// </summary>
     public GrassResult Dispatch(ReadOnlySpan<Vector4> planes, Vector2 eye, float pageSize, int prefixIndex, float fraction, in GrassTables tables,
-        float motionScale = 0)
+        float motionScale = 0, in OcclusionView occlusion = default)
     {
         int n = SlotHigh;
         if (n == 0 || tables.PatchCount == 0) return default;
@@ -374,12 +388,13 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         var scratch = this._scratch!;
         if (!(scratch.TryAllocate((ulong)n * 16, out var keysBuffer, out var keysOffset) && scratch.TryAllocate((ulong)n * 16, out var drawsBuffer,
                 out var drawsOffset) &&
-              scratch.TryAllocate(16, out var countersBuffer, out var countersOffset)))
+              scratch.TryAllocate(16, out var countersBuffer, out var countersOffset) &&
+              scratch.TryAllocate((ulong)n * 4, out var firstsBuffer, out var firstsOffset)))
             return default;
         var keys = (Buffer: keysBuffer, Offset: keysOffset);
         var draws = (Buffer: drawsBuffer, Offset: drawsOffset);
         var counters = (Buffer: countersBuffer, Offset: countersOffset);
-        var viewData = Vk.Frame.Constants.Allocate(160, Align);
+        var viewData = Vk.Frame.Constants.Allocate(ViewBytes, Align);
         var p = (Vector4*)viewData.Pointer;
         for (int i = 0; i < 8; i++) p[i] = i < planes.Length ? planes[i] : default;
         var rest = (uint*)(viewData.Pointer + 128);
@@ -390,9 +405,12 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         ((float*)rest)[5] = fraction;
         rest[6] = (uint)prefixIndex;
         ((float*)rest)[7] = motionScale;
+        // The pyramid's vectors (6 vec4, 3 uvec4); zeros (level count 0) without one.
+        var hz = (Vector4*)(viewData.Pointer + 160);
+        for (int i = 0; i < HizPyramid.ViewVectors; i++) hz[i] = occlusion.IsEmpty ? default : occlusion.Vectors[i];
 
-        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[8];
-        b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, 160);
+        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[10];
+        b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, ViewBytes);
         b[1] = new GpuBufferBinding(_slots.Handle, 0, _slots.Size);
         b[2] = new GpuBufferBinding(_prefixes.Handle, 0, _prefixes.Size);
         b[3] = new GpuBufferBinding(tables.Zones.Handle, tables.Zones.Offset, (ulong)Math.Max(tables.ZoneCount, 1) * 8);
@@ -400,6 +418,8 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         b[5] = new GpuBufferBinding(keys.Buffer, keys.Offset, (ulong)n * 16);
         b[6] = new GpuBufferBinding(draws.Buffer, draws.Offset, (ulong)n * 16);
         b[7] = new GpuBufferBinding(counters.Buffer, counters.Offset, 16);
+        b[8] = new GpuBufferBinding(firstsBuffer, firstsOffset, (ulong)n * 4);   // the draws' first blades, in kernel 1's list order
+        b[9] = occlusion.IsEmpty ? new GpuBufferBinding(_slots.Handle, 0, _slots.Size) : occlusion.Buffer;   // the pyramid (a stand-in without one)
 
         var cmd = UploadCommands;
         var stamps = (_ctx.Frame.Timestamps.Allocate(), _ctx.Frame.Timestamps.Allocate());

@@ -539,6 +539,7 @@ public static class ImpostorShaders
             float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.5;
             vec3 sunLight = vec3(1.0, 0.97, 0.92);
             vec3 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
+            atmoReceiver = -1;   // the quad is not the surface it shows: the cascades, not a ray from it
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, gloss, world);
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, world);
             fragColour = vec4(colour, coverage);
@@ -617,6 +618,7 @@ public static class ImpostorShaders
         uniform vec4 uImpostor;
         uniform float uImpostorGrid;
         uniform mat4 uViewProjection;
+        uniform vec3 uEye;
         layout(std140) uniform {{ShadowShaders.CasterBlock}}
         {
             vec4 uShadowBias;   // x fixed, y slope, z max slope (depth units)
@@ -630,7 +632,7 @@ public static class ImpostorShaders
                 vObjectEye, vObjectPoint - vObjectEye, vCellA, vCellB, vCellC, vWeights, pick + 2.0);   // + 2: the plain pick, see impostorSample
             if (s.coverage < 0.5) discard;
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
-            vec4 clip = uViewProjection * vec4((model * vec4(s.position, 1.0)).xyz, 1.0);
+            vec4 clip = uViewProjection * vec4((model * vec4(s.position, 1.0)).xyz - uEye, 1.0);   // eye-relative (RenderOrigin)
             float z = clip.z / clip.w;
             float g = length(vec2(dFdx(z), dFdy(z)));
             gl_FragDepth = clamp(z + min(uShadowBias.z, uShadowBias.y * g) + uShadowBias.x, 0.0, 1.0);
@@ -737,10 +739,8 @@ public static class ImpostorShaders
         ["uImpostorBox"] = "pc.spare",
     };
 
-    /// <summary>
-    /// <see cref="Vertex"/> in the native model.
-    /// </summary>
-    public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
+    /// <summary><see cref="Vertex"/> in the native model.</summary>
+    public static string VertexNative() => NativeShaders.Port(RenderOrigin.Relative(Vertex), NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary>
     /// <see cref="Fragment"/> in the native model.

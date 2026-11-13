@@ -123,6 +123,14 @@ sealed class SandboxScenario(GameHost host)
             .GroupBy(x => x.Races[0]).Select(grp => (Race: db.Find(grp.Key)!.Name, Record: grp.First().Id))
             .OrderBy(x => x.Race, StringComparer.Ordinal).ToList();
 
+    /// <summary><c>--sandbox-animals</c>: the first ANIMAL_CHARACTER record of every race animals use, by name.</summary>
+    static List<(string Race, string Record)> SandboxAnimals(Meitou.Data.GameDatabase db) =>
+        db.Records.Values.Where(r => r.Type == FcsRecordType.AnimalCharacter)
+            .Select(r => (Id: r.StringId, Name: r.Name, Race: Meitou.Data.Characters.CharacterAppearance.AnimalRaceId(r)))
+            .Where(x => x.Race is not null)
+            .GroupBy(x => x.Race!).Select(grp => (Race: db.Find(grp.Key)?.Name ?? grp.Key, Record: grp.First().Id))
+            .OrderBy(x => x.Race, StringComparer.Ordinal).ToList();
+
     /// <summary>
     /// Spawns the hero (and the foe), selects the hero, applies the command-line start state; returns where the camera starts.
     /// </summary>
@@ -143,6 +151,12 @@ sealed class SandboxScenario(GameHost host)
             var races = SandboxRaces(host.Scene.Database!);
             Console.WriteLine($"sandbox   {races.Count} races: {string.Join(", ", races.Select(x => x.Race))}");
             extra.AddRange(races.Select(x => x.Record));
+        }
+        if (host.GameOptions.SandboxAnimals)
+        {
+            var animals = SandboxAnimals(host.Scene.Database!);
+            Console.WriteLine($"sandbox   {animals.Count} animal races: {string.Join(", ", animals.Select(x => $"{x.Race} ({x.Record})"))}");
+            extra.AddRange(animals.Select(x => x.Record));
         }
         for (int i = 0, ring = 1, placed = 0; i < extra.Count; i++, placed++)
         {
@@ -319,12 +333,9 @@ sealed class SandboxScenario(GameHost host)
             host.Player.Follow = null;
             return;
         }
-
-        if (!followed.CarriedBy.IsNone && characters.FirstOrDefault(c => c.Id == followed.CarriedBy) is { } carrier)
-            followed = carrier;
-
-        host.Session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
-        host.Camera.Target = host.DrawnPosition(followed) + new Vector3(0, KenshiCamera.TrackHeight, 0);
+        var tracked = host.Tracked(followed);
+        host.Session.Camera.MovePivot(new Vector2(tracked.Position.X, tracked.Position.Z));
+        host.Camera.Target = host.DrawnPosition(tracked) + new Vector3(0, KenshiCamera.TrackHeight, 0);
     }
 
     /// <summary>

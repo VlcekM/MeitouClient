@@ -25,6 +25,13 @@ sealed class FoliageGrassPage
     public bool Dropped;
 
     /// <summary>
+    /// The heights the page's blades span, the lowest root to the highest tip (<see cref="FoliageGrassStore.QueuePage"/>): the box the views test.
+    /// The page's ground height at its centre with 2000 units either way let every page under the view's line of sight draw, far past where it
+    /// meets the ground.
+    /// </summary>
+    public float MinY, MaxY;
+
+    /// <summary>
     /// The generated blades while the arena or the slot table had no room (<see cref="FoliageGrassGpu.Misses"/>): placed again by
     /// <see cref="FoliageRenderer.UpdateGrass"/>. Rented (<see cref="FoliageGrassField.RentBladesWithPrefixes"/>), the first
     /// <see cref="PendingFloats"/> of each in use; the page's last upload step returns them.
@@ -52,6 +59,11 @@ sealed class FoliageGrassBuffer
     /// <see cref="Slot"/> is its place in the GPU cull's slot table (-1 for a patch without blades).
     /// </summary>
     public ArenaRange Range;
+
+    /// <summary>
+    /// The <see cref="FoliageRenderer.GrassFarCover"/> version (FoliageRenderer's <c>_grassSpriteVersion</c>) its sprite was looked up at.
+    /// </summary>
+    public int SpriteVersion = -1;
 
     /// <summary>
     /// The draw's first instance (<see cref="FoliageGrassGpu.FirstBlade"/> of <see cref="Range"/>).

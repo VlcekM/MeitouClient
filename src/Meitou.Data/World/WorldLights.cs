@@ -167,8 +167,8 @@ public static class WorldLights
         WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation, new BuildingState { Identity = b.Key }, placed);
         foreach (var p in placed) result.Add(FromPlaced(p, interior: false, powerOn));
 
-        if (layouts is null || state is null) return result;
-
+        // A standalone placement (the character editor's bar) has no state record; its layouts are named by the placement.
+        if (layouts is null) return result;
         AddLayout(db, layouts, building, b.LayoutName(state, exterior: true), exterior: true, result);
         if (includeInteriors && !b.WithoutInterior)
         {

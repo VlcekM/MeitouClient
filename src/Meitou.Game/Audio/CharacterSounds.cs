@@ -159,6 +159,11 @@ public sealed class CharacterSounds
     public const float WaterHeight = 100;
 
     /// <summary>
+    /// Meitou's puddles (the wet world, <c>GameHost.InPuddle</c>): a character standing in one walks on the Water surface. Null: none.
+    /// </summary>
+    public Func<Vector3, bool>? Puddle { get; init; }
+
+    /// <summary>
     /// The squared camera distance within which a luckyren burst also squelches (<see cref="Burst"/>; its sound has no distance falloff).
     /// </summary>
     public const float SquelchLimit = 160000;
@@ -515,7 +520,8 @@ public sealed class CharacterSounds
         {
             // A building's floor under the foot names its own material; anywhere else the terrain's overlay does.
             surface = BuildingFloor(e, position);
-            if (surface < 0 && _ground is not null) surface = _ground.At(position.X, position.Z);
+            if (surface < 0 && Puddle?.Invoke(position) == true) surface = GroundSurfaces.Water;   // the wet world's puddles (Meitou): the water's step
+            else if (surface < 0 && _ground is not null) surface = _ground.At(position.X, position.Z);
         }
         else return;
         // Still loading, or a type past the table (a building's material 9: the exe reads past its name table, Unknown).

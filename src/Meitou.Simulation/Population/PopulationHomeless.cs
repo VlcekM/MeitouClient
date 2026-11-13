@@ -526,7 +526,7 @@ public sealed partial class PopulationSystem
         var walk = world.Walkability;
         var regions = RegionsOf(world);
         var players = PlayerSpots(world);
-
+        var worldShare = WorldShareOf(world);
         // One job builds them in order until a squad is made; the sectors it did not reach come back empty so their pending marks clear.
         List<BuiltWild> Build()
         {
@@ -536,7 +536,7 @@ public sealed partial class PopulationSystem
             {
                 var b = made
                     ? new BuiltWild(t.Site.Index, t.LoadId, default, [], TopUp: true)
-                    : BuildSector(t.Site, t.LoadId, seed, walk, regions, players, t.Hold, t.Number);
+                    : BuildSector(t.Site, t.LoadId, seed, walk, regions, players, t.Hold, worldShare, t.Number);
                 made |= b.Squads.Count > 0;
                 results.Add(b);
             }

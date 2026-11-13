@@ -668,6 +668,16 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (`BuildSector`, load-time fill and refill): a sector whose own town is a nest with roaming squads (`OwnNest`: the nearest nest site,
   or a level-data nest town, standing in the sector and nearer than any other town) makes none of the group's squads; the nest's pool
   stays its own site's (engine choice: the sector route to it is not modelled).
+- **Homeless spot and template weights** (`FUN_1408f50d0`, `FUN_1408f4d70`, `FUN_1408f7e80`, `FUN_1406b9d10`, **Verified** by decompile). The spot (also the patrol's point, same function): up to 4 x 10 tries of a random point of the
+  sector, pushed out of towns (2 x radius own, 1 x another faction's) and, if within 1382.4 of the camera focus, away from it; accepted only when `FUN_1408f4d70` passes:
+  the terrain height there (`FUN_1409b32f0`) is **not below 95** (-99, "no terrain", passes), so nothing spawns more than 5 units under the water level (100), and the
+  `areasmap.tga` pixel there (1152 units a pixel, `trunc((coord + 147456) / 1152)`, the map object being built from -147456 to 147456 by `FUN_1408fb580`) is not black (black is the NONE group); then, for a loaded sector, the point is
+  snapped to the navmesh and refused inside a non-Ruins town or where the face data's high nibble is above 0. The navmesh covers the water, so walkability alone is not this test.
+  Meitou: `SpotAllowed` (terrain >= `SpawnMinTerrainHeight` 95, `BiomeMap.Painted`) next to `IsWalkable`.
+  Weight of a `homeless spawns` entry: `max(0, v0 - k x n)` (times `FUN_1402dd530`, a constant 1), n = the living platoons of that faction and template in the **whole world**,
+  loaded or not (`FUN_1406b9d10`), k = (sum of the list's v0) / (loaded zones x P x `homeless spawn amount`), the zone count being the size of the zone manager's loaded-zone map
+  (`+0x168128`, read by the zone loops; Meitou divides by ceil(P x amount) instead of P x amount, since a sector makes that many at once: engine choice). So a template is held to its share v0 / sum of the loaded world's squads. Meitou: `WorldShareOf` (living squads, unloaded platoons, kept wild squads, town residents of the same template included as in the original; the zones are the active ones).
+  Frequency of a kind is therefore its share of the list: on the Leviathan Coast with the user's mods the five leviathan templates are 11 of 138 (**Observed**, data).
 - **Patrol task** (`Task_Patrol`, loaded; **Verified** by code and disassembly unless marked): the platoon's `PatrolInfo` (+0x1e8: biome
   group, has-home flag and home town position, sector range near/far, `patrol approaches towns`, a smell factor) is made once; the
   start sets the range to (1, 2), or (0, 1) when the platoon has a home town, then orders a move whose destination (`CharMovement`

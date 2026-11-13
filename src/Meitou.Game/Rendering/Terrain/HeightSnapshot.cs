@@ -63,6 +63,54 @@ internal readonly struct HeightSnapshot
     }
 
     /// <summary>
+    /// Height at a world point through a smooth surface: Catmull-Rom over the fine window's samples (the coarse grid's bilinear outside it,
+    /// blended as <see cref="HeightAt"/> blends). The drawn ground curves its triangles' edges between the samples (the outline refinement); this
+    /// follows such a curve far closer than the bilinear facets do.
+    /// </summary>
+    public float SmoothHeightAt(float x, float z)
+    {
+        float h = WorldLayout.HalfWorldSize;
+        float c = Bilinear(_coarse, _coarseSize, _coarseSize, x + h, z + h, WorldLayout.WorldSize / (float)(_coarseSize - 1));
+        float w = Math.Clamp(Math.Min(Math.Min(x - _fx0, _fx1 - x), Math.Min(z - _fz0, _fz1 - z)) / _fineBand, 0, 1);
+        if (w <= 0) return c;
+        return c + (Bicubic(_fine.Raw, _fine.Columns, _fine.Rows, x - _fx0, z - _fz0, _fine.Spacing) - c) * w;
+    }
+
+    /// <summary>
+    /// Catmull-Rom height of a raw grid at (<paramref name="x"/>, <paramref name="z"/>) from its corner, in world units (clamped to the grid).
+    /// </summary>
+    static float Bicubic(ushort[] raw, int cols, int rows, float x, float z, float spacing)
+    {
+        float fx = Math.Clamp(x / spacing, 0, cols - 1), fz = Math.Clamp(z / spacing, 0, rows - 1);
+        int i = Math.Clamp((int)fx, 0, Math.Max(cols - 2, 0)), j = Math.Clamp((int)fz, 0, Math.Max(rows - 2, 0));
+        float tx = fx - i, tz = fz - j;
+        float sum = 0;
+        for (int b = -1; b <= 2; b++)
+        {
+            int row = Math.Clamp(j + b, 0, rows - 1) * cols;
+            float line = 0;
+            for (int a = -1; a <= 2; a++) line += raw[row + Math.Clamp(i + a, 0, cols - 1)] * CatmullRom(a, tx);
+            sum += line * CatmullRom(b, tz);
+        }
+        return sum * (WorldLayout.MaxHeight / ushort.MaxValue);
+    }
+
+    /// <summary>
+    /// The Catmull-Rom weight of sample <paramref name="k"/> (-1 to 2) at <paramref name="t"/> between samples 0 and 1.
+    /// </summary>
+    static float CatmullRom(int k, float t)
+    {
+        float t2 = t * t, t3 = t2 * t;
+        return k switch
+        {
+            -1 => 0.5f * (-t3 + 2 * t2 - t),
+            0 => 0.5f * (3 * t3 - 5 * t2 + 2),
+            1 => 0.5f * (-3 * t3 + 4 * t2 + t),
+            _ => 0.5f * (t3 - t2),
+        };
+    }
+
+    /// <summary>
     /// Bilinear height of a raw grid at (<paramref name="x"/>, <paramref name="z"/>) from its corner, in world units (clamped to the grid).
     /// </summary>
     static float Bilinear(ushort[] raw, int cols, int rows, float x, float z, float spacing)

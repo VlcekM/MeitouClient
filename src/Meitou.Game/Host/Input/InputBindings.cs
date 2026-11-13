@@ -291,6 +291,10 @@ public enum InputAction
     /// </summary>
     PutDown,
     /// <summary>
+    /// Meitou's own: photo mode on and off (default P; docs/viewer.md "Photo mode").
+    /// </summary>
+    TogglePhotoMode,
+    /// <summary>
     /// Escape's action (default Escape).
     /// </summary>
     Quit,
@@ -487,6 +491,7 @@ public sealed class InputBindings
         Set(InputAction.Prospect);
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
+        Set(InputAction.TogglePhotoMode, Key.P);
         Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
         // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
         Set(InputAction.Select, MouseButton.Left);

@@ -55,7 +55,7 @@ public sealed partial class FloorSurfaces
     /// The height of the lowest floor, stairs or unwalkable roof triangle straight above (<paramref name="x"/>, <paramref name="z"/>) at or over
     /// <paramref name="bottom"/>, or null when there is none: what covers a point inside the building (<see cref="InteriorVolume.Covered"/>).
     /// </summary>
-    public float? LowestAbove(float x, float z, float bottom) => Lowest(x, z, bottom, [_surfaces, _roofs]);
+    public float? LowestAbove(float x, float z, float bottom, int maxFloor = int.MaxValue) => Lowest(x, z, bottom, [_surfaces, _roofs], maxFloor);
 
     /// <summary>
     /// <see cref="LowestAbove"/> with the solids' undersides: the ceiling straight above a point, the underside of the slab or roof over it rather
@@ -65,9 +65,9 @@ public sealed partial class FloorSurfaces
 
     /// <summary>
     /// The lowest triangle height over (<paramref name="x"/>, <paramref name="z"/>) at or above <paramref name="bottom"/> among
-    /// <paramref name="lists"/>; null when there is none.
+    /// <paramref name="lists"/>, on floors up to <paramref name="maxFloor"/>; null when there is none.
     /// </summary>
-    float? Lowest(float x, float z, float bottom, ReadOnlySpan<List<Surface>> lists)
+    float? Lowest(float x, float z, float bottom, ReadOnlySpan<List<Surface>> lists, int maxFloor = int.MaxValue)
     {
         float best = float.PositiveInfinity;
         var q = new Vector2(x, z);
@@ -76,6 +76,7 @@ public sealed partial class FloorSurfaces
         {
             foreach (var s in list)
             {
+                if (s.Floor > maxFloor) continue;
                 if (q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMax < bottom) continue;
 
                 foreach (int i in s.Grid.At(q))

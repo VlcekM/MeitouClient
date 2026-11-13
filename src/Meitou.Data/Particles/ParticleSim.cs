@@ -204,6 +204,14 @@ public sealed class ParticleSimulation
         /// </summary>
         public uint[] Seed = [];
         /// <summary>
+        /// Per particle: its mass, read by a gravity affector (only drawn when the technique has one).
+        /// </summary>
+        public float[] Mass = [];
+        /// <summary>
+        /// Whether the technique has a gravity affector.
+        /// </summary>
+        public readonly bool HasGravity;
+        /// <summary>
         /// Per particle: the index of the emitter that made it.
         /// </summary>
         public byte[] Emitter = [];
@@ -228,6 +236,7 @@ public sealed class ParticleSimulation
             Def = def;
             Emitters = [.. def.Emitters.Select(_ => new EmitterState())];
             RandomiserClock = new float[def.Affectors.Count];
+            HasGravity = def.Affectors.Any(a => a.Type == PuAffectorType.Gravity);
             Capacity = Math.Max(def.VisualQuota, 0);
             Resize(Math.Min(Capacity, InitialPool));
         }
@@ -261,6 +270,7 @@ public sealed class ParticleSimulation
             Array.Resize(ref Ea, n);
             Array.Resize(ref Seed, n);
             Array.Resize(ref Emitter, n);
+            Array.Resize(ref Mass, n);
         }
 
         /// <summary>
@@ -302,6 +312,7 @@ public sealed class ParticleSimulation
             Ea[i] = Ea[last];
             Seed[i] = Seed[last];
             Emitter[i] = Emitter[last];
+            Mass[i] = Mass[last];
         }
     }
 
@@ -461,6 +472,8 @@ public sealed class ParticleSimulation
         t.A[i] = t.Ea[i] = colour.W;
         t.Seed[i] = (uint)_random.Next();
         t.Emitter[i] = (byte)emitterIndex;
+        // Only a Gravity affector reads the mass; a draw for any other would change the random stream.
+        t.Mass[i] = t.HasGravity ? e.Mass.Evaluate(Time, _random) : 1;
         t.Rotation[i] = 0;
         t.RotationSpeed[i] = 0;
         InitTextureRotation(t, i, e);
@@ -754,15 +767,15 @@ public sealed class ParticleSimulation
         var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
         var centre = Origin + a.Position * Definition.Scale;
         if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
+        // The plugin's VortexAffector::_preProcessParticles (Verified): once per update the angle is the rotation speed (radians a
+        // second) read at the SYSTEM's age (a dyn_random draws anew each update), times the step. _affect then turns every
+        // particle's place about the affector's position, and its velocity, by it.
+        var q = Quaternion.CreateFromAxisAngle(axis, (a.RotationSpeed?.Evaluate(Time, _random) ?? 0) * dt);
         ForRange(n, (lo, hi) =>
         {
             for (int i = lo; i < hi; i++)
             {
                 if (excluded?[t.Emitter[i]] == true) continue;
-                // Rotates the particle about the axis through the affector's position, speed in radians per second (Unknown: the
-                // unit).
-                float speed = a.RotationSpeed?.Evaluate(t.Age[i] / t.Life[i]) ?? 0;
-                var q = Quaternion.CreateFromAxisAngle(axis, speed * dt);
                 var p = Vector3.Transform(new Vector3(t.X[i], t.Y[i], t.Z[i]) - centre, q) + centre;
                 t.X[i] = p.X;
                 t.Y[i] = p.Y;
@@ -780,17 +793,22 @@ public sealed class ParticleSimulation
     /// </summary>
     void AffectGravity(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
     {
-        // Attracts towards the affector's position (Unknown: the strength law; here g / max(d, 1)).
+        // The plugin's GravityAffector::_affect (Verified): the direction gains d * (scale velocity * gravity * the particle's
+        // mass * the affector's mass / |d|^2) * dt, d the vector to the affector's place (nothing at d = 0). The motion step then
+        // multiplies the direction by the scale velocity again, and the velocities here are those moved distances, so the pull is
+        // scale velocity squared in all.
         var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
         float g = a.Strength?.Evaluate(0) ?? 0;
+        float pull = Definition.ScaleVelocity * Definition.ScaleVelocity * g * a.MassAffector * dt;
         ForRange(n, (lo, hi) =>
         {
             for (int i = lo; i < hi; i++)
             {
                 if (excluded?[t.Emitter[i]] == true) continue;
                 var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
-                float len = Math.Max(d.Length(), 1);
-                var dv = d / len * (g / len) * dt;
+                float r2 = d.LengthSquared();
+                if (!(r2 > 0)) continue;
+                var dv = d * (pull * t.Mass[i] / r2);
                 t.Vx[i] += dv.X;
                 t.Vy[i] += dv.Y;
                 t.Vz[i] += dv.Z;
@@ -844,31 +862,48 @@ public sealed class ParticleSimulation
     /// <summary>
     /// The randomiser (affector <paramref name="k"/> of the technique, whose clock it keeps): nudges the particle's position by a random amount.
     /// </summary>
-    static void AffectRandomiser(TechniqueState t, int k, PuAffectorDef a, bool[]? excluded, int n, float dt)
+    void AffectRandomiser(TechniqueState t, int k, PuAffectorDef a, bool[]? excluded, int n, float dt)
     {
-        // Every time_step seconds (each step when 0) the particle's position is nudged by a random amount up to ± max_deviation
-        // per axis; a step shorter than 1/60 s is scaled to it, so the drift does not depend on the frame rate (Observed: the
-        // scripts' small deviations make a falling flake flutter; the plugin's exact rule is Unknown).
+        // The plugin's Randomiser (Verified, _preProcessParticles / _affect / constructor): once the time passed since the last
+        // kick exceeds time_step (every update when 0), each particle gets a uniform random value of up to max_deviation per axis
+        // added to its DIRECTION (random_direction, true by default and set by no script), not scaled by anything; with
+        // random_direction false its position moves by it, times the system scale. The direction is what the motion step
+        // multiplies by the scale velocity, so as a velocity here the kick takes that factor. One kick per update, so the walk
+        // depends on the update rate as the original does; a step off 1/60 s keeps the variance of a 60 Hz run (Engine choice).
         float stepTime = a.TimeStep;
-        float scale = 1;
+        float rate = 1;
         if (stepTime > 0)
         {
             t.RandomiserClock[k] += dt;
-            if (t.RandomiserClock[k] < stepTime) return;
+            if (t.RandomiserClock[k] <= stepTime) return;
             t.RandomiserClock[k] -= stepTime;
         }
-        else scale = Math.Min(dt * 60, 4);
+        else rate = MathF.Sqrt(Math.Min(dt * 60, 4));
         uint step = t.Step * 2654435761u + (uint)k * 40503u;
-        var dev = a.MaxDeviation * scale;
+        bool kick = a.RandomDirection;
+        var dev = a.MaxDeviation * (kick ? Definition.ScaleVelocity * rate : rate);
+        var place = kick ? Vector3.One : Definition.Scale;
         ForRange(n, (lo, hi) =>
         {
             for (int i = lo; i < hi; i++)
             {
                 if (excluded?[t.Emitter[i]] == true) continue;
                 uint s = t.Seed[i] ^ step;
-                t.X[i] += (Hash01(s * 3 + 1) * 2 - 1) * dev.X;
-                t.Y[i] += (Hash01(s * 3 + 2) * 2 - 1) * dev.Y;
-                t.Z[i] += (Hash01(s * 3 + 3) * 2 - 1) * dev.Z;
+                float x = (Hash01(s * 3 + 1) * 2 - 1) * dev.X * place.X;
+                float y = (Hash01(s * 3 + 2) * 2 - 1) * dev.Y * place.Y;
+                float z = (Hash01(s * 3 + 3) * 2 - 1) * dev.Z * place.Z;
+                if (kick)
+                {
+                    t.Vx[i] += x;
+                    t.Vy[i] += y;
+                    t.Vz[i] += z;
+                }
+                else
+                {
+                    t.X[i] += x;
+                    t.Y[i] += y;
+                    t.Z[i] += z;
+                }
             }
         });
     }

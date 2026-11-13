@@ -52,6 +52,11 @@ sealed class CorpseFlies(GameHost host)
     static string FlyKey(CharacterId id) => $"flies/{id}";
 
     /// <summary>
+    /// Whether the flies of this corpse are shown (the console's <c>flies</c>).
+    /// </summary>
+    internal bool IsShown(CharacterId id) => _flyCorpses.ContainsKey(id);
+
+    /// <summary>
     /// Once a frame with the buildings: the effect at each corpse with flies, gone with them.
     /// </summary>
     internal void UpdateCorpseFlies()

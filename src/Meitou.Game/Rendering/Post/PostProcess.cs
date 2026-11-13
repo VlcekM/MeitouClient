@@ -113,21 +113,27 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void Dispose()
     {
         External?.Dispose();
+        _retired?.Dispose();
         Free();
         _fogRate.Dispose();
         _shafts.Dispose();
         DisposeSceneLayers();
+        DisposeReflections();
         _lateParticles.Dispose();
+        DisposeLateFogShadow();
         _merged.Dispose();
         _upscaleExposure.Dispose();
         _bloom.Dispose();
+        DisposeDepthOfField();
+        DisposeGtao();
+        DisposeLampShadows();
         Hiz?.Dispose();
         _occlusion.Dispose();
         foreach (var p in new FullscreenProgram[] { _luminancePass, _adaptPass, _compositePass, _fxaaPass, _hazePass,
                 _velocityPass, _cloudMotionPass, _taaPass, _fogPass, _particleDepthPass, _particleSoftDepthPass, _particleCompositePass,
                 _particleCoveragePass }) p.P.Dispose();
         _smaaPasses.Dispose();
-        _giResolvePass?.P.Dispose();
+        foreach (var pass in _giResolvePasses) pass?.P.Dispose();
         _giApplyPass?.P.Dispose();
         _aoApplyPass?.P.Dispose();
         _flowTexture?.Dispose();
@@ -181,11 +187,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     readonly FogPass _fogPass;
     /// <summary>
-    /// The GI resolve pass, made the first time the GI resolve runs.
+    /// The GI resolve passes, each made the first time the GI resolve runs with it, by gihybrid's parts: bit 0 relocated probes, bit 1 the radiance
+    /// cache.
     /// </summary>
-    GiResolvePass? _giResolvePass;
+    readonly GiResolvePass?[] _giResolvePasses = new GiResolvePass?[4];
     /// <summary>
-    /// The GI resolve's upsample pass, made with <see cref="_giResolvePass"/>.
+    /// The GI resolve's upsample pass, made with the first resolve pass.
     /// </summary>
     GiApplyPass? _giApplyPass;
     /// <summary>
@@ -295,10 +302,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
         /// <summary>
         /// The program's uniforms <c>uAuto</c>, <c>uExposure</c>, <c>uUseAo</c>, <c>uDither</c>, <c>uSceneSize</c>, <c>uSharpen</c>, <c>uTone</c>,
-        /// <c>uToneMix</c>, <c>uGrade</c>, <c>uSaturation</c>, <c>uContrast</c>, <c>uNight</c>, <c>uBalance</c>, <c>uBloomStrength</c>.
+        /// <c>uToneMix</c>, <c>uGrade</c>, <c>uSaturation</c>, <c>uContrast</c>, <c>uNight</c>, <c>uBalance</c>, <c>uBloomStrength</c>,
+        /// <c>uHdrPeak</c>.
         /// </summary>
         public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance,
-            BloomStrength;
+            BloomStrength, HdrPeak;
         /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
@@ -307,8 +315,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
             (SceneSize, Sharpen) = (P.Uniform("uSceneSize"), P.Uniform("uSharpen"));
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
-            (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"),
-                P.Uniform("uContrast"));
+            HdrPeak = P.Uniform("uHdrPeak");
+            (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"), P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
             (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
         }
@@ -476,6 +484,38 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
+    /// Contact shadows at the render size, multiplied into the scene (<see cref="PostProcessShaders.Contact"/>).
+    /// </summary>
+    sealed class ContactPass : FullscreenProgram
+    {
+        /// <summary>
+        /// The depth, the GI surfaces and the traced sun's term.
+        /// </summary>
+        public readonly SamplerSlot Depth, Surface, Term;
+
+        /// <summary>
+        /// The view's tangents, planes, size, axes and eye, the water height, the march's terms and whether the surfaces and the term are bound.
+        /// </summary>
+        public readonly UniformHandle Tan, NearFar, Size, Right, Up, Back, Eye, WaterY, Contact, SurfaceOn, TermOn;
+
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
+        public ContactPass(GpuContext gpu) : base(gpu, PostProcessShaders.Contact, "post contact")
+        {
+            (Surface, SurfaceOn, Term, TermOn) = (P.Sampler("uSurface"), P.Uniform("uSurfaceOn"), P.Sampler("uTerm"), P.Uniform("uTermOn"));
+            (Depth, WaterY, Contact) = (P.Sampler("uDepth"), P.Uniform("uWaterY"), P.Uniform("uContact"));
+            (Tan, NearFar, Size) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"));
+            (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+        }
+    }
+
+    /// <summary>
+    /// The contact shadows' pass (made at its first use).
+    /// </summary>
+    ContactPass? _contactPass;
+
+    /// <summary>
     /// The placed fog volumes in one full-screen pass over the scene (<see cref="PostProcessShaders.FogVolumes"/>).
     /// </summary>
     sealed class FogPass : FullscreenProgram
@@ -536,9 +576,23 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The resolve: the probes' light at the low resolution (<see cref="Gi.GiResolveShaders.Resolve"/>).
+    /// The resolve: the probes' light at the low resolution (<see cref="Gi.GiResolveShaders.ResolveFor"/>, from relocated probes and with the
+    /// radiance cache by its switches).
     /// </summary>
-    sealed class GiResolvePass(GpuContext gpu) : GiPass(gpu, Gi.GiResolveShaders.Resolve, "post gi resolve");
+    sealed class GiResolvePass : GiPass
+    {
+        /// <summary>
+        /// The radiance cache's output (<c>uGiCache</c>; unset without the cache).
+        /// </summary>
+        public readonly SamplerSlot Cache;
+
+        /// <summary>
+        /// Compiles the variant and resolves its handles.
+        /// </summary>
+        public GiResolvePass(GpuContext gpu, bool relocate, bool cache)
+            : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, cache), "post gi resolve") =>
+            Cache = cache ? P.Sampler("uGiCache") : default;
+    }
 
     /// <summary>
     /// The depth-aware upsample of the resolve added to the scene (<see cref="Gi.GiResolveShaders.Apply"/>).
@@ -692,7 +746,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _occlusion.A, _occlusion.B, _occlusion.Mask,
                 _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth,
                 _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _fogRate.Distance, _fogRate.Image,
-                _fogRate.Neutral, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History }
+                _fogRate.Neutral, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History,
+                _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch,
+                _lampFiltered, _lampTotal, _lampTotal1 }
             .OfType<Target2D>();
 
     /// <summary>
@@ -705,11 +761,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = null;
         _fogRate.Free();
         _occlusion.Free();
+        _gtaoPacked = _terrainResolve = null;
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
         _giAlbedo = _giLow = _softDepth = null;
+        _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
+        _lampLost = _ssrHit = _ssrLow = null;
         _shafts.Free();
         _bloom.Free();
+        FreeDepthOfField();
         _adaptedValid = _historyValid = _softDepthReady = false;
         _adaptedFrames = 0;
     }
@@ -886,7 +946,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The most timestamps a frame's set holds.
     /// </summary>
-    const int MaxStamps = 16;
+    const int MaxStamps = 40;
     /// <summary>
     /// The sets of frames whose timestamps are not yet read, oldest first.
     /// </summary>
@@ -914,7 +974,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// Whether this frame's "scene" stamp is written (<see cref="MarkScene"/>).
     /// </summary>
-    bool _sceneMarked;
+    bool _sceneMarked, _giResolved;
     /// <summary>
     /// The benchmark harness's frame number for the frame begun next; <see cref="OnCost"/> hands it back with each section's GPU ms once the frame's
     /// timestamps have been read.
@@ -1095,6 +1155,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Allocate(w, h);
         if (Unallocated) return;
         EnsureGi();
+        EnsureAoSize();
+        EnsureTracedSun();
         Collect();
         _stamps = _freeStamps.Count > 0 ? _freeStamps.Pop() : new StampSet();
         _stamps.Count = 0;
@@ -1103,14 +1165,30 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Drawn = l.Late = false;
         _softDepthReady = false;
         CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
-        _sceneMarked = _aoApplied = false;
+        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = false;
         Stamp("start");
         _frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(_frameIndex, JitterPhases) : Vector2.Zero;
 
         // Textures at the display size's detail: log2 of the scale, and one further as the vendor upscalers recommend (DECISIONS 15); TAA too.
         Gpu.LodBias = Temporal ? MathF.Log2(_width / (float)_displayWidth) - 1 : 0;
-        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget);
+        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
+    }
+
+    /// <summary>
+    /// The depth pyramid of this frame's scene (the next frame's foliage cull reads it; the lamps' shadows read it in this frame, so they build it once the opaque
+    /// scene is drawn: then the frame's end finds it built). False: no pyramid this frame (the occlusion cull off, a view window, no scene).
+    /// </summary>
+    bool BuildHiz()
+    {
+        if (!(OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)) return false;
+        Hiz ??= new HizPyramid(Gpu);
+        if (Hiz.BuiltThisFrame) return true;
+        var hizCmd = Gpu.BeginNative("hiz");
+        Hiz.Build(hizCmd, _sceneDepth.Texture, _planes, _width, _height, _eyeNow, _viewRotation, _fovNow, _aspectNow);
+        Gpu.EndNative(hizCmd);
+        Stamp("hiz");
+        return true;
     }
 
     /// <summary>
@@ -1128,9 +1206,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (_shafts.Pending || _fogPending) ApplyLayers(false);
 
         bool ao = needDepth;
-        if (ao && !_aoApplied) RunSsao();
+        if (ao && !_aoApplied)
+        {
+            if (GtaoOn) RunGtao();
+            else RunSsao();
+        }
         if (ao && !_aoApplied) Stamp("ssao");
-
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         _postColour = _sceneColour!;
         if (Temporal)
@@ -1139,6 +1220,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Stamp("upscale");
         }
         else ActiveUpscaler = "off";
+        _postColour = RunDepthOfField(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1146,9 +1228,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
         RunCompositeChain(o, final, ao, auto, bloom);
         CloseSegment();
-        BuildHiz();
+        if (!BuildHiz()) Hiz?.Invalidate();
         QueueStamps();
-        (_previousRotation, _previousEye, _previousFov, _previousAspect, _previousValid) = (_viewRotation, _eyeNow, _fovNow, _aspectNow, Temporal);
+        (_previousRotation, _previousEye, _previousRest, _previousFov, _previousAspect, _previousValid) =
+            (_viewRotation, _eyeNow, _eyeRestNow, _fovNow, _aspectNow, Temporal);
     }
 
     /// <summary>
@@ -1200,11 +1283,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.SceneSize, plainScaled ? _postColour.Width : 0f, plainScaled ? _postColour.Height : 0f);
         c.P.Set(c.Sharpen, Temporal && _sharpenAfter ? 2 * Math.Clamp(o.Upscale.Sharpness, 0, 1) : 0f);
         c.P.Set(c.Auto, auto ? 1 : 0);
-        c.P.Set(c.Exposure, o.Exposure);
+        c.P.Set(c.Exposure, o.ExposureApplied);
         c.P.Set(c.UseAo, ao && !_aoApplied ? 1 : 0);   // applied before the particles: only the debug view still reads it
         c.P.Set(c.Dither, o.Dither ? 1 : 0);
         c.P.Set(c.Tone, (int)o.ToneMapUsed);
         c.P.Set(c.ToneMix, Math.Clamp(o.ToneMix, 0, 1));
+        c.P.Set(c.HdrPeak, o.HdrPeak);
         c.P.Set(c.Grade, o.GradeUsed ? 1 : 0);
         c.P.Set(c.Saturation, PostOptions.Saturation);
         c.P.Set(c.Contrast, PostOptions.Contrast);
@@ -1212,22 +1296,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         c.P.Set(c.Balance, o.Balance);
         Bind(c.P, c.Bloom, bloom);
         c.P.Set(c.BloomStrength, bloom is null ? 0f : Math.Clamp(o.BloomAmount, 0, 1));
-    }
-
-    /// <summary>
-    /// The depth pyramid of this frame, for the next frame's foliage cull (nothing else reads it); invalidated when the frame makes none.
-    /// </summary>
-    void BuildHiz()
-    {
-        if (OcclusionCull && ViewWindow.Current.IsWhole && _haveScene && _sceneDepth is not null)
-        {
-            Hiz ??= new HizPyramid(Gpu);
-            var hizCmd = Gpu.BeginNative("hiz");
-            Hiz.Build(hizCmd, _sceneDepth.Texture, _planes, _width, _height, _eyeNow, _viewRotation, _fovNow, _aspectNow);
-            Gpu.EndNative(hizCmd);
-            Stamp("hiz");
-        }
-        else Hiz?.Invalidate();
     }
 
     /// <summary>
@@ -1251,14 +1319,20 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void MakeLdrTargets(bool smaa, bool fxaa, bool haze)
     {
         bool wantLdr = smaa || fxaa || haze, wantSecond = haze && (smaa || fxaa);
-        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null)
-            && (!smaa || _smaaWeights is not null))
-            return;
+        // The pictures between the composite and the target carry the highlights in HDR output.
+        var format = Options.HdrPeak > 1 ? InternalFormat.Rgba16F : InternalFormat.Rgba8;
+        if (_ldr is not null && _ldr.Format != format)
+        {
+            _ldr.Texture.Dispose();   // released after the frames in flight
+            _ldrFxaa?.Texture.Dispose();
+            _ldr = _ldrFxaa = null;
+        }
+        if (_displayWidth <= 0 || (!wantLdr || _ldr is not null) && (!wantSecond || _ldrFxaa is not null) && (!smaa || _smaaWeights is not null)) return;
         try
         {
             using var batch = Gpu.Uploads.Begin();
-            if (wantLdr) _ldr ??= Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr");
-            if (wantSecond) _ldrFxaa ??= Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post ldr fxaa");
+            if (wantLdr) _ldr ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr");
+            if (wantSecond) _ldrFxaa ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr fxaa");
             if (smaa && _smaaWeights is null)
             {
                 _smaaEdges ??= Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa edges");
@@ -1307,6 +1381,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The eye this frame and last.
     /// </summary>
     Vector3 _eyeNow, _previousEye;
+    /// <summary>
+    /// What the float eyes leave out of the eye the scene is drawn from (WorldCamera.EyeResidual) this frame and last.
+    /// </summary>
+    Vector3 _eyeRestNow, _previousRest;
+    /// <summary>
+    /// The eye's step since the previous frame, its residual included.
+    /// </summary>
+    Vector3 EyeStep => (_eyeNow - _previousEye) + (_eyeRestNow - _previousRest);
     /// <summary>
     /// The field of view and aspect this frame and last.
     /// </summary>
@@ -1387,9 +1469,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The main camera of this frame, before <see cref="BeginScene"/>: for the motion vectors (reprojection into the previous frame).
     /// </summary>
-    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio)
+    public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio, Vector3 eyeResidual = default)
     {
         _eyeNow = eye;
+        _eyeRestNow = eyeResidual;
         _viewRotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         (_fovNow, _aspectNow) = (fieldOfView, aspectRatio);
     }
@@ -1399,7 +1482,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     public void BeginScene(float near, float far, float fieldOfView, float aspectRatio)
     {
-        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget);
+        SceneTargets = PassTargets.Of(_sceneColour!.Texture, _sceneDepth!.Texture, GiAlbedoTarget, TracedTermTarget);
         _nearPlane = near;
         _farPlane = far;
         _fovY = fieldOfView;
@@ -1420,8 +1503,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var standard = Matrix4x4.CreatePerspectiveFieldOfView(_fovNow, _aspectNow, near, far);
         var now = DepthConvention.Apply(Jitter.Apply(standard, JitterPixels, _width, _height));
         var previous = DepthConvention.Perspective(_previousFov, _previousAspect, near, far);
-        return Reprojection.ClipToPrevious(_viewRotation, _eyeNow, now, _previousRotation, _previousEye, previous);
+        return Reprojection.ClipToPrevious(_viewRotation, EyeStep, now, _previousRotation, previous);
     }
+
 
     #endregion
 
@@ -1597,10 +1681,21 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
 
     /// <summary>
+    /// A vendor upscaler that failed last frame, freed at the start of this one (the frame that failed still held its commands).
+    /// </summary>
+    IUpscaler? _retired;
+
+    /// <summary>
     /// Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.
     /// </summary>
     Target2D RunUpscale()
     {
+        if (_retired is not null)
+        {
+            _retired.Dispose();
+            _retired = null;
+        }
+
         bool reset = !_historyValid || !_previousValid || Vector3.Distance(_eyeNow, _previousEye) > 5000;
         float dt = (float)_frameClock.Elapsed.TotalSeconds;
         _frameClock.Restart();
@@ -1621,7 +1716,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (external is not null) done = RunExternalUpscaler(external, merged, output, reset, dt);
         if (!done) reset = RunTaa(output, reset);
 
-        // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it, through their own temporal filter.
+        // The vendor upscaler's output (not a history Meitou keeps): the fog volumes' shadow kept out of what was upscaled
+        // (FogShadowAfterUpscale), then the low-resolution particles over it, through their own temporal filter.
+        output = CompositeLateFogShadow(output, _displayWidth, _displayHeight, reset);
         _lateParticles.CompositeFiltered(_lowTargets[0], _lowTargets[1], output, _displayWidth, _displayHeight, reset);
         _historyValid = true;
 
@@ -1686,7 +1783,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
             _unavailable.Add(external.Kind);
-            external.Dispose();
+            _retired = external;   // not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one
             External = null;
             _warnedFallback = true;
         }
@@ -1717,8 +1814,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Sharpness = Options.Upscale.Sharpness,
         Reset = reset,
         ViewToClip = FullProjection(_fovNow, _aspectNow),
-        ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+        ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
         Eye = _eyeNow,
         Right = new Vector3(_viewRotation.M11, _viewRotation.M21, _viewRotation.M31),
         Up = new Vector3(_viewRotation.M12, _viewRotation.M22, _viewRotation.M32),
@@ -1789,8 +1886,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Forward = -new Vector3(_viewRotation.M13, _viewRotation.M23, _viewRotation.M33),
             Aspect = _aspectNow,
             ViewToClip = FullProjection(_fovNow, _aspectNow),
-            ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, _eyeNow, FullProjection(_fovNow, _aspectNow),
-                    _previousRotation, _previousEye, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
+            ClipToPreviousClip = _previousValid ? Reprojection.ClipToPrevious(_viewRotation, EyeStep, FullProjection(_fovNow, _aspectNow),
+                    _previousRotation, FullProjection(_previousFov, _previousAspect)) : Matrix4x4.Identity,
         });
     }
 
@@ -2122,6 +2219,80 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void ApplySsao()
     {
         MarkScene();
+        ApplyOcclusion();
+        ApplyContactShadows();
+    }
+
+    /// <summary>
+    /// The contact shadows over the scene now, whatever the occlusion (SSAO, GTAO or none; docs/render-post.md "Contact shadows"), at the render size, so the
+    /// characters keep theirs in full and their fine detail.
+    /// </summary>
+    /// <summary>The sun casts shadows this frame (set by the world frame): false with the sun shadows Off (<see cref="SunShadowMode"/>), when the contact shadows have nothing to add to.</summary>
+    public bool SunShadowed { get; set; } = true;
+
+    void ApplyContactShadows()
+    {
+        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess), nor when
+        // they went into the sun written apart (RunContactSun).
+        if (!Options.ContactShadows || !SunShadowed || TracedSun || _contactSunRan || !_haveScene || _sceneColour is null || _sceneDepth is null) return;
+        DrawContact(MathF.Tan(_fovY * 0.5f), _aspect, _nearPlane, _farPlane, null);
+        Stamp("contact");
+        CloseSegment();
+    }
+
+    /// <summary>
+    /// This frame's sun is written apart for the contact shadows (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the lit fragments leave it out
+    /// of the colour (location 2, as for the traced sun) and <see cref="RunContactSun"/> adds it back times what the contact shadows leave of it, so they take
+    /// the sun alone, exactly, and nothing of the ambient, the lamps or the bounced light.
+    /// </summary>
+    public bool ContactSun { get; set; }
+    /// <summary>The scene targets carry the sun's term for the contact shadows this frame.</summary>
+    internal bool ContactSunReady => ContactSun && !TracedSun && TracedTermTarget is not null && _giAlbedo is not null;
+    bool _contactSunRan;
+
+    /// <summary>Over the opaque scene, its pass closed (as <see cref="RunTracedSun"/>): the sun's term times what the contact shadows leave, added to the scene.</summary>
+    internal void RunContactSun()
+    {
+        if (_tracedTerm is null || _giAlbedo is null || _sceneColour is null || _sceneDepth is null) return;
+        DrawContact(MathF.Tan(_fovNow * 0.5f), _aspectNow, _planes.X, _planes.Y, _tracedTerm);
+        _contactSunRan = true;
+        Stamp("contact sun");
+        CloseSegment();
+    }
+
+    /// <summary>The contact pass: over <paramref name="term"/> added to the scene, or without one multiplied into it.</summary>
+    void DrawContact(float tanY, float aspect, float near, float far, Target2D? term)
+    {
+        var c = _contactPass ??= new ContactPass(Gpu);
+        Bind(c.P, c.Depth, _sceneDepth);
+        c.P.Set(c.Tan, ViewWindow.Tan(tanY * aspect, tanY));
+        c.P.Set(c.NearFar, near, far);
+        c.P.Set(c.Size, (float)_width, (float)_height);
+        var r = _viewRotation;
+        c.P.Set(c.Right, r.M11, r.M21, r.M31);
+        c.P.Set(c.Up, r.M12, r.M22, r.M32);
+        c.P.Set(c.Back, ViewWindow.BackFor(r, 2 * MathF.Atan(tanY), aspect));
+        c.P.Set(c.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
+        c.P.Set(c.WaterY, WaterHeight ?? float.MinValue);
+        c.P.Set(c.Contact, Options.ContactParams);
+        // Pixels the traced sun lights (the surface target's bit 16) keep its shadow alone: it already holds the contact, and both darkened thin gaps twice.
+        bool surface = term is not null || SurfaceReady;
+        Bind(c.P, c.Surface, surface ? _giAlbedo : null);
+        c.P.Set(c.SurfaceOn, surface ? 1f : 0f);
+        Bind(c.P, c.Term, term);
+        c.P.Set(c.TermOn, term is not null ? 1f : 0f);
+        c.P.ApplyGlobals();
+        Draw(c.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, term is not null ? GiAddState : AoMultiplyState);
+    }
+
+    /// <summary>The occlusion (SSAO or GTAO) into the scene colour (<see cref="ApplySsao"/>).</summary>
+    void ApplyOcclusion()
+    {
+        if (GtaoOn)
+        {
+            ApplyGtao();
+            return;
+        }
         if (MergeLayers)
         {
             ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _occlusion.A is not null);
@@ -2168,6 +2339,23 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One),
         ColourMask = DrawState.Rgb };
+
+    // Here and not in PostProcess.LampShadows.cs: static fields initialise in textual order only within one file, and these read PassState.
+    /// <summary>
+    /// Scene minus source; red, green and blue only (the alpha is the characters' SSAO mask).
+    /// </summary>
+    static readonly DrawState LampShadowState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract), ColourMask = DrawState.Rgb,
+    };
+
+    /// <summary>
+    /// The larger of the scene and the source; red, green and blue only.
+    /// </summary>
+    static readonly DrawState LampShadowFloorState = PassState with
+    {
+        Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max), ColourMask = DrawState.Rgb,
+    };
     /// <summary>
     /// The GI resolve's divisor of the render size (0: off, the lit fragments read the probes themselves; 1 full size; 2 half). Set before
     /// <see cref="Begin"/>: while it is above 0 the scene targets carry the albedo target.
@@ -2176,34 +2364,69 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The albedo target the scene writes while the GI resolve is on, else null.
     /// </summary>
-    GpuTexture? GiAlbedoTarget => GiResolve > 0 ? _giAlbedo?.Texture : null;
+    GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces ? _giAlbedo?.Texture : null;
+
+    /// <summary>
+    /// The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c>
+    /// switch's <c>cache</c> part).
+    /// </summary>
+    internal Gi.GiCache? GiCache { get; set; }
+
+    /// <summary>
+    /// The radiance cache for this frame's resolve, its output or null. It needs the scene's targets closed, so the open segment ends first.
+    /// </summary>
+    GpuTexture? RunGiCache()
+    {
+        if (GiCache is not { } cache) return null;
+        CloseSegment();
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        var rot = _viewRotation;
+        var right = new Vector3(rot.M11, rot.M21, rot.M31);
+        var up = new Vector3(rot.M12, rot.M22, rot.M32);
+        var view = new Gi.GiCache.View(_eyeNow, right, up, ViewWindow.BackFor(rot, _fovNow, _aspectNow), ViewWindow.Tan(tanY * _aspectNow, tanY),
+            _planes, _giLow!.Width, _giLow.Height, _giDivisor, _width, _height, tanY);
+        return cache.Run(_sceneDepth!.Texture, _giAlbedo!.Texture, view, Options.GiRelocating, Options.GiCloudShadowing);
+    }
+
+    /// <summary>
+    /// What a pass over the GI surfaces needs of the depth, the surface target and the camera.
+    /// </summary>
+    void SetGiView(GiPass g)
+    {
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        var rot = _viewRotation;
+        Bind(g.P, g.NearDepth, _sceneDepth);
+        Bind(g.P, g.Albedo, _giAlbedo);
+        g.P.Set(g.NearPlanes, _planes.X, _planes.Y);
+        g.P.Set(g.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
+        g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
+        g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
+        g.P.Set(g.Back, ViewWindow.BackFor(rot, _fovNow, _aspectNow));
+        g.P.Set(g.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
+        g.P.Set(g.FullSize, (float)_width, (float)_height);
+        g.P.Set(g.Div, (float)_giDivisor);
+    }
 
     /// <summary>
     /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their albedo: the resolve at 1/<see cref="GiResolve"/> of the render
-    /// size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too).
+    /// size, then the depth-aware upsample added to the scene colour. After the scene, before the fog volumes (they cover the light too); once a frame.
+    /// <paramref name="early"/>: over the opaque scene before the water copies it (the scene's pass closed): the water writes no surface, so what lies
+    /// under it kept the sky's ambient while the ground beside it took the probes', and the shore was a band of another brightness with the resolve's
+    /// texels for an edge.
     /// </summary>
-    public void RunGiResolve()
+    public void RunGiResolve(bool early = false)
     {
-        if (GiResolve <= 0 || _giAlbedo is null || _giLow is null || _sceneColour is null || !_haveScene) return;
-        MarkScene();
-        var r = _giResolvePass ??= new GiResolvePass(Gpu);
+        if (_giResolved || GiResolve <= 0 || _giAlbedo is null || _giLow is null || _sceneColour is null || !_haveScene) return;
+        _giResolved = true;
+        if (!early) MarkScene();
+        var cache = RunGiCache();
+        if (cache is not null) Stamp("gi cache");
+        bool relocate = Options.GiRelocating;
+        var r = _giResolvePasses[(relocate ? 1 : 0) | (cache is null ? 0 : 2)] ??= new GiResolvePass(Gpu, relocate, cache is not null);
         var a = _giApplyPass ??= new GiApplyPass(Gpu);
-        float tanY = MathF.Tan(_fovNow * 0.5f);
-        var rot = _viewRotation;
-        foreach (var g in (ReadOnlySpan<GiPass>)[r, a])
-        {
-            Bind(g.P, g.NearDepth, _sceneDepth);
-            Bind(g.P, g.Albedo, _giAlbedo);
-            g.P.Set(g.NearPlanes, _planes.X, _planes.Y);
-            g.P.Set(g.Tan, ViewWindow.Tan(tanY * _aspectNow, tanY));
-            g.P.Set(g.Right, rot.M11, rot.M21, rot.M31);
-            g.P.Set(g.Up, rot.M12, rot.M22, rot.M32);
-            g.P.Set(g.Back, ViewWindow.BackFor(rot, _fovNow, _aspectNow));
-            g.P.Set(g.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
-            g.P.Set(g.FullSize, (float)_width, (float)_height);
-            g.P.Set(g.Div, (float)_giDivisor);
-        }
+        foreach (var g in (ReadOnlySpan<GiPass>)[r, a]) SetGiView(g);
         r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
+        if (cache is not null) r.P.Bind(r.Cache, new SampledTexture(Point(), cache.View()));
         Draw(r.P, _giLow);
         Bind(a.P, a.Low, _giLow);
         a.P.Set(a.LowSize, (float)_giLow.Width, (float)_giLow.Height);
@@ -2217,16 +2440,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     void EnsureGi()
     {
-        if (GiResolve <= 0 || (_giAlbedo is not null && _giDivisor == GiResolve)) return;
+        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
+        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
         _giAlbedo?.Texture.Dispose();
         _giLow?.Texture.Dispose();
-        _giDivisor = GiResolve;
+        _giDivisor = divisor;
         using var batch = Gpu.Uploads.Begin();
-
-        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
-        // probes' light can be below the sky's) with the view depth in alpha.
-        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16Ui, _width, _height,
-            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+        // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the probes' light can be below the sky's) with the view depth in alpha.
+        _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
             TextureMinFilter.Nearest, "post gi resolve");

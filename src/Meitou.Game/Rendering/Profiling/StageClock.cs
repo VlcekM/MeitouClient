@@ -17,7 +17,7 @@ static class StageClock
     [
         "upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "ui",
         "shadows", "particles", "gi", "uploads", "cull", "bake", "shafts", "fog", "characters", "upd-chars", "submit", "driver-wait", "host", "blood",
-        "sim", "birds",
+        "sim", "birds", "lamp-shadows",
     ];
 
     /// <summary>
@@ -49,6 +49,11 @@ static class StageClock
     /// next).
     /// </summary>
     public const int Birds = 27;
+
+    /// <summary>
+    /// 28 is the lamps' traced shadows (part of the gi group in the legend).
+    /// </summary>
+    public const int LampShadows = 28;
 
     /// <summary>
     /// The stage the last lap ended (-1 before the first of the frame).

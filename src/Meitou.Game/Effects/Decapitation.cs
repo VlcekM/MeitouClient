@@ -52,22 +52,40 @@ sealed class Decapitation(GameHost host)
         /// </summary>
         public required Vector3 Velocity;
         /// <summary>
-        /// How fast it turns (radians/s), and the seconds its drop takes to the ground under where it was cut.
+        /// The seconds its drop takes to the ground under where it was cut.
         /// </summary>
-        public required float Spin, Flight;
+        public required float Flight;
+        /// <summary>
+        /// The tumble's speed in the air (radians/s): less after each landing.
+        /// </summary>
+        public required float Spin;
         /// <summary>
         /// The body's blood amounts when it was cut, drawn on the head.
         /// </summary>
         public required ulong Blood;
         /// <summary>
-        /// The shown tick its fall started (NaN until its look is drawn) and the seconds into it that it landed, at what height (NaN: still falling).
+        /// The shown tick its fall started (NaN until its look is drawn).
         /// </summary>
         public double Tick = double.NaN;
         /// <summary>
-        /// The seconds into the fall it landed (NaN while falling), and the height it rests at.
+        /// Its motion (<see cref="Step"/>): the seconds of its fall stepped so far, where the head bone is, its speed, how it is turned about the head
+        /// bone, its tumble's speed in the air, and whether it has come to rest.
         /// </summary>
-        public float Landed = float.NaN, RestY;
+        public float Time;
+        public Vector3 At, Speed;
+        public Quaternion Turn = Quaternion.Identity;
+        public bool Started, Resting;
     }
+
+    /// <summary>
+    /// A head on the ground: what a landing keeps of its fall's speed (below <see cref="BounceLeast"/> units/s it stays down) and takes of its speed
+    /// across the ground, how fast a rolling head slows (units/s2; a head is no ball), what a landing keeps of the tumble, and the speed it rests at.
+    /// </summary>
+    const float Bounce = 0.32f, BounceLeast = 6, LandingGrip = 0.3f, RollSlowing = 28, TumbleKept = 0.5f, RestSpeed = 0.4f;
+    /// <summary>
+    /// The longest step of a head's motion, and the most seconds caught up in one frame.
+    /// </summary>
+    const float StepSeconds = 1f / 120, CatchUp = 0.25f;
 
     /// <summary>
     /// The heads falling or lying, the oldest first; past the dropped-items limit the oldest goes.
@@ -159,20 +177,67 @@ sealed class Decapitation(GameHost host)
             // Its clock starts with the first frame its look is drawn; until then it is listed (so it gets ready) where it was cut.
             if (double.IsNaN(h.Tick) && characters.IsPrepared(h.Look)) h.Tick = clock;
             float t = double.IsNaN(h.Tick) ? 0 : MathF.Max(0, (float)((clock - h.Tick) * tick));
-            if (!float.IsNaN(h.Landed)) t = h.Landed;
-            float s = h.Flight > 0 ? MathF.Min(t / h.Flight, 1) : 1;
-            var at = new Vector3(h.Start.X + (h.Aside.X - h.Start.X) * s + h.Velocity.X * t,
-                h.Start.Y + h.Velocity.Y * t - 0.5f * Debris.FallGravity * t * t, h.Start.Z + (h.Aside.Y - h.Start.Z) * s + h.Velocity.Z * t);
-            if (float.IsNaN(h.Landed))
+            if (!h.Started)
             {
-                float floor = SurfaceUnder(characters, new Vector2(at.X, at.Z), h) + HeadRestHeight;
-                if (at.Y <= floor) (h.Landed, h.RestY) = (t, floor);
+                // Thrown with the blow's speed, and aside over the time of its drop.
+                var aside = (h.Aside - new Vector2(h.Start.X, h.Start.Z)) / MathF.Max(h.Flight, 0.2f);
+                (h.At, h.Speed, h.Started) = (h.Start, h.Velocity + new Vector3(aside.X, 0, aside.Y), true);
             }
-            if (!float.IsNaN(h.Landed)) at.Y = h.RestY;
-            var world = h.World * Matrix4x4.CreateTranslation(-h.Start) * Matrix4x4.CreateFromAxisAngle(h.Axis,
-                h.Spin * t) * Matrix4x4.CreateTranslation(at);
-            list.Add(new CharacterInstance(h.Key, h.Look, at, 0, []) { World = world, FreezeFrom = h.From, Blood = h.Blood });
+
+            if (!h.Resting && t > h.Time)
+            {
+                h.Time = MathF.Max(h.Time, t - CatchUp);
+                float floor = SurfaceUnder(characters, new Vector2(h.At.X, h.At.Z), h) + HeadRestHeight;
+                while (h.Time < t && !h.Resting)
+                {
+                    float dt = MathF.Min(StepSeconds, t - h.Time);
+                    Step(h, dt, floor);
+                    h.Time += dt;
+                }
+            }
+
+            var world = h.World * Matrix4x4.CreateTranslation(-h.Start) * Matrix4x4.CreateFromQuaternion(h.Turn) * Matrix4x4.CreateTranslation(h.At);
+            list.Add(new CharacterInstance(h.Key, h.Look, h.At, 0, []) { World = world, FreezeFrom = h.From, Blood = h.Blood });
         }
+    }
+
+    /// <summary>
+    /// One step of a head's motion over what lies <paramref name="floor"/> high under it: it falls and tumbles; a landing throws it back up with a
+    /// share of its speed and takes some of its speed across the ground; on the ground it rolls the way it goes, turning as a ball of its size
+    /// would, slowing until it rests. Engine choice (the decapitation is Meitou's): a ball over a height, not a body in the physics scene.
+    /// </summary>
+    static void Step(FallingHead h, float dt, float floor)
+    {
+        h.Speed.Y -= Debris.FallGravity * dt;
+        h.At += h.Speed * dt;
+        var across = new Vector2(h.Speed.X, h.Speed.Z);
+        bool down = h.At.Y <= floor;
+        if (down)
+        {
+            h.At.Y = floor;
+            if (h.Speed.Y < -BounceLeast)
+            {
+                h.Speed.Y *= -Bounce;
+                across *= 1 - LandingGrip;
+                h.Spin *= TumbleKept;
+            }
+            else
+            {
+                h.Speed.Y = 0;
+                float speed = across.Length(), slowed = MathF.Max(speed - RollSlowing * dt, 0);
+                across = speed > 1e-4f ? across * (slowed / speed) : Vector2.Zero;
+                if (slowed < RestSpeed) (across, h.Resting) = (Vector2.Zero, true);
+            }
+
+            (h.Speed.X, h.Speed.Z) = (across.X, across.Y);
+        }
+
+        // In the air it tumbles as it was cut; on the ground it turns about the axis across its way, by the ground it covers.
+        float rolling = across.Length();
+        var (axis, turn) = down && h.Speed.Y == 0
+            ? (rolling > 1e-4f ? new Vector3(across.Y, 0, -across.X) / rolling : h.Axis, rolling / HeadRestHeight * dt)
+            : (h.Axis, h.Spin * dt);
+        if (turn != 0) h.Turn = Quaternion.Normalize(Quaternion.Concatenate(h.Turn, Quaternion.CreateFromAxisAngle(axis, turn)));
     }
 
     /// <summary>

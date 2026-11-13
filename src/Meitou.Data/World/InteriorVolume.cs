@@ -203,7 +203,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// <see cref="CoverClearance"/> up (<see cref="FloorSurfaces.LowestAbove"/>). False on a walkable roof and in a roofless part, which the hull's
     /// height range still holds: Meitou's indoor lighting asks this, the floor view and the sounds ask <see cref="Contains"/> as the game does.
     /// </summary>
-    public bool Covered(Vector3 p) => _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance) is not null;
+    public bool Covered(Vector3 p, int maxFloor = int.MaxValue) => _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance, maxFloor) is not null;
 
     /// <summary>
     /// The height of the ceiling over <paramref name="p"/> (from <see cref="CoverClearance"/> up), or null when nothing is over it

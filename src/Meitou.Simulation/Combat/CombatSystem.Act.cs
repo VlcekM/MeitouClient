@@ -469,7 +469,11 @@ public sealed partial class CombatSystem
         {
             s.AttackTech = -1;
             s.NextBlow = 0;
-            bool task = s.TargetSlot == s.TaskSlot && s.TargetGeneration == s.TaskGeneration;
+            // Only a focused fight (the player's pick, rows 5 and 61) ends with its target: its start stores the target in CombatClassAI +0x2c8 and
+            // clears refocus +0x2e8. Every other fight (rows 4, 13, 16, 227) starts with refocus set and no stored target, so a target down
+            // leaves it deciding (state 4) and it picks the next one (FUN_14060d6a0, FUN_1406681e0, FUN_1403341f0, Verified); only the nothing-left
+            // test ends it.
+            bool task = s.Picked && s.TargetSlot == s.TaskSlot && s.TargetGeneration == s.TaskGeneration;
             int pick = task ? -1 : ChooseTarget(world, i, s, cold);
             s.PickTick = now + PickTicks(world, cold);
             if (pick >= 0)

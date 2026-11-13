@@ -59,6 +59,8 @@ public sealed partial class GlslProgramCompiler
         ArgumentNullException.ThrowIfNull(vertexGlsl);
         ArgumentNullException.ThrowIfNull(fragmentGlsl);
         options ??= DefaultOptions;
+        vertexGlsl = ShaderOverrides.Source(vertexGlsl, "vertex");
+        fragmentGlsl = ShaderOverrides.Source(fragmentGlsl, "fragment");
 
         string key = ShaderCache.Key(vertexGlsl, fragmentGlsl, options, CacheVersion);
         if (options.UseMemoryCache && _memory.TryGetValue(key, out var cached)) return cached.WithSource(ProgramSource.Memory);
@@ -207,6 +209,7 @@ public sealed partial class GlslProgramCompiler
     {
         ArgumentNullException.ThrowIfNull(glsl);
         options ??= DefaultOptions;
+        glsl = ShaderOverrides.Source(glsl, stage.Replace(' ', '-'));
         string key = ShaderCache.Key(stage + ":native", glsl, options, NativeCacheVersion);
         if (options.UseMemoryCache && _nativeMemory.TryGetValue(key, out var hit)) return hit;
 

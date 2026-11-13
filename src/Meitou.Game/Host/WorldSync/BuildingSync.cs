@@ -309,6 +309,9 @@ sealed class BuildingSync(GameHost host)
         if (host.Scene.Database is not { } db) return null;
         var footprints = new Simulation.Navigation.BuildingFootprints(host.Install, db,
             host.Sandbox.IsSandbox || host.Duel.IsDuel || host.Battle.IsBattle ? null : host.Scene.Objects?.Levels);
+
+        // The walls and posts standing in the water stop the shore waves and the wakes (docs/render-water.md "Shore waves").
+        if (host.Gpu.Water is { } water) water.Walls = (centre, radius) => footprints.PlaneCut(centre, radius, Data.World.WorldWater.Height);
         var parts = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var icons = new BuildingIcons(Path.Combine(host.Install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<PlacementTown>? towns = null;

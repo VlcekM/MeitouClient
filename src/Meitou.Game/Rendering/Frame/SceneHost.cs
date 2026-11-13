@@ -43,8 +43,9 @@ sealed class SceneHost(IGpuContext ctx)
 
         // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
+        var extra2 = clearColour is not null && !targets.Extra2.IsNull ? targets.Extra2 with { Load = LoadOp.Clear, Clear = default } : targets.Extra2;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel,
-            extra), secondaries);
+            extra, extra2), secondaries);
         ctx.BeginHostPassParallel(list, targets, DrawState.SceneDepth(targets.Formats, DrawState.Rgb),
             stage);   // alpha: the characters only (the SSAO character mask)
         _cmd = list;

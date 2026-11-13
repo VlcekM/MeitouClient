@@ -546,6 +546,7 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   anywhere is **Unknown** (nothing in its data does). Bounty Hunters is the only base FACTION of `fundamental type` ADVENTURER with a
   `legal system` (**Verified** by probe; the others with one: Medics Guild, Traders Guild, Slave Traders, Free Traders, Tech Hunters,
   Empire Peasants, Machinists -> United Cities; the empires point at themselves).
+- **Animals never spot** (**Verified**, decompile of `FUN_140856f00`): its first test is the looker's vfunc `0x248` (the animal test, also used by DA 29); an animal looker, one in combat mode, or a target that is carried or imprisoned makes it return at once, so an animal never recognises a bounty, fires event 44 or starts a hunt. The base "Bounty hunters" squads (wandering between towns, rebirth "Bounty hunters", "Empire Bounty hunters") carry a Bonedog in `animals`, in the squad's faction, so they pass the faction test of `CrimeFactions.Hunts`. They fight the target only as squad mates: DA 6 tags the target as the squad's temporary enemy and mates join through their enemy scan. Meitou: the spotting and disguise loops (`ArrestSystem.Spot`, `Disguise`) skip animal lookers. In-combat lookers are **not modelled** (unchanged).
 
 ### 12. Slaves, prisoners, animals
 

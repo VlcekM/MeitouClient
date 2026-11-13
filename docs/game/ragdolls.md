@@ -77,6 +77,8 @@ also uses 0x8000 internally as "release all".
   opposite request for the same parts cancels both, a duplicate is dropped. Only when the character
   has a visual or is dead (slot 31) and, for "on", is not in furniture (Character `+0x2f8`, the
   bed/cage state of [carry-loot](carry-loot.md)).
+  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls. **Observed** (harness `cage-in --record` in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and `stealth-ko`): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced (**Unknown**).
+
 - The queue is drained at the sync point `FUN_1407d2380` → `FUN_1405d2c30` → setter `FUN_1405d0db0`,
   which keeps a request queued while the skeleton is not ready or a get-up blend runs.
 - The setter, for WHOLE or CARRY_MODE: unlinks a carried body (also when the carrying arm goes limp),
@@ -254,6 +256,27 @@ pose exists only as pinned kinematic bones.
 - **Verified** pinned bodies (`FUN_1407d1550` -> `FUN_1401a9ea0`, `FUN_1401a9f00`): a pinned body gets position and orientation **set** (separate setters, not a kinematic move) and its linear and angular velocity zeroed,
   every frame; a joint to a simulated limb therefore sees only the position error of the jump, never the pinned body's speed. Meitou: `RagdollSystem.Pin` does the same (**Observed** in the sandbox carry scene: the joints stay stable, the forearms swing slightly more after the lift than with the velocity drive it replaced).
 
+### Joint frames, zero angle and body properties
+
+- **Verified** (decompile of `FUN_1401a81b0` and its common part `FUN_1401a7e90`): a joint's two actors get the same local normal and local axis (the file's, turned by the insert rotation) and the anchor
+  is set globally from the actors' poses at build time. All actors are created with one orientation (the insert rotation), so a revolute angle is 0 exactly when every body shares one orientation. The
+  global-axis setter runs only for a joint to the world. There is no joint to the world in the human files.
+- **Verified** (`FUN_1407d26b0`, `FUN_1407d1550`, `FUN_1407d3a30`): that shared orientation is the binding pose. Each ragdoll bone keeps its binding-pose derived orientation (`OldBone::_getBindingPoseInverseOrientation` and its
+  inverse, at bone-record `+0x68` / `+0x58`); a body's orientation is node rotation x bone derived orientation x binding inverse (the bone's turn from its binding pose), its position node + (node rotation x bone
+  position) x scale, and a simulated body writes the bone back as parent inverse x actor x binding. So a revolute angle is the relative turn of two bones from the binding pose, about the file's axis, and the ranges are
+  measured from it. Meitou already does this (`RagdollBody.BoneInBody`, `RagdollJoint.BasisA/B`); no change to the reference angle was needed. The spine's clip-fit outliers
+  ([below](#rest-poses-of-the-spine)) are therefore the file's own limits, not a different zero.
+- **Verified** (`FUN_1401a81b0`, file read with the repo's reader plus a raw dump of `hu_m_ragdoll_5.phs`): a revolute limit is low = `+0x5c`, high = `+0x58` in radians, restitution 0, hardness 1 (hard). The
+  projection mode is applied only when field `+0xdc` is 1; it is 0 with distance and angle 0 in every joint of the file (no projection). No joint is breakable (max force and torque 0), none has motor or collision enabled
+  (so jointed pairs do not collide) and only Head -> Neck has a spring.
+- **Verified** (`FUN_1401a8be0`): a body gets the file's mass (1), mass-space inertia 0 (PhysX computes it from the shape) and density 0; angular damping is the file's x 10 (0.5) and linear 0 until the ragdoll callback
+  and the activation set 0.5 / 0.5 and then 0.05 / 0.01; solver iteration count = max(file, 16); body flags 0x900; no centre of mass offset in the ragdoll files. All 13 bodies weigh the same (a head as much as a torso).
+- **Verified** (`FUN_1407dbee0`): scene time step method variable with max step 1/60 and max 16 iterations (a 1/30 s frame is two 1/60 steps, 0.04 s is three); SDK dynamic and static friction scaling 4.0 (parameters 5, 6) over
+  materials of dynamic 1.0, static 20.0, restitution 0.05, so the contact friction a ragdoll meets is the material's times 4. **Observed**: that the scaling multiplies the material's coefficients is from PhysX 2.8's
+  documentation, not the binary. Meitou used friction 1 (`RagdollPhysics.Friction`).
+- Differences that stay: Bepu has one friction coefficient (no static one, so 4 stands for the dynamic coefficient only), its limits are soft constraints solved with 2 iterations in each of 4 substeps against PhysX's
+  hard limits and 16 iterations (a pose measured at the limits overshoots them by under 1 degree on average, **Observed**, `ragdoll-dump` on 13 bodies), and shape skin width 0.25 is not modelled.
+
 ## Initial state
 
 `FUN_1407d1800` places every body at its bone's current animated world pose and gives simulated
@@ -269,10 +292,10 @@ is focused on the struck part (below). Bodies kept from a partial ragdoll keep t
 ### Advanced ragdolls (Meitou)
 
 Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful: the original's hard limits and no pull), tuned by eye (**Unknown** against real motion):
-- **Soft limits**, every ragdoll: each limit gets an inner one 25% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a soft overdamped spring (5 Hz, ratio 3)
-  that brakes the joint before the hard stop instead of letting it hit it at full speed.
+- **Soft limits**, every ragdoll: each limit gets an inner one 25% of its range in from either end (`SoftBand`; a spherical joint's swing cone too), a firm critically damped spring (20 Hz, ratio 1)
+  that stops the joint a quarter of its range short of the hard stop ([Rest poses of the spine](#rest-poses-of-the-spine): the weaker 5 Hz ratio 3 one let backs creep into the stops).
 - **Relaxed pull**, whole and carried ragdolls of an incapacitated character (not a conscious one's collapsed limbs, which hang loose): a capped `TwistServo` on each joint towards
-  60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees, which way **Unknown**, spine straight; a shoulder's twist to 0, its swing left to
+  60% of the way from the binding pose to the middle of a hinge's range (knees about 50 degrees, elbows about 45, hips about 24 degrees of flexion (**Observed**: the hip's clip poses run −130 to +50 with a median of −17, so negative is flexion), spine at its binding pose; a shoulder's twist to 0, its swing left to
   gravity). Unconscious 1.5 Hz with at most 40 torque, dead 0.8 Hz with at most 12 (muscles go slack at death); the head keeps only the file's spring. Re-set when the state
   changes (a knocked-out body dying), removed at the freeze. Gravity beats it, so it shapes the rest pose rather than holding one.
 - **Spin on impact**: a new ragdoll started by a blow (`CharacterCold.Blow`'s push) spins its upper arms along the push and its thighs against it (the feet held the ground),
@@ -280,6 +303,33 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 - **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
   (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body takes the whole push times the ragdoll's mass over its own (at most 4x: an impulse on it
   alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; no start cap (the physics holds each body to `RagdollPhysics.MaxSpeed`, 200). No bone: the whole push on every body.
+
+### Rest poses of the spine
+
+Reported: knocked-out and dead bodies often end with a rounded ("arched") back. **Observed** in the hidden game (`ragdoll-dump`; Siwa plus 12 spawned Dust Bandits of `t_flats_shore`, standing still ("stand") or
+ordered to run for 40 ticks ("run"), then `ko`, dumped 300 ticks later). "Rounded" = lumbar twist minus thoracic twist above 40 degrees (forward flexion is positive for `Spine1 -> Bip01` and negative for
+`Spine1 -> Spine2` and `Spine2 -> Neck`; limits +-37 and +-30). One run of 13 bodies per cell: the rest pose depends strongly on small differences, so read the counts as indications.
+
+| Setup | stand: rounded of 13, mean abs curve | run |
+|---|---|---|
+| Faithful (Advanced off), friction 1 | 2, 22 | 7, 39 |
+| Faithful, friction 4 | 1, 28 | 5, 38 |
+| Faithful, friction 4, 2 substeps x 8 iterations (nearer PhysX's hard limits) | 5, 40 | 8, 46 |
+| Advanced as first built (soft limit 5 Hz ratio 3, relaxed pull) | 6, 37 | 11, 52 |
+| Advanced, soft limits only | 12, 62 | |
+| Advanced, relaxed pull only | 5, 30 | |
+| Advanced, soft limit 20 Hz ratio 1, friction 4 (now) | 1, 35 | 4, 33 |
+
+- The curled kneeling pose (hips -100 to -110, knees 140 to 157, lumbar +38 to +41, thoracic -31, both at their stops) is what a standing or running body does when its legs fold: a knee flexes under a forward-leaning
+  body. The joints, zero angle and limits are the original's ([above](#joint-frames-zero-angle-and-body-properties)), and the closer Meitou's solver gets to hard limits the more often a collapse ends on the stops (5 to 8
+  of 13). So the pose is very probably the original's own, which also starts at rest with no impulse. **Unknown**: how often the original ends in it (PhysX's solver, static friction 80 and shape skin are not reproduced).
+- Advanced ragdolls made it worse: the soft limit was a weak overdamped spring (5 Hz, ratio 3), under which a collapsing back creeps into the stops (alone: 12 of 13 rounded). It is now a firm one (20 Hz, ratio 1)
+  a quarter of the range short of each stop, so the back stops rounding at about half of the file's range. Edge: ranges of the other joints shrink the same way, so most bodies end with hips near -85 and knees under 90.
+  Not tried further: a stronger spine pull (150 torque at 3 Hz) changed nothing measurable.
+- The hinge joints agree with the clips for the limbs (the angle `RagdollJointTests` checks: 0.0 to 0.8% of 696 clip poses of the male skeleton outside the ranges, 3 degrees of slack) but not for the back: `Spine1 -> Bip01` 10%
+  outside (its clip poses run from -8 to +54, median +15, against +-37), `Spine1 -> Spine2` 1.3%, `Spine2 -> Neck` 4.2%, `Head -> Neck` 19%. With the reference **Verified** as the binding pose (above) these are the file's own
+  limits, narrower than the animators' poses: the original pushes such a pose back to the limit the moment its ragdoll starts. The earlier guess that Meitou's zero angle differed is disproved.
+- **Unknown**: whether bodies of one character collide with each other in the original beyond jointed pairs (groups 3 and 4 do not disable themselves, no actor-pair flag was found; Meitou lets non-jointed pairs collide).
 
 ## Per frame
 

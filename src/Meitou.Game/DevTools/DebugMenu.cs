@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Meitou.Data.Fcs;
 using Meitou.Game.DevTools.Agents;
 using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Ui;
@@ -193,6 +194,16 @@ sealed class DebugMenu(GameHost host)
     string _debugStatus = "";
 
     /// <summary>
+    /// The highlighted row (the photo and agent tools read it).
+    /// </summary>
+    internal int RowIndex => _debugRow;
+
+    /// <summary>
+    /// The status line (the photo and agent tools read it).
+    /// </summary>
+    internal string DebugStatus => _debugStatus;
+
+    /// <summary>
     /// The open row's sub-list (Enter or Right opens it, Esc or Left closes it). Damage and Force hits: "Random" or "Off", then the first target's
     /// parts as (template id, name); Clear bounties: "All factions", then each faction with a bounty as (faction index, name and total).
     /// </summary>
@@ -222,12 +233,17 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// A tool row: its section, label, key hint ("" for none), its state for the value column ("on", "off", a mode, "" for none) and what Enter does.
     /// </summary>
-    readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch)
+    internal readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch)
     {
         /// <summary>
         /// A plain on / off row: Left turns it off, Right on (Enter and Space flip it); other rows flip or cycle on every one of the four keys.
         /// </summary>
         public bool IsSwitch { get; init; }
+
+        /// <summary>
+        /// A stepped row (the time of day): Left steps back, Right, Enter and Space forward; its state is a value, not on / off.
+        /// </summary>
+        public Action<int>? Step { get; init; }
     }
 
     /// <summary>
@@ -239,8 +255,9 @@ sealed class DebugMenu(GameHost host)
     /// The tool rows below the cheats: each opens a tool or switches an overlay; a new tool adds its row here (tools first, then the Overlays
     /// section).
     /// </summary>
-    DebugTool[] DebugTools => _debugTools ??=
+    internal DebugTool[] DebugTools => _debugTools ??=
     [
+        new("World", "Time of day (Left/Right: -/+ 1 h)", "", DebugTimeText, () => { }) { Step = DebugStepTime },
         new("Tools", "Pick & collision inspector...", "", () => "", () => { DebugMenuOpen = false; InspectorMenuOpen = true; }),
         new("Tools", "Interior editor...", "", () => "", host.InteriorEditorHost.OpenInteriorEditor),
         new("Tools", "Level editor...", "Shift+F12", () => "", host.LevelEditorHost.OpenLevelEditor),
@@ -264,6 +281,45 @@ sealed class DebugMenu(GameHost host)
     /// The tool rows, made on first use.
     /// </summary>
     DebugTool[]? _debugTools;
+
+    /// <summary>
+    /// The settings window's "Time of day" slider (the same setter as its Advanced page), null where the loop has none.
+    /// </summary>
+    Slider? DebugTimeSlider => host.AgentChannel.SettingsPanel?.Sliders.FirstOrDefault(s => s.Label == "Time of day");
+
+    /// <summary>
+    /// The time row's value text.
+    /// </summary>
+    string DebugTimeText() => DebugTimeSlider is { } s ? s.Display : "n/a";
+
+    /// <summary>
+    /// The whole hour the time row last stepped to (-1: none), so Left keeps going back while the clock runs on past it.
+    /// </summary>
+    int _debugLastHour = -1;
+
+    /// <summary>
+    /// Moves the time of day to the next whole hour (<paramref name="hours"/> 1) or back (-1): to the start of the current hour, or to the hour
+    /// before when the time is within 5 game minutes past the hour or still in the hour this row last stepped to (a running clock moves on from it).
+    /// </summary>
+    void DebugStepTime(int hours)
+    {
+        if (DebugTimeSlider is not { } s) return;
+        float h = s.Get();
+        int whole;
+        if (hours > 0)
+        {
+            whole = (int)MathF.Floor(h + 1e-3f) + hours;
+        }
+        else
+        {
+            whole = (int)MathF.Floor(h);
+            if (h - whole < 5 / 60f || whole == _debugLastHour) whole += hours;
+        }
+
+        whole = (whole % 24 + 24) % 24;
+        _debugLastHour = whole;
+        s.Set(whole);
+    }
 
     /// <summary>
     /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the
@@ -468,7 +524,7 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// Whether <paramref name="row"/> is a tool row.
     /// </summary>
-    bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
+    internal bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
 
     /// <summary>
     /// Whether <paramref name="row"/> takes typed text: a mod row with a field, or a cheat row other than the switches and actions without one.
@@ -548,6 +604,12 @@ sealed class DebugMenu(GameHost host)
                 break;
             case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(_debugRow):
                 var tool = DebugTools[_debugRow - host.Modding.DebugRowCount];
+                if (tool.Step is { } step)
+                {
+                    step(key == EngineKey.Left ? -1 : 1);
+                    break;
+                }
+
                 // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
                 if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right))
                     break;
@@ -858,10 +920,43 @@ sealed class DebugMenu(GameHost host)
 
 
     /// <summary>
+    /// Takes <c>--maker x</c>, <c>--model x</c> and <c>--level n</c> out of <paramref name="args"/>; null when none is given.
+    /// </summary>
+    internal static DebugWeaponGrade? TakeGrade(ref IReadOnlyList<string> args)
+    {
+        string? maker = null, model = null;
+        int? level = null;
+        var rest = new List<string>();
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (i + 1 < args.Count && args[i].Equals("--maker", StringComparison.OrdinalIgnoreCase))
+            {
+                maker = args[++i];
+            }
+            else if (i + 1 < args.Count && args[i].Equals("--model", StringComparison.OrdinalIgnoreCase))
+            {
+                model = args[++i];
+            }
+            else if (i + 1 < args.Count && args[i].Equals("--level", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out int n))
+            {
+                level = n;
+                i++;
+            }
+            else
+            {
+                rest.Add(args[i]);
+            }
+        }
+
+        args = rest;
+        return maker is null && model is null && level is null ? null : new DebugWeaponGrade(maker, model, level);
+    }
+
+    /// <summary>
     /// Puts items on the first selected character (the menu's Give item row; the console's <c>give</c>): the record by name, the quantity 1 to 1000,
     /// the quality 0 to 100.
     /// </summary>
-    internal string DebugGive(string name, int quantity, int quality, bool equip = false)
+    internal string DebugGive(string name, int quantity, int quality, bool equip = false, DebugWeaponGrade? exact = null)
     {
         DebugFailed = false;
         var selected = host.Player.AgentOrders.ControlOrderers().ToArray();
@@ -870,7 +965,7 @@ sealed class DebugMenu(GameHost host)
         quality = Math.Clamp(quality, 0, 100);
         if (DebugRecord(name, character: false) is not { } item) return DebugFail($"no item record matches '{name}'");
         host.Session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity,
-            quality) { Tick = host.Session.World.Tick, Equip = equip });
+            quality) { Tick = host.Session.World.Tick, Equip = equip, Exact = exact });
         if (host.Scene.Database is { } db && db.Find(item.Id)?.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(db, quality) is { } grade)
             return $"gave {quantity} x {grade.Name} {item.Name} (level {grade.Level})";
         return $"gave {quantity} x {item.Name}{(DebugHasQuality(item.Id) ? $" (quality {quality})" : "")}";
@@ -997,7 +1092,7 @@ sealed class DebugMenu(GameHost host)
             {
                 var tool = DebugTools[i - host.Modding.DebugRowCount];
                 string state = tool.State();
-                bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
+                bool toolOn = tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
                 lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn));
                 continue;

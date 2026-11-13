@@ -248,7 +248,7 @@ public sealed unsafe partial class WorldObjectRenderer
             var view = Matrix4x4.CreateTranslation(-entry.Anchor) * entry.View;
             Matrix4x4.Invert(view, out var toWorld);
             var eye = toWorld.Translation;
-            var constants = new ViewConstants { ViewProjection = view * entry.Projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = 0 };
+            var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(eye) * view * entry.Projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = 0 };
             PrepareDraws(IconOptions, wire: false);
 
             // The picture shows no weather (the game's has no dust), as an impostor bake.

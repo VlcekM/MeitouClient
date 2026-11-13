@@ -74,10 +74,10 @@ items flip their normal map's green (skin.hlsl), so their binormal is the opposi
 their darken and green flip are **Unknown**; Meitou applies neither (both keyed on `PartMaterial.Worn`).
 Worn items (template `Skinned`, `AppearanceBase::setupItemMaterial` `FUN_140536210`) write gloss = diffuse alpha × `glossMult`, metalness = colour
 map blue; nothing sets `glossMult` there and `Skinned_FP` has no default, so it is 0: worn clothing is matte (**Observed**: no setter in the function,
-no default in `skin.program`). Items attached with their own mesh (`StaticObject`) keep `glossMult` 1. Lighting (**Verified**, `deferred.hlsl` / `rtt.hlsl`, `lightingFunctions.hlsl`): specular colour = lerp(0.04, albedo, metalness),
+no default in `skin.program`). The worn items' diffuse alpha is still a painted gloss map, cloth near 0 and metal bright (**Observed**, `Samurai_d_HI.dds`, `whites.dds`; 66 of 107 vanilla armour diffuses have a varied alpha, 24 are flat), unused by the game; `Advanced materials` uses it to tell plate from cloth. The diffuse alpha is the gloss everywhere else too (**Verified**, `objects.hlsl`, `skin.hlsl`, `character.hlsl` `writeGloss`). Character normal maps hold no hidden channel: X in alpha, Y in green, red a copy of green (**Verified**, channel correlation on 8 `character/skins` normals). No roughness, AO or height map is authored (**Observed**, shaders and channel scan by family). Surfaces cut out by the normal map's alpha (`FeatureAlpha`, `Building_Alpha`, farm plants) are translucent to the sun only: translucency = 1 - (normal alpha - threshold) / (1 - threshold), and a side facing away takes -N.L times it (**Verified**, `objects.hlsl` TRANSPARENCY, `lightingFunctions.hlsl` `CalcPunctualLight`, `deferred.hlsl`; lamps do not pass it); Meitou applies the same in `kenshiLight`. **Observed** (main menu scene, the value displayed): 0 on the bushes, non-zero on a few texels only, so the term changes almost nothing there. Foliage has no gloss or metal data: `foliage.hlsl` forces both to 0. Weapons (and their sheaths, which copy the item's material) read the model record's `metalness map`, red channel (**Verified**, decompile: `FUN_140844030` → `FUN_140446e60` → `FUN_140841a50` binds `metalnessMap` when the field is set; `objects.material` `StaticObject`, `objects.hlsl`); Meitou reads it too (`HasMetalMap`). The colour map is bound only with a `color map` and a dye record (`FUN_140536210`), and vanilla masks rarely fill blue (**Verified**, byte scan of `color map` in the four base files, blue channel of each item texture read: 0 in the samurai, barbarian, police, monk, helmet, coat and fancy-clothes masks; set in `robotmask_metal_hi`, `f_medplate_d5c`, `jacket-trader-01_color`, `cargo01_color`, `fancy-rug_colourmap`): vanilla armour is almost never metal. Items attached with their own mesh (`StaticObject`) keep `glossMult` 1. Lighting (**Verified**, `deferred.hlsl` / `rtt.hlsl`, `lightingFunctions.hlsl`): specular colour = lerp(0.04, albedo, metalness),
 diffuse albedo x (1 - metalness), diffuse light x (1 - the specular colour's mean); the GGX Fresnel and Lazarov environment BRDF take that colour.
 Meitou: `atmoMetalness` in `kenshiLight` / `stageLight`, set from a worn item's colour map blue; other surfaces stay dielectric
-(objects' `metal_map` is not read).
+(objects' `metal_map` is not read; **Verified** by byte scan of the `metalness map` / `metalness map 2` values: `gamedata.base` sets none of its 298, `rebirth.mod` 5 and `Newwworld.mod` 7). Objects now read `metalness map` where set (`WorldObjectRenderer`, the game's value), and the optional `objmetal` switch treats 12 named sheet-metal textures (`MetalTextures`) as metal, at 0.3 at most, where they have no colour of their own, the reflections added over the texture's own light (`atmoMetalDiffuse`; **Observed** on 6 buildings at noon and dusk: replacing that light as the game's metalness does darkened them by 13 to 35 %; `metalness map 2` is not read).
 Skin tone, body normals/muscle/starvation, hair/beard overlays, dye/cloth/cutout and wet/dust inputs
 have separate parameters. Material runtime facts: [runtime-materials](formats/runtime-materials.md).
 Bone/positional sizes and face morph deltas apply before skinning; meshes with their own LOD or
@@ -151,9 +151,38 @@ Boots (slot 9, not `is locked`) on a character with exactly one fitted leg prost
 
 ### Weapon parts and their material
 
+#### A weapon's grade look
+
+**Verified** (base-game data, 23 MATERIAL_SPECS_WEAPON records read with `GameDatabase`): the look of a weapon grade is its **model**, the item's `material sid`, a MATERIAL_SPECS_WEAPON, and nothing else. The record holds `texture map`, `normal map` (may be empty), `specular mult` (1, except `001` = 0), `attack mod` / `defence mod`, an empty `metalness map` and the scale fields `overall scale` / `scale length` / `scale thickness` / `scale width` (all 1 in the base game; only the item icon reads them). No rust, wear or dirt amount exists as a number: a rusted blade is a rust texture. The manufacturer (`company sid`, WEAPON_MANUFACTURER) only decides which models exist (`weapon models`: model, level in value 0, pick weight in value 1); the level and the manufacturer change stats, name and weight, not the picture. Base textures, in `data/items/weapons/tex/`: Rusted Junk, Rusting blade-, Mk 0, Mk IV, Mk V, Mk VI and Industrial 007 share `01_HI` (no normal map); Rusting Blade `02`; Mid-Grade Salvage `03`; Old Refitted Blade `04`; Refitted Blade `05`; Catun No.1-3 `06`-`08`; Mk I `09`; Mk II `10`; Mk III `11`; Edge Type 1-3 `12`-`14` (each with a `_n_HI` normal map from `02` up); Merchants Blade `tech5r`; `001` `plain2`. The model's texture covers the whole mesh of the weapon (blade, handle, sheath).
+
+**Verified** (decompile, `FUN_140844030` via `FUN_140446e60`, ground items and weapons): the material built for a weapon is the model's record with shader flags 0. **Observed** (no other input found there and none in the data): no per-level or per-manufacturer parameter. A lying weapon takes the same model as a held one (the item instance's `material sid`). Meitou draws it: held and sheathed (`CharacterPart.Material`), on the ground (`GroundItemSnapshot.Material` -> `BuildingPlacement.ItemMaterial` -> `PlacedMesh.Material`), and in icons (`ItemIcons.MaterialOf`). A weapon with no model keeps the resolver's pick (**Unknown** whether the original rolls one).
 **Observed** (decompile: `FUN_1405d24b0` sheath attach, `FUN_140535e50` attach, `FUN_1405358a0` attachment object, `FUN_140536210` `setupItemMaterial`; `data/materials/deferred/skin.hlsl`): a weapon's `sheath` mesh is attached like `bare sword` and `mesh`: the attachment copies the weapon item's material record (the saved `material sid` model, `FUN_140535e50` takes the item and the mesh name), so the scabbard wears the same MATERIAL_SPECS_WEAPON model (grade) as the blade. Meitou gave the sheath no model and resolved it as an unowned mesh (the first model of the weapon's manufacturer: a Rusted Junk look on every graded sword); fixed, and the crossbow's model reaches its `mesh`, `extra mesh` and `live ammo` parts the same way. A weapon with no saved model keeps the resolver's choice (**Unknown** whether the original then picks one at random, `FUN_140840140`).
 
 **Verified** (`skin.hlsl`): worn items always `clip(normal.a - 0.6)`, so a normal map whose alpha is low (BC1 punch-through, atlas islands) hides those texels.
+
+### Surveys
+
+`dotnet run --project tools/Meitou.Tools -- characters` builds the look of every ANIMAL_CHARACTER and of one CHARACTER per race list and reports a missing body mesh, skeleton,
+texture or part mesh; `items` resolves each worn ARMOUR/CONTAINER's material (7,370 of 13,107 mesh fields name no material list and take the mesh's own material: not a failure);
+`specs` counts the paint factors of coloured materials; `record <name|id>[|...]` prints a record. **Observed** (owner's mods): the only people/animals failing were the 4 all-0-chance
+animals (animals.md). Samurai Clothpants' `color samurai armour nopaint faction painted` has `dont colorise` false, so a worn pair takes the wearer's faction scheme (a
+white second colour for Bounty Hunters), which paints the colour map's second region white over the light texture. **Verified** (decompile `FUN_140536210`): the original reads `paint factor 1/2` from the item's record (`+0x78`, 0 for every item) and the colour map from the material (`+0xb0`); the colours come from the colour record at `+0xb8`, so the inputs are ours. **Observed** (controlled scene, siwa-test6 at 13:00, four people side by side in Bloodraiders): the pants draw textured and tinted red, so the white pair of Trak is his stored white scheme, not a render fault.
+
+### Characters that cannot be drawn
+
+**Verified** (decompile of kenshi_x64.exe):
+- A character whose race id names no RACE record (`FUN_140074f00`) logs "Warning: Missing race: <id>. Using fallback.", takes
+  `17-gamedata.quack` (Greenlander) and rewrites its `race` reference to it; `FUN_140538360` (the appearance's race) falls back the same way.
+- A RACE record that exists without a mesh for the gender is not that case: the loader creates a record a mod only changes even when its base is
+  missing (fcs-mod.md "Merging"). `Appearance::chooseBodyMesh` (`FUN_14052cd20`) reads the race's mesh for the gender (`FUN_14006eaf0`) and, when it
+  is empty, returns `human_male.mesh` whatever the gender; there is no fall back to the other gender's mesh. The body is then made by
+  `createBody` (`FUN_140539ed0`), which only logs "Error: Character model for race '{1}' not found" when the entity cannot be made.
+Meitou (`CharacterAppearance.Build`) draws `human_male.mesh` the same way. **Observed** (a 664-mod save, `draw-state`): 6 of 760 characters were of race
+`Hive Scout Drone` `16-HiverScoutmesh.mod`, a stub left by `Animation - Collection Pack.mod` changing a record of a mod that is not loaded; before
+this rule they were never drawn (the look failed to build, cached, silently). A look that still fails to build prints one
+`characters a look failed to build ...` line and is marked by the debug square (`GameHost.DrawMarkers`). Reproduce with
+`spawn-at <x> <z> --race "Hive Scout Drone"` and `draw-state`. The race's texture names (empty here) are copied as they are into the character
+material's parameters (`FUN_140070790`, `diffuse` to `diffuseMap`), and `Character`'s `diffuseMap` in `character.material` names no default texture.
 
 ### Clothing colours
 
@@ -327,9 +356,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Meitou bar** (Meitou UI, both hosts; `EditorBar`, `EditorBarScene`): instead of the stage, the world's renderers draw a copy of The Hub's intact
-  Storm House with interior layout `Bar` (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar` whose state and layouts are read from
-  the source's zone, `BuildingPlacement.StateZone`) 3000 above the highest ground round the edited character, in the interior view with every floor, at
+- **Meitou bar** (the `editorbar` switch, Meitou, off by default, else the platform; both hosts; `EditorBar`, `EditorBarScene`, `CharacterEditorHost`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
+  Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, from records alone (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar`, `BuildingPlacement.Standalone`: no town's material, the part variants of a fixed place; barman from residents `44856-rebirth.mod`, patrons from The Hub's `bar squads`), the frame holding nothing of the world (`WorldObjectRenderer.Isolated`, `GiScene.SkipWorld`), 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldGpu.ViewCap`: far plane and
   shadow cascades), short of the world 3000 below; headless 1280x960 Release: 4.0-4.2 ms a frame capped, 5-29 ms uncapped (**Observed**, noisy machine). The shown character stands at a fixed spot of the building's frame facing the counter; up to 5 other
   characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
@@ -339,10 +367,11 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   the edited character's stance preview follows the same rule.
   Base data has none: its seat clips loop (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data).
   The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`). The bar stands on
-  `FLatTop_Pillar01.mesh` scaled to 1500 each way with its top at the bar's ground, with 14 shrubs round it. A white point light under the roof (half the
-  lamps' mean power, radius 220) and a grey character fill (0.04) light the room neutrally. The camera is the stage's
+  `FLatTop_Pillar01.mesh` scaled to 1500 each way with its top at the bar's ground, with 14 shrubs round it. A point light under the roof in the lamps' own colour (a quarter of
+  their mean power, radius 220) fills the room; the characters take no fill of their own (**Observed**, a bare Greenlander: white, at half the lamps' power and
+  with a grey fill of 0.04 on the characters alone, the skin shone and seemed to glow in the warm, dim room). The camera is the stage's
   orbit, moved across instead of shifting the projection. The stage covers the bar until its parts, the streaming and the characters are in, or at most 3 s
-  after its room is laid out (the counts are global and can stay up under memory pressure). The faithful UI keeps the stage. Metal: compiled, not yet seen on a Mac.
+  after its room is laid out (the counts are global and can stay up under memory pressure). With the switch off, the stage. Metal: compiled, not yet seen on a Mac.
 - **Keys**: `in editor` true while open; a mode 0 character without a body file is randomised on open (Meitou's start characters are already
   rolled). Closing in mode 0 also sets health from the CHARACTER's `starting health` (Meitou: a new race at creation gets a new body, which
   applies it; the edited look keeps stumps and prosthetics), then validates each human's inventory sections for its race (**Verified**, `FUN_1405f5d10`:

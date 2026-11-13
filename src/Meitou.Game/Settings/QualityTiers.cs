@@ -12,21 +12,23 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The quality preset choice's names.
     /// </summary>
-    internal static readonly string[] PresetNames = ["Low", "Medium", "High", "Ultra", "Custom"];
+    internal static readonly string[] PresetNames = ["Low", "Medium", "High", "Ultra", "Extreme", "Custom"];
 
     /// <summary>
-    /// The indexes of Low, Medium, High and Custom in <see cref="PresetNames"/>.
+    /// The indexes of the tiers and Custom in <see cref="PresetNames"/>. Each tier is meant for a class of GPU (<see cref="HardwareProbe"/>):
+    /// Low a GTX 1050 to an RTX 3050, Medium an RTX 3060, High an RTX 3070 to 4070, Ultra an RTX 4070 Ti to 4080, Extreme above.
     /// </summary>
-    internal const int LowPreset = 0, MediumPreset = 1, HighPreset = 2, CustomPreset = 4;
+    internal const int LowPreset = 0, MediumPreset = 1, HighPreset = 2, UltraPreset = 3, ExtremePreset = 4, CustomPreset = 5;
 
     /// <summary>
     /// A preset's slider: its value at Low, Medium and Ultra (High is the start default; NaN: the start default too), either fixed or a multiple of
     /// the start default. <see cref="Mode"/> names the switch whose side picks the base instead (the slider's Meitou or Faithful mark), so High reads
     /// High in both looks. <see cref="LowFixed"/>: Low's value is fixed even where the others are multiples. Low is <c>--low-end</c>
-    /// (WorldOptions.ApplyLowEnd): a slider it leaves alone stays at High.
+    /// (WorldOptions.ApplyLowEnd): a slider it leaves alone stays at High. <see cref="Extreme"/>: its value at Extreme, Ultra's when null (the
+    /// distances: Extreme adds effects, not range).
     /// </summary>
     internal sealed record PresetSlider(string Label, float Low, float Medium, float Ultra, bool Scale = false, string? Mode = null, float? High = null,
-        bool LowFixed = false);
+        bool LowFixed = false, float? Extreme = null);
 
     /// <summary>
     /// --low-end's large foliage range, as a multiple of the default; the medium and small ranges follow it.
@@ -65,6 +67,7 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.ShadowMapSlider, float.NaN, 1, 2),
         new(WorldFrame.ShadowFilterSlider, 0, 1, 2),
         new(WorldFrame.ShaftQualitySlider, 0, 1, 2, High: 2),
+        new(WorldFrame.GtaoQualitySlider, 0, 0, 2, High: 1),
         new(WorldFrame.ParticleSliders[1], WorldOptions.LowEndParticleDensity, 0.5f, float.NaN),
         new(WorldFrame.FilteringSlider, 0, 2, 4, High: 4),
 
@@ -75,21 +78,38 @@ sealed class QualityTiers(SettingsMenu menu)
     ];
 
     /// <summary>
-    /// A quality switch: on or off at Low, Medium and Ultra (High is its start default). Meitou features only: Faithful keeps them off whatever the
-    /// tier.
+    /// A quality switch: on or off at Low, Medium and Ultra; at High its start default unless <see cref="High"/> says, at Extreme as Ultra unless
+    /// <see cref="Extreme"/> says. Meitou features only: Faithful keeps them off whatever the tier.
     /// </summary>
-    internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra);
+    internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra, bool? High = null, bool? Extreme = null);
 
     /// <summary>
-    /// Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou
-    /// switches), not tiers. The quality switches the presets set.
+    /// The quality switches the presets set: the relief's (docs/render-terrain.md "Ground relief", RTX 4090: refinement +0.38 ms; parallax and
+    /// displacement are effects, not tiers), then Meitou's effects by what they cost (measured on an RTX 4090 at 1440p native, GPU time: the
+    /// materials, trails, foam and far grass under 0.1 ms; reflections +0.13, GTAO +0.11 and +0.54 at its high quality; the radiance cache +0.17,
+    /// the traced sun +1.3; its grass shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are the switches their
+    /// choices stand for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>).
     /// </summary>
     internal static readonly PresetToggle[] PresetToggles =
     [
         new(WorldFrame.FifthCascadeSwitch, false, false, true),
         new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
+        new("Advanced materials", false, true, true, High: true),
+        new("Ground trails", false, true, true, High: true),
+        new("Water contact foam, wakes and ripples", false, true, true, High: true),
+        new(WorldFrame.GrassCoverSwitch, false, true, true, High: true),
+        new("Reflections", false, false, true, High: true),
+        new("Ground-truth occlusion", false, false, true, High: true),
+        new("Hybrid GI", false, false, true, High: false),
+        new("Traced sun shadows", false, false, true, High: false),
+        new(WorldFrame.TracedGrassSwitch, false, false, false, High: false, Extreme: true),
     ];
+
+    /// <summary>
+    /// The tier switches that need the indirect light's traced scene: off, whatever the tier, while it is off (no ray tracing on the device).
+    /// </summary>
+    static readonly string[] TracedSwitches = ["Hybrid GI", "Traced sun shadows"];
 
     /// <summary>
     /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing
@@ -111,7 +131,7 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The quality preset choice's hint.
     /// </summary>
-    internal const string PresetHint = "Distances, shadows and detail together. Low is the same as --low-end.";
+    internal const string PresetHint = "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end.";
 
     /// <summary>
     /// The tier being applied (<see cref="ApplyPreset"/>, <see cref="LookPresets.SetFaithful"/>), so the Low cut follows it before the sliders reach
@@ -162,7 +182,7 @@ sealed class QualityTiers(SettingsMenu menu)
             start = mark;
         }
 
-        float factor = preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => float.NaN };
+        float factor = preset switch { LowPreset => p.Low, MediumPreset => p.Medium, UltraPreset => p.Ultra, ExtremePreset => p.Extreme ?? p.Ultra, _ => float.NaN };
         float value = preset == HighPreset ? p.High ?? start
             : float.IsNaN(factor) ? p.High ?? start
             : float.IsNegativeInfinity(factor) ? slider.Min
@@ -187,7 +207,33 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The state of switch <paramref name="p"/> at <paramref name="preset"/> (High: <paramref name="start"/>).
     /// </summary>
-    internal static bool SwitchTarget(PresetToggle p, bool start, int preset) => preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => start };
+    internal static bool SwitchTarget(PresetToggle p, bool start, int preset) => preset switch
+    {
+        LowPreset => p.Low,
+        MediumPreset => p.Medium,
+        UltraPreset => p.Ultra,
+        ExtremePreset => p.Extreme ?? p.Ultra,
+        _ => p.High ?? start,
+    };
+
+    /// <summary>
+    /// <see cref="SwitchTarget"/> on this device: a switch that needs the traced scene (<see cref="TracedSwitches"/>) is off while the indirect light
+    /// is.
+    /// </summary>
+    internal bool SwitchTargetHere(PresetToggle p, bool start, int preset) =>
+        SwitchTarget(p, start, preset)
+        && (!TracedSwitches.Contains(p.Label) || menu.Values.Toggles.Any(t => t.Label == "Indirect light" && t.Get()));
+
+    /// <summary>
+    /// Sets the tier switches that need the traced scene, once the look has set the indirect light (<see cref="LookPresets.SetFaithful"/>).
+    /// </summary>
+    internal void ApplyTracedSwitches(int preset)
+    {
+        foreach (var (p, toggle, start) in PresetSwitches().Where(x => TracedSwitches.Contains(x.Preset.Label)))
+        {
+            if (toggle.Get() != SwitchTargetHere(p, start, preset)) toggle.Set(SwitchTargetHere(p, start, preset));
+        }
+    }
 
     /// <summary>
     /// The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not
@@ -200,7 +246,7 @@ sealed class QualityTiers(SettingsMenu menu)
         for (int preset = 0; preset < CustomPreset; preset++)
         {
             if (PresetPairs().All(x => SameSliderPlace(x.Preset, x.Slider, preset))
-                && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTarget(x.Preset, x.Default, preset)))
+                && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTargetHere(x.Preset, x.Default, preset)))
                 && (cascade is null || cascade.Get() == CascadeFor(preset)))
             {
                 return preset;
@@ -254,7 +300,7 @@ sealed class QualityTiers(SettingsMenu menu)
         ApplyPreset(MediumPreset);
         string[] off =
         [
-            "Indirect light", "Indoor GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch,
+            "Indirect light", "Indoor GI", "Hybrid GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch,
             WorldFrame.OutlineRefineSwitch,
         ];
         foreach (var toggle in menu.Values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
@@ -305,12 +351,12 @@ sealed class QualityTiers(SettingsMenu menu)
             .Select(x => (x.p, menu.Values.Toggles[x.Index], menu.ToggleDefaults[x.Index]));
 
     /// <summary>
-    /// The fifth shadow cascade's state at <paramref name="preset"/>: off at Low and Medium, on at Ultra, else its start default.
+    /// The fifth shadow cascade's state at <paramref name="preset"/>: off at Low and Medium, on at Ultra and Extreme, else its start default.
     /// </summary>
     bool CascadeFor(int preset) => preset switch
     {
-        0 or 1 => false,
-        3 => true,
+        LowPreset or MediumPreset => false,
+        UltraPreset or ExtremePreset => true,
         _ => menu.ToggleDefaults[menu.Values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)],
     };
 
@@ -352,7 +398,7 @@ sealed class QualityTiers(SettingsMenu menu)
         {
             foreach (var (p, toggle, start) in PresetSwitches())
             {
-                if (toggle.Get() != SwitchTarget(p, start, preset)) toggle.Set(SwitchTarget(p, start, preset));
+                if (toggle.Get() != SwitchTargetHere(p, start, preset)) toggle.Set(SwitchTargetHere(p, start, preset));
             }
 
             menu.LookPresets.ApplyLowCut();

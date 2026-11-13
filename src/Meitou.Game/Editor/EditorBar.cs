@@ -1,43 +1,42 @@
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Title;
-using Meitou.Simulation;
-using Meitou.Simulation.Factions;
-using Meitou.Simulation.Population;
 
 namespace Meitou.Game.Editor;
 
 /// <summary>
-/// The Meitou UI's character editor scene (docs/characters.md "Character editor", Meitou): a copy of The Hub's Storm House bar, its walls, furniture
-/// and lamps, placed high above the edited character so nothing of the world around it reaches in, on a staged patch of ground, and drawn at night by
-/// the world's own renderers. The edited character stands on its floor; the others being edited sit on its seats behind, among the bar's own people
-/// (its barman and guard, and patrons of the town's bar squads).
+/// The character editor's bar (the <c>editorbar</c> switch, docs/characters.md "Character editor", Meitou): the base data's Storm House with its
+/// <c>Bar</c> interior, its lamps and people, on a staged patch of ground, built from records alone (no town, zone or save is read) and drawn at night
+/// by the world's own pipeline, with the player's graphics settings. It stands high above the edited character and the frame holds nothing else
+/// (<see cref="WorldObjectRenderer.Isolated"/>). The edited character stands on its floor; the others being edited sit on its seats behind, among the
+/// bar's own people.
 /// </summary>
 sealed class EditorBar
 {
     /// <summary>
-    /// The copy's placement key: its parts, interior volume and lamps go by it.
+    /// The placement's key: its parts, interior volume and lamps go by it.
     /// </summary>
     public const string Key = "meitou:editor-bar";
+    /// <summary>
+    /// The base data's Storm House, a generic bar's residents and The Hub (whose <c>bar squads</c> give the patrons).
+    /// </summary>
+    const string BuildingId = "3384-TwoStorey.mod", ResidentsId = "44856-rebirth.mod", TownId = "18919-Newwworld.mod", LayoutName = "Bar";
     /// <summary>
     /// At most this many of the other edited characters sit in the bar.
     /// </summary>
     public const int MaxSeated = 5;
     /// <summary>
-    /// The bar copied for the editor's scene: The Hub's Storm House, and the layout its patrons come from.
-    /// </summary>
-    const string TownName = "The Hub", BuildingName = "Storm House", LayoutName = "Bar";
-    /// <summary>
-    /// How far above the highest ground round the anchor the copy stands.
+    /// How far above the highest ground round the anchor it stands.
     /// </summary>
     const float Lift = 3000;
     /// <summary>
-    /// Where the edited character stands and which way it faces, in the building's frame (its layout's: x across, z along, y up; the floor is 4.4
-    /// up): on the open floor between the counter and the tables, facing the counter, so the camera in front of it looks back across the room at the
-    /// seated ones.
+    /// Where the edited character stands and which way it faces, in the building's frame (x across, z along, y up; the floor is 4.4 up): on the open
+    /// floor between the counter and the tables, facing the counter, so the camera in front of it looks back across the room at the seated ones.
     /// </summary>
     static readonly Vector3 StandLocal = new(12, 4.4f, -14), FacingLocal = Vector3.UnitX;
     /// <summary>
@@ -79,9 +78,9 @@ sealed class EditorBar
     /// </summary>
     const float ShrubNear = 140, ShrubFar = 700;
     /// <summary>
-    /// The room's neutral fill: a white point light under the roof, this share of the bar's own lamps' mean power, reaching this far.
+    /// The room's fill: a point light under the roof in the lamps' colour, this share of the bar's own lamps' mean power, reaching this far.
     /// </summary>
-    public const float FillShare = 0.5f, FillRadius = 220;
+    public const float FillShare = 0.25f, FillRadius = 220;
     /// <summary>
     /// How high under the roof the fill light hangs (units, in the building's frame).
     /// </summary>
@@ -92,13 +91,9 @@ sealed class EditorBar
     /// </summary>
     public BuildingPlacement Placement { get; }
     /// <summary>
-    /// The copy's origin (absolute height) and turn, as the source's.
+    /// The origin (absolute height).
     /// </summary>
     public Vector3 Origin { get; }
-    /// <summary>
-    /// The copy's turn, the source's.
-    /// </summary>
-    public Quaternion Rotation { get; }
     /// <summary>
     /// Where the edited character stands and its yaw (0 along +Z, turning towards +X).
     /// </summary>
@@ -117,7 +112,7 @@ sealed class EditorBar
     /// </summary>
     public IReadOnlyList<(string Record, string? Faction, Vector3 Position, float Yaw, string Clip, int Seed)> Crowd { get; }
     /// <summary>
-    /// The staged ground and shrubs round the bar (<see cref="Meitou.Game.Rendering.Objects.WorldObjectRenderer.Staged"/>).
+    /// The staged ground and shrubs round the bar (<see cref="WorldObjectRenderer.Staged"/>).
     /// </summary>
     public IReadOnlyList<PlacedMesh> Ground { get; }
     /// <summary>
@@ -126,33 +121,46 @@ sealed class EditorBar
     public Vector3 FillAt { get; }
 
     /// <summary>
-    /// The copy of <paramref name="source"/> (resolved as <paramref name="resolved"/>) at <paramref name="origin"/>: its placement, the stand, the
-    /// seats, the crowd, the staged ground and the fill light.
+    /// The bar at <paramref name="origin"/> from the record <paramref name="record"/>: its placement, the stand, the seats, the crowd, the staged
+    /// ground and the fill light.
     /// </summary>
-    EditorBar(GameInstall install, GameDatabase db, TownSite site, TownBuilding source, ResolvedBuilding resolved, Vector3 origin)
+    EditorBar(WorldObjects world, GameRecord record, Vector3 origin)
     {
-        var level = resolved.Placement;
+        var db = world.Database;
         Origin = origin;
-        Rotation = level.Rotation;
-        Placement = level with { Zone = WorldLayout.ZoneOf(origin.X, origin.Z), Position = origin with { Y = 0 }, WorldY = origin.Y,
-            StateZone = level.Zone, Key = Key, DestroyedOverride = null };
-        Stand = origin + Vector3.Transform(StandLocal, Rotation);
-        var facing = Vector3.Transform(FacingLocal, Rotation);
-        StandYaw = MathF.Atan2(facing.X, facing.Z);
-        FillAt = origin + Vector3.Transform(new Vector3(0, FillHeight, 0), Rotation);
-        // The source's spots (world places; seats already turned to their tables: TownBuildings) moved with the building, the near ones left out,
-        // nearest the focus first.
-        var focus = origin + Vector3.Transform(SeatFocusLocal, Rotation);
-        IEnumerable<HomeSpot> Spots(Func<HomeSpot, bool> which) => source.Spots.Where(which)
-            .Select(s => s with { Position = s.Position - resolved.Position + origin })
+        Placement = new BuildingPlacement(WorldLayout.ZoneOf(origin.X, origin.Z), Key, BuildingId, origin with { Y = 0 }, Quaternion.Identity, null, origin.Y)
+        {
+            Key = Key, InteriorLayout = LayoutName, ExteriorLayout = "", Standalone = true,
+        };
+        Stand = origin + StandLocal;
+        StandYaw = MathF.Atan2(FacingLocal.X, FacingLocal.Z);
+        FillAt = origin + new Vector3(0, FillHeight, 0);
+        // The spots of the record's interior layout, the near ones left out, nearest the focus first.
+        var focus = origin + SeatFocusLocal;
+        var spots = TownBuildings.InteriorSpots(db, world.Layouts, new ResolvedBuilding(Placement, record, origin, false));
+        IEnumerable<HomeSpot> Spots(Func<HomeSpot, bool> which) => spots.Where(which)
             // The ground floor only.
             .Where(s => new Vector2(s.Position.X - Stand.X, s.Position.Z - Stand.Z).Length() > SeatClearance && s.Position.Y < origin.Y + 20)
             .OrderBy(s => Vector3.DistanceSquared(s.Position, focus));
         var seats = Spots(s => s.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && s.SitClip is not null).ToList();
         Seats = [.. seats.Take(MaxSeated).Select(s => (s.Position, s.Yaw, s.SitClip!))];
-        Crowd = MakeCrowd(db, site, source, seats.Skip(MaxSeated), Spots(s => s.Kind == HomeSpotKind.Shopkeeper),
-            Spots(s => s.Kind == HomeSpotKind.Guard), Spots(s => s.Kind == HomeSpotKind.General));
-        Ground = MakeGround(install, db, origin);
+        Crowd = MakeCrowd(db, seats.Skip(MaxSeated), Spots(s => s.Kind == HomeSpotKind.Shopkeeper), Spots(s => s.Kind == HomeSpotKind.Guard),
+            Spots(s => s.Kind == HomeSpotKind.General));
+        Ground = MakeGround(world.Install, db, origin);
+    }
+
+    /// <summary>
+    /// The bar above <paramref name="anchor"/> (x, z; <paramref name="ground"/> gives the heights round it); null when the data has no such building
+    /// or layout.
+    /// </summary>
+    public static EditorBar? Above(WorldObjects world, Vector3 anchor, Func<float, float, float> ground)
+    {
+        if (world.Database.Find(BuildingId) is not { Type: FcsRecordType.Building } record || world.Layouts.Find(record, LayoutName, exterior: false) is null) return null;
+        float top = float.MinValue;
+        for (int x = -2; x <= 2; x++)
+            for (int z = -2; z <= 2; z++)
+                top = MathF.Max(top, ground(anchor.X + x * 100, anchor.Z + z * 100));
+        return new EditorBar(world, record, new Vector3(anchor.X, top + Lift, anchor.Z));
     }
 
     /// <summary>
@@ -160,12 +168,15 @@ sealed class EditorBar
     /// drawn from the town's bar squads, some on the seats left after the editor's characters' and some standing at the room's nodes. Rolled the same
     /// each time (fixed seeds).
     /// </summary>
-    static List<(string, string?, Vector3, float, string, int)> MakeCrowd(GameDatabase db, TownSite site, TownBuilding source,
-        IEnumerable<HomeSpot> seats, IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
+    static List<(string Record, string? Faction, Vector3 Position, float Yaw, string Clip, int Seed)> MakeCrowd(GameDatabase db, IEnumerable<HomeSpot> seats,
+        IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
     {
         var crowd = new List<(string, string?, Vector3, float, string, int)>();
-        bool IsCharacter(string id) => db.Find(id)?.Type == Data.Fcs.FcsRecordType.Character;
-        if (db.Find(source.ResidentsTemplate) is { } residentRecord && SquadTemplate.From(residentRecord) is var residents)
+        // Only the base game's people, so a mod that adds to the town's or the residents' lists does not change who stands in the bar.
+        static bool IsBase(string id) => id.EndsWith("gamedata.base", StringComparison.Ordinal) || id.EndsWith("Newwworld.mod", StringComparison.Ordinal)
+            || id.EndsWith("rebirth.mod", StringComparison.Ordinal) || id.EndsWith("Dialogue.mod", StringComparison.Ordinal);
+        bool IsCharacter(string id) => IsBase(id) && db.Find(id)?.Type == FcsRecordType.Character;
+        if (db.Find(ResidentsId) is { } residentRecord && SquadTemplate.From(residentRecord) is var residents)
         {
             if (residents.Leader is { } barman && IsCharacter(barman.Id) && counter.FirstOrDefault() is { Position: var at } spot && at != default)
                 crowd.Add((barman.Id, residents.Faction, at, spot.Yaw, "idle_stand_confident", 11));
@@ -174,11 +185,12 @@ sealed class EditorBar
                 crowd.Add((guard, residents.Faction, post, postSpot.Yaw, "idle_stand_guard", 12));
         }
         var patrons = new List<(string Id, string? Faction)>();
-        foreach (var link in site.Town.BarSquads)
-            if (db.Find(link.Id) is { } record && SquadTemplate.From(record) is var squad)
-                foreach (var m in (squad.Leader is { } leader ? [leader] : Array.Empty<RecordLink>()).Concat(squad.Squad)
-                        .Concat(squad.Squad2).Concat(squad.ChooseFrom))
-                    if (IsCharacter(m.Id) && !patrons.Exists(p => p.Id == m.Id)) patrons.Add((m.Id, squad.Faction));
+        if (db.Find(TownId) is { } town)
+            foreach (var link in town.GetReferences("bar squads"))
+                if (IsBase(link.TargetStringId) && db.Find(link.TargetStringId) is { } record && SquadTemplate.From(record) is var squad)
+                    foreach (var m in (squad.Leader is { } leader ? [leader] : Array.Empty<RecordLink>()).Concat(squad.Squad)
+                            .Concat(squad.Squad2).Concat(squad.ChooseFrom))
+                        if (IsCharacter(m.Id) && !patrons.Exists(p => p.Id == m.Id)) patrons.Add((m.Id, squad.Faction));
         if (patrons.Count == 0) return crowd;
         var random = new Random(173);
         int next = 0;
@@ -240,24 +252,5 @@ sealed class EditorBar
             placed.Add(new PlacedMesh(shrub.GetPath("mesh"), transform, shrub, shrub, $"{Key}/shrub {i}", PlacedKind.MapFeature));
         }
         return placed;
-    }
-
-    /// <summary>
-    /// The bar above <paramref name="anchor"/> (x, z; <paramref name="ground"/> gives the heights round it), or null when the data has no intact
-    /// Storm House bar in The Hub.
-    /// </summary>
-    public static EditorBar? Above(GameInstall install, PopulationData data, Vector3 anchor, Func<float, float, float> ground)
-    {
-        foreach (var site in data.Sites.Where(s => s.Town.Name == TownName))
-            if (site.Buildings.FirstOrDefault(b => b is { Destroyed: false, Resolved: not null } && b.Name == BuildingName
-                    && b.InteriorLayout == LayoutName) is { Resolved: { } resolved } source)
-            {
-                float top = float.MinValue;
-                for (int x = -2; x <= 2; x++)
-                    for (int z = -2; z <= 2; z++)
-                        top = MathF.Max(top, ground(anchor.X + x * 100, anchor.Z + z * 100));
-                return new EditorBar(install, data.Db, site, source, resolved, new Vector3(anchor.X, top + Lift, anchor.Z));
-            }
-        return null;
     }
 }

@@ -6,10 +6,11 @@ using Meitou.Game.Rendering.Terrain;
 namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
-/// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of (signed distance
-/// to the waterline, exposure), baked on a worker thread by <see cref="ShoreBake"/> from a <see cref="HeightSnapshot"/> and rebaked when the eye has
-/// moved more than a quarter of the field's width from its centre. Sampled with linear filtering, clamped to the edge, at uv = (p.xz − Rect.xy) /
-/// (Rect.zw − Rect.xy). Render thread only (<see cref="Update"/>, <see cref="Sampled"/>, <see cref="Dispose"/>).
+/// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RGBA32F texture of
+/// (signed distance to the waterline, exposure, the shore waves' travel time and swell; <see cref="ShoreTravel"/>), baked on a worker thread by
+/// <see cref="ShoreBake"/> from a <see cref="HeightSnapshot"/> and rebaked when the eye has moved more than a quarter of the field's width from its
+/// centre. Sampled with linear filtering, clamped to the edge, at uv = (p.xz − Rect.xy) / (Rect.zw − Rect.xy). Render thread only
+/// (<see cref="Update"/>, <see cref="Sampled"/>, <see cref="Dispose"/>).
 /// <para>
 /// A rebake costs the render thread next to nothing (2026-10-10; before, 4 to 6 ms and 8 MB of staging in one frame, up to four times a second at
 /// 9000 units a second): the worker also lays the texels out (and reuses the arrays of the bake, the interleaved texels and the textures themselves
@@ -30,9 +31,9 @@ internal sealed class ShoreField : IDisposable
     public const float DefaultTexel = 10f;
 
     /// <summary>
-    /// Rows written to the texture a frame once a field is shown (256 rows of 1024 texels are 2 MB).
+    /// Rows written to the texture a frame once a field is shown (128 rows of 1024 texels are 2 MB).
     /// </summary>
-    public const int RowsPerFrame = 256;
+    public const int RowsPerFrame = 128;
 
     /// <summary>
     /// Full-size textures kept for reuse at most (<see cref="_spare"/>).
@@ -43,6 +44,22 @@ internal sealed class ShoreField : IDisposable
     /// A finished bake: the world rectangle, and the texels, or the one value every texel has.
     /// </summary>
     sealed record Baked(float X0, float Z0, float X1, float Z1, bool Uniform, Vector2 Value, float[]? Texels, double Ms);
+
+    /// <summary>
+    /// The walls and posts standing in the water round a point (centre, radius; X/Z segments where the buildings' collision cuts the water's height), which the shore waves do
+    /// not pass (<see cref="ShoreTravel"/>). Called on the bake's worker. Setting it bakes the field again.
+    /// </summary>
+    public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls
+    {
+        get => _walls;
+        set
+        {
+            _walls = value;
+            _centre = null;
+        }
+    }
+
+    Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
 
     /// <summary>
     /// The context the textures and their uploads go through.
@@ -268,23 +285,36 @@ internal sealed class ShoreField : IDisposable
         var (cx, cz) = ShoreBake.SnapCentre(eye.X, eye.Z, _texel);
         int n = _size;
         float t = _texel;
+        var wallsAt = _walls;
 
         // Two bakes in flight never share a buffer: this one fills the one the shown field's upload is not reading.
         int buffer = _nextBuffer;
         _nextBuffer ^= 1;
-        _job = Task.Run(() => BakeOnWorker(heights, cx, cz, n, t, buffer));
+        _job = Task.Run(() => BakeOnWorker(heights, cx, cz, n, t, buffer, wallsAt));
 
         // The next bake is centred on this snapped point however long it takes, so a long bake is not restarted every frame.
         _centre = (cx, cz);
     }
 
     /// <summary>
-    /// The worker's bake: the grid, then either its one value or its texels interleaved into buffer <paramref name="buffer"/>, timed.
+    /// The worker's bake: the grid (its waves stopped by <paramref name="wallsAt"/>), then either its one value or its texels interleaved into
+    /// buffer <paramref name="buffer"/>, timed.
     /// </summary>
-    Baked BakeOnWorker(HeightSnapshot heights, float cx, float cz, int n, float t, int buffer)
+    Baked BakeOnWorker(HeightSnapshot heights, float cx, float cz, int n, float t, int buffer,
+        Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? wallsAt)
     {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
-        var grid = ShoreBake.Bake(heights.HeightAt, cx, cz, n, t, scratch: _scratch);
+        IReadOnlyList<(Vector2 A, Vector2 B)>? cut = null;
+        try
+        {
+            cut = wallsAt?.Invoke(new Vector2(cx, cz), n * t * 0.71f);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"water     shore walls not read: {e.GetBaseException().Message}");
+        }
+
+        var grid = ShoreBake.Bake(heights.HeightAt, cx, cz, n, t, scratch: _scratch, walls: cut);
         Baked baked;
         if (grid.IsUniform(out var value))
         {
@@ -292,7 +322,7 @@ internal sealed class ShoreField : IDisposable
         }
         else
         {
-            var texels = _texelBuffers[buffer] ??= new float[n * n * 2];
+            var texels = _texelBuffers[buffer] ??= new float[n * n * 4];
             grid.InterleaveInto(texels);
             baked = new Baked(grid.X0, grid.Z0, grid.X1, grid.Z1, false, default, texels, 0);
         }
@@ -319,8 +349,9 @@ internal sealed class ShoreField : IDisposable
                 var value = baked.Value;
                 using (var batch = _gpu.Uploads.Begin())
                 {
-                    var t = batch.Create(new TextureDesc(InternalFormat.Rg32F, 1, 1, Name: "shore field"));
-                    batch.Write(t, 0, 0, new PixelRect(0, 0, 1, 1), MemoryMarshal.AsBytes(new ReadOnlySpan<Vector2>(in value)));
+                    var t = batch.Create(new TextureDesc(InternalFormat.Rgba32F, 1, 1, Name: "shore field"));
+                    var texel4 = new Vector4(value, 0, 0);
+                    batch.Write(t, 0, 0, new PixelRect(0, 0, 1, 1), MemoryMarshal.AsBytes(new ReadOnlySpan<Vector4>(in texel4)));
                     next = new TerrainTexture(_gpu, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
                 }
 
@@ -345,7 +376,7 @@ internal sealed class ShoreField : IDisposable
         else
         {
             using var batch = _gpu.Uploads.Begin();
-            target = new TerrainTexture(_gpu, batch.Create(new TextureDesc(InternalFormat.Rg32F, _size, _size, Name: "shore field")),
+            target = new TerrainTexture(_gpu, batch.Create(new TextureDesc(InternalFormat.Rgba32F, _size, _size, Name: "shore field")),
                 TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
         }
 
@@ -368,7 +399,7 @@ internal sealed class ShoreField : IDisposable
         using (var batch = _gpu.Uploads.Begin())
         {
             batch.Write(target.Texture, 0, 0, new PixelRect(0, row, (uint)_size, (uint)rows),
-                MemoryMarshal.AsBytes(baked.Texels.AsSpan(row * _size * 2, rows * _size * 2)));
+                MemoryMarshal.AsBytes(baked.Texels.AsSpan(row * _size * 4, rows * _size * 4)));
         }
 
         row += rows;

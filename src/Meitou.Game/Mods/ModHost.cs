@@ -170,8 +170,13 @@ public sealed class ModHost
     {
         try
         {
-            var onDisk = ModList.Discover(install).Where(m => m.HasCode).ToDictionary(m => m.Name, StringComparer.Ordinal);
-            List<ModInfo> enabled = [.. ModList.ReadEnabled(install).Select(n => onDisk.GetValueOrDefault(n)).OfType<ModInfo>()];
+            var discovered = ModList.Discover(install);
+            var onDisk = discovered.Where(m => m.HasCode).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            List<ModInfo> enabled = [];
+            foreach (string name in ModList.ReadEnabled(install))
+            {
+                if (onDisk.GetValueOrDefault(name) is { } code) enabled.Add(code);
+            }
             return (enabled, [.. onDisk.Values.Except(enabled)]);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

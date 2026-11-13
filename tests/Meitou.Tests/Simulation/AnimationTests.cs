@@ -150,31 +150,36 @@ public class AnimationTests
     }
 
     [Fact]
-    public void Root_motion_stops_at_another_body_and_keeps_the_sideways_part()
+    public void Root_motion_is_not_cut_at_another_body_and_the_overlap_is_pushed_apart()
     {
         var world = new SimWorld(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
 
-        // Facing +X (yaw 90 degrees), 10 units from a second character: two footprints of 4 leave 2 units to go.
+        // Facing +X (yaw 90 degrees), 10 units from a second character (docs/game/pathfinding.md "Bodies in the way": the original's body test only
+        // pushes overlapping characters apart).
         var a = world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000), Yaw = MathF.PI / 2, Health = 100 },
                 new CharacterCold(), 0);
-        world.Characters.Spawn(new CharacterHot { Position = new Vector3(1010, 150, 1000), Health = 100 }, new CharacterCold(), 0);
+        var b = world.Characters.Spawn(new CharacterHot { Position = new Vector3(1010, 150, 1000), Health = 100 }, new CharacterCold(), 0);
         world.RunTick();   // builds the grid of these positions
         ref var hot = ref world.Characters.Next[a.Slot];
         AnimationSystem.Relocate(world, a.Slot, ref hot, new Vector2(0, 2));
 
         Assert.Equal(1002, hot.Position.X, 3);
 
-        // A lunge of 7 more (and 3 to its right, world +Z) would end inside the other body: the closing part is dropped, the sideways part kept.
+        // A lunge of 7 more (and 3 to its right, world +Z) goes through the whole way: a standing body does not stop it.
         AnimationSystem.Relocate(world, a.Slot, ref hot, new Vector2(-3, 7));
 
-        Assert.Equal(1002, hot.Position.X, 3);
+        Assert.Equal(1009, hot.Position.X, 3);
         Assert.Equal(1003, hot.Position.Z, 3);
 
-        // Away from it, nothing is held back.
-        AnimationSystem.Relocate(world, a.Slot, ref hot, new Vector2(0, -5));
+        // The movement separation then pushes the overlapping bodies apart.
+        for (int i = 0; i < 30; i++)
+            world.RunTick();
 
-        Assert.Equal(997, hot.Position.X, 3);
+        var pa = world.Characters.Previous[a.Slot].Position;
+        var pb = world.Characters.Previous[b.Slot].Position;
+        Assert.True(new Vector2(pa.X - pb.X, pa.Z - pb.Z).Length() > 3);
     }
+
     [Fact]
     public void A_leg_down_crawls_at_once_and_its_recovery_plays_the_get_up_clip()
     {

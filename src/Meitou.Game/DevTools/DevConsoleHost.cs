@@ -417,6 +417,19 @@ sealed class DevConsoleHost(GameHost host)
             + "--radius kills every living character within <m> metres (max 2000) of X Z, or of the selected (else first) squad member, "
             + "in one command; never the player's squad or faction, animals only with --animals", ConsoleKill);
 
+        Add("weather-sim", "weather-sim <none|dust|acid|off>", "what the simulation reads as the weather everywhere (affect type only; the sky keeps "
+            + "its own weather); off = the schedule's", ConsoleWeatherSim);
+
+        Add("flies", "flies", "every dead character: id, position, flies, the weather there; and the fly effects shown", ConsoleFlies);
+
+        Add("editor", "editor [yawDegrees [elevationDegrees]]", "opens the character editor (the recruit form: appearance only) on the player squad's "
+            + "leader, as a recruit's would open, or with it open turns its camera (0: in front, 180: behind); for pictures of the editor's stage",
+            ConsoleEditor);
+
+        Add("draw-state", "draw-state [--missing]", "every character: id, name, position, state, whether it is in the draw list (hidden indoors, in "
+            + "reach) and what the character renderer did with it last update (culled, not built, off screen, palette NaNs, parts shown); --missing: "
+            + "only those not drawn", ConsoleDrawState);
+
         Add("research", "research [list | queue <tech>]", "finish every research; research list shows the research state, "
             + "research queue <tech> queues one the way the research window does", ConsoleResearch);
     }
@@ -623,6 +636,7 @@ sealed class DevConsoleHost(GameHost host)
     {
         bool equipFlag = args.Any(a => a.Equals("--equip", StringComparison.OrdinalIgnoreCase));
         if (equipFlag) args = [.. args.Where(a => !a.Equals("--equip", StringComparison.OrdinalIgnoreCase))];
+        var exact = DebugMenu.TakeGrade(ref args);
         if (!Need(args, 1, 3, Self("give"))) return;
         int quantity = 1, quality = 0;
         if (args.Count > 1 && !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out quantity))
@@ -637,7 +651,7 @@ sealed class DevConsoleHost(GameHost host)
             return;
         }
 
-        Report(con, host.DebugMenu.DebugGive(args[0], quantity, quality, equipFlag));
+        Report(con, host.DebugMenu.DebugGive(args[0], quantity, quality, equipFlag, exact));
         // A paused game takes no tick: apply the give now so the reply (and a build right after) already sees the item.
         if (!host.DebugMenu.DebugFailed) host.Session.ApplyPausedCommandsNow();
     }
@@ -711,6 +725,128 @@ sealed class DevConsoleHost(GameHost host)
 
         Send(t => new DebugKill(selected) { Tick = t });
         con.Print($"killed {selected.Length}");
+    }
+
+    /// <summary>
+    /// The <c>weather-sim</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
+    /// </summary>
+    void ConsoleWeatherSim(IReadOnlyList<string> args, DevConsole con)
+    {
+        Meitou.Data.World.WeatherAffecting? kind = args.Count == 1
+            ? args[0].ToLowerInvariant() switch
+            {
+                "none" => Meitou.Data.World.WeatherAffecting.None,
+                "dust" => Meitou.Data.World.WeatherAffecting.DustStorm,
+                "acid" => Meitou.Data.World.WeatherAffecting.Acid,
+                _ => null,
+            }
+            : null;
+        if (kind is null && !(args.Count == 1 && args[0].Equals("off", StringComparison.OrdinalIgnoreCase)))
+        {
+            con.Error("usage: weather-sim <none|dust|acid|off>");
+            return;
+        }
+
+        if (host.WeatherFeed.WeatherSource is not { } hostWeather)
+        {
+            con.Error("no world weather yet");
+            return;
+        }
+
+        hostWeather.Forced = kind is { } k
+            ? new Meitou.Simulation.WeatherHere(k, k == Meitou.Data.World.WeatherAffecting.None ? 0 : 1, 0, 0)
+            : null;
+        con.Print($"simulation weather: {args[0]}");
+    }
+
+    /// <summary>
+    /// The <c>flies</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
+    /// </summary>
+    void ConsoleFlies(IReadOnlyList<string> args, DevConsole con)
+    {
+        foreach (var c in host.Session.CurrentSnapshot.Characters)
+        {
+            if (c.Body is not { Dead: true }) continue;
+            var w = host.Session.World.Weather?.At(c.Position.X, c.Position.Z);
+            var died = host.Session.World.Characters.Cold(c.Id.Slot)?.DiedTick ?? -2;
+            con.Print($"{c.Id} at {c.Position.X:0},{c.Position.Z:0} died={died} now={host.Session.World.Tick} flies={c.HasFlies} "
+                + $"shown={host.CorpseFlies.IsShown(c.Id)} weather={(w is { } h ? $"{h.Affect}/{h.Strength:0.##}" : "none")}");
+        }
+
+        con.Print($"building effects {host.Gpu?.Particles?.BuildingEffectCount}");
+        if (host.Gpu?.Particles is { } pr)
+        {
+            foreach (var line in pr.Describe(host.Session.Focus, 100000).Where(l => l.Contains("Fly"))) con.Print(line.Trim());
+        }
+    }
+
+    /// <summary>
+    /// The <c>editor</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
+    /// </summary>
+    void ConsoleEditor(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Need(args, 0, 2, Self("editor"))) return;
+        if (host.PlayerSquad is null)
+        {
+            con.Error("editor: no player squad");
+            return;
+        }
+
+        if (args.Count >= 1)
+        {
+            if (!float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float yaw))
+            {
+                con.Error("editor: yaw in degrees");
+                return;
+            }
+
+            float? height = args.Count == 2 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float h)
+                ? h * MathF.PI / 180
+                : null;
+            if (!host.Player.CharacterEditor.TurnEditor(yaw * MathF.PI / 180, height))
+            {
+                con.Error("editor: not open");
+                return;
+            }
+
+            con.Print("editor turned to " + yaw);
+            return;
+        }
+
+        if (!host.Player.CharacterEditor.OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, [host.PlayerSquad.Leader]))
+        {
+            con.Error("editor: the editor did not open");
+            return;
+        }
+
+        con.Print("editor open on " + host.PlayerSquad.Leader);
+    }
+
+    /// <summary>
+    /// The <c>draw-state</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
+    /// </summary>
+    void ConsoleDrawState(IReadOnlyList<string> args, DevConsole con)
+    {
+        bool missing = args.Contains("--missing");
+        foreach (var c in host.Session.CurrentSnapshot.Characters)
+        {
+            string what = host.Gpu?.Characters is { } r ? r.DrawReport(host.DrawKey(c.Id)) : "no renderer";
+            if (missing && what.StartsWith("live ") && !what.Contains("FAILED") && what.Contains("inFrustum=True") && what.Contains("partsShown=")
+                && !what.Contains("partsShown=0/") && what.Contains("badBones=0/"))
+            {
+                continue;
+            }
+
+            string kind = c.Body is { Dead: true } ? "dead" : c.Ragdoll is not null ? "ragdoll" : "alive";
+            var look = c.Appearance;
+            string appearance = look is null ? "NULL" : (look.Headless ? "headless " : "") + (host.Gpu?.Characters?.AssetState(look) ?? "?");
+            con.Print($"{c.Id} {c.Name} {kind} at {c.Position.X:0.0},{c.Position.Y:0.0},{c.Position.Z:0.0} carriedBy={c.CarriedBy} "
+                + $"appearance={appearance} race={look?.Race?.Name}[{look?.Race?.StringId}]/{(look?.Female == true ? "F" : "M")} "
+                + $"mesh='{look?.BodyMesh}' record={look?.Character?.Name}[{look?.Character?.StringId}] "
+                + $"notes=[{string.Join("; ", look?.Notes ?? [])}] loadoutRace={look?.Loadout?.Race?.Name} "
+                + $"hiddenIndoors={host.Interiors.HiddenIndoors.Contains(c.Id)} "
+                + $"reach={(host.Gpu?.Characters?.InReach(c.Position, host.Camera.Eye, c.DrawDistanceScale) == true)} | {what}");
+        }
     }
 
     /// <summary>

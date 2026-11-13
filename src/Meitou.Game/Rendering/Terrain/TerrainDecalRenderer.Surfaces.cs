@@ -19,9 +19,28 @@ namespace Meitou.Game.Rendering.Terrain;
 public sealed unsafe partial class TerrainDecalRenderer
 {
     /// <summary>
-    /// The most decals kept.
+    /// The most decals kept: only a guard against a runaway source (the oldest goes first when it is reached). A decal's own life bounds the number
+    /// in play, and every kept decal within range and in view is drawn (docs/game/blood-decals.md "Blood on surfaces"): a lower cap made live decals
+    /// vanish in a big fight. <see cref="DrawChunk"/> is the rows of one draw.
     /// </summary>
-    const int MaxSurfaces = 1024;
+    const int MaxSurfaces = 32768, DrawChunk = 4096;
+
+    /// <summary>
+    /// The camera's eye as the frame last gave it (<see cref="SurfacesNear"/>): the decals within <see cref="Range"/> of it are the drawn ones, which
+    /// do not run out (<see cref="AgeSurfaces"/>).
+    /// </summary>
+    Vector3 _surfaceEye;
+    bool _surfaceEyeKnown;
+
+    /// <summary>
+    /// The decal's circle round its square is within <see cref="Range"/> of the eye (the terrain's cells within the range are the ones on a texture).
+    /// </summary>
+    bool InRange(SurfaceDecal d)
+    {
+        if (!_surfaceEyeKnown) return true;   // no frame yet (a world just loaded): nothing runs out before the camera is known
+        var (hw, hh) = Half(d);
+        return Vector3.Distance(d.Centre, _surfaceEye) - MathF.Sqrt(hw * hw + hh * hh) <= MathF.Max(Range, 0);
+    }
 
     /// <summary>
     /// The range and default of <see cref="SurfaceDraws"/>.
@@ -32,6 +51,8 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// The most surface decals and footprints drawn in a frame, the nearest (the Tab panel's <c>Blood decals drawn</c> slider).
     /// </summary>
     public static int SurfaceDraws { get; set; } = DefaultSurfaceDraws;
+
+    /// <summary>
 
     /// <summary>
     /// How high above the feet a splash is centred (a blow lands at the body, not the soles).
@@ -510,6 +531,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     public bool SurfacesNear(Vector3 eye)
     {
         if (!_surfacesOn) return false;
+        (_surfaceEye, _surfaceEyeKnown) = (eye, true);
         float range = MathF.Max(Range, 0);
         foreach (var d in _surfaces)
         {
@@ -592,14 +614,15 @@ public sealed unsafe partial class TerrainDecalRenderer
     {
         _surfaces.Clear();
         _surfacePools.Clear();
+        _surfaceEyeKnown = false;
     }
 
     /// <summary>
     /// The decals kept for the surfaces as a save holds them (<see cref="SaveSurfaceDecals"/>), oldest first, each with its life left.
     /// </summary>
     public IEnumerable<SurfaceBloodDecal> SavedSurfaces =>
-        _surfaces.Select(d => new SurfaceBloodDecal(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, d.Expires - _surfaceClock,
-            d.Colour, d.Floor));
+        _surfaces.Select(d => new SurfaceBloodDecal(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, MathF.Max(d.Expires - _surfaceClock, 0),
+            d.Colour, d.Floor));   // a life that ran out in view (see AgeSurfaces) is saved as 0: it stays while the camera is near
 
     /// <summary>
     /// Puts back the decals a save held (after <see cref="ClearSurfaces"/>, a new world): each with its life left, the newest kept when over <see
@@ -612,7 +635,7 @@ public sealed unsafe partial class TerrainDecalRenderer
         for (int i = Math.Max(0, saved.Count - MaxSurfaces); i < saved.Count; i++)
         {
             var s = saved[i];
-            if (s.Type > TerrainDecalType.Smear || s.Variant >= _sprites[(int)s.Type].Length || s.Life <= 0 || s.Size <= 0)
+            if (s.Type > TerrainDecalType.Smear || s.Variant >= _sprites[(int)s.Type].Length || s.Life < 0 || s.Size <= 0)
                 continue;
             Keep(new SurfaceDecal
             {
@@ -630,15 +653,17 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
-    /// Ages the decals by <paramref name="dt"/> seconds of game time; those whose life ran out go.
+    /// Ages the decals by <paramref name="dt"/> seconds of game time. As the terrain's (<c>TerrainDecalStore.Age</c>, the game's rule: a decal at life 0 is removed
+    /// unless its cell is on a texture now), a decal whose life ran out goes only while it is out of the camera's range: within it, it stays as drawn, so
+    /// blood in view never vanishes by itself (it used to fade out in its last second while the terrain's blood beside it stayed).
     /// </summary>
     public void AgeSurfaces(float dt)
     {
         if (dt <= 0 || (_surfaces.Count == 0 && _footprints.Count == 0)) return;
         _surfaceClock += dt;
         _footprints.RemoveAll(d => d.Expires <= _surfaceClock);
-        if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock) > 0)
-            foreach (var key in _surfacePools.Where(p => p.Value.Expires <= _surfaceClock).Select(p => p.Key).ToList())
+        if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock && !InRange(d)) > 0)
+            foreach (var key in _surfacePools.Where(p => p.Value.Expires <= _surfaceClock && !InRange(p.Value)).Select(p => p.Key).ToList())
                 _surfacePools.Remove(key);
     }
 
@@ -845,6 +870,7 @@ public sealed unsafe partial class TerrainDecalRenderer
                 var rel = d.Centre - eye;
                 // Past the range, or behind the eye.
                 if (radius <= 0 || rel.Length() - radius > range || Vector3.Dot(rel, back) > radius) continue;
+                if (!FrustumTests.SphereVisible(frustum, d.Centre, radius * 1.01f + 0.5f)) continue;
                 _surfaceNear.Add((rel.LengthSquared(), d));
             }
         }
@@ -884,10 +910,11 @@ public sealed unsafe partial class TerrainDecalRenderer
             uint index = d.Sole is { } sole ? _soles.Index(sole) : _spriteIndex[(int)d.Type][d.Variant];
             var (hw, hh) = Half(d);
             if (index == uint.MaxValue || hw <= 0) continue;
-            float life = d.Expires - _surfaceClock;
             uint abgr = d.Colour;
-            float alpha = MathF.Min((abgr >> 24) / 255f, life);
+            // A decal on a surface is as one drawn on a cell's texture: its alpha at the start, no fade (docs/game/blood-decals.md); a footprint fades with its life.
             bool footprint = d.Type == TerrainDecalType.Footprint;
+            float alpha = (abgr >> 24) / 255f;
+            if (footprint) alpha = MathF.Min(alpha, d.Expires - _surfaceClock);
             _surfaceInstances[n++] = new SurfaceInstance
             {
                 Centre = new Vector4(d.Centre - eye, footprint ? SoleRadius(d) : MathF.Sqrt(hw * hw + hh * hh)),   // the sphere round the decal's square
@@ -920,8 +947,6 @@ public sealed unsafe partial class TerrainDecalRenderer
         cmd.Order();
         var t = PassTargets.Of(colour, null);
         cmd.BeginRendering(t.Rendering);
-        var rows = _gpu.Frame.AllocateConstants((ulong)(n * SurfaceInstance.Size), 16);
-        MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * SurfaceInstance.Size));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: Multiply, mask: DrawState.Rgb);
         state.Record(cmd, t);
         var pipeline = _surfacePipeline ??=
@@ -943,13 +968,19 @@ public sealed unsafe partial class TerrainDecalRenderer
             RowSign = _gpu.RenderTargetsBottomUp ? 1 : -1,
         };
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
-        Span<GpuBufferBinding> buffers =
-        [
-            new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),
-        ];
+        for (int first = 0; first < n; first += DrawChunk)
+        {
+            int count = Math.Min(DrawChunk, n - first);
+            var rows = _gpu.Frame.AllocateConstants((ulong)(count * SurfaceInstance.Size), 16);
+            MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(first, count)).CopyTo(new Span<byte>(rows.Pointer, count * SurfaceInstance.Size));
+            Span<GpuBufferBinding> buffers =
+            [
+                new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),
+            ];
 
-        cmd.BindVertexBuffers(0, buffers);
-        cmd.Draw(4, (uint)n);
+            cmd.BindVertexBuffers(0, buffers);
+            cmd.Draw(4, (uint)count);
+        }
         cmd.EndRendering();
         cmd.Order();
         _gpu.EndNative(cmd);

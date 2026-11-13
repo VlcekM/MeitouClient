@@ -115,7 +115,7 @@ sealed class ShadowBlockerMap : IDisposable
         var pipeline = _gpu.Pipelines.Get(BlockerState.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles, formats, "shadow blockers"));
         for (int i = 0; i < count; i++)
         {
-            if (!drawn[i] && !fresh) continue;
+            if (!drawn[i < count ? i : i - count] && !fresh) continue;   // a character layer goes with its cascade
 
             var target = new RenderTarget(map.Attachment(0, i), LoadOp.Load, default);
             cmd.BeginRendering(new RenderingDesc(target, default, side, side));

@@ -36,6 +36,7 @@ static partial class GiResolveShaders
     /// one that calls it and then writes <c>giAlbedoOut</c> (set by <c>kenshiLight</c>), so early returns and discards keep working.
     /// <paramref name="inShader"/>: the program keeps reading the probes itself (foliage, grass, characters, impostors) and writes 0;
     /// <paramref name="none"/>: a fragment without <c>kenshiLight</c> (the water) that only clears the target where it draws.
+    /// Location 2 is the traced sun's term (<c>tracedSunOut</c>, docs/render-shadows.md "Traced sun"), written the same way; it goes nowhere without that attachment.
     /// </summary>
     public static string WithAlbedo(string fragment, bool inShader = false, bool none = false)
     {
@@ -48,29 +49,32 @@ static partial class GiResolveShaders
         if (inShader)
         {
             int line = body.IndexOf('\n');
-            if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal))
-                throw new InvalidOperationException("WithAlbedo: no #version line");
-            body = body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..];
+            if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal)) throw new InvalidOperationException("WithAlbedo: no #version line");
+            body = GiShaders.Relocating(body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..]);
         }
         return body + $$"""
 
             layout(location = 1) out uvec4 oGiAlbedo;
-            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; }
+            layout(location = 2) out vec4 oTracedSun;
+            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; oTracedSun = {{(none ? "vec4(0.0)" : "vec4(tracedSunOut, 0.0)")}}; }
 
             """;
     }
 
-    /// <summary>
-    /// The scene's position from the scene depth, shared by both passes.
-    /// </summary>
-    const string Reconstruct = """
+    /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
+    internal const string Reconstruct = ReconstructUniforms + ReconstructFunctions;
+
+    const string ReconstructUniforms = """
         uniform sampler2D uNearDepth;
         uniform vec2 uNearPlanes;               // near, far of the scene depth
         uniform vec2 uTan;                      // tan(fov/2) * aspect, tan(fov/2)
         uniform vec3 uRight, uUp, uBack;        // the camera's axes in the world
         uniform vec3 uGiEye;
         uniform vec2 uFullSize;                 // the render size
-        """ + DepthConvention.Glsl + """
+        """;
+
+    /// <summary>What <see cref="Reconstruct"/> computes, for a shader that declares those names itself (the lamp shadow trace).</summary>
+    internal const string ReconstructFunctions = DepthConvention.Glsl + """
 
         // The depth along the view axis at a pixel of the render size (0: the sky).
         float depthAt(ivec2 px)
@@ -126,25 +130,36 @@ static partial class GiResolveShaders
         }
         """;
 
-    /// <summary>
-    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
-    /// bilinear weights divided by how far each one's depth is from this pixel's (relative), times the albedo.
-    /// </summary>
-    public static readonly string Apply = "#version 330 core\n" + Reconstruct + """
-        in vec2 vUv;
-        out vec4 fragColour;
-        uniform usampler2D uAlbedo;
-        uniform sampler2D uLow;
-        uniform vec2 uLowSize;
-        uniform float uDiv;
+    const string ProbesRead = "vec4 gi = giIrradiance(p, n, v);";
+    const string ResolveUniforms = "uniform float uDiv;";
 
-        void main()
-        {
-            ivec2 px = ivec2(floor(gl_FragCoord.xy));
-            uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w & 256u) == 0u) discard;
-            float z = depthAt(px);
-            if (z <= 0.0) discard;
+    /// <summary>
+    /// <see cref="Resolve"/> for the frame's <c>gihybrid</c> parts (docs/render-gi.md "Hybrid GI"): reading relocated probes; taking the radiance cache (<see cref="GiCache"/>, the same
+    /// texels: its a says how much) in place of the probes' light.
+    /// </summary>
+    public static string ResolveFor(bool relocate, bool cache)
+    {
+        string resolve = relocate ? GiShaders.Relocating(Resolve) : Resolve;
+        if (!cache) return resolve;
+        if (!resolve.Contains(ProbesRead, StringComparison.Ordinal)) throw new InvalidOperationException("ResolveFor: no probe read");
+        string taken = $$"""
+
+                vec4 cached = texelFetch(uGiCache, ivec2(floor(gl_FragCoord.xy)), 0);
+                // Where the cache is unsure (a below 1: cells just made, cells only on another plane) the probes fill in, but no brighter than the cache's own light
+                // there (they do not see the texel's contact shade), fading to the probes alone towards the cache's end.
+                float bound = cached.a > 0.0 ? 1.0 - smoothstep({{F(0.75f * GiCache.Range)}}, {{F(GiCache.Range)}}, length(p - uGiEye)) : 0.0;
+                vec3 fill = mix(gi.rgb, min(gi.rgb, cached.rgb), bound);
+                gi = vec4(mix(fill, cached.rgb, cached.a), mix(gi.a, 1.0, cached.a));
+            """;
+        return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiCache;", StringComparison.Ordinal)
+            .Replace(ProbesRead, ProbesRead + taken, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The statements that make <c>add</c>: a low target's value at this pixel, its four nearest texels with their bilinear weights divided by how far each one's
+    /// depth is from this pixel's (relative). Needs <c>uLow</c> (alpha the signed view depth), <c>uLowSize</c>, <c>uDiv</c>, <c>surface</c>, <c>px</c>, <c>z</c>.
+    /// </summary>
+    internal const string Upsample = """
             vec2 f = (vec2(px) + 0.5) / uDiv - 0.5;
             ivec2 i0 = ivec2(floor(f));
             vec2 w = f - vec2(i0);
@@ -164,6 +179,30 @@ static partial class GiResolveShaders
                 if (rel < best) { best = rel; nearest = t.rgb; }
             }
             vec3 add = total > 1e-6 ? sum / total : nearest;
+        """;
+
+    /// <summary>
+    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
+    /// bilinear weights divided by how far each one's depth is from this pixel's (relative), times the albedo.
+    /// </summary>
+    public static readonly string Apply = "#version 330 core\n" + Reconstruct + """
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform usampler2D uAlbedo;
+        uniform sampler2D uLow;
+        uniform vec2 uLowSize;
+        uniform float uDiv;
+
+        void main()
+        {
+            ivec2 px = ivec2(floor(gl_FragCoord.xy));
+            uvec4 surface = texelFetch(uAlbedo, px, 0);
+            if ((surface.w & 256u) == 0u) discard;
+            float z = depthAt(px);
+            if (z <= 0.0) discard;
+
+        """ + Upsample + """
+
             vec3 albedo = vec3(float(surface.z & 255u), float(surface.z >> 8), float(surface.w & 255u)) / 255.0;
             fragColour = vec4(albedo * albedo * add, 0.0);
         }

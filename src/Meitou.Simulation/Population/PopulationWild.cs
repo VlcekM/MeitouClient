@@ -269,6 +269,42 @@ public sealed partial class PopulationSystem
     sealed record WildHold(int Squads, int Members, Dictionary<string, int> Templates);
 
     /// <summary>
+    /// What the homeless maker reads of the world: the living platoons per template, and the zones loaded (<c>FUN_1408f8060</c>,
+    /// <c>FUN_1406b9d10</c>).
+    /// </summary>
+    sealed record WorldShare(Dictionary<string, int> Counts, int Zones);
+
+    /// <summary>
+    /// The world's share now: the living squads and the unmade or saved platoons per template, the wild squads kept for unloaded sites, and the zones
+    /// loaded (the active ones, at least the sectors loaded or loading).
+    /// </summary>
+    WorldShare WorldShareOf(World world)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        void Add(string id) => counts[id] = counts.GetValueOrDefault(id) + 1;
+
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Members.Any(m => Living(world, m))) Add(squad.TemplateId);
+        }
+
+        foreach (var p in world.Platoons.All)
+        {
+            if (p.SquadId >= 0 || p.Dead) continue;
+            if (p.Saved is { } sp ? sp.Members.Any(m => !m.Dead && !m.Gone) : p.Stored is not null) Add(p.TemplateId);
+        }
+
+        foreach (var list in _keptWild.Values)
+        {
+            foreach (var k in list) Add(k.TemplateId);
+        }
+
+        // The zone manager's loaded zones: the active ones, at least the sectors loaded (or loading) now.
+        int sectors = _wildLoaded.Count(i => _wildSites![i].Kind == WildKind.Sector);
+        return new WorldShare(counts, Math.Max(Math.Max(_active.Count, sectors), 1));
+    }
+
+    /// <summary>
     /// What the save's kept wild platoons bound to the site hold; null when none does.
     /// </summary>
     WildHold? HoldOf(World world, int site)
@@ -723,8 +759,9 @@ public sealed partial class PopulationSystem
         int share = HomelessCount(_data.Biomes!.Groups[site.Group], _settings.PopulationMultiplier);
         state.Planned = Math.Max(0, Math.Min(share, held + room) - held);
 
-        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, regions, players, hold, room: room));
-        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, regions, players, hold, room: room)));
+        var worldShare = WorldShareOf(world);
+        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, regions, players, hold, worldShare, room: room));
+        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, regions, players, hold, worldShare, room: room)));
     }
 
     /// <summary>
@@ -838,6 +875,11 @@ public sealed partial class PopulationSystem
         }
         else squad.HomeRadius = _settings.HomelessHomeRadius;
         state.Squads.Add(squad.Id);
+        if (SpawnTrace is { Count: > 0 } trace && trace[^1].SquadId == squad.Id)
+        {
+            trace[^1] = trace[^1] with { Source = site.Kind == WildKind.Nest ? "nest:" + site.Nest!.Name : "sector:" + _data.Biomes!.Groups[site.Group].Name };
+        }
+
         if (_wildLog.Count < 256)
         {
             _wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : _data.Biomes!.Groups[site.Group].Name,
@@ -879,10 +921,12 @@ public sealed partial class PopulationSystem
         (int)MathF.Ceiling(MathF.Max(0, populationMultiplier * group.HomelessSpawnAmount) - 1e-4f);
 
     /// <summary>
-    /// The template weights of 6.2's homeless branch for one sector: <c>max(0, v0 - k x count)</c>, k = (sum of v0) / (P x amount), with
-    /// <paramref name="counts"/> the squads of each entry already made; entries that are no template or are gated get 0.
+    /// The template weights of 6.2's homeless branch for one sector (<c>FUN_1408f7e80</c>, <b>Verified</b>): <c>max(0, v0 - k x count)</c>, k = (sum
+    /// of v0) / (zones x P x amount) with <paramref name="zones"/> the zones loaded and <paramref name="counts"/> the living platoons of each entry's
+    /// template in the whole world; entries that are no template or are gated get 0.
     /// </summary>
-    public static float[] HomelessWeights(BiomeGroupData group, float populationMultiplier, IReadOnlyList<int> counts, Func<string, bool> usable)
+    public static float[] HomelessWeights(
+        BiomeGroupData group, float populationMultiplier, IReadOnlyList<int> counts, Func<string, bool> usable, int zones = 1)
     {
         var entries = group.HomelessSpawns;
         var w = new float[entries.Count];
@@ -890,7 +934,8 @@ public sealed partial class PopulationSystem
         foreach (var e in entries) sum += Math.Max(0, e.V0);
         float target = populationMultiplier * group.HomelessSpawnAmount;
         if (target <= 0 || sum <= 0) return w;
-        float k = sum / target;
+        // Engine choice: a sector makes ceil(P x amount) squads at once, so that is the share each zone is balanced to.
+        float k = sum / (HomelessCount(group, populationMultiplier) * Math.Max(zones, 1));
         for (int i = 0; i < entries.Count; i++)
             w[i] = entries[i].V0 > 0 && usable(entries[i].Id) ? MathF.Max(0, entries[i].V0 - k * counts[i]) : 0;
 
@@ -929,7 +974,7 @@ public sealed partial class PopulationSystem
     /// (<c>PopulationHomeless.cs</c>).
     /// </summary>
     BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Locks.IGateRegions? regions, Vector2[] players, WildHold? hold,
-        int topUp = -1, int room = int.MaxValue)
+        WorldShare worldShare, int topUp = -1, int room = int.MaxValue)
     {
         var squads = new List<BuiltSquad>();
         var group = _data.Biomes!.Groups[site.Group];
@@ -947,8 +992,8 @@ public sealed partial class PopulationSystem
         int n = HomelessCount(group, _settings.PopulationMultiplier);
         var counts = new int[group.HomelessSpawns.Count];
 
-        // The save's homeless squads standing in this sector are of its count (and of their entry's).
-        for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(group.HomelessSpawns[i].Id);
+        // The maker counts the living platoons of each entry's template in the whole world (FUN_1406b9d10, Verified), loaded or not.
+        for (int i = 0; i < counts.Length; i++) counts[i] = worldShare.Counts.GetValueOrDefault(group.HomelessSpawns[i].Id);
         int first = hold?.Squads ?? 0;
 
         // At load no more than the island has room for (IslandRoom).
@@ -959,7 +1004,7 @@ public sealed partial class PopulationSystem
         for (int s = first; s < n; s++)
         {
             ulong key = Rng.Mix(SeedSalts.HomelessSquad ^ (ulong)site.Zone.X << 40 ^ (ulong)site.Zone.Y << 24 ^ (uint)s);
-            var weights = HomelessWeights(group, _settings.PopulationMultiplier, counts, TemplateUsable);
+            var weights = HomelessWeights(group, _settings.PopulationMultiplier, counts, TemplateUsable, worldShare.Zones);
             int e = Pick(weights, Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.HomelessPick));
             if (e < 0) break;
             counts[e]++;

@@ -278,6 +278,13 @@ public sealed unsafe class HizPyramid : IDisposable
         cmd.Dispatch(1);
     }
 
+    /// <summary>Built in this frame (<see cref="Build"/> ran): a pass after it may read this frame's depth through <see cref="ThisFrame"/>.</summary>
+    public bool BuiltThisFrame => HasData && _ctx.Frame.Number == _builtFrame;
+
+    /// <summary>This frame's pyramid for a pass recorded after its build (the lamps' shadow areas), as <see cref="ViewFor"/> gives the last frame's, with no step; empty when it was not built this frame.</summary>
+    public OcclusionView ThisFrame() => !BuiltThisFrame ? default
+        : new OcclusionView(new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size), Vectors(_eye, 0, _right, _up, _back, _tanX, _tanY, _width, _height, _levelCount, _baseWidth, _baseHeight, _offsets));
+
     /// <summary>
     /// Forgets the pyramid (the depth's size or the camera's continuity changed): no frame uses it until the next <see cref="Build"/>.
     /// </summary>

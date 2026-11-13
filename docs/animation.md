@@ -30,6 +30,12 @@ Engine choice (`GameHost.LayerTime`): the host draws a layer's clip time from th
 length), so a loop that wraps keeps moving through its end, forwards or backwards (the combat shuffles and side step have negative play speeds, so their time falls
 through 0 once per cycle). Taking the new time at the wrap held the pose for a tick, or swept the whole clip in one tick when the time ran backwards.
 
+Layer weights between ticks (`GameHost.BlendLayers`): the host interpolates the **whole** weight vector of the last two snapshots. The renderer adds layers up without normalising (the rest of
+the weight is the binding pose) and the simulation keeps each body half's weights at a total of 1, so a layer that is only drawn while it exists in the current snapshot drops the total for the
+span after it fades out (a gait change: `jog lower` leaving at weight ~0.25) and the pose lurches towards the binding pose for a frame; a new layer drawn at its full weight from the start of
+the span has the same fault. A layer new this tick fades in from 0, one gone fades out to 0 at its last clip time, keeping its place in the layer order. **Verified** (probe of the drawn
+bone palette of a running character at game speed 0.1, 560 moving frames): 6 such pops of up to 1.7 units a frame (hand, foot) before, none after; invisible at speed 1 only because one tick lasts 33 ms.
+
 ### Layer managers
 
 **Verified** (decompilation; Meitou `AnimationSystem.BlendStep`, `Publish`). `AnimationClass` slot 6 (`@ 1405b68c0`) runs each frame: slot 7,

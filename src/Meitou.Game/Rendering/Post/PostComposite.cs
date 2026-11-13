@@ -269,11 +269,11 @@ sealed class PostComposite : IDisposable
     /// The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
     /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.
     /// </summary>
-    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn)
+    public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn, Vector4 contact = default)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
         if (volumes) RunFogVolumes(cmd, scene, depth, inputs);
-        if (ssaoOn) RunSsao(cmd, scene, depth, inputs);
+        if (ssaoOn) RunSsao(cmd, scene, depth, inputs, contact);
     }
 
     /// <summary>
@@ -350,7 +350,7 @@ sealed class PostComposite : IDisposable
         p.Bind(_sceneSlot, _sceneSampler with { View = scene.View() });
         p.Bind(_aoSlot, _ctx.Dummy(p.SamplerInfo(_aoSlot)));
         p.Bind(_adaptedSlot, _plainSampler with { View = _adaptB!.View() });
-        p.Set(_exposure, o.Exposure);
+        p.Set(_exposure, o.ExposureApplied);
         p.Set(_useAo, 0);
         p.Set(_dither, o.Dither ? 1 : 0);
         p.Set(_auto, 1);
@@ -580,9 +580,9 @@ sealed class PostComposite : IDisposable
     }
 
     /// <summary>
-    /// The SSAO at half size, blurred, then multiplied into <paramref name="scene"/>.
+    /// The SSAO at half size, blurred, then multiplied into <paramref name="scene"/> (<paramref name="contact"/>: the contact shadows' terms).
     /// </summary>
-    void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
+    void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, Vector4 contact)
     {
         int w = Math.Max((scene.Desc.Width + 1) / 2, 1), h = Math.Max((scene.Desc.Height + 1) / 2, 1);
         if (_aoA is null || _aoA.Desc.Width != w || _aoA.Desc.Height != h)
@@ -612,6 +612,7 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
         s.P.Set(s.Eye, i.Eye);
         s.P.Set(s.WaterY, i.WaterHeight ?? float.MinValue);
+        s.P.Set(s.Contact, contact);
         s.P.ApplyGlobals();
         Fullscreen(cmd, s.P, _aoA, w, h);
 
@@ -909,9 +910,10 @@ sealed class PostComposite : IDisposable
         public readonly SamplerSlot Depth, Mask;
         /// <summary>
         /// The program's uniforms <c>uTan</c>, <c>uNearFar</c>, <c>uSize</c>, <c>uRadius</c>, <c>uStrength</c>, <c>uFadeStart</c>, <c>uFadeEnd</c>,
-        /// <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uSsaoEye</c>, <c>uCharacterOccluder</c>, <c>uWaterY</c>.
+        /// <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uSsaoEye</c>, <c>uCharacterOccluder</c>, <c>uWaterY</c>, <c>uContact</c>.
         /// </summary>
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
+        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY,
+            Contact;
         /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
@@ -922,6 +924,7 @@ sealed class PostComposite : IDisposable
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
+            Contact = P.Uniform("uContact");
         }
     }
 

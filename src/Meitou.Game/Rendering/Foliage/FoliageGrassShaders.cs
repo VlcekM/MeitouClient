@@ -35,31 +35,86 @@ public static partial class FoliageGrassShaders
     const string Common = """
         #version 450
         layout(local_size_x = 256) in;
-        struct Slot { float x0; float z0; float y; uint firstBlade; uint count; uint zone; uint local; uint tie; };
+        struct Slot { float x0; float z0; float yMin; float yMax; uint firstBlade; uint count; uint zone; uint local; uint tie; };
         struct Zone { uint patchBase; uint patchCount; };
         struct Patch { vec4 size; vec4 colourBounds; float sway; float range; float frequency; uint flags; uint sprite; uint colourMap; uint nearDepth; uint vertexCount; };
         struct Draw { uint vertexCount; uint instanceCount; uint firstVertex; uint firstInstance; };
-        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec2 eye; uint planeCount; uint slotCount; float pageSize; float fraction; uint prefixIndex; float motionScale; } view;
+        layout(std430, set = 0, binding = 0) readonly buffer View { vec4 planes[8]; vec2 eye; uint planeCount; uint slotCount; float pageSize; float fraction; uint prefixIndex; float motionScale; vec4 hz[6]; uvec4 hzOff[3]; } view;
         layout(std430, set = 0, binding = 1) readonly buffer Slots { Slot slots[]; };
         layout(std430, set = 0, binding = 3) readonly buffer Zones { Zone zones[]; };
         layout(std430, set = 0, binding = 4) readonly buffer Patches { Patch patches[]; };
         layout(std430, set = 0, binding = 5) buffer Keys { uvec4 keys[]; };
+        layout(std430, set = 0, binding = 8) buffer Firsts { uint firsts[]; };
         """;
 
     /// <summary>
     /// Kernel 1, one thread per slot (a page's blades of one patch): the decisions of <c>FoliageRenderer.PrepareGrass</c> in its operation order,
     /// <c>precise</c> (no FMA): the page box against the planes (<c>WorldCamera.Intersects</c>), the page's distance (<c>BoxDistance</c> with the
-    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). Writes <c>keys[s] =
-    /// (distance bits, tie, blades, patch row)</c>, or distance bits <c>0xFFFFFFFF</c> for no draw; counts the draws and blades.
+    /// correctly rounded root) against the patch's range, the density's blade prefix (<c>FoliageGrassField.PrefixCount</c>). A slot that draws takes the
+    /// next place of the view's list (the draws' count, in whatever order the threads come) and writes there <c>keys[place] = (distance bits, tie,
+    /// blades, patch row)</c> and its first blade; counts the draws and blades. The list holds the slots that draw and no others, so kernel 2 ranks
+    /// among those alone. With the last frame's depth pyramid (<c>view.hz</c>, <c>hzOff</c> and <c>hiz</c> as <see cref="FoliageShaders"/>' cull
+    /// reads them; level count 0: none) a page whose box (its square grown by half the patch's widest quad and its sway, the heights its blades span) lay wholly
+    /// behind that frame's surfaces is left out, by the rule of the meshes' occlusion cull (docs/formats/foliage.md "Occlusion culling").
     /// </summary>
-    public static readonly string CullCompute = Common + FoliageShaders.CrSqrt + """
+    public static readonly string CullCompute = Common + FoliageShaders.CrSqrt + "\n" + """
         layout(std430, set = 0, binding = 2) readonly buffer Prefixes { uint prefixes[]; };
         layout(std430, set = 0, binding = 7) buffer Counters { uint counters[]; };
+        layout(std430, set = 0, binding = 9) readonly buffer Hiz { vec2 hiz[]; };
+        // The texels covering the pixel rectangle r (x0, y0, x1, y1): the level where it spans at most 2 x 2 texels; false when it leaves the picture.
+        bool HizRegion(vec4 r, out float least, out float most)
+        {
+            least = 3.0e38; most = 0.0;
+            if (r.x < 0.0 || r.y < 0.0 || r.z >= view.hz[4].z || r.w >= view.hz[4].w) return false;
+            int bw = int(view.hz[5].z), bh = int(view.hz[5].w), levels = int(view.hz[5].y);
+            int x0 = int(r.x) >> 2, y0 = int(r.y) >> 2, x1 = min(int(r.z) >> 2, bw - 1), y1 = min(int(r.w) >> 2, bh - 1);
+            int l = 0;
+            while (l < levels - 1 && (((x1 >> l) - (x0 >> l)) > 1 || ((y1 >> l) - (y0 >> l)) > 1)) l++;
+            int w = (bw + (1 << l) - 1) >> l;
+            uint off = view.hzOff[l >> 2][l & 3];
+            for (int y = y0 >> l; y <= (y1 >> l); y++)
+                for (int x = x0 >> l; x <= (x1 >> l); x++)
+                {
+                    vec2 t = hiz[off + uint(y * w + x)];
+                    least = min(least, t.x);
+                    most = max(most, t.y);
+                }
+            return true;
+        }
+        // True when every ray from the eye to the box is stopped by the surfaces of the previous frame: the pixel rectangle its corners cover there, grown by a pixel
+        // (the depth was drawn with a jitter) and by the parallax of the eye's step against the nearest surface in it, holds nothing but surfaces nearer than the
+        // box by a margin. A box that reaches within 40 units of the eye's plane is drawn.
+        bool PageOccluded(vec3 lo, vec3 hi)
+        {
+            if (view.hz[5].y < 0.5) return false;
+            float zn = 3.0e38, tx0 = 3.0e38, tx1 = -3.0e38, ty0 = 3.0e38, ty1 = -3.0e38;
+            for (int i = 0; i < 8; i++)
+            {
+                vec3 d = vec3((i & 1) != 0 ? hi.x : lo.x, (i & 2) != 0 ? hi.y : lo.y, (i & 4) != 0 ? hi.z : lo.z) - view.hz[0].xyz;
+                float zc = -dot(view.hz[3].xyz, d);
+                if (zc < 40.0) return false;
+                float tx = dot(view.hz[1].xyz, d) / zc, ty = dot(view.hz[2].xyz, d) / zc;
+                zn = min(zn, zc);
+                tx0 = min(tx0, tx); tx1 = max(tx1, tx);
+                ty0 = min(ty0, ty); ty1 = max(ty1, ty);
+            }
+            vec2 size = view.hz[4].zw, tn = view.hz[4].xy;
+            vec4 rect = vec4((0.5 + 0.5 * tx0 / tn.x) * size.x - 1.0, (0.5 + 0.5 * ty0 / tn.y) * size.y - 1.0,
+                             (0.5 + 0.5 * tx1 / tn.x) * size.x + 1.0, (0.5 + 0.5 * ty1 / tn.y) * size.y + 1.0);
+            float delta = view.hz[0].w, f = view.hz[5].x, pad = 0.0, least, most;
+            for (int i = 0; i < 3; i++)
+            {
+                if (!HizRegion(rect + vec4(-pad, -pad, pad, pad), least, most)) return false;
+                float need = delta * f / max(least, 1.0);
+                if (need <= pad + 0.5) return most + 0.01 * zn + 3.0 < zn;
+                pad = need;
+            }
+            return false;
+        }
         void main()
         {
             uint s = gl_GlobalInvocationID.x;
             if (s >= view.slotCount) return;
-            keys[s] = uvec4(0xFFFFFFFFu, 0u, 0u, 0u);
             Slot slot = slots[s];
             if (slot.count == 0u) return;
             Zone zone = zones[slot.zone];
@@ -74,8 +129,8 @@ public static partial class FoliageGrassShaders
             precise float reach = pt.range;
             if (view.motionScale > 0.0) reach = min(reach, pt.sway * view.motionScale);   // the motion pass: only blades that move enough to show
             if (d >= reach) return;
-            precise float minY = slot.y - 2000.0;
-            precise float maxY = slot.y + 2000.0;
+            precise float minY = slot.yMin;
+            precise float maxY = slot.yMax;
             precise float maxX = slot.x0 + view.pageSize;
             precise float maxZ = slot.z0 + view.pageSize;
             for (uint p = 0u; p < view.planeCount; p++)
@@ -92,32 +147,43 @@ public static partial class FoliageGrassShaders
             precise float part = float(int(prefixes[at + 1u]) - first) * view.fraction;
             int shown = first + int(part);
             if (shown == 0) return;
-            keys[s] = uvec4(floatBitsToUint(d), slot.tie, uint(shown), row);
-            atomicAdd(counters[0], 1u);
+            // Far pages draw fewer blades, each as much wider (GrassVertex, the same rule by the blade's own distance), so the grass covers the ground as before: past
+            // 1500 units a blade is under a pixel wide, and millions of them cost their vertices, shimmered and smeared under the temporal upscalers. One in eight at least.
+            shown = max(int(float(shown) * clamp(1500.0 / max(d, 1.0), 0.125, 1.0)), 1);
+            // A blade stands on the page; half its widest quad and its sway reach past it.
+            float past = 0.5 * pt.size.y + abs(pt.sway) + 1.0;
+            if (PageOccluded(vec3(slot.x0 - past, minY, slot.z0 - past), vec3(maxX + past, maxY, maxZ + past))) return;
+            uint place = atomicAdd(counters[0], 1u);
+            keys[place] = uvec4(floatBitsToUint(d), slot.tie, uint(shown), row);
+            firsts[place] = slot.firstBlade;
             atomicAdd(counters[1], uint(shown));
         }
         """;
 
     /// <summary>
-    /// Kernel 2, one thread per slot: the draw's place in the view's list, the number of draws with a smaller (distance, tie): nearest page
-    /// first, equal distances in the order of the page's creation and the patch's index (a total order, so the result does not depend on the
-    /// scheduling). Writes the <c>VkDrawIndirectCommand</c>: the patch's vertex count, the blades, the patch row as the first vertex and
-    /// the slot's first blade as the first instance.
+    /// Kernel 2, one thread per draw of kernel 1's list (the groups past its count end at once): the draw's place in the view's order, the number of
+    /// draws with a smaller (distance, tie): nearest page first, equal distances in the order of the page's creation and the patch's index (a total
+    /// order, so the result depends neither on the scheduling nor on the list's order). Writes the <c>VkDrawIndirectCommand</c>: the patch's vertex
+    /// count, the blades, the patch row as the first vertex and the slot's first blade as the first instance. Ranking among the draws alone: every
+    /// slot used to be ranked against every slot, 0.65 ms a view whatever was in sight (docs/render-foliage.md).
     /// </summary>
     public static readonly string OrderCompute = Common + """
         layout(std430, set = 0, binding = 6) writeonly buffer Draws { Draw draws[]; };
+        layout(std430, set = 0, binding = 7) readonly buffer Counters { uint counters[]; };
         shared uvec2 tile[256];
         void main()
         {
+            uint count = counters[0];
+            if (gl_WorkGroupID.x * 256u >= count) return;
             uint s = gl_GlobalInvocationID.x;
             uint t = gl_LocalInvocationID.x;
-            uvec4 mine = s < view.slotCount ? keys[s] : uvec4(0xFFFFFFFFu);
-            bool valid = mine.x != 0xFFFFFFFFu;
+            bool valid = s < count;
+            uvec4 mine = valid ? keys[s] : uvec4(0xFFFFFFFFu);
             uint rank = 0u;
-            for (uint b = 0u; b < view.slotCount; b += 256u)
+            for (uint b = 0u; b < count; b += 256u)
             {
                 uint j = b + t;
-                tile[t] = j < view.slotCount ? keys[j].xy : uvec2(0xFFFFFFFFu);
+                tile[t] = j < count ? keys[j].xy : uvec2(0xFFFFFFFFu);
                 barrier();
                 if (valid)
                     for (uint i = 0u; i < 256u; i++)
@@ -128,7 +194,7 @@ public static partial class FoliageGrassShaders
                 barrier();
             }
             if (!valid) return;
-            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, slots[s].firstBlade);
+            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, firsts[s]);
         }
         """;
 
@@ -180,6 +246,7 @@ public static partial class FoliageGrassShaders
         ["uHasColourMap"] = Flag(FlagColourMap),
         ["uCoverage"] = Flag(FlagCoverage),
         ["uWireframe"] = Flag(FlagWireframe),
+        ["uGrassDepthOnly"] = "(view.previousTime < -0.5)",
         ["uSprite"] = Tex("sprite"),
         ["uColourMap"] = Tex("colourMap"),
         ["uNearDepth"] = Tex("nearDepth"),
@@ -243,18 +310,18 @@ public static partial class FoliageGrassShaders
 }
 
 /// <summary>
-/// One slot of the slot table (std430, 32 bytes): a page's blades of one patch. <see cref="X0"/>, <see cref="Z0"/> and <see cref="Y"/> are the page's
-/// corner and the ground height at its centre as <c>PrepareGrass</c> computes them; <see cref="FirstBlade"/> the index of its first blade in the
-/// arena (the draw's first instance); <see cref="Zone"/> and <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out
+/// One slot of the slot table (std430, 36 bytes): a page's blades of one patch. <see cref="X0"/>, <see cref="Z0"/> are the page's corner,
+/// <see cref="YMin"/> and <see cref="YMax"/> the heights its blades span (the lowest root to the highest tip), as <c>PrepareGrass</c> reads them
+/// from the page; <see cref="FirstBlade"/> the index of its first blade in the arena (the draw's first instance); <see cref="Zone"/> and <see cref="Local"/> reach its patch (the zone's patches change when a zone is laid out
 /// again); <see cref="Tie"/> orders pages of equal distance (creation order, then patch index).
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassSlot
 {
     /// <summary>
-    /// The page's corner (x, z) and the ground height at its centre.
+    /// The page's corner (x, z) and the heights its blades span (the lowest root to the highest tip).
     /// </summary>
-    public float X0, Z0, Y;
+    public float X0, Z0, YMin, YMax;
     /// <summary>
     /// The first blade in the arena, the blade count, the zone, the patch within it and the tie order.
     /// </summary>
@@ -263,7 +330,7 @@ public struct GrassSlot
     /// <summary>
     /// The slot's size in bytes.
     /// </summary>
-    public const int Size = 32;
+    public const int Size = 36;
 }
 
 /// <summary>

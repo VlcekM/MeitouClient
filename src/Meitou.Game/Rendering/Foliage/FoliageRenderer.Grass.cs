@@ -23,6 +23,12 @@ public sealed unsafe partial class FoliageRenderer
     readonly FoliageGrassStore _grass;
 
     /// <summary>
+    /// The grass of a colour view is drawn twice (docs/render-foliage.md "Grass depth first"): its depth alone, then its colour where the depth is
+    /// its own, so a pixel is lit once however many blades cover it. Off: one draw, every layer lit.
+    /// </summary>
+    public bool GrassDepthFirst { get; set; } = true;
+
+    /// <summary>
     /// The grass drawn by the GPU (docs/renderer-native.md 5.6.2; where the device allows it): per view two compute kernels choose the pages in view,
     /// the blades each shows and the order, and one indirect draw records them all. Off is the CPU path (the reference): the CPU walks the pages,
     /// frustum-tests and sorts them.
@@ -105,7 +111,7 @@ public sealed unsafe partial class FoliageRenderer
         for (int i = 0; i < rows.Length; i++)
         {
             ref var r = ref rows[i];
-            r.Sprite = Texture(r.Sprite);
+            r.Sprite = GrassTexture(r.Sprite);
             r.ColourMap = Texture(r.ColourMap);
             r.NearDepth = nearDepth;
         }
@@ -131,19 +137,59 @@ public sealed unsafe partial class FoliageRenderer
         NewTextureSegment();
         var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
-        var result = _grass.Store.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance,
-            Time = SwayPhase() };
+        var result = _grass.Store.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables,
+            occlusion: FoliageGrassGpu.OcclusionCull ? Occlusion : default);
+        var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour,
+            FogDistance = fogDistance, Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
+
+        // Depth first: the same draw with the colour masked and the fragment stopping after its cut (uGrassDepthOnly), then the colour with the depth
+        // test EQUAL and no depth write. Blades cover each other many times over and the lighting ran for every layer the depth test had not yet
+        // hidden (Gut: 4.2 ms of 17.5, with the traced sun's rays for pixels that were then covered).
+        bool depthFirst = GrassDepthFirst && !_depthPass && !coverage && !result.IsEmpty && state.DepthTest && state.DepthWrite;
+        if (depthFirst)
+        {
+            RecordGrassDepth(gp, targets, state, view, in tables, result);
+            state = state with { Compare = DepthFunction.Equal, DepthWrite = false };
+            segment = SegmentId(GrassEqualKind, p, targets, state);
+        }
+
         var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, state, p);
         job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding]);
-        job.Pipeline = result.IsEmpty ? null : PipelineFor(ref _grass.MeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
-        (job.Vertices, job.Result) = (_grass.MeshGpu.Vertices, result);
+        if (depthFirst)
+        {
+            job.Pipeline = PipelineFor(ref _grass.MeshGpuEqual, gp, segment, state, targets.Formats, "foliage grass gpu after depth");
+            (job.Vertices, job.Result) = (_grass.MeshGpuEqual.Vertices, result);
+        }
+        else
+        {
+            job.Pipeline = result.IsEmpty ? null : PipelineFor(ref _grass.MeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
+            (job.Vertices, job.Result) = (_grass.MeshGpu.Vertices, result);
+        }
+
         Gpu.Record("foliage grass", job);
         DrawCalls += _grass.Store.LateDraws;
         DrawnBlades += (int)_grass.Store.LateBlades;
         return true;
+    }
+
+    /// <summary>
+    /// The depth draw of the depth-first pair (<see cref="GrassDepthFirst"/>): the blades with the colour masked, the fragment stopping after its
+    /// cut (the view's PreviousTime -1 is its uGrassDepthOnly).
+    /// </summary>
+    void RecordGrassDepth(NativeProg gp, PassTargets targets, DrawState state, ViewConstants view, in GrassTables tables, GrassResult result)
+    {
+        var p = gp.P;
+        var depthState = state with { ColourMask = 0 };
+        view.PreviousTime = -1;
+        var job = _grassGpuJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program) = (this, targets, depthState, p);
+        job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding]);
+        int segment = SegmentId(GrassDepthKind, p, targets, depthState);
+        job.Pipeline = PipelineFor(ref _grass.MeshGpuDepth, gp, segment, depthState, targets.Formats, "foliage grass gpu depth");
+        (job.Vertices, job.Result) = (_grass.MeshGpuDepth.Vertices, result);
+        Gpu.Record("foliage grass depth", job);
     }
 
     /// <summary>
@@ -234,7 +280,7 @@ public sealed unsafe partial class FoliageRenderer
         cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = _motionViewProjection,
+            ViewProjection = _motionRelative,
             PreviousViewProjection = previous,
             Eye = eye,
             Time = time,

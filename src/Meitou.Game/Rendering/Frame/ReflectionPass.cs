@@ -16,7 +16,7 @@ namespace Meitou.Game.Rendering.Frame;
 /// <summary>
 /// Planar reflection of the scene for the water (docs/formats/terrain.md, "Water"; the game does the same with a 512Â²
 /// render target drawn by a mirrored camera). The sky, terrain and, through <see cref="SceneDraw"/>, characters, objects
-/// and foliage are drawn mirrored about the water plane into a half-resolution texture; <see cref="WaterRenderer"/> samples it
+/// and foliage are drawn mirrored about the water plane into a texture of the picture's size; <see cref="WaterRenderer"/> samples it
 /// with the same view-projection, so no flip of the texture is needed. The mirror reverses triangle winding, which a
 /// mirrored (negated) clip X puts right again, so no renderer has to change its culling. Nothing below the water leaks
 /// into the picture: the projection's near plane is replaced by the water plane (oblique near-plane clipping).
@@ -31,9 +31,9 @@ public sealed class ReflectionPass : IDisposable
     public delegate void SceneDraw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum);
 
     /// <summary>
-    /// Size of the texture relative to the picture (the game's is a fixed 512Â²).
+    /// Size of the texture relative to the picture (the game's is a fixed 512Â²). Full size: at a grazing angle the mirror image is seen about as large as the scene itself.
     /// </summary>
-    public const float Scale = 0.5f;
+    public const float Scale = 1f;
 
     /// <summary>
     /// The reflection covers this much more than the picture in each direction (as a factor of the field of view tangent).

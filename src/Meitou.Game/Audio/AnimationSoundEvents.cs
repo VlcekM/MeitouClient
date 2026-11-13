@@ -9,7 +9,13 @@ namespace Meitou.Game.Audio;
 /// <see cref="OverrideValue"/>) and the event to post when the animation ends (<see cref="Stop"/>). <see cref="Footstep"/> is an event called exactly
 /// <c>Footsteps</c>.
 /// </summary>
-public sealed record AnimationSoundEvent(string Event, string OverrideState, string OverrideValue, string Stop, bool Footstep, float Fraction);
+public sealed record AnimationSoundEvent(string Event, string OverrideState, string OverrideValue, string Stop, bool Footstep, float Fraction) : IAnimationEvent;
+
+/// <summary>An event at a fraction of its clip, fired by an <see cref="AnimationEventCursor"/> (the exe keeps sound, ground and reload events in one list, each with its own fire).</summary>
+public interface IAnimationEvent
+{
+    float Fraction { get; }
+}
 
 /// <summary>
 /// The sound events of the animation records: the <c>events</c> of ANIMATION, ANIMAL_ANIMATION and COMBAT_TECHNIQUE records and the <c>animation
@@ -138,7 +144,7 @@ public struct AnimationEventCursor
     /// The events changed under the cursor (a machine's added to its clip): the next to fire is the first not before the last fraction, as the exe's
     /// insert moves the index past an event added behind it (<c>FUN_140064870</c>).
     /// </summary>
-    public void Rebase(AnimationSoundEvent[] events)
+    public void Rebase<T>(T[] events) where T : IAnimationEvent
     {
         Next = 0;
         while (Next < events.Length && events[Next].Fraction < Last) Next++;
@@ -148,7 +154,7 @@ public struct AnimationEventCursor
     /// Fires, through <paramref name="fire"/>, the events passed between the last fraction and <paramref name="fraction"/> (those left from the pass
     /// before first when the clip looped); keeps only the fraction while not <paramref name="enabled"/>.
     /// </summary>
-    public void Update(AnimationSoundEvent[] events, float fraction, bool enabled, Action<AnimationSoundEvent> fire)
+    public void Update<T>(T[] events, float fraction, bool enabled, Action<T> fire) where T : IAnimationEvent
     {
         if (events.Length == 0 || fraction == Last) return;
         bool wrapped = fraction < Last;

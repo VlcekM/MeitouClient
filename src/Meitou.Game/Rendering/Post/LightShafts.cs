@@ -49,9 +49,11 @@ sealed unsafe class LightShafts(PostProcess post)
         public readonly UniformHandle Samples;
 
         /// <summary>
-        /// Compiles the program and resolves its handles.
+        /// Compiles the program (<paramref name="clouds"/>: the variant whose samples read the cloud shadows) and resolves its handles.
         /// </summary>
-        public ShaftInjectPass(GpuContext gpu) : base(gpu, LightShaftShaders.Inject, "post shafts inject") => Samples = P.Uniform("uShaftSamples");
+        public ShaftInjectPass(GpuContext gpu, bool clouds)
+            : base(gpu, clouds ? LightShaftShaders.InjectClouded : LightShaftShaders.Inject, "post shafts inject") =>
+            Samples = P.Uniform("uShaftSamples");
     }
 
     /// <summary>
@@ -162,7 +164,12 @@ sealed unsafe class LightShafts(PostProcess post)
     public const float TemporalBlend = 0.1f;
 
     /// <summary>
-    /// The injection pass (made by the first <see cref="Run"/>, as are the other passes).
+    /// The injection passes, by whether the samples read the cloud shadows (the gihybrid switch's clouds part), each made when first used.
+    /// </summary>
+    readonly ShaftInjectPass?[] _injects = new ShaftInjectPass?[2];
+
+    /// <summary>
+    /// This frame's injection pass (set by <see cref="Run"/>).
     /// </summary>
     ShaftInjectPass? _inject;
 
@@ -286,7 +293,8 @@ sealed unsafe class LightShafts(PostProcess post)
                 : "off")}";
         EnsureAtlases(aw, ah);
         var gpu = post.Gpu;
-        _inject ??= new ShaftInjectPass(gpu);
+        bool clouds = o.GiCloudShadowing;
+        _inject = _injects[clouds ? 1 : 0] ??= new ShaftInjectPass(gpu, clouds);
         _integrate ??= new ShaftIntegratePass(gpu);
         _apply ??= new ShaftApplyPass(gpu);
         _scatterPass ??= new ShaftScatterPass(gpu);
@@ -602,7 +610,7 @@ sealed unsafe class LightShafts(PostProcess post)
     /// </summary>
     public void Dispose()
     {
-        _inject?.P.Dispose();
+        foreach (var inject in _injects) inject?.P.Dispose();
         _resolve?.P.Dispose();
         _integrate?.P.Dispose();
         _apply?.P.Dispose();

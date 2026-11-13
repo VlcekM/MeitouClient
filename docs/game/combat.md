@@ -616,15 +616,19 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
 
 - **Target down or held** (`FUN_14060d6a0`, **Verified**): each update, a fight target that is carried, dead or ragdolled (`FUN_1407d1440`: carried flag `+0x3d4`, or the
   body state's `+0x59`/`+0x5a`), or imprisoned (`+0x2f8` 2) while the *fighter's own* fight state is not 8 (stumbling), is dropped, provided the fight state is not 0 (swinging) or
-  the attack clip has reached its end point; the fight goes to state 4 (re-decide, kept at 8); when it was also the task's target and refocus is clear the task ends.
-  A focused (ordered) target is dropped too. Meitou: `CombatSystem.Act`'s target test drops a target down this tick (after every body step, `BeforeAct`), caged or carried (the
+  the attack clip has reached its end point; the fight goes to state 4 (re-decide, kept at 8); when it was also the focused target and refocus is clear the task ends.
+  A focused (ordered) target is dropped too. **Verified** who has a focused target and who has refocus (decompile): the start of `Task_MeleeAttack` (rows 4, 13, 16, 227; `FUN_1403341f0`) calls the combat class's
+  mode function `FUN_1406681e0` with its target hand, mode 0 and flag 0: the focused hand at CombatClassAI `+0x2c8` is cleared and refocus `+0x2e8` set to "the AI task has a target"; the start of `Task_FocusedMeleeAttack`
+  (rows 5 and 61; `FUN_14033c1e0`) passes flag 1: the hand is the target and refocus is cleared. The update `FUN_14060d6a0` runs the target chooser `FUN_140666ee0` while refocus is set and the hand empty, and
+  ends the task on a dropped target only when it is the stored hand and refocus is clear. So a fight started by a goal or a reaction goes on to the next target when its target falls (only the nothing-left test below ends it);
+  the player's picked attack ends with its target. Meitou: `CombatSystem.Act`'s target test drops a target down this tick (after every body step, `BeforeAct`), caged or carried (the
   stumbling fighter skips that step; the swing clause is not modelled, as for a fallen target), and `Consider` leaves a carried one out. The task target is the fight's start target
-  (`CombatSlot.TaskSlot`, set by the attack order or goal, kept through retargets); dropping it ends the fight at once, without a new choice (refocus read as clear).
+  (`CombatSlot.TaskSlot`, set by the attack order or goal, kept through retargets); dropping it ends the fight at once, without a new choice, only while it is the player's pick (`CombatSlot.Picked`, rows 5 and 61).
 - **Nothing left** (`Task_MeleeAttack` update): the task ends when the fight task stopped (`FUN_1405c9750`), or when all hold:
   the senses (Character vfunc `0x68`) count no enemies (`numEnemies` +0x94 = 0) and no threat to allies (`totalThreatLevelAllies` +0x8c ≤ 0,
   [threats](#fight-lifecycle-and-orders)), nobody is engaged on the character (engaged list + overflow 0),
   the fight has no target (`+0x2a0` none), and the task's own target is gone or down (its vfunc `0x30` true; **Verified** decompile of `FUN_14034ca40`).
-  The immediate end above is `CombatClassAI` update `FUN_14060d6a0` (**Verified**: the dropped target equals the task's target and refocus `+0x2e8` is clear).
+  The immediate end above is `CombatClassAI` update `FUN_14060d6a0` (**Verified**: the dropped target equals the stored focused hand and refocus `+0x2e8` is clear, i.e. a picked attack).
   Meitou (`CombatSystem.NothingLeft`): a fighter that loses another target, or whose periodic choice finds nobody, fights on without a target (state 9), choosing again every pick
   interval and still defending, until the test passes over its senses ([perception](perception.md#senses): `Enemies`, `ThreatToAllies`), `AttackerCount` and the task target (gone, dead,
   knocked out; carried too, engine reading). Engine choice: a task target with no sense entry counts as gone, so the entry's decay (30 / 60 / 120 units of 2 s) ends the wait on a live
@@ -906,7 +910,7 @@ terrain hits under |dot(normal, dir)| 0.1 vanish; objects and buildings land wit
 the landed bolt with the longest flight time (`Harpoon +0x60`, summed per flight frame in `FUN_1404380e0`; the first of equals) goes. In a character (`FUN_1406508d0` -> wound record -> `FUN_14052bfa0`): every hitting bolt sticks, attached to the
 struck part's `bone name` (or `bone name 2` half the time, `FUN_140649fd0`; the root without the bone) at 0.6 x a random vertex of the body on the
 bolt's side (back when it flew the way the character faces), keeping its world orientation in the bone's frame; no timer, cap or `harpoonLimit`;
-all go at once when first aid leaves no wound (`FUN_14064d800` -> `FUN_14052bc10`) or the appearance reloads; not recoverable. Meitou: the debris
+all go at once on the first first-aid update that finds no open wound record (**Verified**, decompile: `FUN_14064d800` sets the character's clear flag `+0x68` whenever its wound list `+0x178` is empty, the patient alive and the kit null or of the patient's kind; the per-frame character update `FUN_140538d30` then calls `FUN_14052bc10`, which recycles every bolt in the list `+0x50`) so not at the end of bandaging, and not while wounds are being closed (bolts hit open a wound, so they stay until the last one closes), or when the appearance reloads (**Observed**: other callers of `FUN_14052bc10` are vtable slots, not checked); not recoverable. Meitou: the debris
 renderer draws them (in flight interpolated between ticks); a stuck bolt sits 2 units back along its flight from its bone's origin (engine choice for
 the random vertex), not saved.
 Meitou `tracers` switch (default; Faithful: none, as the game): a semi-transparent streak behind each drawn bolt in flight (`GameHost.AddTracers`, drawn by

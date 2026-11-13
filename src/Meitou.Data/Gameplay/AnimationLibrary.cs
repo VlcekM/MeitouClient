@@ -1,3 +1,4 @@
+using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 
 namespace Meitou.Data.Gameplay;
@@ -339,7 +340,7 @@ public sealed class AnimationLibrary
                 .DistinctBy(r => r.StringId)
                 .ToList();
             var defs = listed.Select(r => index[r.StringId]).ToList();
-            string? race = a.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => r.TargetStringId).FirstOrDefault();
+            string? race = CharacterAppearance.AnimalRaceId(a);
             _animals[a.StringId] = new AnimalClips(
                 a.StringId, race,
                 [.. defs.Where(i => _all[i].MoveSpeed != 0).OrderBy(i => _all[i].Id, StringComparer.Ordinal)],

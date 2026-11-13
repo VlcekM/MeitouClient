@@ -45,6 +45,20 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public Matrix4x4 Transform;
 
         /// <summary>
+        /// An animated part (door, turret joint, rotor): the transform it was drawn with in the last frame that wrote motion (<c>WorldObjectRenderer.NoteMotion</c>) and that frame's number.
+        /// </summary>
+        public Matrix4x4 LastDrawn;
+
+        public long LastDrawnFrame = -2;
+
+        /// <summary>
+        /// The traced scene's lamp caches: this instance's mesh and transform hash and the frame it last changed (<see cref="Gi.GiScene"/>).
+        /// </summary>
+        public ulong CasterHash;
+
+        public long CasterChanged;
+
+        /// <summary>
         /// World bounding sphere (the placement point and a guess until resolved).
         /// </summary>
         public Vector3 Centre;

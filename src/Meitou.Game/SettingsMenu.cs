@@ -50,7 +50,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// The Graphics tabs: the look tabs, then the quality tabs (<see cref="GraphicsSection"/>).
     /// </summary>
-    internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
+    internal static readonly string[] GraphicsPages =
+        ["Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
     /// <summary>
     /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
     /// </summary>
@@ -196,7 +197,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
         InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
         string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
-        bool Locked = false);
+        bool Locked = false, string? Tag = null, bool TagHot = false);
 
     /// <summary>
     /// A clickable widget as the last frame drew it: its bounds, what a click does, and a slider's track.
@@ -465,17 +466,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The Tick ahead row's hint.
     /// </summary>
     internal const string TickAheadHint =
-        "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
-        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, "
-        + "up to 33 ms more input delay.";
+        "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay.";
     /// <summary>
     /// The Frame generation row's hint, its state in place of {1}.
     /// </summary>
     const string FrameGenerationTemplate =
-        "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-        + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's "
-        + "frame generation DLLs and turns Reflex on. "
-        + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
+        "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}";
     /// <summary>
     /// The Frame generation row's choices.
     /// </summary>
@@ -484,6 +480,32 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The Tick ahead row's choices.
     /// </summary>
     internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
+    /// <summary>
+    /// The names of the HDR output rows of the Display page and of the launcher (docs/render-post.md "HDR output").
+    /// </summary>
+    internal const string HdrName = "HDR output", HdrPaperName = "White brightness", HdrPeakName = "Peak brightness";
+    /// <summary>
+    /// The HDR output row's hint.
+    /// </summary>
+    internal const string HdrHint = "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation.";
+    /// <summary>
+    /// The White brightness row's hint.
+    /// </summary>
+    internal const string HdrPaperHint = "Brightness of white, in nits. Automatic matches the Windows desktop.";
+    /// <summary>
+    /// The Peak brightness row's hint.
+    /// </summary>
+    internal const string HdrPeakHint = "Your display's brightest level, in nits.";
+    /// <summary>
+    /// The settings read once, when the game starts (by their row's key): their row says so, and says it louder once the value is no longer the one
+    /// the game started with.
+    /// </summary>
+    static readonly HashSet<string> RestartKeys =
+        ["frameGeneration", "hdr", WorldFrame.TextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
+    /// <summary>
+    /// The value each restart setting had when its row was first built (the menu is made with the game).
+    /// </summary>
+    readonly Dictionary<string, float> _atStart = [];
 
     /// <summary>
     /// A row's label without its range or its numbering; Anti-aliasing reads Anti-aliasing/upscaling.
@@ -510,8 +532,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static string ToggleSection(string label) => GraphicsSection(label, true);
 
     /// <summary>
-    /// The Graphics tab a setting sits on, by feature (Display and Advanced settings are sorted out before this): a feature's switch, look settings,
-    /// quality settings and distances on one tab, in its group (<see cref="FeatureGrouping.FeatureGroups"/>). Interior lamps is on Advanced; the
+    /// The Graphics tab a setting sits on, by subject (Display and Advanced settings are sorted out before this): a feature's switch, look settings,
+    /// quality settings and its own distances on one tab, in its group (<see cref="FeatureGrouping.FeatureGroups"/>). Interior lamps is on Advanced; the
     /// anti-aliasing and weather particles switches are hidden.
     /// </summary>
     internal static string GraphicsSection(string label, bool toggle)
@@ -524,23 +546,37 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             {
                 "Interior lamps" => "Advanced",
                 "Anti-aliasing" or "Weather particles" => "Hidden",
-                "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine"
-                    or WorldFrame.FifthCascadeSwitch => "Lighting",
-                "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze"
-                    or "Fog" => "Sky & weather",
-                "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch => "Colour",
-                "Skin" or "Character levels" or "Item icons" => "Characters",
-                _ => "World",
+                "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
+                    or WorldFrame.TracedGrassSwitch => "Lighting",
+                "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine"
+                    or WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => "Lighting",
+                "Water" or "Water contact foam, wakes and ripples" or "Reflections" => "Water & reflections",
+                "Ground parallax" or "Ground displacement (tessellation)" or "Ground trails" or WorldFrame.RockSmoothingSwitch
+                    or WorldFrame.OutlineRefineSwitch => "Terrain",
+                "Foliage ranges" or "Foliage levels" or "Far impostors" or WorldFrame.GrassCoverSwitch => "Vegetation",
+                "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Fog" or WorldFrame.WetWorldSwitch => "Sky & weather",
+                "Tone map and grade" or "Night grading" or "Dithering" => "Colour",
+                "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Post FX",
+                "Skin" or "Character levels" or "Advanced materials" or "Blood on weapons and gear" or "Blood cells" or "Blood on surfaces" or "Bolt tracers"
+                    or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch or WorldFrame.MaterialEyesSwitch
+                    or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => "Characters",
+                "Item icons" or "Portrait and editor sun" or "Character editor bar" => "Interface",
+                _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings
             };
         }
 
-        if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow"))
-            return "Lighting";
-        if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
+        if (label == WorldFrame.SunShadowsChoice || S("Shadow")) return "Lighting";
+        if (WorldFrame.ChoiceSliders.Contains(label) || S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine")) return "Lighting";
+        if (S("Water") || S("Far water") || label == WorldFrame.ReflectionRangeSlider || label == WorldFrame.ReflectionSamplesSlider) return "Water & reflections";
+        if (S("Terrain") || S("Ground")) return "Terrain";
+        if (S("Foliage") || S("Large foliage") || S("Medium foliage") || S("Small foliage") || S("Grass") || S("Impostor") || S("Large impostor")) return "Vegetation";
+        if (S("Haze") || label == WorldFrame.HazeDistanceSlider || label == WorldFrame.CloudHeightSlider || WorldFrame.ParticleSliders.Contains(label))
+            return "Sky & weather";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading")) return "Colour";
+        if (S("Bloom") || S("Depth of field") || S("Heat haze")) return "Post FX";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
-        return "World";
+        return "Objects";   // object, landmark and town distances, object LOD
     }
 
     /// <summary>
@@ -558,10 +594,24 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return label switch
         {
             WorldFrame.GroundReliefQualitySlider or WorldFrame.GroundReliefDepthSlider => GroundRelief.ParallaxActive || displace,
-            WorldFrame.GroundParallaxDistanceSlider => GroundRelief.ParallaxActive,
+            WorldFrame.GroundParallaxDistanceSlider or WorldFrame.GroundParallaxDepthSlider => GroundRelief.ParallaxActive,
             WorldFrame.GroundDisplaceDistanceSlider => displace,
             _ => true,
         };
+    }
+
+    /// <summary>
+    /// <paramref name="row"/> with its restart tag when its setting is read at start-up only (<see cref="RestartKeys"/>).
+    /// </summary>
+    Entry Restarting(Entry row)
+    {
+        if (row.Raw is not { } key || !RestartKeys.Contains(key) || row.Label == "Custom value") return row;
+
+        float now = row.Toggle is { } toggle ? toggle.Get() ? 1 : 0 : row.Choice is { } choice ? choice.Current() : row.Slider?.Get() ?? 0;
+        if (!_atStart.TryGetValue(key, out float start)) _atStart[key] = start = now;
+
+        bool pending = MathF.Abs(now - start) > 1e-4f;
+        return row with { Tag = pending ? "Restart to apply" : "Needs restart", TagHot = pending };
     }
 
     /// <summary>
@@ -617,6 +667,130 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
+    /// Whether a Graphics switch has a row: not the techniques a choice stands for (<see cref="WorldFrame.ChoiceDrivenSwitches"/> but the two master
+    /// switches, when the choices exist: the Metal panel has none), nor one whose effect is off (<see cref="RowShown"/>).
+    /// </summary>
+    bool ShownSwitch(string label) =>
+        !(WorldFrame.ChoiceDrivenSwitches.Contains(label) && label is not ("Ambient occlusion" or "Indirect light")
+            && Values.Sliders.Any(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+        && RowShown(label);
+
+    /// <summary>
+    /// A technique choice's position (<see cref="WorldFrame.ChoiceSliders"/>); -1 when the panel has none.
+    /// </summary>
+    int ChoiceAt(string label) => Values.Sliders.FirstOrDefault(s => s.Label == label) is { } s ? (int)MathF.Round(s.Get()) : -1;
+
+    /// <summary>
+    /// Whether switch <paramref name="label"/> is on (true when the panel has none, so its rows show).
+    /// </summary>
+    bool SwitchOn(string label) => Values.Toggles.FirstOrDefault(t => t.Label == label)?.Get() ?? true;
+
+    /// <summary>
+    /// Whether a Graphics row acts now: a setting of an effect shows only while that effect is on, and one of a technique only with that technique
+    /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade; the grass shadows with
+    /// them; the screen-space contact shadows with the cascades; the cache's parts with the hybrid indirect light).
+    /// </summary>
+    bool RowShown(string label)
+    {
+        int sun = ChoiceAt(WorldFrame.SunShadowsChoice), occlusion = ChoiceAt(WorldFrame.OcclusionChoice), gi = ChoiceAt(WorldFrame.GiChoice);
+        return label switch
+        {
+            WorldFrame.ShadowDistanceSlider => sun != 0,
+            WorldFrame.ShadowMapSlider => sun is not (0 or 3),
+            WorldFrame.ShadowFilterSlider or WorldFrame.FifthCascadeSwitch => sun is -1 or 2,
+            "Contact shadows" => sun != 3,
+            WorldFrame.TracedGrassSwitch => sun is -1 or 3,
+            "Indoor GI" => gi != 0,
+            WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => gi is -1 or 2,
+            WorldFrame.GtaoQualitySlider => occlusion is -1 or 2,
+            WorldFrame.ShaftStrengthSlider or WorldFrame.ShaftAirSlider or WorldFrame.ShaftAirDawnSlider or WorldFrame.ShaftQualitySlider => SwitchOn("Light shafts"),
+            WorldFrame.PlanetshineStrengthSlider => SwitchOn("Planetshine"),
+            WorldFrame.WaterClaritySlider or WorldFrame.FarWaterClaritySlider or WorldFrame.WaterClearDistanceSlider => SwitchOn("Water"),
+            WorldFrame.LandmarkDistanceSlider => SwitchOn("Draw distances"),
+            WorldFrame.FoliageLodSlider => SwitchOn("Foliage levels"),
+            WorldFrame.LargeFoliageRangeSlider or WorldFrame.MediumFoliageRangeSlider or WorldFrame.SmallFoliageRangeSlider => SwitchOn("Foliage ranges"),
+            WorldFrame.ImpostorDistanceSlider or WorldFrame.LargeImpostorDistanceSlider or WorldFrame.ImpostorBudgetSlider => SwitchOn("Far impostors"),
+            WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch or WorldFrame.MaterialEyesSwitch
+                or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => SwitchOn("Advanced materials"),
+            WorldFrame.NightGradeStrengthSlider => SwitchOn("Night grading"),
+            WorldFrame.BloomStrengthSlider => SwitchOn(WorldFrame.BloomSwitch),
+            WorldFrame.DofApertureSlider or WorldFrame.CameraEffectsSwitch => SwitchOn(WorldFrame.DepthOfFieldSwitch),
+            _ => true,
+        };
+    }
+
+    /// <summary>
+    /// The techniques of the effects with several: the choice that holds them (<see cref="WorldFrame.ChoiceSliders"/>), its first technique's
+    /// position (below it the effect is off or the game's), the row's name, the techniques, the hint and the tab.
+    /// </summary>
+    static readonly (string Choice, int First, string Label, string[] Options, string Hint, string Section)[] Techniques =
+    [
+        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced"],
+            "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light).",
+            "Lighting"),
+        (WorldFrame.OcclusionChoice, 1, "Ambient occlusion technique", ["SSAO", "GTAO"],
+            "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more.", "Lighting"),
+        (WorldFrame.GiChoice, 1, "Indirect light technique", ["Probes", "Probes and cache"],
+            "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera.", "Lighting"),
+    ];
+
+    /// <summary>
+    /// The technique each effect had when it was last on (this session), by its choice: turning the effect back on returns to it.
+    /// </summary>
+    readonly Dictionary<string, int> _lastTechnique = [];
+
+    /// <summary>
+    /// A technique row's key (its place in <see cref="FeatureGrouping.FeatureGroups"/>): not a saved setting, the choice is.
+    /// </summary>
+    internal static string TechniqueKey(string choice) => choice + ": technique";
+
+    /// <summary>
+    /// Moves a technique choice: off or the game's (below <paramref name="first"/>) remembers the technique it leaves, on returns to it.
+    /// </summary>
+    void SetEffect(Slider choice, int first, int position)
+    {
+        int now = (int)MathF.Round(choice.Get());
+        if (now >= first) _lastTechnique[choice.Label] = now;
+        choice.Set(position < first ? position : _lastTechnique.GetValueOrDefault(choice.Label, first));
+    }
+
+    /// <summary>
+    /// The sun shadows' master switch, the head of the Shadows feature (the lamps' and the contact shadows are under it): off, the game's cascades, or
+    /// Meitou's (their technique is the row under it).
+    /// </summary>
+    Entry SunShadowsRow(Slider choice) => new("Shadows", "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside.", Segmented: true,
+        Choice: new(() => ["Off", "Faithful", "Meitou"], () => Math.Min((int)MathF.Round(choice.Get()), 2), i => SetEffect(choice, 2, i)), Raw: choice.Label);
+
+    /// <summary>
+    /// A switch as its row has it: the ambient occlusion and indirect light switches go through their technique choice, which keeps what depends on
+    /// them right (the traced shadows need the indirect light) and returns to the technique last used.
+    /// </summary>
+    Toggle MasterSwitch(Toggle toggle)
+    {
+        string? label = toggle.Label switch { "Ambient occlusion" => WorldFrame.OcclusionChoice, "Indirect light" => WorldFrame.GiChoice, _ => null };
+        return label is not null && Values.Sliders.FirstOrDefault(s => s.Label == label) is { } choice
+            ? toggle with { Set = v => SetEffect(choice, 1, v ? 1 : 0) }
+            : toggle;
+    }
+
+    /// <summary>
+    /// The technique rows of a tab: one per effect that is on, under its master switch.
+    /// </summary>
+    IEnumerable<Entry> TechniqueRows(string section)
+    {
+        foreach (var (label, first, name, options, hint, tab) in Techniques)
+        {
+            if (tab != section || Values.Sliders.FirstOrDefault(s => s.Label == label) is not { } choice || choice.Get() < first - 0.5f) continue;
+
+            yield return new(name, hint, Segmented: true, Choice: new(() => options, () => (int)MathF.Round(choice.Get()) - first, i =>
+            {
+                _lastTechnique[label] = i + first;
+                choice.Set(i + first);
+            }), Raw: TechniqueKey(label));
+        }
+    }
+
+    /// <summary>
     /// The rows of the page shown.
     /// </summary>
     internal List<Entry> Entries()
@@ -663,15 +837,15 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     List<Entry> GraphicsRows(string section)
     {
         var changes = LookPresets.LookChanges();
-        var result = Values.Toggles
-            .Where(toggle => ToggleSection(toggle.Label) == section)
+        var result = Values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section && ShownSwitch(toggle.Label))
             .OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
-            .Select(toggle => LookPresets.LookRow(new Entry(Label(toggle.Label), SettingHints.ToggleHint(toggle.Label), Toggle: toggle),
-                SwitchKey(toggle.Label), toggle.Label, true, changes))
-            .Concat(Values.Sliders
-                .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
+            .Select(toggle => LookPresets.LookRow(new Entry(Label(toggle.Label), SettingHints.ToggleHint(toggle.Label), Toggle: MasterSwitch(toggle)), SwitchKey(toggle.Label), toggle.Label, true, changes))
+            // The sun shadows' choice is its master switch; the occlusion's and the indirect light's are their switches' and technique rows'.
+            .Concat(Values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed" or WorldFrame.OcclusionChoice or WorldFrame.GiChoice)
+                    && Section(s.Label) == section && ReliefSliderShown(s.Label) && RowShown(s.Label))
                 .OrderBy(s => LauncherSchema.Order(s.Label))
-                .Select(s => LookPresets.LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
+                .Select(s => LookPresets.LookRow(s.Label == WorldFrame.SunShadowsChoice ? SunShadowsRow(s) : SliderEntry(s), s.Label, s.Label, false, changes)))
+            .Concat(TechniqueRows(section))
             .ToList();
 
         // Graphics > Characters, in the Skin feature: after the switch, one row per person race of the loaded data (mods too), on or off against its
@@ -694,11 +868,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             }
         }
 
-        return Grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)]);
+        return Grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length).Select(Restarting)]);
     }
 
     /// <summary>
-    /// The Display page: its sliders, the frame limit, world tick and frame generation, in the catalogue's order; modes replace their sliders.
+    /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their
+    /// sliders, and the upscaler's and the HDR output's settings fold under their rows.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
@@ -715,12 +890,22 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         {
             result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)Config.FrameGenerationMethod,
                 i => Config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
+            result.Add(new(HdrName, HdrHint, Toggle: new(HdrName, () => Config.Hdr, v => Config.Hdr = v, OnOff: true), Raw: "hdr"));
+            // The lowest position is automatic: the white Windows shows SDR content at.
+            result.Add(new(HdrPaperName, HdrPaperHint, Slider: new Slider(HdrPaperName, UserConfig.HdrPaperAuto - 10, 500,
+                () => Config.HdrPaperNits >= UserConfig.HdrPaperAuto ? Config.HdrPaperNits : UserConfig.HdrPaperAuto - 10,
+                v => Config.HdrPaperNits = v < UserConfig.HdrPaperAuto ? 0 : MathF.Round(v / 10) * 10, "0",
+                Text: v => v < UserConfig.HdrPaperAuto ? Loc.Tr("Automatic ({0})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture)) : v.ToString("0", CultureInfo.InvariantCulture)),
+                Raw: "hdrPaperNits", Locked: !Config.Hdr));
+            result.Add(new(HdrPeakName, HdrPeakHint, Slider: new Slider(HdrPeakName, 200, 4000, () => Config.HdrPeakNits,
+                v => Config.HdrPeakNits = MathF.Round(v / 50) * 50, "0"), Raw: "hdrPeakNits", Locked: !Config.Hdr));
         }
 
         result.RemoveAll(e => !ShownNow(e));
         result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
-        result = [.. result.SelectMany(Modes.ModeEntries)];
-        return result;
+        result = [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
+        // As the Graphics tabs: a feature's settings fold under its row (HDR output, the upscaler).
+        return Grouping.Grouped(result);
     }
 
     /// <summary>
@@ -740,7 +925,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     Entry SidesEntry(string label, string hint, string what, IReadOnlyList<Toggle> toggles, IReadOnlyList<Slider> sliders) =>
         new(label, hint, Segmented: true,
-        Choice: new(() => ["Faithful", "Meitou"], () =>
+        Choice: new(() => ["All Faithful", "All Meitou"], () =>
         {
             var live = toggles.Where(t => !LookPresets.StuckSwitches.Contains(t.Label)).ToList();
 
@@ -1309,15 +1494,16 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (Page == 1)
         {
-            // The Look and Quality rows (LookBar), then the tabs, one per subject, across the page.
+            // The Look and Quality rows (LookBar), then the tabs, one per subject, on two rows across the page.
             LookBar.DrawLookBar();
-            const float tabGap = 6;
-            float tabWidth = (888 - tabGap * (GraphicsPages.Length - 1)) / GraphicsPages.Length;
+            const float tabGap = 6, tabHeight = 26;
+            int perRow = (GraphicsPages.Length + 1) / 2;
+            float tabWidth = (888 - tabGap * (perRow - 1)) / perRow;
 
             for (int i = 0; i < GraphicsPages.Length; i++)
             {
                 int index = i;
-                Canvas.Button(GraphicsPages[i], Canvas.R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () =>
+                Canvas.Button(GraphicsPages[i], Canvas.R(212 + i % perRow * (tabWidth + tabGap), 174 + i / perRow * (tabHeight + 4), tabWidth, tabHeight), () =>
                 {
                     GraphicsPage = index;
                     ScrollOffset = ScrollTarget = 0;
@@ -1326,7 +1512,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 }, GraphicsPage == i);
             }
 
-            top = 212;
+            top = 238;
         }
 
         Viewport = Canvas.R(212, top, 888, 666 - top);

@@ -64,9 +64,11 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public static bool RayTracing { get; set; }
 
     /// <summary>
-    /// A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null.
+    /// A window created from <paramref name="options"/> (its Vulkan surface; shown), or headless when <paramref name="options"/> is null;
+    /// <paramref name="hdr"/>: asks for an HDR10 swapchain (<see cref="HdrActive"/>).
     /// </summary>
-    public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, FrameGenerationMethod frameGeneration = FrameGenerationMethod.Off)
+    public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, FrameGenerationMethod frameGeneration = FrameGenerationMethod.Off,
+        bool hdr = false)
     {
         var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
         _validationRequested = validation == true;
@@ -91,12 +93,12 @@ public sealed unsafe class VulkanDisplay : IDisposable
         bool layerLoads = fsrFrameGeneration && options is not null && layerWhy is null && FfxSwapchain.LibraryLoads(out _, out layerWhy);
         (Ngx, Streamline) = LoadDlss(dlss, dlssFrameGeneration, layerLoads, deviceOptions);
         bool wantLayer = fsrFrameGeneration && options is not null && WantLayer(layerLoads, layerWhy, deviceOptions);
-        if (options is not null) Window = OpenWindow(options.Value, deviceOptions);
+        if (options is not null) Window = OpenWindow(options.Value, deviceOptions, hdr);
         Device = VulkanDevice.Create(deviceOptions);
         ReportDevice();
 
         Context = new GpuContext(Device);
-        if (options is not null) _presenter = CreatePresenter(vsync, wantLayer);
+        if (options is not null) _presenter = CreatePresenter(vsync, wantLayer, hdr);
     }
 
     /// <summary>
@@ -153,7 +155,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>
     /// The window (shown, with its icon), its Vulkan surface's instance extensions and surface factory added to <paramref name="deviceOptions"/>.
     /// </summary>
-    IWindow OpenWindow(WindowOptions options, VulkanDeviceOptions deviceOptions)
+    IWindow OpenWindow(WindowOptions options, VulkanDeviceOptions deviceOptions, bool hdr)
     {
         var window = Silk.NET.Windowing.Window.Create(options with { API = GraphicsAPI.DefaultVulkan, VSync = false });
         window.Initialize();
@@ -162,7 +164,11 @@ public sealed unsafe class VulkanDisplay : IDisposable
         var names = surface.GetRequiredExtensions(out uint count);
         var extensions = new string[count];
         for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
-        deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
+
+        // Only then do the drivers list HDR colour spaces; a request stays a request where the loader has no such extension (no window on such a
+        // system offers HDR).
+        string[] hdrExtensions = hdr && HasInstanceExtension("VK_EXT_swapchain_colorspace") ? ["VK_EXT_swapchain_colorspace"] : [];
+        deviceOptions.InstanceExtensions = [.. extensions, .. hdrExtensions, .. deviceOptions.InstanceExtensions ?? []];
         deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
 
         // DLSS frame generation looks the window up by its surface: once the device is handed over, the surface is made again through the
@@ -203,12 +209,13 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>
     /// The window's presenter, through Streamline's present and swapchain hooks where DLSS loaded, and AMD's layer when frame generation wants it.
     /// </summary>
-    VulkanPresenter CreatePresenter(bool vsync, bool wantLayer)
+    VulkanPresenter CreatePresenter(bool vsync, bool wantLayer, bool hdr)
     {
         var presenter = new VulkanPresenter(Context, vsync)
         {
             PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
             StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
+            WantHdr = hdr,
         };
         if (wantLayer)
         {
@@ -238,6 +245,30 @@ public sealed unsafe class VulkanDisplay : IDisposable
         {
             Console.WriteLine($"window icon  {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// The window shows HDR10: draw with <see cref="Meitou.Game.Rendering.Frame.UiLayer.CompositeHdr"/>. Known after the first
+    /// <see cref="BeginFrame"/>.
+    /// </summary>
+    public bool HdrActive => _presenter?.HdrActive ?? false;
+
+    /// <summary>
+    /// Whether the Vulkan loader offers the instance extension <paramref name="name"/>.
+    /// </summary>
+    static unsafe bool HasInstanceExtension(string name)
+    {
+        var vk = Vk.GetApi();
+        uint n = 0;
+        if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, null) != Result.Success) return false;
+        var properties = new ExtensionProperties[n];
+        fixed (ExtensionProperties* p = properties)
+        {
+            if (vk.EnumerateInstanceExtensionProperties((byte*)null, &n, p) != Result.Success) return false;
+            for (uint i = 0; i < n; i++)
+                if (SilkMarshal.PtrToString((nint)p[i].ExtensionName) == name) return true;
+        }
+        return false;
     }
 
     /// <summary>

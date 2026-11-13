@@ -99,7 +99,8 @@ sealed unsafe class TerrainRockBake : IDisposable
         in Matrix4x4 viewProjection, Vector3 eye, Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
     {
         var p = RockBakeProgram();
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
+        var relative = RenderOrigin.ViewProjection(viewProjection, eye);
+        var view = new ViewConstants { ViewProjection = relative, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
         var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
         var constants = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([_terrain.BakeConstants(row)]));

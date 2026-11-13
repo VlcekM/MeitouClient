@@ -21,7 +21,12 @@ sealed class TerrainPrograms : IDisposable
     /// <summary>
     /// The colour sets made so far, by march (3 apart) and relief quality.
     /// </summary>
-    readonly ColourSet?[] _colourSets = new ColourSet?[6];
+    readonly ColourSet?[] _colourSets = new ColourSet?[12];
+
+    /// <summary>
+    /// The resolved colour's programs (TerrainRenderer.Resolve) by parallax march, relief quality, trails and normal maps.
+    /// </summary>
+    readonly Dictionary<(bool March, int Quality, bool Trails, bool Normal), TerrainProgram> _resolvePrograms = [];
 
     /// <summary>
     /// Makes the depth and prepass programs, the colour set for the current relief, and the tessellated variants where the device has tessellation.
@@ -35,6 +40,10 @@ sealed class TerrainPrograms : IDisposable
         PatchPrepass = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), "terrain prepass");
         PatchPrepassCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
             TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain prepass interior cut");
+        PatchPrepassResolve = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassResolveFragmentNative(),
+            "terrain resolve prepass");
+        PatchPrepassResolveCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
+            TerrainShaders.PrepassResolveFragmentNative(interiorCut: true), "terrain resolve prepass interior cut");
         // The ground displacement (GroundRelief): the colour and prepass programs tessellated, for the patches near the eye (the same stages in both,
         // so the late colour's depth test meets the prepass's depths).
         if (gpu.HasTessellation)
@@ -44,6 +53,12 @@ sealed class TerrainPrograms : IDisposable
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
             PatchPrepassCutTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
                 TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain relief prepass interior cut",
+                TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
+            PatchPrepassResolveTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
+                TerrainShaders.PrepassResolveFragmentNative(), "terrain relief resolve prepass", TerrainShaders.PatchControlNative(),
+                TerrainShaders.PatchEvaluationNative());
+            PatchPrepassResolveCutTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
+                TerrainShaders.PrepassResolveFragmentNative(interiorCut: true), "terrain relief resolve prepass interior cut",
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
         }
         MeshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(),
@@ -71,6 +86,31 @@ sealed class TerrainPrograms : IDisposable
     /// The prepass of the patches overlapping an interior cut.
     /// </summary>
     public TerrainProgram PatchPrepassCut { get; }
+
+    /// <summary>
+    /// The prepass of the resolved colour (TerrainRenderer.Resolve): the prepass's stages with a fragment stage that writes the resolve's inputs.
+    /// </summary>
+    public TerrainProgram PatchPrepassResolve { get; }
+
+    /// <summary>
+    /// <see cref="PatchPrepassResolve"/> with the interior cut.
+    /// </summary>
+    public TerrainProgram PatchPrepassResolveCut { get; }
+
+    /// <summary>
+    /// <see cref="PatchPrepassResolve"/> tessellated (null without tessellation shaders).
+    /// </summary>
+    public TerrainProgram? PatchPrepassResolveTess { get; }
+
+    /// <summary>
+    /// <see cref="PatchPrepassResolveCut"/> tessellated (null without tessellation shaders).
+    /// </summary>
+    public TerrainProgram? PatchPrepassResolveCutTess { get; }
+
+    /// <summary>
+    /// The parallax march, relief quality and trails of the colour set in use (<see cref="UseColour"/>).
+    /// </summary>
+    public (bool March, int Quality, bool Trails) ColourKey { get; private set; }
 
     /// <summary>
     /// The shadow casters' TERRAIN-mode meshes.
@@ -165,12 +205,18 @@ sealed class TerrainPrograms : IDisposable
         TerrainProgram? PatchTess, TerrainProgram? PatchCutTess, TerrainProgram? MeshTess, TerrainProgram? MeshSolidTess) : IDisposable
     {
         /// <summary>
-        /// Frees every program of the set.
+        /// The trails' set: its patch programs are its own, its mesh programs the plain set's (<see cref="MakeTrailed"/>).
+        /// </summary>
+        public bool SharesMeshes { get; init; }
+
+        /// <summary>
+        /// Frees the set's programs (not the meshes' of a trails set, which the plain set holds).
         /// </summary>
         public void Dispose()
         {
-            foreach (var p in new[] { Patch, PatchNoNormal, PatchCut, PatchCutNoNormal, Mesh, MeshNoNormal, MeshSolid, MeshSolidNoNormal,
-                         PatchTess, PatchCutTess, MeshTess, MeshSolidTess }) p?.Dispose();
+            foreach (var p in new[] { Patch, PatchNoNormal, PatchCut, PatchCutNoNormal, PatchTess, PatchCutTess }) p?.Dispose();
+            if (SharesMeshes) return;
+            foreach (var p in new[] { Mesh, MeshNoNormal, MeshSolid, MeshSolidNoNormal, MeshTess, MeshSolidTess }) p?.Dispose();
         }
     }
 
@@ -180,10 +226,11 @@ sealed class TerrainPrograms : IDisposable
     /// </summary>
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(PatchColour), nameof(PatchColourNoNormal), nameof(PatchColourCut),
         nameof(PatchColourCutNoNormal), nameof(MeshColour), nameof(MeshColourNoNormal), nameof(MeshSolid), nameof(MeshSolidNoNormal))]
-    public void UseColour(bool march, int quality)
+    public void UseColour(bool march, int quality, bool trails = false)
     {
         quality = Math.Clamp(quality, 0, 2);
-        var set = _colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
+        ColourKey = (march, quality, trails);
+        var set = trails ? _colourSets[6 + (march ? 3 : 0) + quality] ??= MakeTrailed(march, quality) : Plain(march, quality);
         (PatchColour, PatchColourNoNormal, PatchColourCut,
             PatchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
         (MeshColour, MeshColourNoNormal, MeshSolid, MeshSolidNoNormal) = (set.Mesh, set.MeshNoNormal, set.MeshSolid, set.MeshSolidNoNormal);
@@ -223,11 +270,52 @@ sealed class TerrainPrograms : IDisposable
     }
 
     /// <summary>
+    /// The resolve's program for the colour set in use (<see cref="ColourKey"/>) and <paramref name="normalMaps"/>, made the first time.
+    /// </summary>
+    public TerrainProgram ResolveProgram(bool normalMaps)
+    {
+        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, normalMaps);
+        if (_resolvePrograms.TryGetValue(key, out var p)) return p;
+        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normalMaps ? null : false, key.Quality, key.Trails);
+        return _resolvePrograms[key] = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(), fragment, "terrain resolve");
+    }
+
+    /// <summary>
+    /// The plain colour set of <paramref name="march"/> and <paramref name="quality"/>, made the first time.
+    /// </summary>
+    ColourSet Plain(bool march, int quality) => _colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
+
+    /// <summary>
+    /// The plain set with its patch programs built with the ground trails; the map features' meshes take no trails.
+    /// </summary>
+    ColourSet MakeTrailed(bool march, int quality)
+    {
+        TerrainProgram Patch(string fragment, string name) => new(_gpu, _sets, TerrainShaders.PatchVertexNative(), fragment, name);
+        TerrainProgram? PatchTess(string fragment, string name) => _gpu.HasTessellation
+            ? new(_gpu, _sets, TerrainShaders.PatchVertexTessNative(), fragment, name, TerrainShaders.PatchControlNative(),
+                TerrainShaders.PatchEvaluationNative())
+            : null;
+        return Plain(march, quality) with
+        {
+            Patch = Patch(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails"),
+            PatchNoNormal = Patch(TerrainShaders.FragmentTrails(false, march, false, quality), "terrain trails no normal"),
+            PatchCut = Patch(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails interior cut"),
+            PatchCutNoNormal = Patch(TerrainShaders.FragmentTrails(true, march, false, quality), "terrain trails interior cut no normal"),
+            PatchTess = PatchTess(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails relief"),
+            PatchCutTess = PatchTess(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails relief interior cut"),
+            SharesMeshes = true,
+        };
+    }
+
+    /// <summary>
     /// Frees every program and colour set.
     /// </summary>
     public void Dispose()
     {
-        foreach (var p in new[] { PatchDepth, PatchPrepass, PatchPrepassCut, MeshDepth }) p.Dispose();
+        foreach (var p in new[] { PatchDepth, PatchPrepass, PatchPrepassCut, MeshDepth, PatchPrepassResolve, PatchPrepassResolveCut }) p.Dispose();
+        PatchPrepassResolveTess?.Dispose();
+        PatchPrepassResolveCutTess?.Dispose();
+        foreach (var p in _resolvePrograms.Values) p.Dispose();
         foreach (var set in _colourSets) set?.Dispose();
         PatchPrepassTess?.Dispose();
         PatchPrepassCutTess?.Dispose();

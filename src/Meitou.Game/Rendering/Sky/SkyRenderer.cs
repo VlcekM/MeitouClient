@@ -217,16 +217,16 @@ public sealed unsafe class SkyRenderer : IDisposable
         """;
 
     /// <summary>
-    /// The fullscreen vertex stage: one triangle covering the screen at the far plane, with its NDC position.
+    /// The fullscreen vertex stage: one triangle covering the screen, at the depth no surface has (the cleared value), so the scene's sky can be
+    /// drawn after its surfaces, where none was drawn (Draw's behind); with its NDC position.
     /// </summary>
-    const string Vertex = """
-        #version 330 core
+    const string Vertex = "#version 330 core\n" + DepthConvention.Glsl + """
         out vec2 vNdc;
         void main()
         {
             vec2 p = vec2((gl_VertexID & 1) * 4.0 - 1.0, (gl_VertexID & 2) * 2.0 - 1.0);
             vNdc = p;
-            gl_Position = vec4(p, 1.0, 1.0);
+            gl_Position = vec4(p, DEPTH_SKY, 1.0);
         }
         """;
 
@@ -1244,7 +1244,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         var (cloud, pull) = HorizonClouds(s);
         return new AtmosphereUniforms(
             new Vector4(tau.X, tau.Y, tau.Z, SkyAtmosphere.MieZenithDepth),
-            new Vector4(Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, 0),
+            new Vector4(Physical ? 1f : 0f, MathF.Max(s.FogDistance, 1), ScaleHeightUnits, GrazingSun.Enabled ? 1f : 0f),
             new Vector4(s.Sun.X, s.Sun.Y, s.Sun.Z, 0),
             new Vector4(s.LightDirection.X, s.LightDirection.Y, s.LightDirection.Z, s.Environment),
             new Vector3(s.SunLight.X, s.SunLight.Y, s.SunLight.Z),
@@ -1330,14 +1330,14 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// No GL state is changed (phase 8 stage 2): the GL code turned the depth test and write off around the draw and back on after it, and every
     /// caller turns the depth test on after the sky itself (docs/renderer-native.md 8.6).
     /// </summary>
-    public void Draw(Matrix4x4 viewProjection, SkyColours colours)
+    public void Draw(Matrix4x4 viewProjection, SkyColours colours, bool behind = false)
     {
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return;
         Poll();   // a timestamp pair is readable only for a few frames after its own (the arena's ring), so collect them as they come
         _skyTimer.Begin();
         var program = Physical && _state.Valid ? _sky : _simple;
         Prepare(program, inverse, colours);
-        Record(program);
+        Record(program, behind);
         _skyTimer.End();
     }
 
@@ -1354,14 +1354,16 @@ public sealed unsafe class SkyRenderer : IDisposable
     }
 
     /// <summary>
-    /// Draws the sky as a guest of the open pass: depth neither tested nor written, one fullscreen triangle.
+    /// Draws the sky as a guest of the open pass: depth not written, one fullscreen triangle; tested only <paramref name="behind"/> the scene
+    /// (where the depth is still the cleared one).
     /// </summary>
-    void Record(SkyProg program)
+    void Record(SkyProg program, bool behind)
     {
         var cmd = Gpu.BeginGuest(program == _sky ? "sky" : "sky simple");
         var targets = Gpu.CurrentTargets();
-        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state.
-        var drawState = Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
+        // What the GL code's Disable(DepthTest) and DepthMask(false) made of the pass's state; behind the scene: only where the depth is still the cleared one.
+        var drawState = behind ? Gpu.CurrentState() with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Equal }
+            : Gpu.CurrentState() with { DepthTest = false, DepthWrite = false };
         cmd.SetViewport(targets.Viewport);
         cmd.SetScissor(targets.Scissor);
         cmd.SetRaster(drawState.Cull, drawState.Front);

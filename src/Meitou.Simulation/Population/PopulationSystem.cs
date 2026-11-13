@@ -247,7 +247,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         foreach (var c in commands)
         {
             if (c is FocusCommand f) _focus = f.Position;
-            else if (c is DebugSpawn spawn) SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: ++_debugSpawns);
+            else if (c is DebugSpawn spawn) SpawnDebug(world, spawn);
         }
 
         var ready = new List<BuiltTown>();
@@ -1132,8 +1132,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         squad.SpawnSize = squad.Members.Count;
         if (squad.Leader.IsNone) squad.Leader = SquadRegistry.Successor(squad.Members, table);
         world.Squads.Add(squad);
+        if (SpawnTrace is { } trace && !player && !idle)
+            trace.Add(new SpawnTraceEntry(world.Tick, site is not null ? "town" : "wild", squad.Id, squad.TemplateId, squad.Name, squad.Faction, squad.Members.Count, built.Position.X, built.Position.Y, PlayerSpots(world).Select(a => Vector2.Distance(a, built.Position)).DefaultIfEmpty(-1).Min(),
+                leaderPlan?.RecordId ?? builtMembers.FirstOrDefault()?.Plan.RecordId ?? ""));
         return squad;
     }
+
+    /// <summary>A squad made by the population (debug aid, the control channel's <c>spawn-trace</c>): when, from where, which template and where.</summary>
+    public readonly record struct SpawnTraceEntry(long Tick, string Source, int SquadId, string TemplateId, string Name, int Faction, int Members, float X, float Z, float PlayerDistance, string LeaderRecord);
+
+    /// <summary>When set, every squad the population makes (not the player's, not the sandbox's) is appended here (debug aid, not part of the state).</summary>
+    public List<SpawnTraceEntry>? SpawnTrace { get; set; }
 
     /// <summary>
     /// Makes one fresh member at its planned spot, with its body, initial hunger and slave state, bounties and expanded name.

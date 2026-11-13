@@ -3,6 +3,7 @@ using Meitou.Data.World;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Water;
 using Meitou.Settings;
 
 namespace Meitou.Game.Settings;
@@ -79,27 +80,39 @@ static class LauncherSchema
         Graphics(WorldFrame.SmallFoliageRangeSlider, 200, 40000, 50, 4000) with { Logarithmic = true },
         Graphics(WorldFrame.ImpostorDistanceSlider, 500, 40000, 50, 5000) with { Logarithmic = true },
         Graphics(WorldFrame.LargeImpostorDistanceSlider, 500, 40000, 50, 10000) with { Logarithmic = true },
+        Graphics(WorldFrame.ImpostorBudgetSlider, 0, 2048, 16, 0) with { Suffix = " MB", OffBelow = WorldFrame.ImpostorBudgetFloor, OffText = "Automatic" },
         Multiplier(WorldFrame.GrassDistanceSlider, 0.25f, 80, 1),
         Graphics(WorldFrame.GrassDensitySlider, 0.1f, 2, 0.05f, 1) with { Format = "0.00", Suffix = "x" },
+        Graphics(WorldFrame.MaterialDistanceSlider, 2000, 100000, 500, 30000) with { Logarithmic = true },
         Graphics(WorldFrame.GroundReliefQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         Graphics(WorldFrame.GroundReliefDepthSlider, 0, 80, 0.5f, 20) with { Format = "0.0", Suffix = " cm" },
         Graphics(WorldFrame.GroundDisplaceDistanceSlider, 10, 200, 1, 50) with { Suffix = " m" },
+        Graphics(WorldFrame.GroundParallaxDepthSlider, 10, 200, 5, 100) with { Suffix = " %" },
         Graphics(WorldFrame.GroundParallaxDistanceSlider, 10, 150, 1, 50) with { Suffix = " m" },
         Graphics(WorldFrame.BloodDrawsSlider, Rendering.Terrain.TerrainDecalRenderer.MinSurfaceDraws,
             Rendering.Terrain.TerrainDecalRenderer.MaxSurfaceDraws, 64, Rendering.Terrain.TerrainDecalRenderer.DefaultSurfaceDraws),
         // Water
         Graphics(WorldFrame.WaterReflectionSlider, 0, 4, 1, 2) with { Labels = ["Off", "Landscape", "Characters", "Buildings", "Everything"] },
         Multiplier(WorldFrame.ReflectionRangeSlider, 0.1f, 50, 0.6f),
+        Graphics(WorldFrame.ReflectionSamplesSlider, 0, 3, 1, 2) with { Labels = ["Off", "2x", "4x", "8x"] },
+        Graphics(WorldFrame.WaterGridSlider, 64, 1024, 64, WaterRenderer.DefaultGridSegments) with { Logarithmic = true },
+        Graphics(WorldFrame.WaterOceanSlider, 0, 2, 1, 2) with { Name = "Water wave resolution", Labels = ["64", "128", "256"] },
         Multiplier(WorldFrame.WaterClaritySlider, 0.25f, 8, 0.5f),
         Graphics(WorldFrame.FarWaterClaritySlider, 0, 1, 0.01f, 0.25f) with { Format = "0.00" },
         Graphics(WorldFrame.WaterClearDistanceSlider, 1000, 100000, 100, 10000) with { Logarithmic = true },
-        // Lighting
+        // Lighting: the technique choices first (WorldFrame.AddChoiceSliders), their defaults as a fresh WorldOptions' switches have them
+        Graphics(WorldFrame.SunShadowsChoice, 0, 3, 1, ChoiceDefault(WorldFrame.SunShadowsChoice)) with
+            { Labels = ["Off", "Faithful cascades", "Meitou cascades", "Traced (ray tracing)"] },
+        Graphics(WorldFrame.OcclusionChoice, 0, 2, 1, ChoiceDefault(WorldFrame.OcclusionChoice)) with { Name = "Ambient occlusion", Labels = ["Off", "SSAO", "GTAO"] },
+        Graphics(WorldFrame.GiChoice, 0, 2, 1, ChoiceDefault(WorldFrame.GiChoice)) with
+            { Labels = ["Off (flat ambient)", "Probes (ray tracing)", "Probes + hybrid cache"] },
         Graphics(WorldFrame.ShadowDistanceSlider, KenshiShadows.MinRange * 0.9f, 200000, 100, Enhancements.MeitouShadowRange) with
             { Logarithmic = true, OffBelow = KenshiShadows.MinRange },
         Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with
             { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
         Graphics(WorldFrame.ShadowFilterSlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         Graphics(WorldFrame.HazeStrengthSlider, 0, 3, 0.01f, Enhancements.MeitouHazeStrength) with { Format = "0.00" },
+        Graphics(WorldFrame.HazeDistanceSlider, 10000, 1000000, 1000, 250000) with { Logarithmic = true },
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
         Graphics(WorldFrame.CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, 100, VolumetricClouds.Bottom) with
             { Logarithmic = true },
@@ -109,6 +122,7 @@ static class LauncherSchema
         Graphics(WorldFrame.ShaftAirSlider, 0, 4, 0.05f, 1) with { Format = "0.00" },
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
         Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
+        Graphics(WorldFrame.GtaoQualitySlider, 0, 2, 1, 1) with { Labels = LowMediumHigh },
         // Effects
         Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with
         {
@@ -122,6 +136,7 @@ static class LauncherSchema
         Graphics(WorldFrame.HeatHazeStrengthSlider, 0, 3, 0.05f, Enhancements.MeitouHeatHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
         Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
+        Graphics(WorldFrame.DofApertureSlider, 0.25f, 22, 0.05f, new PostOptions().DofAperture) with { Logarithmic = true, Format = "0.00" },
     ];
 
     /// <summary>
@@ -149,6 +164,21 @@ static class LauncherSchema
         Graphics(label, min, max, 0.05f, shown) with { Logarithmic = min > 0, Format = "0.00", Suffix = "x" };
 
     /// <summary>
+    /// A technique choice's value for a fresh <see cref="WorldOptions"/>'s switches (Meitou cascades, SSAO or GTAO, probes or probes + hybrid).
+    /// </summary>
+    static float ChoiceDefault(string choice)
+    {
+        var on = WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).ToDictionary(e => e.Name, e => e.IsMeitou);
+        bool On(string name) => on.TryGetValue(name, out bool v) && v;
+        return choice switch
+        {
+            WorldFrame.SunShadowsChoice => On("Traced sun shadows") ? 3 : On("Shadows") ? 2 : 1,
+            WorldFrame.OcclusionChoice => !On("Ambient occlusion") ? 0 : On("Ground-truth occlusion") ? 2 : 1,
+            _ => !On("Indirect light") ? 0 : On("Hybrid GI") ? 2 : 1,
+        };
+    }
+
+    /// <summary>
     /// The Tab panel switches: the Faithful / Meitou ones (their state as a fresh <see cref="WorldOptions"/> has it) and the plain on/off ones.
     /// </summary>
     static IEnumerable<SettingDescription> Switches()
@@ -165,11 +195,28 @@ static class LauncherSchema
             Shown = shown ? 1 : 0,
             Impact = LookPresets.ImpactOf(label),
         };
-        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !LookPresets.HiddenSwitch(e.Name)))
+        // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it last).
+        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null)
+                     .Where(e => !LookPresets.HiddenSwitch(e.Name) && !WorldFrame.ChoiceDrivenSwitches.Contains(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
+        // The hybrid GI's parts (--gi-hybrid), on at start.
+        yield return Switch(WorldFrame.GiRelocateSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.GiCloudShadowsSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.GiCacheSwitch, "Off", "On", true);
+        // The Advanced materials' parts, on at start.
+        yield return Switch(WorldFrame.MaterialHairSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.MaterialClothSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.MaterialSkinSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.MaterialEyesSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.MaterialMetalSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
+        yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with { ShownWhen = new() { Key = WorldFrame.SunShadowsChoice, Value = 3 } };
+        yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "Meitou: on", true);
+        yield return Switch(WorldFrame.WetWorldSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
+        yield return Switch(WorldFrame.CameraEffectsSwitch, "Off", "On", false);
         // Faithful / Meitou switches whose game side is off; both start off (Ultra turns them on).
         yield return Switch(WorldFrame.RockSmoothingSwitch, "Off", "Meitou: on", false);
         yield return Switch(WorldFrame.OutlineRefineSwitch, "Off", "Meitou: on", false);
@@ -183,23 +230,42 @@ static class LauncherSchema
         new()
         {
             Key = Key(nameof(UserConfig.FrameGeneration)), Kind = SettingKind.Toggle, Name = "Frame generation",
-            Description = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-                + "Works with TAA, FSR and DLSS upscaling. Turns on and off at start-up.",
+            Description = "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay.",
             Default = defaults.FrameGeneration ? 1 : 0, On = "On", Off = "Off",
         },
         new()
         {
             Key = Key(nameof(UserConfig.FrameGenerationVendor)), Kind = SettingKind.Slider, Name = "Frame generation by",
-            Description = "FSR 3: AMD's, any GPU, needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). "
-                + "DLSS: NVIDIA's, Windows with an RTX 40 or later, needs Streamline's frame generation DLLs "
-                + "(sl.dlss_g.dll, nvngx_dlssg.dll, sl.reflex.dll, sl.pcl.dll) and turns Reflex on. Takes effect at start-up.",
-            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1,
-            Labels = ["FSR 3", "DLSS"],
+            Description = "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs.",
+            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1, Labels = ["FSR 3", "DLSS"],
         },
     ];
 
     /// <summary>
-    /// The launcher's Display section: full screen, VSync, the frame limit, the world tick and the Display ones of the given sliders.
+    /// HDR output (docs/render-post.md "HDR output"): the switch, read at start-up, and the picture's white and the display's peak in nits.
+    /// </summary>
+    static SettingDescription[] HdrSettings(UserConfig defaults) =>
+    [
+        new()
+        {
+            Key = Key(nameof(UserConfig.Hdr)), Kind = SettingKind.Toggle, Name = SettingsMenu.HdrName, Description = SettingsMenu.HdrHint,
+            Default = defaults.Hdr ? 1 : 0, On = "On", Off = "Off",
+        },
+        new()
+        {
+            Key = Key(nameof(UserConfig.HdrPaperNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPaperName, Description = SettingsMenu.HdrPaperHint,
+            Default = UserConfig.HdrPaperAuto - 10, Shown = UserConfig.HdrPaperAuto - 10, Min = UserConfig.HdrPaperAuto - 10, Max = 500, Step = 10, Suffix = " nits",
+            OffBelow = UserConfig.HdrPaperAuto, OffText = "Automatic",
+        },
+        new()
+        {
+            Key = Key(nameof(UserConfig.HdrPeakNits)), Kind = SettingKind.Slider, Name = SettingsMenu.HdrPeakName, Description = SettingsMenu.HdrPeakHint,
+            Default = defaults.HdrPeakNits, Shown = defaults.HdrPeakNits, Min = 200, Max = 4000, Step = 50, Suffix = " nits",
+        },
+    ];
+
+    /// <summary>
+    /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of the given sliders.
     /// </summary>
     static SettingsSection DisplaySection(UserConfig defaults, List<SettingDescription> sliders) => new()
     {
@@ -223,6 +289,7 @@ static class LauncherSchema
                 Step = 5, Suffix = " fps", OffBelow = 1, OffText = "Unlimited",
             },
             .. (!OperatingSystem.IsMacOS() ? FrameGenerationSettings(defaults) : []),
+            .. (!OperatingSystem.IsMacOS() ? HdrSettings(defaults) : []),
             new()
             {
                 Key = Key(nameof(UserConfig.TickAhead)), Kind = SettingKind.Slider, Name = "World tick alongside drawing",
@@ -243,6 +310,7 @@ static class LauncherSchema
         var sliders = GraphicsSliders().ToList();
         var switches = Switches().ToList();
         var display = DisplaySection(defaults, sliders);
+        display.Groups = FeatureGrouping.LauncherGroups([.. display.Settings.Select(s => s.Key)]);
         return new SettingsSchema
         {
             SettingsVersion = UserConfig.CurrentVersion,

@@ -14,6 +14,12 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Game.Rendering.Water;
 
+/// <summary>The <c>contactfoam</c> switch (docs/render-water.md "Contact foam"): off, none of its code runs or is in the water's program.</summary>
+public static class WaterContact
+{
+    public static bool Enabled { get; set; }
+}
+
 /// <summary>
 /// Water as the game places it (docs/formats/terrain.md, "Water"): one surface at <see cref="WorldWater.Height"/>
 /// over the whole world, hidden wherever the terrain is higher. Shading follows the facts of Kenshi's water material:
@@ -77,7 +83,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             uint heightCoarse;
             uint heightFine;
             uint sceneDepthMap;
-            uint spare1;
+            uint rippleMap;       // the contactfoam switch's waves (WaterRipples)
+            vec4 rippleWindow;
+            vec4 rippleShape;
         } water;
 
         """;
@@ -85,7 +93,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>
     /// The C# side of <see cref="ConstantsBlock"/> (std140).
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 512)]
+    [StructLayout(LayoutKind.Explicit, Size = 544)]
     struct WaterConstants
     {
         /// <summary>
@@ -249,9 +257,17 @@ public sealed unsafe class WaterRenderer : IDisposable
         /// </summary>
         [FieldOffset(504)] public uint SceneDepthMap;
         /// <summary>
-        /// Padding to the block's 512 bytes.
+        /// The contact ripples' surface's bindless index (the stand-in without them).
         /// </summary>
-        [FieldOffset(508)] public uint Spare1;
+        [FieldOffset(508)] public uint RippleMap;
+        /// <summary>
+        /// The ripples' window: its centre and size in the world.
+        /// </summary>
+        [FieldOffset(512)] public Vector4 RippleWindow;
+        /// <summary>
+        /// The ripples' half side, one over their side in world units, their texel, and 1 while they are drawn.
+        /// </summary>
+        [FieldOffset(528)] public Vector4 RippleShape;
     }
 
     /// <summary>
@@ -471,7 +487,8 @@ public sealed unsafe class WaterRenderer : IDisposable
 
         // river: how much p is in a river (0 none, 1 a river's channel), flow: its unit direction (x, z), speed: how fast it runs (units a second).
         // wave: the number of the breaker whose crest is in p's cycle (at g 0.5; it changes in the trough at g 0/1), wrapping at 4096.
-        struct Shore { float depth; float dist; float g; float wave; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; };
+        // len: the local wavelength of the shore waves (units); prop: the way they run (unit, towards the shore); swell: what is left of them here (0 to 1).
+        struct Shore { float depth; float dist; float g; float wave; vec2 dir; float open; float size; float breakAt; float river; vec2 flow; float speed; float sizeWet; float brk; float len; vec2 prop; float swell; };
 
         // Waves arrive in pieces, not as one line round the coast. Each wave has a number (the wave count at its place, which it keeps as it
         // travels in), and slow, coarse noise on the shore point it is heading for (constant across the wave, varying along the shore, drifting
@@ -496,9 +513,21 @@ public sealed unsafe class WaterRenderer : IDisposable
             float n = (wNoise(q / 620.0 + o) - 0.5) * 1.6 + 0.71 + 0.3 * (group - 0.5);
             brk = smoothstep(0.2, 0.6, n);
             size = mix(0.55, 1.6, group) * (0.8 + 0.4 * wNoise(q / 800.0 + o + 40.0)) * mix(0.7, 1.0, brk);
+            // A crest is not one line round the shore: along it, it swells and fades over a few hundred units, each wave in its own places.
+            size *= mix(0.5, 1.0, smoothstep(0.15, 0.65, wNoise(q / 240.0 + o * 1.7 + 70.0)));
         }
 
-        vec2 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0).rg; }
+        vec4 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0); }
+
+        // The swell's wave count at time tau (seconds; docs/render-water.md "Shore waves"): a wave every uShore.z seconds on average, in sets of seven over which the period
+        // swings 20% either way, so the crests never come evenly spaced. period: the period at tau.
+        float waveCount(float tau, out float period)
+        {
+            float n = floor(tau / uShore.z), r = tau - n * uShore.z;
+            float a = 6.2831853 * (mod(n, 7.0) + r / uShore.z) / 7.0;
+            period = uShore.z / (1.0 + 0.2 * cos(a));
+            return n + r / uShore.z + 0.2 * 7.0 / 6.2831853 * sin(a);
+        }
 
         // depth: still water over the ground (negative on land); dist: the distance to the waterline (negative inland); g: the breaker phase
         // in [0, 1), the crest at 0.5 with its steep front towards the shore; dir: the unit direction towards the shore; open: how exposed the
@@ -507,9 +536,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         Shore shoreAt(vec2 p)
         {
             Shore r;
-            float trust = 0.0;   // how well the field gives the direction to the shore (it fades to nil on the axis between two shores, where the nearest shore jumps)
+            float travel = 0.0;   // the swell's arrival time here (seconds)
             r.depth = uWaterHeight - terrainHeight(p);
-            r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0;
+            r.dist = 1.0e6; r.dir = vec2(0.0); r.open = 0.0; r.flow = vec2(0.0); r.speed = 0.0; r.prop = vec2(1.0, 0.0); r.swell = 0.0;
             // Rivers (the baked map, 144 units a texel): the weight, the coarse direction downstream and the width.
             vec4 rv = textureLod(uRiverMap, (p + uHalfWorld) / (2.0 * uHalfWorld), 0.0);
             vec2 coarse = rv.rg * 2.0 - 1.0;
@@ -521,13 +550,18 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (extent.x > 0.0)
             {
                 vec2 uv = (p - uShoreRect.xy) / extent;
-                vec2 f = shoreField(uv);
+                vec4 f = shoreField(uv);
                 vec2 e = vec2(12.0) / extent;
-                vec2 grad = vec2(shoreField(uv + vec2(e.x, 0.0)).r - shoreField(uv - vec2(e.x, 0.0)).r,
-                                 shoreField(uv + vec2(0.0, e.y)).r - shoreField(uv - vec2(0.0, e.y)).r);
+                vec4 fx1 = shoreField(uv + vec2(e.x, 0.0)), fx0 = shoreField(uv - vec2(e.x, 0.0));
+                vec4 fz1 = shoreField(uv + vec2(0.0, e.y)), fz0 = shoreField(uv - vec2(0.0, e.y));
+                vec2 grad = vec2(fx1.r - fx0.r, fz1.r - fz0.r);
+                vec2 gradT = vec2(fx1.b - fx0.b, fz1.b - fz0.b);
                 r.dist = f.r;
-                trust = smoothstep(10.0, 20.0, length(grad));
                 r.dir = length(grad) > 1e-6 ? -normalize(grad) : vec2(0.0);
+                // The way the swell runs: up its arrival time (smooth; it bends round headlands and the ends of walls, it has no seam where two shores meet).
+                r.prop = length(gradT) > 1e-7 ? normalize(gradT) : r.dir;
+                travel = f.b;
+                r.swell = f.a;
                 // Fade out towards the field's edge (it follows the eye; beyond it nothing is known).
                 vec2 inside = min(uv, 1.0 - uv) * extent;
                 r.open = f.g * smoothstep(0.0, 600.0, min(inside.x, inside.y));
@@ -550,30 +584,32 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Rivers have no open water: no surf, and (oceanScale) no waves. They run faster where narrow and shallow.
             r.open *= 1.0 - r.river;
             r.speed = mix(30.0, 14.0, smoothstep(1.0, 5.0, rv.b * 8.0)) * mix(1.5, 0.8, smoothstep(5.0, 60.0, r.depth));
-            // The breakers: phase from the distance to the shore and the wave count; in the surf zone the pieces of the shore (above) offset it
-            // (so the crests slant against the shore and the break peels along them), and give each wave its size and whether it breaks.
-            float x = r.dist / uShore.z + uShore.x;
+            // The breakers: the swell's crests, by its arrival time (travel; ShoreTravel), so they come in from the open water, slow and close up in the shallows and turn
+            // towards the depth contours; a little slow noise bends them. Each wave its own size along its crest (waveAt, in the wave's own frame q, which runs with it), and
+            // what is left of the swell here (in a narrow inlet, behind a wall or round a headland, less).
+            float period;
+            float x = waveCount(uShore.x - travel, period) + 0.3 * (wNoise(p / 420.0 + 11.3) - 0.5);
+            r.len = (r.depth > 0.0 ? 22.0 * sqrt(clamp(r.depth / 60.0, 1.0 / 60.0, 1.0)) : 14.0) * period;
             r.size = 1.0; r.sizeWet = 1.0; r.brk = 1.0;
-            float base = 70.0 + 35.0 * sin(p.x * 0.0031 + p.y * 0.0023);
             if (r.open > 0.0 && r.dist > -150.0 && r.dist < 700.0)
             {
-                vec2 q = p + r.dir * r.dist + 260.0 * vec2(sin(uShore.x * (23.0 * 6.2831853 / 4096.0) + 1.0), cos(uShore.x * (17.0 * 6.2831853 / 4096.0)));
-                x += trust * (0.6 * (sin(q.x * 0.0021 + sin(q.y * 0.0013) * 2.0) + sin(q.y * 0.0017 + q.x * 0.0009))
-                   + 1.4 * (wNoise(q / 480.0 + 11.3) - 0.5) + 0.7 * (wNoise(q / 210.0 + 5.1) - 0.5));
                 float k = floor(x);
+                vec2 q = p - r.prop * r.len * fract(x);
                 float s0, b0, s1, b1;
                 waveAt(k, q, s0, b0);
-                waveAt(k - 1.0, q, s1, b1);
+                waveAt(k - 1.0, q - r.prop * r.len, s1, b1);
                 // Continuous across the troughs between waves (the breakers' profile is nil there): the new wave's values take over at its front.
                 float t = smoothstep(0.0, 0.25, fract(x));
-                r.size = mix(1.0, mix(s1, s0, t), trust);
-                r.brk = mix(1.0, mix(b1, b0, t), trust);
-                r.sizeWet = mix(1.0, fract(x) >= 0.5 ? s0 : s1, trust);   // the wet sand remembers the last crest that passed
+                r.size = mix(s1, s0, t) * r.swell;
+                r.brk = mix(b1, b0, t);
+                r.sizeWet = (fract(x) >= 0.5 ? s0 : s1) * r.swell;   // the wet sand remembers the last crest that passed
             }
             r.g = fract(x);
             r.wave = mod(floor(x), 4096.0);
-            // A wave that does not break here runs on to the shore (its break point is at the waterline).
-            r.breakAt = mix(-40.0, base * (0.7 + 0.5 * r.size), r.brk);
+            // A wave breaks where the water is about 1.3 times as deep as it is high (depth 0.78 of the height); its distance from the waterline from the local slope
+            // of the floor. One that does not break runs on to the shore (its break point is at the waterline).
+            float breakDepth = uShore.w * r.size / 0.78;
+            r.breakAt = mix(-40.0, clamp(breakDepth * r.dist / max(r.depth, 0.3), 10.0, 400.0), r.brk);
             return r;
         }
 
@@ -593,11 +629,35 @@ public sealed unsafe class WaterRenderer : IDisposable
         {
             float build = smoothstep(460.0, 160.0, s.dist) * (1.0 + 0.9 * s.brk * smoothstep(s.breakAt + 140.0, s.breakAt + 10.0, s.dist));
             float collapse = mix(0.3, 1.0, smoothstep(s.breakAt - 30.0, s.breakAt + 5.0, s.dist));
-            return uShore.w * s.open * s.size * build * collapse * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth);
+            // No higher than the water is deep: past the break the bore shrinks with the depth, and a film over the sand carries none.
+            float limit = clamp(0.78 * max(s.depth, 0.0) / max(uShore.w * s.size, 0.1), 0.0, 1.0);
+            return uShore.w * s.open * s.size * build * collapse * limit * smoothstep(-5.0, 20.0, s.dist) * smoothstep(250.0, 120.0, s.depth);
         }
 
         // The steep profile the fragment shades with.
         float breakerHeight(Shore s) { return breakerScale(s) * breakerProfile(s.g, smoothstep(s.breakAt + 160.0, s.breakAt, s.dist)); }
+
+        #ifdef WATER_CONTACT
+        uniform sampler2D uRippleMap;       // WaterRipples: height, its slopes along x and z, foam; world-anchored, wrapping
+        uniform vec4 uRippleWindow;         // the window's centre (world xz) and that centre's place in the image
+        uniform vec4 uRippleShape;          // x the half side the waves show over, y 1 / the image's side in units, z a texel (units), w 1 with a field
+
+        // Where p is in the ripples' image, and how much of the field shows there (fading out over the window's last 12 units).
+        vec2 rippleUv(vec2 p) { return (p - uRippleWindow.xy) * uRippleShape.y + uRippleWindow.zw; }
+        // The field's texel, bounded: a value not finite reads as calm water (never a hole or a raised sheet over the land).
+        vec4 rippleAt(vec2 p, float lod)
+        {
+            vec4 r = textureLod(uRippleMap, rippleUv(p), lod);
+            if (isnan(r.x) || isnan(r.y) || isnan(r.z) || isnan(r.w) || isinf(r.x) || isinf(r.y) || isinf(r.z) || isinf(r.w)) return vec4(0.0);
+            return clamp(r, vec4(-4.0, -2.0, -2.0, 0.0), vec4(4.0, 2.0, 2.0, 1.0));
+        }
+
+        float rippleWeight(vec2 p)
+        {
+            vec2 d = abs(p - uRippleWindow.xy);
+            return uRippleShape.w * (1.0 - smoothstep(uRippleShape.x - 12.0, uRippleShape.x, max(d.x, d.y)));
+        }
+        #endif
         """;
 
     /// <summary>
@@ -628,13 +688,18 @@ public sealed unsafe class WaterRenderer : IDisposable
                 Shore s = shoreAt(p);
                 // The geometry gets a smooth hump only (the steep front a few units wide would fall between the vertices and facet; the
                 // fragment shades it), and none where the vertices are too far apart for it.
-                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
+                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / s.len);
                 float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
                 float scale = oceanScale(s) * fade;
                 vec3 d = vec3(0.0);
                 if (uLean < 0.5 || scale > 0.0) d = oceanDisplace(p, spacing).xyz * scale;
                 w += vec3(d.x, d.y + max(hump, lift) * shoreFade, d.z);
             }
+            #ifdef WATER_CONTACT
+            // The interactive waves' height, only where the vertices are close enough to carry it (further out the fragment's normals do).
+            float rw = r < 1.0e5 ? rippleWeight(p) * (1.0 - smoothstep(1.0, 3.0, max(r, 1.0) * uGridStep / uRippleShape.z)) : 0.0;
+            if (rw > 0.0) w.y += rippleAt(p, 0.0).r * rw;
+            #endif
             vBase = p;
             vWorld = w;
             gl_Position = uViewProjection * vec4(w, 1.0);
@@ -658,7 +723,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform vec3 uGlintColour;
         uniform sampler2D uColourMap;
         uniform sampler2D uFlowMap;
-        uniform sampler2D uFoamMap;     // WaterFoam: a lace of bubble rims in R
+        uniform sampler2D uFoamMap;     // WaterFoam: the caustics' lace in R, patches in G, bubbles in B, the froth in A
         uniform sampler2D uNormalMap;
         uniform sampler2D uRainMap;
         uniform sampler2D uParamsA;
@@ -670,6 +735,33 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform mat4 uReflectionViewProjection;
         uniform float uReflect;
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureScene)
+
+        // The scene under the water at a screen position, from the half-size copy: its four texels weighed by how near the depths they were made of are to this pixel's
+        // own (zHere, 0 without a depth copy: plain filtering). A leg or a blade in the water otherwise took some of the bright floor beside it, which it shows through
+        // its own thin layer of water: a light rim along its edge.
+        vec3 sceneUnder(vec2 uv, float zHere)
+        {
+            if (zHere <= 0.0) return texture(uRefraction, uv).rgb;
+            ivec2 size = textureSize(uRefraction, 0);
+            vec2 full = vec2(textureSize(uSceneDepth, 0));
+            vec2 f = uv * vec2(size) - 0.5;
+            ivec2 i0 = ivec2(floor(f));
+            vec2 w = f - vec2(i0);
+            vec3 sum = vec3(0.0);
+            float total = 0.0;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 o = ivec2(k & 1, k >> 1);
+                ivec2 q = clamp(i0 + o, ivec2(0), size - 1);
+                vec4 d = textureGather(uSceneDepth, (vec2(q) * 2.0 + 1.0) / full);   // the four pixels the texel averages
+                float rel = 0.0;
+                for (int j = 0; j < 4; j++) rel = max(rel, abs(depthViewZ(d[j], uDepthPlanes.xy) - zHere));
+                float weight = max((o.x == 1 ? w.x : 1.0 - w.x) * (o.y == 1 ? w.y : 1.0 - w.y), 1e-3) / (rel / zHere + 0.005);
+                sum += texelFetch(uRefraction, q, 0).rgb * weight;
+                total += weight;
+            }
+            return sum / total;
+        }
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
         uniform vec2 uCentre;           // the grid's centre and its spacing over its radius (the vertex stage's), for the hump's vertex spacing
@@ -719,7 +811,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             return sum;
         }
 
-        // The foam's two blotch scales (R: lace, G: noise) stretched along the flow into streaks and carried with it, cross-faded the same way.
+        // The foam's two blotch scales (x: froth, y: noise) stretched along the flow into streaks and carried with it, cross-faded the same way.
         void riverFoam(vec2 p, vec2 flow, float speed, vec2 dpx, vec2 dpy, out vec2 a1, out vec2 a2)
         {
             a1 = vec2(0.0); a2 = vec2(0.0);
@@ -730,8 +822,8 @@ public sealed unsafe class WaterRenderer : IDisposable
                 float t = fract(uTime * 240.0 + 0.5 * float(i));
                 float w = 1.0 - abs(t * 2.0 - 1.0);
                 vec2 q = frame * (p - flow * speed * 2.5 * (t - 0.5));
-                a1 += textureGrad(uFoamMap, q * s1, frame * dpx * s1, frame * dpy * s1).rg * w;
-                a2 += textureGrad(uFoamMap, q * s2 + 0.37, frame * dpx * s2, frame * dpy * s2).rg * w;
+                a1 += textureGrad(uFoamMap, q * s1, frame * dpx * s1, frame * dpy * s1).ag * w;
+                a2 += textureGrad(uFoamMap, q * s2 + 0.37, frame * dpx * s2, frame * dpy * s2).ag * w;
             }
         }
 
@@ -745,26 +837,21 @@ public sealed unsafe class WaterRenderer : IDisposable
             return albedo * (diffuse + atmoIrradiance(n) * 0.96 * am.rgb * uAtmoLight.w);
         }
 
-        // The surf's cells: a cellular pattern (the 3 by 3 neighbouring cells) whose points wander slowly with the clock (cycles of 10 and
-        // 20 s). x: the distance to the cell wall (F2 - F1, 0 on a wall, up to about 0.5 in a cell's middle); y: the nearest cell's lifetime
-        // (0.25 to 1: the foam age at which it bursts).
-        vec2 popCells(vec2 x)
+        #ifdef WATER_CONTACT
+        // How far from the eye the contact foam and the wakes reach, and the distance over which they fade out there.
+        const float ContactFar = 1200.0, ContactFade = 400.0;
+
+        // Foam where something stands in the water (docs/render-water.md "Contact foam"): the view ray ends close behind the surface, on something that stands above
+        // the terrain under this point (the shore has foam of its own). thick: the way through the water to it; depth: the terrain's depth here; up: the view's
+        // height; blotch: the band's edge wanders with the foam's noise.
+        float contactFoam(float thick, float depth, float up, float blotch)
         {
-            vec2 i = floor(x), f = fract(x);
-            vec2 a = 6.2831853 * vec2(fract(uTime * 60.0), fract(uTime * 30.0));
-            float d1 = 8.0, d2 = 8.0, life = 0.0;
-            for (int j = -1; j <= 1; j++)
-                for (int k = -1; k <= 1; k++)
-                {
-                    vec2 c = vec2(float(k), float(j)), h = i + c;
-                    vec2 hv = vec2(wHash(h), wHash(h + 17.3));
-                    vec2 pt = c + 0.15 + 0.7 * hv + 0.15 * sin(a + 6.2831853 * hv.yx);
-                    float d = distance(pt, f);
-                    if (d < d1) { d2 = d1; d1 = d; life = wHash(h + 71.9); }
-                    else d2 = min(d2, d);
-                }
-            return vec2(d2 - d1, mix(0.25, 1.0, life));
+            if (thick < 0.0) return 0.0;
+            float standing = smoothstep(2.5, 4.5, depth - thick * up);   // the ground's relief (ripples, displacement) stands less than this
+            return 0.85 * standing * (1.0 - smoothstep(0.0, mix(1.5, 4.0, blotch), thick));
         }
+
+        #endif
 
         void main()
         {
@@ -787,7 +874,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The motion fades with the eye distance; beyond it (and past the world's edge) this is the game's flat water.
             float fade = outside <= 0.0 ? 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist) : 0.0;
             Shore s;
-            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.wave = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0;
+            s.depth = 1.0e4; s.dist = 1.0e6; s.g = 0.0; s.wave = 0.0; s.dir = vec2(0.0); s.open = 0.0; s.size = 1.0; s.breakAt = 0.0; s.river = 0.0; s.flow = vec2(1.0, 0.0); s.speed = 0.0; s.sizeWet = 1.0; s.brk = 1.0; s.len = 100.0; s.prop = vec2(1.0, 0.0); s.swell = 0.0;
             if (fade > 0.0) s = shoreAt(p);
             else if (outside <= 0.0) s.depth = uWaterHeight - terrainHeight(p);
 
@@ -798,6 +885,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             float sinceCrest = fract(s.g - 0.5);
             float level = runup * breakerProfile(s.g);
             float wetLevel = uShore.y * s.open * s.sizeWet * fade * smoothstep(-120.0, -40.0, s.dist) * (1.0 - 0.8 * sinceCrest);
+            // Each wave runs further up the beach in some places than in others (tongues some 70 units across), and the wet sand it leaves is as ragged,
+            // so the waterline is not one smooth copy of the shore.
+            if (runup > 0.0)
+            {
+                level *= mix(0.55, 1.0, wNoise(p / 70.0 + vec2(wHash(vec2(s.wave, 3.1)), wHash(vec2(s.wave, 8.7))) * 97.0));
+                wetLevel *= mix(0.7, 1.0, wNoise(p / 55.0 + 13.7));
+            }
             if (above > 0.0 && above >= max(level, wetLevel)) discard;
             bool swash = above > 0.0;
             float sheet = swash ? level - above : 0.0;   // the swash's thickness (negative: wet sand only)
@@ -864,12 +958,26 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec2 slope = nm.xz / max(nm.y, 0.05) - os.xy / spread;
             // The breaker's hump tilts the surface: its height falls towards the shore on the front and rises on the back.
             Shore ahead = s, behind = s;
-            ahead.g = fract(s.g - 0.01); ahead.dist -= 0.01 * uShore.z;
-            behind.g = fract(s.g + 0.01); behind.dist += 0.01 * uShore.z;
+            ahead.g = fract(s.g - 0.03); ahead.dist -= 0.03 * s.len;
+            behind.g = fract(s.g + 0.03); behind.dist += 0.03 * s.len;
             float breaker = breakerHeight(s) * fade;
             // The breaker's shading fades with the distance: a few pixels across its steep front only read as a dark streak.
             float near = 1.0 - smoothstep(700.0, 2500.0, dist);
-            slope += s.dir * ((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.02 * uShore.z));
+            // Over 6% of a wavelength and at most 0.35: the 2% difference made a thin, steep strip ahead of every crest, which reflected as a bright
+            // greenish line all along it.
+            slope += s.prop * clamp((breakerHeight(behind) - breakerHeight(ahead)) * fade * near * 0.7 / (0.06 * s.len), -0.35, 0.35);
+            #ifdef WATER_CONTACT
+            // The interactive waves (docs/render-water.md "Wakes and ripples"): their slopes tilt the surface; their foam joins the rest below.
+            vec4 ripple = vec4(0.0);
+            float rippleW = outside <= 0.0 ? rippleWeight(p) : 0.0;
+            if (rippleW > 0.0)
+            {
+                // The field has one level: where a pixel spans several of its texels the waves are smaller than it, and fade out (the foam stays).
+                ripple = rippleAt(p, 0.0) * rippleW;
+                ripple.xyz *= 1.0 - smoothstep(1.5, 4.0, max(length(dpx), length(dpy)) / uRippleShape.z);
+            }
+            slope -= ripple.yz;
+            #endif
             vec3 n = normalize(vec3(slope.x, 1.0, slope.y));
 
             float gloss = clamp(pb.x, 0.0, 1.0);
@@ -882,8 +990,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Glitter: far away the waves are smaller than a pixel, so the sun's glint spreads into a band of sparkles, a broader lobe let
             // through where a fine, moving pattern peaks.
             float far = smoothstep(800.0, 4000.0, dist);
-            float sparkle = smoothstep(0.55, 0.95, textureLod(uFoamMap, p * 0.0023 + n.xz * 0.35 + vec2(uTime * 1.7, uTime * 1.1), 0.0).r);
-            spec += pow(nh, power * 0.12) * (power * 0.12 + 8.0) / 25.0 * gloss * sparkle * far * 2.5;
+            // The glitter's mean only (0.15 of a broader lobe): a mask from the foam texture showed its cells, standing still, in a band of distances.
+            spec += pow(nh, power * 0.12) * (power * 0.12 + 8.0) / 25.0 * gloss * 0.15 * far * 2.5;
             float lh = clamp(dot(glintL, h), 0.0, 1.0);
             spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(toEyeDir, n), 0.0);
@@ -936,7 +1044,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             {
                 float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
                 float spacing = max(length(vBase - uCentre), 1.0) * uGridStep;
-                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / uShore.z);
+                float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / s.len);
                 thick = max(thick - max(lift - max(hump, level), 0.0) * fade / max(toEyeDir.y, 0.05), 0.0);
             }
             float depth = thick >= 0.0 && !swash ? thick * pow(max(toEyeDir.y, 0.05), uClarity.y)
@@ -950,7 +1058,14 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // What lies under the water, seen through the waves: the scene copied before the water, its lookup bent by the surface's slope
                 // (less in thin water and far away).
                 vec2 bend = n.xz * 0.06 * clamp(depth / 30.0, 0.0, 1.0) / (1.0 + dist / 600.0);
-                under = texture(uRefraction, gl_FragCoord.xy * uScreen + bend).rgb;
+                float zHere = uDepthPlanes.z > 0.5 ? depthViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r, uDepthPlanes.xy) : 0.0;
+                if (zHere > 0.0)
+                {
+                    // The bend stays on what this pixel shows: across a silhouette it brought the floor's colour under a leg's thin water, or the leg's under the floor's deep water.
+                    ivec2 bent = clamp(ivec2(gl_FragCoord.xy + bend / uScreen), ivec2(0), textureSize(uSceneDepth, 0) - 1);
+                    bend *= 1.0 - smoothstep(0.03, 0.1, abs(depthViewZ(texelFetch(uSceneDepth, bent, 0).r, uDepthPlanes.xy) - zHere) / zHere);
+                }
+                under = sceneUnder(gl_FragCoord.xy * uScreen + bend, zHere);
                 // Caustics: the waves focus the sun into a moving web of light on the floor of shallow water (two drifting webs of the foam
                 // texture's cell rims, multiplied).
                 if (uLean < 0.5 || (dist < 2500.0 && floorDepth > 1.5 && l.y > 0.0))
@@ -975,12 +1090,14 @@ public sealed unsafe class WaterRenderer : IDisposable
                 colour = mix(under * transmit + body * (1.0 - transmit), reflected, schlick * gloss);
             }
             else colour = mix(body, reflected, schlick * gloss);
-            colour += min(spec, 4.0) * uGlintColour * 0.25 * atmoCloudShadow(vWorld) + pb.y * waterColour;
+            colour += min(spec, 4.0) * uGlintColour * 0.25 * atmoCloudShadow(vWorld) * (swash ? 0.25 : 1.0) + pb.y * waterColour;
 
             // A breaker's face: light comes through its thin lip, so it is brighter than the water (in its colour), and less see-through.
-            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth);
+            // Only as the wave steepens just before it breaks (along the whole swell it drew a yellow-green band ahead of every crest).
+            float lip = smoothstep(0.22, 0.45, s.g) * (1.0 - smoothstep(0.46, 0.51, s.g)) * clamp(breaker / max(uShore.w, 0.1), 0.0, 1.0) * smoothstep(4.0, 24.0, s.depth)
+                * smoothstep(s.breakAt + 80.0, s.breakAt + 10.0, s.dist);
             vec3 lipColour = (waterColour * 1.8 + vec3(0.01, 0.04, 0.035) * clean) * (uSunColour * 0.7 * overcast + uSkyZenith * 0.6);
-            colour = mix(colour, max(colour, lipColour), lip * 0.6 * near);   // it only brightens: dark water has no light to show through its lip
+            colour = mix(colour, max(colour, lipColour), lip * 0.35 * near);   // it only brightens: dark water has no light to show through its lip
             // and the trough in front of it is darker.
             float trough = smoothstep(0.05, 0.2, s.g) * (1.0 - smoothstep(0.2, 0.3, s.g)) * clamp(breakerHeight(behind) / max(uShore.w, 0.1), 0.0, 1.0) * (1.0 - smoothstep(s.breakAt, s.breakAt - 30.0, s.dist));
             colour *= 1.0 - 0.25 * trough * near;
@@ -1002,19 +1119,37 @@ public sealed unsafe class WaterRenderer : IDisposable
             float amount = max(clamp((0.7 - jacobian) * 3.75, 0.0, 1.0), clamp(oceanFoam * open * 1.5, 0.0, 1.0) * 0.75);
             float surfAmount = 0.0, clump = 0.5, ageS = 0.0;
             vec2 q = vec2(0.0), b1 = vec2(0.5), b2 = vec2(0.5);
+            float fine = 0.5;
             // Sheltered ponds have no surf; keep river, open-water and waterline foam independent below.
             if (uLean < 0.5 || surfZone > 0.0 || swash)
             {
-                float travel = clamp((s.breakAt - (s.dist - uShore.z * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
+                float travel = clamp((s.breakAt - (s.dist - s.len * (s.g - 0.5))) / max(s.breakAt + 10.0, 40.0), 0.0, 1.0);
                 ageS = clamp(0.6 * travel + 0.5 * smoothstep(0.5, 0.95, s.g), 0.0, 1.0);
                 float squeeze = 1.0 - 1.0 / (1.0 + 1.1 * ageS * ageS);
-                vec2 q0 = p + s.dir * (s.dist - uShore.z * s.g) + vec2(wHash(vec2(s.wave, 21.7)), wHash(vec2(s.wave, 5.3))) * 997.0;
-                q = q0 + s.dir * (uShore.z * (s.g - 0.5) * squeeze);
-                vec2 gx = dpx - s.dir * (dot(s.dir, dpx) * squeeze), gy = dpy - s.dir * (dot(s.dir, dpy) * squeeze);
+                // The foam's frame runs with the wave (the phase goes back as the crest comes in), and is a new one for every wave (its number's hash).
+                vec2 q0 = p - s.prop * (s.len * s.g) + vec2(wHash(vec2(s.wave, 21.7)), wHash(vec2(s.wave, 5.3))) * 997.0;
+                q = q0 + s.prop * (s.len * (s.g - 0.5) * squeeze);
+                vec2 gx = dpx + s.prop * (dot(s.prop, dpx) * (1.0 - squeeze)), gy = dpy + s.prop * (dot(s.prop, dpy) * (1.0 - squeeze));
+                // On the swash the foam rides the sheet: up the beach with the uprush and back down with the backwash (the sheet's edge moves level / slope
+                // across the sand; no per-wave hash, whose change would draw a line on the sand).
+                if (swash)
+                {
+                    float beach = clamp(s.depth / min(s.dist, -1.0), 0.02, 0.5);
+                    q = p - s.prop * (level / beach);
+                    gx = dpx;
+                    gy = dpy;
+                }
                 clump = textureGrad(uFoamMap, q0 * 0.0037 + vec2(0.21, 0.63), dpx * 0.0037, dpy * 0.0037).g;
-                if (fade > 0.0) { b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).rg; b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).rg; }
+                if (fade > 0.0)
+                {
+                    b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).ag;
+                    b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).ag;
+                    mat2 turnA = mat2(0.8, 0.6, -0.6, 0.8), turnB = mat2(-0.28, 0.96, -0.96, -0.28);
+                    fine = textureGrad(uFoamMap, turnA * q * 0.027 + 0.61, turnA * gx * 0.027, turnA * gy * 0.027).a * 0.5
+                         + textureGrad(uFoamMap, turnB * q * 0.045 + 0.23, turnB * gx * 0.045, turnB * gy * 0.045).a * 0.5;
+                }
                 float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
-                float crestAt = dw - uShore.z * (gw - 0.5);   // the distance of the crest this point trails (or leads)
+                float crestAt = dw - s.len * (gw - 0.5);   // the distance of the crest this point trails (or leads)
                 float broken = smoothstep(s.breakAt + 15.0, s.breakAt - 15.0, crestAt);   // the wave has broken: its foam follows the crest back out to the break point
                 float burst = (1.0 - smoothstep(0.0, 45.0, abs(dw - s.breakAt + 10.0))) * smoothstep(0.42, 0.5, gw) * (1.0 - smoothstep(0.62, 0.8, gw));
                 float bore = broken * smoothstep(0.43, 0.5, gw) * (1.0 - smoothstep(0.54, 0.68, gw));
@@ -1023,19 +1158,30 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
                 float stretch = smoothstep(0.2, 0.75, textureGrad(uFoamMap, p * 0.0011, dpx * 0.0011, dpy * 0.0011).g);
                 float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.275, 1.0, s.brk);
-                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.5, 0.95);   // capped: the lace shows through even the thickest whitewater
+                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.65, 0.88);   // capped: the lace shows through even the thickest whitewater
             }
-            amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * (0.15 + 0.25 * s.open) * fade);
+            // At the waterline of an exposed shore a little foam comes in with each wave and wears off before the next (a pond's edge has none: it stood still).
+            amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * 0.3 * s.open * (1.0 - sinceCrest) * fade);
             // The swash: its front is dense, the sheet behind it thins out.
-            if (swash && sheet > 0.0) surfAmount = max(surfAmount, max(0.85 * (1.0 - smoothstep(0.0, runup * 0.2, sheet + (b1.g - 0.5) * runup * 0.3)), 0.35 * (1.0 - sinceCrest)));
+            // The swash's front: a line of foam whose width wanders along the shore (a thread here, a broad band there), thinning out at its very
+            // edge and broken by the lace, and a thin lace in the sheet behind it.
+            if (swash && sheet > 0.0)
+            {
+                float wander = wNoise(p / 40.0 + 7.3);
+                float band = runup * mix(0.04, 0.3, wander * wander);
+                float frontFoam = 0.8 * (1.0 - smoothstep(0.0, band, sheet + (b1.g - 0.5) * band)) * smoothstep(0.0, 0.03 + 0.12 * b2.g, sheet);
+                surfAmount = max(surfAmount, max(frontFoam, 0.3 * (1.0 - sinceCrest) * smoothstep(0.0, 0.08, sinceCrest) * smoothstep(0.35, 0.75, b1.g)));
+            }
             // Foam wears away as it ages: fresh at the break, and the further the wave has run in since (travel, from the break point to the
             // waterline) and the further behind its crest, the more of it is lace with holes (on the swash too: the sheet thins as it recedes).
             float age = clamp(ageS + (0.5 - clump) * 0.5, 0.0, 1.0);
-            vec2 drift = direction * speed * uTime * 0.2;
+            // Carried by the current; on still water it still wanders a little (half a unit, over about a minute), so standing foam is never frozen.
+            vec2 wander = fract(uTime * vec2(10.5, 7.93)) * 6.2832;   // phases of 57 and 76 s (uTime counts 600 s), kept small so they stay precise
+            vec2 drift = direction * speed * uTime * 0.2 + vec2(sin(wander.x), cos(wander.y)) * (0.5 * 0.009);
             vec2 driftDx = dFdx(drift), driftDy = dFdy(drift);
-            // Blotches (the multi-octave noise at two scales) with bubble rims in them; the more foam, the lower the threshold. Up close the
-            // foam shows its bubbles (B: fine cell walls), lit on their walls and darker inside.
-            vec2 a1 = texture(uFoamMap, p * 0.009 + drift).rg, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).rg;
+            // Blotches (the multi-octave noise at two scales) with the froth's holes in them; the more foam, the lower the threshold. Up close the
+            // foam shows its bubbles (B: rings of 0.13 to 0.4 units), lit on their walls and darker inside.
+            vec2 a1 = texture(uFoamMap, p * 0.009 + drift).ag, a2 = texture(uFoamMap, p * 0.027 - drift * 1.3).ag;
             if (rw > 0.01)
             {
                 // A river's foam: streaks along the current, a thin trace everywhere in it and a white rush in its rapids.
@@ -1044,26 +1190,49 @@ public sealed unsafe class WaterRenderer : IDisposable
                 a1 = mix(a1, r1, rw); a2 = mix(a2, r2, rw);
                 amount = max(amount, rw * (0.02 + 0.55 * rapid));
             }
+            float touched = 0.0;
+            #ifdef WATER_CONTACT
+            float contact = 0.0;
+            if (!swash && outside <= 0.0 && dist < ContactFar)
+            {
+                contact = contactFoam(thick, floorDepth, toEyeDir.y, a1.g);
+                touched = max(contact, ripple.a) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist));
+            }
+            #endif
+            // Every foam pattern is in the world at fixed scales, so zooming never changes its size or shape. Detail finer than a pixel is filtered (the
+            // texture's mips), and the finest octave, the bubbles' walls, is faded out by the pixel's footprint rather than the eye's distance.
+            float footprint = max(length(dpx), length(dpy));
+            float bubbleShow = 1.0 - smoothstep(0.12, 0.3, footprint);
             float bubbles = 0.0;
-            if (uLean < 0.5 || dist < 600.0)
-                bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
-            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.7 + max(a1.r, a2.r) * 0.45 + bubbles * 0.08;
+            if (bubbleShow > 0.0)
+                bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * bubbleShow;
+            // The blotches and the froth at two scales (holes of 0.4 to 9 units): organic clusters, holes and dots as the threshold rises, never a line network.
+            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.8 + (a1.r * 0.4 + a2.r * 0.6) * 0.3 + bubbles * 0.08;
             // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
+            // Foam churned up by what moves in the water (a splash, a wake, a rock's surge) is as thick on dark water as on clear: only its colour changes.
+            amount = max(amount, touched);
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
             if (surfAmount > 0.0)
             {
-                // The same lace in three scales (clumps, blotches, rims) in the wave's frame, its threshold rising with the foam's age.
-                float lace = (smoothstep(0.15, 0.9, clump) * 0.4 + b1.g * 0.3 + b2.g * 0.3) * 0.7 + max(b1.r, b2.r) * 0.45 + bubbles * 0.08;
-                // It wears cell by cell (cells of about 22 units, in the same stretched frame): each bursts at its own age, a hole opening
-                // from its middle while the walls between the cells stay as lace; the threshold itself rises only a little with the age.
-                vec2 cell = popCells(q * 0.045);
-                float popped = smoothstep(cell.y, cell.y + 0.12, age);
-                lace -= popped * 0.45 * smoothstep(0.04, 0.3, cell.x);
-                float wear = 0.075 + age * 0.3;
+                // Where the foam lies: clumps and blotches of noise in the wave's frame, the holes opening as it ages (its threshold rises). Its texture: the froth at two
+                // finer scales, turned against each other, which only shades it, so even the densest whitewater is not a flat white sheet.
+                // Streaks along the waves' way: the blotch noise stretched five to one along it.
+                vec2 along = s.prop, across = vec2(-s.prop.y, s.prop.x);
+                vec2 sk = vec2(0.006, 0.03);
+                float streak = textureGrad(uFoamMap, vec2(dot(q, along), dot(q, across)) * sk + 0.13,
+                    vec2(dot(dpx, along), dot(dpx, across)) * sk, vec2(dot(dpy, along), dot(dpy, across)) * sk).g;
+                float lace = smoothstep(0.15, 0.9, clump) * 0.35 + b1.g * 0.25 + b2.g * 0.15 + streak * 0.25;
+                float wear = 0.2 + age * 0.4;   // even fresh whitewater has holes
                 float surf = surfAmount * mix(0.7, 1.0, clean);
-                foam = max(foam, smoothstep(0.95 - surf + wear, 1.3 - surf + wear + 0.2 * age, lace));
+                // The rims also fray its edges, which stay crisp (a narrow threshold) rather than soft blobs.
+                // The froth at fixed world scales (holes of 0.3 to 3.5 units, two scales turned against each other); far away the mips average it.
+                float rims = fine;
+                float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (rims - 0.3) * 0.35);
+                // Inside, the foam's density follows its texture (bubbles, streaks), so even dense whitewater is never a flat white sheet.
+                float texture_ = rims * 0.5 + b2.g * 0.25 + streak * 0.25;
+                foam = max(foam, min(cover * mix(0.3, 1.2, clamp(texture_, 0.0, 1.0)), 1.0));   // linear, so the filtered (distant) foam keeps the same mean
             }
             foam *= mix(0.8, 0.92, clean);
             // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
@@ -1087,9 +1256,16 @@ public sealed unsafe class WaterRenderer : IDisposable
             // The last two units of water fade into what is behind it (the game's alpha term saturate(depth / 2), on the distance through the
             // water): no line where the surface meets the ground (displaced or not), a rock or a leg. The swash's raised surface lies nearly
             // along the beach, so it fades over half a unit where it meets the sand.
-            float edge = thick >= 0.0 ? clamp(thick / max(swash ? 0.5 : 2.0, thicknessError(dist)), 0.0, 1.0) : 1.0;
+            // Over 2 units along the ray (0.5 for the swash) and 0.6 units of depth (0.2), whichever is longer, so a grazing view of ripples standing out of a thin
+            // film does not cut them with a line; smoothstep, so no band shows at either end.
+            float edge = thick >= 0.0 ? smoothstep(0.0, 1.0, min(thick / max(swash ? 0.5 : 2.0, thicknessError(dist)), thick * max(toEyeDir.y, 0.02) / (swash ? 0.2 : 0.6))) : 1.0;
+            #ifdef WATER_CONTACT
+            edge = max(edge, max(contact, ripple.a) * foam);   // the foam stays up to the line it clings to, where the water itself has faded out
+            #endif
             // Wet sand, behind the swash and under its front: darker and glossy, drying out until the next wave, faded out over the edge of its band.
-            float wet = swash ? (1.0 - sinceCrest) * 0.6 * smoothstep(0.0, 0.3, max(level, wetLevel) - above) : 0.0;
+            // The sand dries in patches after the backwash (a slow noise sets which patch dries first), and the wet line fades out over a soft band.
+            float drying = smoothstep(sinceCrest * 1.3 - 0.3, sinceCrest * 1.3, wNoise(p / 9.0 + 3.7) * 0.6 + wNoise(p / 23.0) * 0.4);
+            float wet = swash ? drying * 0.6 * smoothstep(0.0, 0.5, max(level, wetLevel) - above) : 0.0;
             vec3 wetGloss = reflected * schlick * gloss + min(spec, 4.0) * uGlintColour * 0.15;
             float a;
             if (refract)
@@ -1100,7 +1276,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 {
                     // The sheet thins into the wet sand at its front, and its foam's leading edge is a few units wide. Wet sand darkens and glosses
                     // the scene under it, scene * (1 - 0.35 wet) + gloss * wet: a blend over the scene at full size (the half-size copy blurred the sand).
-                    float f = foam * smoothstep(0.0, 0.15, sheet), front = smoothstep(0.0, 0.6, sheet);
+                    float f = foam * smoothstep(0.0, 0.05 + 0.25 * b2.g, sheet), front = smoothstep(0.0, 0.3 + 0.6 * b1.g, sheet);
                     a = f + (1.0 - f) * (front + (1.0 - front) * 0.35 * wet);
                     colour = (foamColour * f + (1.0 - f) * (surface * front + (1.0 - front) * wetGloss * wet)) / max(a, 1e-4);
                 }
@@ -1137,6 +1313,21 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions
         + MeitouMotion + MeitouBody;
+
+    /// <summary>
+    /// The Meitou water with the <c>contactfoam</c> switch's foam (<see cref="WaterContact"/>); the plain program has none of its code.
+    /// </summary>
+    static string MeitouContactNative() => NativeFragment(WithContact(MeitouFragment));
+
+    /// <summary>
+    /// The Meitou water's vertex stage with the <c>contactfoam</c> switch's waves.
+    /// </summary>
+    static string MeitouContactVertex() => NativeVertex(WithContact(MeitouVertex));
+
+    /// <summary>
+    /// <paramref name="source"/> with <c>WATER_CONTACT</c> defined.
+    /// </summary>
+    static string WithContact(string source) => source.Insert(source.IndexOf('\n') + 1, "#define WATER_CONTACT\n");
 
     /// <summary>
     /// The water's own uniforms in the native model: <see cref="ConstantsBlock"/> and the bindless arrays.
@@ -1194,6 +1385,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uRiverMap"] = "textures2D[water.riverMap]",
         ["uSceneDepth"] = "textures2D[water.sceneDepthMap]",
         ["uDepthPlanes"] = "water.depthPlanes",
+        ["uRippleMap"] = "textures2D[water.rippleMap]",
+        ["uRippleWindow"] = "water.rippleWindow",
+        ["uRippleShape"] = "water.rippleShape",
     };
 
     /// <summary>
@@ -1215,7 +1409,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>
     /// A water vertex shader in the native model (the constants block put in, the uniforms mapped).
     /// </summary>
-    static string NativeVertex(string source) => NativeShaders.Port(WithConstants(source), NativeMap);
+    static string NativeVertex(string source) => NativeShaders.Port(WithConstants(RenderOrigin.Relative(source)), NativeMap);
 
     /// <summary>
     /// A water fragment shader in the native model, its albedo for the GI resolve (none).
@@ -1278,6 +1472,31 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly WaterProgram? _meitou;
 
     /// <summary>
+    /// The Meitou water with the contact foam (<see cref="WaterContact"/>), made at its first use.
+    /// </summary>
+    WaterProgram? _meitouContact;
+
+    /// <summary>
+    /// The grid's inputs, for <see cref="_meitouContact"/>.
+    /// </summary>
+    LegacyProgram.Attribute?[] _gridInputs = [];
+
+    /// <summary>
+    /// The contact ripples (made while the contact foam is on), the game hours they last stepped at and the heights they read.
+    /// </summary>
+    WaterRipples? _ripples;
+
+    /// <summary>
+    /// The game hours the ripples last stepped at.
+    /// </summary>
+    double _rippleHours;
+
+    /// <summary>
+    /// The heights the ripples read.
+    /// </summary>
+    HeightSnapshot? _rippleHeights;
+
+    /// <summary>
     /// The bindless entries of <see cref="_maps"/>.
     /// </summary>
     readonly BindlessTexture[] _mapTextures;
@@ -1285,7 +1504,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>
     /// The bindless entries of the ocean's maps, the shore field, the reflection, the refraction, the heightmaps and the scene depth copy.
     /// </summary>
-    readonly BindlessTexture _oceanMap, _shoreMap, _reflectionMap, _refractionMap, _heightCoarse, _heightFine, _sceneDepthMap;
+    readonly BindlessTexture _oceanMap, _shoreMap, _reflectionMap, _refractionMap, _heightCoarse, _heightFine, _sceneDepthMap, _rippleMap;
 
     /// <summary>
     /// The one-texel array the ocean's entry reads before its first FFT (every read is gated on the ocean's size).
@@ -1328,9 +1547,45 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly ulong _uniformAlign;
 
     /// <summary>
-    /// The Meitou polar grid: segments round the eye (128 low, 256 default, 512 high), rings follow from it.
+    /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.
     /// </summary>
-    public const int DefaultGridSegments = 256;
+    public WaterRipples? Ripples => WaterContact.Enabled && Meitou && _meitou is not null && Gpu is GpuContext ? _ripples ??= new WaterRipples(Gpu) { Walls = _walls } : null;
+
+    /// <summary>
+    /// The walls and posts standing in the water round a point (centre, radius: X/Z segments where the buildings' collision cuts the water's height, read on a worker), which
+    /// neither the shore waves (<see cref="ShoreTravel"/>) nor the characters' wakes pass. Set by the game, which knows the buildings.
+    /// </summary>
+    public Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? Walls
+    {
+        get => _walls;
+        set
+        {
+            _walls = value;
+            if (_shore is not null)
+            {
+                _shore.Walls = value;
+            }
+
+            if (_ripples is not null)
+            {
+                _ripples.Walls = value;
+            }
+        }
+    }
+
+    Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
+
+    /// <summary>
+    /// The Meitou program to draw with: with the contact foam (Vulkan only: it needs the scene depth), made the first time it is asked for.
+    /// </summary>
+    WaterProgram MeitouProgram() => !WaterContact.Enabled || Gpu is not GpuContext ? _meitou!
+        : _meitouContact ??= new WaterProgram(Gpu, _frame, MeitouContactVertex(), MeitouContactNative(), "water meitou contact", PrimitiveType.Triangles, _gridInputs, _constantsLayout);
+
+    /// <summary>
+    /// The Meitou polar grid: segments round the eye (256 low, 1024 default), rings follow from it. A vertex's spacing is its distance from the eye times 2 pi over this,
+    /// and the waves it carries are those that spacing can hold: at 256 (30 pixels a cell at 1080p) the crests a few hundred units out changed shape as the camera moved.
+    /// </summary>
+    public const int DefaultGridSegments = 1024;
 
     /// <summary>
     /// Out to this radius the Meitou grid is fine enough for the waves; beyond it the water is flat.
@@ -1481,6 +1736,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         _reflectionMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         _refractionMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         _sceneDepthMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
+        _rippleMap = new BindlessTexture(gpu, BindlessKind.Texture2D);
         _heightCoarse = new BindlessTexture(gpu, BindlessKind.Texture2D);
         _heightFine = new BindlessTexture(gpu, BindlessKind.Texture2D);
         // A valid one-texel array view for the frames before the ocean's first FFT; the shader gates every read on uOcean.w.
@@ -1524,6 +1780,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         LegacyProgram.Attribute?[] gridAttributes = [QuadAttribute(grid)];
         var program = new WaterProgram(gpu, _frame, NativeVertex(MeitouVertex), NativeFragment(MeitouFragment), "water meitou",
             PrimitiveType.Triangles, gridAttributes, _constantsLayout);
+        _gridInputs = gridAttributes;
         return (grid, gridIndices, program, (uint)indices.Length);
     }
 
@@ -1546,6 +1803,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         _faithful.Dispose();
         _meitou?.Dispose();
+        _meitouContact?.Dispose();
         _frame.Dispose();
         _quad.Dispose();
         _grid?.Dispose();
@@ -1556,6 +1814,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         _reflectionMap.Dispose();
         _refractionMap.Dispose();
         _sceneDepthMap.Dispose();
+        _rippleMap.Dispose();
+        _ripples?.Dispose();
         _heightCoarse.Dispose();
         _heightFine.Dispose();
         Gpu.Bindless.Free(BindlessKind.Texture2DArray, _standInArray);
@@ -1597,10 +1857,12 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
         var indices = new List<uint>(segments * 3 + (radii.Count - 1) * segments * 6);
         uint V(int ring, int s) => (uint)(1 + ring * segments + (s % segments));
-        for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
-        for (int ring = 0; ring + 1 < radii.Count; ring++)
+        // Far rings first, the eye's fan last: the water writes no depth, so where a displaced crest stands in front of water further out the nearer
+        // triangle must come later to cover it (drawn near first, the water behind a wave showed through it).
+        for (int ring = radii.Count - 2; ring >= 0; ring--)
             for (int s = 0; s < segments; s++)
                 indices.AddRange([V(ring, s), V(ring, s + 1), V(ring + 1, s + 1), V(ring, s), V(ring + 1, s + 1), V(ring + 1, s)]);
+        for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
         return (positions, indices.ToArray());
     }
 
@@ -1855,7 +2117,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         _waves.Step(gameHours, windDirection, windSpeed);
         if (Meitou) _ocean?.Update(gameHours, windDirection, windSpeed);
+        _rippleHours = gameHours;
     }
+
 
     /// <summary>
     /// Keeps the Meitou water's shore field (<see cref="ShoreField"/>) round the eye: once a frame on the render thread, with the
@@ -1864,7 +2128,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal void Track(Vector3 eye, HeightSnapshot heights)
     {
         if (Meitou) _shore?.Update(eye, heights);
+        _rippleHeights = heights;
     }
+
 
     /// <summary>
     /// Records the Meitou ocean's FFT before the scene host opens (Metal records compute into the same command buffer and
@@ -1873,7 +2139,13 @@ public sealed unsafe class WaterRenderer : IDisposable
     internal void PrepareFrame()
     {
         if (Meitou && OceanInView) _ocean?.Record();   // the FFT only while water near enough to show its detail is in view
+        // The interactive waves only while their switch is on and water within their reach can be in view.
+        if (Meitou && WaterContact.Enabled && _ripples is { } r && _rippleHeights is { } heights && (float.IsNaN(NearestWater) || NearestWater < ContactFar))
+        {
+            r.Record(_rippleHours, heights);
+        }
     }
+
 
     /// <summary>
     /// The open waves (for the viewer's statistics and tests).
@@ -1995,8 +2267,15 @@ public sealed unsafe class WaterRenderer : IDisposable
     {
         if (Gpu is not GpuContext) return false;
         if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
-        return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
+        // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam
+        // reads the depth.
+        return NeedsRefraction(near) || WaterContact.Enabled && near < ContactFar && (float.IsNaN(NearestWater) || NearestWater < ContactFar);
     }
+
+    /// <summary>
+    /// How far from the eye the contact foam reaches (the shader's ContactFar).
+    /// </summary>
+    const float ContactFar = 1200;
 
     /// <summary>
     /// Whether water at <paramref name="near"/> can still be see-through: nearer than 1.5 times the clear distance (at least 100) or the shore
@@ -2049,19 +2328,18 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// no later draw (docs/renderer-native.md 8.6). Faithful draws the game's quad; Meitou the polar grid with <see cref="Animate"/>'s motion.
     /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours). Meitou uses the game clock instead.</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent,
-        ReflectionPass? reflection = null)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null, Matrix4x4? relative = null)
     {
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && _meitou is not null;
-        var p = meitouWater ? _meitou! : _faithful;
+        var p = meitouWater ? MeitouProgram() : _faithful;
         var c = PrepareConstants(meitouWater, eye, light, colours, meitouWater ? _waves.NormalTime : time, extent, reflection, targets);
         var slice = Gpu.Frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<WaterConstants>(in c)), _uniformAlign);
         var set = ConstantSet(slice.Handle);
         var cmd = Gpu.BeginGuest(meitouWater ? "water meitou" : "water");
         var state = WaterState(targets);
         SetDynamicState(cmd, targets, state);
-        var view = View(viewProjection, eye, time, light);
+        var view = View(viewProjection, eye, time, light, relative);
         _frame.Bind(cmd, p.Gpu, in view);
         uint offset = (uint)slice.Offset;
         cmd.BindSets(p.Gpu, ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
@@ -2105,13 +2383,14 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <summary>
-    /// The camera, the animation <paramref name="time"/> and the light's direction and fog as <see cref="ViewConstants"/>.
+    /// The camera (eye-relative: <paramref name="relative"/>, else from <paramref name="viewProjection"/>), the animation <paramref name="time"/> and
+    /// the light's direction and fog as <see cref="ViewConstants"/>.
     /// </summary>
-    static ViewConstants View(Matrix4x4 viewProjection, Vector3 eye, float time, WorldLighting light)
+    static ViewConstants View(Matrix4x4 viewProjection, Vector3 eye, float time, WorldLighting light, Matrix4x4? relative)
     {
         return new ViewConstants
         {
-            ViewProjection = viewProjection,
+            ViewProjection = RenderOrigin.ViewProjection(viewProjection, eye, relative),
             Eye = eye,
             Time = time,
             LightDir = light.SunDirection,
@@ -2203,6 +2482,11 @@ public sealed unsafe class WaterRenderer : IDisposable
         bool depth = _sceneDepthCopy is not null && _sceneDepthFrame == Gpu.Frame.Number;
         c.DepthPlanes = new Vector4(_sceneDepthPlanes, depth ? 1f : 0f, 0f);
         c.SceneDepthMap = depth ? _sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), _sceneDepthCopy!.View())) : Gpu.StandIn2D;
+        bool ripple = WaterContact.Enabled && _ripples is { Ready: true };
+        c.RippleMap = ripple ? _rippleMap.Index(_ripples!.Surface) : Gpu.StandIn2D;
+        var (window, rippleHalf) = _ripples?.Window ?? default;
+        c.RippleWindow = window;
+        c.RippleShape = new Vector4(rippleHalf, 1f / (WaterRipples.Side * WaterRipples.Texel), WaterRipples.Texel, ripple ? 1f : 0f);
     }
 
     /// <summary>

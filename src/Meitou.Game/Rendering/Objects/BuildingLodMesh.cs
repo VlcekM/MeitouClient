@@ -444,6 +444,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// Decodes running or wanted, and meshes whose upload is queued.
     /// </summary>
     public int Pending => _running.Count + _wanted.Count + _reshaping.Count + _reshapeQueued;
+    /// <summary>
+    /// <see cref="Pending"/> as a loading screen waits for it: the remakes that coarsen a mesh (memory housekeeping, nothing to see) are left out; a
+    /// camera at rest kept two of them running for tens of seconds.
+    /// </summary>
+    public int LoadingPending => _running.Count + _wanted.Count + _reshaping.Count(m => m.Upgrade) + _upgradesQueued;
 
     /// <summary>
     /// Nothing decodes, waits for a decode or waits for its reshaped upload.
@@ -462,6 +467,10 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// </summary>
     int _reshapeQueued;
 
+    /// <summary>
+    /// How many of <see cref="_reshapeQueued"/> make a mesh finer (the others coarsen one).
+    /// </summary>
+    int _upgradesQueued;
     /// <summary>
     /// Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.
     /// </summary>
@@ -1163,9 +1172,12 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
                 QueuePart(innerGpu, inner.Prepared[i], $"mesh {mesh.Key} manual {level} part {i} (reshaped)");
         }
         _reshapeQueued++;
+        bool upgrade = mesh.Upgrade;
+        if (upgrade) _upgradesQueued++;
         uploads.Add(() =>
         {
             _reshapeQueued--;
+            if (upgrade) _upgradesQueued--;
             if (mesh.Gpu is not { } old || mesh.Status != ObjectMesh.State.Resident || old.Manual.Length != fresh.Manual.Length)
             {
                 DeleteBuffers(fresh);
@@ -1207,6 +1219,15 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     /// The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.
     /// </summary>
     public bool Dust { get; init; }
+    /// <summary>
+    /// The game's metalness map, where the material names one.
+    /// </summary>
+    public WorldTexture? MetalMap { get; init; }
+
+    /// <summary>
+    /// The metalness map's key (0: none, or not resident yet).
+    /// </summary>
+    public uint Metal => MetalMap?.Key ?? 0;
 
     /// <summary>
     /// The diffuse map's key (0: none, or not resident yet).

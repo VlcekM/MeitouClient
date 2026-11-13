@@ -149,6 +149,55 @@ using reduced targets plus depth-aware reconstruction/mask fallback. A texel tha
 must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
 `post-merge` fuses velocity/exposure compute groups while preserving ordering and dependencies.
 
+## Contact shadows
+
+The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: what the screen does not show casts nothing; never with the sun shadows Off or
+traced, whose rays hold them): short sun shadows from the scene depth at the render size, for what the cascades' texels are too coarse for (armour plates,
+straps, a boot on the ground, the ground's own relief). One full-screen pass (`PostProcessShaders.Contact`):
+
+- The march (`contactHit`): the ray to the sun is walked on the screen a pixel at a time, at most 48 steps (two pixels a step past 48 pixels; cut short past
+  96), over at most 8 units, its depth exact at each pixel (1 / depth is linear on the screen). No noise: the same picture every frame. What hides the ray
+  stands above the point's own plane by two pixels' size (the normal rebuilt from the depth), so a surface never shadows itself at any view angle, and has the
+  ray within 0.6 units (+1 % of the view depth) behind it, so a near object does not shadow all that lies far behind it on the screen. The shadow fades over
+  the last 40 % of the reach, and from 1500 to 2500 units from the eye. Only where the rebuilt normal faces the sun.
+- With the GI resolve (`PostProcess.ContactSun`): the lit fragments write their sun term, cascades included, apart (location 2, the traced sun's circuit;
+  `uGiParams.z` bit 8, `GiProbes.SunApart`), and the pass, run over the opaque scene before the water (`RunContactSun`), adds it back times what the march
+  leaves, through the haze. The contact shadows then take the sun alone: nothing of the ambient, the lamps or the bounced light, and nothing in cascade shadow.
+- Without it: the pass multiplies the scene colour (`ApplyContactShadows`, after the occlusion) by `1 - hit x the sun's share of the surface's light`
+  (`sun / (sun + ambient)`, with the cascades and cloud shadow in the sun term), with the occlusion's air and water visibility.
+
+**Observed** (a character on dunes at noon and a Shek town at 15:10, off and on): armour plates and the boot gain their shadows, the dunes' ridges theirs; no
+halo round the character against the far ground; the rest of the picture is the same to the eye. **Unknown**: cost.
+
+## HDR output
+
+The Display page's `HDR output` row (the launcher and the in-game menu), `--hdr` or `hdr` in `meitou.user.json` (read at start-up, off by default; Vulkan only, frame generation stays off with it). `HDR white brightness` and `HDR peak brightness` (`hdrPaperNits` 80 to 500, below 80 automatic and the default: the white Windows shows SDR content at on its first display with HDR on, `WindowsHdr.SdrWhiteNits`, asked once a second, 200 where it cannot say; `hdrPeakNits` 200 to 4000) are read every frame. The swapchain takes HDR10
+(10-bit PQ) when the display lists it, else stays SDR. The backbuffer and LDR targets are then RGBA16F, the composite keeps the look's tone curve and lifts its highlights: the shoulder (and the game's clip) become `hdrShoulder` (the SDR picture below 0.8, then a roll-off to `PostOptions.HdrPeak`), ACES and the hybrid are multiplied by `hdrGain`, the HDR shoulder over the SDR one (1 below 0.8), and `UiLayer.CompositeHdr` decodes gamma 2.2, places white at
+`hdrPaperNits`, converts to BT.2020 and encodes PQ; `hdrPeakNits` (1000) sets the ceiling. Saved pictures use the SDR composite.
+Limits: no HDR metadata; pictures presented without the interface layer (the first loading screen) show gamma values as PQ. **Observed** (2026-11-12, AOC CQ27G2S over DisplayPort, Windows HDR on, RTX 4090): the swapchain takes `A2B10G10R10` HDR10 and the picture shows. The look is **Unknown**: that display's HDR mode shifts the colours of the Windows desktop too.
+### GTAO
+
+The `gtao` switch (`PostOptions.Gtao`, off by default, off in every preset) replaces the SSAO gather while `ao` is on; with it off `Ssao` runs unchanged.
+Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward scene. Own programs (`GtaoShaders`, `PostProcess.Gtao.cs`); Vulkan only, the Metal chain ignores the switch.
+
+- **Gather** (`Gather`): per pixel, slices through the view ray, each searching both ways along the screen for the horizon, with the closed-form integral.
+  The result is divided by what the same slices see with nothing on the surface, so open ground stays near 1 at any slice count (**Observed**, a numeric run of the gather on an authored wall and floor: 0.98 to 1 before the blur; the taps snap to texels, so they leave the slice a little). Radius 20 units, 96 to 12 pixels at 1440 rows.
+  Horizons start at the surface's own (a faded tap cannot fall below it) and decay after an occluder is passed (`GtaoThickness`).
+- **Normals**: the lit fragment's shading normal from the surface target when the GI resolve is on, for the fragments that wrote it (terrain, objects, buildings);
+  else from depth (foliage, grass, characters, impostors, or no GI resolve).
+- **Traced occlusion on characters** (`PostOptions.CharacterOcclusion`, **off**, no setting; `Gi.CharacterOcclusionPass`, `PostProcess.RunCharacterOcclusion`; needs GTAO, the GI resolve and the characters in the traced scene). The screen's occlusion sees no surface the picture does not show and no probe ray sees a character, so the inside of a hood keeps the open skin's ambient light. On each pixel a character drew as a receiver (the surface target's bit 19, hair excluded) 8 cosine-weighted rays go over the hemisphere of its normal against the characters and what moves, up to 8 units; between the body and what it wears (bit 20, the record's tint 204) every hit counts, the body's own parts on the body only from 0.4 units (in full from 1.5). Each pixel of a 4 x 4 block turns the set and the apply takes the block's mean on the pixel's own surface. The apply takes back the ambient light alone (albedo x the probes' or the sky's irradiance, as `kenshiLight`'s in-shader branch) times 1 - the visibility after Jimenez's multi-bounce fit: each light is cut by its own shadow. **Observed** (a hooded character outdoors at 10:00 and in the editor's bar, 2560 x 1440): the luminance of the face against the pass off is 0.5-0.6 on the forehead, cheek and chin outdoors, 0.1 on a temple, 0.2 on a cheek in the bar, with dark patches round the eyes: too dark to ship. Multiplying the whole pixel instead (through GTAO's apply) looked painted. **Unknown**: the right amount; a path-traced reference of the same head and hood is the way to set it.
+- **Same rules as SSAO**: character occluder share and mask, `SsaoBlur`, distance fade, air and water visibility, 1 on the sky.
+- **Depth** (`Pack`): a pass at the render size writes each pixel's view depth, 0 on the sky, negative on a character's pixel (the scene's alpha), and the gather's taps read that alone: the character mask was a second, filtered lookup of the half-size mask at every tap (36 a pixel at 3 x 6). The occluder share is now by the tap's own pixel, not the mask's blur. **Observed** (desert close-up, 2560x1440, quality 2): the occlusion 0.945 -> 0.840 ms of GPU; the ground of a paused view unchanged.
+- **Depth levels** (`DepthLevel`, XeGTAO's depth filter): four coarser levels of that depth, each texel the average of the four below weighted by how near they are to the farthest (none a radius nearer: a level holds the surface behind), the sky when one is the sky. A tap whose reach is r pixels reads level log2(r) - 3.3, rounded, so the far taps' texels lie together. **Observed** (2560x1440, quality 2, one session, paused, alternated): the occlusion 0.87 -> 0.70 ms on the desert close-up, 0.88 -> 0.80 in the town; the pictures differ as two frames of the same setting do (mean 0.25 to 0.67 / 255 against 0.36 to 0.47). `MEITOU_GTAO_LEVELS=0`: every tap reads the pixels.
+- **Apply** (`Apply`): full size, after the merged layers: the merged pass's factor is grey, so `layer-merge` runs with its occlusion off and this pass multiplies over it,
+  which is the old order (shafts, fog, occlusion). Four nearest occlusion texels by depth, none near: open. Then KenshiNative's curve (power 1.6, strength 0.55) and the multi-bounce fit
+  per channel of the surface target's albedo (`GtaoAlbedo` where none was written). A caller without `ApplySsao` gets the grey blurred occlusion in the composite.
+- **Quality** (`--gtao-quality`, Tab slider): 0 half size, 2 x 4; 1 half size, 3 x 6 (default); 2 render size, 3 x 6. Full size remakes the occlusion's targets at that size.
+  With a temporal upscaler the noise moves per frame.
+
+Look, cost, the thickness and the albedo constant are **Unknown** (not run on a GPU; the curve and radius were tuned on KenshiNative's frame). Shading normals may darken normal-mapped ground
+at half size, where one texel stands for four (KenshiNative moved to smooth mesh normals for this; this target has none).
+
 ## Fog
 
 The `fog` switch (`PostOptions.MeitouFog`) changes the particle sprites only; the haze and weather fog are [sky](formats/sky.md)'s,
@@ -210,8 +259,12 @@ Where a block's two depths lie within 4 % (or it is all sky) its farthest is wri
 shades only along depth edges; likewise the filtered composite evaluates the four render pixels' surfaces only where they differ by
 more than 4 %. **Observed** (mec-tou-nu, 2560 x 1440, DLSS, 4090): the particle draws 0.05 → 0.04 ms (master 0.02, the rest the
 lighting below), the picture within 1/255 (99th percentile); the particle passes together within the run-to-run noise of master's.
-A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80) and a size is only used from 6 screens of
-overdraw: each is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
+A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80), capped by its texture's detail
+(`ParticleTextureDetail`, measured at decode: the fewest pixels across, halving from the texture's size, whose box-reduced copy brought back
+up bilinearly stays within 0.04 mean premultiplied difference; a size is allowed from 2 or 4 times that), and a size is only used from 6 screens of
+overdraw. **Observed** (the game's particle textures): soft ones need 4-64 px (dust mites 32, mist 32-64, smoke 8-32, sand wisps 4-32), sharp
+ones 256-2048 (blood splats `Splatt0x` 256-1024, `BloodSplash` 2048, drifting leaves 256); the decapitation spurt (`HackBlood-system`, splats
+scaled up to 54x) was drawn at quarter size, a blurred dark blotch, and stays full size now. Each size is left 15 % past its threshold and a size below half its overdraw, so dust near one does not flip between looks as the
 view moves; with a vendor upscaler the overdraw rule is off (full-size dust would be in what DLSS upscales, and trail). With a vendor upscaler (DLSS, FSR) the low-resolution particles are
 blended over its output instead of the scene it upscales (`PostProcess.ParticlesAfterUpscale`, half then quarter size, the composite reading
 the render-size depth at `uScale` render pixels per output pixel), drawn with the unjittered projection, and left out of the reactive mask:
@@ -265,6 +318,41 @@ fovY. The composite reads the 1/4 level through a 4-tap cubic B-spline (no squar
 R11G11B10 targets. **Observed** (Hub, 02:00, 1600x900, DLSS): a round halo centred on the lamp
 at 0.25, frame mean linear luminance within 2.5% of off; GPU 0.07 ms on the run's average.
 
+## Camera effects order
+
+Upscaler, depth of field, exposure, bloom, composite. A lens acts on the light before the sensor responds, so the depth of field runs on the
+HDR picture and comes before the exposure's measure, which then reads the frame the player sees. Bloom is the glare of what reached the sensor, so
+it comes after, and a defocused light keeps its glow.
+Each writes its own target: the upscaler's output is the next frame's history. The world's overlays (UI, panels) draw later in their own layer.
+
+It runs only in a whole view of a scene (`PostOptions.CameraEffectsHeld`, `ViewWindow`), in the free camera, on a camera the cinema holds, with its editor (F6) open
+or recording (`PostOptions.CinematicView`, set per frame by the game), never over the title. "Camera effects in the strategy camera" (`CameraEffectsEverywhere`, off)
+adds that camera. Vulkan only; Metal ignores the options.
+
+## Depth of field
+
+Optional (`dof`, `PostOptions.DepthOfField`, off in every look). Port of KenshiNative's `docs/features/dof-rewrite.md`, without its sparkle, `PostProcess.DepthOfField.cs`:
+at the picture's size after the upscaler, in linear light, no history. Half-size prepare (RGBA16F, CoC in alpha, the nearest depth of four), near CoC tiles and dilation, far
+gather, near gather (premultiplied), full-size composite: far field by the full-size CoC with a CoC-weighted upsample, near field over it. Four rings at most.
+
+The CoC is a thin lens's, not a slider's radius (KenshiNative's). A full-frame sensor, 24 mm high (`ThinLens`), and the camera's vertical field of view give the focal length f;
+with f-number N and focus s, the disc's diameter on the sensor at depth z is `f^2 / (N (s - f)) * |z - s| / z`, the sky at infinity, in half-size pixels at most 1.5 % of the
+height and 24. 10 world units are a metre (see "Fog" above). Radius at infinity at 1080p and f/1, half-size pixels:
+
+| lens | focus 5 m | focus 20 m |
+|---|---|---|
+| 50° (25.7 mm, the default lens) | 1.5 | 0.4 |
+| 20° (68 mm) | 10.5 | 2.6 |
+
+So at the default lens a far focus is nearly sharp, as a real lens would be: the blur asks for a long lens, a near focus or a wide aperture (`Depth of field aperture`, f/0.25 to
+f/22, 1 by default; below about f/1 no real lens goes).
+
+Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [viewer](viewer.md#cinematic-camera)), else the autofocus and the slider. Autofocus
+(`CameraEffectShaders.DofFocus`, `PostOptions.LensAutoFocus`): a one-texel target holds the focus distance, the nearest surface among 25 taps in a spot at the picture's centre
+(3 % of its height each way), eased from the last frame's in log distance over 0.15 s (snapped after half a second without a frame); the prepare and composite passes
+compute the lens from it. On sky alone it falls back to the camera target's distance. The target's distance alone focused behind a close face (the head's bone), **Observed**. A sharp zone (`PostOptions.LensSharpZone`, photo mode's Sharp zone, world units each side of the focus) is taken out of the distance from the focus before the CoC: what lies in it is wholly sharp. The far gather weighs each sample by one over its own disc's area (its light is spread over that disc); weighed alike, a blurred figure before a more blurred background kept a sharp outline (**Observed** in play). A 5 x 5 binomial (`DofFarFilter`, step a quarter texel in focus to one texel from a CoC of 4, taps weighed by their blur) then removes the grain the gather's few taps leave. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
+The depth is jittered: the composite shifts its tap by the jitter, and an edge may still shimmer a render pixel. Look and cost **Unknown** (not run on a GPU).
+
 ## SMAA
 
 Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the
@@ -292,4 +380,4 @@ named swamp screenshot test; DLSS/FSR outputs require baseline-noise comparison.
 mask, half-resolution and fog-rate changes are not blanket pixel-parity claims. Compare still
 and moving views at matched time/weather/upscaler. [bench.md](bench.md).
 **Limits:** screen-space information, temporal disocclusion, coarse fog shading,
-and lost GI specular occlusion on resolved surfaces; see feature docs for uncertainty.
+and lost GI specular occlusion on resolved surfaces without `ssr`; see feature docs for uncertainty.

@@ -469,6 +469,11 @@ public sealed record BuildingPlacement(
         (exterior ? ExteriorLayout : InteriorLayout) ?? state?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
 
     /// <summary>
+    /// A loose weapon's model (its instance's <c>material sid</c>, a MATERIAL_SPECS_WEAPON): its look instead of the resolver's pick; null or empty for none.
+    /// </summary>
+    public string? ItemMaterial { get; init; }
+
+    /// <summary>
     /// A loose item's mesh and scale when not its record's own (a nest's numbered debris piece, docs/game/factions-squads-towns.md "Nest furniture").
     /// </summary>
     public string? ItemMesh { get; init; }
@@ -497,6 +502,11 @@ public sealed record BuildingPlacement(
     /// The building it was placed in (<see cref="PlacedMesh.ContainerId"/>), when known.
     /// </summary>
     public string? ContainerId { get; init; }
+
+    /// <summary>
+    /// Laid out the same wherever it stands: no town's material, its parts' variants chosen as at a fixed place (the character editor's bar).
+    /// </summary>
+    public bool Standalone { get; init; }
 
     /// <summary>
     /// The zone file holding <see cref="StateId"/> when it is not <see cref="Zone"/>: a copy of a level building placed elsewhere (the Meitou
