@@ -480,7 +480,7 @@ sealed class GameLoop(GameHost host)
                         _ => throw new ArgumentOutOfRangeException(nameof(index)) });
                     return $"UI mode: {host.Player.UiMode}";
                 })]);
-        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",
             Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
         _panel = new SettingsMenu(host.Player, values, host.Session.Bindings, SaveSettings, frameLimit, host.Config)
         {

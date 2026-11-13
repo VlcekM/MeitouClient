@@ -1218,7 +1218,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         _settingsValues = CreateMetalSettings();
         _settings = new SettingsMenu(hud, _settingsValues, host.Session.Bindings, SaveSettings,
-            new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+            new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",
                 Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps"), host.Config)
         {
             UpscalerStatus = _upscaling.UpscalerStatusText,

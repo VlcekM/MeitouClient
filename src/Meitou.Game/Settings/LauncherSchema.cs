@@ -380,7 +380,7 @@ static class LauncherSchema
             {
                 Key = Key(nameof(UserConfig.FpsLimit)), Kind = SettingKind.Slider, Name = "Frame limit",
                 Description = SettingHints.SliderHint("Frame limit"), Default = defaults.FpsLimit, Shown = defaults.FpsLimit, Min = 0, Max = 360,
-                Step = 5, Suffix = " fps", OffBelow = 1, OffText = "Unlimited",
+                Step = 1, Suffix = " fps", OffBelow = 1, OffText = "Unlimited",
             },
             .. (!OperatingSystem.IsMacOS() ? FrameGenerationSettings(defaults) : []),
             .. (!OperatingSystem.IsMacOS() ? HdrSettings(defaults) : []),
