@@ -40,7 +40,8 @@ A lot of navmesh issues remain to be resolved though, so please bear with us for
 - Trading with your own squad member no longer closes the window
 - Fitted prosthetic limbs can be taken from loot windows
 - The sand at the Watchtower's foot no longer counts as indoors, and windmills no longer sink when placed
-- macOS: loading and blood decals fixed, with separate packages for older Macs (Ventura)
+- macOS: loading fixed, blood lands where the fight is (outdoors too), and there are separate packages for older Macs (Ventura)
+- Metal runs smoother: shaders compile in the background, and the memory budget can size itself to your Mac
 
 Code mods can now add equipment slots too.
 

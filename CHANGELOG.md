@@ -29,7 +29,8 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - The Settings window scales up to fill high-DPI screens (#573); the empty general storage heading is hidden (#561)
 - Code mods can add equipment slots (#570)
 - --headless plays no sound
-- macOS: loading and blood decals fixed; separate .NET 10 packages for older Macs (Ventura) (#555)
+- macOS: loading fixed, and blood decals land where the fight is, outdoors too (#586); separate .NET 10 packages for older Macs (Ventura) (#555)
+- Metal: smoother frames (shaders compile in the background, the GPU starts before the display is free), and an Auto memory budget sized to the Mac (#584)
 - Contributors panel redrawn
 
 ## v0.17.4
