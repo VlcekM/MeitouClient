@@ -516,7 +516,7 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one) and the
+    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one or house) and the
     /// For sale button.
     /// </summary>
     void AddPublicLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail, bool mine,
@@ -533,9 +533,11 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour, Action: "meitou:building-public", ButtonWidth: 0.3f));
         }
-        else if (!mine && (PublicDayOf(focus, detail) || focus.PublicNight))
+        else if (!mine && (PublicDayOf(focus, detail) || HasInterior(focus)))
         {
-            bool open = player.Session.Clock.IsDaytime ? PublicDayOf(focus, detail) : focus.PublicNight;
+            // Another faction's building reads slot 82 at any hour (FUN_140301840; `public night` is never read): a private home says Private.
+            // Meitou keeps the line off a private building without an interior (a bed, a rock, a wall).
+            bool open = PublicDayOf(focus, detail);
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
         }
@@ -806,6 +808,11 @@ sealed class BuildingSelection(PlayerInterface player)
     /// <c>public day</c> over the building's flag when the squad is housed, which is what the residents' AI reads), else as its level state reads.
     /// </summary>
     static bool PublicDayOf(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail) => detail?.ResidentsPublic ?? focus.PublicDay;
+
+    /// <summary>
+    /// Whether the selected building's record has an interior (a house, not a piece of furniture, a rock or a wall).
+    /// </summary>
+    bool HasInterior(SelectedBuilding focus) => focus.Record is { } record && DataOf(record) is { HasInterior: true };
 
     /// <summary>
     /// The panel's own buttons on a selected building of the player's: Dismantle (after the original's "Are you sure?"), pause, upgrade, downgrade,
