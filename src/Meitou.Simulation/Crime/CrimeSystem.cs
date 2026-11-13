@@ -312,7 +312,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 if (c.Pending is not null) Witnesses(world, s, c, false, null, seconds);
                 continue;
             }
-            bool kidnapping = !c.Carrying.IsNone && table.TryResolveNext(c.Carrying, out int body) && Innocent(c, table.Cold(body)!);
+            bool kidnapping = !c.Carrying.IsNone && table.TryResolveNext(c.Carrying, out int body) && Bodies.CharacterFacts.Kidnapped(table.Cold(body)!);
             var premises = PremisesOf(world, s);
             if (c.Pending is null && !kidnapping && premises is null) continue;
             Witnesses(world, s, c, kidnapping, premises, seconds);
@@ -343,12 +343,17 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// A carried body whose carrying is a kidnapping when seen (carry-loot.md 4.6, the game's "innocent victim", <b>Observed</b>; its status flag
-    /// <c>+0xe9</c> is <b>Unknown</b> and read here as: an NPC of another, real, non-bandit faction, not a bandit and with no bounty).
+    /// Whether a witness of faction <paramref name="wf"/> takes the carrying of a kidnapped <paramref name="body"/> for a kidnapping
+    /// (<c>FUN_1408549f0</c>, <b>Verified</b>; carry-loot.md 4.6): never an enemy of the body's faction; one that is friendly to it always; any
+    /// other only while the carrier stands in a town, the body's faction is real and the body has no bounty with the witness's faction.
     /// </summary>
-    bool Innocent(CharacterCold carrier, CharacterCold body) =>
-        !body.IsPlayer && body.Faction != carrier.Faction && !Factions.Lawless(body.Faction) && body.NpcClass != FundamentalType.Bandit
-            && body.Bounties is not { Any: true };
+    bool MindsKidnapping(int wf, CharacterCold carrier, CharacterCold body)
+    {
+        if (AggroSystem.IsEnemy(Relations, wf, body.Faction)) return false;
+        if (Friendly(wf, body.Faction)) return true;
+
+        return !carrier.StatusTown.IsNone && !Factions.NotReal(body.Faction) && !(body.Bounties?.AmountFor(wf) > 0);
+    }
 
     /// <summary>
     /// Every awake NPC that sees the culprit, in slot order, reacts as the game's witness function does (<c>FUN_140854d10</c>, <b>Observed</b>): not
@@ -385,7 +390,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 if (v <= 0 || !Spotted(world, w, culpritId)) continue;
             }
             else if (world.Sight.Sees(w, culprit, next[w].Position, at, range) <= 0) continue;
-            if (body is not null && !Friendly(wf, c.Faction) && Friendly(wf, body.Faction))
+            if (body is not null && !Friendly(wf, c.Faction) && MindsKidnapping(wf, c, body))
                 SetPending(world, culprit, CrimeCode.Kidnapping, body.Faction, c.Carrying, KidnapTimer, viaWrapper: true);
             if (premises is { } house && Trespasses(world, wc, c, house))
                 SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);

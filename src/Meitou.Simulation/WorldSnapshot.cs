@@ -505,6 +505,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public StatusView? Status { get; internal set; }
     /// <summary>
+    /// The kidnap victim flag (<see cref="CharacterCold.KidnapVictim"/>), which shows the bounty panel by itself (<c>MainBarGUI</c>
+    /// <c>FUN_1407211b0</c>); false for a character published without detail.
+    /// </summary>
+    public bool KidnapVictim { get; internal set; }
+    /// <summary>
     /// A selected character's trained stats (the host formats them); null for the others and for a character without stats.
     /// </summary>
     public SkillSummary? Skills { get; internal set; }

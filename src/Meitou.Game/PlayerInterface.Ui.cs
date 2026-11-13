@@ -345,8 +345,8 @@ sealed partial class PlayerInterface
         b.Actions["BuildButton"] = "meitou:build";
         if (Build.Active) foreach (string name in BuildMode.BuildHiddenHud) b.Hidden.Add(name);
 
-        // A bounty or a status line (Slave, Leader, Committing Crime!...) shows the bounty panel.
-        if (lead is null || lead.Bounties.Count == 0 && lead.Slave is null && lead.Status is null) b.Hidden.Add("BountyPanel");
+        // A bounty, a status line (Slave, Leader, Committing Crime!...) or the kidnap victim flag shows the bounty panel.
+        if (lead is null || !TooltipRuntime.ShowsBountyPanel(lead)) b.Hidden.Add("BountyPanel");
 
         // The information panel starts collapsed (as the original's, docs/game/ui-screens.md section 4): the extending part (name, state lines,
         // extended stats) slid down

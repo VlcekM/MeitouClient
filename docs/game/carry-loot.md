@@ -303,15 +303,20 @@ Status `+0xe9`, saved as `kidn` ([save](../formats/save.md)). **Verified** by de
 - **Cleared** by the per-update `FUN_140852a30`: not carried (`+0x3d4` clear) and in a bed (`+0x2f8` = 1) while its status town (`+0x88`) is its
   home town (`FUN_1407956a0` `+0x30`); or carried by someone it regards as friendly (vfunc `0x3f0`) or loves (`FUN_140599590`), else it tags its
   carrier TEMP ENEMY (4) each update. Also by the separated-squad merge ([locks](locks.md#cages-and-beds)). Caging, release and escape do not touch it.
-- **Read**: `Character` slot `0x350` (`FUN_140791d50`, the "Kidnapped" status line and the character finder): the flag only while carried, slave
-  state 0, no bounty (`FUN_140854080` below 1) and status `+0xdc` not 8. The put-down (`FUN_1405ce1e0`): a flagged victim that does not regard
+- **Read**: `Character` slot `0x350` (`FUN_140791d50`, the "Kidnapped" status line and the witnesses' test below): the flag only while carried, slave
+  state 0, no bounty (`FUN_140854080` below 1) and NPC type (status `+0xdc`) not 8 (Bandit). The put-down (`FUN_1405ce1e0`): a flagged victim that does not regard
   its carrier as friendly tags it TEMP ENEMY, and when not unconscious (`+0x5b9`, `+0x5bc`) gives it a new pending Kidnapping (**Observed**:
-  timer argument 10) and the forced sense. `MainBarGUI` `FUN_1407211b0` with the escaped flag (which control it toggles is **Unknown**).
+  timer argument 10) and the forced sense. `MainBarGUI` `FUN_1407211b0` (the bounty panel's visibility, [ui-screens](ui-screens.md)) reads the bare flag.
+- **Witnesses** (`FUN_1408549f0`, a looker seeing a carrier whose load passes slot `0x350`): nothing when the looker is the victim's enemy
+  (vfunc `0x3e8`); a looker that does not regard the victim as friendly (`0x3f0`) acts only while the carrier's status town is set, the
+  victim's faction is real and the victim has no bounty with the looker's faction. Then, for a carrier that is not down, no animal, and a real
+  victim faction: the carrier's `+0x110` = 250 and a wrapper-set pending Kidnapping (timer 20, freed flag cleared).
 - No sentence, bail or escape rule reads it.
 
 Meitou: `CharacterCold.KidnapVictim`, set by `CarrySystem.Kidnap` on a roll that took, kept up by `ArrestSystem.UpdateKidnapVictims` (the bed
-test reads "its home town" as `InOwnTown`), read by `CarrySystem.LetKidnapVictimGo` and the status line (`World.KidnapShows`; `+0xdc` read as
-the Bandit class, **engine reading**). Not modelled: the squad-merge clear, the character finder's and `MainBarGUI`'s reads. Meitou's own
+test reads "its home town" as `InOwnTown`) and `PopulationSystem.RejoinSeparated`, read by `CarrySystem.LetKidnapVictimGo`, the status line and
+the witnesses (`CharacterFacts.Kidnapped`, `CrimeSystem.MindsKidnapping`; a witness friendly to the carrier's faction is still skipped, engine
+choice) and the bounty panel (`TooltipRuntime.ShowsBountyPanel`). Meitou's own
 `CharacterCold.Kidnapped` ("held by a kidnapper: no sentence, no bail, leaving is no escape"; set when `KidnapSystem` cages a victim and on
 spawned cage prisoners, cleared with the hold) is a separate flag, saved as `meitou kidnapped`.
 

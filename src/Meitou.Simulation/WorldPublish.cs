@@ -477,6 +477,7 @@ public sealed partial class World
             ? DisguiseOf(cold, state[i].Position, population)
             : null;
         s.Status = detailed ? StatusOf(id, cold!, state[i].Position, population) : null;
+        s.KidnapVictim = detailed && cold!.KidnapVictim;
         s.NoLootGuilt = cold is { } guilt
             && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl }
                 && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
@@ -704,14 +705,6 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// <summary>
-    /// The "Kidnapped" status (Character slot <c>0x350</c>, <c>FUN_140791d50</c>, <b>Verified</b>): the kidnap victim flag only while the
-    /// character is carried, is no slave and has no bounty. The original also wants status <c>+0xdc</c> not 8, read here as "not of the Bandit
-    /// class" (<b>engine reading</b>).
-    /// </summary>
-    static bool KidnapShows(CharacterCold c) =>
-        c.KidnapVictim && !c.CarriedBy.IsNone && c.SlaveState == 0 && c.Bounties is not { Any: true } && c.NpcClass != FundamentalType.Bandit;
-
     /// The status line of the bounty panel (<c>FUN_1405d4260</c>, <b>Observed</b>, docs/game/ui-screens.md section 4), first match: the leader of a
     /// campaign's leader platoon (<c>Character::isLeadingAWarCampaign</c>): War Leader for a hostile campaign (<c>CampaignData::_isHostile</c>), else
     /// Leader; kidnapped; Diplomatic Status for an NPC class Diplomat (<c>Character::isDiplomaticStatus</c> without its biome test, <b>Verified</b>
@@ -727,7 +720,7 @@ public sealed partial class World
                 : StatusKind.Leader);
         }
 
-        if (KidnapShows(c)) return new(StatusKind.Kidnapped);
+        if (CharacterFacts.Kidnapped(c)) return new(StatusKind.Kidnapped);
         if (c.NpcClass == FundamentalType.Diplomat) return new(StatusKind.Diplomatic);
         if (c.SlaveState != 0) return null;
 

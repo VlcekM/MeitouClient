@@ -601,6 +601,13 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
+    /// Whether the bounty panel shows for the one selected character (<c>MainBarGUI</c> <c>FUN_1407211b0</c>, <b>Verified</b>): a bounty, a slave
+    /// state, a status line (campaign leader, Diplomatic Status, a pending crime, the escaped flag) or the kidnap victim flag, carried or not.
+    /// </summary>
+    internal static bool ShowsBountyPanel(CharacterSnapshot lead) =>
+        lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null || lead.KidnapVictim;
+
+    /// <summary>
     /// The bounty panel's own text (the other output of <c>FUN_1405d2da0</c>): wanted by the local faction, Title <c>Bounty:</c> and its amount in
     /// Main; else both Greyed with the largest bounty (<c>FUN_140853740</c>).
     /// </summary>
@@ -719,7 +726,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
         foreach (var (widget, text) in HudTips) Add(widget, text);
 
-        if (player.Lead() is { } wanted && (wanted.Bounties.Count > 0 || wanted.Slave is not null || wanted.Status is not null))
+        if (player.Lead() is { } wanted && ShowsBountyPanel(wanted))
         {
             var rows = wanted.Status is { } status ? StatusRows(status) : wanted.Slave is { } slave ? SlaveRows(slave, wanted.IsPlayer) : [];
             if (wanted.Bounties.Count > 0 && wanted.Status is not { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped })
