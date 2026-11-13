@@ -985,15 +985,24 @@ the ordinary production path can consume stocked inputs, scaled by generator loa
 This does not make fuel a prerequisite for NPC grid output: exhausting that stock still leaves the NPC-output exemption.
 Meitou's NPC grid does not simulate those generators' inventory production or drain; its output needs no fuel state.
 
-**Verified** (private decompile `FUN_1402a1750`, `FUN_140555650`, `FUN_140559ad0`; fraction getter `FUN_140547200`,
-GOG `0x140546ba0`): level and saved GAMESTATE_BUILDING records load `power on`, `broken`, `construction progress`
-and `is complete`. A loaded state's missing `power on` is false. Progress divided by the building's material target,
-capped at 1, supplies construction health; positive infinity means the full target. With no construction cost the
-building completes at once. The complete flag alone does not replace a partial progress value. With no state a completed
-building starts switched on (`FUN_140562340`). Meitou reads the zone-qualified state in `FixtureRegistry.Saved` first,
-else `TownBuilding.LevelState`; a present save state replaces the whole level state rather than inheriting missing keys.
-`ProductionSystem.NpcGeneratorHealth` applies the switch and fraction, without treating `broken` as another cutoff.
-The existing exclusion of ruined level placements remains.
+**Verified** (private decompile `FUN_1409ffad0`, `FUN_14036d7e0`, `FUN_14036b140`, `FUN_140552b70`,
+`FUN_1402a1750`): the loader context byte at `+0x10` is the zone's `newGameFirstTimeLoaded` flag. It is set
+when no saved zone loads, when a town reset discards its old building list, or when `0-buildinglist` contains the
+bool key `imported` (presence, regardless of value). Zone loading passes it through the container to building creation.
+Only a non-fresh zone or a player-faction owner loads `batterycharge`, `gets battery`, `power on`, `broken` and
+production/fuel state. A fresh NPC building instead completes construction and switches on. Thus a sparse NPC level
+state without `construction progress` still has full health in a fresh zone; its level switch and partial progress are
+ignored too. Meitou uses `World.SavedZones` for this guard, excluding imported zones; the saved owner takes precedence,
+else the level player override or the town's faction applies. Town-override zone resets beyond this set are **Unknown**.
+
+**Verified** (`FUN_140555650`, `FUN_1400b0ab0`, `FUN_140559ad0`, fraction getter `FUN_140547200`): when the guard
+allows loading, a present state's missing `power on` is false and missing progress is zero. Progress divided by the
+material target, capped at 1, supplies health; positive infinity means the full target, and a zero target completes
+immediately. The original's complete flag does not replace a partial progress value. Meitou's player-site import
+currently differs: `BuildingSave.Read` substitutes the target when `is complete` is true. NPC generation follows the
+original fraction. `FixtureRegistry.Saved` replaces the whole `TownBuilding.LevelState` when present, without inheriting
+missing keys. No state gives a complete, switched-on building (`FUN_140562340`). `broken` is not a separate output cutoff;
+the existing ruined-placement exclusion remains. Construction targets are cached with the database version.
 
 **Verified** (`FUN_140297810`, GOG `0x1402971b0`, and [rotating parts](#rotating-parts)): wind multiplies that switched,
 health-scaled output by the first spawned wind-speed rotor's share; a result below 1 gives zero. No rotor or no loaded
@@ -1005,10 +1014,11 @@ sunlight/daylight branch. Function 5 without `consumes` creates a wind generator
 with `consumes` it creates a fuel generator. Naming a mod building "Solar" does not add a sunlight rule. Behaviour of
 code-injected solar generators is **Unknown** and is not inferred from their name.
 
-Coverage: synthetic quick tests in `ProductionTests` exercise empty fuel, day/night independence, absent state defaults,
-level/save switches, whole-state precedence, partial/zero/full construction health, independent broken flags, rotor
-absence, wind limits and the one-unit cutoff. Existing player-fuel/battery tests retain the player's fuel requirement.
-No original-game runtime measurement is claimed here.
+**Verified** (clean GOG base load order, installed-level check): all 170 placed generators have a level state and
+`construction progress`; missing progress count is 0. The 47 fuel placements provide 3560 rated power in a fresh-zone
+simulation using their real building records and level states, with fuel unused. This is an aggregate harness check,
+not a runtime measurement or a per-town distribution; wind output still depends on local weather. Sparse mod states
+are covered synthetically. No original-game runtime measurement is claimed.
 
 ### Rotating parts
 

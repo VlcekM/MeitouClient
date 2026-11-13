@@ -45,9 +45,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
     /// <summary>
-    /// The construction targets of the level generators, by building record; derived from the data.
+    /// The construction targets of the level generators, by building record and database version.
     /// </summary>
-    readonly Dictionary<string, float> _npcTargets = new(StringComparer.Ordinal);
+    readonly Dictionary<string, (int Version, float Target)> _npcTargets = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -259,7 +259,7 @@ public sealed partial class ProductionSystem
         {
             if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true } data) continue;
 
-            float output = NpcGeneratorHealth(world, b) * data.PowerOutput;
+            float output = NpcGeneratorHealth(world, site, b) * data.PowerOutput;
             if (data.IsWind) output *= NpcWind(world, b);
             if (!data.IsWind || output >= 1) total += output;
         }
@@ -268,23 +268,45 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A level generator's switched construction fraction: the save's whole state replaces the level state. Empty fuel inputs and the separate
-    /// broken flag do not cut NPC output (GOG generator output 0x140297100; docs/game/buildings-production.md "NPC generator state").
+    /// A level generator's switched construction fraction. Fresh/reset zones complete and switch on NPC buildings; player ownership bypasses
+    /// that reset guard. Otherwise the save's whole state replaces the level state (FUN_1402a1750, FUN_140552b70; "NPC generator state").
     /// </summary>
-    float NpcGeneratorHealth(World world, TownBuilding b)
+    float NpcGeneratorHealth(World world, TownSite town, TownBuilding b)
     {
         var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        if (!world.SavedZones.Contains(b.Zone) && !PlayerGeneratorOwner(world, town, b, saved)) return 1;
+
         bool on = saved is not null ? saved.Bools.GetValueOrDefault("power on") : b.LevelState?.GetBool("power on") ?? true;
         if (!on) return 0;
         if (saved is null && b.LevelState is null) return 1;
 
-        if (!_npcTargets.TryGetValue(b.BuildingId, out float target))
-            _npcTargets[b.BuildingId] = target = _db.Find(b.BuildingId) is { } record ? BuildingBuildData.From(record).Target : 0;
+        if (!_npcTargets.TryGetValue(b.BuildingId, out var known) || known.Version != _db.Version)
+        {
+            float value = _db.Find(b.BuildingId) is { } record ? BuildingBuildData.From(record).Target : 0;
+            _npcTargets[b.BuildingId] = known = (_db.Version, value);
+        }
+
+        float target = known.Target;
         if (target <= 0) return 1;
 
         float progress = saved is not null ? saved.Floats.GetValueOrDefault("construction progress")
             : b.LevelState!.GetFloat("construction progress");
         return Math.Clamp(progress / target, 0, 1);
+    }
+
+    /// <summary>
+    /// The saved owner when it resolves, otherwise the level owner (player override or town faction), using the same rules as fixture registration.
+    /// </summary>
+    static bool PlayerGeneratorOwner(World world, TownSite town, TownBuilding b, Meitou.Data.Fcs.FcsRecord? saved)
+    {
+        if (world.SystemOf<PopulationSystem>()?.Data is not { } data) return false;
+
+        int townFaction = data.FactionIndex(town.Town.Faction ?? "");
+        int owner = data.LevelOwnerOf(b, townFaction);
+        if (saved?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } id && data.FactionIndex(id) is >= 0 and var faction)
+            owner = faction;
+
+        return owner >= 0 && owner == world.Player.Faction;
     }
 
     /// <summary>
