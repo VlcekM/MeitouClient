@@ -1500,6 +1500,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
         Config.PauseOnLoad = true;
+        Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;

@@ -398,6 +398,11 @@ sealed class UserConfig
     /// </summary>
     public bool PauseOnLoad { get; set; } = true;
     /// <summary>
+    /// A character's bag window opens with their inventory until OPEN BAG closes it (Advanced settings, a Faithful / Meitou switch; on by default,
+    /// Meitou: in the game each bag stays shut until OPEN BAG is pressed once per session).
+    /// </summary>
+    public bool AutoOpenBags { get; set; } = true;
+    /// <summary>
     /// The player's animals pick up loose items into their bags (Advanced settings, a Faithful / Meitou switch whose
     /// Faithful side is on, as the game lets animals pick up; off by default, Meitou;
     /// <c>PlayerSystem.AnimalsPickUp</c>).

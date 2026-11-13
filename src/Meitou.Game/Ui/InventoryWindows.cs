@@ -53,6 +53,12 @@ sealed class InventoryWindows(PlayerInterface player)
     internal bool RotateItems;
 
     /// <summary>
+    /// Meitou's open bags (the Advanced page's Open bags at once): a bag shows unless OPEN BAG closed it (<see cref="_bagClosed"/>), not only once
+    /// OPEN BAG opened it (<see cref="BagOpen"/>).
+    /// </summary>
+    internal bool AutoOpenBags;
+
+    /// <summary>
     /// The pinned inventory windows (<see cref="PinnedPrefix"/> and a number) and the character each stays on (docs/game/ui-screens.md section 6).
     /// </summary>
     internal readonly Dictionary<string, CharacterId> PinnedInventories = new(StringComparer.Ordinal);
@@ -811,13 +817,28 @@ sealed class InventoryWindows(PlayerInterface player)
     internal readonly HashSet<CharacterId> BagOpen = [];
 
     /// <summary>
+    /// The characters whose bag was closed with OPEN BAG, which <see cref="AutoOpenBags"/> leaves shut.
+    /// </summary>
+    readonly HashSet<CharacterId> _bagClosed = [];
+
+    /// <summary>
     /// OPEN BAG, on the inventory window or a pinned one (<paramref name="who"/>, its character): opens or closes the character's bag and
     /// remembers it for them.
     /// </summary>
     internal void ToggleBag(CharacterSnapshot? who = null)
     {
         if ((who ?? InventoryOwner()) is not { } lead) return;
-        if (!BagOpen.Remove(lead.Id)) BagOpen.Add(lead.Id);
+        if (BagWanted(lead.Id))
+        {
+            BagOpen.Remove(lead.Id);
+            _bagClosed.Add(lead.Id);
+        }
+        else
+        {
+            BagOpen.Add(lead.Id);
+            _bagClosed.Remove(lead.Id);
+        }
+
         if (player.TradeWindows.LootOpenedBag == lead.Id) player.TradeWindows.LootOpenedBag = CharacterId.None;
 
         SyncBagScreen();
@@ -880,9 +901,14 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether a character window shows <paramref name="shown"/>'s bag: they wear one and left it open (<see cref="BagOpen"/>).
+    /// Whether a character window shows <paramref name="shown"/>'s bag: they wear one and want it open (<see cref="BagWanted"/>).
     /// </summary>
-    bool WantsBag(CharacterSnapshot? shown) => shown is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagOpen.Contains(shown.Id);
+    bool WantsBag(CharacterSnapshot? shown) => shown is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && BagWanted(shown.Id);
+
+    /// <summary>
+    /// Whether the character's bag is wanted open: left open with OPEN BAG, or with <see cref="AutoOpenBags"/> not closed with it.
+    /// </summary>
+    bool BagWanted(CharacterId id) => BagOpen.Contains(id) || AutoOpenBags && !_bagClosed.Contains(id);
 
     /// <summary>
     /// A pinned window's bag window is open while the window is and its character wants it (<see cref="WantsBag"/>), beside it on its left.

@@ -651,6 +651,11 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
             Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
+        result.Add(new("Open bags at once",
+            "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading "
+            + "until OPEN BAG is pressed for it.",
+            Toggle: new("Open bags at once", () => menu.Config.AutoOpenBags,
+                v => menu.Player.InventoryWindows.AutoOpenBags = menu.Config.AutoOpenBags = v, Remaster: true, OnOff: true)));
         result.Add(new("Animals pick up items",
             "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). "
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",

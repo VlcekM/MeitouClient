@@ -1164,7 +1164,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   vanilla trader screenshot (Swamper Barman) shows it full under food stacks. The stack count shows only from 2. The bag has a 10-by-14 grid with a fitted frame and an ARRANGE footer without the generic layout's editor capacity/type fields.
   **Observed** (vanilla screenshot supplied 2026-10-21, METARU, Medium Backpack): the bag window sits left of the character window, same top, with no caption buttons; it is married to
   the character window and closed only by OPEN BAG again. Meitou: `MyGuiScreenHost.Follow("bag", "inventory")` (a drag on either moves both; Escape or closing the inventory closes both). Engine choice: OPEN BAG's state is kept per character
-  (`PlayerInterface.bagOpen`, not saved), so the bag reopens with that character's inventory or when they are selected again.
+  (`InventoryWindows.BagOpen`, not saved), so the bag reopens with that character's inventory or when they are selected again. Advanced → Open bags at once
+  (`AutoOpenBags`, a Faithful / Meitou switch, Meitou and on by default): every bag shows until OPEN BAG closes it; Faithful: shut after a load until OPEN BAG is pressed (**Observed**, player report 2026-11-13).
 - <a id="limbs-window"></a>**Limbs window** (`LimbsInventoryLayout` `FUN_1401573d0`, `Kenshi_LimbReplacementWindow`; **Verified** in the decompile unless marked; code `InventoryWindows`,
   `ArrangeLimbSlots`, `PlaceLimbsWindow`):
   - LIMBS is enabled once the character has a limb holder (made the first time a limb changes, `FUN_140645690`); it toggles the window (`FUN_14070d1e0`), with `Inventory_Open` / `_Close`.
