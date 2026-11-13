@@ -1691,7 +1691,7 @@ sealed class GameLoop(GameHost host)
             _frameGenTried = true;
             _frameGen = FrameGenerationSetup.CreateFrameGenerator(_display);
         }
-        bool frameGenWanted = !host.Covered && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
+        bool frameGenWanted = !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
         _frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
         host.Gpu.Post!.FrameGen = _frameGen;
         // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
@@ -1722,6 +1722,7 @@ sealed class GameLoop(GameHost host)
         if (sceneLoading && host.SkyArrival is { AtStars: true })
             WorldFrame.DrawLoadingSky(host.Gpu, host.Scene, host.Camera, size.X, size.Y, host.PresentationHour ?? 0, (float)host.AnimSeconds,
                 host.WorldOptions.FogDistance);
+        else if (host.TitleHidesWorld) ClearBackbuffer(size);
         else if (!sceneLoading || host.SkyArrival is not null)
         {
             // The duel's laps and recorded flights replay exactly, and the play benchmark is deterministic from its save: their ticks stay in step
@@ -1731,6 +1732,17 @@ sealed class GameLoop(GameHost host)
             host.DrawWorld(size.X, size.Y);
             host.TickAhead = false;
         }
+    }
+
+    /// <summary>
+    /// Black in place of the world, for a frame the interface covers whole (<see cref="GameHost.TitleHidesWorld"/>).
+    /// </summary>
+    void ClearBackbuffer(Vector2D<int> size)
+    {
+        var cmd = _display.Context.BeginNative("backbuffer clear");
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(host.Gpu.Post!.Target!.Attachment(), LoadOp.Clear, default), default, size.X, size.Y));
+        cmd.EndRendering();
+        _display.Context.EndNative(cmd);
     }
 
     /// <summary>

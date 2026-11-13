@@ -124,6 +124,12 @@ sealed partial class GameHost
     internal bool Covered => ActiveSceneLoad is not null || Warming || SkyArrival is not null || Loading is { Exiting: true };
 
     /// <summary>
+    /// The Faithful title is up: the original's opaque picture, nothing of the world shows behind it, so the world is neither warmed nor drawn.
+    /// </summary>
+    internal bool TitleHidesWorld => Player.TitleOpen && !Player.MeitouMainMenu && CharacterEditor.PendingCreation is null
+        && !Player.CharacterEditor.EditorOpen;
+
+    /// <summary>
     /// A load stage: its step, its work and whether it may run during the sky arrival's climb (the save's read always may).
     /// </summary>
     internal static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run,
