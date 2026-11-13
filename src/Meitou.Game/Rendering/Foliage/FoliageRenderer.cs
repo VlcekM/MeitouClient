@@ -246,7 +246,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>
     /// The player's towns now, which keep <c>avoid towns</c> foliage away like the level's (the same list the navmesh's foliage uses,
     /// docs/formats/foliage.md "Towns"): the laid-out zones a founded, moved or gone town reaches are dropped and laid out again. A zone whose layout
-    /// is running keeps what it was started with.
+    /// is running keeps what it was started with and is checked again when the job ends (<see cref="AcceptLayouts"/>).
     /// </summary>
     public void SetPlayerTowns(PlayerFoliageTowns towns)
     {
@@ -781,6 +781,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     void AcceptLayouts()
     {
+        _dropping.Clear();
         foreach (var state in _zones.Values)
         {
             if (state.Job is not { IsCompleted: true } job) continue;
@@ -798,8 +799,24 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}");
                 state.Ready = state.Complete = state.MeshLayers = true;
             }
+            if (state.JobTowns is { } started && IsStale(state, started)) _dropping.Add(state);
+            state.JobTowns = null;
             _grass.Changed();
         }
+        foreach (var state in _dropping) Drop(state);
+    }
+
+    /// <summary>
+    /// Whether the player's towns changed in a way that reaches the zone since its layout job started with <paramref name="started"/> (the zone
+    /// is then laid out again).
+    /// </summary>
+    bool IsStale(FoliageZoneState state, PlayerFoliageTowns started)
+    {
+        var now = _playerTowns;
+        if (ReferenceEquals(started, now)) return false;
+
+        var (min, max) = PlayerFoliageTowns.Box(state.Zone);
+        return PlayerFoliageTowns.Difference(started.Towns, now.Towns).Any(t => now.Affects(t, min, max, 0));
     }
 
     /// <summary>
@@ -937,6 +954,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             else
                 _runningFar++;
             state.JobTier = tier;
+            var towns = state.JobTowns = _playerTowns;
             started++;
             if (forKept) keptWaiting--;
             bool farOnly = !whole;
@@ -949,7 +967,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 }
                 try
                 {
-                    world.ExtraTowns = _playerTowns.Towns;
+                    world.ExtraTowns = towns.Towns;
 
                     // Grouped on the worker (thousands of instances cost 15 to 20 ms on the render thread), straight from the cache file's records
                     // when it has the zone.
