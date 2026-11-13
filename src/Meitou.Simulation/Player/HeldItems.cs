@@ -674,8 +674,8 @@ sealed class HeldItems(PopulationData? data)
     /// <summary>
     /// Gives the held item to a character in the world (<c>FUN_1407136a0</c>): someone other than its window's owner, within <see cref="GiveRange"/>
     /// (<see cref="StealRange"/> for a non-player window's item; "Out of trading range."), added where it fits in its inventory
-    /// (<see cref="Inventory.Add"/>). Nothing fits: "No room for that item." and it goes back; what does not fit stays on the mouse. Stock is not
-    /// given away.
+    /// (<see cref="Inventory.Add"/>), else in a free slot that takes it. Nothing fits: "No room for that item." and it goes back; what does not fit
+    /// stays on the mouse. Stock is not given away.
     /// </summary>
     void Give(World world, GiveHeld give)
     {
@@ -708,6 +708,11 @@ sealed class HeldItems(PopulationData? data)
         (item.Death, item.Mark) = (false, HeldItemTheft.MarkFor(world, held, taker, overwrite: true));
         // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting.
         bool all = into.Add(item);
+
+        // Engine choice, as a pick-up: what no grid takes goes into a free slot that takes it (a polearm fits no grid, only the back slot).
+        bool worn = !all && item.Quantity == before
+                && (InventoryCommands.TryEquip(into, item, taker) || InventoryCommands.TryWearBag(into, item, taker));
+        all |= worn;
         if (!all && item.Quantity == before)
         {
             (item.Death, item.Mark) = (death, mark);
@@ -718,6 +723,7 @@ sealed class HeldItems(PopulationData? data)
         if (all) player.Held = null;
         else
             (item.Death, item.Mark) = (death, mark);
+        if (worn) _assembly?.RefreshEquipment(taker);
         HeldItemTheft.LeftLoot(world, held, death);
         if (held.From.Holder == ItemHolder.Site) world.Machines.Touch();
     }

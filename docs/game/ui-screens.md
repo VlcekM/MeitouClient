@@ -1090,6 +1090,14 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
 
 ## 6. Inventory, trade, dialogue, build
 
+- **Rotating an item** (Meitou, optional: Advanced → Item rotation, `UserConfig.RotateItems`, default off; the original has no rotation; after
+  ErasmianFolly's GetRotatedIdiot mod): the Rotate item control (`InputAction.RotateItem`, default the middle button, which stays the camera's
+  orbit anywhere else) turns the item on the mouse a quarter (`RotateHeld`), else the grid item under the pointer in a window of one of the
+  player's characters (`RotateItem`, `InventoryCommands.Rotate`: at its own cell when the turned footprint is free there, else the nearest
+  cell with room, refused when none). A turned item (`ItemInstance.Rotated`) has its footprint's sides swapped and its icon drawn turned
+  clockwise; square items do not turn. Only the grids hold turned items (`main` of a character, stock, storage or container, and
+  `backpack_content`): any other section sets the item upright, and an item put back from the mouse lies as it did when lifted. Saved as bool
+  `meitou rotated` ([save.md](../formats/save.md#zone-files)).
 - **Holding an item** (**Observed**, Ghidra decompile of `kenshi_x64.exe`; one item on the mouse at a time, `MouseInventory` `FUN_14070e640`):
   - Input: the item sections hook only pressed (`FUN_140716800`) and released (`FUN_1407169a0`); no double click, no inventory keys, no quantity dialog. Shift = `DAT_142133449`,
     Ctrl = `DAT_142133448` (key flags `FUN_14082b010`).
