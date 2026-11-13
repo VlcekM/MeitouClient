@@ -409,18 +409,29 @@ public class ConstructionTests
     }
 
     /// <summary>
-    /// A regular placement joins only a player town whose actual radius contains it; the 5000-unit candidate search does not extend town ownership.
+    /// A regular placement joins a town of any owner whose actual radius contains it; the 5000-unit candidate search does not extend town ownership.
     /// </summary>
     [Theory]
-    [InlineData(1249, true)]
-    [InlineData(1250, true)]
-    [InlineData(1251, false)]
-    [InlineData(5001, false)]
-    public void A_placed_building_joins_only_a_player_town_that_contains_it(float distance, bool contained)
+    [InlineData(1249, true, false)]
+    [InlineData(1249, true, true)]
+    [InlineData(1250, true, false)]
+    [InlineData(1250, true, true)]
+    [InlineData(1251, false, false)]
+    [InlineData(1251, false, true)]
+    [InlineData(5001, false, false)]
+    [InlineData(5001, false, true)]
+    public void A_placed_building_joins_only_a_town_that_contains_it(float distance, bool contained, bool levelTown)
     {
-        using var rig = new Rig();
+        var population = levelTown ? new PopulationData
+        {
+            Db = Database(), Factions = [],
+            Sites = [new TownSite(0, new TownData { Id = "npc", Name = "NPC outpost", Type = TownType.Outpost },
+                new Vector3(0, 300, 0), new ZoneCoordinate(32, 32))],
+        } : null;
+        using var rig = new Rig(population: population);
         var town = rig.World.Buildings.AddTown(new Vector3(0, 300, 0), Rig.PlayerFaction);
-        town.Override = 1250;
+        town.Override = levelTown ? 1 : 1250;
+        if (levelTown) town.Position = new Vector3(-3000, 300, 0);
         rig.World.Buildings.Add(new BuildSite
         {
             Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = new Vector3(0, 300, 0), Town = town.Number,
@@ -431,7 +442,8 @@ public class ConstructionTests
         rig.World.RunTicks(2);
 
         var placed = rig.World.Buildings.All.Single(site => site.Record == Shed);
-        Assert.Equal(contained ? town.Number : 0, placed.Town);
+        Assert.Equal(contained && !levelTown ? town.Number : 0, placed.Town);
+        if (contained && levelTown) Assert.Equal(-1, TownLookup.KeyOf(rig.World, placed));
         Assert.Equal(!contained, placed.InNoTown);
         Assert.Equal(!contained, placed.ForeignTown is not null);
     }

@@ -727,7 +727,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Resolves each placed site against the actual player-town radii after the ghost's candidate-town search; a site outside every player town gets
+    /// Resolves each placed site against actual town radii after the ghost's candidate-town search; a site outside every town gets
     /// the canonical NO_TOWN handle. A parent in a level building keeps its existing NPC-town association.
     /// </summary>
     void AssignFinalTowns(World world, List<BuildSite> placed)
@@ -751,11 +751,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             var proposed = world.Buildings.FindTown(site.Town);
             var town = proposed is { } candidate && candidate.Owner == world.Player.Faction
                     && DistanceXz(candidate.Position, site.Position) <= candidate.Radius
-                ? candidate
+                ? candidate.Number
                 : ClosestContainingTown(world, site.Position);
-            if (town is not null)
+            if (town != 0)
             {
-                site.Town = town.Number;
+                site.Town = Math.Max(0, town);
                 site.ForeignTown = null;
                 site.InNoTown = false;
                 continue;
@@ -768,20 +768,31 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// The closest player town whose actual radius contains <paramref name="at"/> (horizontal distance); null when none contains it.
+    /// The closest non-nest town whose actual radius contains <paramref name="at"/> (horizontal distance), using <see cref="TownLookup.NearestKey"/>
+    /// keys; 0 when none contains it. A level town keeps the existing unresolved-handle representation and nearest-town power fallback.
     /// </summary>
-    static PlayerTown? ClosestContainingTown(World world, Vector3 at)
+    static int ClosestContainingTown(World world, Vector3 at)
     {
-        PlayerTown? closest = null;
+        int closest = 0;
         float best = float.MaxValue;
         foreach (var town in world.Buildings.Towns)
         {
-            if (town.Owner != world.Player.Faction) continue;
-
             float distance = DistanceXz(town.Position, at);
             if (distance > town.Radius || distance >= best) continue;
 
-            (closest, best) = (town, distance);
+            (closest, best) = (town.Number, distance);
+        }
+
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites is not { } sites) return closest;
+
+        foreach (var town in sites)
+        {
+            if (town.Town.Type is TownType.Nest or TownType.NestMarker) continue;
+
+            float distance = DistanceXz(town.Position, at);
+            if (distance > town.Town.Radius || distance >= best) continue;
+
+            (closest, best) = (-(town.Index + 1), distance);
         }
 
         return closest;

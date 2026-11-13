@@ -264,12 +264,16 @@ shows the first failing message in this order (**Verified** unless marked):
   `0x14057c610`, containment lookup `0x140927fd0`; decompile names `FUN_1404d72a0`, `FUN_14057cc70`,
   `FUN_140928890`): the 5000-unit ghost lookup above proposes a town; creation rejects a player town when the
   building's root position is outside its actual radius (X/Z, boundary included). It then chooses the nearest
-  containing non-nest town; no containing town gives the live `NO_TOWN` object. Its fixed handle is
+  containing non-nest town of any owner; no containing town gives the live `NO_TOWN` object. Its fixed handle is
   `(TYPE=13, C=511, CS=-1064864767, I=0, S=0)` (**Verified**, GOG `TownNull` constructor `0x140934720`,
   decompile `FUN_140934fe0`, and the zero initial slot/serial from `RootObjectBase`; **Observed** in the original's
   saved Wind Generator II `1099-zone28.30-INGAME`). NO_TOWN contributes to no outpost radius or power frame.
-  Meitou: `ConstructionSystem` checks the actual radius after the ghost/wall town passes and records `Hand.NoTown`
-  in `BuildSite.ForeignTown` with `InNoTown`; furniture inherits its placed parent's town state.
+  Town-creating buildings use a separate nearest-town path (`FUN_140927e40`); Meitou founds their outpost directly.
+  Meitou: `ConstructionSystem` retains a containing proposed player town, otherwise compares all registered towns and
+  non-nest `PopulationData.Sites` by distance within their radii. Level towns keep `Town = 0`, `ForeignTown = null`,
+  `InNoTown = false`, using the existing nearest-town power fallback. Only no containing town records `Hand.NoTown`
+  with `InNoTown`; furniture inherits its placed parent's town state. **Unknown:** exact level-town identity persistence
+  for a new placement when another non-containing town is nearer; this fallback does not store the selected level handle.
 - **Later adoption** (**Verified**, GOG founding path `0x1404d6730`, decompile `FUN_1404d6d90`): founding an
   outpost explicitly moves existing player buildings into it when their town is a player town or NO_TOWN and their
   nearest town of any faction within 8000 is the new one. An NPC-town building is excluded. Meitou clears the old

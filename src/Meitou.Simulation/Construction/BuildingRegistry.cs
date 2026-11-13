@@ -81,7 +81,7 @@ public sealed class BuildSite
     public int Town { get; set; }
     /// <summary>
     /// The save's <c>town</c> handle when it named a live town that is not a player outpost (a level town, or <c>NO_TOWN</c>, the canonical town of
-    /// a building outside every town; <b>Verified</b>, placement creation and the original's save of a player generator outside every radius,
+    /// a building outside every town; <b>Verified</b>, the original's save of a player generator outside every radius,
     /// shared by the faction-less buildings of the whole world): the original keeps such a building in that town, so it belongs to no player outpost
     /// and is never given the nearest one (<see cref="TownLookup.KeyOf"/>). Null: none. New townless placements use <see cref="Data.Save.Hand.NoTown"/>;
     /// founding an outpost may explicitly adopt them and clear this handle. Otherwise written back as read.
