@@ -504,6 +504,7 @@ public sealed partial class World
         s.PathExact = pathed && cold!.PathExact != int.MaxValue ? Math.Max(cold.PathExact - state[i].PathCursor, 0) : int.MaxValue;
         s.CarriedBy = cold?.CarriedBy ?? CharacterId.None;
         s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
+        s.Anchor = cold?.DrawAnchor;
         s.Carrying = cold?.Carrying ?? CharacterId.None;
         s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null }
             ? cold.OperateTool

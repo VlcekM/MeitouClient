@@ -782,6 +782,12 @@ public sealed class CharacterCold
     public Carrying.CarryAttach? CarryAttach { get; set; }
 
     /// <summary>
+    /// The bone of another character this one is drawn on (null: none), for code mods (docs/modding.md "Bone anchors"): published as it is, not
+    /// saved, not hashed and read by no system. A carried body is drawn on its carrier's shoulder whatever this says.
+    /// </summary>
+    public DrawAnchor? DrawAnchor { get; set; }
+
+    /// <summary>
     /// Whom the <see cref="CharacterTask.PickUp"/>, <see cref="CharacterTask.Loot"/> or <see cref="CharacterTask.StealthKo"/> task is for; meaningful
     /// only while one of those tasks is set.
     /// </summary>

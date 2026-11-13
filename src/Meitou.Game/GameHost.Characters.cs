@@ -300,14 +300,22 @@ sealed partial class GameHost
             : now.OnBone;
 
     /// <summary>
-    /// The bone a carried body is drawn on: its carrier's attach bone as the renderer poses it (<see cref="CharacterInstance.Anchor"/>), so the body
-    /// follows the drawn shoulder between the ticks; null when it is not carried or the simulation had no skeleton for the carrier.
+    /// The bone <paramref name="c"/> is drawn on (<see cref="CharacterInstance.Anchor"/>): a carried body's carrier's attach bone as the renderer
+    /// poses it, so the body follows the drawn shoulder between the ticks (none when the simulation had no skeleton for the carrier); else the one a
+    /// code mod gave it (<see cref="CharacterSnapshot.Anchor"/>). Null: none.
     /// </summary>
-    CharacterAnchor? CarryAnchor(CharacterSnapshot? before, CharacterSnapshot c, float alpha)
+    CharacterAnchor? AnchorOf(CharacterSnapshot? before, CharacterSnapshot c, float alpha)
     {
-        if (c.Carry is not { } carry || MixCarry(before?.Carry, carry, alpha).OnBone is not { } on) return null;
+        if (c.Carry is { } carry)
+        {
+            return MixCarry(before?.Carry, carry, alpha).OnBone is { } on
+                ? new CharacterAnchor(DrawKey(c.CarriedBy), Simulation.Carrying.CarrySystem.AttachBone, on.Offset, on.Rotation)
+                : null;
+        }
 
-        return new CharacterAnchor(DrawKey(c.CarriedBy), Simulation.Carrying.CarrySystem.AttachBone, on.Offset, on.Rotation);
+        if (c.Anchor is not { } anchor || anchor.Carrier == c.Id || anchor.Carrier.IsNone) return null;
+
+        return new CharacterAnchor(DrawKey(anchor.Carrier), anchor.Bone, anchor.Offset, anchor.Rotation);
     }
 
     /// <summary>
@@ -431,7 +439,7 @@ sealed partial class GameHost
                 ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
             var look = HatLooks.WorldLook(c, out var hatless);
             var instance = Drawn(c, look, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer)
-                with { Anchor = CarryAnchor(before, c, alpha) };
+                with { Anchor = AnchorOf(before, c, alpha) };
             list.Add(instance);
             if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);
         }
@@ -633,7 +641,7 @@ sealed partial class GameHost
         bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
         bool fullRated = editing is not null || _fullRate.Contains(c.Id)
             || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
-        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated) with { Anchor = CarryAnchor(before, c, alpha) };
+        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated) with { Anchor = AnchorOf(before, c, alpha) };
         if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
         list.Add(instance);
         if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);

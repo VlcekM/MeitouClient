@@ -562,6 +562,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public Carrying.CarryAttach? Carry { get; internal set; }
     /// <summary>
+    /// The bone of another character this one is drawn on (<see cref="CharacterCold.DrawAnchor"/>); null: none.
+    /// </summary>
+    public DrawAnchor? Anchor { get; internal set; }
+    /// <summary>
     /// The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c>
     /// (docs/game/buildings-production.md "Production"); null for none.
     /// </summary>
