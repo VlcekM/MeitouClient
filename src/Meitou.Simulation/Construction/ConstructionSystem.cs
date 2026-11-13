@@ -4,6 +4,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -408,9 +409,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             if (Place(world, plan) is { } site) placed.Add(site);
 
         TownForWalls(world, placed);
+        AssignFinalTowns(world, placed);
         AttachWalls(world.Buildings, Data, placed);
         // Once, with the last placed building's town (FUN_1404d72a0), not once per town the batch touched.
-        if (placed.Count > 0) TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
+        if (placed.Count > 0 && !placed[^1].InNoTown)
+            TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
 
         // Confirm ends by sending the selection to build the last building created (FUN_1404d72a0: order 2 through FUN_1407f9e20, Shift ignored).
         if (placed.Count > 0) OrderBuild(world, world.Player.Selection.ToArray(), Root(reg, placed[^1]), queued: false);
@@ -714,8 +717,104 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (data.LinksTogether || !data.CreatesPlayerTown) return 0;
         var town = reg.AddTown(site.Position + boundsSize, faction);   // the ghost's position plus its bounds' size (FUN_1404d6d90)
         foreach (var s in reg.All)
-            if (s.Owner == faction && NearestTown(reg, s.Position, AdoptRange) == town.Number) s.Town = town.Number;
+        {
+            if (s.Owner == faction && (s.ForeignTown is null || s.InNoTown) && NearestTown(reg, s.Position, AdoptRange) == town.Number)
+                JoinTown(s, town.Number);
+        }
+
         return town.Number;
+    }
+
+    /// <summary>
+    /// Resolves each placed site against actual town radii after the ghost's candidate-town search; a site outside every town gets
+    /// the canonical NO_TOWN handle. A parent in a level building keeps its existing NPC-town association.
+    /// </summary>
+    void AssignFinalTowns(World world, List<BuildSite> placed)
+    {
+        foreach (var site in placed)
+        {
+            if (site.Parent is { } parent && KeepParentTown(world, site, parent)) continue;
+
+            int town = ProposedTownHolds(world, site) ? site.Town : ClosestContainingTown(world, site.Position);
+            if (town != 0) JoinTown(site, Math.Max(0, town));
+            else LeaveForNoTown(site);
+        }
+    }
+
+    /// <summary>
+    /// Gives a site with a parent its parent's town: a placed parent's town and handles, or nothing to change inside a level parent's town (within
+    /// <see cref="JoinTownRange"/>). False when the parent decides nothing.
+    /// </summary>
+    static bool KeepParentTown(World world, BuildSite site, string parent)
+    {
+        if (world.Buildings.Find(parent) is { } home)
+        {
+            site.Town = home.Town;
+            site.ForeignTown = home.ForeignTown;
+            site.InNoTown = home.InNoTown;
+            return true;
+        }
+
+        return LevelTownOf(world, parent, site.Position) is { } centre && DistanceXz(centre, site.Position) <= JoinTownRange;
+    }
+
+    /// <summary>
+    /// Whether the town the ghost proposed is a player-faction town whose actual radius contains the site.
+    /// </summary>
+    static bool ProposedTownHolds(World world, BuildSite site) =>
+        world.Buildings.FindTown(site.Town) is { } candidate
+        && candidate.Owner == world.Player.Faction
+        && DistanceXz(candidate.Position, site.Position) <= candidate.Radius;
+
+    /// <summary>
+    /// Puts the site in player town <paramref name="town"/> (0: a level town, kept as the unresolved handle), clearing any foreign handle.
+    /// </summary>
+    static void JoinTown(BuildSite site, int town)
+    {
+        site.Town = town;
+        site.ForeignTown = null;
+        site.InNoTown = false;
+    }
+
+    /// <summary>
+    /// Puts the site outside every town: the canonical NO_TOWN handle.
+    /// </summary>
+    static void LeaveForNoTown(BuildSite site)
+    {
+        site.Town = 0;
+        site.ForeignTown = Hand.NoTown;
+        site.InNoTown = true;
+    }
+
+    /// <summary>
+    /// The closest non-nest town whose actual radius contains <paramref name="at"/> (horizontal distance), using <see cref="TownLookup.NearestKey"/>
+    /// keys; 0 when none contains it. A level town keeps the existing unresolved-handle representation and nearest-town power fallback.
+    /// </summary>
+    static int ClosestContainingTown(World world, Vector3 at)
+    {
+        int closest = 0;
+        float best = float.MaxValue;
+        foreach (var town in world.Buildings.Towns)
+        {
+            float distance = DistanceXz(town.Position, at);
+            if (distance > town.Radius || distance >= best) continue;
+
+            (closest, best) = (town.Number, distance);
+        }
+
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites is not { } sites) return closest;
+
+        foreach (var town in sites)
+        {
+            if (town.Town.Type is TownType.Nest or TownType.NestMarker) continue;
+
+            float distance = DistanceXz(town.Position, at);
+            if (distance > town.Town.Radius || distance >= best) continue;
+
+            (closest, best) = (-(town.Index + 1), distance);
+        }
+
+        return closest;
     }
 
     /// <summary>

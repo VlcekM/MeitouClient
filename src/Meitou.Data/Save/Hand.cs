@@ -21,6 +21,12 @@ public readonly record struct Hand(int Type, int C, int Cs, int I, int S)
     public static readonly Hand Null = new(NullType, 0, 0, 0, 0);
 
     /// <summary>
+    /// The canonical town outside every town radius: type 13, container 511, fixed serial, slot and slot serial 0 (<b>Verified</b>, GOG
+    /// <c>0x140934720</c>, <c>TownNull</c> constructor). This live handle is distinct from an unresolved <see cref="Null"/> handle.
+    /// </summary>
+    public static readonly Hand NoTown = new((int)FcsRecordType.Town, 511, -1064864767, 0, 0);
+
+    /// <summary>
     /// Whether this is the null handle (see <see cref="NullType"/>).
     /// </summary>
     public bool IsNull => Type == NullType;

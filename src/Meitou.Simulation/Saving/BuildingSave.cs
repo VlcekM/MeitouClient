@@ -439,7 +439,8 @@ public static class BuildingSave
     static Dictionary<(int C, int CS), bool> ForeignTownHands(SaveGame save, IReadOnlyDictionary<string, FcsRecord> states, string playerFactionId,
         Dictionary<(int C, int CS), int> townOf)
     {
-        var found = new Dictionary<(int C, int CS), bool>();
+        // NO_TOWN exists independently of the level buildings loaded into this save (GOG TownNull constructor 0x140934720).
+        var found = new Dictionary<(int C, int CS), bool> { [(Hand.NoTown.C, Hand.NoTown.Cs)] = true };
         foreach (var state in states.Values)
         {
             if (!state.Strings.TryGetValue("owner faction ID", out var owner) || owner == playerFactionId) continue;
