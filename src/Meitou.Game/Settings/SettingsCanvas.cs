@@ -266,9 +266,10 @@ sealed class SettingsCanvas(SettingsMenu menu)
     }
 
     /// <summary>
-    /// How far a Graphics row's text sits right of the column: the group chevron's room, and one step more inside a group.
+    /// How far a row's text sits right of the column: a Graphics row's group chevron's room, and one step more inside a group or under the
+    /// switch it depends on (the other pages' sub-rows, clear of the band's edge).
     /// </summary>
-    static float Indent(SettingsMenu.Entry entry) => entry.Raw is not null || entry.GroupId is not null ? 28 + entry.Depth * 24 : 0;
+    static float Indent(SettingsMenu.Entry entry) => (entry.Raw is not null || entry.GroupId is not null ? 28 : 0) + entry.Depth * 24;
 
     /// <summary>
     /// A row's height: its label and hint, at least 36 units.
