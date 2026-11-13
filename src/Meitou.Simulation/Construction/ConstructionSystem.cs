@@ -993,7 +993,18 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         SiteReach.Within(n, goal.Site is { } site
             ? SiteReach.Gap(Settings.EdgeGap, site, n.Position)
             : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
-        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, world.Fixtures.DoorsByBuilding[high.Id].Any()));
+        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, FloorHeight(world, high), world.Fixtures.DoorsByBuilding[high.Id].Any()));
+
+    /// <summary>
+    /// The height of the floor a site belongs to: a <c>ceiling placement</c> site's is the floor under it (it hangs from the ceiling, and the
+    /// original's same-floor test passes its builder whatever the height, #592), any other's its own.
+    /// </summary>
+    float FloorHeight(World world, BuildSite site)
+    {
+        var at = site.Position;
+        if (Data(site.Record) is not { CeilingPlacement: true }) return at.Y;
+        return world.Walkability.GroundHeight(at.X, at.Z, at.Y);
+    }
 
     /// <summary>
     /// Where a worker goes and from how near it works: the site, or for a fetcher its source (a storage by its machine's <c>use range</c>, the

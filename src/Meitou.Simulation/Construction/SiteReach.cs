@@ -43,6 +43,12 @@ public static class SiteReach
     /// Whether the worker is at the site's height: Meitou has no floor id, so a height difference below <see cref="HeightLimit"/> stands for "the
     /// same floor, or close enough" (the original passes the same floor whatever the difference).
     /// </summary>
-    public static bool AtHeight(in CharacterHot n, BuildSite site, bool door) =>
-        MathF.Abs(n.Position.Y - site.Position.Y) < HeightLimit(door, site.Parent is not null);
+    public static bool AtHeight(in CharacterHot n, BuildSite site, bool door) => AtHeight(n, site, site.Position.Y, door);
+
+    /// <summary>
+    /// <see cref="AtHeight(in CharacterHot, BuildSite, bool)"/> measured from <paramref name="floorY"/>, the height of the floor the site belongs to
+    /// (a ceiling light hangs up to about 50 over its floor, #592).
+    /// </summary>
+    public static bool AtHeight(in CharacterHot n, BuildSite site, float floorY, bool door) =>
+        MathF.Abs(n.Position.Y - floorY) < HeightLimit(door, site.Parent is not null);
 }
