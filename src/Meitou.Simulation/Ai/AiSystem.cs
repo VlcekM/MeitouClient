@@ -309,7 +309,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
     /// the fight's start), a town errand's walk but the cage walk (<see cref="Kidnap.TownDutySystem"/> waits for the fight to end and walks on; one
     /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing and its meal
-    /// (<see cref="InterruptibleJob"/>), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
+    /// (<see cref="InterruptibleDuty"/>), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
     /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight.
     /// </summary>
     internal static Restrict Preempts(in CharacterHot n, CharacterCold cold)
@@ -319,25 +319,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return Restrict.None;
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
-        if (cold.Engaged) return InterruptibleJob(n, cold) ? Restrict.Combat : Restrict.Self;
+        if (cold.Engaged) return InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
-        if (n.Task == (byte)CharacterTask.Treat) return Restrict.Combat;
-        return n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run
-            && (Kidnap.TownDutySystem.IsErrandRow(run.Row) || cold.Carrying.IsNone && Kidnap.CaptiveSystem.IsJobRow(run.Row))
-            ? Restrict.Combat : Restrict.Self;
+
+        return n.Task == (byte)CharacterTask.Treat || InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
     }
 
     /// <summary>
-    /// A captive job a fight may interrupt (<see cref="Kidnap.CaptiveSystem"/> gives it up at the fight's start): its walk carrying nothing, or the
-    /// meal it stands at (220 Eating is a priority-2 goal's task, below the combat goals; a vampiric meal lasts minutes, #623).
+    /// A duty holding the character (<see cref="CharacterCold.Engaged"/>) that a fight may interrupt: a town errand's walk but the cage walk
+    /// (<see cref="Kidnap.TownDutySystem"/> waits for the fight's end and walks on; a carrier fights with the body on its shoulder), a captive job's
+    /// walk carrying nothing (<see cref="Kidnap.CaptiveSystem"/> gives the job up at the fight's start), or the meal it stands at (220 Eating is a
+    /// priority-2 goal's task, below the combat goals; a vampiric meal lasts minutes, #623).
     /// </summary>
-    static bool InterruptibleJob(in CharacterHot n, CharacterCold cold)
+    static bool InterruptibleDuty(in CharacterHot n, CharacterCold cold)
     {
-        if (!cold.Carrying.IsNone) return false;
-        if (n.Task == (byte)CharacterTask.Idle) return cold.ActionClip == Kidnap.CaptiveSystem.EatClip;
+        if (n.Task == (byte)CharacterTask.Idle) return cold.Carrying.IsNone && cold.ActionClip == Kidnap.CaptiveSystem.EatClip;
+        if (n.Task != (byte)CharacterTask.GoTo || cold.Running is not { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run) return false;
 
-        return n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run
-            && Kidnap.CaptiveSystem.IsJobRow(run.Row);
+        return Kidnap.TownDutySystem.IsErrandRow(run.Row) || cold.Carrying.IsNone && Kidnap.CaptiveSystem.IsJobRow(run.Row);
     }
 
     /// <summary>
