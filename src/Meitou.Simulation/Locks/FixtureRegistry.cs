@@ -1561,7 +1561,9 @@ public sealed partial class FixtureRegistry
     /// "designated" buildings of two kinds nearest it, then any BF_BED building near it. The original takes the first in its building list's order (a
     /// set of pointers, or the finder's cell order) and, when the squad's home is not the building the character is in, passes over a bed with a cost
     /// above 1 (<b>Unknown</b> field); Meitou has no designated buildings, takes the nearest free bed of its town for the last two steps, and has no
-    /// cost test (engine choices).
+    /// cost test (engine choices). Those finders pass only an ally's building (<c>FUN_1408ca5d0</c>, <b>Verified</b>): the character's faction's or
+    /// one <see cref="CanUse(World, CharacterCold, Fixture)"/> accepts, so a homeless vagrant takes a bar's bed and never one in a private house,
+    /// where the residents would call it a trespasser (#618).
     /// </summary>
     Fixture? FindBedNpc(World world, int slot, CharacterCold c, Func<Fixture, bool>? skip)
     {
@@ -1581,6 +1583,8 @@ public sealed partial class FixtureRegistry
         foreach (var f in _all)
         {
             if (!Usable(f) || squad is { Town: >= 0 } && f.Site != squad.Town) continue;
+            if (f.Owner >= 0 && !CanUse(world, c, f)) continue;
+
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
