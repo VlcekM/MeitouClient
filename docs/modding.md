@@ -161,6 +161,14 @@ holds refuses the second mod.
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group);
   using it in play **Unknown**.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
+- **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
+  the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
+  `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
+  `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
+  (`BuildSite.Id`); null clears it. The player's orders and jobs come first. The switch, package and home are saved with the squad. Off drops the
+  package and the members' minds. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
+  **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
+  move order takes them at once and they resume after it, and a re-saved game loads autonomous.
 
 ## Harmony
 

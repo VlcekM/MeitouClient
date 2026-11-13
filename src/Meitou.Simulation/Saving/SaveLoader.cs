@@ -500,6 +500,7 @@ public static class SaveLoader
             HomeCentre = new Vector2(platoon.Position.X, platoon.Position.Z),
             HomeRadius = 100,
         };
+        AutonomySave.Read(platoon.Record, squad);
 
         foreach (var sc in platoon.Characters)
         {

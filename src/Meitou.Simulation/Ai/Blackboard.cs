@@ -263,9 +263,10 @@ public sealed class Blackboard
 
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
-    /// was given, <see cref="Home"/> the one in use (a bar package moves it to the bar).
+    /// was given, <see cref="Home"/> the one in use (a bar package moves it to the bar). An autonomous player squad's is its assigned home's town
+    /// (<see cref="SquadAutonomy"/>).
     /// </summary>
-    public int Town { get; init; } = -1;
+    public int Town { get; set; } = -1;
 
     /// <summary>
     /// The town's turrets (<see cref="PopulationData.Turrets"/>) and the turret index each member's slot claimed to man, as the last serial step
@@ -794,6 +795,33 @@ public sealed class AiMind
     public bool Engine { get; init; }
 
     /// <summary>
+    /// A player character's mind (a member of an autonomous squad, <see cref="SquadAutonomy"/>): it weighs its squad's package goals only; Self
+    /// preservation and its race's goals stay the decision step's (<see cref="DecisionSystem"/>).
+    /// </summary>
+    public bool Player { get; init; }
+
+    /// <summary>
+    /// A player character's mind wants an urgent (priority 3) package goal, as its last think found: the decision step's source
+    /// (<see cref="SquadAutonomy"/>) then takes it off a job and keeps the jobs from taking it back. Hashed with <see cref="Player"/>.
+    /// </summary>
+    public bool Urgent { get; set; }
+
+    /// <summary>
+    /// The tick and row of the last task the think started for a player character (<see cref="RunningTask.Tick"/>, <see cref="RunningTask.Row"/>):
+    /// while that provenance runs its task, the task is the AI's own (<see cref="Owns"/>). Hashed with <see cref="Player"/>.
+    /// </summary>
+    public long OwnTick { get; set; }
+    /// <summary>
+    /// The row of the task started at <see cref="OwnTick"/>.
+    /// </summary>
+    public TaskType OwnRow { get; set; }
+
+    /// <summary>
+    /// Whether <paramref name="run"/> is the provenance of a task the think started for this mind's character (a goal's, of its tick and row).
+    /// </summary>
+    public bool Owns(RunningTask run) => run.Source == TaskSource.Goal && run.Tick == OwnTick && run.Row == OwnRow;
+
+    /// <summary>
     /// The combat goals of its platoon's package for its role (none without a package), set by the AI's serial step on the package cadence. Follow
     /// from the package, so not hashed.
     /// </summary>
@@ -1113,6 +1141,14 @@ public sealed class AiMind
     internal void Hash(ref StateHasher hasher)
     {
         if (Engine) hasher.Add(0x456E6769);
+        if (Player)
+        {
+            hasher.Add(0x506C6179);
+            hasher.Add(Urgent);
+            hasher.Add(OwnTick);
+            hasher.Add((int)OwnRow);
+        }
+
         hasher.Add((int)(Goal?.Task.Type ?? TaskType.None));
         hasher.Add((int)Step);
         hasher.Add((int)Behaviour);

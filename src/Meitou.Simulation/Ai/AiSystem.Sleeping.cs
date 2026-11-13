@@ -24,12 +24,12 @@ public sealed partial class AiSystem
     /// 153 Going to bed a dead end): 0 for a character carrying someone (Character <c>+0x348</c>) or of a robot race; 0 while
     /// <see cref="SleepDanger"/> is above 0; for an NPC 1 while it lies in a bed (status <c>+0xb4</c>), 0 when it is in its home and knows a neutral
     /// or enemy that is in the same building, 0 for an animal that used a bed under 180 minutes ago and 0.3 for any character under 20 minutes ago
-    /// (status <c>+0xc0</c>, <see cref="CharacterCold.BedUsedHours"/>), else 1. The player-faction branch is not modelled: the AI plans for no player
-    /// character.
+    /// (status <c>+0xc0</c>, <see cref="CharacterCold.BedUsedHours"/>), else 1. The player-faction branch is not modelled: a player character the
+    /// AI plans for (<see cref="SquadAutonomy"/>) takes the NPC's (<b>engine choice</b>).
     /// </summary>
     internal float SleepingDesire(World world, Blackboard board, int slot)
     {
-        if (world.Characters.Cold(slot) is not { } me || !me.Carrying.IsNone || me.Race is { IsRobot: true } || me.IsPlayer) return 0;
+        if (world.Characters.Cold(slot) is not { } me || !me.Carrying.IsNone || me.Race is { IsRobot: true }) return 0;
         if (SleepDanger(world, board, slot, me) > 0) return 0;
         if (me.InSomething == Locks.HeldState.Bed) return 1;
         if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot)) return 0;

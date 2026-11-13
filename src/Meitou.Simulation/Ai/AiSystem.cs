@@ -96,7 +96,8 @@ public sealed record ChangeAi(int SquadId, string PackageId) : SimCommand;
 /// Goals</c> and the default idle goal by tier (urgent, then non-urgent, then fluff; the first tier with a positive score wins), weight, hour window,
 /// crowding and continuity, acts out the winner through <see cref="TaskBehaviours"/> (in its home building's nodes and beds where it has one); its
 /// combat goals are goals of the same choice (AiSystem.Fights.cs), which <see cref="AggroSystem"/>'s look asks it to weigh again when it senses a new
-/// enemy. The AI runs only characters that nothing else holds: not the player's, not in a fight it did not start, fleeing, down, carrying, carried,
+/// enemy. The AI runs only characters that nothing else holds: not the player's (but those of a squad made autonomous, below their orders and jobs,
+/// <see cref="SquadAutonomy"/>), not in a fight it did not start, fleeing, down, carrying, carried,
 /// treating, looting or trading; in its own fight it chooses but acts out nothing (<see cref="InFight"/>), and an engine duty or fight is taken over
 /// only by the goals that pre-empt it (<see cref="Preempts"/>). The members of a squad it does not run get a mind that weighs only their combat goals
 /// (<see cref="AiMind.Engine"/>, <see cref="EngineMinds"/>). Roaming platoons keep their travel stand-in (<see cref="PopulationSystem"/>; their
@@ -108,7 +109,7 @@ public sealed record ChangeAi(int SquadId, string PackageId) : SimCommand;
 /// intact test, the package choice, the patrol's progress and the crowding counts.</item>
 /// </list>
 /// </summary>
-public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed
+public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
 {
     #region Settings and wiring
 
@@ -226,6 +227,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var id = table.IdOf(i);
             var roles = mind.Engine ? mind.EngineGoals : ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, id, cold)];
             ref var n = ref table.Next[i];
+            if (cold.IsPlayer && SquadAutonomy.OnJob(n, cold, mind))
+            {
+                AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
+                continue;
+            }
+
             if (Holds(n, cold))
             {
                 if (mind.Engine)
@@ -243,6 +250,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 }
 
                 var goal = Choose(world, i, id, mind, squad, board, roles, hour)!;
+                if (mind.Player) mind.Urgent = goal.Task.Priority == TaskPriority.Urgent;
                 if (cold.InCombat) InFight(mind, goal, board);
                 else Act(world, i, mind, goal, board);
                 continue;
@@ -256,6 +264,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 else if (!cold.InCombat) AskFight(world, i, urgent.Task.Type, mind);
             }
         }
+    }
+
+    /// <summary>
+    /// The think of a player character on a job's task (<see cref="SquadAutonomy.OnJob"/>): only its urgent package goals are weighed; one that
+    /// plans is kept as <see cref="AiMind.Urgent"/> and asks the decision step, whose source takes the character off the job
+    /// (<see cref="SquadAutonomy.PackageGoals"/>). Writes only its own slot.
+    /// </summary>
+    void AskOffJob(World world, int slot, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board,
+        IReadOnlyList<AiGoal> roles, int hour)
+    {
+        bool wanted = Choose(world, slot, id, mind, squad, board, roles, hour, Restrict.Urgent) is not null;
+        if (wanted && !mind.Urgent) DecisionSystem.Request(cold);
+
+        mind.Urgent = wanted;
+        mind.Version = board.Version;
     }
 
     /// <summary>
@@ -299,6 +322,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// <see cref="AiMind.Engine"/> mind weighs on its routine and in its own fight.
         /// </summary>
         Combat,
+        /// <summary>
+        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>).
+        /// </summary>
+        Urgent,
     }
 
     /// <summary>
@@ -377,9 +404,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     public static bool Holds(in CharacterHot n, CharacterCold cold)
     {
-        if (cold.Ai is not { } mind || cold.IsPlayer || cold.Fleeing || cold.Engaged || cold.IsImprisoned || !cold.CarriedBy.IsNone
+        if (cold.Ai is not { } mind || cold.Fleeing || cold.Engaged || cold.IsImprisoned || !cold.CarriedBy.IsNone
             || !cold.Carrying.IsNone || cold.Medical is { Incapacitated: true })
             return false;
+
+        // A player character: only one of an autonomous squad, on no order's or job's task (SquadAutonomy.Free).
+        if (cold.IsPlayer && !SquadAutonomy.Free(n, cold, mind)) return false;
 
         if (cold.InCombat) return n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
         if (mind.Engine) return false;
@@ -495,7 +525,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Index loops: a foreach over the interface would box an enumerator per list and pass.
             for (int k = 0; k < roles.Count; k++) Consider(roles[k]);
             for (int k = 0; k < race.Count; k++) Consider(race[k]);
-            if (tier == TaskPriority.Urgent) Consider(SelfPreservationGoal);
+            if (tier == TaskPriority.Urgent && !mind.Player) Consider(SelfPreservationGoal);   // a player character's is the decision step's
             for (int k = 0; k < candidates.Count; k++)
                 if (plans.TryPlan(candidates[k].Goal, candidates[k].Desire)) return candidates[k].Goal;
         }
@@ -1507,7 +1537,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // Lying in its bed. One loaded there, or laid in by the walk's end, sleeps by no start of this goal: the goal takes the sleep as its
         // own (the original's sleeper runs its plan's 98 Task_UseBed).
         if (table.Cold(slot)!.Running is not { Source: TaskSource.Goal } own || !own.Runs(CharacterTask.Sleep))
+        {
             TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Sleep, type, TaskSource.Goal));
+            SquadAutonomy.Stamp(world, slot);
+        }
     }
 
     /// <summary>
@@ -1933,6 +1966,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     Locks.Fixture? SpareBed(World world, Blackboard board, AiMind mind, int slot)
     {
         if (board.Home is not null && !mind.HomeUnreachable && BedSpotOf(board, mind) is not null) return null;
+        if (board.Home is { } built && !mind.HomeUnreachable && SquadAutonomy.HomeBed(world, built, mind) is { } own) return own;
         if (board.Home is null && !mind.HomeUnreachable && OccupiedBed(world, board, mind, slot) is { } occupied) return occupied;
         if (world.Characters.Cold(slot) is not { } self) return null;
         if (mind.Squad.Town >= 0) return world.Fixtures.FindBed(world, slot, data.Relations);
@@ -2041,6 +2075,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // A spot on a floor counts as reached on that floor only, not on the ground below it.
         bool away = Vector2.DistanceSquared(here, target) > within * within || height is { } y && MathF.Abs(n.Position.Y - y) > FloorSlack;
         if (n.Task != (byte)CharacterTask.Idle) mind.ArrivedAt = null;   // it moved on: the finished path no longer says where it is
+
+        // A player character whose walk an order or job took: the walk that ended since is not this one's (neither arrival nor failure).
+        if (mind.Walking && SquadAutonomy.WalkTaken(table.Cold(slot)!, mind)) mind.Walking = false;
+
         if (mind.Walking && n.Task != (byte)CharacterTask.GoTo)
         {
             // The walk is over: arrived, or it ended elsewhere (no way there, or a fight took it).
@@ -2124,6 +2162,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (world.Characters.Next[slot].Task == (byte)task) return;
         TaskStart.StartOwn(world, slot, new TaskRequest(task, GoalRow(world, slot), TaskSource.Goal));
+        SquadAutonomy.Stamp(world, slot);
     }
 
     /// <summary>
@@ -2149,6 +2188,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.GoTo, GoalRow(world, slot), TaskSource.Goal) { Goal = to, Mode = mode });
+        SquadAutonomy.Stamp(world, slot);
     }
 
     /// <summary>
@@ -2238,29 +2278,53 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly TownPlaceClaims _claims = new(data);
 
     /// <summary>
-    /// The contract and AI change commands: the squad (attached first when the AI does not run it yet) takes the package.
+    /// The player's squads the AI runs: their switch and home commands and their homes.
+    /// </summary>
+    readonly SquadAutonomy _autonomy = new(data);
+
+    /// <summary>
+    /// Registers the decision step's source for the urgent package goals of the player's autonomous squads.
+    /// </summary>
+    public void RegisterSources(DecisionSystem decisions) => decisions.Register(new SquadAutonomy.PackageGoals());
+
+    /// <summary>
+    /// The commands: an autonomous squad's switch and home (<see cref="SquadAutonomy.Apply"/>; a home in a town not looked at yet has its places
+    /// found), then the contract and AI change commands (<see cref="TakePackage"/>).
     /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
         {
-            var (squadId, packageId) = command switch
+            if (_autonomy.Apply(world, command, out var named))
             {
-                StartContract s => (s.SquadId, s.PackageId),
-                ChangeAi a => (a.SquadId, a.PackageId),
-                _ => (-1, ""),
-            };
-            if (world.Squads.Find(squadId) is not { } squad || data.Ai.Package(packageId) is not { } package) continue;
-            if (squad.Ai is null)
-            {
-                if (IsPlayers(world, squad)) continue;
-                Attach(world, squad);
+                if (named?.Ai is { Town: >= 0 } settled && !_townPlaces.Has(settled.Town)) _townPlaces.Refresh(world, this);
             }
-
-            _rules.Bind(this, world, squad);
-            if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target);
-            else squad.Ai!.Replace(package, _rules);
+            else TakePackage(world, command);
         }
+    }
+
+    /// <summary>
+    /// A contract or AI change command: the squad takes the package, attached first when the AI does not run it yet. A player's squad takes one
+    /// only while it is autonomous (<see cref="Squad.Autonomous"/>).
+    /// </summary>
+    void TakePackage(World world, SimCommand command)
+    {
+        var (squadId, packageId) = command switch
+        {
+            StartContract s => (s.SquadId, s.PackageId),
+            ChangeAi a => (a.SquadId, a.PackageId),
+            _ => (-1, ""),
+        };
+        if (world.Squads.Find(squadId) is not { } squad || data.Ai.Package(packageId) is not { } package) return;
+        if (squad.Ai is null)
+        {
+            if (IsPlayers(world, squad) && !squad.Autonomous) return;
+            Attach(world, squad);
+        }
+
+        _rules.Bind(this, world, squad);
+        if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target);
+        else squad.Ai!.Replace(package, _rules);
     }
 
     /// <summary>
@@ -2352,6 +2416,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void UpdateSquad(World world, Squad squad)
     {
         var board = squad.Ai!;
+        if (squad.Autonomous) _autonomy.Refresh(world, squad, board);
+
         board.Intact = IsIntact(world, squad, board);
         UpdateInTown(world, squad, board);
         _rules.Bind(this, world, squad);
@@ -2397,7 +2463,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         var cold = table.Cold(s)!;
 
-        if (!populationMoves && cold.Ai is null or { Engine: true })
+        // An autonomous squad: minds for the player's characters only (not a prisoner kept in it), made again for one that came from another squad.
+        if (squad.Autonomous && !cold.IsPlayer) return;
+
+        bool own = squad.Autonomous && cold.IsPlayer;
+        bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
+        if (!populationMoves && (moved || cold.Ai is null or { Engine: true }))
         {
             var p = table.Next[s].Position;
             cold.Ai = new AiMind
@@ -2405,7 +2476,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Squad = squad,
                 MemberIndex = k,
                 Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
-                RaceGoals = cold.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [],
+                Player = own,
+                RaceGoals = cold.Race is { } race && !own ? data.Ai.RaceGoals(race.StringId) : [],
                 Resume = squad.Resume,
                 Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
             };
@@ -2634,6 +2706,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         squad.LeftPackage = null;
+        if (squad.Autonomous) _autonomy.Settle(world, squad, squad.Ai);
     }
 
     /// <summary>
@@ -2646,7 +2719,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     void EngineMinds(World world, Squad squad, Blackboard? board = null)
     {
-        if (IsPlayers(world, squad)) return;
+        if (IsPlayers(world, squad))
+        {
+            SquadAutonomy.DropMinds(world, squad);   // none for a player's squad; what an autonomous one left goes
+            return;
+        }
+
         var table = world.Characters;
         AiPackage? package;
         if (board is not null) package = board.Current;   // a platoon's squad running its blackboard: the package that runs
@@ -2733,9 +2811,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The AI runs a squad that is not the player's, not a roaming platoon's active half (a town's own saved squad, pinned, is run like the town's, a
-    /// save's wild one like the wild sites' squads), and whose template lists AI packages.
+    /// save's wild one like the wild sites' squads), and whose template lists AI packages. A player's squad only when it is autonomous and a save
+    /// held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package (<see cref="TakePackage"/>).
     /// </summary>
-    bool Runs(World world, Squad squad) => !IsPlayers(world, squad) && TemplateOf(squad.TemplateId).Packages.Count > 0;
+    bool Runs(World world, Squad squad) =>
+        IsPlayers(world, squad) ? squad is { Autonomous: true, SavedAi: not null } : TemplateOf(squad.TemplateId).Packages.Count > 0;
 
     /// <summary>
     /// The platoon whose squad this is when the population moves it (a loaded roaming or campaign platoon: not a town's own saved squad, nor a wild
@@ -2836,7 +2916,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     public void Evict(World world, string building)
     {
         foreach (var squad in world.Squads.All)
-            if (squad.HomeBuilding?.Key == building || squad.Ai?.OwnHome?.Key == building) Rehome(world, squad);
+            if (!squad.Autonomous && (squad.HomeBuilding?.Key == building || squad.Ai?.OwnHome?.Key == building)) Rehome(world, squad);
         foreach (var platoon in world.Platoons.All)
             if (platoon.Stored is { } stored && stored.HomeBuilding?.Key == building) stored.HomeBuilding = null;
     }

@@ -281,7 +281,8 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
      A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
      replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
      stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also clears its queue (order 116). NPC victims
-     keep their deferred defensive attack (the AI is stage 9).
+     keep their deferred defensive attack (the AI is stage 9). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
+     ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the
      step. So a higher job takes over a lower running one at the next decision; the running job keeps no priority beyond its place. With nothing found, a list job the task still runs
@@ -1781,6 +1782,30 @@ package): the war classes (19, 20, 32) and 31, which run only in campaigns; the 
   a save's wild platoon is AI-run like the wild sites' own squads. The occupation's intruder, cage and food goals: [Town duties](#town-duties); its bed goal (153, 1 to 9 h; not the leader's) takes a bed of the occupied town ([beds](game/locks.md#beds)); a member whose bed is taken rests beside it, one in a town without beds at its post. Campaigns read only the loaded occupiers (`AiSystem.Occupied`; they need a player within 1250 of the
   town, so it is loaded). **Observed** (headless, Stack area, a starving-bandit mob put into an outpost with 3 player characters): the assault starts, the
   occupation follows 0.1 h after the players are knocked out. No fight started in that run (the aggro's sight of sandbox characters there was not looked into).
+
+### Autonomous player squads
+
+Meitou only (the original's AI plans for no player squad; asked for as the RE_Kenshi "Squad Autonomy" plugin's base). `Squad.Autonomous`
+(`SetSquadAutonomy`) opens a player's squad to `ChangeAi` / `StartContract` (dialogue's `change AI` on it too); `SquadAutonomy` holds the rules.
+- **Minds**: only its `IsPlayer` members get one (`AiMind.Player`), of the package's role goals alone: Self preservation and race goals stay the
+  [decision step](#decision-step)'s. A member moved to another squad loses its mind at the next package step. Off: board, saved AI and minds go,
+  an AI-started task ends (one in a bed lies on).
+- **Precedence** (the chooser's order, [precedence](game/ai-tasks.md#precedence)): orders, urgent package goals, jobs, the other package goals.
+  `AiSystem.Holds` takes a player character only when no plan runs its task or the plan is 14 Idleness's or the think's own (`AiMind.Owns`: the
+  tick and row of its last start; its own fight), so an order's, job's or reaction's task is never touched. On a job's task the think weighs the
+  urgent tier only (`Restrict.Urgent`); a goal that plans sets `AiMind.Urgent` and the step-4 source `SquadAutonomy.PackageGoals` frees the
+  character (idle; the next think acts the goal out) and counts as running, so step 5 does not take it back. A task for a goal that is not urgent
+  yields to the jobs at the engine re-ask (`DecisionSystem.GoalsComeFirst`). **Engine choices**: the source's weight 0.5 and desire 1 (Self
+  preservation wins); implicit jobs take only a standing character, as before.
+- **Home** (`SetSquadHome`, `Squad.AssignedHome`): a town building (its town becomes `Blackboard.Town`, so town goals, turrets and workplaces are
+  that town's) or a player-built building, stood in for by a `TownBuilding` with `RuntimeKey` = the site id and no spots. A player-built home that
+  is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the
+  complete beds the player placed in it (`BuildSite.Parent`, one per member, `SquadAutonomy.HomeBed`), else the player bed search. A player-built
+  home has no indoor volume: "inside" is within the home radius.
+- **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
+  goals would never plan).
+- **Not built**: a player outpost is no `Blackboard.Town`, so its turrets, machines and nodes are not goal targets (the player's jobs run them);
+  a work building; the contract's mission target over a save (as NPC platoons).
 
 ### Planner
 
