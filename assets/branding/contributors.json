@@ -28,16 +28,16 @@
     "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 6,
-    "areas": "Benchmarks, Crossbow bolt tracers"
+    "commits": 7,
+    "areas": "Benchmarks, Crossbow tracers"
   },
   "lucasskrewer": {
     "commits": 12,
     "areas": "Benchmarks, Animal hunger"
   },
   "dxseba": {
-    "commits": 2,
-    "areas": "Combat, Mesh buffers"
+    "commits": 3,
+    "areas": "Footprints, Combat hits, Mesh buffers"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,11 +48,15 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 28,
-    "areas": "Animals, Medics, Inventory, Rendering"
+    "commits": 35,
+    "areas": "Doors, Animals, Medics, General bugfixing"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
+  },
+  "deseven": {
+    "commits": 7,
+    "areas": "Metal renderer, Settings window"
   }
 }
