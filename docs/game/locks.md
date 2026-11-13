@@ -284,8 +284,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   (lifted out) and `Task_GetOutOfCage` flag 1 (above). Cleared only by: being caged again (`FUN_140330600`'s put-in branch); `Task_GetOutOfCage`
   flag 0 (133, a release); `ActivePlatoon::periodicUpdate` (`FUN_1404ff060`, vtable slot +0x40): a squad split from another (`Platoon::isSeparatedSquad` `+0xb8`) whose parent
   has an active platoon within squared distance 1.0404e7 (~3226 units) moves each member that is not imprisoned, not slave state 1 and passes two more tests (byte `+0x3d4` clear, vfunc +0x30 false; **Unknown**) into the parent, and
-  clears its escaped and kidnapped (`+0xe9`) flags. No timer and no town test clear it, so "Leave town to clear this status. Expires in 99999 hrs" ([ui-screens](ui-screens.md))
-  is never true for a player character. (The other `+0xe8` writes in `FUN_1408cb360` / `FUN_1407933a0` are the Blackboard's `homeIsLockedUp`.)
+  clears its escaped and kidnapped (`+0xe9`) flags; the status update `FUN_1405a4f50` (**Verified**; an array-form write, `param_1[0x3a]`, which `field_writes.txt` does not index):
+  cleared on each update while the status town (`+0x88`, [rule](carry-loot.md#the-status-town)) is null, as the freed flag `+0xea` is. So "Leave town to clear this status"
+  ([ui-screens](ui-screens.md)) is true; no timer clears it, the 99999 hrs is text only. Meitou: `ArrestSystem.DropTownStatusOutsideTowns`. (The other `+0xe8` writes in `FUN_1408cb360` / `FUN_1407933a0` are the Blackboard's `homeIsLockedUp`.)
 - **Exit spot** (**Observed** from decompile, `FUN_140330600` → `FUN_140661f90`): clearing the hold resets the character's movement body while `+0x2f8` and the handle are
   still set, so it looks up the held building's `Node Use` (type 4) node nearest the character's position (`FUN_14038ab50`; the character stands at the cage origin) and
   moves the body there after a physics ray query at the node (`FUN_1403a2fa0`, door hit filter; the ray's exact use is **Unknown**). No node (Prisoner Pole): it stays.

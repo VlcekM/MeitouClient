@@ -460,7 +460,7 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   `FactionWarMgr::isBiomeHomeTerritory` for the biome at its position; this entry passes 0, as do four of the other five callers); then for slave state 0: a pending crime (Character `+0x148` code, `+0x180` timer) "Committing Crime!" with int(timer), text
   "This character is currently committing {1}, make sure nobody witnesses it." while timer <= 3, else "...has been caught committing {1}! He might end up with a bounty on his head if he
   can't vanish." plus " Current bounty is c.{2,num}" with the local faction's bounty (`getActualBounty`) above 0; the escaped flag (`+0xe8`) "Escaped Prisoner", text "... Leave town to
-  clear this status. Expires in {1}" with `{1,num} hr(s)` of the constant 99999 (text only: no timer or town test clears the flag, [locks](locks.md)); a bounty: the bounty entry; else the slave states above. Crime, escaped and slave entries list the bounty rows
+  clear this status. Expires in {1}" with `{1,num} hr(s)` of the constant 99999 (text only: no timer clears the flag, leaving every town does, [locks](locks.md)); a bounty: the bounty entry; else the slave states above. Crime, escaped and slave entries list the bounty rows
   (`FUN_1405d1400`) before their text. "Imprisoned:" belongs to the Lockpicking section. Meitou: `World.StatusOf`, `PlayerInterface.StatusLine` / `StatusRows` / `SlaveRows` (slave hints for
   player characters only; engine choice); the entry's title is the `BountyText` line; Diplomatic Status is `CharacterCold.NpcClass` Diplomat.
 - Bounty panel (`FUN_1405d2da0`, **Observed**; colour strings **Verified**: their static initialisers `FUN_14158a2a0` `#afa68b` Main, `FUN_14158a320` `#492620` Title,

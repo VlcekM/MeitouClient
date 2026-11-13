@@ -413,7 +413,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Disguise(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             UpdateStatusTowns(world);
-            DropFreedOutsideTowns(world);
+            DropTownStatusOutsideTowns(world);
             EscapeFarFromOwner(world);
         }
         BountyDuty(world);
@@ -449,16 +449,21 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// A freed character stops being freed once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status <c>+0xea</c> on each
-    /// update while the status object's current town (<c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>) is null (<b>Verified</b>). Without town
-    /// data the flag stays.
+    /// An escaped prisoner or a freed character stops being one once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status
+    /// <c>+0xe8</c> and <c>+0xea</c> on each update while the status object's current town (<c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>)
+    /// is null (<b>Verified</b>). Without town data the flags stay.
     /// </summary>
-    void DropFreedOutsideTowns(World world)
+    void DropTownStatusOutsideTowns(World world)
     {
         if (Towns is null) return;
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && c.StatusTown.IsNone) c.Freed = false;
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { } c || !c.StatusTown.IsNone) continue;
+
+            c.Escaped = false;
+            c.Freed = false;
+        }
     }
 
     /// <summary>
