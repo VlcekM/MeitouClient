@@ -199,6 +199,11 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     GpuTexture? _backbuffer, _depth, _albedo;
     /// <summary>
+    /// The scene's picture at the render size, apart from the backbuffer, while <see cref="StretchPicture"/> asks for it; made and resized by
+    /// <see cref="EnsureTargets"/>.
+    /// </summary>
+    GpuTexture? _picture;
+    /// <summary>
     /// The pipeline that copies the backbuffer into the drawable (<see cref="PresentMsl"/>).
     /// </summary>
     MTLRenderPipelineState _presentPipeline;
@@ -696,6 +701,11 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             if (of.Views[i].OwnsImage) images.Add(of.Views[i].Image);
         }
 
+        // No table entry may keep naming the images that are about to be released.
+        var gone = new HashSet<nint> { of.Image.NativePtr };
+        foreach (var image in images) gone.Add(image.NativePtr);
+        _bindless.Forget(gone);
+
         of.Views.Clear();
         of.ViewCache.Clear();
         _textures[texture.Index] = null;
@@ -1135,6 +1145,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         ReadLastGpuTime();
         var size = display.Window.FramebufferSize;
         EnsureTargets(size.X, size.Y);
+        PresentPicture = false;
         StartSlot(command);
         return true;
     }
@@ -1161,6 +1172,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         if (gpu > 0) LastGpuMilliseconds = gpu;
     }
 
+
     /// <summary>
     /// The size the scene renders at in a <paramref name="width"/> x <paramref name="height"/> pixel backbuffer (the window's backing pixels,
     /// Retina included) at <paramref name="renderScale"/>.
@@ -1172,7 +1184,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// The backbuffer at the window's size, and the scene's depth and GI albedo at the render size (re-made when either changed).
+    /// The backbuffer at the window's size, the scene's depth and GI albedo at the render size, and the picture when it is stretched (re-made when
+    /// either changed).
     /// </summary>
     void EnsureTargets(int width, int height)
     {
@@ -1196,6 +1209,29 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             _albedo?.Dispose();
             _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
         }
+
+        EnsurePicture(width, height);
+    }
+
+    /// <summary>
+    /// The picture's own target at the render size while it is stretched to a larger backbuffer; none otherwise (the backbuffer is the picture).
+    /// </summary>
+    void EnsurePicture(int width, int height)
+    {
+        bool apart = StretchPicture && (SceneWidth != width || SceneHeight != height);
+        if (!apart)
+        {
+            _picture?.Dispose();
+            _picture = null;
+            return;
+        }
+
+        if (_picture is { } current && current.Desc.Width == SceneWidth && current.Desc.Height == SceneHeight) return;
+
+        Console.WriteLine($"metal     picture {SceneWidth}x{SceneHeight} stretched to {width}x{height}");
+        _picture?.Dispose();
+        _picture = CreateTexture(new TextureDesc(InternalFormat.Rgba8, SceneWidth, SceneHeight,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "picture"));
     }
 
     /// <summary>
@@ -1223,6 +1259,28 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// The offscreen target the renderers draw into (the engine's Rgba8, as the Vulkan path's backbuffer is).
     /// </summary>
     public GpuTexture Backbuffer => _backbuffer ?? throw new InvalidOperationException("no frame is open");
+
+    /// <summary>
+    /// Whether the scene's picture is made apart from the backbuffer at the render size when that is smaller (Disabled upscaler at a division of
+    /// the screen): the host sets it before a frame, stretches the picture to the backbuffer or has the present do it
+    /// (<see cref="PresentPicture"/>). Off: the picture is the backbuffer.
+    /// </summary>
+    public bool StretchPicture { get; set; }
+
+    /// <summary>
+    /// The frame's present shows <see cref="Picture"/> stretched to the drawable (nearest) instead of the backbuffer; cleared when a frame begins.
+    /// </summary>
+    public bool PresentPicture { get; set; }
+
+    /// <summary>
+    /// The target the scene's composite writes: the backbuffer, or while it is stretched a target of the render size.
+    /// </summary>
+    public GpuTexture Picture => _picture ?? Backbuffer;
+
+    /// <summary>
+    /// Whether <see cref="Picture"/> is a target apart from the backbuffer, at the render size, that the host has to put on the screen.
+    /// </summary>
+    public bool PictureApart => _picture is not null;
 
     /// <summary>
     /// The scene's depth attachment (the scene's render size, re-made with it): the host pass tests and writes it.
@@ -1349,7 +1407,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         attachments.SetObject(attachment, 0);
         var encoder = command.RenderCommandEncoder(descriptor);
         encoder.SetRenderPipelineState(_presentPipeline);
-        encoder.SetFragmentTexture(TextureAt(_backbuffer!), 0);
+        encoder.SetFragmentTexture(TextureAt(PresentPicture ? Picture : _backbuffer!), 0);
         encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest))), 0);
         var targetSize = stackalloc float[2] { (float)drawable.Texture.Width, (float)drawable.Texture.Height };
         encoder.SetFragmentBytes((nint)targetSize, 8, 1);

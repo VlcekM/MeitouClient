@@ -24,6 +24,17 @@ static class PostProcessShaders
         """;
 
     /// <summary>
+    /// One lookup of <c>uImage</c> at <c>vUv</c>: with a nearest sampler, the picture stretched to the target's size with the nearest pixel.
+    /// </summary>
+    public const string Stretch = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uImage;
+        void main() { fragColour = texture(uImage, vUv); }
+        """;
+
+    /// <summary>
     /// Interleaved gradient noise (Jimenez): a cheap per-pixel value in 0..1.
     /// </summary>
     const string Noise = """

@@ -151,7 +151,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// </summary>
     public ParticleRenderer? Particles { get; set; }
     /// <summary>
-    /// The finished picture target; the backbuffer unless the host sets another.
+    /// The finished picture target; the context's picture (the backbuffer, or the render-size target while it is stretched) unless the host sets
+    /// another.
     /// </summary>
     public GpuTexture? Target { get; set; }
     /// <summary>
@@ -267,7 +268,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
 
         // The full-size particles draw after the GI resolve and were built without the albedo attachment on Metal.
         SceneTargetsForParticles = PassTargets.Of(_sceneColour, _ctx.Depth);
-        Target = _ctx.Backbuffer;
+        Target = _ctx.Picture;
         foreach (var low in _lowTargets) low.Drawn = false;
         _frame++;
         JitterPixels = _jitter(_frame, sceneWidth, _displayWidth);
@@ -436,7 +437,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void End()
     {
         if (_sceneColour is null) throw new InvalidOperationException("no Metal post frame is open");
-        var target = Target ?? _ctx.Backbuffer;
+        var target = Target ?? _ctx.Picture;
         GpuTexture resolved = _sceneColour;
         if (!_noTaa())
         {

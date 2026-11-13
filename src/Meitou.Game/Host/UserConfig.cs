@@ -58,14 +58,18 @@ enum TickAheadMode
 }
 
 /// <summary>
-/// The Metal display path: native at full size, MetalFX temporal at any preset scale, MetalFX spatial as an alternative, or TAA.
+/// The Metal display path's upscaler: none (the picture's size is the window's, or in full screen a whole division of the screen's), MetalFX temporal
+/// at any preset scale, MetalFX spatial as an alternative, or TAA. The numbers are saved in <c>meitou.user.json</c>; <see cref="Disabled"/> is the
+/// running state of <see cref="UserConfig.MetalUseUpscaling"/> off and is never saved as the <see cref="UserConfig.MetalUpscaler"/>.
 /// </summary>
 enum MetalUpscalerMode
 {
     /// <summary>
-    /// Native rendering at full size (used when MetalFX is unavailable).
+    /// No upscaler (<see cref="UserConfig.MetalUseUpscaling"/> off, or MetalFX unavailable): the scene at the window's size, or in full screen at
+    /// <see cref="UserConfig.MetalRenderDivisor"/> of the screen's, or in a window at its virtual Retina pixels (<see cref="UserConfig.MetalRetinaResolution"/>
+    /// off), stretched to the screen with the nearest pixel. Was called Native.
     /// </summary>
-    Native,
+    Disabled,
     /// <summary>
     /// MetalFX temporal upscaling at any preset scale (the default).
     /// </summary>
@@ -96,7 +100,7 @@ sealed class UserConfig
     /// retyped or read with a new meaning, and convert older files in <see cref="Migrate"/>. A Tab panel slider whose numbering changes
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     /// <summary>
     /// The default of <see cref="CharacterFlightSeconds"/>, and the distance from the view a squad member must be past for a double click to
     /// fly there.
@@ -203,13 +207,39 @@ sealed class UserConfig
         }
     }
     /// <summary>
-    /// The Metal display default: MetalFX balanced (temporal at 0.50); Native is used when MetalFX is unavailable.
+    /// Whether the Metal path uses an upscaler (the default) or none: with it off the scene renders at the window's size, or in full screen at
+    /// <see cref="MetalRenderDivisor"/> of the screen's. Switched off by itself when MetalFX is unavailable.
+    /// </summary>
+    public bool MetalUseUpscaling { get; set; } = true;
+    /// <summary>
+    /// The Metal upscaler used while <see cref="MetalUseUpscaling"/> is on, kept while it is off: MetalFX balanced (temporal at 0.50) by default.
+    /// Never <see cref="MetalUpscalerMode.Disabled"/>.
     /// </summary>
     public MetalUpscalerMode MetalUpscaler { get; set; } = MetalUpscalerMode.Temporal;
     /// <summary>
     /// The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.
     /// </summary>
     public float MetalRenderScale { get; set; } = 0.5f;
+    /// <summary>
+    /// Without the Metal upscaler, in full screen: the screen's size divided by this (1 to <see cref="MetalRenderDivisorMax"/>, whole
+    /// numbers) is the size the scene renders at. In a window the scene is as large as the window.
+    /// </summary>
+    public int MetalRenderDivisor { get; set; } = 1;
+    /// <summary>
+    /// Without the Metal upscaler, in a window (full screen has <see cref="MetalRenderDivisor"/>): whether the scene renders at the window's real
+    /// pixels (the default) or at its virtual Retina pixels, one per point, stretched to the window. It changes nothing where the window has one
+    /// pixel per point.
+    /// </summary>
+    public bool MetalRetinaResolution { get; set; } = true;
+    /// <summary>
+    /// The largest <see cref="MetalRenderDivisor"/>.
+    /// </summary>
+    public const int MetalRenderDivisorMax = 4;
+    /// <summary>
+    /// Without the Metal upscaler and a render size below the screen's (full screen): the interface is drawn at the screen's size over the
+    /// stretched picture (the default), else at the render size with it.
+    /// </summary>
+    public bool MetalUiAtScreenResolution { get; set; } = true;
     /// <summary>
     /// The interface style: Meitou (the default) or Faithful, the game's.
     /// </summary>
@@ -729,6 +759,20 @@ sealed class UserConfig
             Strength("Meitou: Tone map and grade", 0, "Tone map (0 = game)", "Grading (0 = game)");
             if (AtGame("Tone map (0 = game)", 0)) graphics.Remove("Tone map (0 = game)");
         }
+        if (from < 3) MigrateMetalUpscaling(json);
+    }
+
+    /// <summary>
+    /// Layout 3 saves "no upscaler" as <c>metalUseUpscaling</c> off, never as a <c>metalUpscaler</c> of 0. A layout 1 or 2 file with that 0 (Native, saved
+    /// with a <c>metalRenderScale</c> of 1) gets the switch off and loses both, so turning it on picks the defaults (MetalFX temporal at 0.50).
+    /// </summary>
+    static void MigrateMetalUpscaling(JsonObject json)
+    {
+        if (json["metalUpscaler"] is not JsonValue value || !value.TryGetValue(out int mode) || mode != (int)MetalUpscalerMode.Disabled) return;
+
+        json.Remove("metalUpscaler");
+        json.Remove("metalRenderScale");
+        json["metalUseUpscaling"] = false;
     }
 
     /// <summary>
@@ -806,8 +850,9 @@ sealed class UserConfig
     {
         if (!float.IsFinite(MetalRenderScale)) MetalRenderScale = 0.5f;
         MetalRenderScale = Math.Clamp(MetalRenderScale, 0.33f, 1f);
-        if (!Enum.IsDefined(MetalUpscaler)) MetalUpscaler = MetalUpscalerMode.Temporal;
+        if (!Enum.IsDefined(MetalUpscaler) || MetalUpscaler == MetalUpscalerMode.Disabled) MetalUpscaler = MetalUpscalerMode.Temporal;
         if (MetalUpscaler is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) MetalRenderScale = Math.Clamp(MetalRenderScale, 0.4f, 1f);
+        MetalRenderDivisor = Math.Clamp(MetalRenderDivisor, 1, MetalRenderDivisorMax);
         ModSettings ??= [];
         foreach (var (mod, saved) in ModSettings.ToList())
             if (saved is null) ModSettings.Remove(mod);

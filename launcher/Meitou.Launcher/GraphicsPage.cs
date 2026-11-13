@@ -42,6 +42,11 @@ public sealed partial class MainWindow
     int _schemaVersion;
 
     /// <summary>
+    /// The renderer Play would start the game with (<c>vulkan</c> or <c>metal</c>), which decides the settings of one renderer that are shown.
+    /// </summary>
+    string _graphicsRenderer = "vulkan";
+
+    /// <summary>
     /// The Graphics tab shown (a section's name).
     /// </summary>
     string _graphicsTab = "";
@@ -71,6 +76,7 @@ public sealed partial class MainWindow
     /// </summary>
     (SettingsSchema? Schema, string? Problem) PlaySchema()
     {
+
         if (PlayVersion is not { } version)
             return (null, "Install a version first (Versions): its settings are shown here.");
         if (Releases.FindGame(Releases.VersionDirectory(version)) is not { } exe)
@@ -101,6 +107,7 @@ public sealed partial class MainWindow
             return;
         }
         _schemaVersion = schema.SettingsVersion;
+        _graphicsRenderer = GraphicsRenderer(schema);
         string? locked = Locked(schema);
         ShowGraphicsNotes(locked);
         var rows = GraphicsRows(schema, locked);
@@ -108,6 +115,19 @@ public sealed partial class MainWindow
         GraphicsPanel.Children.Add(rows);
         LauncherText.TranslateTree(GraphicsPanel, _originalUiText);
         LauncherText.TranslateTree(GraphicsFooter, _originalUiText);
+    }
+
+    /// <summary>
+    /// The renderer Play starts the game with for <paramref name="schema"/>'s release, as <c>SetUpRenderer</c> picks it: always Vulkan off macOS, and
+    /// there Auto is Vulkan for a release without Metal.
+    /// </summary>
+    string GraphicsRenderer(SettingsSchema schema)
+    {
+        if (!OperatingSystem.IsMacOS()) return "vulkan";
+
+        bool metalSupported = schema.Renderers.Contains("metal", StringComparer.OrdinalIgnoreCase);
+        string requested = _config.Renderer == "auto" && !metalSupported ? "vulkan" : _config.Renderer;
+        return MacSupport.Resolve(requested);
     }
 
     /// <summary>
@@ -236,9 +256,10 @@ public sealed partial class MainWindow
         : null;
 
     /// <summary>
-    /// Whether a setting gets a row: every toggle, and a slider with a range.
+    /// Whether a setting gets a row: every toggle, and a slider with a range, of the renderer the game would start with (or of both).
     /// </summary>
-    static bool Shown(SettingDescription s) => s.Kind == SettingKind.Toggle || s.Kind == SettingKind.Slider && s.Max > s.Min;
+    bool Shown(SettingDescription s) => (s.Kind == SettingKind.Toggle || s.Kind == SettingKind.Slider && s.Max > s.Min)
+        && (s.Renderer is not { } renderer || renderer == _graphicsRenderer);
 
     /// <summary>
     /// Fills the content with one tab's rows: its plain settings, then its feature groups (headers that fold their settings), with their marks and
@@ -297,7 +318,8 @@ public sealed partial class MainWindow
     /// </summary>
     void ShowWhen(Control row, SettingCondition when)
     {
-        void Check() => row.IsVisible = !_settingByKey.TryGetValue(when.Key, out var other) || when.Matches(CurrentValue(other));
+        float? ValueOf(string key) => _settingByKey.TryGetValue(key, out var other) ? CurrentValue(other) : null;
+        void Check() => row.IsVisible = when.Holds(ValueOf);
         _rowMarks.Add(Check);
         Check();
     }

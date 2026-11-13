@@ -53,13 +53,33 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static readonly string[] GraphicsPages =
         ["Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
     /// <summary>
-    /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
+    /// The Metal-only switch between the two trees of Metal display settings: with it on the upscaler (<see cref="MetalPresetSlider"/>,
+    /// <see cref="MetalRenderScaleSlider"/>), off the render resolution (<see cref="MetalRenderResolutionSlider"/>, <see cref="MetalUiResolutionSlider"/>);
+    /// catalogue key <c>metalUseUpscaling</c>.
     /// </summary>
-    internal const string MetalPresetSlider = "Metal upscaling";
+    internal const string MetalUseUpscalingSlider = "Use Metal upscaling";
     /// <summary>
-    /// The Metal-only free render scale under the preset's upscaler, shown with the scene's size in pixels.
+    /// The Metal-only preset row (MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel; shown while the upscaling is on.
+    /// </summary>
+    internal const string MetalPresetSlider = "Metal upscaling preset";
+    /// <summary>
+    /// The Metal-only free render scale under the preset's upscaler, shown with the scene's size in pixels; shown while the upscaling is on.
     /// </summary>
     internal const string MetalRenderScaleSlider = "Metal render scale";
+    /// <summary>
+    /// The Metal-only switch for rendering a window without the upscaler at its real pixels or its virtual Retina pixels (one per point); catalogue
+    /// key <c>metalRetinaResolution</c>.
+    /// </summary>
+    internal const string MetalRetinaResolutionSlider = "Full Retina resolution";
+    /// <summary>
+    /// The Metal-only render resolution without the upscaler in full screen (the screen's size divided by 1 to 4), catalogue key
+    /// <c>metalRenderDivisor</c>.
+    /// </summary>
+    internal const string MetalRenderResolutionSlider = "Render resolution";
+    /// <summary>
+    /// The Metal-only switch for drawing the interface at the screen's size over the stretched picture, catalogue key <c>metalUiAtScreenResolution</c>.
+    /// </summary>
+    internal const string MetalUiResolutionSlider = "Render UI in screen resolution";
     /// <summary>
     /// The sliders' values when the menu was made: what Restore defaults puts back.
     /// </summary>
@@ -360,6 +380,17 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Func<string>? UpscalerStatus { get; init; }
 
     /// <summary>
+    /// Whether a Display row, by its row's key (a Tab panel label or the catalogue key), is shown now; null on a host without conditional rows
+    /// (the Metal host hides the render scale or the render resolution by the upscaler and full screen).
+    /// </summary>
+    public Func<string, bool>? DisplayRowShown { get; init; }
+
+    /// <summary>
+    /// The Render resolution row's choices with their pixel sizes on the screen as it is now; null: the catalogue's names.
+    /// </summary>
+    public Func<string[]>? RenderResolutionLabels { get; init; }
+
+    /// <summary>
     /// What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.
     /// </summary>
     public Func<string>? FrameGenerationStatus { get; init; }
@@ -540,7 +571,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static string Section(string label)
     {
         if (label is "Time of day" or "Time speed") return "Advanced";
-        if (label is "VSync" or "Full screen" or MetalPresetSlider or MetalRenderScaleSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
+        if (label is "VSync" or "Full screen" or MetalUseUpscalingSlider or MetalPresetSlider or MetalRenderScaleSlider or MetalRenderResolutionSlider
+                or MetalRetinaResolutionSlider or MetalUiResolutionSlider
+            || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
             || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
 
         return GraphicsSection(label, false);
@@ -659,7 +692,23 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.
     /// </summary>
-    static string CatalogueKey(string label) => label switch { "Full screen" => "fullScreen", "VSync" => "vSync", _ => label };
+    static string CatalogueKey(string label) => label switch
+    {
+        "Full screen" => "fullScreen",
+        "VSync" => "vSync",
+        MetalUseUpscalingSlider => "metalUseUpscaling",
+        MetalPresetSlider => "metalUpscaler",
+        MetalRenderResolutionSlider => "metalRenderDivisor",
+        MetalRetinaResolutionSlider => "metalRetinaResolution",
+        MetalUiResolutionSlider => "metalUiAtScreenResolution",
+        _ => label,
+    };
+
+    /// <summary>
+    /// Where a Display row comes on its page: its place in the catalogue. The Metal render scale row is the game's own (its choices are the
+    /// preset row's), ordered as the launcher's <c>metalRenderScale</c>.
+    /// </summary>
+    static int RowOrder(string key) => LauncherSchema.Order(key == MetalRenderScaleSlider ? "metalRenderScale" : key);
 
     /// <summary>
     /// A Tab panel slider's row, as the launcher shows it: name, range, scale direction, value text and choices come from the catalogue
@@ -684,9 +733,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         string[]? options = key == MetalPresetSlider
-            ? ["Native 1.00", "MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50",
+            ? ["MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50",
                 "MetalFX Temporal 0.40", "MetalFX Spatial 0.50 (alternative)", "MetalFX Spatial 0.40 (alternative)", "TAA 0.50 (experimental)",
                 "Custom"]
+            : key == MetalRenderResolutionSlider && RenderResolutionLabels?.Invoke() is { } sizes ? sizes
             : d?.Labels;
         string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
@@ -696,11 +746,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", Loc.Tr(UpscalerStatus?.Invoke() ?? "unavailable"))
             : SettingHints.SliderHint(slider);
 
-        // The options are the slider's whole values from its left end.
-        float first = d?.Min ?? slider.Min;
+        // The options are the slider's whole values from its left end (the preset row's are its own, from the panel's slider: the catalogue's
+        // upscaler choice has no Disabled).
+        float first = key == MetalPresetSlider ? slider.Min : d?.Min ?? slider.Min;
         return options is { } items
-            ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
-            : new(label, hint, Slider: slider, Raw: key);
+            ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: CatalogueKey(key))
+            : new(label, hint, Slider: slider, Raw: CatalogueKey(key));
     }
 
     /// <summary>
@@ -836,7 +887,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = Values.Sliders
             .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[Page] && ReliefSliderShown(s.Label))
-            .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label)))
+            .OrderBy(s => RowOrder(CatalogueKey(s.Label)))
             .Select(SliderEntry)
             .ToList();
 
@@ -962,7 +1013,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         result.RemoveAll(e => !ShownNow(e));
-        result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
+        result = [.. result.OrderBy(e => RowOrder(e.Raw ?? ""))];
         result = [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
 
         // As the Graphics tabs: a feature's settings fold under its row (HDR output, the upscaler).
@@ -997,8 +1048,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// False for a row the catalogue shows only while another setting is at a value (<c>ShownWhen</c>: the DLSS preset) and that one is not.
     /// </summary>
-    bool ShownNow(Entry entry) => entry.Raw is not { } key || LauncherSchema.Find(key)?.ShownWhen is not { } when
-        || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get());
+    bool ShownNow(Entry entry) => entry.Raw is not { } key || (DisplayRowShown?.Invoke(key) ?? true)
+        && (LauncherSchema.Find(key)?.ShownWhen is not { } when
+            || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get()));
 
     /// <summary>
     /// An action's name for its row: its words spaced.
