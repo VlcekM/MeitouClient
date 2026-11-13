@@ -72,7 +72,7 @@ static class NavSurfaceFaces
 
         byte area = mesh.Areas[polygon];
         bool filtered = area is NavArea.Door or NavArea.Water or NavArea.WaterWaist or NavArea.WaterDeep;
-        return new SurfaceFace(corners, open, filtered);
+        return new SurfaceFace(corners, open, filtered, (x, z) => mesh.HeightAt(polygon, x, z));
     }
 
     /// <summary>

@@ -53,9 +53,9 @@ static class RefitSnap
         {
             if (face.Filtered || !BoxMeets(face, at.X, at.Z, Reach, at.Y, Reach)) continue;
 
-            for (int k = 1; k + 1 < face.Corners.Length; k++)
+            foreach (var (a, b, c) in For(face).Triangles)
             {
-                var point = ClosestOnTriangle(at, face.Corners[0], face.Corners[k], face.Corners[k + 1]);
+                var point = ClosestOnTriangle(at, a, b, c);
                 float d = Vector3.DistanceSquared(at, point);
                 if (d >= bestDistance) continue;
 
@@ -215,7 +215,7 @@ static class RefitSnap
             if (!Barycentric(p, c[0], c[k], c[k + 1], out float u, out float v, out float w)) continue;
             if (u < -1e-5f || v < -1e-5f || w < -1e-5f) continue;
 
-            y = u * c[0].Y + v * c[k].Y + w * c[k + 1].Y;
+            y = face.SurfaceHeight?.Invoke(p.X, p.Y) ?? u * c[0].Y + v * c[k].Y + w * c[k + 1].Y;
             return true;
         }
 
@@ -256,7 +256,10 @@ static class RefitSnap
             hi = Vector3.Max(hi, c);
         }
 
-        return hi.X >= x - half && lo.X <= x + half && hi.Z >= z - half && lo.Z <= z + half && hi.Y >= y - halfY && lo.Y <= y + halfY;
+        if (hi.X < x - half || lo.X > x + half || hi.Z < z - half || lo.Z > z + half) return false;
+        if (face.SurfaceHeight is not null) (lo.Y, hi.Y) = For(face).HeightRange;
+
+        return hi.Y >= y - halfY && lo.Y <= y + halfY;
     }
 
     /// <summary>
@@ -269,6 +272,84 @@ static class RefitSnap
         float t = length < 1e-12f ? 0 : Math.Clamp(Vector2.Dot(p - a, ab) / length, 0, 1);
         return Vector2.Distance(p, a + ab * t);
     }
+
+    #endregion
+
+    #region Surface
+
+    /// <summary>
+    /// The triangles each face is queried as, kept per face (a face is queried many times in one snap).
+    /// </summary>
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SurfaceFace, Prepared> Cache = new();
+
+    /// <summary>
+    /// The longest triangle edge the surface is cut to where a face knows its own heights: twice the 18-unit terrain sample spacing, the
+    /// resolution the original's terrain mesh is generated at (every second height sample).
+    /// </summary>
+    const float SurfaceEdge = 36;
+
+    /// <summary>
+    /// A face's query triangles and the height range they cover.
+    /// </summary>
+    sealed record Prepared(List<(Vector3 A, Vector3 B, Vector3 C)> Triangles, (float Lo, float Hi) HeightRange);
+
+    /// <summary>
+    /// The face's triangles: the fan over its corners, cut to <see cref="SurfaceEdge"/> with the heights of <see cref="SurfaceFace.SurfaceHeight"/> at
+    /// every corner when the face has them (a navmesh polygon spans slopes its corner heights do not follow: Goonrock's live 3D snap landed 15 units
+    /// from the one on the original's terrain mesh).
+    /// </summary>
+    static Prepared For(SurfaceFace face) => Cache.GetValue(face, Build);
+
+    /// <summary>
+    /// <see cref="For"/> without the cache.
+    /// </summary>
+    static Prepared Build(SurfaceFace face)
+    {
+        var triangles = new List<(Vector3, Vector3, Vector3)>();
+        var c = face.Corners;
+        for (int k = 1; k + 1 < c.Length; k++)
+        {
+            if (face.SurfaceHeight is { } height) Cut(triangles, height, c[0], c[k], c[k + 1], 0);
+            else triangles.Add((c[0], c[k], c[k + 1]));
+        }
+
+        float lo = float.MaxValue, hi = float.MinValue;
+        foreach (var (a, b, d) in triangles)
+        {
+            lo = MathF.Min(lo, MathF.Min(a.Y, MathF.Min(b.Y, d.Y)));
+            hi = MathF.Max(hi, MathF.Max(a.Y, MathF.Max(b.Y, d.Y)));
+        }
+
+        return new Prepared(triangles, (lo, hi));
+    }
+
+    /// <summary>
+    /// Adds triangle (a, b, c) to the list, cut into four at its edge midpoints (heights from <paramref name="height"/>) until no edge is longer than
+    /// <see cref="SurfaceEdge"/>.
+    /// </summary>
+    static void Cut(List<(Vector3, Vector3, Vector3)> list, Func<float, float, float> height, Vector3 a, Vector3 b, Vector3 c, int depth)
+    {
+        float longest = MathF.Max(Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)),
+            MathF.Max(Vector2.Distance(new(b.X, b.Z), new(c.X, c.Z)), Vector2.Distance(new(c.X, c.Z), new(a.X, a.Z))));
+        if (longest <= SurfaceEdge || depth >= 6)
+        {
+            list.Add((OnSurface(height, a), OnSurface(height, b), OnSurface(height, c)));
+            return;
+        }
+
+        var ab = (a + b) / 2;
+        var bc = (b + c) / 2;
+        var ca = (c + a) / 2;
+        Cut(list, height, a, ab, ca, depth + 1);
+        Cut(list, height, ab, b, bc, depth + 1);
+        Cut(list, height, ca, bc, c, depth + 1);
+        Cut(list, height, ab, bc, ca, depth + 1);
+    }
+
+    /// <summary>
+    /// The point with the surface's height at its X/Z.
+    /// </summary>
+    static Vector3 OnSurface(Func<float, float, float> height, Vector3 p) => p with { Y = height(p.X, p.Z) };
 
     #endregion
 }
