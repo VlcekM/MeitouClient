@@ -645,8 +645,11 @@ building's interior layout (`TownBuilding.ItemSlots`, id `<building>/item<n>`) i
 (weighted pick, a weapon with a manufacturer and model, armour with the grade quality of the owner faction's armour chances: engine reading) laid flat at the slot, turned at
 random for `random yaw`, owned by the building's faction (`GroundItem.OwnedBy`) and not counted against the limit; when it leaves the ground the next is due in an int of
 [min, max] game hours. Builders fetching materials skip items another faction owns; taking one is stealing, as any owned loose item. Engine choices: slot items are saved as plain
-loose items (`ownedby` null) and a reload binds a saved item lying within 2 of a slot (one of its group's records) to it; respawn deadlines are not saved (a taken slot is due at
-once after a reload); upper-floor items are not hidden when a lower floor is viewed. The original, loading such a save, generates the interiors again beside those items.
+loose items (`ownedby` null); an empty slot's due game hour is saved as `meitou slot due item<n>` in its building's GAMESTATE_BUILDING (`ItemSlots.WriteDue`,
+[save keys](formats/save.md)), and a slot saved empty waits for it (capped at its longest respawn time from the load) and claims nothing; on a reload each other slot
+takes the nearest saved item of its group's records lying within 2 of it in XZ and 10 in height, and nearer to it in 3D than to the building's other slots (shelf spots
+lie closer than 2, two in the Hub's bar 1.6 apart, **Observed**, and shelves stand above one another); a save from the original has no such key, so a slot emptied in
+it is due at once after the load; upper-floor items are not hidden when a lower floor is viewed. The original, loading such a save, generates the interiors again beside those items.
 
 ## Items and eating
 

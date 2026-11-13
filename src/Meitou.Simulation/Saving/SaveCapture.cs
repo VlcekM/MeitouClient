@@ -1554,9 +1554,10 @@ public static partial class SaveCapture
     #region Locks and buildings
 
     /// <summary>
-    /// The registered buildings' locks, doors and container contents, and the homes a lock-up round locked, into their zones' state records. A
-    /// building the save has no record of is left out, except a level placement (one placed during the session) whose containers hold items: it gets
-    /// a state record in its zone's file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt without them.
+    /// The registered buildings' locks, doors, container contents and empty loose-item slots' waits, and the homes a lock-up round locked, into
+    /// their zones' state records. A building the save has no record of is left out, except a level placement (one placed during the session) whose
+    /// containers hold items: it gets a state record in its zone's file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt
+    /// without them.
     /// </summary>
     static void WriteLocks(SaveGame game, World world, Dictionary<string, FcsRecord> buildings, WorldLevelData? levels)
     {
@@ -1581,6 +1582,8 @@ public static partial class SaveCapture
             if (locks.IsHouseLocked(world, b)) state.Bools[Locks.LockSystem.HouseLockedKey] = true;
             else state.Bools.Remove(Locks.LockSystem.HouseLockedKey);
         }
+
+        world.ItemSlots.WriteDue(world, buildings);
     }
 
     /// <summary>
