@@ -154,12 +154,15 @@ public sealed class FoliageWorld : IDisposable
         var at = new Vector2(x, z);
         FoliageTown? best = null;
         float bestDistance = float.MaxValue;
-        foreach (var t in _towns!.Concat(ExtraTowns))
+        foreach (var t in _towns!) Consider(t);
+        foreach (var t in ExtraTowns) Consider(t);
+        return best;
+
+        void Consider(FoliageTown t)
         {
             float d = Vector2.DistanceSquared(t.At, at);
             if (d < bestDistance) (bestDistance, best) = (d, t);
         }
-        return best;
     }
 
     /// <summary>
