@@ -172,8 +172,8 @@ public sealed class FreeCamera
     /// </summary>
     public void Update(float dt, ActionState a)
     {
-        // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): the mouse alone turns the view
-        // there.
+        // Photo mode has its own keys (the game's turn keys are its down and up, its Orbit key its slow modifier): only the mouse drag turns the
+        // view there.
         bool photoMode = Photo is not null;
         if (!photoMode) AdjustSpeed(dt, a.Wheel);
         TurnView(dt, a, photoMode);
@@ -182,8 +182,8 @@ public sealed class FreeCamera
     }
 
     /// <summary>
-    /// Turns the view by the rotate and pitch keys (not in photo mode) and the mouse drag, scaled by photo mode's <see cref="PhotoControls.LookScale"/>;
-    /// clamps the pitch.
+    /// Turns the view by the rotate and pitch keys (not in photo mode) and the mouse (dragged in photo mode), scaled by photo mode's
+    /// <see cref="PhotoControls.LookScale"/>; clamps the pitch.
     /// </summary>
     void TurnView(float dt, ActionState a, bool photoMode)
     {
@@ -192,7 +192,8 @@ public sealed class FreeCamera
         float tilt = photoMode ? 0 : (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
         Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * look * dt);
         Pitch += tilt * _settings.RotateSpeed * look * dt;
-        if (photoMode ? a.Input.IsDown(MouseButton.Right) || a.Input.IsDown(MouseButton.Middle) : a.Held(InputAction.Orbit))
+        // Outside photo mode the mouse alone turns the view, no button held (engine choice; the host pins the pointer, GameHost.MouseLook).
+        if (!photoMode || a.Input.IsDown(MouseButton.Right) || a.Input.IsDown(MouseButton.Middle))
         {
             Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity * look);
             Pitch += a.MouseDelta.Y * _settings.MouseSensitivity * look;

@@ -77,6 +77,12 @@ sealed partial class GameHost
         : Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>
+    /// The mouse turns the camera and the pointer is pinned: Orbit is held, or the free camera flies outside photo mode (it looks around with the
+    /// mouse alone, engine choice) with no modal window open.
+    /// </summary>
+    internal bool MouseLook() => OrbitHeld() || Session.Camera.IsFree && !PhotoLook && !Player.ModalOpen;
+
+    /// <summary>
     /// A key or button bound to Highlight (either Alt by default) is down: the original's steal, pick-lock and loot modifier is that action's held
     /// flag (docs/game/ui-input.md "Building picking and selection").
     /// </summary>

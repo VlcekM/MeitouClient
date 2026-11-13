@@ -146,7 +146,7 @@ overshoots by up to one step); the eye is never left below the clearance by the 
 follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the
 ground by the same clearance, as it does for the squad tour's arcs, [viewer.md](../viewer.md#squad-tour)); rotating pins the pointer as the game does (put back after every move, no
 marker drawn); `mouse_rotate` is the middle button or Ctrl (Ctrl+right click is also Meitou's carry binding); the free camera keeps its own
-engine feel (its Q/E turn the view left/right as named, not as the strategy camera's; each wheel notch scales its speed by 2^(1/4), 1/16 to
+engine feel (the mouse turns the view without a button held, the pointer pinned; photo mode keeps the drag; its Q/E turn the view left/right as named, not as the strategy camera's; each wheel notch scales its speed by 2^(1/4), 1/16 to
 16 times, so scrolling back always reaches 100%; a label shows the speed for 3 s after a change; Shift does not boost it). The sea height clamps the camera's ground
 (**Observed**: the water node's height is the water height, 100). The settings above are constants of `CameraSettings`, not read
 from `settings.cfg`; `.`/`,` are no longer the time-step keys (they tilt, as in the game).

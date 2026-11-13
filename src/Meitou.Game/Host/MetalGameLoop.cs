@@ -1975,7 +1975,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _lastMouse = p;
             return;
         }
-        bool hold = _lastMouse is not null && host.OrbitHeld();
+        bool hold = _lastMouse is not null && host.MouseLook();
         _hud?.MouseMove(Pixels(hold ? _lastMouse!.Value : p));
         // The panels and their drags own the pointer: the camera must not also turn under them.
         if (_hud is { UiCapturesPointer: true })

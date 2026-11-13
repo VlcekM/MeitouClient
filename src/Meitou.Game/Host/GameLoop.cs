@@ -1286,7 +1286,7 @@ sealed class GameLoop(GameHost host)
             _lastMouse = p;
             return;
         }
-        bool hold = _lastMouse is not null && host.OrbitHeld();
+        bool hold = _lastMouse is not null && host.MouseLook();
         host.Player.MouseMove(Pixels(hold ? _lastMouse!.Value : p));
         if (host.Player.UiCapturesPointer || host.Player.ModalOpen)
         {
@@ -1534,7 +1534,7 @@ sealed class GameLoop(GameHost host)
         StepControlPointer();
         // Rotation over on Linux: the pointer is let go where it was locked, in the cursor mode it had before, and before its position is read
         // (still locked, GLFW reports its virtual position, and the pointer was drawn there for a frame). The next move starts afresh.
-        if (_orbitAnchor is not null && !host.OrbitHeld())
+        if (_orbitAnchor is not null && !host.MouseLook())
         {
             _orbitAnchor = null;
             _lastMouse = null;
