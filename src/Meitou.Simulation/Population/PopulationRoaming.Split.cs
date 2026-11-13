@@ -107,6 +107,7 @@ public sealed partial class PopulationSystem
 
         squad.Members.Remove(id);
         if (squad.Leader == id) squad.Leader = SquadRegistry.Successor(squad.Members, world.Characters);
+        LeaveSavedPlatoon(world, cold);
 
         cold.SquadId = made.Id;
         cold.Role = (int)SquadRole.Leader;
@@ -117,6 +118,19 @@ public sealed partial class PopulationSystem
         np.Package = package;
         world.Squads.Add(made);
         world.Platoons.Add(np);
+    }
+
+    /// <summary>
+    /// A member made from a save's platoon leaves that platoon's record with the split, as the original's split moves the character into the new
+    /// platoon (<c>FUN_14079c1c0</c>): a save then writes it with its new platoon, where it is. Kept in the old record it came back only with its
+    /// home squad, so a kidnapped town character was gone after a load (#622).
+    /// </summary>
+    static void LeaveSavedPlatoon(World world, CharacterCold cold)
+    {
+        if (cold.Save is not { } link || world.Saved?.MemberOf(link) is not { } member) return;
+
+        member.Gone = true;
+        member.Live = CharacterId.None;
     }
 
     /// <summary>

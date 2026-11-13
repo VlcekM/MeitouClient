@@ -227,6 +227,11 @@ public sealed class SavedPopulation
     /// </summary>
     public List<SavedPlatoon> Platoons { get; } = [];
     /// <summary>
+    /// The member of a save's NPC platoon a character was made from; null for a character of the player's platoons.
+    /// </summary>
+    public SavedMember? MemberOf(SavedCharacterLink link) =>
+        Platoons.FirstOrDefault(sp => sp.Name == link.PlatoonName)?.Members.FirstOrDefault(m => m.Slot == link.Slot);
+    /// <summary>
     /// The save's nests in list order: the wild layout takes them before rolling more (empty: none, e.g. a Meitou save from before nests were
     /// written).
     /// </summary>

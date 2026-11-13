@@ -1231,7 +1231,7 @@ public static partial class SaveCapture
                 if (!Writable(squad.Town, squad.Faction) && !MadeWild(roamer, squad.Faction)) continue;
 
                 // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
-                var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
+                var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false } c && OwnRecord(c)).ToList();
                 var alive = every.Where(m => table.Cold(m.Slot)!.DiedTick < 0).ToList();
                 var into = Into(roamer);
                 if (alive.Count == 0)
@@ -1254,8 +1254,15 @@ public static partial class SaveCapture
                     .ToList();
                 var sp = WriteWorldSquad(squad, roamer, members, into);
                 if (roamer is not null) _written[roamer.Id] = sp;
+                if (roamer is { Persistent: true }) sp.Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
             }
         }
+
+        /// <summary>
+        /// Whether a character gets a record of its own here: one the population made, or one made from a save's platoon it has left since (a
+        /// captive split off its squad, <c>PopulationSystem.SplitCaptives</c>). Any other character of a save is written into its own platoon.
+        /// </summary>
+        bool OwnRecord(CharacterCold cold) => cold.Save is not { } link || _world.Saved?.MemberOf(link) is { Gone: true };
 
         /// <summary>
         /// Writes one squad in the world, with its platoon's state when it has one.
