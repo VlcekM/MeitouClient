@@ -153,6 +153,10 @@ for its body mesh, so the first of a body mesh is still built. Never the player'
 no shadow, motion or reflection pass sees it either; the simulation, the host's lists, sight, sounds and selection are untouched (picking reads the live list: a speck is not clickable).
 **Observed**: far giants of a mod-heavy install cost 0.6-1.2 ms a frame in a camera flight before this; **Unknown**: popping under DLSS at 1.5 px (not seen at the far zoom).
 
+### Bone anchors (Meitou engine choice)
+
+`CharacterInstance.Anchor` (`CharacterAnchor`: carrier key, bone name, offset and rotation in the bone's frame) places a character's node on another character's bone as that one is drawn in the same frame: node position = the bone's world position + (carrier rotation x bone model-space rotation) x offset x carrier size, node rotation = carrier rotation x bone rotation x the anchor's rotation. The anchored character keeps its own size, pose, gear and bounds. `PoseLive` poses every character first, then `PlaceAnchored` moves the anchored ones (world matrix, bounding sphere, motion vectors) and places their parts; a carrier whose pose is held by the thinning anchors on its held palette, and an anchored carrier is placed before what it carries (4 deep). While the carrier is not drawn in the world that update (out of reach, hidden, look not built) or lacks the bone, the instance's own `Position` / `Rotation` draw it; they always feed the gather's culling. Used by the shoulder carry ([carry-loot](game/carry-loot.md)); code mods have no access to the draw list yet (issue #602). **Verified** (throwaway check, male skeleton, 40 clips): the anchor's node equals the simulation's `CarryPose` placement within 0.01 units; not seen in game.
+
 ## Animals and portraits
 
 Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not human fallback.

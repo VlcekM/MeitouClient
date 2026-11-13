@@ -76,7 +76,7 @@ is the carrier's), so a chained slave of the carrier's faction is set down awake
 **Verified** placement (decompile `FUN_1405cda20`, `FUN_1405b5980`, `FUN_1405b1a30`, constants read): node position = carrier node position + carrier rotation x the attach bone's model-space position
 (`FUN_1405b1ec0`) + the bone's world rotation x O; rotation = bone world rotation x 90 degrees about x x 14 degrees about z; O lerps by t = 2 x (Height - 80) x 0.025 from (-1.4, 0, 1) through (-1.9, -1, 2.6)
 to (-3, -0.4, 5), not clamped (Meitou `CarryPose` matches). The body's node is its feet origin, so a carried body's head hangs down in front of the carrier and its hips ride on the shoulder.
-Meitou draws the body on the carrier's **drawn** facing and the attach interpolated between ticks (`GameHost.CarrierYaw`, `MixCarry`). Measured (carry scene, a standing carrier): shoulder bone y 14.5, node y 17 to 20,
+Meitou draws the body on the carrier's attach bone as the renderer poses it that frame ([bone anchors](../character-renderer.md#bone-anchors-meitou-engine-choice): the simulation publishes the node in the bone's frame, `CarryAttach.OnBone`, for a person the offset O and the two fixed turns, for an animal what its pinned carry body gives). The simulation's own placement, on the carrier's **drawn** facing with the attach interpolated between ticks (`GameHost.CarrierYaw`, `MixCarry`), poses the ragdoll and draws the body while its carrier is not drawn. Measured (carry scene, a standing carrier): shoulder bone y 14.5, node y 17 to 20,
 carried pelvis 8 to 16, head 14 to 16 above the carrier's feet; a crawling carrier's shoulder is at 3 to 5 and so is its body.
 
 ### A carrier in a fight

@@ -467,6 +467,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public Matrix4x4 World;
         /// <summary>
+        /// The bone of another character its node is placed on once the poses are known (<see cref="PlaceAnchored"/>); null: none.
+        /// </summary>
+        public CharacterAnchor? Anchor;
+        /// <summary>
+        /// The size it is drawn at (<see cref="CharacterInstance.Scale"/>).
+        /// </summary>
+        public float Scale;
+        /// <summary>
         /// Its bounding sphere's centre in the world.
         /// </summary>
         public Vector3 Centre;
@@ -576,6 +584,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// Whether <see cref="World"/> has been set (the first frame's previous transform is the current one).
         /// </summary>
         public bool HasWorld;
+        /// <summary>
+        /// The update stamp in which it still waits to be placed on its carrier's bone, and the last one it was placed on it in
+        /// (<see cref="PlaceAnchored"/>).
+        /// </summary>
+        public long AnchorDue = -1, Anchored = -1;
         /// <summary>
         /// The update stamp it was last posed in (-1: never) and the one it was last seen in (<see cref="EvictStates"/> forgets it after 60).
         /// </summary>
@@ -1114,6 +1127,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     (int Bones, int Parts) GatherLive(Vector3 eye)
     {
         _liveCount = _layerCount = _attachCount = 0;
+        _anchored.Clear();
         (_tinyBefore, _tinyNow) = (_tinyNow, _tinyBefore);
         _tinyNow.Clear();
         int built = 0, boneTotal = 0, partTotal = 0;
@@ -1239,6 +1253,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.Asset = asset;
         (l.Key, l.PortraitOnly) = (inst.Key, far);
         l.World = WorldOf(in inst, asset, scale);
+        (l.Anchor, l.Scale) = (inst.World is null ? inst.Anchor : null, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
         l.Mouth = inst.Mouth;
         l.Centre = centre;
@@ -1251,6 +1266,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.LayerStart = _layerCount;
         l.LayerCount = 0;
         Track(ref l, in inst, asset, far);
+        if (l.Anchor is null) return ref l;
+
+        _anchored.Add(_liveCount - 1);
+        l.State.AnchorDue = _updateStamp;
         return ref l;
     }
 
@@ -1262,10 +1281,20 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     static Matrix4x4 WorldOf(in CharacterInstance inst, CharacterAsset asset, float scale)
     {
         if (inst.World is { } world) return world;
-        var placed = inst.Rotation is { } rotation
-            ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation)
-                * Matrix4x4.CreateTranslation(inst.Position)
-            : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
+        if (inst.Rotation is { } rotation) return Turned(asset, inst.Position, rotation, scale);
+
+        var placed = Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
+        return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
+    }
+
+    /// <summary>
+    /// The world matrix of a node at <paramref name="position"/> turned by its whole <paramref name="rotation"/>: lowered by the ground offset in
+    /// its own frame, then turned and moved.
+    /// </summary>
+    static Matrix4x4 Turned(CharacterAsset asset, Vector3 position, Quaternion rotation, float scale)
+    {
+        var placed = Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation)
+            * Matrix4x4.CreateTranslation(position);
         return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
     }
 
@@ -1388,6 +1417,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (_partFrames.Length < partTotal) _partFrames = new PartFrame[Math.Max(partTotal, _partFrames.Length * 2)];
         if (_liveCount > 0)
             Parallel.For(0, _liveCount, i => PoseOne(ref _live[i], bonePointer, previousPointer, motion, eye));
+        PlaceAnchored(eye, motion);
         (_partStamp, _partOrigin, _partMotion) = (_updateStamp, eye, motion);
         _paletteFrame = Gpu.Frame.Number;
         LastPoseMs = watch.Elapsed.TotalMilliseconds;
@@ -1413,7 +1443,69 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             (l.Repose ? state.Previous : state.Bones).CopyTo(new Span<Matrix4x4>((byte*)previousPointer + (long)l.BoneBase * 64, rig.BoneCount));
             if (!l.Repose) state.Attach.CopyTo(state.PreviousAttach, 0);
         }
-        if (!l.PortraitOnly) PlaceParts(in l, eye, motion);
+        if (!l.PortraitOnly && l.Anchor is null) PlaceParts(in l, eye, motion);
+    }
+
+    /// <summary>
+    /// The live characters anchored to another's bone this update (<see cref="Live.Anchor"/>), by index.
+    /// </summary>
+    readonly List<int> _anchored = [];
+
+    /// <summary>
+    /// How deep a chain of anchors is followed in order (a body carried by a rider on a mount is 2); a deeper or circular one is placed on its
+    /// carrier as that one stands then.
+    /// </summary>
+    const int AnchorDepth = 4;
+
+    /// <summary>
+    /// Places the anchored characters on their carriers' bones as just posed (a carrier whose pose was held this frame: on its held palette, as it
+    /// is drawn), then their parts. A carrier that is anchored itself is placed first. One whose carrier is not drawn in the world this update, or
+    /// lacks the bone, stays where the draw list put it.
+    /// </summary>
+    void PlaceAnchored(Vector3 eye, bool motion)
+    {
+        for (int pass = 0; pass < AnchorDepth; pass++)
+        {
+            foreach (int i in _anchored)
+            {
+                ref var l = ref _live[i];
+                if (l.State.AnchorDue != _updateStamp) continue;
+
+                _states.TryGetValue(l.Anchor!.Value.Carrier, out var carrier);
+                if (carrier?.AnchorDue == _updateStamp && pass < AnchorDepth - 1) continue;
+
+                if (carrier is not null && NodeOn(carrier, l.Anchor.Value) is var (position, rotation)) MoveTo(ref l, position, rotation);
+                l.State.AnchorDue = -1;
+                if (!l.PortraitOnly) PlaceParts(in l, eye, motion);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The node <paramref name="anchor"/> gives on <paramref name="carrier"/> as it is drawn in the world this update; null when it is not, or
+    /// has no such bone.
+    /// </summary>
+    (Vector3 Position, Quaternion Rotation)? NodeOn(CharState carrier, in CharacterAnchor anchor)
+    {
+        if (carrier.Seen != _updateStamp || !carrier.InWorld || carrier.Posed < 0 || carrier.Asset is not { IsIcon: false } asset) return null;
+        if (carrier.Bones.Length != asset.Rig.BoneCount) return null;
+
+        return BoneAnchor.Node(asset.Rig, carrier.Bones, in carrier.World, in anchor);
+    }
+
+    /// <summary>
+    /// Moves an anchored character's node to <paramref name="position"/> / <paramref name="rotation"/>: its world matrix and bounding sphere, and
+    /// what is kept of them. The first update on the anchor has no motion from where the draw list had put it.
+    /// </summary>
+    void MoveTo(ref Live l, Vector3 position, Quaternion rotation)
+    {
+        var state = l.State;
+        l.World = Turned(l.Asset, position, rotation, l.Scale);
+        l.Centre = position + new Vector3(0, l.Asset.Height * 0.5f * l.Scale, 0);
+
+        (state.World, state.Centre) = (l.World, l.Centre);
+        if (state.Anchored != _updateStamp - 1) state.PreviousWorld = l.World;
+        state.Anchored = _updateStamp;
     }
 
     /// <summary>

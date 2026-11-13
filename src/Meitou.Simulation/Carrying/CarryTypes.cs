@@ -187,6 +187,23 @@ public readonly record struct LootEntry(long Tick, CharacterId Looter, Character
 public readonly record struct CarryAttach(System.Numerics.Vector3 Offset, System.Numerics.Quaternion Rotation)
 {
     /// <summary>
+    /// The same placement in the frame of the carrier's <see cref="CarrySystem.AttachBone"/>, for the renderer to hang the body on the bone as it
+    /// draws it; null without the carrier's skeleton (<see cref="CarryPose.Fallback"/>).
+    /// </summary>
+    public CarryOnBone? OnBone { get; init; }
+
+    /// <summary>
+    /// This placement with <see cref="OnBone"/> worked out for the carrier's attach bone at <paramref name="bone"/> / <paramref name="rotation"/> in
+    /// the carrier's frame.
+    /// </summary>
+    public CarryAttach On(System.Numerics.Vector3 bone, System.Numerics.Quaternion rotation)
+    {
+        var inverse = System.Numerics.Quaternion.Conjugate(rotation);
+        var local = System.Numerics.Vector3.Transform(Offset - bone, inverse);
+        return this with { OnBone = new CarryOnBone(local, System.Numerics.Quaternion.Normalize(inverse * Rotation)) };
+    }
+
+    /// <summary>
     /// The body's node in the world for a carrier at <paramref name="position"/> facing <paramref name="yaw"/>.
     /// </summary>
     public (System.Numerics.Vector3 Position, System.Numerics.Quaternion Rotation) World(System.Numerics.Vector3 position, float yaw)
@@ -195,6 +212,12 @@ public readonly record struct CarryAttach(System.Numerics.Vector3 Offset, System
         return (position + System.Numerics.Vector3.Transform(Offset, turn), System.Numerics.Quaternion.Normalize(turn * Rotation));
     }
 }
+
+/// <summary>
+/// A carried body's node in the frame of its carrier's attach bone: the node is at the bone's position plus <paramref name="Offset"/> turned by the
+/// bone's model-space rotation, and turned by that rotation then <paramref name="Rotation"/>.
+/// </summary>
+public readonly record struct CarryOnBone(System.Numerics.Vector3 Offset, System.Numerics.Quaternion Rotation);
 
 /// <summary>
 /// Where a carried body hangs (docs/game/carry-loot.md "Carry and release", <b>Observed</b> <c>CharacterAnimal::vfunc_77</c>, <c>FUN_1405b5980</c>):
