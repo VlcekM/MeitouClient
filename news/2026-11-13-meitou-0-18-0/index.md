@@ -12,6 +12,8 @@ Thanks to everyone sending in saves thru the feedback reports - makes the proces
 
 A lot of navmesh issues remain to be resolved though, so please bear with us for a bit more!
 
+**Please do keep in mind that saves made before this patch likely have issues with buildings not having the original roles/titles. A new save is required for them to be faithful.**
+
 # Towns
 
 - Town residents move into the same homes as in a vanilla new game, so each town has the shops you know, in the same houses
