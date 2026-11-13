@@ -126,7 +126,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         _seedsByZone = NavSeeds.Load(install);
         _layouts = new BuildingLayouts(db, levels.Interiors);
         _layouts.UseSwaps(levels);
-        _foliage = new FoliageObstacles(install, db, levels);
+        _foliage = new FoliageObstacles(install, db, levels, runtime);
     }
 
     /// <summary>

@@ -79,6 +79,7 @@ sealed class BuildingSync(GameHost host)
         var snapshot = host.Session.CurrentSnapshot;
         host.TownChanges.UpdateRuins(snapshot);
         host.TownChanges.UpdateEmptiedHouses(snapshot);
+        UpdateFoliageTowns(snapshot);
         if (snapshot.BuildingsRevision != _buildingsRevision || snapshot.NestBuildingsRevision != _nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
@@ -103,6 +104,25 @@ sealed class BuildingSync(GameHost host)
         foreach (var site in snapshot.Buildings)
             if (!site.Complete && !site.Destroyed) _constructionLook[site.Id] = ConstructionLook(site);
         objects.Construction = _constructionLook.Count == 0 ? null : _constructionLook;
+    }
+
+    /// <summary>
+    /// The outposts the foliage placer was last given.
+    /// </summary>
+    IReadOnlyList<Simulation.Production.OutpostSnapshot>? _foliageOutposts;
+
+    /// <summary>
+    /// Gives the navmesh the player's outposts (centre, the template's <c>no-foliage range</c>, owned by the player's faction or not) as towns that
+    /// keep <c>avoid towns</c> foliage away. Before the sites are diffed, so a building added in the same snapshot is built with them.
+    /// </summary>
+    void UpdateFoliageTowns(WorldSnapshot snapshot)
+    {
+        if (host.Nav is null || host.Scene.Database is not { } db || ReferenceEquals(snapshot.Outposts, _foliageOutposts)) return;
+
+        _foliageOutposts = snapshot.Outposts;
+        float range = FoliageWorld.OutpostRange(db);
+        int player = host.Session.World.Player.Faction;
+        host.Nav.SetPlayerTowns([.. snapshot.Outposts.Select(o => new FoliageTown(new Vector2(o.Position.X, o.Position.Z), range, o.Owner == player))]);
     }
 
     /// <summary>

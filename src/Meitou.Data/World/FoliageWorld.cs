@@ -74,6 +74,19 @@ public sealed class FoliageWorld : IDisposable
     public FoliageCatalog Catalog { get; }
 
     /// <summary>
+    /// Towns beside the level's that keep foliage away: the player's outposts at their current centre (set by the caller before a zone is placed;
+    /// the nearest town of both lists decides). Empty for none.
+    /// </summary>
+    public IReadOnlyList<FoliageTown> ExtraTowns { get; set; } = [];
+
+    /// <summary>
+    /// The <c>no-foliage range</c> of an outpost the player founded: its TOWN template's (<c>player_town_template</c>, 1000), 2000 without the
+    /// record (the field's default).
+    /// </summary>
+    public static float OutpostRange(GameDatabase db) =>
+        db.Find("player_town_template") is { } record ? record.GetFloat("no-foliage range", 2000) : 2000;
+
+    /// <summary>
     /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a
     /// snapshot: a town founded or captured later changes the placement of resource rocks only when its zone is placed again,
     /// docs/formats/foliage.md "Towns").
@@ -141,7 +154,7 @@ public sealed class FoliageWorld : IDisposable
         var at = new Vector2(x, z);
         FoliageTown? best = null;
         float bestDistance = float.MaxValue;
-        foreach (var t in _towns!)
+        foreach (var t in _towns!.Concat(ExtraTowns))
         {
             float d = Vector2.DistanceSquared(t.At, at);
             if (d < bestDistance) (bestDistance, best) = (d, t);

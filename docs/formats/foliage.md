@@ -32,9 +32,14 @@ Algorithm verification does not establish screenshot parity for complete generat
   nearest town that is not a nest marker (type 8). **Verified (decompiled)**.
   Exception (**Verified**, `FUN_1406d2410` at the town test, `FUN_140927f10` the nearest town): a mesh with a non-empty `building type` list (the resource rocks) is **not**
   rejected when the nearest town's owner faction is the player's (faction `+0x250`, see factions-squads-towns.md); every other mesh, and rocks near any other town, are rejected on
-  distance alone. The town list is the live one, so it includes towns the player founded or took, and the test runs when the zone is paged. Not modelled: Meitou places a zone
-  from the level's towns only and caches the layout by content, so ownership (and the player's own towns) never changes a layout; a town the player owns in a loaded save keeps
-  its rocks away. Wiring it needs the layout cache key to carry which towns the player owns.
+  distance alone. The town list is the live one, so it includes towns the player founded or took, and the test runs when the zone is paged.
+  **Player outposts** (**Verified** for the rule, parity round 9: Goonrock's three `avoid towns` boulders, 235-630 from its centre, are absent from the original's runtime tile; **Observed** in
+  Meitou, round 10): the navmesh's foliage (`FoliageObstacles`) places with the level's towns plus the player's outposts at their current centre, each with the template's range
+  (`player_town_template`, 1000; `FoliageWorld.ExtraTowns`, fed by `NavSystem.SetPlayerTowns` from the snapshot's outposts, owned flag = the player's faction). A town founded, moved or gone drops the
+  kept obstacles of the zones it can change (within the larger of its range and the level's largest range, since it can become the nearest town for points a level town covered)
+  and builds the loaded zones again, and the navmesh cache key (`BuildingHash`) carries the towns near the zone. Timing differs from the original, which re-places a zone's foliage only when
+  it pages in: Meitou builds again at once, the nearest approximation (the original's exact trigger is **Unknown**). Not modelled: the drawn foliage (`FoliageRenderer`, its layout cache keyed by the level's
+  towns and the load-time `PlayerTowns` snapshot) still shows the rocks the navmesh no longer has, so a rock can be drawn that is walked through.
   A town with range 0 keeps nothing away (**Observed**: Newwworld's The Hub `18919-Newwworld.mod`, so its trees grow among the buildings, issue #522).
 - **No building test** (**Verified (decompiled)**, `FUN_1406d2410`): the mesh placer rejects by slope, zone, town range, altitude and the overlay's road
   channel only (the grid test there is the overlay A byte, `FUN_1406d82d0`); nothing checks buildings, so a tree can stand in a building's yard or room.

@@ -177,6 +177,33 @@ public sealed class NavSystem : IDisposable
     }
 
     /// <summary>
+    /// <see cref="LevelTownRange"/>'s value once read.
+    /// </summary>
+    float? _levelTownRange;
+
+    /// <summary>
+    /// The largest <c>no-foliage range</c> of the level's towns, read once (<see cref="PlayerFoliageTowns.LevelRange"/>).
+    /// </summary>
+    float LevelTownRange => _levelTownRange ??= FoliageWorld.ReadTowns(_db, _levels).Select(t => t.Range).DefaultIfEmpty(0).Max();
+
+    /// <summary>
+    /// The player's towns now (founded, moved or gone ones differ from the last call): they keep <c>avoid towns</c> foliage away from the next
+    /// build of the zones they reach, which are built again when loaded, as the original's live town list does at its next foliage placement.
+    /// Call before the buildings of the same change are added.
+    /// </summary>
+    public void SetPlayerTowns(IReadOnlyList<FoliageTown> towns)
+    {
+        var before = Runtime.FoliageTowns;
+        var changed = PlayerFoliageTowns.Difference(before.Towns, towns);
+        if (changed.Count == 0) return;
+
+        var after = new PlayerFoliageTowns(towns, LevelTownRange);
+        Runtime.SetFoliageTowns(after);
+        foreach (var zone in changed.SelectMany(after.ZonesOf).Distinct())
+            RebuildZone(zone);
+    }
+
+    /// <summary>
     /// The level data's buildings changed near <paramref name="position"/> (the level editor placed or cleared one): the zones it reaches are built
     /// again from the level data as it is now.
     /// </summary>
