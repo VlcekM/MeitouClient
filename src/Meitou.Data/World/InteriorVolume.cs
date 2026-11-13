@@ -192,6 +192,10 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// The building's floor, roof and underside surfaces, made the first time they are asked for; null for a volume made by hand.
     /// </summary>
     Lazy<FloorSurfaces>? _floors;
+    /// <summary>
+    /// The building's roofs and ceilings as drawn, made the first time they are asked for; null for a volume made by hand.
+    /// </summary>
+    Lazy<RoofCover>? _roofCover;
 
     /// <summary>
     /// How far above a point the search for something over it starts (the floor it stands on is not its cover).
@@ -248,6 +252,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// <paramref name="prism"/> by more than <paramref name="tolerance"/>; false for a volume made by hand.
     /// </summary>
     public bool StructureCuts(FootprintPrism prism, float tolerance) => _floors?.Value.Cuts(prism, tolerance) == true;
+
+    /// <summary>
+    /// Whether the building's drawn roofs and ceilings (<see cref="RoofCover.Cuts"/>) cut into <paramref name="prism"/> by more than
+    /// <paramref name="tolerance"/>; false for a volume made by hand.
+    /// </summary>
+    public bool RoofCuts(FootprintPrism prism, float tolerance) => _roofCover?.Value.Cuts(prism, tolerance) == true;
 
     /// <summary>
     /// The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/>
@@ -313,6 +323,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             _maskCorners = [.. corners],
             _pieces = [.. pieces],
             _floors = new Lazy<FloorSurfaces>(() => FloorSurfaces.For(db, building, placementId, position, rotation, node, collision)),
+            _roofCover = new Lazy<RoofCover>(() => RoofCover.For(db, building, placementId, position, rotation, collision)),
         };
     }
 
@@ -522,8 +533,8 @@ public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Out
 }
 
 /// <summary>
-/// The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts), read and triangulated once each; safe from several
-/// threads.
+/// The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts) and their render meshes' triangles (what
+/// <see cref="RoofCover"/> reads), read once each; safe from several threads.
 /// </summary>
 public sealed class InteriorCollisions(GameInstall install)
 {
@@ -531,6 +542,34 @@ public sealed class InteriorCollisions(GameInstall install)
     /// The collision files read, by record path (null for a missing or unreadable one).
     /// </summary>
     readonly ConcurrentDictionary<string, CollisionMesh?> _files = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The render meshes' triangle corners in their own space, by record path (empty for a missing or unreadable one).
+    /// </summary>
+    readonly ConcurrentDictionary<string, Vector3[]> _renderMeshes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The triangle corners of a part's render mesh in its own space (<see cref="Ogre.OgreMesh.TriangleCorners"/>); empty when the path is empty or
+    /// the file is missing or unreadable.
+    /// </summary>
+    public Vector3[] RenderTriangles(string recordPath) =>
+        string.IsNullOrWhiteSpace(recordPath) ? [] : _renderMeshes.GetOrAdd(recordPath, LoadRender);
+
+    /// <summary>
+    /// Reads a render mesh's triangles; empty when it does not resolve or read.
+    /// </summary>
+    Vector3[] LoadRender(string recordPath)
+    {
+        if (CollisionPaths.Resolve(install, recordPath) is not { } path) return [];
+
+        try
+        {
+            return Ogre.OgreMeshReader.ReadFile(path).TriangleCorners();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Ogre.OgreFormatException)
+        {
+            return [];
+        }
+    }
 
     /// <summary>
     /// Every triangulated vertex of the file's shapes, or null when the path is empty or the file is missing or unreadable.

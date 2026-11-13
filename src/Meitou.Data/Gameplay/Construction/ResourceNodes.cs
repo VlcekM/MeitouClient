@@ -132,21 +132,11 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
     /// </summary>
     public static RockShape? Of(OgreMesh mesh)
     {
-        var corners = new List<Vector3>();
-        foreach (var sub in mesh.SubMeshes)
-        {
-            if (sub.Operation != OgreOperationType.TriangleList
-                || (sub.UseSharedVertices ? mesh.SharedVertexData : sub.VertexData)?.ReadPositions() is not { } positions)
-                continue;
-            var indices = sub.Indices.Indices;
-            for (int i = 0; i + 2 < indices.Length; i += 3)
-                if (indices[i] < positions.Length && indices[i + 1] < positions.Length && indices[i + 2] < positions.Length)
-                    corners.AddRange([positions[indices[i]], positions[indices[i + 1]], positions[indices[i + 2]]]);
-        }
-        if (corners.Count == 0) return null;
+        var corners = mesh.TriangleCorners();
+        if (corners.Length == 0) return null;
         Vector3 min = corners[0], max = corners[0];
         foreach (var c in corners) (min, max) = (Vector3.Min(min, c), Vector3.Max(max, c));
-        return new RockShape([.. corners], min, max);
+        return new RockShape(corners, min, max);
     }
 }
 

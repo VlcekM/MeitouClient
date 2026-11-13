@@ -61,6 +61,28 @@ public sealed class OgreMesh
     /// Chunks the reader steps over without decoding: edge lists (for stencil shadows), vertex animations and per-submesh extremes. Id and count.
     /// </summary>
     public Dictionary<OgreMeshChunk, int> SkippedChunks { get; } = [];
+
+    /// <summary>
+    /// The corners of the triangle-list submeshes' triangles, three per triangle, in the mesh's own space (a triangle naming a vertex past the
+    /// end is left out); empty when there are none.
+    /// </summary>
+    public Vector3[] TriangleCorners()
+    {
+        var corners = new List<Vector3>();
+        foreach (var sub in SubMeshes)
+        {
+            if (sub.Operation != OgreOperationType.TriangleList
+                || (sub.UseSharedVertices ? SharedVertexData : sub.VertexData)?.ReadPositions() is not { } positions)
+                continue;
+
+            var indices = sub.Indices.Indices;
+            for (int i = 0; i + 2 < indices.Length; i += 3)
+                if (indices[i] < positions.Length && indices[i + 1] < positions.Length && indices[i + 2] < positions.Length)
+                    corners.AddRange([positions[indices[i]], positions[indices[i + 1]], positions[indices[i + 2]]]);
+        }
+
+        return [.. corners];
+    }
 }
 
 /// <summary>

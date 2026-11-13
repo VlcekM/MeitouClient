@@ -47,6 +47,12 @@ public sealed record GhostFloor(string Building, Vector2[] Footprint, int Floor,
     public Func<FootprintPrism, float, bool>? Structure { get; init; }
 
     /// <summary>
+    /// Whether the building's drawn roofs and ceilings cut into a prism by more than a tolerance (<see cref="InteriorVolume.RoofCuts"/>); null when
+    /// it is not known.
+    /// </summary>
+    public Func<FootprintPrism, float, bool>? Roof { get; init; }
+
+    /// <summary>
     /// The parent the placed building records: the site's id, or the level building's instance id.
     /// </summary>
     public string Parent => Level ?? Building;
@@ -207,6 +213,11 @@ public static class PlacementCheck
     /// </summary>
     const float StructureTolerance = 1;
     /// <summary>
+    /// How far above the floor the ghost's footprint is tested against the building's drawn roofs (engine choice): the fixtures drawn lower down
+    /// (counters, steps) do not block it.
+    /// </summary>
+    const float RoofClearance = 12;
+    /// <summary>
     /// The slope the original refuses outright (the ground's normal Y below 0.2).
     /// </summary>
     const float SteepestNormalY = 0.2f;
@@ -317,16 +328,24 @@ public static class PlacementCheck
     /// <summary>
     /// Whether the walls, floors or roofs of the building the ghost stands in cut into its footprint <paramref name="hull"/>, from
     /// <see cref="StructureClearance"/> over its floor to as much under its top (engine stand-in for the original's node boxes against the
-    /// building's physics shapes: the indoor hull is convex and takes in the walls, so a footprint inside it still went into them, feedback #399).
+    /// building's physics shapes: the indoor hull is convex and takes in the walls, so a footprint inside it still went into them, feedback #399),
+    /// and whether its drawn roofs do from <see cref="RoofClearance"/> up.
     /// </summary>
     static bool CutsStructure(PlacementQuery q, Vector2[] hull)
     {
-        if (q.On?.Structure is not { } structure || q.Services.Footprint(q.Building.Id) is not { } footprint) return false;
+        if (q.On is not { } on || q.Services.Footprint(q.Building.Id) is not { } footprint) return false;
 
-        float bottom = q.Position.Y + MathF.Max(footprint.YMin, 0) + StructureClearance;
+        float floor = q.Position.Y + MathF.Max(footprint.YMin, 0);
         float top = q.Position.Y + footprint.YMax - StructureClearance;
-        return top > bottom && structure(new FootprintPrism(hull, bottom, top), StructureTolerance);
+        return Cuts(on.Structure, hull, floor + StructureClearance, top) || Cuts(on.Roof, hull, floor + RoofClearance, top);
     }
+
+    /// <summary>
+    /// Whether <paramref name="cuts"/> finds something in the prism of <paramref name="hull"/> from <paramref name="bottom"/> to
+    /// <paramref name="top"/>; false when it is not known or the prism is empty.
+    /// </summary>
+    static bool Cuts(Func<FootprintPrism, float, bool>? cuts, Vector2[] hull, float bottom, float top) =>
+        cuts is not null && top > bottom && cuts(new FootprintPrism(hull, bottom, top), StructureTolerance);
 
     /// <summary>
     /// Whether a site or queued ghost stands on another floor of the building <paramref name="parent"/> the ghost is in: the original tests node
