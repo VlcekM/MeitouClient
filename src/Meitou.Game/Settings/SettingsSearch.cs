@@ -39,8 +39,7 @@ sealed class SettingsSearch(SettingsMenu menu)
     internal bool Begin()
     {
         Focused = true;
-        _field.Anchor = 0;
-        _field.Caret = Query.Length;
+        _field.SelectAll();
         menu.ActiveChoice = null;
         menu.Focus = -1;
         return true;

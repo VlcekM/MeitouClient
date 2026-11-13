@@ -158,13 +158,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal Slider? EditingNumber;
     /// <summary>
-    /// The typed value's text.
+    /// The typed value's text, caret and selection (at most 24 characters).
     /// </summary>
-    internal string NumberText = "";
-    /// <summary>
-    /// The typed value's caret and the other end of its selection.
-    /// </summary>
-    internal int NumberCaret, NumberAnchor;
+    internal readonly TextField Number = new(24);
     /// <summary>
     /// Where the typed value's box is.
     /// </summary>
@@ -1332,8 +1328,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, the caret and
-    /// selection), else as without Ctrl.
+    /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, then the
+    /// editing keys of <see cref="TextField"/>), else as without Ctrl.
     /// </summary>
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
@@ -1354,37 +1350,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             case Key.Tab:
                 if (CommitNumber()) KeyDown(key, shift);
                 break;
-            case Key.A when ctrl:
-                NumberAnchor = 0;
-                NumberCaret = NumberText.Length;
-                break;
-            case Key.Home:
-                NumberCaret = 0;
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.End:
-                NumberCaret = NumberText.Length;
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Left:
-                NumberCaret = !shift && NumberCaret != NumberAnchor ? Math.Min(NumberCaret, NumberAnchor) : Math.Max(0, NumberCaret - 1);
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Right:
-                NumberCaret = !shift && NumberCaret != NumberAnchor
-                    ? Math.Max(NumberCaret, NumberAnchor)
-                    : Math.Min(NumberText.Length, NumberCaret + 1);
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Backspace:
-            case Key.Delete:
-                if (NumberCaret == NumberAnchor)
-                {
-                    if (key == Key.Backspace && NumberCaret > 0) NumberAnchor--;
-                    if (key == Key.Delete && NumberCaret < NumberText.Length) NumberAnchor++;
-                }
-
-                ReplaceNumberSelection("");
+            default:
+                string before = Number.Text;
+                Number.OnKey(key, shift, ctrl, ClipboardNumber, Player.ClipboardWrite);
+                if (Number.Text != before) Notice = "";
                 break;
         }
 
@@ -1409,9 +1378,19 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         if (EditingNumber is null || !Visible) return;
-        if (value is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E')
-            ReplaceNumberSelection(value == ',' ? "." : value.ToString());
+        if (NumberChars(value.ToString()) is { Length: > 0 } typed && Number.Insert(typed)) Notice = "";
     }
+
+    /// <summary>
+    /// The clipboard's text as a typed value takes it (<see cref="NumberChars"/>); null when there is none.
+    /// </summary>
+    string? ClipboardNumber() => Player.ClipboardRead?.Invoke() is { } text ? NumberChars(text) : null;
+
+    /// <summary>
+    /// The characters of <paramref name="text"/> a typed value takes: digits and the number's signs, a comma read as the decimal point.
+    /// </summary>
+    static string NumberChars(string text) =>
+        new([.. text.Where(c => c is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E').Select(c => c == ',' ? '.' : c)]);
 
     /// <summary>
     /// Starts typing a slider's value in the box at <paramref name="at"/>, all of it selected.
@@ -1419,26 +1398,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal void BeginNumber(Slider slider, UiRect at)
     {
         EditingNumber = slider;
-        NumberText = MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture);
-        NumberAnchor = 0;
-        NumberCaret = NumberText.Length;
+        Number.Set(MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture));
+        Number.SelectAll();
         NumberBounds = at;
         ScrollTarget = ScrollOffset;
         _dragging = null;
         _thumbGrab = null;
-        Notice = "";
-    }
-
-    /// <summary>
-    /// Replaces the typed value's selection (at most 24 characters).
-    /// </summary>
-    void ReplaceNumberSelection(string replacement)
-    {
-        int start = Math.Min(NumberCaret, NumberAnchor), end = Math.Max(NumberCaret, NumberAnchor);
-        if (NumberText.Length - (end - start) + replacement.Length > 24) return;
-
-        NumberText = NumberText[..start] + replacement + NumberText[end..];
-        NumberCaret = NumberAnchor = start + replacement.Length;
         Notice = "";
     }
 
@@ -1449,7 +1414,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         if (EditingNumber is not { } slider) return true;
 
-        if (!float.TryParse(NumberText, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
+        if (!float.TryParse(Number.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
         {
             Notice = "Enter a valid number, or press Esc to cancel.";
             return false;

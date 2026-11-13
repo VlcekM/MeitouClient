@@ -553,16 +553,16 @@ sealed class SettingsCanvas(SettingsMenu menu)
         menu.NumberBounds = valueAt;
         Rect(valueAt, new(0.06f, 0.05f, 0.04f, 0.95f), menu.Viewport);
         var textAt = valueAt with { X = valueAt.X + 6 * menu.Scale, Width = valueAt.Width - 12 * menu.Scale };
-        menu.Controls.Add(new("settings-number", "EditBox", textAt, menu.NumberText, "", "", true,
+        menu.Controls.Add(new("settings-number", "EditBox", textAt, menu.Number.Text, "", "", true,
             new Dictionary<string, string>
             {
                 ["Focused"] = "true",
                 ["Numeric"] = "true",
                 ["TextAlign"] = "Right VCenter",
                 ["FontPixels"] = ((int)MathF.Round(13 * menu.Scale)).ToString(CultureInfo.InvariantCulture),
-                ["SelectionStart"] = Math.Min(menu.NumberCaret, menu.NumberAnchor).ToString(CultureInfo.InvariantCulture),
-                ["SelectionLength"] = Math.Abs(menu.NumberCaret - menu.NumberAnchor).ToString(CultureInfo.InvariantCulture),
-                ["CaretIndex"] = menu.NumberCaret.ToString(CultureInfo.InvariantCulture),
+                ["SelectionStart"] = menu.Number.SelectionStart.ToString(CultureInfo.InvariantCulture),
+                ["SelectionLength"] = menu.Number.SelectionLength.ToString(CultureInfo.InvariantCulture),
+                ["CaretIndex"] = menu.Number.Caret.ToString(CultureInfo.InvariantCulture),
             }, Vector4.Zero, LightInk, Clip: menu.Viewport, Pickable: false));
     }
 

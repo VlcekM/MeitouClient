@@ -40,6 +40,15 @@ sealed class TextField(int maxLength)
     }
 
     /// <summary>
+    /// Selects the whole text, the caret at its end.
+    /// </summary>
+    internal void SelectAll()
+    {
+        Anchor = 0;
+        Caret = Text.Length;
+    }
+
+    /// <summary>
     /// Replaces the selection with <paramref name="value"/> (control characters dropped); false when the text would be too long.
     /// </summary>
     internal bool Insert(string value)
@@ -98,8 +107,7 @@ sealed class TextField(int maxLength)
         switch (key)
         {
             case Key.A:
-                Anchor = 0;
-                Caret = Text.Length;
+                SelectAll();
                 return true;
             case Key.C:
                 if (selected.Length > 0) writeClipboard?.Invoke(selected);
