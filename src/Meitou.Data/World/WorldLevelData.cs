@@ -55,6 +55,11 @@ public sealed class WorldLevelData
     public HashSet<string> ResidentRuined { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The keys of the buildings <see cref="ResidentRuins.Apply"/> stood up (their level files have them destroyed).
+    /// </summary>
+    public HashSet<string> ResidentRestored { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The interior and exterior layout names the level files give the buildings <see cref="ResidentRuins.Apply"/> named otherwise, by building key.
     /// </summary>
     public Dictionary<string, (string Interior, string Exterior)> LevelLayoutNames { get; } = new(StringComparer.Ordinal);

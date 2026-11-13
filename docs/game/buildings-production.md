@@ -1156,7 +1156,10 @@ interior meshes but no functionality record, their level states lack `sell home`
 
 **Verified** (decompile): the squad setup `FUN_14057f1f0` calls slot 104 (set destroyed) on the squad's home with `building ruined` of its template and slot 105
 (`FUN_14055b520`, can be destroyed): true when the building's class (+0x198) is 7, GatewayBuilding, the `is wall gate` building (**Verified**, [pathfinding](pathfinding.md)), or it, or a part reached through `parts` at any depth, has a
-`destroyed mesh`. So a home whose template is not ruined is set intact. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
+`destroyed mesh`. So a home whose template is not ruined is set intact, a ruin of the level file too: set destroyed with false (`FUN_140557280`) clears the flag
+(+0x1a1) and builds the standing building, and `FUN_14057f4c0` runs the setup for every home, a template with no members too (**Verified**, decompile).
+**Observed** (the original's save `bench-bases-2026-10-27`): Blister Hill's Small Shack `23.22:667-Newwworld-INGAME`, destroyed in the level file, is saved
+standing under `Civilian solo holy -small`. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
 them `_ruined empty building (DEFAULT)` (`44421-rebirth.mod`), the `default resident` of Old Village (Deadcat, `50243-rebirth.mod`), whose level states are
 intact and name no template. Its houses are ruins in the original (issue #145).
 
@@ -1170,14 +1173,18 @@ fixtures or item slots).
 
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
-the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves
-made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class. Not modelled: setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
-`Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**).
+the library ruins). Any other home the level file has destroyed is set standing (`WorldLevelData.ResidentRestored`, `TownBuilding.RestoredByResidents`); 34 base-game
+buildings, e.g. the Snailhouse bar of the Waystation in The Hook (`17.53:4-rebirth-INGAME`, issue #630), the Lost Library, the Lost Armoury, Mourn's shop, and one or
+two `Trashed building` homes each in Bast and Endin, whose other buildings are ruins by their default resident. A saved `destroyed` false does not undo a level ruin
+unless the player's repair saved it (`meitou town construction`; engine choice: saves made before this pass wrote those buildings intact). A saved `destroyed` true
+does not ruin a home the residents stand up while the save has the same `residents template` in it and no `meitou town construction` (engine choice: saves made before
+the homes were stood up wrote the level file's ruin; `FixtureRegistry.SavedLevelRuin`). A town's baked distant mesh is a fixed file of the install, drawn as it is (as
+in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class.
 
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
 (`FixtureRegistry.ApplyTownRuins`) sets each of the town's buildings in its own zone that is not the player's: a home of a ruined template that can be destroyed is a
-ruin, any other as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state, but such a home there becomes a ruin
-too. A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
+ruin, any other home stands, and a building with nobody is as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state,
+but a home of a ruined template there becomes a ruin too (not modelled: standing a ruin up there). A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
 buildings' level placements (drawing, navmesh, lamps) and drops a ruin's particle effects (a standing one's come back); doors, locks and indoor sight follow. **Observed** (data):
 95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.
 

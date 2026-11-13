@@ -67,6 +67,7 @@ sealed class ProbeWorld : IDisposable
             lock (gate) return map.HeightAt(x, z);
         };
         var layouts = new BuildingLayouts(db, levels.Interiors);
+        ResidentRuins.Apply(db, levels, layouts);   // the homes' ruins and layouts before anything reads the levels, as the game's boot
         var data = PopulationData(install, db, levels, layouts, height);
         var save = SaveGame.Load(SaveFolder.Open(saveFolder));
         if (at is { } spot) MovePlayer(save, spot, height);
@@ -109,7 +110,6 @@ sealed class ProbeWorld : IDisposable
     static NavSystem LoadNavmesh(GameInstall install, GameDatabase db, WorldLevelData levels, BuildingLayouts layouts, PopulationData data,
         SaveGame save, Func<float, float, float> height)
     {
-        ResidentRuins.Apply(db, levels, layouts);
         var nav = new NavSystem(install, db, levels, height);
         nav.Walkability.Roads = data.Roads;
         foreach (var zone in ZoneActivation.ZonesAround(SavedStart(save), 1)) nav.LoadZone(zone).Wait();

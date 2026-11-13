@@ -194,6 +194,14 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public bool RuinedByResidents { get; init; }
     /// <summary>
+    /// Standing only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it destroyed.
+    /// </summary>
+    public bool RestoredByResidents { get; init; }
+    /// <summary>
+    /// The <c>destroyed</c> of its level file, before any residents were housed in it.
+    /// </summary>
+    public bool LevelDestroyed => Destroyed ? !RuinedByResidents : RestoredByResidents;
+    /// <summary>
     /// The <c>residents template</c> of its level state (a SQUAD_TEMPLATE id; empty when none): once the boot housed the towns
     /// (<see cref="ResidentRuins.Apply"/>), the template of the residents housed in it. Later changes:
     /// <c>FixtureRegistry.ResidentsTemplate</c>.

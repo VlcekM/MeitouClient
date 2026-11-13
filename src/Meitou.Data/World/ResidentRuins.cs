@@ -7,7 +7,8 @@ namespace Meitou.Data.World;
 /// assignment the population houses its towns with (<see cref="ResidentHomes.Assign"/>):
 /// <list type="bullet">
 /// <item>the ruins (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c> destroys a home whose
-/// template has <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>);</item>
+/// template has <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>), and stands any other home up, a ruin of the level file
+/// too;</item>
 /// <item>the layouts (docs/game/factions-squads-towns.md "Town residents"): the original gives a home its template's <c>layout interior</c> and
 /// <c>layout exterior</c> (<c>FUN_140552140</c>), replacing or clearing what the level state names;</item>
 /// <item>the templates: a home carries its residents' template, any other building of a town none: the original's state reader drops the level
@@ -30,8 +31,8 @@ public static class ResidentRuins
     public const string ResidentsTemplateKey = "residents template";
 
     /// <summary>
-    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names each home's layouts as its residents' template
-    /// does; returns how many it ruined. A second call on the same levels does nothing.
+    /// Sets the level-data state's <c>destroyed</c> of each home as its residents leave it (ruined, or stood up) and names each home's layouts as
+    /// its residents' template does; returns how many it ruined. A second call on the same levels does nothing.
     /// </summary>
     public static int Apply(GameDatabase db, WorldLevelData levels, BuildingLayouts layouts)
     {
@@ -52,7 +53,12 @@ public static class ResidentRuins
                 var homes = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
-                    if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
+                    if (Ruins(db, t, b))
+                    {
+                        if (Ruin(levels, b)) ruined++;
+                    }
+                    else Restore(levels, b);
+
                     LayOut(levels, b, t);
                     homes.Add(b);
                 }
@@ -67,14 +73,34 @@ public static class ResidentRuins
     }
 
     /// <summary>
-    /// Destroys <paramref name="b"/>'s level state when it is standing and its record can be destroyed; whether it did.
+    /// Whether housing <paramref name="t"/> in <paramref name="b"/> leaves it a ruin (<c>FUN_14057f1f0</c>, Verified): the template has
+    /// <c>building ruined</c> and the building can be destroyed. Any other home is set standing.
     /// </summary>
-    static bool Ruin(GameDatabase db, WorldLevelData levels, TownBuilding b)
+    public static bool Ruins(GameDatabase db, SquadTemplate t, TownBuilding b) =>
+        t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record);
+
+    /// <summary>
+    /// Destroys <paramref name="b"/>'s level state when it is standing; whether it did.
+    /// </summary>
+    static bool Ruin(WorldLevelData levels, TownBuilding b)
     {
-        if (b.Destroyed || b.LevelState is not { } state || db.Find(b.BuildingId) is not { } record || !CanBeDestroyed(db, record)) return false;
+        if (b.Destroyed || b.LevelState is not { } state) return false;
+
         state.BoolTable["destroyed"] = true;
         levels.ResidentRuined.Add(b.Key);
         return true;
+    }
+
+    /// <summary>
+    /// Stands <paramref name="b"/>'s level state up when its level file has it destroyed (the Snailhouse bar of the Waystation in The Hook, issue
+    /// #630).
+    /// </summary>
+    static void Restore(WorldLevelData levels, TownBuilding b)
+    {
+        if (!b.Destroyed || b.LevelState is not { } state) return;
+
+        state.BoolTable["destroyed"] = false;
+        levels.ResidentRestored.Add(b.Key);
     }
 
     /// <summary>
@@ -130,28 +156,14 @@ public static class ResidentRuins
 
     /// <summary>
     /// The templates housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> puts in its homes (a town override, which
-    /// names them as <see cref="LayOut"/> does), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as
-    /// for <see cref="RuinedHomes"/>.
+    /// names them as <see cref="LayOut"/> does), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/>:
+    /// the buildings the player owns now, which house nobody (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
     public static Dictionary<string, SquadTemplate> HomeTemplates(GameDatabase db, TownData town, FactionData? faction,
         IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
         var result = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
         foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned)) result[b.Key] = t;
-        return result;
-    }
-
-    /// <summary>
-    /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override):
-    /// homes of a ruined template that can be destroyed. <paramref name="playerOwned"/>: the buildings the player owns now, which house
-    /// nobody (<see cref="ResidentHomes.Assign"/>).
-    /// </summary>
-    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings,
-        string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned))
-            if (t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record)) result.Add(b.Key);
         return result;
     }
 

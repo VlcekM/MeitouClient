@@ -51,9 +51,9 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// The ruins of a replaced town's residents (the original reads the town's zone back from the level file and houses the replacement's residents,
-    /// whose ruined templates ruin their homes, <c>FUN_14057f1f0</c>), for its buildings that are not the player's: in its own zone each is a ruin as
-    /// a home of a ruined template, else as its level file has it; in other zones (which keep their state) such a home becomes a ruin. A loaded save
-    /// applies them again from its replacements.
+    /// whose ruined templates ruin their homes and whose others stand theirs up, <c>FUN_14057f1f0</c>), for its buildings that are not the player's:
+    /// in its own zone a home is a ruin as its template says, any other building as its level file has it; in other zones (which keep their state)
+    /// a home of a ruined template becomes a ruin. A loaded save applies them again from its replacements.
     /// </summary>
     public void ApplyTownRuins(World world, PopulationData data, int site)
     {
@@ -75,12 +75,14 @@ public sealed partial class FixtureRegistry
         var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
         string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        var ruined = ResidentRuins.RuinedHomes(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
+        var homes = ResidentRuins.HomeTemplates(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
         foreach (var b in town.Buildings)
         {
+            bool home = homes.TryGetValue(b.Key, out var template);
+            bool ruined = home && ResidentRuins.Ruins(data.Db, template!, b);
             if (reset.Contains(b.Key))
-                SetRuin(world, data, site, b, ruined.Contains(b.Key) || b.Destroyed && !b.RuinedByResidents);
-            else if (ruined.Contains(b.Key) && !IsPlayers(data, site, b, player))
+                SetRuin(world, data, site, b, home ? ruined : b.LevelDestroyed);
+            else if (ruined && !IsPlayers(data, site, b, player))
             {
                 SetRuin(world, data, site, b, true);
                 RemoveShell(b.Key);
@@ -100,8 +102,8 @@ public sealed partial class FixtureRegistry
         {
             foreach (var b in site.Buildings)
             {
-                if (!b.Destroyed && Saved.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed") == true
-                        && !IsPlayers(data, site.Index, b, player))
+                if (!b.Destroyed && Saved.GetValueOrDefault(b.Key) is { } saved && saved.Bools.GetValueOrDefault("destroyed")
+                        && !SavedLevelRuin(b, saved) && !IsPlayers(data, site.Index, b, player))
                     SetRuin(world, data, site.Index, b, true);
             }
         }
