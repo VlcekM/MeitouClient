@@ -566,6 +566,15 @@ sealed class UserConfig
     /// </summary>
     public bool RotateItems { get; set; }
     /// <summary>
+    /// Where the hats of the player's characters are left out of the drawing (Advanced settings; optional, off by default;
+    /// <see cref="HiddenHatLooks"/>).
+    /// </summary>
+    public HideHats HideHats { get; set; }
+    /// <summary>
+    /// With <see cref="HideHats"/>: the other factions' characters lose their hats the same way.
+    /// </summary>
+    public bool HideHatsOfOthers { get; set; }
+    /// <summary>
     /// The second and third speed buttons' (and keys') game speeds (Advanced settings; the game's 2 and 5 by default; <see
     /// cref="Meitou.Simulation.Session.SimulationClock.SetFastSpeeds"/>).
     /// </summary>

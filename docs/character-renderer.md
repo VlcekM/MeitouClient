@@ -171,7 +171,7 @@ coverage (anti-aliased edges on the transparent background), grades and dithers 
 picture. Atlas cells are 256 px apart; enhanced portraits fill them (the original's 128 px were stretched to the
 squad bar's 120-230 px from 1080 to 4K lines and looked soft), faithful ones keep 128 px in the corner. Portraits keep the
 fixed plain light: a still drawn under the live sky would depend on the hour it was drawn. Faithful
-keeps the original's direct 8-bit stage and 128 px plain portraits.
+keeps the original's direct 8-bit stage and 128 px plain portraits. Hide hats (Meitou, optional, `HiddenHatLooks`): a look is built again without its hat ARMOUR (`CharacterAppearance.WithoutHat`: hair, beard and the hat's `hide parts` show); On draws it in the world, Portraits only lists it hidden under draw key bit 53 and the portrait requests name that key.
 Studio (`previewsun`, Meitou, on by default; `CharacterRenderer.Studio`): enhanced previews are lit by a fixed sun instead of the key light, the same
 whatever the hour. Per view: the character's depth from the sun into a 2048 px map (an orthographic box round its sphere, the matrix relative to the
 sphere's centre), its depth from the camera, a horizon-based occlusion from that depth (8 directions of 6 steps out to an eighth of the sphere, a fixed

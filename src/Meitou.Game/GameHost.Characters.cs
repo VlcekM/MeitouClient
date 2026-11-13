@@ -339,6 +339,16 @@ sealed partial class GameHost
     internal HeldToolLooks HeldLooks => field ??= new(this);
 
     /// <summary>
+    /// The looks without hats of the Hide hats setting.
+    /// </summary>
+    internal HiddenHatLooks HatLooks => field ??= new(this);
+
+    /// <summary>
+    /// Whether this frame's portrait requests name the character, so it is posed however far.
+    /// </summary>
+    internal bool PortraitWanted(CharacterId id) => _portraitKeys.Contains(DrawKey(id));
+
+    /// <summary>
     /// Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.
     /// </summary>
     internal void FillDrawList(CharacterDrawList list)
@@ -440,31 +450,37 @@ sealed partial class GameHost
         {
             var members = Player.PortraitBar.PortraitMembers();
             for (int i = 0; i < members.Count; i++)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(members[i].Id), i, members[i].PortraitSerial));
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(members[i].Id), i, members[i].PortraitSerial));
             foreach (var (id, cell) in Player.TradeWindows.CharacterTradePortraits())
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
         }
         if (Player.PortraitBar.DialoguePortraitCharacters() is var (npc, talker))
         {
             if (!npc.IsNone)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PortraitBar.DialogueNpcCell,
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(npc), PortraitBar.DialogueNpcCell,
                     Player.PortraitBar.PortraitSerial(npc)));
             if (!talker.IsNone)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PortraitBar.DialoguePlayerCell,
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(talker), PortraitBar.DialoguePlayerCell,
                     Player.PortraitBar.PortraitSerial(talker)));
         }
     }
+
+    /// <summary>
+    /// The draw key a character's portrait is drawn from: its own, or its hatless instance's (Hide hats, portraits only).
+    /// </summary>
+    long PortraitKey(CharacterId id) => HatLooks.PortraitKey(DrawKey(id));
 
     /// <summary>
     /// A character beyond reach into the distant list: its look (with its tool), its snapshot place, and what loading and the kept textures read.
     /// </summary>
     void AddDistant(CharacterDrawList list, CharacterSnapshot c)
     {
-        var look = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        var look = HeldLooks.HeldLook(HatLooks.WorldLook(c, out var hatless), c.HeldTool, out var heldPending);
         Decapitation.CutHead(c, look);
         bool hidden = Interiors.HiddenIndoors.Contains(c.Id);
-        list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale,
-            Hidden = hidden, Build = c.Build });
+        var instance = new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden, Build = c.Build };
+        list.Distant.Add(instance);
+        if (hatless is not null) HatLooks.ListHidden(list.Distant, in instance, hatless);
         if (heldPending is not null)
             list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
     }
@@ -495,12 +511,13 @@ sealed partial class GameHost
         var reachOf = editing is null && !Player.CharacterEditor.EditorOpen ? Gpu.Characters : null;
         var eye = Camera.Eye;
         bool distant = BeginDistant(list, current, reachOf);
+        HatLooks.Begin();
         foreach (var c in current.Characters)
         {
             var inBar = editing is { } shown ? CharacterEditor.Bar.EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
-            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !_portraitKeys.Contains(DrawKey(c.Id))
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !PortraitWanted(c.Id)
                     && c.Id != Sandbox.SandboxHero)
             {
                 if (distant) AddDistant(list, c);
@@ -519,7 +536,8 @@ sealed partial class GameHost
     bool BeginDistant(CharacterDrawList list, WorldSnapshot current, CharacterRenderer? reachOf)
     {
         _portraitKeys.Clear();
-        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key);
+        // A portrait drawn from the character's hatless instance (HiddenHatLooks) counts as the character's.
+        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key & ~HiddenHatLooks.KeyBit);
         var distantKey = (current, current.Tick, worldEpoch: Saves.WorldEpoch);
         bool distant = reachOf is not null && distantKey != DistantFor;
         if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
@@ -537,7 +555,7 @@ sealed partial class GameHost
         var (position, yaw, rotation, before) = DrawnPlace(current, c, alpha);
         // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
         // either.
-        bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
+        bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || PortraitWanted(c.Id);
         var poses = LayerPoses(c, before, alpha, posed);
         if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
         // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
@@ -552,7 +570,10 @@ sealed partial class GameHost
         }
         if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
             poses = forced;   // the sandbox drop-down loops a picked clip on the hero
-        var held = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        // The editor shows the character as it is dressed; elsewhere the Hide hats setting may leave its hat out.
+        Data.Characters.CharacterAppearance? hatless = null;
+        var worn = editing is null ? HatLooks.WorldLook(c, out hatless) : c.Appearance!;
+        var held = HeldLooks.HeldLook(worn, c.HeldTool, out var heldPending);
         var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
         if (editing is null) Decapitation.CutHead(c, look);
         var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
@@ -565,6 +586,7 @@ sealed partial class GameHost
         var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
         if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
         list.Add(instance);
+        if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);
         // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
         if (Player.CharacterEditor.Previews.EditorPending(c.Id) is { } pending)
             list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });

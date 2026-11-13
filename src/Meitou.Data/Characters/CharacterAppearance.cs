@@ -256,6 +256,12 @@ public sealed record CharacterOptions
     /// The head shaven or not, as the character is now (a processed slave's, or an ex-slave's grown back); null: the CHARACTER's <c>shaved</c>.
     /// </summary>
     public bool? Shaved { get; init; }
+
+    /// <summary>
+    /// Leave the worn hat (the ARMOUR in the hat slot) out, with what it hides: the hair and beard show (Meitou's Hide hats setting,
+    /// <see cref="CharacterAppearance.WithoutHat"/>).
+    /// </summary>
+    public bool HideHat { get; init; }
 }
 
 /// <summary>
@@ -486,6 +492,7 @@ public sealed class CharacterAppearance
         var (items, materials, colours) = CollectItems(db, options, character, loadout, random);
         AddEquipped(db, result, options, race, items);
         var worn = WornArmour(items);
+        if (options.HideHat) worn.RemoveAll(IsHat);
         bool headless = ApplyDecapitation(result, loadout, worn);
         result.Shaved = options.Shaved ?? character?.GetBool("shaved") == true;
         AddHairAndBeard(db, result, body, character, race, random, female, worn, headless);
@@ -708,9 +715,14 @@ public sealed class CharacterAppearance
     {
         bool headless = loadout?.Decapitated == true;
         result.Headless = headless;
-        if (headless) worn.RemoveAll(w => (AttachSlot)w.GetInt("slot", 5) == AttachSlot.Hat);
+        if (headless) worn.RemoveAll(IsHat);
         return headless;
     }
+
+    /// <summary>
+    /// Whether a worn ARMOUR is in the hat slot.
+    /// </summary>
+    static bool IsHat(GameRecord worn) => (AttachSlot)worn.GetInt("slot", 5) == AttachSlot.Hat;
 
     /// <summary>
     /// The hair and beard: the body's, else (for a character without a body file) a rolled hair; a hat hides the hair, a cut-off head takes both off.
@@ -720,7 +732,7 @@ public sealed class CharacterAppearance
         List<GameRecord> worn, bool headless)
     {
         // fcs.def: "hide hair" (default true) is for hats only.
-        bool hideHair = worn.Any(w => (AttachSlot)w.GetInt("slot", 5) == AttachSlot.Hat && w.GetBool("hide hair", true));
+        bool hideHair = worn.Any(w => IsHat(w) && w.GetBool("hide hair", true));
         bool hideBeard = worn.Any(w => w.GetBool("hide beard"));
         foreach (var w in worn) result.HiddenParts |= w.GetInt("hide parts");
 
@@ -1190,6 +1202,21 @@ public sealed class CharacterAppearance
         foreach (var (name, point) in AttachmentPoints) copy.AttachmentPoints[name] = point;
         foreach (var (name, weight) in PoseWeights) copy.PoseWeights[name] = weight;
         return copy;
+    }
+
+    /// <summary>
+    /// This look without its hat (Meitou's Hide hats setting): built again from its loadout with <see cref="CharacterOptions.HideHat"/>, so the
+    /// hair and beard the hat hid show and the body parts it hid are drawn. This look itself when it wears no hat ARMOUR or was not built from a
+    /// CHARACTER's loadout.
+    /// </summary>
+    public CharacterAppearance WithoutHat(GameDatabase db, string installRoot)
+    {
+        if (Character is null || Loadout is null || !Parts.Any(p => p.Slot == AttachSlot.Hat && p.Record.Type == FcsRecordType.Armour)) return this;
+
+        var options = new CharacterOptions { Loadout = Loadout, Shaved = Shaved, Faction = Faction?.StringId, HideHat = true };
+        var bare = Build(db, installRoot, Character.StringId, options);
+        bare.Shape = Shape;
+        return bare;
     }
 
     #endregion

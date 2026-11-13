@@ -698,7 +698,7 @@ sealed class GamePages(SettingsMenu menu)
 
     /// <summary>
     /// The optional rows, off by default and in neither the all Faithful nor the all Meitou switch: the follow camera offset and item rotation
-    /// (after ErasmianFolly's Camera Tweaks and GetRotatedIdiot mods).
+    /// (after ErasmianFolly's Camera Tweaks and GetRotatedIdiot mods) and the hidden hats.
     /// </summary>
     void AddOptionalRows(List<SettingsMenu.Entry> result)
     {
@@ -713,6 +713,24 @@ sealed class GamePages(SettingsMenu menu)
             + "item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items "
             + "cannot be turned. From ErasmianFolly's GetRotatedIdiot.",
             Toggle: new("Item rotation", () => menu.Config.RotateItems, SetRotateItems)));
+        AddHideHatsRows(result);
+    }
+
+    /// <summary>
+    /// The Hide hats choice and, while it hides any, its row for the other factions' characters.
+    /// </summary>
+    void AddHideHatsRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Hide hats",
+            "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. "
+            + "Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game.",
+            Choice: new(() => ["Off", "Portraits only", "On"], () => (int)menu.Config.HideHats, i => menu.Config.HideHats = (HideHats)i)));
+        if (menu.Config.HideHats == HideHats.Off) return;
+
+        result.Add(new("Hide other factions' hats",
+            "The hats of every other character are left out the same way, not only your own characters'.",
+            Toggle: new("Hide other factions' hats", () => menu.Config.HideHatsOfOthers, v => menu.Config.HideHatsOfOthers = v, OnOff: true),
+            Depth: 1));
     }
 
     /// <summary>
@@ -738,13 +756,14 @@ sealed class GamePages(SettingsMenu menu)
     void SetRotateItems(bool on) => menu.Player.InventoryWindows.RotateItems = menu.Config.RotateItems = on;
 
     /// <summary>
-    /// Restore defaults for the optional rows: both off, the follow camera's values as shipped.
+    /// Restore defaults for the optional rows: all off, the follow camera's values as shipped.
     /// </summary>
     internal void ResetOptional()
     {
         SetRotateItems(false);
         (menu.Config.FollowCameraOffset, menu.Config.FollowCameraHeadLock) = (false, false);
         (menu.Config.FollowCameraRaise, menu.Config.FollowCameraSide) = (FollowFocus.DefaultRaise, 0);
+        (menu.Config.HideHats, menu.Config.HideHatsOfOthers) = (HideHats.Off, false);
     }
 
     /// <summary>

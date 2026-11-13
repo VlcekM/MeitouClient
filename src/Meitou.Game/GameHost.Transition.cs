@@ -325,8 +325,14 @@ sealed partial class GameHost
     /// Whether the loading screen still waits for a character's look: one in its reach whose drawn look is not prepared. An operator's tool look,
     /// once prepared, is the drawn one (<see cref="Host.HeldToolLooks.HeldLook"/>) and its plain look is listed no more, so that may never be built.
     /// </summary>
-    bool AwaitsLook(Simulation.CharacterSnapshot c, Rendering.Characters.CharacterRenderer characters) =>
-        c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldLooks.HeldPrepared(look, c.HeldTool, characters);
+    bool AwaitsLook(Simulation.CharacterSnapshot c, Rendering.Characters.CharacterRenderer characters)
+    {
+        if (c.Appearance is null || !InLoadingReach(c)) return false;
+
+        // The drawn look may be the one without its hat (Hide hats).
+        var look = HatLooks.WorldLook(c, out _);
+        return !characters.IsPrepared(look) && !HeldLooks.HeldPrepared(look, c.HeldTool, characters);
+    }
 
     /// <summary>
     /// Advances the sky arrival by <paramref name="seconds"/>, aiming at the read save's hour once known; a finished one ends.
