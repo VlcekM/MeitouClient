@@ -195,6 +195,12 @@ public static class SaveLoader
     }
 
     /// <summary>
+    /// An imported zone resets NPC building state even when a player building keeps the zone file (FUN_1409ffad0: "imported" key presence).
+    /// </summary>
+    static bool HasSavedBuildingState(KeyValuePair<Meitou.Data.World.ZoneCoordinate, SaveZone> entry) =>
+        entry.Value.BuildingList?.Bools.ContainsKey("imported") != true;
+
+    /// <summary>
     /// The research, the player's buildings and machines, the NPC town and rock machines and the zones' loose items.
     /// </summary>
     static void LoadWorks(World world, SaveGame save, PopulationData data, int playerIndex, LoadedSave loaded)
@@ -217,9 +223,8 @@ public static class SaveLoader
             RockMachineSave.Read(camera.Record, world, townProduction);
         }
 
-        // The loose items of the zone files (docs/simulation.md "Ground items"); a zone with a file is not loaded fresh (no nest items are laid
-        // there).
-        world.SavedZones.UnionWith(save.Zones.Keys);
+        // The loose items of the zone files (docs/simulation.md "Ground items"); a non-imported saved zone is not loaded fresh (no nest items).
+        world.SavedZones.UnionWith(save.Zones.Where(HasSavedBuildingState).Select(entry => entry.Key));
         if (GroundItemSave.Load(save, world, data.Items,
             id => data.FactionIndex(id) is var f and >= 0 && !data.Factions[f].NotReal ? f : -1) is > 0 and var lost)
             loaded.Notes.Add($"{lost} loose items name records this game does not have; they stay in the zone files.");

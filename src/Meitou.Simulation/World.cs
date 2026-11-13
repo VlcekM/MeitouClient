@@ -388,7 +388,7 @@ public sealed partial class World : IDisposable
     /// </summary>
     public HashSet<Meitou.Data.World.ZoneCoordinate> VisitedZones { get; } = [];
     /// <summary>
-    /// The zones the loaded save has a file of: the original's zones not loaded fresh (<c>ZoneMapContent::newGameFirstTimeLoaded</c> clear), where a
+    /// The zones the loaded save has a non-imported file of: the original's zones not loaded fresh (<c>ZoneMapContent::newGameFirstTimeLoaded</c> clear), where a
     /// nest lays no items.
     /// </summary>
     public HashSet<Meitou.Data.World.ZoneCoordinate> SavedZones { get; } = [];

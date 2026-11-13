@@ -234,7 +234,10 @@ their squad's point, on the ground there (`PlaceOnGround`); a save without a pla
 comes from with no start applied is **Unknown**); imprisoned uniques not in the player's squads are dropped from the table
 (their characters are not carried) instead of tested by handle; the finished research of "off" is `_Default Start` only; the weather and decals start fresh; war states are dropped with
 the NPC platoons. A save older than 0.90.0 drops the reset, buildings, research and dead-NPC ticks (`SaveImport.AllowedFor`; the original's window disables and unticks them,
-`FUN_14047cee0`, comparing the CAMERA `version` packed as a << 24 | b << 12 | c, unparsable = 0; Meitou's window does the same on row selection, `PlayerInterface.OldImportSave`). Done: the "too close" player-town removal (`SaveImport.TooCloseTowns`; the radius is the placed town's). Not built: and the `imported` marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
+`FUN_14047cee0`, comparing the CAMERA `version` packed as a << 24 | b << 12 | c, unparsable = 0; Meitou's window does the same on row selection, `PlayerInterface.OldImportSave`). Done: the "too close" player-town removal (`SaveImport.TooCloseTowns`; the radius is the placed town's).
+`SaveLoader` recognizes an original save's `imported` marker and excludes that zone from `World.SavedZones`, so NPC
+generators use fresh construction and switch defaults while player-owned generators retain their state. Meitou's own
+import filter does not yet write that marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
 data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`).
 
 ### Object handles and slot lists
