@@ -304,6 +304,11 @@ label, pointer and outline take the nearest character whose posed mesh the ray m
 box per bone (vertices by their strongest weight; an unskinned part one box), grown 0.4 units; the boxes are posed by the live bone palette,
 so people and animals pick over their whole drawn body, a ragdoll where it lies. **Verified** (sandbox probe, 2026-10-16): a person hits from the feet to 18 units
 up and misses at 22; a bonedog hits up to 10. A character the renderer does not draw falls back to a capsule 18 units tall.
+A left click without Shift takes the nearest character the same way, the player's or another's (`PlayerInterface`): one of the player's is selected, another's is
+inspected and the selection kept, so a body carried in front of its carrier takes the click. **Observed** in the original 1.0.68 (2026-11-13): a click on another
+faction's dead body carried over the selected character's shoulder, where the body is in front of the carrier, shows the body in the HUD panels and keeps the selection;
+a carried squad member and any other character in front of one of the player's were not tested. Meitou: with Shift only the player's characters count (the original's
+Shift click is **Unknown**).
 A building seen from outside (its interior not shown, [interior masks](../formats/zones.md#interior-masks)) hides what is inside or behind it from these picks and from
 ground-item picks: the ray stops where it meets the building's `interior mask` collision (engine choice, standing in for the original's building hits in the same ray).
 

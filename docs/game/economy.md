@@ -78,6 +78,12 @@ with the sound `gui_notrade` (`FUN_14070f7e0`). The limit is 1000 unless a flag 
 inventory, `uses_building_category`), or an owner of type 1 whose +0x2f8 is 2, or of type 0x5b whose +0xc0 object has +0x2f8 = 2, or the source owner's +0x78 object passing
 its slot +0x260 (meanings **Unknown**). Flagged: the owners must not be enemies (faction test) and must be on the same floor, and the limit is 60, or the source owner's bounds radius + 40
 when the source is a building (class 0). The limits are stored squared (1e6, 3600). Same owner: always allowed. **Unknown**: which windows the three drop callers flag; whether take-all uses the check.
+A carried, unconscious squad member trades through its own window (**Observed** in the original 1.0.68, plain game, 2026-11-13: Zepp carries the unconscious Beep into a
+bar and trades with the barman; Beep's portrait clicked during the trade shows Beep's window beside the trader's, an item dragged from it to the trader sells for 27 and
+dragged back buys for 27). Meitou: an open trade passes to a knocked-out player character within 1000 whose window is used and stays with them, so stock dragged
+or right-clicked into that window is bought and their goods sell (`TradeSystem.Trades`, `Parties`; `HeldItems.KeepHeld` keeps a stock lift for them); opening a trade
+needs a conscious one, and a dead one does not trade. **Unknown** in the original: a knocked-out member lying on the ground, one carried by another faction or caged, a
+customer knocked out while trading, and a dead one.
 
 Opening a trade from dialogue (**Observed**, read): the Trade effect (`FUN_1409524f0`, the speaker's squad must have stock) only queues a pending open (kind 1, both
 characters) on the player interface (`FUN_140791830`; kind 3 is loot/inspect, `FUN_140354dc0`); its per-frame update (`FUN_1406ea070`) opens both inventory windows

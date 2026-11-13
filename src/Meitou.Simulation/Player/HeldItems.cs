@@ -881,15 +881,17 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is gone, or
-    /// down while working another's window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329).
+    /// down while working another's window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329),
+    /// and so does stock lifted by a knocked-out (not dead) customer while the trade stays open with them (<c>TradeSystem.OpenStock</c>).
     /// </summary>
     internal void KeepHeld(World world)
     {
         if (world.Player.Held is not { } held) return;
         var table = world.Characters;
         bool own = held.From == ItemOwner.Of(held.Actor);
+        bool stock = held.From.Holder == ItemHolder.Stock;
         bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && (own
-                || actor.Medical is not { Incapacitated: true }) && held.From.Holder switch
+                || actor.Medical is not { Incapacitated: true } || (stock && actor.Medical is not { Dead: true })) && held.From.Holder switch
         {
             ItemHolder.Character => CharacterWindow(world, held.From.Character, held.Actor, out _) is not null,
             ItemHolder.Stock => world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out _) is not null,
