@@ -2,7 +2,7 @@
 title: Meitou 0.18.0
 date: 2026-11-13
 author: VlcekM
-image: banner.jpg
+image: banner-wide.jpg
 ---
 
 Hey hey everyone,
