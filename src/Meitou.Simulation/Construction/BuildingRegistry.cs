@@ -80,6 +80,18 @@ public sealed class BuildSite
     /// </summary>
     public int Town { get; set; }
     /// <summary>
+    /// The save's <c>town</c> handle when it named a live town that is not a player outpost (a level town, or <c>NO_TOWN</c>, the canonical town of
+    /// a building outside every town; <b>Observed</b>, the original's save of a player generator outside every radius carries NO_TOWN's handle,
+    /// shared by the faction-less buildings of the whole world): the original keeps such a building in that town, so it belongs to no player outpost
+    /// and is never given the nearest one (<see cref="TownLookup.KeyOf"/>). Null: none. Written back as read.
+    /// </summary>
+    public Data.Save.Hand? ForeignTown { get; set; }
+    /// <summary>
+    /// <see cref="ForeignTown"/> is <c>NO_TOWN</c> (the handle faction-less buildings carry): no power frame, so a machine there is never registered
+    /// (<b>Verified</b>, <c>FUN_14092d850</c>: NO_TOWN is no frame).
+    /// </summary>
+    public bool InNoTown { get; set; }
+    /// <summary>
     /// The owning faction, a position in the world's faction list.
     /// </summary>
     public int Owner { get; set; }
@@ -186,6 +198,7 @@ public sealed class BuildSite
         h.Add(Paused);
         if (Destroyed || Ruined) { h.Add(0x44657374); h.Add(Destroyed); h.Add(Ruined); }
         if (Town != 0) { h.Add(0x546F776E); h.Add(Town); }
+        if (ForeignTown is not null) { h.Add(0x466F7265); h.Add(InNoTown); }
         if (!Public) h.Add(0x50726976);
         if (Upgrading) h.Add(0x55706772);
         h.Add(Materials.Length);
@@ -248,6 +261,11 @@ public sealed class PlayerTown
     /// The save's instance id of its town-list entry (null until a save has named it); bookkeeping for <c>Saving.BuildingSave</c>, not hashed.
     /// </summary>
     public string? SaveInstance { get; set; }
+    /// <summary>
+    /// The TOWN record its town-list entry names when that is not <see cref="Template"/> (a player-owned level town keeps its placement's record);
+    /// null: <see cref="Template"/>. Bookkeeping for <c>Saving.BuildingSave</c>, not hashed.
+    /// </summary>
+    public string? SaveTemplate { get; set; }
     /// <summary>
     /// The save's town handle <c>hand*</c> (null until a save has named it); not hashed.
     /// </summary>
@@ -314,24 +332,64 @@ public sealed partial class BuildingRegistry
     public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
-    /// The player towns (outposts), in creation order; never removed.
+    /// The save instance ids loaded as player towns; a save removes only these when their town is gone (bookkeeping, not hashed).
+    /// </summary>
+    internal HashSet<string> ImportedTownInstances { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The player towns (outposts), in creation order.
     /// </summary>
     public IReadOnlyList<PlayerTown> Towns => _towns;
     /// <summary>
     /// The player town numbered <paramref name="number"/>; null when there is none.
     /// </summary>
-    public PlayerTown? FindTown(int number) => number > 0 && number <= _towns.Count ? _towns[number - 1] : null;
+    public PlayerTown? FindTown(int number) => number > 0 ? _towns.Find(t => t.Number == number) : null;
+
+    /// <summary>
+    /// The highest town number ever given in this world; numbers of removed towns are never reused (the AI's campaign state holds them).
+    /// </summary>
+    int _lastTownNumber;
+
+    /// <summary>
+    /// The highest town handle container ever given to an outpost: saved, so a removed outpost's container is never reused.
+    /// </summary>
+    internal int TownContainerFloor { get; set; }
 
     /// <summary>
     /// Makes a player town with the next number.
     /// </summary>
     public PlayerTown AddTown(Vector3 position, int owner, string name = PlayerTown.DefaultName)
     {
-        var town = new PlayerTown { Number = _towns.Count + 1, Name = name, Position = position, Owner = owner };
+        int number = Math.Max(_lastTownNumber, _towns.Count == 0 ? 0 : _towns.Max(t => t.Number)) + 1;
+        _lastTownNumber = number;
+        var town = new PlayerTown { Number = number, Name = name, Position = position, Owner = owner };
         _towns.Add(town);
         Revision++;
         Version++;
         return town;
+    }
+
+    /// <summary>
+    /// Removes a town during save-load normalisation or an overlap merge.
+    /// </summary>
+    internal bool RemoveTown(PlayerTown town)
+    {
+        if (!_towns.Remove(town)) return false;
+
+        Revision++;
+        Version++;
+        return true;
+    }
+
+    /// <summary>
+    /// Moves every site assigned to <paramref name="from"/> to <paramref name="to"/>.
+    /// </summary>
+    internal void MoveTownBuildings(PlayerTown from, PlayerTown to)
+    {
+        foreach (var site in _sites)
+            if (site.Town == from.Number) site.Town = to.Number;
+
+        Version++;
     }
 
     /// <summary>

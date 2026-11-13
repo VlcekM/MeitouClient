@@ -1,6 +1,9 @@
+using System.Numerics;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Production;
 
@@ -28,6 +31,19 @@ public sealed partial class ProductionSystem
     /// Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.
     /// </summary>
     readonly Dictionary<int, TownPower> _townPower = [];
+    /// <summary>
+    /// The generation of each town of the level data (negative grid keys) that holds a player machine this tick: what its placed generators give
+    /// (<see cref="NpcGeneration"/>). A scratch map.
+    /// </summary>
+    readonly Dictionary<int, float> _npcSupply = [];
+    /// <summary>
+    /// The draws of the machine-class buildings of each such town (<see cref="NpcDraws"/>): pseudo consumers of its frame. A scratch map.
+    /// </summary>
+    readonly Dictionary<int, List<float>> _npcDraws = [];
+    /// <summary>
+    /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
+    /// </summary>
+    readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -74,12 +90,62 @@ public sealed partial class ProductionSystem
     int _powerCursor;
 
     /// <summary>
+    /// The grid key of a machine that has no town at all (a machine in a world without any town).
+    /// </summary>
+    const int NoPowerTown = 0;
+    /// <summary>
+    /// The grid each town-less site was resolved to, with the player towns' layout it was resolved for (<see cref="_townLayout"/>).
+    /// </summary>
+    readonly Dictionary<string, (int Town, int Layout)> _powerTowns = new(StringComparer.Ordinal);
+    /// <summary>
+    /// A hash of the player towns' numbers and centres this tick; a cached <see cref="_powerTowns"/> entry is valid for one layout.
+    /// </summary>
+    int _townLayout;
+
+    /// <summary>
+    /// The town whose power frame a site's machine joins (<c>FUN_140296940</c> and <c>FUN_1409f9180</c>, <b>Observed</b>): the town of its building,
+    /// else (no handle, or one whose town is gone) the nearest town by horizontal distance, whatever its owner and however far, a nest excluded;
+    /// <see cref="NoPowerTown"/> for a building whose handle is NO_TOWN (<see cref="BuildSite.InNoTown"/>, no frame). A player town's key is its number; a town
+    /// of the level data (an NPC town, whose machines Meitou gives a frame of their own) is <c>-(index + 1)</c>; <see cref="NoPowerTown"/> when the
+    /// world has none. A tie goes to the player town, then to the lower index.
+    /// </summary>
+    int PowerTown(World world, BuildSite site)
+    {
+        if (site.Town != 0) return site.Town;
+        if (site.InNoTown) return NoPowerTown;
+        if (_powerTowns.TryGetValue(site.Id, out var known) && known.Layout == _townLayout) return known.Town;
+
+        int found = TownLookup.NearestKey(world, site.Position);
+
+        _powerTowns[site.Id] = (found, _townLayout);
+        return found;
+    }
+
+    /// <summary>
+    /// A hash of the player towns' numbers and centres, to invalidate the resolved <see cref="PowerTown"/>s when one moves or is added or removed.
+    /// </summary>
+    static int TownLayout(World world)
+    {
+        var hash = new HashCode();
+        foreach (var t in world.Buildings.Towns)
+        {
+            hash.Add(t.Number);
+            hash.Add(t.Position);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
     /// The power step: every machine's indoor, active, wind and rain state, each town's grid sharing its power (<see cref="ShareOneTown"/>), the
     /// generators' fuel burnt, then each machine's health, research multiplier and efficiency.
     /// </summary>
     void PowerTick(World world, float dt)
     {
         foreach (var list in _grids.Values) list.Clear();
+        int layout = TownLayout(world);
+        if (layout != _townLayout) _powerTowns.Clear();   // every entry is stale now, and the removed sites' are gone with them
+        _townLayout = layout;
         foreach (var m in world.Machines.All)
         {
             // Slot 59 (isIndoors): interior furniture standing in a building; slot 164: a light building outdoors works only while it is not daytime.
@@ -95,11 +161,19 @@ public sealed partial class ProductionSystem
                 m.Power = 1;
                 continue;
             }
+            int town = PowerTown(world, site);
+            if (town == NoPowerTown)
+            {
+                // No town at all: the original never registers the machine, so a machine that draws power gets none.
+                m.Power = Rated(world, m) == 0 ? 1 : 0;
+                continue;
+            }
 
-            if (!_grids.TryGetValue(site.Town, out var grid)) _grids[site.Town] = grid = [];
+            if (!_grids.TryGetValue(town, out var grid)) _grids[town] = grid = [];
             grid.Add(m);
         }
 
+        NpcGeneration(world);
         ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
         {
@@ -117,17 +191,88 @@ public sealed partial class ProductionSystem
             m.Health = site is { Target: > 0 } s ? Math.Clamp(s.Progress / s.Target, 0, 1) : 1;
             m.ProductionMult = UpgradeOf(world, m).ProductionMult;
             m.Efficiency = built ? Efficiency(world, m) : 0;
-            m.HasPower = built && HasPower(world, m, Site(world, m.Site)!.Town);
+            m.HasPower = built && HasPower(world, m, PowerTown(world, Site(world, m.Site)!));
             m.Rotation = !built ? 0 : m.Data.IsGenerator ? (m.PowerOn ? Output(world, m) * 0.01f : 0) : m.Efficiency;
             if (m.Data.IsBattery)
             {
                 // The battery's word reads its town grid's flows, not its own (FUN_140300b40).
                 TownPower grid = default;
-                m.OnGrid = site is not null && _townPower.TryGetValue(site.Town, out grid);
+                m.OnGrid = site is not null && _townPower.TryGetValue(PowerTown(world, site), out grid);
                 m.GridCharging = grid.Charging > 0;
                 m.GridDraining = grid.Draining > 0;
             }
         }
+    }
+
+    /// <summary>
+    /// The generation of each town of the level data that a player machine resolved to (<see cref="PowerTown"/>, a negative key; <b>Observed</b>,
+    /// <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, so an NPC town's frame has the output of the generators
+    /// placed in it): a wind generator gives its rated output x its blades' wind share (nothing below 1), a fuel generator nothing (the base game
+    /// places 47 of them, all with an empty tank; the placed fuel and the switch are not read). The NPC town's own machine-class buildings
+    /// are consumers of the same frame (<see cref="NpcDraws"/>); with no running generator the player's machine gets 0.
+    /// </summary>
+    void NpcGeneration(World world)
+    {
+        _npcSupply.Clear();
+        _npcDraws.Clear();
+        foreach (var town in _grids.Where(g => g.Key < 0 && g.Value.Count > 0).Select(g => g.Key))
+        {
+            _npcSupply[town] = NpcOutput(world, -town - 1);
+            _npcDraws[town] = NpcDraws(world, -town - 1);
+        }
+    }
+
+    /// <summary>
+    /// The draws of the machine-class buildings placed in the level-data town of <paramref name="index"/> (<b>Observed</b>, <c>FUN_1402a1750</c>
+    /// registers a level building with its power town as a consumer by the sign of its <c>power output</c>): every standing building with a
+    /// functionality whose output is negative (turrets, searchlights, wells, mines, refineries); a light only outside daytime (LightBuilding slot
+    /// 164). Houses and stalls have no functionality and are left out. Each is one consumer of the frame at its level-data draw.
+    /// </summary>
+    List<float> NpcDraws(World world, int index)
+    {
+        var draws = new List<float>();
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return draws;
+
+        foreach (var b in site.Buildings)
+        {
+            if (b.Destroyed || Data(b.BuildingId) is not { IsConsumer: true, Function: >= 0 } data || data.IsLight && world.Daytime) continue;
+
+            draws.Add(MathF.Abs(data.PowerOutput));
+        }
+
+        return draws;
+    }
+
+    /// <summary>
+    /// What the generators placed in the level-data town of <paramref name="index"/> give now (<see cref="NpcGeneration"/>).
+    /// </summary>
+    float NpcOutput(World world, int index)
+    {
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return 0;
+
+        float total = 0;
+        foreach (var b in site.Buildings)
+        {
+            if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true, IsWind: true } data) continue;
+
+            var rotor = Rotor(b);
+            var here = world.Weather?.At(b.Position.X, b.Position.Z);
+            float output = rotor is { } r && here is { } w ? data.PowerOutput * RotorSpec.WindShare(w.WindSpeed, r.Min, r.Max) : 0;
+            if (output >= 1) total += output;
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// The rotor of a placed wind generator, read once.
+    /// </summary>
+    (float Min, float Max)? Rotor(TownBuilding b)
+    {
+        if (_npcRotors.TryGetValue(b.Key, out var known)) return known;
+
+        var rotor = _db.Find(b.BuildingId) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(_db, record, b.Position) : null;
+        return _npcRotors[b.Key] = rotor;
     }
 
     /// <summary>
@@ -202,10 +347,9 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// State 93 <c>BUILDING_HAS_POWER</c> (<c>FUN_140596ab0</c>, <b>Verified</b>), a start condition of operating (87, 221) and manning a turret (146):
-    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share. An NPC town's machine
-    /// always has it (engine choice: NPC towns have no power grid here).
+    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share.
     /// </summary>
-    bool Powered(World world, BuildSite site, Machine m) => IsTownWork(site.Id) || HasPower(world, m, site.Town);
+    bool Powered(World world, BuildSite site, Machine m) => IsTownWork(site.Id) || HasPower(world, m, PowerTown(world, site));
 
     /// <summary>
     /// Whether a machine counts as powered for its sound emitter (<c>FUN_140299370</c>, <b>Observed</b>): a generator always (fuel and switch are not
@@ -247,18 +391,12 @@ public sealed partial class ProductionSystem
             }
         }
 
+        supply += _npcSupply.GetValueOrDefault(town);
         float generated = supply;
         _townSupply[town] = (generated > 0, batteries > 0);
         consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));
-        int left = consumers.Count, @short = 0;
-        foreach (var c in consumers)
-        {
-            float share = supply / Math.Max(1, left--);
-            float give = MathF.Min(share, c.Demand);
-            supply -= give;
-            c.Granted = give;
-            if (give < c.Demand && c.GetsBattery) @short++;
-        }
+        int @short = ShareOut(consumers, _npcDraws.GetValueOrDefault(town), ref supply);
+        demandTotal += _npcDraws.TryGetValue(town, out var npc) ? npc.Sum() : 0;
 
         float batteryLeft = batteries;
         if (mode && @short > 0)
@@ -298,6 +436,33 @@ public sealed partial class ProductionSystem
         }
 
         _townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
+    }
+
+    /// <summary>
+    /// The water-filling of <paramref name="supply"/> over the machines (sorted by demand) and the NPC town's pseudo consumers (<paramref name="npc"/>,
+    /// null: none): in ascending demand each takes at most an equal share of what is left; a machine of equal demand to a pseudo consumer comes
+    /// after it. Returns how many battery-taking machines were left short.
+    /// </summary>
+    static int ShareOut(List<Machine> consumers, List<float>? npc, ref float supply)
+    {
+        var draws = npc is null ? new Queue<float>() : new Queue<float>(npc.Order());
+        int left = consumers.Count + draws.Count, @short = 0;
+        foreach (var c in consumers)
+        {
+            while (draws.Count > 0 && draws.Peek() <= c.Demand)
+            {
+                float draw = draws.Dequeue();
+                supply -= MathF.Min(supply / Math.Max(1, left--), draw);
+            }
+
+            float give = MathF.Min(supply / Math.Max(1, left--), c.Demand);
+            supply -= give;
+            c.Granted = give;
+            if (give < c.Demand && c.GetsBattery) @short++;
+        }
+
+        while (draws.Count > 0) supply -= MathF.Min(supply / Math.Max(1, left--), draws.Dequeue());
+        return @short;
     }
 
     /// <summary>

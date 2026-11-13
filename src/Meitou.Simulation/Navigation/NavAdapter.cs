@@ -55,6 +55,9 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
     /// <inheritdoc/>
     public Vector3? FloorNear(float x, float z, float y, float slack) => nav.FloorNear(x, z, y, slack);
 
+    /// <inheritdoc/>
+    public IReadOnlyList<SurfaceFace>? SurfaceFaces(Vector3 centre, float reach) => NavSurfaceFaces.Of(nav.World, centre, reach);
+
     /// <summary>
     /// A path for the default human agent (the navmesh's own default).
     /// </summary>

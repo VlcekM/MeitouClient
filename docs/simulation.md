@@ -119,7 +119,7 @@ request its character replaced before a thread took it up; F12's sim rows show t
 
 `StateHash` is ordered, includes slot/generation/free-list and hashed subsystem state, normalizes
 negative zero, and is a diagnostic rather than gameplay work. Golden scenarios must agree at
-1/4/16 threads before pins change; pins are platform-specific. Snapshots expose living-character
+1/4/16 threads before pins change; pins are platform-specific. `GoldenHashTests.Scripted_scenarios_hash_as_pinned` emits the measured arrays on Windows; take pins from there. Linux runs reproduce the `production` and `build` pins bit for bit but not the wandering ones, and Wine/Proton reproduces neither reliably, so a pin taken from Linux needs one Windows CI run to confirm. The production fixture uses town 1 so its generator, battery and powered workshop share a grid. Snapshots expose living-character
 identity, appearance, transform, animation, faction/squad/player/selection and body status;
 selected characters also expose skills, inventory and path. Host reads double-buffered active
 zones within the frame after ticks. Null appearances draw markers.

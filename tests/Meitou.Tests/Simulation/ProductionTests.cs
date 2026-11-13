@@ -11,6 +11,7 @@ using Meitou.Simulation.Construction;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 using static Meitou.Tests.Bodies.BodyFixtures;
@@ -238,6 +239,11 @@ public class ProductionTests
         return tank;
     }
 
+    /// <summary>
+    /// The record of the installed Wind Generator, by name; null when the data set has none.
+    /// </summary>
+    static string? WindGeneratorId(GameDatabase db) => db.OfType(FcsRecordType.Building).FirstOrDefault(r => r.Name == "Wind Generator")?.StringId;
+
     sealed class Rig : IDisposable
     {
         public SimWorld World { get; }
@@ -245,22 +251,27 @@ public class ProductionTests
         public ProductionSystem Production { get; }
         public List<string> Sites { get; } = [];
 
-        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false)
+        /// <summary>
+        /// Creates machines on town 1 so power fixtures use a shared grid; town 0 models furniture without a player outpost.
+        /// </summary>
+        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1,
+            PopulationData? population = null, float spacing = 30)
         {
             Items = new ItemFactory(db, constants);
             var walk = new OpenGroundWalkability(SyntheticTown.Ground);
             Production = new ProductionSystem(db, constants, BodyOptions.Default, Items, null);
             World = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, PublishSnapshots = snapshots, MinPartitionSize = 1 }, walk,
-                [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]);
+                population is null
+                    ? [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]
+                    : [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production, new PopulationSystem(population)]);
             World.Player.Faction = PlayerFaction;
             World.Research.Set(db, []);
             for (int i = 0; i < records.Length; i++)
             {
                 // 30 apart: a character at one building is within the trading range (40) of the next.
-                var p = At + new Vector3(i * 30, 0, 0);
+                var p = At + new Vector3(i * spacing, 0, 0);
                 string id = World.Buildings.NewId(WorldLayout.ZoneOf(p.X, p.Z));
-                World.Buildings.Add(new BuildSite { Id = id, Record = records[i], Position = p, Owner = PlayerFaction, Materials = [],
-                        Complete = true });
+                World.Buildings.Add(new BuildSite { Id = id, Record = records[i], Position = p, Owner = PlayerFaction, Town = town, Materials = [], Complete = true });
                 Sites.Add(id);
             }
         }
@@ -581,6 +592,195 @@ public class ProductionTests
         rig.World.RunTicks(ticks);
 
         Assert.Equal(charge - ticks * rig.World.TickSeconds, battery.Charge, 0.01f);
+    }
+
+    /// <summary>
+    /// A machine without a town joins the grid of the nearest town (any owner, no distance cap) and needs a generator there: no free power.
+    /// </summary>
+    [Fact]
+    public void A_no_town_machine_without_a_generator_has_no_power()
+    {
+        using var rig = new Rig(Database(), Constants, [Lamp], town: 0);
+        rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        rig.World.RunTicks(2);
+        Assert.False(rig.Machine(0).HasPower);
+    }
+
+    /// <summary>
+    /// A generator of the nearest town powers a machine without a town; one of a farther town does not.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_no_town_machine_is_powered_by_the_nearest_towns_generator_only(bool generatorInNearestTown)
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp], town: 0);
+        var near = rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        var far = rig.World.Buildings.AddTown(At + new Vector3(9000, 0, 0), PlayerFaction);
+        rig.World.Buildings.Find(rig.Sites[0])!.Town = generatorInNearestTown ? near.Number : far.Number;
+        rig.World.RunTick();
+        var generator = rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!;
+        generator.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+        Assert.Equal(generatorInNearestTown, rig.Machine(1).Granted > 0);
+        Assert.Equal(generatorInNearestTown, rig.Machine(1).HasPower);
+    }
+
+    /// <summary>
+    /// A generator whose saved town is NO_TOWN joins no frame (the original: NO_TOWN is no frame; Goonrock's Wind Generator II 1099 outside the
+    /// radius), so it powers nothing, while the same generator with no handle at all joins the nearest town's grid.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_generator_in_no_town_powers_no_grid(bool inNoTown)
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp], town: 0);
+        rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        var site = rig.World.Buildings.Find(rig.Sites[0])!;
+        if (inNoTown) (site.ForeignTown, site.InNoTown) = (new Data.Save.Hand((int)FcsRecordType.Town, 511, -3, 0, 0), true);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, site)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+
+        Assert.Equal(!inNoTown, rig.Machine(1).HasPower);
+    }
+
+    /// <summary>
+    /// Operating a machine without a town needs power from the grid of the nearest town as well (the order check reads the same grid as the
+    /// machine's power): with no generator there the order is refused, with a fuelled one it runs.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Operating_a_no_town_machine_needs_power_from_the_nearest_towns_grid(bool generatorInNearestTown)
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, PoweredWorkshop], town: 0);
+        var worker = rig.Add(1, StatsEnumerated.Engineering, Unit);
+        var town = rig.World.Buildings.AddTown(At + new Vector3(100, 0, 0), PlayerFaction);
+        rig.World.RunTick();
+        if (generatorInNearestTown)
+        {
+            rig.World.Buildings.Find(rig.Sites[0])!.Town = town.Number;
+            rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        }
+
+        rig.World.RunTicks(6);
+
+        Assert.Equal(generatorInNearestTown, rig.World.CanOrder(Data.Gameplay.Ai.TaskType.OperateMachinery, worker, site: rig.Sites[1]).Can);
+    }
+
+    /// <summary>
+    /// A machine without a town in a world with no town at all is never registered: even beside a fuelled generator a machine that draws power gets
+    /// none, while one that draws nothing keeps full satisfaction.
+    /// </summary>
+    [Fact]
+    public void A_no_town_machine_in_a_world_without_towns_gets_no_power()
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp, Bench], town: 0);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+        Assert.Equal(0, rig.Machine(1).Power);
+        Assert.Equal(1, rig.Machine(2).Power);
+    }
+
+    /// <summary>
+    /// A machine without a town joins the frame of the nearest town of the level data when that is nearer than any player town (a bought house in
+    /// an NPC town): a generator beside that town powers it, one beside a far player town does not feed it; with no generator in that town's grid
+    /// the machine gets no power (the NPC town's frame has only the generation placed in it, and a player machine needs some).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_no_town_machine_joins_a_nearer_npc_towns_grid(bool generatorBesideNpcTown)
+    {
+        var db = Database();
+        var file = new FcsFile();
+        var town = Rec("30-t", FcsRecordType.Town, "Npc Town");
+        town.Ints["type"] = (int)TownType.Town;
+        file.Records.Add(town);
+        db.Apply(file, "town.mod");
+        float spacing = generatorBesideNpcTown ? 30 : 20000;
+        var population = PopulationData.Create(db, [new TownPlacement("npc", "30-t", At + new Vector3(spacing, 0, 0), null)]);
+        using var rig = new Rig(db, Constants, [Generator, Lamp], town: 0, population: population, spacing: spacing);
+        rig.World.Buildings.AddTown(At + new Vector3(generatorBesideNpcTown ? 90000 : 0, 0, 0), PlayerFaction);
+        rig.World.RunTick();
+        rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
+        rig.World.RunTicks(6);   // the frames run one town per tick
+
+        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).Granted > 0);
+        Assert.Equal(generatorBesideNpcTown, rig.Machine(1).HasPower);
+        Assert.Equal(generatorBesideNpcTown ? 1 : 0, rig.Machine(1).Power);
+    }
+
+    /// <summary>
+    /// An NPC town's frame has the generation of the generators placed in it: a fuel generator in the town's level data gives nothing (the base
+    /// game's 47 have an empty tank), so a player machine that resolves there gets no power, its order check fails and it is not powered.
+    /// </summary>
+    [Fact]
+    public void A_machine_in_an_npc_town_with_only_a_fuel_generator_has_no_power()
+    {
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone)
+        {
+            Buildings = [new TownBuilding("gen", Generator, "Generator", at, 0, false, false, []) { Zone = zone }],
+        };
+        var population = new PopulationData { Db = Database(), Sites = [site], Factions = [] };
+        using var rig = new Rig(Database(), Constants, [Lamp], town: 0, population: population);
+        rig.World.RunTicks(6);
+
+        Assert.Equal((0f, 0f, false), (rig.Machine(0).Granted, rig.Machine(0).Power, rig.Machine(0).HasPower));
+    }
+
+    /// <summary>
+    /// A complete player research bench with an unresolved town contributes its level.
+    /// </summary>
+    [Fact]
+    public void A_no_town_research_bench_raises_the_global_bench_level()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        rig.World.RunTick();
+        Assert.Equal(1, rig.World.Research.BenchLevel);
+    }
+
+    /// <summary>
+    /// Furniture in a bought NPC-town house has no player outpost number but still unlocks and advances research.
+    /// </summary>
+    [Fact]
+    public void A_bought_house_bench_unlocks_and_advances_research()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        var worker = rig.Add(0, StatsEnumerated.Science, Unit, (Book, 2));
+        rig.World.RunTick();
+        Assert.Equal(1, rig.World.Research.BenchLevel);
+
+        rig.Put(worker, Book, 0, -1);
+        rig.World.RunTick();
+        rig.World.Commands.Enqueue(new QueueResearch(Study) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+        Assert.Single(rig.World.Research.Queue);
+
+        rig.World.Commands.Enqueue(new OperateOrder([worker], rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.RunTicks(120);
+        Assert.True(rig.World.Research.Queue[0].Seconds > 0);
+    }
+
+    /// <summary>
+    /// An operated player bench with an unresolved town advances queued research.
+    /// </summary>
+    [Fact]
+    public void An_unresolved_bench_advances_queued_research()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        var worker = rig.Add(0, StatsEnumerated.Science, Unit);
+        rig.World.Research.Enqueue(Study);
+        rig.World.Commands.Enqueue(new OperateOrder([worker], rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.RunTicks(120);
+
+        Assert.True(rig.World.Research.Queue[0].Seconds > 0);
+        Assert.True(rig.World.Research.Rate > 0);
     }
 
     // ------------------------------------------------------------------ ore
@@ -1027,6 +1227,70 @@ public class ProductionTests
                 (tower.Accepts(water, FcsRecordType.Item), tower.Accepts(iron, FcsRecordType.Item), ore.Accepts(water, FcsRecordType.Item),
                 ore.Accepts(iron, FcsRecordType.Item)));
         Assert.Equal((100f, 100f), (tower.StackBonusMult, ore.StackBonusMult));
+    }
+
+    /// <summary>
+    /// An NPC town's wind generator (the installed Wind Generator, 1999, rated 50, wind 10 to 50) powers a player machine that resolves to the town:
+    /// at wind 30 it gives half its output, at no wind nothing (docs/game/buildings-production.md "Power").
+    /// </summary>
+    [Theory, Slow]
+    [InlineData(30f, true)]
+    [InlineData(0f, false)]
+    public void An_npc_towns_installed_wind_generator_powers_a_machine_that_resolves_there(float wind, bool powered)
+    {
+        var db = InstallData.BaseGame;
+
+        Assert.SkipWhen(db is null, "Kenshi install not found");
+        string? windId = WindGeneratorId(db!);
+        Assert.SkipWhen(windId is null, "this data set has no Wind Generator");
+
+        var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0 }).StringId;
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone)
+        {
+            Buildings = [new TownBuilding("wind", windId!, "Wind Generator", at, 0, false, false, []) { Zone = zone }],
+        };
+        var population = new PopulationData { Db = db, Sites = [site], Factions = [] };
+        using var rig = new Rig(db, GameConstants.FromDatabase(db), [consumer], town: 0, population: population);
+        rig.World.Weather = new Wind(wind);
+        rig.World.RunTicks(6);
+
+        Assert.Equal(powered, rig.Machine(0).HasPower);
+        Assert.Equal(powered, rig.Machine(0).Granted > 0);
+    }
+
+    /// <summary>
+    /// An NPC town's frame also holds the town's machine-class level buildings as consumers (<c>FUN_14092cd60</c> shares the generation over all of
+    /// them): the installed Wind Generator at full wind (50) with three level turrets (function 12) drawing 5 each leaves a player machine drawing
+    /// 40 only 35, satisfaction 0.875; without the turrets it gets its 40 (docs/game/buildings-production.md "Power").
+    /// </summary>
+    [Theory, Slow]
+    [InlineData(3, 35f)]
+    [InlineData(0, 40f)]
+    public void An_npc_towns_turrets_take_their_draw_from_the_wind_a_player_machine_shares(int turrets, float granted)
+    {
+        var db = InstallData.BaseGame;
+
+        Assert.SkipWhen(db is null, "Kenshi install not found");
+        string? windId = WindGeneratorId(db!);
+        Assert.SkipWhen(windId is null, "this data set has no Wind Generator");
+
+        var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is
+            { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0, PowerOutput: -40 }).StringId;
+        var turret = db.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { Function: 12, PowerOutput: -5 }).StringId;
+        var at = At + new Vector3(30, 0, 0);
+        var zone = new ZoneCoordinate(32, 32);
+        var buildings = new List<TownBuilding> { new("wind", windId!, "Wind Generator", at, 0, false, false, []) { Zone = zone } };
+        for (int i = 0; i < turrets; i++) buildings.Add(new TownBuilding("turret" + i, turret, "Turret", at, 0, false, false, []) { Zone = zone });
+        var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone) { Buildings = buildings };
+        var population = new PopulationData { Db = db, Sites = [site], Factions = [] };
+        using var rig = new Rig(db, GameConstants.FromDatabase(db), [consumer], town: 0, population: population);
+        rig.World.Weather = new Wind(50);
+        rig.World.RunTicks(6);
+
+        Assert.Equal(granted, rig.Machine(0).Granted, 0.01f);
+        Assert.Equal(granted / 40, rig.Machine(0).Power, 0.001f);
     }
 
     /// <summary>
