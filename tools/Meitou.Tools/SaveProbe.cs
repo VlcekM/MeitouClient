@@ -700,6 +700,7 @@ static class SaveProbe
 
         string name = b.LayoutName(exterior: false);
         Console.WriteLine($"{key} {b.Name}: interior '{name}', exterior '{b.LayoutName(exterior: true)}'");
+        Console.WriteLine($"  {RuinState(probe, b)}");
         if (layouts.Find(resolved.Record, name, exterior: false) is not { } layout) return;
 
         foreach (var item in layouts.Items(layout, resolved.Placement))
@@ -707,6 +708,20 @@ static class SaveProbe
             var (at, _) = BuildingLayouts.Place(resolved.Position, resolved.Placement.Rotation, item);
             Console.WriteLine($"  {item.InstanceId} '{item.Building.Name}' floor={item.Floor} path={item.Building.GetInt("path mode", 2)} at {at:F0}");
         }
+    }
+
+    /// <summary>
+    /// Whether a town building is a ruin now, with what decides it: the level file's and housing's state, and the save's <c>destroyed</c> and
+    /// <c>residents template</c>.
+    /// </summary>
+    static string RuinState(ProbeWorld probe, TownBuilding b)
+    {
+        var saved = probe.World.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        string savedDestroyed = saved is not null && saved.Bools.TryGetValue("destroyed", out bool d) ? d.ToString() : "none";
+        string savedTemplate = saved?.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) ?? "none";
+
+        return $"destroyed={probe.World.Fixtures.IsDestroyed(b)} level={b.LevelDestroyed} restoredByResidents={b.RestoredByResidents} "
+            + $"residents='{b.ResidentsTemplate}' saved destroyed={savedDestroyed} residents='{savedTemplate}'";
     }
 
     /// <summary>
@@ -737,7 +752,7 @@ static class SaveProbe
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
-              layout <building key>    a town building's layout names now and its interior layout's objects (needs --nav)
+              layout <building key>    a town building (zone:instance id): layout names now, ruin state and its interior layout's objects (needs --nav)
             """);
         return 2;
     }
