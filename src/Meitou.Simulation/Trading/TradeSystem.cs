@@ -836,7 +836,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not fighting nor an enemy; the customer the player's
+    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not held in a cage (engine choice, #641), not
+    /// fighting nor an enemy; the customer the player's
     /// with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window and stays with it,
     /// <see cref="Trades"/>).
     /// </summary>
@@ -849,7 +850,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var cc = table.Cold(c)!;
         var tc = table.Cold(t)!;
         bool customerDown = cc.Medical is { Dead: true } || (!_open && cc.Medical is { Incapacitated: true });
-        if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || cc.Inventory is null)
+        if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || tc.IsImprisoned || cc.Inventory is null)
             return false;
 
         return !AggroSystem.IsEnemy(_data.Relations, cc.Faction, tc.Faction);

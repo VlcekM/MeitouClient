@@ -571,10 +571,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// <summary>
     /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first
     /// trade), and its record says <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other
-    /// members of a trader squad do not.
+    /// members of a trader squad do not, nor does a trader held in a cage (engine choice).
     /// </summary>
     public bool Trades(World world, int slot) =>
-        world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
+        world.Characters.Cold(slot) is { IsPlayer: false, IsImprisoned: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
         && (squad.Shop is not null || squad.HomeBuilding is null && _data.Db.Find(squad.TemplateId)?.GetReferences("vendors").Count > 0)
         && (_data.Db.Find(cold.RecordId)?.GetBool("is trader") == true || SetOf(world, slot).Trades);
 
