@@ -190,7 +190,8 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// Moves units of <paramref name="item"/> into stacks of <paramref name="into"/> with room left (of <paramref name="section"/>, else of its
-    /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left.
+    /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left. Partial charges combine as in
+    /// <see cref="InventoryCommands.Merge"/>.
     /// </summary>
     static bool TopUp(Inventory into, ItemInstance item, bool dropReceipt, string? section = null)
     {
@@ -207,7 +208,11 @@ public sealed class Inventory(int width, int height)
             other.Quantity += move;   // clears other's receipt; the joined one is set after
             if (kept is not null) other.Buyback = kept.Append(coming!.Take(move));
             item.Quantity -= move;
-            if (item.Quantity == 0) return true;
+            if (item.Quantity > 0) continue;
+
+            // The last units bring the stack's partly used one: its charges join the kept stack's instead of being dropped (#620).
+            InventoryCommands.JoinPart(other, item.Charges);
+            return true;
         }
         return false;
     }

@@ -353,14 +353,21 @@ public static class InventoryCommands
         bool last = units >= from.Quantity;
         into.Quantity += units;
         from.Quantity -= units;
-        if (!last || into.MaxCharges <= 0) return;
-        float combined = into.Charges + from.Charges;
-        if (combined <= into.MaxCharges)
-        {
-            into.Quantity--;
-            into.Charges = combined;
-        }
-        else into.Charges = combined - into.MaxCharges;
+        if (last) JoinPart(into, from.Charges);
+    }
+
+    /// <summary>
+    /// Joins the partly used unit of a stack whose last units just moved onto <paramref name="into"/> (its <paramref name="charges"/>) with
+    /// <paramref name="into"/>'s own: two parts that fit in one unit make one, else one unit is full and the rest is the part. An item of a
+    /// single charge has no part.
+    /// </summary>
+    public static void JoinPart(ItemInstance into, float charges)
+    {
+        if (into.MaxCharges <= 1) return;
+
+        float combined = into.Charges + charges;
+        if (combined <= into.MaxCharges) into.Quantity--;
+        into.Charges = combined <= into.MaxCharges ? combined : combined - into.MaxCharges;
     }
 
     /// <summary>

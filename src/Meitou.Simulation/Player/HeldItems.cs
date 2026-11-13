@@ -96,7 +96,6 @@ sealed class HeldItems(PopulationData? data)
         if (units >= item.Quantity) return item;
         var part = item.WithQuantity(units);   // the first units, with their receipt's first coins
         item.Quantity -= units;
-        if (part.MaxCharges > 0) part.Charges = part.MaxCharges;
         return part;
     }
 

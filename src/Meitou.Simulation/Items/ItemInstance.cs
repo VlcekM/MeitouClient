@@ -277,7 +277,8 @@ public sealed class ItemInstance
     public FcsRecord? Saved { get; set; }
 
     /// <summary>
-    /// A copy of this item with another quantity (a stack split off; never used for a backpack, whose contents are not copied).
+    /// A copy of this item with another quantity (a stack split off; never used for a backpack, whose contents are not copied). Fewer units than
+    /// the stack's are full ones: the stack keeps its partly used unit (<see cref="Charges"/>), which only a copy of the whole stack carries.
     /// </summary>
     public ItemInstance WithQuantity(int quantity) => new()
     {
@@ -300,7 +301,7 @@ public sealed class ItemInstance
         ColourId = ColourId,
         ItemFunction = ItemFunction,
         Quality = Quality,
-        Charges = Charges,
+        Charges = quantity < Quantity && MaxCharges > 1 ? MaxCharges : Charges,
         MaxCharges = MaxCharges,
         Width = Width,
         Height = Height,
