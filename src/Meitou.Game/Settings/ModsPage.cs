@@ -76,7 +76,28 @@ sealed class ModsPage(SettingsMenu menu)
 
         menu.Canvas.Button("Copy", menu.Canvas.R(212, 402, 120, 28), CopyMod);
         menu.Canvas.Button("Copy all problems", menu.Canvas.R(340, 402, 200, 28), CopyProblems);
+        DrawFoldButtons();
         DrawModsDetail(report);
+    }
+
+    /// <summary>
+    /// Collapse all and Expand all at the title's right end, while a mod has settings.
+    /// </summary>
+    void DrawFoldButtons()
+    {
+        if (!Settings.AnyGroups) return;
+
+        menu.Canvas.FoldButton("Collapse all", menu.Canvas.R(1016, 60, 38, 26), false, CollapseAll);
+        menu.Canvas.FoldButton("Expand all", menu.Canvas.R(1058, 60, 38, 26), true, () => Settings.FoldAll(true));
+    }
+
+    /// <summary>
+    /// Closes every mod's settings and shows the list from its top.
+    /// </summary>
+    void CollapseAll()
+    {
+        Settings.FoldAll(false);
+        menu.ScrollOffset = menu.ScrollTarget = 0;
     }
 
     /// <summary>

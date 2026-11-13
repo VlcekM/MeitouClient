@@ -220,14 +220,31 @@ sealed class SettingsCanvas(SettingsMenu menu)
     /// <summary>
     /// The game's own arrow (the floor selector's: a grey chevron on a dark plate, gold when highlighted, <c>Kenshi_FloorArrowUpSkin</c> /
     /// <c>DownSkin</c>), 21 × 14 units centred on (<paramref name="x"/>, <paramref name="y"/>) in pixels: down opens (a closed group, a list), up
-    /// closes (an open group).
+    /// closes (an open group). <paramref name="size"/> scales it.
     /// </summary>
-    void Arrow(float x, float y, bool down, bool lit, UiRect? clip = null)
+    void Arrow(float x, float y, bool down, bool lit, UiRect? clip = null, float size = 1)
     {
-        float w = MathF.Round(21 * menu.Scale), h = MathF.Round(14 * menu.Scale);
+        float w = MathF.Round(21 * size * menu.Scale), h = MathF.Round(14 * size * menu.Scale);
         string skin = down ? "Kenshi_FloorArrowDownSkin" : "Kenshi_FloorArrowUpSkin";
         menu.Controls.Add(new("settings-arrow", "Widget", new(MathF.Round(x - w / 2), MathF.Round(y - h / 2), w, h), "", "", skin, true,
             new Dictionary<string, string> { ["State"] = lit ? "highlighted" : "normal" }, Vector4.Zero, Clip: clip, Pickable: false));
+    }
+
+    /// <summary>
+    /// An Expand all or Collapse all button: two small arrows pointing away from a line between them (expand) or at it (collapse).
+    /// </summary>
+    internal void FoldButton(string label, UiRect at, bool expand, Action action)
+    {
+        bool hovered = at.Contains(menu.Pointer.X, menu.Pointer.Y);
+        Surface(at, "button", hovered && menu.PointerDown, hovered);
+
+        float x = at.X + at.Width / 2, y = at.Y + at.Height / 2, offset = 7 * menu.Scale;
+        Arrow(x, y - offset, !expand, hovered, size: 0.7f);
+        Arrow(x, y + offset, expand, hovered, size: 0.7f);
+        float line = MathF.Max(1, MathF.Round(1.5f * menu.Scale));
+        Rect(new(MathF.Round(x - 8 * menu.Scale), MathF.Round(y - line / 2), MathF.Round(16 * menu.Scale), line), hovered ? LightInk : MainInk);
+
+        menu.Hits.Add(new(at, action, Label: label));
     }
 
     /// <summary>

@@ -30,6 +30,33 @@ sealed class ModSettingsRows(SettingsMenu menu)
     }
 
     /// <summary>
+    /// Whether any loaded mod registered settings (the page's Collapse all and Expand all show then).
+    /// </summary>
+    internal bool AnyGroups => menu.ModSettings().Count > 0;
+
+    /// <summary>
+    /// Opens or closes every mod's settings group (Expand all, Collapse all).
+    /// </summary>
+    internal void FoldAll(bool open)
+    {
+        foreach (var group in menu.ModSettings())
+        {
+            string id = GroupId(group);
+            _modGroupsSeen.Add(id);
+
+            if (open) menu.Grouping.OpenGroups.Add(id);
+            else menu.Grouping.OpenGroups.Remove(id);
+        }
+
+        menu.Focus = -1;
+    }
+
+    /// <summary>
+    /// A mod's settings group's id among the open groups.
+    /// </summary>
+    static string GroupId(ModSettingsGroup group) => "mod:" + group.ModId;
+
+    /// <summary>
     /// Each mod's row with its settings group under it; a group whose mod has no row (not in the list file) comes last, under its name.
     /// </summary>
     internal List<ModsLine> ModsLines(IReadOnlyList<ModRow> rows)
@@ -57,7 +84,7 @@ sealed class ModSettingsRows(SettingsMenu menu)
     /// </summary>
     void AddModGroup(List<ModsLine> lines, ModSettingsGroup group, string label)
     {
-        string id = "mod:" + group.ModId;
+        string id = GroupId(group);
         if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
         bool open = menu.Grouping.OpenGroups.Contains(id);
         bool changed = group.Settings.Any(s => !s.IsDefault);
