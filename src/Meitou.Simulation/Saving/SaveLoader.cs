@@ -611,13 +611,19 @@ public static class SaveLoader
     {
         int origin = -1;
 
+        // Several placed towns can be one TOWN (the four Waystations of 44854-rebirth.mod): the platoon's `hometown` handle names its own.
+        var named = Hand.Read(platoon.Record, "hometown");
+        if (named.Type == (int)FcsRecordType.Town && context.TownSites.TryGetValue((named.C, named.Cs), out int namedSite)
+                && IsBaseTown(data.Sites[namedSite], baseTown))
+            return namedSite;
+
         for (int i = 0; i < data.Sites.Count && baseTown.Length > 0; i++)
         {
-            if (data.Sites[i].Record.Id == baseTown || data.Sites[i].Replacement?.Id == baseTown)
+            if (IsBaseTown(data.Sites[i], baseTown))
             {
                 origin = i;
                 break;
-            }   // the town's own TOWN, or the override that took its place (platoons made since)
+            }
         }
 
         if (origin < 0 && campaignHome is { IsNull: false } home && context.TownSites.TryGetValue((home.C, home.Cs), out int homeSite))
@@ -625,6 +631,11 @@ public static class SaveLoader
 
         return origin;
     }
+
+    /// <summary>
+    /// Whether <paramref name="baseTown"/> is the site's own TOWN, or the override that took its place (platoons made since).
+    /// </summary>
+    static bool IsBaseTown(TownSite site, string baseTown) => site.Record.Id == baseTown || site.Replacement?.Id == baseTown;
 
     /// <summary>
     /// The saved characters a platoon carries: none for a town's platoon never made (made from its template), else its saved ones.
