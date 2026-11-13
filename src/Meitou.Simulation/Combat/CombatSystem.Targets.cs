@@ -184,20 +184,23 @@ public sealed partial class CombatSystem
     /// (<see cref="SenseBlock.ThreatToAllies"/>), nobody fights it (<see cref="AttackerCount"/>, the engaged list), and its task target
     /// (<see cref="CombatSlot.TaskSlot"/>) is gone or down (dead or knocked out; carried too, engine reading). Engine choice: a task target its
     /// senses hold no entry of counts as gone, so a fighter does not wait for ever on a live target it lost (the entry decays 30 to 120 sense units
-    /// after it was last sensed); a world without senses never holds it. Reads the last tick's fights and the senses of the last look.
+    /// after it was last sensed); a world without senses never holds it. Engine choice: an enemy in a cage is not counted and a task target in a cage
+    /// counts as gone. The original ends such a fight through its goal (an arrest's effect 129 holds once the target is imprisoned), which the
+    /// engine's own fights (an arrest's, a joiner's) do not have: left in it, guards stood in combat mode at the cage and turned on the prisoner
+    /// once it was let out (#629). Reads the last tick's fights and the senses of the last look.
     /// </summary>
     bool NothingLeft(World world, int i, in CombatSlot s)
     {
         if (AttackerCount(world, i) > 0) return false;
 
         var senses = CharacterFacts.Senses(world, i);
-        if (senses is { Enemies: > 0 } or { ThreatToAllies: > 0 }) return false;
+        if (senses is { ThreatToAllies: > 0 } || senses is not null && senses.Enemies > senses.CagedEnemies) return false;
 
         var table = world.Characters;
         var prev = table.Previous;
         int t = s.TaskSlot;
         if ((uint)t >= (uint)prev.Length || !prev[t].Alive || prev[t].Generation != s.TaskGeneration || _read[t].Down
-            || table.Cold(t) is not { Medical.Incapacitated: false, CarriedBy.IsNone: true })
+            || table.Cold(t) is not { Medical.Incapacitated: false, CarriedBy.IsNone: true, IsImprisoned: false })
             return true;
 
         return senses is null || !senses.Knows(new CharacterId(t, s.TaskGeneration));

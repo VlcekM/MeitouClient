@@ -632,7 +632,10 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
   Meitou (`CombatSystem.NothingLeft`): a fighter that loses another target, or whose periodic choice finds nobody, fights on without a target (state 9), choosing again every pick
   interval and still defending, until the test passes over its senses ([perception](perception.md#senses): `Enemies`, `ThreatToAllies`), `AttackerCount` and the task target (gone, dead,
   knocked out; carried too, engine reading). Engine choice: a task target with no sense entry counts as gone, so the entry's decay (30 / 60 / 120 units of 2 s) ends the wait on a live
-  target the fighter lost; a world without senses ends the fight at once.
+  target the fighter lost; a world without senses ends the fight at once. Engine choice: an enemy in a cage is not counted (`SenseBlock.CagedEnemies`)
+  and a task target in a cage counts as gone. The original ends such a fight through its goal ([arrest chain](ai-tasks.md): effect 129 holds once the target is
+  imprisoned), which the engine's own fights (an arrest's, a joiner's) lack. **Observed** (Meitou, headless The Slaves start, a player slave put in a cage
+  mid-arrest): without it the guards stayed in combat mode while they sensed the prisoner and turned on it when it was let out (#629).
 - **Path chase give-up** (`ChaseMode`, a base of `Task_MeleeAttack` at task `+0x78`): checked only while the fight is in
   state 11, the path chase that `CombatClassAI::vfunc_9` enters from state 10 when the navmesh line to the target is
   blocked, the two are in different places, or the 2 s chase timer runs ([Combat stance](#combat-stance)). Any other

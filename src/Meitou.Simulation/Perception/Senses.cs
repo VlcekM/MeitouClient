@@ -120,6 +120,12 @@ public sealed class SenseBlock
     public int Enemies { get; internal set; }
 
     /// <summary>
+    /// Those of <see cref="Enemies"/> that are in a cage: nobody can fight them, so no fight waits on them
+    /// (<see cref="Combat.CombatSystem.NothingLeft"/>, <b>engine</b>).
+    /// </summary>
+    public int CagedEnemies { get; internal set; }
+
+    /// <summary>
     /// <c>numNeutrals</c> (+0x98): the same for the entries tagged neutral.
     /// </summary>
     public int Neutrals { get; internal set; }

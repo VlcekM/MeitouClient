@@ -1092,7 +1092,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var b = s.Block;
         b.ThreatList.Clear();
-        b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
         b.Faded = false;
         var table = s.Table;
@@ -1135,7 +1135,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var b = s.Block;
         b.ThreatList.Clear();
-        b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
         b.Faded = true;
         var table = s.Table;
@@ -1654,12 +1654,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// The counts of the pass (<c>FUN_1408593d0</c>): an entry tagged ENEMY whose character is not down, dead or carried adds to <c>numEnemies</c>,
-    /// one tagged NEUTRAL to <c>numNeutrals</c>.
+    /// one tagged NEUTRAL to <c>numNeutrals</c>. The enemies in a cage are counted apart as well (<see cref="SenseBlock.CagedEnemies"/>).
     /// </summary>
     static void Count(ref Scan s, in SenseEntry e, CharacterCold c)
     {
         if (CharacterFacts.Down(c) || c.Medical is { Dead: true }) return;
-        if ((e.Tags & SenseTag.Enemy) != 0) s.Block.Enemies++;
+
+        if ((e.Tags & SenseTag.Enemy) != 0)
+        {
+            s.Block.Enemies++;
+            if (c.IsImprisoned) s.Block.CagedEnemies++;
+        }
         else if ((e.Tags & SenseTag.Neutral) != 0) s.Block.Neutrals++;
     }
 
