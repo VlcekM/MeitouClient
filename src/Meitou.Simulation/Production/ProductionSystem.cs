@@ -745,6 +745,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.OperateTool = m.Data.Tool;
         cold.OperateFunctionality = m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction ? null : m.Data.Functionality;
         cold.OperateHungerRate = m.Data.HungerRate;
+        cold.OperateStat = m.Data.Stat;
         cold.HaulSite = null;
         cold.HaulFetch = null;
         cold.Operating = false;
@@ -1165,7 +1166,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// The stat's level, with the medical multiplier.
     /// </summary>
-    static float Effective(CharacterCold cold, StatsEnumerated stat) => (cold.Stats?[stat] ?? 0) * (cold.Medical?.StatMultiplier(stat) ?? 1);
+    internal static float Effective(CharacterCold cold, StatsEnumerated stat) => (cold.Stats?[stat] ?? 0) * (cold.Medical?.StatMultiplier(stat) ?? 1);
 
     /// <summary>
     /// The linear blend of <paramref name="a"/> and <paramref name="b"/> at <paramref name="t"/>.

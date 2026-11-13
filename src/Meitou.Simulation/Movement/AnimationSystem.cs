@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Player;
 
@@ -389,6 +390,27 @@ public sealed class AnimationSystem(
     #endregion
 
     #region Held clips
+
+    /// <summary>
+    /// The rate an operator plays its machine's clip at, times the record's <c>play speed</c>: from <see cref="OperateRateUnskilled"/> at skill 0
+    /// to <see cref="OperateRateSkilled"/> at 100 of the machine's <c>stat used</c>, at most <see cref="OperateRateMax"/> (Verified,
+    /// Task_OperateMachine's update FUN_14035bc90; docs/animation.md "At a machine or on a seat").
+    /// </summary>
+    const float OperateRateUnskilled = 0.55f, OperateRateSkilled = 2, OperateRateMax = 1.5f;
+
+    /// <summary>
+    /// The rate of the clip of the machine or seat the character uses (<see cref="OperateRateUnskilled"/> and on): by its level in the machine's
+    /// stat, 0 for one without a stat (a chair); 1 for a gunner, whose clip is not the functionality's. A seated NPC's seat counts as one without a
+    /// stat (engine choice: the town seats have none).
+    /// </summary>
+    static float OperateRateOf(CharacterTask task, CharacterCold cold)
+    {
+        if (task == CharacterTask.Operate && cold.OperateFunctionality is null) return 1;
+
+        var stat = (StatsEnumerated)(task == CharacterTask.Operate ? cold.OperateStat : 0);
+        float skill = stat > 0 ? Production.ProductionSystem.Effective(cold, stat) : 0;
+        return MathF.Min(OperateRateUnskilled + (OperateRateSkilled - OperateRateUnskilled) * skill * 0.01f, OperateRateMax);
+    }
 
     /// <summary>
     /// The held clip of a task (-1: none). Building, delivering materials and prospecting play the medic clip (Verified, Task_Build,
@@ -1188,7 +1210,7 @@ public sealed class AnimationSystem(
         else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held)
         {
             a.HeldIndex = held;
-            a.HeldRate = HeldRateOf(cold, held, tick);
+            a.HeldRate = HeldRateOf(task, cold, held, tick);
             wanted.Add((held, 1));
             a.Idle = -1;
         }
@@ -1334,14 +1356,16 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The play speed factor of the held clip the character plays: -1 when it stands up from a crouch (the crouch clip backwards), the crouch goal's
-    /// direction on the crouch clip, the lock picker's rate while it picks, else 1.
+    /// direction on the crouch clip, the lock picker's rate while it picks, the operating rate at a machine or on a seat, else 1.
     /// </summary>
-    float HeldRateOf(CharacterCold cold, int held, long tick)
+    float HeldRateOf(CharacterTask task, CharacterCold cold, int held, long tick)
     {
         if (cold.StandingUp && held == SquatClip) return -1;
         if (held == SquatClip && CrouchGoal(cold) != 0) return CrouchGoal(cold);
+        if (cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1) return cold.PickWork.Rate;
 
-        return cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1;
+        bool seated = task == CharacterTask.Rest && cold.Ai?.SitClip is not null;
+        return task == CharacterTask.Operate || seated ? OperateRateOf(task, cold) : 1;
     }
 
     /// <summary>

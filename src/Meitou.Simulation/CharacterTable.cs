@@ -1272,6 +1272,12 @@ public sealed class CharacterCold
     public float OperateHungerRate { get; set; } = 1;
 
     /// <summary>
+    /// The machine's <see cref="Meitou.Data.Gameplay.Construction.MachineData.Stat"/> (<c>stat used</c>; 0 for none) while its operate task runs:
+    /// the operator's level in it sets the rate of <see cref="OperateClip"/>; derived, not hashed.
+    /// </summary>
+    public int OperateStat { get; set; }
+
+    /// <summary>
     /// The operator did work this tick (it plays <see cref="OperateClip"/>); derived, not hashed.
     /// </summary>
     public bool Operating { get; set; }

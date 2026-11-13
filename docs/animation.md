@@ -205,6 +205,15 @@ rate 1.0; else `Character+0x51c` (`MedicalSystem::dazedOrAlert`, KenshiLib name 
 Meitou: a sleeper plays `CharacterCold.OperateClip` as a held clip at its `play speed`; a prisoner (`CharacterCold.CageClips`) plays the KO clip while down, the dazed clip
 with a leg down (engine reading of dazedOrAlert), else the idle clip, at the records' play speeds.
 
+### At a machine or on a seat
+
+**Verified** (decompilation, `Task_OperateMachine`'s update `FUN_14035bc90`, the named play `FUN_1405203b0` / `FUN_14051eab0`): every update the operator plays the
+functionality's `animation` (`stonemine` when it names none) at rate R × the record's `play speed`, R = 0.55 + (2 − 0.55) × 0.01 × its level in the
+functionality's `stat used` (the stat getter `FUN_140884ac0`, with its multipliers; 0 for stat 0), at most 1.5. Seats and training dummies run the same task; a chair has
+no stat (**Verified** by probe: `chair`, `chair-fixed`, `sit on floor (no chair)` `stat used` 0), so a sitter plays its clip at 0.55 × `play speed`. Base data hides it on
+chairs (`sitting chair` is a still pose); mods that animate the seat clip show it (#634: Immersive non-combat animations sets `sitting chair` to `play speed` 0.7).
+Meitou: `AnimationSystem.OperateRateOf` (`CharacterCold.OperateStat`); a seated NPC's seat is taken as one without a stat (engine choice).
+
 ### Clips that stop movement
 
 **Verified** (`AnimationClass::isCurrentlyIncapableOfWaypointMovemode` `@ 14051c870`, from `CharMovement::update`): while the current action clip has ANIMATION `disables movement`
