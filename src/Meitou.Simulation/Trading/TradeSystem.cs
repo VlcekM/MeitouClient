@@ -440,9 +440,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
     /// <summary>
     /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from, when within
-    /// <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (one who cannot trade, down or without an
-    /// inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>, docs/game/economy.md
-    /// "Trading range").
+    /// <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (one who cannot trade, not the player's, dead
+    /// or without an inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>,
+    /// docs/game/economy.md "Trading range").
     /// </summary>
     internal bool TradeWith(World world, CharacterId who)
     {
@@ -462,9 +462,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the character can trade: a player character with an inventory, not incapacitated.
+    /// Whether the character can trade: a player character with an inventory, not dead. A knocked-out one trades through its window too: the
+    /// original buys into and sells from a carried, unconscious squad member's window (docs/game/economy.md "Trading range").
     /// </summary>
-    static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } };
+    static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Dead: true } };
 
     /// <summary>
     /// Rebuilds the published view of the open trade.
@@ -831,8 +832,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer and the trader can trade, whatever the trader stocks: both up, the customer the player's with an inventory, the trader
-    /// not fighting nor an enemy.
+    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not fighting nor an enemy; the customer the player's
+    /// with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window and stays with it,
+    /// <see cref="Trades"/>).
     /// </summary>
     bool Parties(World world, out int c, out int t)
     {
@@ -842,7 +844,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         var cc = table.Cold(c)!;
         var tc = table.Cold(t)!;
-        if (!cc.IsPlayer || cc.Medical is { Incapacitated: true } || tc.Medical is { Incapacitated: true } || tc.InCombat || cc.Inventory is null)
+        bool customerDown = cc.Medical is { Dead: true } || (!_open && cc.Medical is { Incapacitated: true });
+        if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || cc.Inventory is null)
             return false;
 
         return !AggroSystem.IsEnemy(_data.Relations, cc.Faction, tc.Faction);

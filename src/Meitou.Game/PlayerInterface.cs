@@ -1080,20 +1080,24 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         }
         else
         {
-            // A click on another faction's character shows it in the information and medical panels and drops the squad's selection
+            // A click on another faction's character shows it in the information and medical panels and keeps the squad's selection
             // (docs/game/ui-screens.md section 4). Shift keeps the selection, a click on your own or on the ground clears the inspection.
-            var hit = Picking.Pick(p);
+            // Without Shift the nearest character under the cursor takes the click, the player's or another's, as the original's one ray does
+            // (docs/game/ui-input.md "Character picking"): a body carried on a squad member's shoulder is in front of its carrier.
+            var nearest = Picking.PickWhere(p, _ => true);
+            CharacterId? nearestOwn = nearest is { } first && Own(first) ? first : null;
+            var hit = shift ? Picking.Pick(p) : nearestOwn;
             if (hit is { } own && DeadOwn(own))
             {
                 Inspect(own);
                 return;
             }
 
-            var other = hit is null && !shift ? Picking.PickWhere(p, c => !c.IsPlayer) : null;
+            var other = hit is null && !shift ? nearest : null;
 
             // A building under the cursor (and no character) is selected and the characters keep their selection (docs/game/ui-input.md "Building
             // picking and selection").
-            if (hit is null && Picking.PickWhere(p, _ => true) is null && BuildingSelection.PickBuilding(p) is { } building)
+            if (hit is null && nearest is null && BuildingSelection.PickBuilding(p) is { } building)
             {
                 BuildingSelection.SetBuilding(building);
                 Inspect(CharacterId.None);
@@ -1113,6 +1117,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// (<c>FUN_1407f9000</c>, <c>FUN_1407f7f20</c>, docs/game/ui-input.md "Selection").
     /// </summary>
     bool DeadOwn(CharacterId id) => Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { Body.Dead: true };
+
+    /// <summary>
+    /// Whether the character is one of the player's.
+    /// </summary>
+    bool Own(CharacterId id) => Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { IsPlayer: true };
 
     /// <summary>
     /// Shows <paramref name="target"/> (another faction's character or your own dead one; <see cref="CharacterId.None"/> for nobody) in the HUD
