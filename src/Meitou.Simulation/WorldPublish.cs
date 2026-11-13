@@ -429,6 +429,7 @@ public sealed partial class World
         s.IsTrader = talk?.Trades(this, i) ?? (cold is { IsPlayer: false, SquadId: >= 0 } && Squads.Find(cold.SquadId)?.Shop is not null);
         s.IsDiplomat = cold?.NpcClass == FundamentalType.Diplomat;
         s.Selected = selected;
+        s.FirstSelected = i == f.LeadSlot;
         s.Inspected = inspected;
     }
 

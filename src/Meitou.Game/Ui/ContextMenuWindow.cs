@@ -198,20 +198,13 @@ sealed class ContextMenuWindow(PlayerInterface player)
         bool down = target.Down;   // vfunc 0x30, FUN_1405c9e10, from the snapshot
         var carriers = player.Selected().Where(c => c.Carrying == id).Select(c => c.Id).ToArray();
 
-        // A carried body: carried by a selected character, its inventory (26, the branch's own verb) and Put Down (and Meitou's cage stand-ins);
-        // carried by someone not of the player's, nothing (FUN_1407a6bc0 empties the list). No pick-up verb for a carried body: the non-hostile
-        // branches test +0x3d4, and a hostile one's Kidnap (246) cannot snatch.
-        if (carriers.Length > 0)
+        // A body the first selected carries: Put Down and nothing else (docs/game/ui-input.md "Context menu verbs"). With another selected first
+        // the body gets its branch's verbs and Put Down below. Carried by someone not of the player's, nothing (FUN_1407a6bc0 empties the list). No
+        // pick-up verb for a carried body: the non-hostile branches test +0x3d4, and a hostile one's Kidnap (246) cannot snatch. A bed and a cage
+        // take the carried body through their own menus (FurnitureUse).
+        if (player.Selected().FirstOrDefault(c => c.FirstSelected) is { } first && first.Carrying == id)
         {
-            if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
-
-            verbs.Add(("Put Down", () => player.Say(new PutDownOrder(carriers) { Tick = player.Session.World.Tick })));
-
-            // Meitou stand-in for the original's cage use (docs/simulation.md "Arrest and jail"): carry the body to the nearest free cage.
-            verbs.Add(("Put in Cage", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Tick = player.Session.World.Tick })));
-
-            // Meitou stand-in for the bed's own "Put in Bed" (FurnitureUse): carry the body to the bed the bed search finds.
-            verbs.Add(("Put in Bed", () => player.Say(new PutInBedOrder(carriers) { Tick = player.Session.World.Tick })));
+            verbs.Add(PutDownVerb(carriers));
             return verbs;
         }
 
@@ -224,6 +217,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
         if (target.Prison is { } prison) PrisonerVerbs(verbs, target, prison, selection, down);
         else if (target.IsPlayer) OwnCharacterVerbs(verbs, target, selection, down);
         else OtherCharacterVerbs(verbs, target, selection, down);
+
+        if (carriers.Length > 0) verbs.Add(PutDownVerb(carriers));
 
         // The medic verbs, unless it is dead or a hostile one standing (the original: the lead's enemy test, vtable +0x3e8).
         if (target.Body is { Dead: false } && (down || target.IsPlayer || !player.PointerPanel.Hostile(target)))
@@ -330,9 +325,10 @@ sealed class ContextMenuWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// One of the player's own characters: another one than the selection is followed (31) or guarded (45, <see cref="FollowOrder.Guard"/>), its
-    /// inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225), standing too when it carries no one
-    /// (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the selection's order).
+    /// One of the player's own characters: another one than the selection is followed (31) or, unless down, guarded (45,
+    /// <see cref="FollowOrder.Guard"/>), its inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225),
+    /// standing too when it carries no one (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the
+    /// selection's order).
     /// </summary>
     void OwnCharacterVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection, bool down)
     {
@@ -346,13 +342,22 @@ sealed class ContextMenuWindow(PlayerInterface player)
             return;
         }
 
-        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel).
-        verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
+        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel). Not for a down one, carried or not
+        // (docs/game/ui-input.md "Context menu verbs").
+        if (!down)
+            verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
+
         verbs.Add(("Follow", () => player.Say(new FollowOrder(selection, id) { Tick = player.Session.World.Tick })));
         if (target.CarriedBy.IsNone && (down || target.Carrying.IsNone))
             verbs.Add(("Pick Up", () => player.Say(new PickUpOrder([], id) { Tick = player.Session.World.Tick })));
         if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
     }
+
+    /// <summary>
+    /// Put Down (69): the selected characters carrying the target set it down.
+    /// </summary>
+    (string, Action) PutDownVerb(CharacterId[] carriers) =>
+        ("Put Down", () => player.Say(new PutDownOrder(carriers) { Tick = player.Session.World.Tick }));
 
     /// <summary>
     /// Loot (26), or Trade for the player's own character: opens the target's inventory beside the selection's. Offered when

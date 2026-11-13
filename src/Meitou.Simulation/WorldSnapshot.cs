@@ -450,6 +450,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool Selected { get; internal set; }
     /// <summary>
+    /// Whether it was selected before the rest of the selection (<see cref="PlayerState.Selection"/>'s first): the lead the kidnap chances
+    /// are against, and whose carrying a carried body's menu tests.
+    /// </summary>
+    public bool FirstSelected { get; internal set; }
+    /// <summary>
     /// Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not
     /// selected.
     /// </summary>
