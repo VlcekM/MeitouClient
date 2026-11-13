@@ -1678,6 +1678,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         Canvas.Surface(Canvas.R(212, 56, 888, 34), "paper");
         Canvas.Text(Search.Active ? "Search results" : Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        DrawFoldButtons();
         float top = 98;
 
         if (Page == GraphicsPageIndex && !Search.Active)
@@ -1715,6 +1716,23 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             Canvas.Rect(ScrollTrack(), SettingsCanvas.MainInk with { W = 0.1f });
             Canvas.Rect(ScrollThumb(), SettingsCanvas.Brass with { W = 0.75f });
         }
+    }
+
+    /// <summary>
+    /// Collapse all and Expand all on the Display page and a Graphics tab while it has features to fold (the Mods page draws its own).
+    /// </summary>
+    void DrawFoldButtons()
+    {
+        if (Search.Active || Page is not (0 or GraphicsPageIndex)) return;
+
+        var rows = Grouping.Grouped(PageRows(Page, GraphicsPage));
+        if (!rows.Any(r => r.Open is not null)) return;
+
+        Canvas.FoldButtons(() =>
+        {
+            Grouping.FoldAll(rows, false);
+            ScrollOffset = ScrollTarget = 0;
+        }, () => Grouping.FoldAll(rows, true));
     }
 
     /// <summary>

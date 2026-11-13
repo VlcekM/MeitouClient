@@ -231,9 +231,18 @@ sealed class SettingsCanvas(SettingsMenu menu)
     }
 
     /// <summary>
+    /// Collapse all and Expand all at the page title's right end.
+    /// </summary>
+    internal void FoldButtons(Action collapse, Action expand)
+    {
+        FoldButton("Collapse all", R(1016, 60, 38, 26), false, collapse);
+        FoldButton("Expand all", R(1058, 60, 38, 26), true, expand);
+    }
+
+    /// <summary>
     /// An Expand all or Collapse all button: two small arrows pointing away from a line between them (expand) or at it (collapse).
     /// </summary>
-    internal void FoldButton(string label, UiRect at, bool expand, Action action)
+    void FoldButton(string label, UiRect at, bool expand, Action action)
     {
         bool hovered = at.Contains(menu.Pointer.X, menu.Pointer.Y);
         Surface(at, "button", hovered && menu.PointerDown, hovered);

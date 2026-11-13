@@ -87,8 +87,7 @@ sealed class ModsPage(SettingsMenu menu)
     {
         if (!Settings.AnyGroups) return;
 
-        menu.Canvas.FoldButton("Collapse all", menu.Canvas.R(1016, 60, 38, 26), false, CollapseAll);
-        menu.Canvas.FoldButton("Expand all", menu.Canvas.R(1058, 60, 38, 26), true, () => Settings.FoldAll(true));
+        menu.Canvas.FoldButtons(CollapseAll, () => Settings.FoldAll(true));
     }
 
     /// <summary>
