@@ -24,9 +24,9 @@ sealed class PortraitBar(PlayerInterface player)
     public const string PortraitTexture = "meitou:portraits";
 
     /// <summary>
-    /// The portrait atlas's cells.
+    /// The portrait atlas's cells for the world's characters (the ones after them are <see cref="RecordPortraits"/>').
     /// </summary>
-    internal const int PortraitCells = CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitRows;
+    internal const int PortraitCells = CharacterRenderer.LivePortraitCells;
 
     /// <summary>
     /// The cell layout's size (Kenshi_PortraitCharacter: 136 x 136); the parts below are placed in its pixels.

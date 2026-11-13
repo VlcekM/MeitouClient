@@ -193,7 +193,11 @@ The map is drawn with the camera's levels of detail. Its lookup takes clip y -1 
 draws the terms instead (red the sun's share, green the sky's visibility, blue the screen's occlusion). **Observed** (sandbox, `editor` console command, overhead and camera
 suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: bounced light (the sky and the ground's bounce stand in).
 Atlas layout (Meitou): squad members take cells 0-29; the conversation window's speaker and player
-character take the last two (30, 31) while a conversation is open.
+character take the last two (30, 31) while a conversation is open. Cells 32-63 (rows 3 and 4 of the 16 x 4 atlas) show
+CHARACTER records for code mods (`UiNode.Portrait`, [native UI](native-ui.md#layout-input-and-lifetime)): `RecordPortraits` gives each record
+on the interface a cell, kept until another record needs it; `RecordPortraitLooks` rolls the record's look once on a worker (seed and camera
+serial from a hash of its string id, no faction) and lists it as a hidden instance at the eye under key bit 52, drawn as any portrait. A record
+cell asked for another record whose look is not posed yet is cleared, not left showing the last one. **Unknown**: drawn in the game (built only).
 Item icons (`CharacterRenderer.Icons.cs`) are the same: an item's mesh drawn through the item shader into a texture of its own, as a pseudo-instance that the world and shadow views skip;
 the camera, lighting and sizes are in [game/ui-screens.md](game/ui-screens.md) "Item icons".
 Harness `--crowd` exercises instance scaling; compare pose/upload/draw/shadow separately.

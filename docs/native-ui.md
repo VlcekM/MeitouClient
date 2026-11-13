@@ -146,7 +146,10 @@ absolute/row/column flow, padding/gaps. Parent disabled propagates; clip drawing
 slot. Labels and images pass input through; panels block world in region. An image node
 (`UiNodeKind.Image`) shows the file at `UiNode.Image` (full path; PNG, TGA, JPEG, BMP, DDS) stretched
 over its placement, cut off by the parent's clip; the painter reads it on a worker at the first
-draw (`UiPainter.IconReady`) and shows nothing until then, or for a file it cannot read. F7 suppresses all UI mouse regions.
+draw (`UiPainter.IconReady`) and shows nothing until then, or for a file it cannot read. With
+`UiNode.Portrait` (a CHARACTER or ANIMAL_CHARACTER string id) it shows that record's portrait instead
+([atlas cells](character-renderer.md)): square, transparent round the character, in the record's gear,
+the same face every time; at most 32 records at once, the ones past that show nothing. F7 suppresses all UI mouse regions.
 Registration/build/action on UI thread; fresh tree each UiFrameContext, no blocking callbacks.
 Painter only receives UiControls, never calls module code. Contribution/action exceptions raise
 UiHost.Diagnostic; failed contribution omitted atomically, others continue. Modules own resources

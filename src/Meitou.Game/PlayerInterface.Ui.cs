@@ -510,7 +510,7 @@ sealed partial class PlayerInterface
             [UiSlots.Selection] = FaithfulSlot("InformationPanel"),
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
-        if (hud) controls.AddRange(_uiHost.Arrange(UiMode, Width, Height, b, slots));
+        controls.AddRange(RecordPortraits.Resolve(hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots) : []));
         PortraitBar.SquadBarRow = 0;
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel)
             PortraitBar.AddSquadPortraits(controls, squadPanel.Bounds);

@@ -348,7 +348,8 @@ public sealed class UiHost
             ["FontName"] = style.FontName,
             ["TextPadding"] = style.TextPadding.ToString(),
         };
-        if (image && node.Image.Length > 0) properties["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(node.Image);
+        if (image && node.Portrait.Length > 0) properties[RecordPortraits.Property] = node.Portrait;
+        else if (image && node.Image.Length > 0) properties["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(node.Image);
 
         return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, style.Skin, enabled, properties,
             style.Background, style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument, style.TextScale,

@@ -344,6 +344,11 @@ sealed partial class GameHost
     internal HiddenHatLooks HatLooks => field ??= new(this);
 
     /// <summary>
+    /// The looks of the CHARACTER records whose portraits code mods show.
+    /// </summary>
+    RecordPortraitLooks RecordLooks => field ??= new(this);
+
+    /// <summary>
     /// Whether this frame's portrait requests name the character, so it is posed however far.
     /// </summary>
     internal bool PortraitWanted(CharacterId id) => _portraitKeys.Contains(DrawKey(id));
@@ -458,6 +463,7 @@ sealed partial class GameHost
                 characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(members[i].Id), i, members[i].PortraitSerial));
             foreach (var (id, cell) in Player.TradeWindows.CharacterTradePortraits())
                 characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
+            RecordLooks.AddRequests(characters);
         }
         if (Player.PortraitBar.DialoguePortraitCharacters() is var (npc, talker))
         {
@@ -530,8 +536,15 @@ sealed partial class GameHost
             }
             AddCharacter(list, current, c, editing, reachOf, inBar, alpha);
         }
-        if (editing is null) Decapitation.AddHeads(list);
-        else CharacterEditor.Bar.AddEditorCrowd(list);
+        if (editing is null)
+        {
+            Decapitation.AddHeads(list);
+            if (Player.UiVisible && !Player.TitleOpen) RecordLooks.AddInstances(list, eye);
+        }
+        else
+        {
+            CharacterEditor.Bar.AddEditorCrowd(list);
+        }
     }
 
     /// <summary>

@@ -23,7 +23,12 @@ internal sealed unsafe partial class CharacterRenderer
     /// the original's 128 px faithfully, the whole 256 px enhanced (the squad bar shows them 120 to 230 px wide from 1080 to 4K lines, so a 128 px
     /// one is stretched and soft). The pitch stays when the look changes, so the interface keeps the same atlas.
     /// </summary>
-    public const int PortraitCell = 256, FaithfulPortraitSize = 128, PortraitColumns = 16, PortraitRows = 2;
+    public const int PortraitCell = 256, FaithfulPortraitSize = 128, PortraitColumns = 16, PortraitRows = 4;
+    /// <summary>
+    /// The cells of the world's characters (the squads', the trade rows' and the conversation's): the first two rows. The cells after them show
+    /// CHARACTER records for code mods (docs/character-renderer.md "Portraits"), from hidden instances the host lists.
+    /// </summary>
+    public const int LivePortraitCells = PortraitColumns * 2;
     /// <summary>
     /// How much of its cell a portrait fills under <paramref name="look"/> (<see cref="PortraitCell"/>).
     /// </summary>
@@ -143,37 +148,68 @@ internal sealed unsafe partial class CharacterRenderer
         var atlas = PortraitAtlas.Texture;   // made on first use, with the depth
         _liveByKey.Clear();
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
-        bool any = !_cleared;
-        foreach (var request in PortraitRequests)
-        {
-            if (Due(request, out _))
-            {
-                any = true;
-                break;
-            }
-        }
 
-        if (!any) return;
+        if (!_cleared) ClearPortraitRects(atlas, [new PixelRect(0, 0, (uint)atlas.Desc.Width, (uint)atlas.Desc.Height)]);
+        _cleared = true;
+        ClearReplacedRecordCells(atlas);
+        if (!AnyPortraitDue()) return;
 
-        if (!_cleared) ClearPortraitAtlas(atlas);
         if (_look.Enhanced) DrawEnhancedPortraits(atlas);
         else DrawFaithfulPortraits(atlas);
     }
 
     /// <summary>
-    /// The atlas starts transparent, once; each cell drawn clears its own square.
+    /// Whether any requested cell needs drawing this frame (<see cref="Due"/>).
     /// </summary>
-    void ClearPortraitAtlas(GpuTexture atlas)
+    bool AnyPortraitDue()
+    {
+        foreach (var request in PortraitRequests)
+        {
+            if (Due(request, out _)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Scratch: the rectangles <see cref="ClearReplacedRecordCells"/> clears.
+    /// </summary>
+    readonly List<PixelRect> _replacedCells = [];
+
+    /// <summary>
+    /// A record cell (<see cref="LivePortraitCells"/> and up) asked to show another record than it does, whose instance is not posed yet (its
+    /// look is still loading), goes transparent: the interface shows the cell at once, and must not show the record it held. A squad cell keeps
+    /// its last picture instead (<see cref="DrawPortraits"/>).
+    /// </summary>
+    void ClearReplacedRecordCells(GpuTexture atlas)
+    {
+        _replacedCells.Clear();
+        foreach (var request in PortraitRequests)
+        {
+            if (request.Cell < LivePortraitCells || _liveByKey.ContainsKey(request.Key)) continue;
+            if (!_portraitShown.TryGetValue(request.Cell, out var shown) || shown.Key == request.Key) continue;
+
+            _portraitShown.Remove(request.Cell);
+            int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
+            _replacedCells.Add(new PixelRect(x, y, PortraitCell, PortraitCell));
+        }
+
+        if (_replacedCells.Count > 0) ClearPortraitRects(atlas, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_replacedCells));
+    }
+
+    /// <summary>
+    /// Makes <paramref name="rects"/> of the atlas transparent: the whole of it once, when it is made (each cell drawn clears its own square).
+    /// </summary>
+    void ClearPortraitRects(GpuTexture atlas, ReadOnlySpan<PixelRect> rects)
     {
         var clear = Gpu.BeginNative("portraits clear");
         var whole = PassTargets.Of(atlas, _portraitDepth);
         clear.BeginRendering(new RenderingDesc(whole.Colour, whole.Depth, whole.Width, whole.Height));
         Gpu.BeginHostPass(clear, whole, DrawState.Scene(whole.Formats));
-        clear.Clear(true, default, false, 1, new PixelRect(0, 0, (uint)whole.Width, (uint)whole.Height));
+        foreach (var rect in rects) clear.Clear(true, default, false, 1, rect);
         Gpu.EndHostPass(clear);
         clear.EndRendering();
         Gpu.EndNative(clear);
-        _cleared = true;
     }
 
     /// <summary>

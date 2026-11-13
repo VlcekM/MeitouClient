@@ -133,6 +133,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The squad bar's portraits (both UI modes).
     /// </summary>
     internal PortraitBar PortraitBar => field ??= new(this);
+
+    /// <summary>
+    /// The portraits of CHARACTER records that code mods show.
+    /// </summary>
+    internal RecordPortraits RecordPortraits => field ??= new(this);
     /// <summary>
     /// The inventory windows (docs/game/ui-screens.md section 6).
     /// </summary>

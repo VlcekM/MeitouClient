@@ -191,6 +191,13 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     public string Image { get; init; } = "";
 
     /// <summary>
+    /// An image node's picture instead of <see cref="Image"/>: the string id of a CHARACTER (or ANIMAL_CHARACTER) record, whose portrait is
+    /// drawn as the squad bar's are, in the record's own gear; square, and transparent round the character. It appears once the look has loaded;
+    /// an unknown record shows nothing. At most <see cref="RecordPortraits.Cells"/> different records show at once.
+    /// </summary>
+    public string Portrait { get; init; } = "";
+
+    /// <summary>
     /// The action a click dispatches; empty for none.
     /// </summary>
     public string Action { get; init; } = "";
