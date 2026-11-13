@@ -31,6 +31,7 @@ A lot of navmesh issues remain to be resolved though, so please bear with us for
 - Swamp House floors are no longer black
 - Bloody footprints after walking through blood
 - Turret gunners man the turret from up close, not from 15 m off
+- Locked gates hold on tilted buildings and slanted doors, such as the Ancient Lab Ramp Gate
 - Fighters attack targets standing just off the navmesh edge
 - Eaten limbs no longer leave a severed limb item
 - Saves with characters from a removed mod load them as Exiles, as the original does

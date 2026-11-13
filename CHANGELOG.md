@@ -15,6 +15,7 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Space resumes the game after the pause button
 - Bloody footprints after walking through blood
 - Turret gunners man the turret from within its use range, not from 15 m off (#580)
+- Locked gates hold on tilted buildings and slanted doors, such as the Ancient Lab Ramp Gate (#560)
 - Stealth KO on an unconscious target ends at once, with no swing or assassination XP, as the original's
 - Fighters attack targets standing just off the navmesh edge (#559)
 - Eaten limbs leave no severed limb item (#564)
