@@ -169,6 +169,16 @@ public sealed class Platoon
     /// </summary>
     public bool Persistent { get; set; }
     /// <summary>
+    /// The platoon this one's member was split from at unload (the original's separated-squad hand, platoon <c>+0xb8</c>, saved as
+    /// <c>separated</c>; <c>FUN_14079c1c0</c>, <b>Verified</b>): its free members go back to it once it is near; -1 for none or for one read from
+    /// a save's record.
+    /// </summary>
+    public int SeparatedFrom { get; set; } = -1;
+    /// <summary>
+    /// The squad the member was split from when that squad has no platoon (a town's own squad); -1 otherwise. Not saved.
+    /// </summary>
+    public int SeparatedFromSquad { get; set; } = -1;
+    /// <summary>
     /// Spawn mode 3 (+0x118, <c>FUN_1404ffad0</c>, <b>Verified</b>): the platoon's home town was replaced by an override town it does not belong to;
     /// its activation is refused and the keep test refuses it (<c>FUN_1407ec570</c>). Not saved (set again at the next activation).
     /// </summary>

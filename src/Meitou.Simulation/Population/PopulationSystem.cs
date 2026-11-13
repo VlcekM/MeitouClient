@@ -327,6 +327,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         RefreshStates(world);
         RefreshZones(world);
         StepRoaming(world);
+        RejoinSeparated(world);
         StepCampaigns(world);
         StepWarManager(world);
         world.ItemSlots.Step(world, _data);

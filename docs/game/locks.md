@@ -283,8 +283,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Escaped flag** (`StateBroadcastData::isEscapedPrisoner` `+0xe8`, KenshiLib 1ce4a16; **Verified** by decompile: every write through `+0x1a0`). Set only by `FUN_14034fbe0`
   (lifted out) and `Task_GetOutOfCage` flag 1 (above). Cleared only by: being caged again (`FUN_140330600`'s put-in branch); `Task_GetOutOfCage`
   flag 0 (133, a release); `ActivePlatoon::periodicUpdate` (`FUN_1404ff060`, vtable slot +0x40): a squad split from another (`Platoon::isSeparatedSquad` `+0xb8`) whose parent
-  has an active platoon within squared distance 1.0404e7 (~3226 units) moves each member that is not imprisoned, not slave state 1 and passes two more tests (byte `+0x3d4` clear, vfunc +0x30 false; **Unknown**) into the parent, and
-  clears its escaped and kidnapped (`+0xe9`) flags; the status update `FUN_1405a4f50` (**Verified**; an array-form write, `param_1[0x3a]`, which `field_writes.txt` does not index):
+  has an active platoon within squared distance 1.0404e7 (~3226 units) moves each member that is in nothing (`+0x2f8` = 0), not slave state 1, not carried (`+0x3d4`) and not down (vfunc +0x30) into the parent, and
+  clears its escaped and kidnapped (`+0xe9`) flags ([the merge](factions-squads-towns.md), Meitou `PopulationSystem.RejoinSeparated`); the status update `FUN_1405a4f50` (**Verified**; an array-form write, `param_1[0x3a]`, which `field_writes.txt` does not index):
   cleared on each update while the status town (`+0x88`, [rule](carry-loot.md#the-status-town)) is null, as the freed flag `+0xea` is. So "Leave town to clear this status"
   ([ui-screens](ui-screens.md)) is true; no timer clears it, the 99999 hrs is text only. Meitou: `ArrestSystem.DropTownStatusOutsideTowns`. (The other `+0xe8` writes in `FUN_1408cb360` / `FUN_1407933a0` are the Blackboard's `homeIsLockedUp`.)
 - **Exit spot** (**Observed** from decompile, `FUN_140330600` → `FUN_140661f90`): clearing the hold resets the character's movement body while `+0x2f8` and the handle are

@@ -132,6 +132,7 @@ public static partial class SaveCapture
 
         // The war states name the campaign platoons by the handles they were just written with.
         WriteWars(game, world, data, loaded, fresh, outposts);
+        WriteSeparated(game, world, loaded, fresh);
 
         // The wild: the nests made so far in the town list the original's way, and the wild squads in the world as new platoons of their nest
         // or sector.
@@ -1061,17 +1062,23 @@ public static partial class SaveCapture
     /// The PLATOON handle of every world platoon the save holds: the loaded save's (stand-ins and saved platoons, by name; not those despawned) and
     /// the ones just written (<paramref name="fresh"/>).
     /// </summary>
-    static Dictionary<int, Hand> PlatoonHands(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    static Dictionary<int, Hand> PlatoonHands(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh) =>
+        WrittenPlatoons(game, world, loaded, fresh).ToDictionary(kv => kv.Key, kv => kv.Value.Handle);
+
+    /// <summary>
+    /// The save's PLATOON of every world platoon it holds, by world platoon id (see <see cref="PlatoonHands"/>).
+    /// </summary>
+    static Dictionary<int, SavePlatoon> WrittenPlatoons(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
     {
         var byName = new Dictionary<string, SavePlatoon>(StringComparer.Ordinal);
         foreach (var x in game.Platoons) byName.TryAdd(x.Name, x);
 
-        var hands = new Dictionary<int, Hand>();
+        var platoons = new Dictionary<int, SavePlatoon>();
         if (loaded is not null)
         {
             foreach (var (id, name) in loaded.RoamingPlatoons)
             {
-                if (byName.TryGetValue(name, out var sp)) hands[id] = sp.Handle;
+                if (byName.TryGetValue(name, out var sp)) platoons[id] = sp;
             }
         }
 
@@ -1079,12 +1086,28 @@ public static partial class SaveCapture
         {
             foreach (var sp in saved.Platoons)
             {
-                if (sp.PlatoonId >= 0 && !sp.Despawned && byName.TryGetValue(sp.Name, out var written)) hands[sp.PlatoonId] = written.Handle;
+                if (sp.PlatoonId >= 0 && !sp.Despawned && byName.TryGetValue(sp.Name, out var written)) platoons[sp.PlatoonId] = written;
             }
         }
 
-        foreach (var (id, sp) in fresh) hands[id] = sp.Handle;
-        return hands;
+        foreach (var (id, sp) in fresh) platoons[id] = sp;
+        return platoons;
+    }
+
+    /// <summary>
+    /// The <c>separated</c> hand of each platoon split off its squad since the world began (<see cref="Platoon.SeparatedFrom"/>): the handle the
+    /// platoon it was split from was just written with, null when the save does not hold that one. A save's own hands stay as they were read.
+    /// </summary>
+    static void WriteSeparated(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    {
+        var written = WrittenPlatoons(game, world, loaded, fresh);
+        foreach (var (id, sp) in written)
+        {
+            if (world.Platoons.Find(id) is not { SeparatedFrom: >= 0 } p) continue;
+
+            var parent = written.TryGetValue(p.SeparatedFrom, out var from) ? from.Handle : Hand.Null;
+            parent.Write(sp.Record, "separated");
+        }
     }
 
     /// <summary>
