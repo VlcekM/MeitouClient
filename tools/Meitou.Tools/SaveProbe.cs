@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
@@ -76,6 +77,7 @@ static class SaveProbe
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("layout", >= 1) when probe.Nav is not null: Layout(probe, a[0]); return true;
             default: return false;
         }
     }
@@ -558,6 +560,30 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// A town building's layout names now (a town override or the save may have relaid it) and each object of its interior layout as placed: record,
+    /// floor, path mode, world position. Needs <c>--nav</c>, which hands the population its layouts.
+    /// </summary>
+    static void Layout(ProbeWorld probe, string key)
+    {
+        var b = probe.Data.Sites.SelectMany(s => s.Buildings).FirstOrDefault(t => t.Key == key);
+        if (b?.Resolved is not { } resolved || probe.Data.Layouts is not { } layouts)
+        {
+            Console.WriteLine($"no laid-out town building {key}");
+            return;
+        }
+
+        string name = b.LayoutName(exterior: false);
+        Console.WriteLine($"{key} {b.Name}: interior '{name}', exterior '{b.LayoutName(exterior: true)}'");
+        if (layouts.Find(resolved.Record, name, exterior: false) is not { } layout) return;
+
+        foreach (var item in layouts.Items(layout, resolved.Placement))
+        {
+            var (at, _) = BuildingLayouts.Place(resolved.Position, resolved.Placement.Rotation, item);
+            Console.WriteLine($"  {item.InstanceId} '{item.Building.Name}' floor={item.Floor} path={item.Building.GetInt("path mode", 2)} at {at:F0}");
+        }
+    }
+
+    /// <summary>
     /// The modes, on standard error; returns 2.
     /// </summary>
     static int Usage()
@@ -582,6 +608,7 @@ static class SaveProbe
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
+              layout <building key>    a town building's layout names now and its interior layout's objects (needs --nav)
             """);
         return 2;
     }

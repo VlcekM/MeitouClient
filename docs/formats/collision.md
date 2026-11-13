@@ -55,6 +55,8 @@ use every rendered triangle as collision or infer PhysX actor dynamics from appe
   nodes and materials), so **parts without `xml collision` are invisible to the navmesh**, whatever the building's
   `path mode`. The `phs or mesh` file must contain
   `.mesh` or nothing is created (as [zones.md](zones.md#placement-files-and-assembly) says), so the one `.phs` part draws nothing.
+  Example (**Verified**, record and install): `Shelves` (664-gamedata.base, OBSTACLE interior furniture) has one part, `shelves01`, with no
+  `xml collision` (a `shelves01.phs` lies beside its mesh, named by nothing): nothing collides with it, so by the rule above the original walks through it too (issue #597).
 - Buildings by `path mode` and whether any exterior part has an `xml collision` (**Verified**, probe):
 
 | path mode | with collision | parts but no collision | no parts |
