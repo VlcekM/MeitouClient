@@ -430,7 +430,8 @@ A nest squad more than 3 nest radii from its nest wanders where it stands (engin
 population made are written as new platoons: a nest's with `basetown` = its TOWN and `hometown` = the nest's handle, a homeless one with neither, `sqt` 2.
 NPC squads of no town, platoon or wild site (a dismissed character's, a slave bought free or handed over, one separated by dialogue) are written the same way as homeless
 platoons with `persistent` true (as the original's dismissed platoon; engine choice for the others), so they load as homeless wild platoons of the sector they stand in
-(counted among its squads); a save's platoon with `persistent` set is never despawned off screen (`PopulationRoaming.Kept`, as the original keeps persistent platoons).
+(counted among its squads); a save's platoon with `persistent` set is never despawned off screen (`PopulationRoaming.Kept`, as the original keeps persistent platoons). A member made from a saved NPC platoon is not written with such a squad: it stays in its
+platoon's file and is of that platoon again after a load (engine choice; the player platoon files take only player characters and the slots of loaded player platoons, #619).
 **Observed** (headless, saves 2, wade, 1, the player moved next to each wild platoon): 41 of 49, 10 of 10, 67 of 67 saved wild characters made (the rest dead in the
 save), each at its saved position (0 units off); a held nest or sector made only its remainder; a Meitou save → load gives the same wild characters at the same places
 (78, 10, 96) and no fresh wild squads. A wild platoon with no file, `never been activated` and a `char count` (`SaveLoader.UnmadeWild`) is a stand-in the same way, made

@@ -590,9 +590,10 @@ public static partial class SaveCapture
         var kept = new HashSet<string>(StringComparer.Ordinal);
         foreach (var squad in order.Concat(world.Squads.All.Where(s => s.PlatoonId < 0 && !order.Contains(s))))
         {
-            // A member of a loaded platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the file);
-            // only the resident squads the population system made, which have no link, are left out by the player test.
-            var alive = squad.Members.Where(m => table.IsAlive(m) && (table.Cold(m.Slot)!.IsPlayer || table.Cold(m.Slot)!.Save is not null)).ToList();
+            // A member of a loaded player platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the
+            // file). An NPC of a saved NPC platoon now in a squad of its own (a slave handed over or bought free) stays in that platoon's file
+            // (WriteSavedMembers): written here it came back as the player's (#619).
+            var alive = squad.Members.Where(m => table.IsAlive(m) && InPlayerFile(table.Cold(m.Slot)!, spawned)).ToList();
             int index = order.IndexOf(squad);
 
             // A player's squad is written even when empty: the original keeps empty squads (the squads screen removes them).
@@ -625,6 +626,13 @@ public static partial class SaveCapture
         game.Camera.Members = members;
         return written;
     }
+
+    /// <summary>
+    /// Whether a character belongs in a player platoon file: a player character, or one made from a slot of a loaded player platoon
+    /// (<paramref name="spawned"/>).
+    /// </summary>
+    static bool InPlayerFile(CharacterCold cold, HashSet<(string Platoon, int Slot)> spawned) =>
+        cold.IsPlayer || cold.Save is { } link && spawned.Contains((link.PlatoonName, link.Slot));
 
     /// <summary>
     /// The platoon of a player-side squad: its own, by the file it was loaded from (never by its members: a character moved between squads would
