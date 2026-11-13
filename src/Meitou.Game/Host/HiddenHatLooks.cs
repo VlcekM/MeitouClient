@@ -84,10 +84,14 @@ sealed class HiddenHatLooks(GameHost host)
     internal long PortraitKey(long key) => _portraits.Contains(key) ? key ^ KeyBit : key;
 
     /// <summary>
-    /// Whether the setting hides <paramref name="c"/>'s hat somewhere: the player's characters, and the others with
-    /// <see cref="UserConfig.HideHatsOfOthers"/>.
+    /// Whether the setting hides <paramref name="c"/>'s hat somewhere: the player's characters, and when it is on the others with
+    /// <see cref="UserConfig.HideHatsOfOthers"/> (portraits only is the player's characters' alone).
     /// </summary>
-    bool Applies(CharacterSnapshot c) => host.Config.HideHats != HideHats.Off && (c.IsPlayer || host.Config.HideHatsOfOthers);
+    bool Applies(CharacterSnapshot c)
+    {
+        var mode = host.Config.HideHats;
+        return mode != HideHats.Off && (c.IsPlayer || mode == HideHats.On && host.Config.HideHatsOfOthers);
+    }
 
     /// <summary>
     /// <paramref name="look"/> without its hat, made once; null without a database.

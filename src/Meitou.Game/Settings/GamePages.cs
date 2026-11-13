@@ -717,7 +717,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The Hide hats choice and, while it hides any, its row for the other factions' characters.
+    /// The Hide hats choice and, while it is on, its row for the other factions' characters.
     /// </summary>
     void AddHideHatsRows(List<SettingsMenu.Entry> result)
     {
@@ -725,7 +725,7 @@ sealed class GamePages(SettingsMenu menu)
             "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. "
             + "Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game.",
             Choice: new(() => ["Off", "Portraits only", "On"], () => (int)menu.Config.HideHats, i => menu.Config.HideHats = (HideHats)i)));
-        if (menu.Config.HideHats == HideHats.Off) return;
+        if (menu.Config.HideHats != HideHats.On) return;
 
         result.Add(new("Hide other factions' hats",
             "The hats of every other character are left out the same way, not only your own characters'.",

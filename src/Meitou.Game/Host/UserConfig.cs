@@ -571,7 +571,7 @@ sealed class UserConfig
     /// </summary>
     public HideHats HideHats { get; set; }
     /// <summary>
-    /// With <see cref="HideHats"/>: the other factions' characters lose their hats the same way.
+    /// With <see cref="HideHats"/> on (not portraits only): the other factions' characters lose their hats the same way.
     /// </summary>
     public bool HideHatsOfOthers { get; set; }
     /// <summary>
