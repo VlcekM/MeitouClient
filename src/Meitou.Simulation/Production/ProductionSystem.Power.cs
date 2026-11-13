@@ -44,6 +44,10 @@ public sealed partial class ProductionSystem
     /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
     /// </summary>
     readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The construction targets of the level generators, by building record; derived from the data.
+    /// </summary>
+    readonly Dictionary<string, float> _npcTargets = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -207,8 +211,8 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The generation of each town of the level data that a player machine resolved to (<see cref="PowerTown"/>, a negative key; <b>Observed</b>,
     /// <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, so an NPC town's frame has the output of the generators
-    /// placed in it): a wind generator gives its rated output x its blades' wind share (nothing below 1), a fuel generator nothing (the base game
-    /// places 47 of them, all with an empty tank; the placed fuel and the switch are not read). The NPC town's own machine-class buildings
+    /// placed in it). NPC generators ignore empty fuel inputs, but use their saved switch and construction fraction; wind also uses its rotor's
+    /// wind share, nothing below 1. The NPC town's own machine-class buildings
     /// are consumers of the same frame (<see cref="NpcDraws"/>); with no running generator the player's machine gets 0.
     /// </summary>
     void NpcGeneration(World world)
@@ -253,15 +257,44 @@ public sealed partial class ProductionSystem
         float total = 0;
         foreach (var b in site.Buildings)
         {
-            if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true, IsWind: true } data) continue;
+            if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true } data) continue;
 
-            var rotor = Rotor(b);
-            var here = world.Weather?.At(b.Position.X, b.Position.Z);
-            float output = rotor is { } r && here is { } w ? data.PowerOutput * RotorSpec.WindShare(w.WindSpeed, r.Min, r.Max) : 0;
-            if (output >= 1) total += output;
+            float output = NpcGeneratorHealth(world, b) * data.PowerOutput;
+            if (data.IsWind) output *= NpcWind(world, b);
+            if (!data.IsWind || output >= 1) total += output;
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// A level generator's switched construction fraction: the save's whole state replaces the level state. Empty fuel inputs and the separate
+    /// broken flag do not cut NPC output (GOG generator output 0x140297100; docs/game/buildings-production.md "NPC generator state").
+    /// </summary>
+    float NpcGeneratorHealth(World world, TownBuilding b)
+    {
+        var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        bool on = saved is not null ? saved.Bools.GetValueOrDefault("power on") : b.LevelState?.GetBool("power on") ?? true;
+        if (!on) return 0;
+        if (saved is null && b.LevelState is null) return 1;
+
+        if (!_npcTargets.TryGetValue(b.BuildingId, out float target))
+            _npcTargets[b.BuildingId] = target = _db.Find(b.BuildingId) is { } record ? BuildingBuildData.From(record).Target : 0;
+        if (target <= 0) return 1;
+
+        float progress = saved is not null ? saved.Floats.GetValueOrDefault("construction progress")
+            : b.LevelState!.GetFloat("construction progress");
+        return Math.Clamp(progress / target, 0, 1);
+    }
+
+    /// <summary>
+    /// The wind share of the rotor this level placement spawns, at its own weather region; zero without a rotor or weather.
+    /// </summary>
+    float NpcWind(World world, TownBuilding b)
+    {
+        var rotor = Rotor(b);
+        var here = world.Weather?.At(b.Position.X, b.Position.Z);
+        return rotor is { } r && here is { } w ? RotorSpec.WindShare(w.WindSpeed, r.Min, r.Max) : 0;
     }
 
     /// <summary>

@@ -264,7 +264,7 @@ shows the first failing message in this order (**Verified** unless marked):
 
   **Research** (**Observed**, `FUN_14029be00` / `FUN_14029b8d0`; faction accessor `FUN_140594640` verified from executable bytes): bench level and operated progress require a player-owned bench, not a resolved town. Meitou likewise permits completed player benches in NPC houses and with missing town handles. No unresolved-town flag is needed. Exact powered-bench throughput remains **Unknown**.
 
-  **Power** (**Verified**, `FUN_14092d850`): the power manager advances frames from the registered town list; `NO_TOWN` is not a frame. **Observed** (`FUN_140299370`, `FUN_140296940`): the sound-emitter power query answers powered when the machine's resolved power town is null. **Observed** (`FUN_140296940`, `FUN_1409f9180`, `FUN_140927f10`, `FUN_1402973f0`, `FUN_14092da80`, `FUN_140296e00`): the machine's power town is its building's town handle when that is a town; otherwise the NEAREST non-nest town by horizontal distance, whatever its owner and with no distance cap (so a machine of a bought NPC-town house uses that town's frame). Only with no town at all is it never registered: its stored power stays 0 and a machine that draws power has satisfaction 0 (one that draws nothing counts as 1). Meitou: a machine whose building has no town number resolves to the nearest player town or placed non-nest town of the level data (`PopulationData.Sites`, nest types excluded here; a tie goes to a player town) and shares that town's grid (`ProductionSystem.PowerTown`); an NPC town gets a frame of its own among Meitou's grids, holding the machines that resolve to it (Meitou builds machines for player buildings only) plus the generation of the generators placed in that town's level data (`ProductionSystem.NpcGeneration`: a wind generator gives its rated output x its rotor's wind share, nothing below 1; a fuel generator gives nothing, the placed fuel and the switch are not read), so a machine there with no running generator gets no power. **Observed** (`FUN_14092d850`, `vfunc 0x270` is the nest test): the original runs a frame for every non-nest town, NPC towns included, with the output of every generator registered to it (`FUN_1402973f0` registers by the building's town, whatever its owner); **Verified** (base data, scratch probe): 170 generator placements, all `power on`, all with a town handle, 123 wind generators and 47 fuel generators with an empty tank (`consumption amount-0` 0), no batteries, no rain collectors; 72 of 261 towns have a generator, 53 a wind generator. **Observed** (round-4 parity, `FUN_1402a1750`, `FUN_14092cd60`): a level building registers through its saved state, so an NPC town's turrets, searchlights, spotlights, wells, mines and refineries (base data: draws 3 to 40 against a Wind Generator II's 100) are consumers of the same water-filling frame. Meitou: `ProductionSystem.NpcDraws` adds one pseudo consumer per standing level building of that town whose functionality has a negative `power output` (a light only outside daytime; houses and stalls have no functionality and are left out), so the player's machine gets what the NPC loads leave (wind 100, three turrets at 5 and a mine at 40: a machine drawing 50 gets 45); NPC generator fuel, switch and `broken` are not read (base data: all on, none broken, all fuel generators empty, so it matters for mods only). No town in the world gives satisfaction 0 for a power-drawing machine. **Unknown**: whether the original's nest test also excludes a nest marker, and the exact parent-chain test for furniture inside a building.
+  **Power** (**Verified**, `FUN_14092d850`): the power manager advances frames from the registered town list; `NO_TOWN` is not a frame. **Observed** (`FUN_140299370`, `FUN_140296940`): the sound-emitter power query answers powered when the machine's resolved power town is null. **Observed** (`FUN_140296940`, `FUN_1409f9180`, `FUN_140927f10`, `FUN_1402973f0`, `FUN_14092da80`, `FUN_140296e00`): the machine's power town is its building's town handle when that is a town; otherwise the NEAREST non-nest town by horizontal distance, whatever its owner and with no distance cap (so a machine of a bought NPC-town house uses that town's frame). Only with no town at all is it never registered: its stored power stays 0 and a machine that draws power has satisfaction 0 (one that draws nothing counts as 1). Meitou: a machine whose building has no town number resolves to the nearest player town or placed non-nest town of the level data (`PopulationData.Sites`, nest types excluded here; a tie goes to a player town) and shares that town's grid (`ProductionSystem.PowerTown`); an NPC town gets a frame of its own among Meitou's grids, holding the machines that resolve to it (Meitou builds machines for player buildings only) plus the generation of the generators placed in that town's level data (`ProductionSystem.NpcGeneration`, [NPC generator state](#npc-generator-state): saved switch and construction health, unlimited NPC fuel output, wind scaled by its rotor), so a machine there with no running generator gets no power. **Observed** (`FUN_14092d850`, `vfunc 0x270` is the nest test): the original runs a frame for every non-nest town, NPC towns included, with the output of every generator registered to it (`FUN_1402973f0` registers by the building's town, whatever its owner); **Verified** (base data, scratch probe): 170 generator placements, all `power on`, all with a town handle, 123 wind generators and 47 fuel generators with an empty tank (`consumption amount-0` 0), no batteries, no rain collectors; 72 of 261 towns have a generator, 53 a wind generator. **Observed** (round-4 parity, `FUN_1402a1750`, `FUN_14092cd60`): a level building registers through its saved state, so an NPC town's turrets, searchlights, spotlights, wells, mines and refineries (base data: draws 3 to 40 against a Wind Generator II's 100) are consumers of the same water-filling frame. Meitou: `ProductionSystem.NpcDraws` adds one pseudo consumer per standing level building of that town whose functionality has a negative `power output` (a light only outside daytime; houses and stalls have no functionality and are left out), so the player's machine gets what the NPC loads leave (wind 100, three turrets at 5 and a mine at 40: a machine drawing 50 gets 45); generator state follows the rules below. No town in the world gives satisfaction 0 for a power-drawing machine. **Unknown**: whether the original's nest test also excludes a nest marker, and the exact parent-chain test for furniture inside a building.
 - **Centre, radius and placement-time merge** (**Verified**, `Town::reassessTownPosition` `FUN_1405488f0`, read from the disassembly of the Steam and the GOG 1.0.68 `kenshi_*x64.exe`: the instructions are identical
   and the constants agree; the Ghidra text is wrong at the division, so build nothing from it; via `TownList::reassessTownPositions` `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` /
   `FUN_14054fea0` and town merge `FUN_140931840`). Only for a town of the player faction. The buildings of a town are those whose root object's town handle resolves to it, else the NEAREST non-nest town by
@@ -902,7 +902,8 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   generator; output < 0 a consumer. Function 5 without `consumes` is a wind generator, otherwise fuelled; batteries
   (23) share the generator class (factory `FUN_14057cc70`).
 - **Generator output** (`GeneratorBuilding::getPowerOutput`): health x (output + increase) when switched on (`power on`) and
-  fuelled ("Out of fuel" otherwise); **Verified** `FUN_140297760`, health the construction fraction. A battery's output is the same health x rate while it holds charge,
+  fuelled for a player owner ("Out of fuel" otherwise; NPC output ignores empty inputs, [below](#npc-generator-state)); **Verified**
+  `FUN_140297760`, health the construction fraction. A battery's output is the same health x rate while it holds charge,
   and its capacity health x (capacity + increase) (`FUN_140297650`). Meitou the same (`ProductionSystem.Output`, `Capacity`).
 - **Wind generators** (**Verified**, decompiled): output = the share x the above, 0 when below 1 (`WindGeneratorBuilding::getPowerOutput`); the share
   (`PhysicsCollection::getWindRotationPower`) is the first ROTATION_WIND_SPEED part's wind share ([rotating parts](#rotating-parts)) among the parts the placement actually spawned (FUN_140848950 spawns only the chosen random-group parts, so the rotor depends on the position's seed; Meitou: `WorldObjectLayout.WindRotor`, per machine), 0 with none or without
@@ -968,6 +969,46 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   Battery Bank 40 / capacity 60; Weapon Smith -8, refineries -10 to -40, Research Bench III-VI -10 to -30. Power
   research: Upgraded Small Generators +15, Amplified Generators +15, Battery Power / Advanced +10 each, Battery
   Capacity / Advanced +60 each.
+
+### NPC generator state
+
+**Verified** (private decompile `FUN_140297760`, checked against GOG `kenshi_GOG_x64.exe` at `0x140297100` with `objdump`):
+NPC fuel generators supply `construction fraction x power output` while `power on`. The empty-input test (slot 149,
+`FUN_140298b70`) suppresses output **only for a player-faction owner** (faction slot 11, player marker `+0x250`;
+`FUN_140546dd0`). An empty NPC tank therefore supplies power indefinitely. The base game's 47 empty fuel-generator
+placements are not evidence of zero generation; this affects the base game as well as mods. Research increases apply
+only to the player's buildings (`FUN_14082ec70`). No separate `broken` or `destroyed` check exists in this output getter;
+construction damage scales the result rather than imposing a broken-flag cutoff.
+
+**Verified** (private decompile `FUN_140297600`, `FUN_140298700`, `FUN_14029a510`, `FUN_14029a370`, `FUN_1402fdd80`):
+the ordinary production path can consume stocked inputs, scaled by generator load, without an ownership exemption.
+This does not make fuel a prerequisite for NPC grid output: exhausting that stock still leaves the NPC-output exemption.
+Meitou's NPC grid does not simulate those generators' inventory production or drain; its output needs no fuel state.
+
+**Verified** (private decompile `FUN_1402a1750`, `FUN_140555650`, `FUN_140559ad0`; fraction getter `FUN_140547200`,
+GOG `0x140546ba0`): level and saved GAMESTATE_BUILDING records load `power on`, `broken`, `construction progress`
+and `is complete`. A loaded state's missing `power on` is false. Progress divided by the building's material target,
+capped at 1, supplies construction health; positive infinity means the full target. With no construction cost the
+building completes at once. The complete flag alone does not replace a partial progress value. With no state a completed
+building starts switched on (`FUN_140562340`). Meitou reads the zone-qualified state in `FixtureRegistry.Saved` first,
+else `TownBuilding.LevelState`; a present save state replaces the whole level state rather than inheriting missing keys.
+`ProductionSystem.NpcGeneratorHealth` applies the switch and fraction, without treating `broken` as another cutoff.
+The existing exclusion of ruined level placements remains.
+
+**Verified** (`FUN_140297810`, GOG `0x1402971b0`, and [rotating parts](#rotating-parts)): wind multiplies that switched,
+health-scaled output by the first spawned wind-speed rotor's share; a result below 1 gives zero. No rotor or no loaded
+physics collection gives zero. Meitou uses the placement's rotor and local weather, retaining its existing choice to
+model every placed rotor even when no render entity is loaded.
+
+**Verified** (factory `FUN_14057cc70`, cases 5 and 23; RTTI vtable list): there is no separate solar generator class or
+sunlight/daylight branch. Function 5 without `consumes` creates a wind generator, which still requires a wind rotor;
+with `consumes` it creates a fuel generator. Naming a mod building "Solar" does not add a sunlight rule. Behaviour of
+code-injected solar generators is **Unknown** and is not inferred from their name.
+
+Coverage: synthetic quick tests in `ProductionTests` exercise empty fuel, day/night independence, absent state defaults,
+level/save switches, whole-state precedence, partial/zero/full construction health, independent broken flags, rotor
+absence, wind limits and the one-unit cutoff. Existing player-fuel/battery tests retain the player's fuel requirement.
+No original-game runtime measurement is claimed here.
 
 ### Rotating parts
 
