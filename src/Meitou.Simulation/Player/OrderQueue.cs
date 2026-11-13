@@ -98,6 +98,14 @@ public interface IOrderOwner
     /// character holding the order.
     /// </summary>
     object? LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) => null;
+
+    /// <summary>
+    /// Readies what a loaded order needs that a save does not hold, before it is first checked (serial phases, <see cref="Saving.OrderSave.Restore"/>):
+    /// what the order's command readies when it is given live.
+    /// </summary>
+    void Restored(World world, OrderEntry order)
+    {
+    }
 }
 
 /// <summary>
