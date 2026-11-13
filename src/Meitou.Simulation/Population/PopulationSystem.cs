@@ -814,13 +814,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// The town leaves the world: each squad it made becomes a pinned platoon that keeps its characters (<see cref="StoredSquad"/>), so the town is
-    /// made of them next time and a save writes them (docs/simulation.md "Population"). A squad with no one alive left is dropped.
+    /// made of them next time and a save writes them (docs/simulation.md "Population"). A member carried off or imprisoned is split off first
+    /// (<see cref="SplitCaptives(World, Squad, SplitFrom)"/>). A squad with no one alive left is dropped.
     /// </summary>
     void Unload(World world, int site, SiteState state)
     {
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
+
+            // A member carried off or jailed stays in the world as a squad of its own (FUN_14079c1c0), before the squad is placed by the rest.
+            if (squad.Members.Count >= 2) SplitCaptives(world, squad, new SplitFrom(site, squad.TemplateId, squad.Faction, 0, squad.Pinned));
             if (KeepLoaded(world, site, squad)) continue;
             var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop,
                 NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi,

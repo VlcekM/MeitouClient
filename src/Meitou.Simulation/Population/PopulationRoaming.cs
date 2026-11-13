@@ -593,7 +593,7 @@ public sealed partial class PopulationSystem
     void Unload(World world, Platoon p, Squad squad)
     {
         var table = world.Characters;
-        if (squad.Members.Count >= 2) SplitPrisoners(world, p, squad);   // before the members are released: a prisoner is not a stray
+        if (squad.Members.Count >= 2) SplitCaptives(world, p, squad);   // before the members are released: a prisoner is not a stray
         if (squad.Members.Count == 0)
         {
             RemoveWiped(world, p, squad);
