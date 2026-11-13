@@ -7,8 +7,10 @@ image: banner.jpg
 
 Hey hey everyone,
 
-**0.18** is out. Towns now fill up the way they do in a vanilla new game, and there's a pile of fixes from your Feedback reports.
-Thanks to everyone sending in saves 🙏
+We've been very busy squashing and fixing and eradicating all the bugs and inaccuracies from the base game.
+Thanks to everyone sending in saves thru the feedback reports - makes the process of fixing it way quicker!
+
+A lot of navmesh issues remain to be resolved though, so please bear with us for a bit more!
 
 # Towns
 
