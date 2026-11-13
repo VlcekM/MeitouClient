@@ -18,21 +18,23 @@ public sealed class MetalUploads : IGpuUploads
     /// The context the batches record and stage through.
     /// </summary>
     readonly MetalContext _ctx;
+    /// <summary>
+    /// The batch the open <see cref="Scope"/> shares (made with the first batch begun in it).
+    /// </summary>
+    MetalUploadBatch? _shared;
+    /// <summary>
+    /// Whether a scope is open.
+    /// </summary>
+    bool _scoped;
+    /// <summary>
+    /// The managed thread the open scope belongs to: other threads' batches stay their own.
+    /// </summary>
+    int _scopeThread;
 
     /// <summary>
     /// The uploads of the context's device.
     /// </summary>
     public MetalUploads(MetalContext ctx) => this._ctx = ctx;
-
-    /// <summary>
-    /// The batch the open <see cref="Scope"/> shares (made with the first batch begun in it), and the thread that opened the scope.
-    /// </summary>
-    MetalUploadBatch? _shared;
-    /// <summary>
-    /// Whether a scope is open, and the managed thread it belongs to: other threads' batches stay their own.
-    /// </summary>
-    bool _scoped;
-    int _scopeThread;
 
     /// <summary>
     /// A new batch with its own command buffer, whose copies run when it is disposed; inside a <see cref="Scope"/>, the scope's thread gets a
@@ -41,16 +43,19 @@ public sealed class MetalUploads : IGpuUploads
     public IGpuUploadBatch Begin()
     {
         if (!_scoped || Environment.CurrentManagedThreadId != _scopeThread) return new MetalUploadBatch(_ctx);
+
         return new SharedBatch(_shared ??= new MetalUploadBatch(_ctx));
     }
 
     /// <summary>
     /// Opens a scope on this thread: every batch begun here until it is disposed records into one command buffer (a queue holds 64 of them, and
-    /// <c>commandBuffer</c> blocks while it is full: one per 512 KB slab stalled the render thread for 8 to 17 ms). Disposing commits it. Scopes do not nest.
+    /// <c>commandBuffer</c> blocks while it is full: one per 512 KB slab stalled the render thread for 8 to 17 ms). Disposing commits it. Scopes do
+    /// not nest.
     /// </summary>
     public IDisposable Scope()
     {
         if (_scoped) return new NoScope();
+
         (_scoped, _scopeThread) = (true, Environment.CurrentManagedThreadId);
         return new OpenScope(this);
     }

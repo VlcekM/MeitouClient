@@ -561,7 +561,8 @@ static class AtmosphereShaders
             msPlane = cross(dFdx(world), dFdy(world));
             msPlaneSet = true;
             #endif
-            bool sunReaches = max(max(nl, max(diffuseNl.x, max(diffuseNl.y, diffuseNl.z))), 0.0) > 0.0 && max(sunBase.x, max(sunBase.y, sunBase.z)) > 0.0 && atmoSelfShadow > 0.0;
+            bool sunFaced = max(max(nl, max(diffuseNl.x, max(diffuseNl.y, diffuseNl.z))), 0.0) > 0.0;
+            bool sunReaches = sunFaced && max(sunBase.x, max(sunBase.y, sunBase.z)) > 0.0 && atmoSelfShadow > 0.0;
             // The sun shadow term (deferred.hlsl: lightColor * shadow); what the traced sun takes over leaves the colour, shadowed by the characters' layers alone.
             vec3 sun = tracedShare < 1.0 && sunReaches ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
             vec3 tracedSun = vec3(0.0);

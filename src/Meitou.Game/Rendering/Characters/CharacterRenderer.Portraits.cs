@@ -161,7 +161,6 @@ internal sealed unsafe partial class CharacterRenderer
         _liveByKey.Clear();
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
 
-
         if (!_cleared) ClearPortraitRects(atlas, [new PixelRect(0, 0, (uint)atlas.Desc.Width, (uint)atlas.Desc.Height)]);
         _cleared = true;
         ClearReplacedRecordCells(atlas);

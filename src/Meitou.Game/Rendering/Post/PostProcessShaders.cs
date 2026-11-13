@@ -24,9 +24,10 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// <see cref="Vertex"/> for a target whose row 0 is at the top (Metal's: <see cref="Gpu.IGpuContext.RenderTargetsBottomUp"/> false): the triangle is drawn
-    /// with clip y negated, so <c>vUv</c> still runs 0..1 from row 0 and <c>gl_FragCoord</c> counts rows from <c>vUv</c> 0, as on Vulkan. An image such
-    /// a pass writes is then looked up by <c>clip * 0.5 + 0.5</c> or by world position the way Vulkan's is. Needs a pass that does not cull (the winding flips).
+    /// <see cref="Vertex"/> for a target whose row 0 is at the top (Metal's: <see cref="Gpu.IGpuContext.RenderTargetsBottomUp"/> false): the
+    /// triangle is drawn with clip y negated, so <c>vUv</c> still runs 0..1 from row 0 and <c>gl_FragCoord</c> counts rows from <c>vUv</c> 0, as on
+    /// Vulkan. An image such a pass writes is then looked up by <c>clip * 0.5 + 0.5</c> or by world position the way Vulkan's is. Needs a pass that
+    /// does not cull (the winding flips).
     /// </summary>
     public static readonly string VertexRowsDown = Vertex.Replace("gl_Position = vec4(p, 0.0, 1.0);", "gl_Position = vec4(p.x, -p.y, 0.0, 1.0);",
         StringComparison.Ordinal);

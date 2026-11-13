@@ -677,6 +677,7 @@ sealed class PostComposite : IDisposable
     void ApplyLayers(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, bool volumes, bool ssaoOn, Vector4 contact)
     {
         if (ssaoOn) RunSsaoGather(cmd, scene, depth, i, contact);
+
         var shafts = _pendingShafts;
         _pendingShafts = null;
         if (!volumes && shafts is null)
@@ -684,6 +685,7 @@ sealed class PostComposite : IDisposable
             if (ssaoOn) ApplyOcclusion(cmd, scene);
             return;
         }
+
         if (volumes) RunLayersHalf(cmd, scene, depth, i, shafts);
         RunSceneLayers(cmd, scene, depth, i, shafts, volumes, ssaoOn);
     }
@@ -700,6 +702,7 @@ sealed class PostComposite : IDisposable
             _layerHalf = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post layers half"));
         }
+
         var p = _layersHalfP;
         SetLayerCommon(p, scene, depth, i, shafts);
         p.P.Set(p.Layers, shafts is null ? 0f : 1f, 1f, 0f, 0f);
@@ -710,7 +713,8 @@ sealed class PostComposite : IDisposable
     /// <summary>
     /// The merged pass over the scene colour, blended as <c>scene * factor + colour</c> (the fog volumes' state).
     /// </summary>
-    void RunSceneLayers(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, PendingShafts? shafts, bool volumes, bool ssaoOn)
+    void RunSceneLayers(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, PendingShafts? shafts, bool volumes,
+        bool ssaoOn)
     {
         var p = _sceneLayersP;
         SetLayerCommon(p, scene, depth, i, shafts);
@@ -719,6 +723,7 @@ sealed class PostComposite : IDisposable
         p.P.Set(p.Layers, shafts is null ? 0f : 1f, volumes ? 1f : 0f, ssaoOn ? 1f : 0f, 0f);
         p.P.Set(p.HalfHolds, volumes && shafts is not null ? 1f : 0f, volumes ? 1f : 0f, 0f, 0f);
         p.P.ApplyGlobals();
+
         var state = DrawState.For(new AttachmentFormats(scene.Desc.Format, InternalFormat.None), false) with
         {
             Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
@@ -915,7 +920,6 @@ sealed class PostComposite : IDisposable
         cmd.EndRendering();
         cmd.Order();
     }
-
 
     /// <summary>
     /// The low-resolution particles' depth pass: the scene's depth reduced to the target's size, each block's nearest (<paramref name="layer"/> 1) or
