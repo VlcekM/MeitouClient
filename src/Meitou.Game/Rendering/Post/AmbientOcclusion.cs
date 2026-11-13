@@ -148,7 +148,7 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         Generate(a);
         BlurInto(a, b);
 
-        // The composite reads aoB: swap so the finished result is there.
+        // The composite reads B: swap so the finished result is there.
         (A, B) = (B, A);
     }
 

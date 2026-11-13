@@ -208,7 +208,7 @@ public sealed unsafe partial class PostProcess
     }
 
     /// <summary>
-    /// The occlusion into <see cref="aoB"/>, as <see cref="RunSsao"/> leaves it: the mask, the gather, the blur.
+    /// The occlusion into <see cref="AmbientOcclusion.B"/>, as <see cref="RunSsao"/> leaves it: the mask, the gather, the blur.
     /// </summary>
     void RunGtao()
     {
@@ -347,7 +347,7 @@ public sealed unsafe partial class PostProcess
         program.Set(reach, PostOptions.GtaoRadius, PostOptions.GtaoMaxPixels * _height, PostOptions.GtaoMinPixels * _height, PostOptions.GtaoFalloff);
 
     /// <summary>
-    /// The SSAO's blur over the gather; the second pass takes the occlusion off the characters' pixels. Leaves the result in <see cref="aoB"/>.
+    /// The SSAO's blur over the gather; the second pass takes the occlusion off the characters' pixels. Leaves the result in <see cref="AmbientOcclusion.B"/>.
     /// </summary>
     void GtaoBlur(bool characters)
     {

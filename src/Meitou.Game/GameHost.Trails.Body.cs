@@ -188,11 +188,6 @@ sealed partial class GameHost
         /// The contact's lowest point, where the mark is pressed.
         /// </summary>
         public Vector3 At;
-
-        /// <summary>
-        /// Cleared with <see cref="Down"/> each frame; nothing sets it.
-        /// </summary>
-        public bool Seen;
     }
 
     /// <summary>
@@ -232,7 +227,7 @@ sealed partial class GameHost
         int bones = 0;
         foreach (var c in _contactBodies) bones = Math.Max(bones, c.Limb + 1);
         if (w.Limbs is null || w.Limbs.Length != bones) w.Limbs = new Limb[bones];
-        foreach (ref var l in w.Limbs.AsSpan()) (l.Down, l.Seen) = (false, false);
+        foreach (ref var l in w.Limbs.AsSpan()) l.Down = false;
     }
 
     /// <summary>
