@@ -3,6 +3,48 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.19.0
+
+- Graphics options sorted into tabs by subject, one master switch per effect with its technique under it; quality tiers up to Extreme set the Meitou effects, chosen by GPU class on first run
+- Settings: a search box (Ctrl+F) over all pages, Collapse all / Expand all, cut, copy and paste in number boxes; the frame limit moves in 1 fps steps
+- Traced sun shadows on ray tracing GPUs, grass included; traced lamp shadows for every lamp, which characters cast and receive
+- Hybrid global illumination (a world-space light cache over the probes), GTAO ambient occlusion, reflections on glossy surfaces, contact shadows
+- HDR output, with white and peak brightness, in the launcher and the in-game menu
+- Photo mode: free camera with lens, roll, exposure, depth of field, time of day, slow motion, grids, frames, named presets and a Gallery button
+- Free camera looks around with the mouse alone; depth of field for the free and cinematic cameras
+- Advanced materials: hair highlights, cloth sheen, skin, eyes and metal on characters, each with its own switch
+- Wet world (optional): puddles in the rain that splash underfoot, drops on characters and objects; characters are wet from the weather and from wading
+- Optional blood on weapons, armour and clothing, kept over a save; blood on surfaces no longer vanishes while in range
+- Footprints and drag marks in soft ground, shaped by each foot, paw or hoof
+- Water: shore waves with breakers and foam, wakes and splashes from characters, no light rim round swimmers
+- Ground: sharper close up, a parallax depth slider, terrain normals lit as the game's
+- Grass: far grass keeps its cover, no veil over moving grass, and costs about half the GPU time
+- Portraits and the character editor get a fixed studio light; optional bar set for the editor
+- Still characters, the camera and stuck bolts no longer shake far from the world origin; birds, bolts and doors no longer trail under DLSS
+- DLSS: no device loss after switching it on and off repeatedly
+- Loading no longer waits 20+ s on mesh remakes; late-game saves load faster
+- Great Beak Things and other animals that were invisible are drawn; a race with no body mesh shows as a plain human, as the original's
+- Dropped weapons stand blade down as in the original, and dropped items land where the character could stand
+- Decapitation takes goggles and masks with the head; lamps glow only at their bulb; Shield Bridge decks keep their texture at distance
+- Player outposts in saves follow the original's rules: the base panel shows, towns keep their centre and radius, NPC town machines get their town's power
+- Homeless squads spawn by the original's spot and share rules
+- Every guard who sees an assault reacts (#599); a fight ends when the only enemies left are caged (#629)
+- A prisoner picks or breaks its own cage's lock (#628); a released prisoner no longer attacks its jailers (#599)
+- Escaped Prisoner clears outside every town, and a disguise hides it (#605); a caged character's bounty shows once its timer runs out (#611)
+- A carried bounty or kidnapped NPC stays carried and survives a save (#590, #622); slaves handed over or bought free stay gone (#619)
+- Miners keep working after a reload (#598); worked rocks keep their ore and progress (#596); ceiling lamps get built (#592)
+- Town farms grow, and town machines can be used and looted (#625); homeless NPCs no longer sleep in private houses (#618)
+- Saved town squads load into their own town, and the Hook Waystation's Snailhouse bar stands (#630)
+- Knocked-out bodies no longer fall through watchtower floors (#608); wind generators no longer go up through a roof (#603)
+- Animals break off a meal to fight and play their eating clip (#623); a victim being eaten wakes up; animals never spot bounties
+- A medic's ask to stand still holds an idle player character; a picked attack ends with its target
+- Partly used medkits keep their charges when stacked (#620); a polearm given to a character goes into its weapon slot
+- A carried body takes the click and a carried squad member can trade (#604); another faction's private house shows Private (#610)
+- New optional settings: Loot into backpack, Hide hats, Follow camera offset, Item rotation in place
+- Damage numbers rise on game time; foliage and birds stand still in a pause
+- Mods: UI Image nodes show a picture file or a character's portrait; SetSquadAutonomy and SetSquadHome put a player squad on AI packages; float settings; ground softness table
+- macOS: MetalFX can be switched off; Linux: saves made under Proton are found
+
 ## v0.18.0
 
 - Town residents move into the same homes, shops and house layouts as in a vanilla new game; signs the original never shows are gone
