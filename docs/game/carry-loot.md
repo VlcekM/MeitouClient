@@ -210,9 +210,7 @@ the target to share the owner's faction (vfunc `0x58`), tested only when the glo
 faction has `+0x250` set (the player's; **Verified** `FUN_1408cd2d0`). An NPC rescuer is never faction-tested: it takes any sensed ALLY body, allied factions included. Rescue (`allowBed` 0)
 therefore skips bed and cage occupants and animals; there is no range limit (the bound is `DAT_14169bc38`, the largest float), the distance is to the place the entry was last sensed at (Meitou: `CarrySystem.FindRescue` reads the ALLY entries of the sense block, and every character in sight as well, since the block is capped); leader finder 142 (`FUN_140598540`) has neither test. Kidnap's `allowBed` 1 also takes sleepers out of beds. 132 is a
 planner goal (A: 153 got a victim, B: not carrying, effect 48 carrying); 254 has no finder: its B list 153, 154 chains 132, then 112/281 find a cage (`FUN_1408d0770`) and 108 puts the
-carried one in (the candidate cages are the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookCarriers` cages a body carried by a free member whose package lists 281 (or 112 for a living one); a kidnapper or arrester whose victim dies keeps it on the shoulder for that. What sets `Status+0xe9` ("innocent victim") was not found: it is saved with the slave state (`FUN_140626580` / `FUN_140626830`), cleared by the per-update
-`FUN_140852a30` (not carried and in its town's bed, or carried by a friend) and read at the lift's release (`FUN_1405ce1e0`) and by `FUN_1406cc470` / `FUN_1407211b0`;
-it is not part of target eligibility.
+carried one in (the candidate cages are the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookCarriers` cages a body carried by a free member whose package lists 281 (or 112 for a living one); a kidnapper or arrester whose victim dies keeps it on the shoulder for that. `Status+0xe9` is the [kidnap victim flag](#the-kidnap-victim-flag); it is not part of target eligibility.
 
 ### 3.3 NPC looting
 
@@ -296,7 +294,25 @@ arrival (vfunc 1, `FUN_14034ffa0`) first rolls:
   a replan request): no `Character::attackTarget` and no task push. The fight is the chooser's (**Observed**): no order can win, the queue is gone; whether the kidnapper then counts as a
   threat for Self preservation (it reads the attacker's intended target) is **Unknown**; an awake victim gets the forced sense and tags only.
 
-Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as above; asleep is lying in a bed or resting with the sleep behaviour; the
+### The kidnap victim flag
+
+Status `+0xe9`, saved as `kidn` ([save](../formats/save.md)). **Verified** by decompile (every `+0xe9` access in the status range):
+- **Set** only by `Task_Kidnapping` vfunc 2 (`FUN_1403552d0`), on the victim, when the roll was not failed (task `+0x80` clear, set by the failed
+  branch of vfunc 1) and the target resolves and is not the kidnapper: the kidnapper gets the pending Kidnapping (code 15) against the victim's
+  faction, the victim the flag, then the lift (`Task_LiftSomething` vfunc 2). So every 246 lift flags its victim, whoever the kidnapper is, before any cage.
+- **Cleared** by the per-update `FUN_140852a30`: not carried (`+0x3d4` clear) and in a bed (`+0x2f8` = 1) while its status town (`+0x88`) is its
+  home town (`FUN_1407956a0` `+0x30`); or carried by someone it regards as friendly (vfunc `0x3f0`) or loves (`FUN_140599590`), else it tags its
+  carrier TEMP ENEMY (4) each update. Also by the separated-squad merge ([locks](locks.md#cages-and-beds)). Caging, release and escape do not touch it.
+- **Read**: `Character` slot `0x350` (`FUN_140791d50`, the "Kidnapped" status line and the character finder): the flag only while carried, slave
+  state 0, no bounty (`FUN_140854080` below 1) and status `+0xdc` not 8. The put-down (`FUN_1405ce1e0`): a flagged victim that does not regard
+  its carrier as friendly tags it TEMP ENEMY, and when not unconscious (`+0x5b9`, `+0x5bc`) gives it a new pending Kidnapping (**Observed**:
+  timer argument 10) and the forced sense. `MainBarGUI` `FUN_1407211b0` with the escaped flag (which control it toggles is **Unknown**).
+- No sentence, bail or escape rule reads it.
+
+Meitou differs: `CharacterCold.Kidnapped` is set when a kidnapper cages its victim (`KidnapSystem`, spawned cage prisoners) and cleared with the
+hold; it means "held by a kidnapper: no sentence, no bail, leaving is no escape" and shows "Kidnapped" while caged, not while carried.
+
+The kidnap itself in Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as [Kidnapping](#kidnapping) describes; asleep is lying in a bed or resting with the sleep behaviour; the
 perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets a deferred defensive attack; a player character's queue is cleared, the kidnapper is
 forced into its senses and the decision step answers with `EngagedDefence` (an engine stand-in for the threats list, [decision step](../simulation.md#decision-step)); an awake player
 victim is only forced-sensed.
@@ -363,7 +379,7 @@ Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and a
    Row 106 does have a finder: its registration stores the bed search `FUN_1408cfe00` at +0x160 (**Verified**, `FUN_140319a60`); `BedSystem` already uses that search.
 2. The **sensed-list category bits** (`FUN_140853960` masks 1, 0x4010, 0x20, 0x210, 0x4008, 0x811, 0x10): which bit is ally, enemy, dead, slave;
    and the size of the sensed list, which is the search range of every finder.
-3. The **status object at `Character+0x1a0`** (int at +0, saved as `slavestate`: 1 slave, 2 escaped slave, 3 ex-slave; `+0x8` the [lie-low stamp](#escaped-slaves-lie-low); the setter `FUN_1405a4940` posts "{1} has been enslaved" for a free player-faction character and sets `+0x110` to 250 on 2; its callers: caging, the squad factory's `slaves`, slave processing (task 182), escapes, release and bail); its `+0x88`, `+0xe0` (a slave's owner faction); its class name, and what sets `+0xe9` (the "innocent victim" flag; see the character finder).
+3. The **status object at `Character+0x1a0`** (int at +0, saved as `slavestate`: 1 slave, 2 escaped slave, 3 ex-slave; `+0x8` the [lie-low stamp](#escaped-slaves-lie-low); the setter `FUN_1405a4940` posts "{1} has been enslaved" for a free player-faction character and sets `+0x110` to 250 on 2; its callers: caging, the squad factory's `slaves`, slave processing (task 182), escapes, release and bail); its `+0x88`, `+0xe0` (a slave's owner faction); its class name (`+0xe9`: the [kidnap victim flag](#the-kidnap-victim-flag)).
    Partly known (**Observed**, [economy 11.4-11.8](economy.md#115-bail-and-sentence)): `+0xe8` escaped-prisoner flag, `+0xea` freed flag ([perception](perception.md#sense-tags-who-is-an-enemy): set on release, bail and slave buy; cleared outside towns and by a wrapper-set pending crime, saved as `tn`), `+0x110` the "recently wanted" marker (250.0).
 4. The **writer of `+0x5b9`**, read as "unconscious" from its readers only.
 5. **Which inventory transfer the player's usual loot takes** (drag and drop gives Theft for a down owner, the right-click transfer Looting): both
