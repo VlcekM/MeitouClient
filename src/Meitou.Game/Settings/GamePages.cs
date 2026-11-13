@@ -391,6 +391,10 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Camera smoothing",
             "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once.",
             Toggle: new("Camera smoothing", () => menu.Config.CameraSmoothing, SetCameraSmoothing)));
+        result.Add(new("Loot into backpack",
+            "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag "
+            + "window is open).",
+            Toggle: new("Loot into backpack", () => menu.Config.TakeIntoBackpack, SetTakeIntoBackpack, OnOff: true)));
         foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
     }
@@ -402,6 +406,15 @@ sealed class GamePages(SettingsMenu menu)
     {
         menu.Config.ShiftPanBoost = on;
         menu.CameraChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The Loot into backpack switch, into the config and the running world.
+    /// </summary>
+    void SetTakeIntoBackpack(bool on)
+    {
+        menu.Config.TakeIntoBackpack = on;
+        menu.TakeIntoBackpackChanged?.Invoke(on);
     }
 
     /// <summary>

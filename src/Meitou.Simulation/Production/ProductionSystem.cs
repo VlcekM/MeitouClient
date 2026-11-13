@@ -1915,8 +1915,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             && mark == StolenMark.None)
             item.Mark = Crime.CrimeSystem.OwnerMark(world, container.Building, container.Owner);
 
-        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
-            out bool worn, cold);
+        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
+            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, out bool worn, cold);
         if (storage.Items.Contains(item)) item.Mark = mark;   // what stayed keeps its mark
         if (worn) Assembly?.RefreshEquipment(cold);
         if (moved > 0) world.Machines.Touch();
@@ -2050,8 +2050,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var kept = item.Mark;
         if (mark != StolenMark.None && kept == StolenMark.None) item.Mark = mark;
 
-        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
-            out bool worn, cold);
+        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
+            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, out bool worn, cold);
         if (storage.Items.Contains(item)) item.Mark = kept;   // what stayed keeps its mark
         if (moved > 0) world.Machines.Touch();
         if (worn) Assembly?.RefreshEquipment(cold);

@@ -790,6 +790,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             },
             systems: systems, walkability: walkability);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
+        host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
         host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed);
         host.Render.Grid = host.Sandbox.IsSandbox;
         host.Session.Camera.Place(new Vector2((float)(host.WorldOptions.X ?? host.Scene.Focus.X), (float)(host.WorldOptions.Z ?? host.Scene.Focus.Z)),
@@ -1243,6 +1244,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on;
             },
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
+            TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TutorialsChanged = on => { if (host.Saves.Tutorials is { } t) t.Enabled = on; },
             ResetTutorials = () => host.Saves.Tutorials?.Reset(),
             OffscreenChanged = () =>

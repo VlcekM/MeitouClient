@@ -447,6 +447,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? AnimalsPickUpChanged { get; init; }
 
     /// <summary>
+    /// The loot-into-backpack switch changed (<see cref="UserConfig.TakeIntoBackpack"/>).
+    /// </summary>
+    public Action<bool>? TakeIntoBackpackChanged { get; init; }
+
+    /// <summary>
     /// The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).
     /// </summary>
     public Action? TimeSpeedsChanged { get; init; }
@@ -1511,6 +1516,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.EdgeScroll = true;
         Config.CameraSmoothing = true;
         Config.ShiftPanBoost = true;
+        Config.TakeIntoBackpack = false;
+        TakeIntoBackpackChanged?.Invoke(false);
         Config.ShiftPanMultiplier = UserConfig.DefaultShiftPanMultiplier;
         Config.InvertX = false;
         Config.InvertY = true;

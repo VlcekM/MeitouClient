@@ -146,6 +146,7 @@ public sealed class WorldSession : IDisposable
         var next = new World(_worldSettings, _worldWalkability, list);
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
         next.BenchFacingFix = World.BenchFacingFix;
+        next.TakeIntoBackpack = World.TakeIntoBackpack;
         try
         {
             setup?.Invoke(next);

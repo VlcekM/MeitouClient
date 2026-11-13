@@ -458,6 +458,11 @@ sealed class UserConfig
     /// </summary>
     public bool ShiftPanBoost { get; set; } = true;
     /// <summary>
+    /// Picked-up and looted items go into the backpack first (Controls settings, an on / off switch; off by default, as in the game;
+    /// <c>World.TakeIntoBackpack</c>).
+    /// </summary>
+    public bool TakeIntoBackpack { get; set; }
+    /// <summary>
     /// The pan speed factor while Shift is held (Controls settings, <see cref="MinShiftPanMultiplier"/> … <see cref="MaxShiftPanMultiplier"/>,
     /// default 2).
     /// </summary>

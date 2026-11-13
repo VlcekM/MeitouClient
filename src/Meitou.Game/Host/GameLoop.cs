@@ -503,6 +503,7 @@ sealed class GameLoop(GameHost host)
             GunnerFacingChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.GunnerFacesBarrel = on),
             PunchReachChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.PunchReachFix = on),
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
+            TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
             DoorsCloseChanged = on => EachSystem<Simulation.Locks.LockSystem>(locks => locks.DoorsCloseBehind = on),
             AnimalsPickUpChanged = on => EachSystem<Simulation.Player.PlayerSystem>(players => players.AnimalsPickUp = on),

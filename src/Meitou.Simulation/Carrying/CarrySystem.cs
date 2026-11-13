@@ -1304,7 +1304,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
         if (TakeLootMoney(world, i, t, owner, item, mark, death)) return;
 
-        int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
+        int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
+            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack,
             out bool wear, cold);
         if (owner.Items.Contains(item)) item.Mark = mark;   // what stays keeps its mark
         if (moved == 0)
