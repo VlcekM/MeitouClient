@@ -149,6 +149,19 @@ using reduced targets plus depth-aware reconstruction/mask fallback. A texel tha
 must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
 `post-merge` fuses velocity/exposure compute groups while preserving ordering and dependencies.
 
+**Metal** (`PostComposite`, region "Merged scene layers"): the same merge, always on, with no `layers-lean` split. `RunLightShafts` builds the atlases and
+holds the apply back; `ApplyScene` then runs the SSAO gather (half size), and with fog volumes in view `LayersHalf` (fog and the shafts' apply at half size, one
+texel per 2 x 2 pixels), then `SceneLayers` over the scene colour (upsample by depth, full size where no texel fits, times the occlusion). Without fog
+volumes the shafts and the occlusion share the full-size pass; with neither, only the occlusion's multiply runs. The SSAO taps read a half-size R8 mask of the scene
+alpha (`SsaoMask`) as on Vulkan; before 2026-11-13 the Metal chain bound the RGBA16F scene colour there, and the shader read its red channel.
+Row order: the Metal passes draw with `vUv` flipped (`flipY`), so a pass that rebuilds a ray from `vUv` or a pixel's row gets clip y negated; `PostComposite.UpAxis` gives
+those passes (SSAO, the shafts' atlases, the merged layers) the negated up axis, which makes `-up * -y` the true ray. Before, the rays were mirrored about the horizontal:
+sky pixels were pulled in to the water plane (`sceneDistance`) and the shafts' and fog's rays were wrong. **Observed** (owner, Metal, before: dark streaks and banded copies in the sky
+that moved with the camera's pitch); after the change the streaks are gone (**Observed**, owner, in play). The blue fringes round far objects in fog were a different
+bug ([metal-backend](metal-backend.md) "Encoders and program state").
+**Observed** (2026-11-13, Mac mini M6, save `111`, no upscaler, 1920x1080 scene in 3840x2160, 3 runs after a warm-up, `--play-bench` idle / orbit): GPU 17.92 / 19.57 ms
+-> 15.47 / 17.10 (-2.4 ms), fps 52.0 / 50.7 -> 60.3 / 58.1; 1920x1080 screenshots of both builds at one view differ by a mean of 0.06/255 (0.02 % of pixels over 12/255).
+
 ## Contact shadows
 
 The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: what the screen does not show casts nothing; never with the sun shadows Off or

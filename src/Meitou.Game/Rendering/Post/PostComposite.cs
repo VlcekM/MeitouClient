@@ -32,6 +32,12 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly IGpuContext _ctx;
     /// <summary>
+    /// Whether the fullscreen passes run with <c>vUv</c> flipped (Metal's top-down targets), so a pass that rebuilds a ray from <c>vUv</c> or a pixel's
+    /// row has the clip y negated: <see cref="UpAxis"/> turns the camera's up axis to match.
+    /// </summary>
+    readonly bool _flipY;
+
+    /// <summary>
     /// The composite, luminance and adaptation programs.
     /// </summary>
     readonly LegacyProgram _composite, _luminance, _adapt;
@@ -62,10 +68,6 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly ApplyPass _apply;
     /// <summary>
-    /// The fog volumes pass.
-    /// </summary>
-    readonly FogPass _fog;
-    /// <summary>
     /// The light shafts' inject pass.
     /// </summary>
     readonly ShaftInjectPass _shaftInjectP;
@@ -78,9 +80,17 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly ShaftScatterPass _shaftScatterP;
     /// <summary>
-    /// The light shafts' apply pass.
+    /// The merged scene layers at half the render size (fog volumes, and the shafts' apply while fog is in view).
     /// </summary>
-    readonly ShaftApplyPass _shaftApplyP;
+    readonly LayersHalfPass _layersHalfP;
+    /// <summary>
+    /// The merged scene layers pass: the shafts' apply, the fog volumes and the occlusion in one blend over the scene colour.
+    /// </summary>
+    readonly SceneLayersPass _sceneLayersP;
+    /// <summary>
+    /// The characters' mask at the occlusion's half size.
+    /// </summary>
+    readonly SsaoMaskPass _ssaoMaskP;
     /// <summary>
     /// The FXAA pass.
     /// </summary>
@@ -127,9 +137,17 @@ sealed class PostComposite : IDisposable
     /// </summary>
     GpuTexture? _ldr, _ldrFxaa, _smaaEdges, _smaaWeights;
     /// <summary>
-    /// The SSAO's half-size targets.
+    /// The SSAO's half-size targets, and the characters' mask (R8) the occlusion's taps read.
     /// </summary>
-    GpuTexture? _aoA, _aoB;
+    GpuTexture? _aoA, _aoB, _aoMask;
+    /// <summary>
+    /// The half-size scene layers texture (RGBA16F: colour and factor), made when fog volumes are in view.
+    /// </summary>
+    GpuTexture? _layerHalf;
+    /// <summary>
+    /// The shafts' apply held back for the merged pass this frame (null: none).
+    /// </summary>
+    PendingShafts? _pendingShafts;
     /// <summary>
     /// The light shafts' injected, light and scatter atlases.
     /// </summary>
@@ -160,6 +178,11 @@ sealed class PostComposite : IDisposable
     int _adaptedFrames;
 
     /// <summary>
+    /// The shafts' apply parameters (the air layer, the darkening and the sky's weight) and their atlas size, kept for the merged scene layers.
+    /// </summary>
+    readonly record struct PendingShafts(Vector4 Air, Vector4 Params, int AtlasWidth, int AtlasHeight);
+
+    /// <summary>
     /// What <see cref="ApplyScene"/> and <see cref="Draw"/> need from the frame's camera.
     /// </summary>
     public readonly record struct SceneInputs(Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect, float Near, float Far,
@@ -173,6 +196,7 @@ sealed class PostComposite : IDisposable
     public PostComposite(IGpuContext ctx, bool flipY = false)
     {
         this._ctx = ctx;
+        _flipY = flipY;
         var vertex = flipY
             ? PostProcessShaders.Vertex.Replace("vUv = p * 0.5 + 0.5;", "vUv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);")
             : PostProcessShaders.Vertex;
@@ -182,11 +206,12 @@ sealed class PostComposite : IDisposable
         _ssao = new SsaoPass(ctx, vertex);
         _blur = new BlurPass(ctx, vertex);
         _apply = new ApplyPass(ctx, vertex);
-        _fog = new FogPass(ctx, vertex);
         _shaftInjectP = new ShaftInjectPass(ctx, vertex);
         _shaftIntegrateP = new ShaftIntegratePass(ctx, vertex);
         _shaftScatterP = new ShaftScatterPass(ctx, vertex);
-        _shaftApplyP = new ShaftApplyPass(ctx, vertex);
+        _layersHalfP = new LayersHalfPass(ctx, vertex);
+        _sceneLayersP = new SceneLayersPass(ctx, vertex);
+        _ssaoMaskP = new SsaoMaskPass(ctx, vertex);
         _fxaa = new FxaaPass(ctx, vertex);
         _stretch = new StretchPass(ctx, vertex);
         _smaa = new SmaaPasses(ctx, vertex);
@@ -271,16 +296,20 @@ sealed class PostComposite : IDisposable
     #region Drawing
 
     /// <summary>
-    /// The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
-    /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.
+    /// The light shafts' apply, the placed fog volumes and the SSAO over the finished scene, before the temporal resolve (<see cref="ApplyLayers"/>). A
+    /// separate native segment or the caller's command list may record it; the passes load the scene colour instead of clearing it.
     /// </summary>
     public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn,
         Vector4 contact = default)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
-        if (volumes) RunFogVolumes(cmd, scene, depth, inputs);
-        if (ssaoOn) RunSsao(cmd, scene, depth, inputs, contact);
+        ApplyLayers(cmd, scene, depth, inputs, volumes, ssaoOn, contact);
     }
+
+    /// <summary>
+    /// Whether <see cref="RunLightShafts"/> left its apply for <see cref="ApplyScene"/> (which then has to run this frame).
+    /// </summary>
+    public bool ShaftsPending => _pendingShafts is not null;
 
     /// <summary>
     /// Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>.
@@ -477,6 +506,7 @@ sealed class PostComposite : IDisposable
         float darkening, float far, float groundY, float airByTime, bool temporal)
     {
         _shaftFrame = default;
+        _pendingShafts = null;
         if (!o.LightShafts || darkening <= 0) return;
         int across = Math.Clamp(o.ShaftCells, 8, 1024), slices = Math.Clamp(o.ShaftSlices, 8, 256);
         int down = Math.Max(1, (int)MathF.Round(across * scene.Desc.Height / (float)Math.Max(scene.Desc.Width, 1)));
@@ -499,7 +529,7 @@ sealed class PostComposite : IDisposable
             s.P.Set(s.Eye, i.Eye);
             s.P.Set(s.Tan, tan);
             s.P.Set(s.Right, r.M11, r.M21, r.M31);
-            s.P.Set(s.Up, r.M12, r.M22, r.M32);
+            s.P.Set(s.Up, UpAxis(r));
             s.P.Set(s.Back, r.M13, r.M23, r.M33);
         }
 
@@ -525,24 +555,9 @@ sealed class PostComposite : IDisposable
             Fullscreen(cmd, scatter.P, _shaftScatter!, aw, ah);
         }
 
-        var apply = _shaftApplyP;
-        Common(apply);
-        apply.P.Bind(apply.NearDepth, _pointSampler with { View = depth.View() });
-        apply.P.Bind(apply.Light, _plainSampler with { View = _shaftLight!.View() });
-        apply.P.Bind(apply.Scatter, withAir ? _plainSampler with { View = _shaftScatter!.View() } : _ctx.Dummy(apply.P.SamplerInfo(apply.Scatter)));
-        apply.P.Set(apply.Air, air);
-        apply.P.Set(apply.NearPlanes, i.Near, i.Far);
-        apply.P.Set(apply.WaterY, i.WaterHeight ?? float.MinValue);
-        apply.P.Set(apply.Atlas, aw, ah);
-        apply.P.Set(apply.Params, Math.Clamp(darkening, 0, 1), PostOptions.ShaftSky, 0f, 0f);
-        apply.P.ApplyGlobals();
-        var state = DrawState.For(new AttachmentFormats(scene.Desc.Format, InternalFormat.None), false) with
-        {
-            Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
-            ColourMask = DrawState.Rgb,
-        };
-        Fullscreen(cmd, apply.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
+        // The apply is the merged scene layers' (ApplyScene); the frame's grid is what the fog's shadow reads.
         _shaftFrame = (grid, range, tan, Math.Clamp(darkening, 0, 1));
+        _pendingShafts = new PendingShafts(air, new Vector4(Math.Clamp(darkening, 0, 1), PostOptions.ShaftSky, 0f, 0f), aw, ah);
     }
 
     /// <summary>
@@ -563,57 +578,17 @@ sealed class PostComposite : IDisposable
     }
 
     /// <summary>
-    /// The placed fog volumes in one pass over <paramref name="scene"/>, shadowed by this frame's shafts.
+    /// The SSAO at half size and its two blur passes (<paramref name="contact"/>: the contact shadows' terms); the finished factor is in <see
+    /// cref="_aoA"/>.
     /// </summary>
-    void RunFogVolumes(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
-    {
-        var f = _fog;
-        f.P.Bind(f.NearDepth, _pointSampler with { View = depth.View() });
-        f.P.Set(f.NearPlanes, i.Near, i.Far);
-        float tanY = MathF.Tan(i.FieldOfView * 0.5f);
-        f.P.Set(f.Tan, ViewWindow.Tan(tanY * i.Aspect, tanY));
-        var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
-        f.P.Set(f.Right, r.M11, r.M21, r.M31);
-        f.P.Set(f.Up, r.M12, r.M22, r.M32);
-        f.P.Set(f.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
-        f.P.Set(f.WaterY, i.WaterHeight ?? float.MinValue);
-        var shaft = _shaftFrame;
-        bool injected = shaft.Darkening > 0 && _shaftInjected is not null;
-        f.P.Bind(f.ShaftInjected, injected ? _plainSampler with { View = _shaftInjected!.View() } : _ctx.Dummy(f.P.SamplerInfo(f.ShaftInjected)));
-        f.P.Set(f.ShaftGrid, shaft.Grid);
-        f.P.Set(f.ShaftRange, shaft.Range);
-        f.P.Set(f.ShaftTan, shaft.Tan);
-        f.P.Set(f.ShaftRight, r.M11, r.M21, r.M31);
-        f.P.Set(f.ShaftUp, r.M12, r.M22, r.M32);
-        f.P.Set(f.ShaftBack, r.M13, r.M23, r.M33);
-        f.P.Set(f.ShaftFog, shaft.Darkening, _shaftInjected?.Desc.Width ?? 1, _shaftInjected?.Desc.Height ?? 1, 0f);
-        f.P.ApplyGlobals();
-        var state = DrawState.For(new AttachmentFormats(scene.Desc.Format, InternalFormat.None), false) with
-        {
-            Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
-            ColourMask = DrawState.Rgb,
-        };
-        Fullscreen(cmd, f.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
-    }
-
-    /// <summary>
-    /// The SSAO at half size, blurred, then multiplied into <paramref name="scene"/> (<paramref name="contact"/>: the contact shadows' terms).
-    /// </summary>
-    void RunSsao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, Vector4 contact)
+    void RunSsaoGather(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, Vector4 contact)
     {
         int w = Math.Max((scene.Desc.Width + 1) / 2, 1), h = Math.Max((scene.Desc.Height + 1) / 2, 1);
-        if (_aoA is null || _aoA.Desc.Width != w || _aoA.Desc.Height != h)
-        {
-            _aoA?.Dispose();
-            _aoB?.Dispose();
-            _aoA = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, w, h,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ssao"));
-            _aoB = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, w, h,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ssao"));
-        }
+        EnsureOcclusionTargets(w, h);
+        if (i.CharactersDrawn) RunSsaoMask(cmd, scene, w, h);
         var s = _ssao;
         s.P.Bind(s.Depth, _pointSampler with { View = depth.View() });
-        s.P.Bind(s.Mask, i.CharactersDrawn ? _sceneSampler with { View = scene.View() } : _ctx.Dummy(s.P.SamplerInfo(s.Mask)));
+        s.P.Bind(s.Mask, i.CharactersDrawn ? _plainSampler with { View = _aoMask!.View() } : _ctx.Dummy(s.P.SamplerInfo(s.Mask)));
         s.P.Set(s.CharacterOccluder, i.CharactersDrawn ? PostOptions.SsaoCharacterOccluder : 1f);
         float tanY = MathF.Tan(i.FieldOfView * 0.5f);
         s.P.Set(s.Tan, ViewWindow.Tan(tanY * i.Aspect, tanY));
@@ -625,16 +600,16 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
         var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
         s.P.Set(s.Right, r.M11, r.M21, r.M31);
-        s.P.Set(s.Up, r.M12, r.M22, r.M32);
+        s.P.Set(s.Up, UpAxis(r));
         s.P.Set(s.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
         s.P.Set(s.Eye, i.Eye);
         s.P.Set(s.WaterY, i.WaterHeight ?? float.MinValue);
         s.P.Set(s.Contact, contact);
         s.P.ApplyGlobals();
-        Fullscreen(cmd, s.P, _aoA, w, h);
+        Fullscreen(cmd, s.P, _aoA!, w, h);
 
         var b = _blur;
-        b.P.Bind(b.Ao, _plainSampler with { View = _aoA.View() });
+        b.P.Bind(b.Ao, _plainSampler with { View = _aoA!.View() });
         b.P.Bind(b.Mask, _ctx.Dummy(b.P.SamplerInfo(b.Mask)));
         b.P.Set(b.Step, 1f / w, 0f);
         b.P.Set(b.CharacterAo, 1f);
@@ -643,16 +618,164 @@ sealed class PostComposite : IDisposable
         b.P.Bind(b.Mask, i.CharactersDrawn ? _sceneSampler with { View = scene.View() } : _ctx.Dummy(b.P.SamplerInfo(b.Mask)));
         b.P.Set(b.Step, 0f, 1f / h);
         b.P.Set(b.CharacterAo, i.CharactersDrawn ? PostOptions.SsaoCharacterStrength : 1f);
-        Fullscreen(cmd, b.P, _aoA, w, h);
+        Fullscreen(cmd, b.P, _aoA!, w, h);
+    }
 
+    /// <summary>
+    /// The half-size occlusion targets and the character mask, made again at a new size.
+    /// </summary>
+    void EnsureOcclusionTargets(int w, int h)
+    {
+        if (_aoA is not null && _aoA.Desc.Width == w && _aoA.Desc.Height == h) return;
+        _aoA?.Dispose();
+        _aoB?.Dispose();
+        _aoMask?.Dispose();
+        _aoA = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ssao"));
+        _aoB = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ssao"));
+        _aoMask = _ctx.CreateTexture(new TextureDesc(InternalFormat.R8, w, h,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ssao mask"));
+    }
+
+    /// <summary>
+    /// The characters' mask at the occlusion's half size: the scene colour's alpha read once per pixel, so the twelve taps of the occlusion read
+    /// 1 byte each instead of RGBA16F at scattered places (<see cref="PostProcessShaders.SsaoMask"/>).
+    /// </summary>
+    void RunSsaoMask(IGpuCommandList cmd, GpuTexture scene, int w, int h)
+    {
+        var m = _ssaoMaskP;
+        m.P.Bind(m.Scene, _sceneSampler with { View = scene.View() });
+        Fullscreen(cmd, m.P, _aoMask!, w, h);
+    }
+
+    /// <summary>
+    /// The finished occlusion (<see cref="_aoA"/>) multiplied into <paramref name="scene"/>.
+    /// </summary>
+    void ApplyOcclusion(IGpuCommandList cmd, GpuTexture scene)
+    {
         var a = _apply;
-        a.P.Bind(a.Ao, _plainSampler with { View = _aoA.View() });
+        a.P.Bind(a.Ao, _plainSampler with { View = _aoA!.View() });
         var state = DrawState.For(new AttachmentFormats(scene.Desc.Format, InternalFormat.None), false) with
         {
             Blend = new BlendState(true, BlendingFactor.Zero, BlendingFactor.SrcColor),
             ColourMask = DrawState.Rgb,
         };
         Fullscreen(cmd, a.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
+    }
+
+    #endregion
+
+    #region Merged scene layers
+
+    /// <summary>
+    /// The shafts' apply (held back by <see cref="RunLightShafts"/>), the fog volumes and the occlusion over <paramref name="scene"/> in one pass
+    /// (<see cref="PostProcessShaders.SceneLayers"/>, as the Vulkan chain's <c>layer-merge</c>): each is a (colour, factor) the scene is blended by,
+    /// so the three compose to one blend. With fog volumes in view they are computed first at half the render size, the shafts' apply with them
+    /// (<see cref="PostProcessShaders.LayersHalf"/>), and the merged pass upsamples them by depth, computing a pixel no texel fits at full size.
+    /// </summary>
+    void ApplyLayers(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, bool volumes, bool ssaoOn, Vector4 contact)
+    {
+        if (ssaoOn) RunSsaoGather(cmd, scene, depth, i, contact);
+        var shafts = _pendingShafts;
+        _pendingShafts = null;
+        if (!volumes && shafts is null)
+        {
+            if (ssaoOn) ApplyOcclusion(cmd, scene);
+            return;
+        }
+        if (volumes) RunLayersHalf(cmd, scene, depth, i, shafts);
+        RunSceneLayers(cmd, scene, depth, i, shafts, volumes, ssaoOn);
+    }
+
+    /// <summary>
+    /// The fog volumes (and the shafts' apply, when pending) at half the render size: each texel is the pixel at twice its coordinates.
+    /// </summary>
+    void RunLayersHalf(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, PendingShafts? shafts)
+    {
+        int w = Math.Max((scene.Desc.Width + 1) / 2, 1), h = Math.Max((scene.Desc.Height + 1) / 2, 1);
+        if (_layerHalf is null || _layerHalf.Desc.Width != w || _layerHalf.Desc.Height != h)
+        {
+            _layerHalf?.Dispose();
+            _layerHalf = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post layers half"));
+        }
+        var p = _layersHalfP;
+        SetLayerCommon(p, scene, depth, i, shafts);
+        p.P.Set(p.Layers, shafts is null ? 0f : 1f, 1f, 0f, 0f);
+        p.P.ApplyGlobals();
+        Fullscreen(cmd, p.P, _layerHalf, w, h);
+    }
+
+    /// <summary>
+    /// The merged pass over the scene colour, blended as <c>scene * factor + colour</c> (the fog volumes' state).
+    /// </summary>
+    void RunSceneLayers(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, PendingShafts? shafts, bool volumes, bool ssaoOn)
+    {
+        var p = _sceneLayersP;
+        SetLayerCommon(p, scene, depth, i, shafts);
+        BindOrDummy(p.P, p.Half, volumes ? _layerHalf : null, _pointSampler);
+        BindOrDummy(p.P, p.Ao, ssaoOn ? _aoA : null, _plainSampler);
+        p.P.Set(p.Layers, shafts is null ? 0f : 1f, volumes ? 1f : 0f, ssaoOn ? 1f : 0f, 0f);
+        p.P.Set(p.HalfHolds, volumes && shafts is not null ? 1f : 0f, volumes ? 1f : 0f, 0f, 0f);
+        p.P.ApplyGlobals();
+        var state = DrawState.For(new AttachmentFormats(scene.Desc.Format, InternalFormat.None), false) with
+        {
+            Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
+            ColourMask = DrawState.Rgb,
+        };
+        Fullscreen(cmd, p.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
+    }
+
+    /// <summary>
+    /// What both layer passes share: the depth, the camera's ray rebuild, the water plane, this frame's shafts' grid (the fog's shadow reads its
+    /// first atlas) and, when pending, the shafts' apply inputs.
+    /// </summary>
+    void SetLayerCommon(LayerPass p, GpuTexture scene, GpuTexture depth, in SceneInputs i, PendingShafts? shafts)
+    {
+        BindOrDummy(p.P, p.NearDepth, depth, _pointSampler);
+        p.P.Set(p.NearPlanes, i.Near, i.Far);
+        p.P.Set(p.WaterY, i.WaterHeight ?? float.MinValue);
+        p.P.Set(p.FullSize, (float)scene.Desc.Width, (float)scene.Desc.Height);
+        float tanY = MathF.Tan(i.FieldOfView * 0.5f);
+        var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
+        p.P.Set(p.Tan, ViewWindow.Tan(tanY * i.Aspect, tanY));
+        p.P.Set(p.Right, r.M11, r.M21, r.M31);
+        p.P.Set(p.Up, UpAxis(r));
+        p.P.Set(p.Back, ViewWindow.BackFor(r, i.FieldOfView, i.Aspect));
+        p.P.Set(p.Eye, i.Eye);
+        var frame = _shaftFrame;
+        p.P.Set(p.Grid, frame.Grid);
+        p.P.Set(p.Range, frame.Range);
+        bool injected = frame.Darkening > 0 && _shaftInjected is not null;
+        BindOrDummy(p.P, p.ShaftInjected, injected ? _shaftInjected : null, _plainSampler);
+        p.P.Set(p.ShaftFog, frame.Darkening, _shaftInjected?.Desc.Width ?? 1, _shaftInjected?.Desc.Height ?? 1, 0f);
+
+        // The shafts' own layer: its atlases and parameters (read only where the pass applies the shafts).
+        bool withAir = shafts is { } s && s.Air.X > 0;
+        BindOrDummy(p.P, p.Light, shafts is null ? null : _shaftLight, _plainSampler);
+        BindOrDummy(p.P, p.Scatter, withAir ? _shaftScatter : null, _plainSampler);
+        p.P.Set(p.Atlas, shafts?.AtlasWidth ?? 1, shafts?.AtlasHeight ?? 1);
+        p.P.Set(p.Params, shafts?.Params ?? default);
+        p.P.Set(p.Air, shafts?.Air ?? default);
+    }
+
+    /// <summary>
+    /// The camera's up axis for the passes that rebuild a ray from <c>vUv</c> or a pixel's row (<c>ndc = uv * 2 - 1</c>). Vulkan's rows run up with clip y;
+    /// Metal's (<see cref="_flipY"/>) run down, so those passes see the clip y negated and are given the negated axis: <c>-up * -y</c> is the true ray. The
+    /// shafts' atlases follow, built and read through the same <c>vUv</c> and axis.
+    /// </summary>
+    Vector3 UpAxis(in Matrix4x4 rotation) =>
+        _flipY ? new Vector3(-rotation.M12, -rotation.M22, -rotation.M32) : new Vector3(rotation.M12, rotation.M22, rotation.M32);
+
+    /// <summary>
+    /// Binds <paramref name="texture"/> to <paramref name="slot"/> of <paramref name="program"/> through <paramref name="sampler"/>, or a stand-in
+    /// where it is null (a layer this frame does not use); nothing where the program has no such sampler.
+    /// </summary>
+    void BindOrDummy(LegacyProgram program, SamplerSlot slot, GpuTexture? texture, SampledTexture sampler)
+    {
+        if (!slot.IsValid) return;
+        program.Bind(slot, texture is null ? _ctx.Dummy(program.SamplerInfo(slot)) : sampler with { View = texture.View() });
     }
 
     #endregion
@@ -678,7 +801,9 @@ sealed class PostComposite : IDisposable
         // SSAO targets are made at the first ApplyScene/End for this size.
         _aoA?.Dispose();
         _aoB?.Dispose();
-        _aoA = _aoB = null;
+        _aoMask?.Dispose();
+        _layerHalf?.Dispose();
+        _aoA = _aoB = _aoMask = _layerHalf = null;
     }
 
     /// <summary>
@@ -791,6 +916,7 @@ sealed class PostComposite : IDisposable
         cmd.Order();
     }
 
+
     /// <summary>
     /// The low-resolution particles' depth pass: the scene's depth reduced to the target's size, each block's nearest (<paramref name="layer"/> 1) or
     /// farthest (2) depth (<see cref="PostProcessShaders.ParticleDepth"/>). The caller opens the native segment and gives the target; this draws a
@@ -879,6 +1005,8 @@ sealed class PostComposite : IDisposable
         _smaaWeights?.Dispose();
         _aoA?.Dispose();
         _aoB?.Dispose();
+        _aoMask?.Dispose();
+        _layerHalf?.Dispose();
         _shaftInjected?.Dispose();
         _shaftLight?.Dispose();
         _shaftScatter?.Dispose();
@@ -890,11 +1018,12 @@ sealed class PostComposite : IDisposable
         _ssao.P.Dispose();
         _blur.P.Dispose();
         _apply.P.Dispose();
-        _fog.P.Dispose();
         _shaftInjectP.P.Dispose();
         _shaftIntegrateP.P.Dispose();
         _shaftScatterP.P.Dispose();
-        _shaftApplyP.P.Dispose();
+        _layersHalfP.P.Dispose();
+        _sceneLayersP.P.Dispose();
+        _ssaoMaskP.P.Dispose();
         _fxaa.P.Dispose();
         _stretch.P.Dispose();
         _smaa.Dispose();
@@ -983,39 +1112,6 @@ sealed class PostComposite : IDisposable
     }
 
     /// <summary>
-    /// The placed fog volumes (<see cref="PostProcessShaders.FogVolumes"/>).
-    /// </summary>
-    sealed class FogPass : Pass
-    {
-        /// <summary>
-        /// The program's samplers <c>uNearDepth</c>, <c>uShaftInjected</c>.
-        /// </summary>
-        public readonly SamplerSlot NearDepth, ShaftInjected;
-        /// <summary>
-        /// The program's uniforms <c>uNearPlanes</c>, <c>uTan</c>, <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uWaterY</c>.
-        /// </summary>
-        public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, WaterY;
-        /// <summary>
-        /// The program's uniforms <c>uShaftGrid</c>, <c>uShaftRange</c>, <c>uShaftTan</c>, <c>uShaftRight</c>, <c>uShaftUp</c>, <c>uShaftBack</c>,
-        /// <c>uShaftFog</c>.
-        /// </summary>
-        public readonly UniformHandle ShaftGrid, ShaftRange, ShaftTan, ShaftRight, ShaftUp, ShaftBack, ShaftFog;
-        /// <summary>
-        /// Compiles the program and resolves its handles.
-        /// </summary>
-        public FogPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.FogVolumes, "post fog volumes")
-        {
-            NearDepth = P.Sampler("uNearDepth");
-            (NearPlanes, Tan, Right, Up, Back, WaterY) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"),
-                P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"));
-            ShaftInjected = P.Sampler("uShaftInjected");
-            (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"),
-                P.Uniform("uShaftFog"));
-            (ShaftRight, ShaftUp, ShaftBack) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
-        }
-    }
-
-    /// <summary>
     /// A light shafts pass: the grid's shared uniforms.
     /// </summary>
     abstract class ShaftPass : Pass
@@ -1088,28 +1184,77 @@ sealed class PostComposite : IDisposable
     }
 
     /// <summary>
-    /// The shafts' apply pass (<see cref="LightShaftShaders.Apply"/>).
+    /// A merged scene layers pass: the ray and distance rebuild, the shafts' camera and grid, and the fog's shadow from the shafts' first atlas.
     /// </summary>
-    sealed class ShaftApplyPass : ShaftPass
+    abstract class LayerPass : Pass
     {
         /// <summary>
-        /// The program's samplers <c>uNearDepth</c>, <c>uShaftLight</c>, <c>uShaftScatter</c>.
+        /// The program's samplers <c>uNearDepth</c>, <c>uShaftInjected</c>, <c>uShaftLight</c>, <c>uShaftScatter</c>.
         /// </summary>
-        public readonly SamplerSlot NearDepth, Light, Scatter;
+        public readonly SamplerSlot NearDepth, ShaftInjected, Light, Scatter;
         /// <summary>
-        /// The program's uniforms <c>uNearPlanes</c>, <c>uWaterY</c>, <c>uShaftAtlas</c>, <c>uShaftParams</c>, <c>uShaftAir</c>.
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uWaterY</c>, <c>uFullSize</c>, <c>uShaftGrid</c>, <c>uShaftRange</c>, <c>uShaftEye</c>,
+        /// <c>uShaftRight</c>, <c>uShaftUp</c>, <c>uShaftBack</c>, <c>uShaftTan</c>, <c>uShaftFog</c>, <c>uShaftAtlas</c>, <c>uShaftParams</c>,
+        /// <c>uShaftAir</c>, <c>uLayers</c>.
         /// </summary>
-        public readonly UniformHandle NearPlanes, WaterY, Atlas, Params, Air;
+        public readonly UniformHandle NearPlanes, WaterY, FullSize, Grid, Range, Eye, Right, Up, Back, Tan, ShaftFog, Atlas, Params, Air, Layers;
+        /// <summary>
+        /// Compiles the program and resolves the shared handles.
+        /// </summary>
+        protected LayerPass(IGpuContext ctx, string vertex, string fragment, string name) : base(ctx, vertex, fragment, name)
+        {
+            (NearDepth, ShaftInjected, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftInjected"), P.Sampler("uShaftLight"),
+                P.Sampler("uShaftScatter"));
+            (NearPlanes, WaterY, FullSize) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uFullSize"));
+            (Grid, Range, Eye, Tan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"),
+                P.Uniform("uShaftTan"), P.Uniform("uShaftFog"));
+            (Right, Up, Back) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
+            (Atlas, Params, Air, Layers) = (P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"), P.Uniform("uShaftAir"), P.Uniform("uLayers"));
+        }
+    }
+
+    /// <summary>
+    /// The layers at half the render size (<see cref="PostProcessShaders.LayersHalf"/>).
+    /// </summary>
+    sealed class LayersHalfPass(IGpuContext ctx, string vertex) : LayerPass(ctx, vertex, PostProcessShaders.LayersHalf, "post layers half");
+
+    /// <summary>
+    /// The merged pass over the scene colour (<see cref="PostProcessShaders.SceneLayers"/>).
+    /// </summary>
+    sealed class SceneLayersPass : LayerPass
+    {
+        /// <summary>
+        /// The program's samplers <c>uLayerHalf</c>, <c>uAo</c>.
+        /// </summary>
+        public readonly SamplerSlot Half, Ao;
+        /// <summary>
+        /// The program's uniform <c>uHalf</c>: which layers the half-size texture holds.
+        /// </summary>
+        public readonly UniformHandle HalfHolds;
         /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
-        public ShaftApplyPass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Apply, "post shafts apply")
+        public SceneLayersPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.SceneLayers, "post scene layers")
         {
-            (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
-            (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"),
-                P.Uniform("uShaftParams"));
-            Air = P.Uniform("uShaftAir");
+            (Half, Ao) = (P.Sampler("uLayerHalf"), P.Sampler("uAo"));
+            HalfHolds = P.Uniform("uHalf");
         }
+    }
+
+    /// <summary>
+    /// The characters' mask at the occlusion's half size (<see cref="PostProcessShaders.SsaoMask"/>).
+    /// </summary>
+    sealed class SsaoMaskPass : Pass
+    {
+        /// <summary>
+        /// The program's sampler <c>uScene</c>.
+        /// </summary>
+        public readonly SamplerSlot Scene;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
+        public SsaoMaskPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.SsaoMask, "post ssao mask") =>
+            Scene = P.Sampler("uScene");
     }
 
     /// <summary>
