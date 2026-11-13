@@ -56,6 +56,18 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         + (Mod.Header is { Author.Length: > 0 } h ? $" · {h.Author}" : "");
 
     /// <summary>
+    /// The mod's Steam workshop page; null for a local mod. A workshop item's folder is named by its published file id.
+    /// </summary>
+    public Uri? WorkshopPage => Mod.Source == ModSource.Workshop && ulong.TryParse(Path.GetFileName(Mod.Folder), out var id)
+        ? new Uri($"https://steamcommunity.com/sharedfiles/filedetails/?id={id}")
+        : null;
+
+    /// <summary>
+    /// The tip of the row's texts: how to open <see cref="WorkshopPage"/>; null (no tip) for a local mod.
+    /// </summary>
+    public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Double-click to open its Steam workshop page");
+
+    /// <summary>
     /// The row's notes: a code mod, an ignored RE_Kenshi plugin, its dependencies, its game version and why it will not load.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
@@ -98,6 +110,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     {
         Changed(nameof(Detail));
         Changed(nameof(Notes));
+        Changed(nameof(PageTip));
     }
 
     /// <summary>

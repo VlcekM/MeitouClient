@@ -225,7 +225,8 @@
                   <TextBlock DockPanel.Dock="Left" Classes="handle" Text="≡" VerticalAlignment="Center" Margin="0,0,10,0"
                              PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order" />
                   <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
-                  <StackPanel VerticalAlignment="Center">
+                  <StackPanel VerticalAlignment="Center" Background="Transparent" DoubleTapped="ModRow_DoubleTapped"
+                              ToolTip.Tip="{Binding PageTip}">
                     <TextBlock Classes="name" Text="{Binding Name}" />
                     <TextBlock Classes="desc" Text="{Binding Detail}" />
                     <TextBlock Classes="warn" Text="{Binding Notes}" IsVisible="{Binding HasNotes}" />
