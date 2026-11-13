@@ -59,7 +59,7 @@ public sealed record ArrestSettings
     /// </summary>
     public float BailRange { get; init; } = 500;
     /// <summary>
-    /// The player's "Put in Cage" takes the best free cage within this distance of the carrier.
+    /// A Put in Cage order naming no cage takes the best free cage within this distance of the carrier.
     /// </summary>
     public float CageSearchRange { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>
