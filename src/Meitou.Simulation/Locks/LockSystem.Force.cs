@@ -89,9 +89,9 @@ public sealed partial class LockSystem
     /// <summary>
     /// Whether <paramref name="c"/> is the prisoner of the cage <paramref name="f"/> and may work its lock from inside: Task_CutLock and
     /// Task_BruteForceLock resolve a character target to the cage it is held in (<c>FUN_140352af0</c>, <c>FUN_140353350</c>, <b>Observed</b>) and
-    /// rows 285 / 286 have no imprisoned test, as the pick; not one tied to a pole (<b>engine choice</b>, as the pick).
+    /// rows 285 / 286 have no imprisoned test, as the pick; one tied to a pole too (the rows are registered for the chained repertoire).
     /// </summary>
-    static bool InCage(CharacterCold c, Fixture f) => c.IsImprisoned && f is { Kind: FixtureKind.Cage, Restrains: false } && c.InWhat == f.Id;
+    static bool InCage(CharacterCold c, Fixture f) => c.IsImprisoned && f.Kind == FixtureKind.Cage && c.InWhat == f.Id;
 
     /// <summary>
     /// Row 226's own conditions (!70 isObjectMine, !128 isAlly): a door of the smasher's faction or of an ally's is never smashed on an order.

@@ -152,7 +152,18 @@ static class PlaceProbe
 
             var record = db.Find(b.BuildingId);
             Console.WriteLine($"building {b.BuildingId} '{record?.Name}' type={record?.Type} instance={b.InstanceId} zone={b.Zone} at {b.Position:F0} "
-                + $"distance={distance:F0}");
+                + $"distance={distance:F0}{StateText(world, b)}");
         }
+    }
+
+    /// <summary>
+    /// The owner and lock keys of a placement's level state (" owner=... lock lvl=..."); empty without a state.
+    /// </summary>
+    static string StateText(WorldLevelData world, BuildingPlacement b)
+    {
+        if (b.StateId is null || !world.Zones.TryGetValue(b.Zone, out var zoneDb) || zoneDb.Find(b.StateId) is not { } state) return "";
+
+        var locks = state.Ints.Where(k => k.Key.StartsWith("lock lvl", StringComparison.Ordinal)).Select(k => $" {k.Key}={k.Value}");
+        return $" owner={state.GetString("owner faction ID")}{string.Concat(locks)}";
     }
 }
