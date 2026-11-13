@@ -18,7 +18,8 @@ only reads and writes the value.
 
 Search (`SettingsSearch`, the header box; a click or Ctrl+F focuses it): every row of every page but Mods whose name or hint holds each
 typed word (as written or translated) is listed, unfolded, under its page's name (Graphics > tab), with its live control and a mode's
-custom value. A row its effect hides is not found. Esc in the box empties it, then leaves it; outside it, Esc ends the search before
+custom value. A row its effect hides is not found. The box (`TextField`) selects with Shift and the arrows / Home /
+End and Ctrl+A, and cuts, copies and pastes with Ctrl+X / C / V; focusing it selects its text. Esc in the box empties it, then leaves it; outside it, Esc ends the search before
 closing; a page button ends it too.
 
 Mods (`ModsPage`): the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy

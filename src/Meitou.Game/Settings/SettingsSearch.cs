@@ -14,14 +14,9 @@ sealed class SettingsSearch(SettingsMenu menu)
     #region Query
 
     /// <summary>
-    /// The longest query the box takes.
+    /// The text typed, at most 40 characters.
     /// </summary>
-    const int MaxLength = 40;
-
-    /// <summary>
-    /// The text typed.
-    /// </summary>
-    internal string Query = "";
+    readonly TextField _field = new(40);
 
     /// <summary>
     /// The box takes the keys and the text typed.
@@ -29,16 +24,23 @@ sealed class SettingsSearch(SettingsMenu menu)
     internal bool Focused;
 
     /// <summary>
+    /// The text typed.
+    /// </summary>
+    internal string Query => _field.Text;
+
+    /// <summary>
     /// Whether the page shows the search's results: the query holds more than spaces.
     /// </summary>
     internal bool Active => Query.Trim().Length > 0;
 
     /// <summary>
-    /// Focuses the box, closing any drop-down and dropping the row focus; true (the key is taken).
+    /// Focuses the box with its text selected, closing any drop-down and dropping the row focus; true (the key is taken).
     /// </summary>
     internal bool Begin()
     {
         Focused = true;
+        _field.Anchor = 0;
+        _field.Caret = Query.Length;
         menu.ActiveChoice = null;
         menu.Focus = -1;
         return true;
@@ -49,44 +51,47 @@ sealed class SettingsSearch(SettingsMenu menu)
     /// </summary>
     internal void Clear()
     {
-        Query = "";
+        _field.Set("");
         Focused = false;
     }
 
     /// <summary>
-    /// A key while the box is focused: Esc empties it (or leaves an empty one), Enter, Tab and the arrows leave it, Backspace drops the last
-    /// character, Page Up / Down scroll the results; every key is taken.
+    /// A key while the box is focused: Esc empties it (or leaves an empty one), Enter, Tab and Up / Down leave it, Page Up / Down scroll the
+    /// results, the rest edit the text and its selection (<see cref="TextField"/>); every key is taken.
     /// </summary>
-    internal bool OnKey(Key key)
+    internal bool OnKey(Key key, bool shift, bool ctrl)
     {
+        string before = Query;
+
         if (key == Key.Escape)
         {
             if (Query.Length == 0) Focused = false;
-            else SetQuery("");
+            else _field.Set("");
         }
         else if (key is Key.Enter or Key.Tab or Key.Up or Key.Down) Focused = false;
-        else if (key == Key.Backspace && Query.Length > 0) SetQuery(Query[..^1]);
         else if (key is Key.PageUp or Key.PageDown) menu.Scroll(key == Key.PageUp ? 5 : -5);
+        else _field.OnKey(key, shift, ctrl, menu.Player.ClipboardRead, menu.Player.ClipboardWrite);
+
+        if (Query != before) ShowFromTop();
 
         return true;
     }
 
     /// <summary>
-    /// A character typed: added unless it is a control character or the query is full.
+    /// A character typed: replaces the selection unless it is a control character or the query is full.
     /// </summary>
     internal void OnText(char value)
     {
-        if (char.IsControl(value) || Query.Length >= MaxLength) return;
+        if (char.IsControl(value)) return;
 
-        SetQuery(Query + value);
+        if (_field.Insert(value.ToString())) ShowFromTop();
     }
 
     /// <summary>
-    /// Sets the query and shows its results from their top.
+    /// Shows the changed query's results from their top.
     /// </summary>
-    void SetQuery(string query)
+    void ShowFromTop()
     {
-        Query = query;
         menu.ScrollOffset = menu.ScrollTarget = 0;
         menu.Focus = -1;
     }
@@ -197,7 +202,7 @@ sealed class SettingsSearch(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The focused box's text and caret, at its end.
+    /// The focused box's text, caret and selection.
     /// </summary>
     void DrawEdit(UiRect at)
     {
@@ -207,9 +212,9 @@ sealed class SettingsSearch(SettingsMenu menu)
                 ["Focused"] = "true",
                 ["TextAlign"] = "Left VCenter",
                 ["FontPixels"] = ((int)MathF.Round(13 * menu.Scale)).ToString(CultureInfo.InvariantCulture),
-                ["CaretIndex"] = Query.Length.ToString(CultureInfo.InvariantCulture),
-                ["SelectionStart"] = "0",
-                ["SelectionLength"] = "0",
+                ["CaretIndex"] = _field.Caret.ToString(CultureInfo.InvariantCulture),
+                ["SelectionStart"] = _field.SelectionStart.ToString(CultureInfo.InvariantCulture),
+                ["SelectionLength"] = _field.SelectionLength.ToString(CultureInfo.InvariantCulture),
             }, Vector4.Zero, SettingsCanvas.LightInk, Pickable: false));
     }
 

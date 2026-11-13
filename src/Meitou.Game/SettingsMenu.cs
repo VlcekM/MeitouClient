@@ -1338,7 +1338,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
-        if (Search.Focused && Visible) return Search.OnKey(key);
+        if (Search.Focused && Visible) return Search.OnKey(key, shift, ctrl);
         if (key == Key.F && ctrl && Visible && EditingNumber is null && Rebinding is null) return Search.Begin();
         if (EditingNumber is null) return KeyDown(key, shift);
 
