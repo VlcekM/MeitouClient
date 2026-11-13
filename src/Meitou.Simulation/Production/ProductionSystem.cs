@@ -503,15 +503,6 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         order.Row is TaskType.OperateMachinery or TaskType.UseTurret && !Powered(world, site, m);
 
     /// <summary>
-    /// A loaded order's machine is made as the live order makes it (<see cref="Inputs"/>): a rock's, a town dummy's or a seat's is not saved, and
-    /// without it <see cref="IOrderOwner.CanRun"/> drops the order (#598).
-    /// </summary>
-    void IOrderOwner.Restored(World world, OrderEntry order)
-    {
-        if (order.Site is { } id && Site(world, id) is { Complete: true } site) Ensure(world, site);
-    }
-
-    /// <summary>
     /// Starts the order's task (prospecting, a storage haul, operating a machine).
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
