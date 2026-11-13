@@ -41,8 +41,11 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Partly used medkits keep their charges when stacked (#620); a polearm given to a character goes into its weapon slot
 - A carried body takes the click and a carried squad member can trade (#604); another faction's private house shows Private (#610)
 - New optional settings: Loot into backpack, Hide hats, Follow camera offset, Item rotation in place
+- A character's bag opens with their inventory (Open bags at once, a Faithful / Meitou switch)
 - Damage numbers rise on game time; foliage and birds stand still in a pause
 - Mods: UI Image nodes show a picture file or a character's portrait; SetSquadAutonomy and SetSquadHome put a player squad on AI packages; float settings; ground softness table
+- Metal: clouds, water reflections and post effects are no longer upside down, no more fog artifacts, fewer render stalls (#635)
+- Portraits refresh one a frame for sharper textures instead of all at once, so no stutter
 - macOS: MetalFX can be switched off; Linux: saves made under Proton are found
 
 ## v0.18.0
