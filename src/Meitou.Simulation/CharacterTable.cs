@@ -1021,9 +1021,16 @@ public sealed class CharacterCold
 
     /// <summary>
     /// Held in a cage by a kidnapper (<see cref="Kidnap.KidnapSystem"/>), not sentenced: no sentence is ever served, no bail is offered, getting out
-    /// is no crime. Saved as <c>kidn</c>. Hashed only while set.
+    /// is no crime. Meitou's own state, saved as <c>meitou kidnapped</c>. Hashed only while set.
     /// </summary>
     public bool Kidnapped { get; set; }
+
+    /// <summary>
+    /// The original's kidnap victim flag (status <c>+0xe9</c>, docs/game/carry-loot.md "The kidnap victim flag"): set when a kidnap's roll takes
+    /// this character, cleared in a bed in its own town or when someone it regards as friendly carries it. Saved as <c>kidn</c>. Hashed only
+    /// while set.
+    /// </summary>
+    public bool KidnapVictim { get; set; }
 
     /// <summary>
     /// Let out of a cage by a releaser, a paid bail or a slave bought free (the original's status <c>+0xea</c>, set by <c>Task_ReleasePrisoner</c>,
@@ -1863,6 +1870,7 @@ public sealed class CharacterTable
 
         if (k.Escaped) hasher.Add(0x45736361);
         if (k.Kidnapped) hasher.Add(0x4B64706E);
+        if (k.KidnapVictim) hasher.Add(0x4B696476);
         if (k.Freed) hasher.Add(0x46726564);
         if (k.Ordered) hasher.Add(0x4F72646E);
         if (k.SlaveState != 0)

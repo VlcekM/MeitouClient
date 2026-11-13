@@ -990,6 +990,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         var c = table.Cold(carrier)!;
         var b = table.Cold(body)!;
+        LetKidnapVictimGo(world, carrier, body);
         c.Carrying = CharacterId.None;
         b.CarriedBy = CharacterId.None;
         b.CarriedAwake = false;

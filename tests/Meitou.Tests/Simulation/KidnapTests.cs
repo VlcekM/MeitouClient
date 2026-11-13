@@ -510,7 +510,7 @@ public class KidnapInstallTests(ITestOutputHelper output)
     /// <summary>
     /// How many saved characters carry the kidnapped flag.
     /// </summary>
-    static int Flags(SaveGame g) => g.Platoons.SelectMany(p => p.Characters).Count(c => c.GameState?.Bools.GetValueOrDefault(CrimeSave.KidnappedKey) == true);
+    static int Flags(SaveGame g) => g.Platoons.SelectMany(p => p.Characters).Count(c => c.GameState?.Bools.ContainsKey(CrimeSave.KidnappedKey) == true);
 
     /// <summary>
     /// A save and a load keep the cage state and the flag, and a second save writes the same.

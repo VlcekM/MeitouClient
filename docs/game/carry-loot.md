@@ -309,8 +309,11 @@ Status `+0xe9`, saved as `kidn` ([save](../formats/save.md)). **Verified** by de
   timer argument 10) and the forced sense. `MainBarGUI` `FUN_1407211b0` with the escaped flag (which control it toggles is **Unknown**).
 - No sentence, bail or escape rule reads it.
 
-Meitou differs: `CharacterCold.Kidnapped` is set when a kidnapper cages its victim (`KidnapSystem`, spawned cage prisoners) and cleared with the
-hold; it means "held by a kidnapper: no sentence, no bail, leaving is no escape" and shows "Kidnapped" while caged, not while carried.
+Meitou: `CharacterCold.KidnapVictim`, set by `CarrySystem.Kidnap` on a roll that took, kept up by `ArrestSystem.UpdateKidnapVictims` (the bed
+test reads "its home town" as `InOwnTown`), read by `CarrySystem.LetKidnapVictimGo` and the status line (`World.KidnapShows`; `+0xdc` read as
+the Bandit class, **engine reading**). Not modelled: the squad-merge clear, the character finder's and `MainBarGUI`'s reads. Meitou's own
+`CharacterCold.Kidnapped` ("held by a kidnapper: no sentence, no bail, leaving is no escape"; set when `KidnapSystem` cages a victim and on
+spawned cage prisoners, cleared with the hold) is a separate flag, saved as `meitou kidnapped`.
 
 The kidnap itself in Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as [Kidnapping](#kidnapping) describes; asleep is lying in a bed or resting with the sleep behaviour; the
 perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets a deferred defensive attack; a player character's queue is cleared, the kidnapper is

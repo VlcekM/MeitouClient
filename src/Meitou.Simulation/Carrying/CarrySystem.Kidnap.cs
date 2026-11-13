@@ -88,6 +88,7 @@ public sealed partial class CarrySystem
         }
         if (success)
         {
+            victim.KidnapVictim = true;   // Task_Kidnapping vfunc 2 flags the victim of a roll that took (status +0xe9)
             if (victim.Medical is { Incapacitated: false } medical)
             {
                 float assassination = cold.Stats?[StatsEnumerated.Assassination] ?? 0;
@@ -124,6 +125,30 @@ public sealed partial class CarrySystem
             else world.Defer(new Combat.AttackOrder([victimId], kidnapperId) { Tick = world.Tick + 1, Source = TaskSource.Reaction });
         }
         return false;
+    }
+
+    /// <summary>
+    /// The timer of the pending Kidnapping a carrier gets for letting a kidnap victim go (<c>FUN_1405ce1e0</c>'s argument, <b>Observed</b>).
+    /// </summary>
+    const float LetGoCrimeTimer = 10;
+
+    /// <summary>
+    /// A carrier lets a kidnap victim go (<c>FUN_1405ce1e0</c>, <b>Verified</b>; <see cref="CharacterCold.KidnapVictim"/>): a victim that does not
+    /// regard it as friendly has its squad tag it TEMP_ENEMY, and one that is conscious also makes the kidnapping a pending crime again and
+    /// notices the carrier. Nothing without a dialogue system.
+    /// </summary>
+    void LetKidnapVictimGo(World world, int carrier, int body)
+    {
+        var table = world.Characters;
+        if (table.Cold(body) is not { KidnapVictim: true } victim || world.SystemOf<Dialogue.DialogueSystem>() is not { } talk) return;
+        if (CharacterFacts.RegardsFriendly(talk, world, body, carrier)) return;
+
+        talk.TagEnemy(world, body, carrier);
+        if (victim.Medical is { Incapacitated: true }) return;
+
+        var victimId = table.IdOf(body);
+        Crimes?.SetPending(world, carrier, Crime.CrimeCode.Kidnapping, victim.Faction, victimId, LetGoCrimeTimer);
+        Aggro?.Alarm(world, victimId, table.IdOf(carrier));
     }
 
     #endregion

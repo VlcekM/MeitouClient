@@ -414,6 +414,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             UpdateStatusTowns(world);
             DropTownStatusOutsideTowns(world);
+            UpdateKidnapVictims(world);
             EscapeFarFromOwner(world);
         }
         BountyDuty(world);
@@ -463,6 +464,33 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
             c.Escaped = false;
             c.Freed = false;
+        }
+    }
+
+    /// <summary>
+    /// The kidnap victim flag's upkeep (<see cref="CharacterCold.KidnapVictim"/>; the per-update <c>FUN_140852a30</c>, <b>Verified</b>): a victim
+    /// nobody carries loses the flag in a bed in its own town (engine reading: <see cref="InOwnTown"/>); a carried one loses it when it regards
+    /// its carrier as friendly, else its squad tags the carrier TEMP_ENEMY each pass. A carried victim keeps the flag without a dialogue system.
+    /// </summary>
+    void UpdateKidnapVictims(World world)
+    {
+        var table = world.Characters;
+        var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { KidnapVictim: true } c) continue;
+
+            if (c.CarriedBy.IsNone)
+            {
+                if (c.InSomething == HeldState.Bed && InOwnTown(world, s)) c.KidnapVictim = false;
+
+                continue;
+            }
+
+            if (talk is null || !table.TryResolveNext(c.CarriedBy, out int carrier)) continue;
+
+            if (CharacterFacts.RegardsFriendly(talk, world, s, carrier)) c.KidnapVictim = false;
+            else talk.TagEnemy(world, s, carrier);
         }
     }
 
