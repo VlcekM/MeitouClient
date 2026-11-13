@@ -64,6 +64,7 @@ static class SaveProbe
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
+            case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
@@ -105,6 +106,80 @@ static class SaveProbe
 
             probe.PrintMessages();
             probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The reach of the <c>premises</c> mode's list of homes round the leader: a town.
+    /// </summary>
+    const float HomesRadius = 2500;
+
+    /// <summary>
+    /// The homes round the leader (<see cref="Homes"/>), then the building the player's squad leader stands in (needs <c>--nav</c> for the building
+    /// sight) every <paramref name="interval"/> ticks, <paramref name="rounds"/> times: the hour, the squads living there with their public flags,
+    /// the house lock and doors, everyone inside with goal and pending crime, and the lines said meanwhile.
+    /// </summary>
+    static void Premises(ProbeWorld probe, int rounds, int interval)
+    {
+        var world = probe.World;
+        var locks = world.Systems.OfType<LockSystem>().FirstOrDefault();
+        Homes(probe, HomesRadius);
+        for (int round = 0; round < rounds; round++)
+        {
+            int leader = world.Squads.Find(world.Player.Squad)!.Leader.Slot;
+            string? key = world.Sight.BuildingOf(leader);
+            Console.WriteLine($"tick {world.Tick} hour={world.Hour} leader in building={key ?? "none"}");
+            if (key is not null) PremisesState(probe, locks, key);
+
+            foreach (var line in world.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
+            probe.PrintMessages();
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The homes of the squads within <paramref name="radius"/> of the leader: the level state's public flags (what the building panel shows), the
+    /// residents' template flag and the registry's (what the AI reads), and which shoo goals each role holds at this hour.
+    /// </summary>
+    static void Homes(ProbeWorld probe, float radius)
+    {
+        var world = probe.World;
+        var population = world.Systems.OfType<PopulationSystem>().First();
+        foreach (var q in world.Squads.All)
+        {
+            if ((q.Ai?.OwnHome ?? q.HomeBuilding) is not { } home || Vector3.Distance(home.Position, probe.LeaderPosition) > radius) continue;
+
+            var shoo = Enum.GetValues<Meitou.Data.Gameplay.Ai.AiRole>()
+                .Select(r => (Role: r, Always: population.GoalDuty(world, q, r, Meitou.Data.Gameplay.Ai.TaskType.ShooStrangersOutOfMyBuilding),
+                    Private: population.GoalDuty(world, q, r, Meitou.Data.Gameplay.Ai.TaskType.ShooStrangersOutOfMyBuildingIfPrivate)))
+                .Where(x => x.Always || x.Private)
+                .Select(x => $"{x.Role}:{(x.Always ? "158" : "")}{(x.Private ? "+283" : "")}");
+            Console.WriteLine($"home {home.Key} squad {q.Id} '{q.Name}' fac={probe.Faction(q.Faction)} template={q.TemplateId} "
+                + $"panel day/night={home.LevelState?.GetBool("is public day")}/{home.LevelState?.GetBool("is public night")} "
+                + $"homePublic={q.Ai?.HomePublic} registry={world.Fixtures.IsPublic(home.Key)} package={q.Ai?.Current?.Name} "
+                + $"shoo=[{string.Join(" ", shoo)}]");
+        }
+    }
+
+    /// <summary>
+    /// One round of <see cref="Premises"/> for building <paramref name="key"/>: its flags and doors, its resident squads, and who is inside.
+    /// </summary>
+    static void PremisesState(ProbeWorld probe, LockSystem? locks, string key)
+    {
+        var world = probe.World;
+        var doors = world.Fixtures.OfBuilding(key).Where(f => f.Kind == FixtureKind.Door).Select(f => $"{f.Lock?.Locked}/{f.Motion}");
+        Console.WriteLine($"  public: player flag={world.Fixtures.PublicOf(key)} state={world.Fixtures.IsPublic(key)} "
+            + $"houseLocked={locks?.IsHouseLocked(world, key)} doors=[{string.Join(", ", doors)}]");
+        foreach (var q in world.Squads.All.Where(q => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key == key))
+        {
+            Console.WriteLine($"  resident squad {q.Id} '{q.Name}' fac={probe.Faction(q.Faction)} template={q.TemplateId} homePublic={q.Ai?.HomePublic} "
+                + $"package={q.Ai?.Current?.Name}");
+        }
+
+        for (int i = 0; i < probe.Characters.HighWater; i++)
+        {
+            if (!probe.Characters.Next[i].Alive || probe.Characters.Cold(i) is not { } c || world.Sight.BuildingOf(i) != key) continue;
+            Console.WriteLine($"  inside {probe.Who(i)} goal={c.Ai?.Goal?.Task.Type} pending={c.Pending?.Code} target={Target(probe, i)}");
         }
     }
 
@@ -497,6 +572,7 @@ static class SaveProbe
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
+              premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               cages <name>             fixtures within 300 of a character, with occupants
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it

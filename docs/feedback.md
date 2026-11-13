@@ -47,7 +47,7 @@ owned by the app user), `PUBLIC_URL` (the links' base, default the Cloudovna add
 
 Checking a report: unzip its `save.zip` and run `meitou-tools probe <save folder> <mode>` (headless load under the install's load order, which
 may not be the reporter's; modes in its usage: nearby characters, a character's AI over time, the squads nearby over time (`squads`; `bait` also
-sends the player's squad after the nearest one to start a fight), everyone near the leader over time (`crowd`), one character's fight with its attackers' gaps and blows (`fight <slot>`; `--nav` for the real navmesh, which a fight stuck on the terrain needs), slaves, cages, dialogue, storage, research benches with their power grid, building re-save, navmesh heights; `--at x,z`
+sends the player's squad after the nearest one to start a fight), everyone near the leader over time (`crowd`), one character's fight with its attackers' gaps and blows (`fight <slot>`; `--nav` for the real navmesh, which a fight stuck on the terrain needs), the town's homes with their public flags and shoo goals and the building the leader stands in (`premises`, with `--nav`), slaves, cages, dialogue, storage, research benches with their power grid, building re-save, navmesh heights; `--at x,z`
 puts the player's squad elsewhere first, to look at a report without a save) or `meitou-tools objects <x> <z> <radius>` (towns, foliage, level buildings and map features at the report's camera target; foliage also by how near its mesh reaches, `reach`).
 Both take `--load-order <file>` (the report's load order list, one mod per line) and `--mod-dir <folder>` (more mods, e.g. a steamcmd download of
 the reporter's workshop items) to run under the reporter's mods instead of the install's.
