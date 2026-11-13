@@ -90,6 +90,12 @@ public class ModdingTests
         public bool On { get; set; } = true;
     }
 
+    sealed class RateSettings
+    {
+        [Setting("Rate", Min = 0, Max = 100, Step = 0.01)]
+        public float Rate { get; set; } = 10;
+    }
+
     static ModContext Context(IReadOnlyDictionary<string, string>? saved = null) =>
         new(new LoadedMod(new ModInfo("Ores", "mods/Ores/Ores.mod", ModSource.Local),
                 new CodeModManifest("ores", ModApi.Version, ["Ores.dll"], "Ores.Mod")),
@@ -219,6 +225,22 @@ public class ModdingTests
         Assert.Equal(ModSettingKind.Switch, group.Settings[2].Kind);
         Assert.Equal(["ask", "respawn"], group.Settings[3].Options);
         Assert.Equal(["Slow", "Fast"], group.Settings[4].Options);
+    }
+
+    /// <summary>
+    /// A float setting takes a value set on the page and a saved one. Catches the value handed back as a double, which the float property
+    /// refuses: the slider changed nothing and a saved value stopped the mod from starting.
+    /// </summary>
+    [Fact]
+    public void A_float_setting_takes_a_set_and_a_saved_value()
+    {
+        var rates = new RateSettings();
+        Context().AddSettings(rates).Settings[0].Set(0.23);
+        Assert.Equal(0.23f, rates.Rate);
+
+        var saved = new RateSettings();
+        Context(new Dictionary<string, string> { ["Rate"] = "42.5" }).AddSettings(saved);
+        Assert.Equal(42.5f, saved.Rate);
     }
 
     /// <summary>
