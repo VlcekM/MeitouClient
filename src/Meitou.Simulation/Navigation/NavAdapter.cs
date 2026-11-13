@@ -12,6 +12,11 @@ namespace Meitou.Simulation.Navigation;
 sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoorGate
 {
     /// <summary>
+    /// The navmesh walkability this adapts (read by <see cref="NavNear"/>).
+    /// </summary>
+    internal NavmeshWalkability Navmesh => nav;
+
+    /// <summary>
     /// A building whose doors are all locked is closed for every path (docs/simulation.md "Cages, beds and locks").
     /// </summary>
     public void SetDoorsBlocked(string buildingInstance, bool blocked) => nav.Doors.Set(buildingInstance, blocked);

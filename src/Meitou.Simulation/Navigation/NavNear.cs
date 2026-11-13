@@ -41,6 +41,11 @@ public static class NavNear
     }
 
     /// <summary>
+    /// The navmesh walkability behind <paramref name="walk"/> (the simulation holds it through <see cref="NavAdapter"/>); null for a stand-in.
+    /// </summary>
+    static NavmeshWalkability? NavmeshOf(IWalkability walk) => walk switch { NavmeshWalkability n => n, NavAdapter a => a.Navmesh, _ => null };
+
+    /// <summary>
     /// The queried point and the half size of the square.
     /// </summary>
     static void WriteQuery(Utf8JsonWriter w, float x, float z, float radius)
@@ -57,7 +62,7 @@ public static class NavNear
     /// </summary>
     static void WriteZones(Utf8JsonWriter w, IWalkability walk, float x, float z, float radius)
     {
-        var nav = (walk as NavmeshWalkability)?.World;
+        var nav = NavmeshOf(walk)?.World;
         var low = WorldLayout.ZoneOf(x - radius, z - radius);
         var high = WorldLayout.ZoneOf(x + radius, z + radius);
 
@@ -106,7 +111,7 @@ public static class NavNear
     static void WriteFaces(Utf8JsonWriter w, IWalkability walk, float x, float z, float radius)
     {
         w.WriteStartArray("faces");
-        if (walk is NavmeshWalkability nav)
+        if (NavmeshOf(walk) is { } nav)
         {
             var world = nav.World;
             foreach (var zone in world.Zones.OrderBy(c => c.X).ThenBy(c => c.Y))
