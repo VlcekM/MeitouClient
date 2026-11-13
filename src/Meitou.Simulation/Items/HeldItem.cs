@@ -178,8 +178,8 @@ public sealed record ReturnHeld : HeldCommand;
 public sealed record RotateHeld : HeldCommand;
 
 /// <summary>
-/// Meitou's item rotation in place: turns the grid item <see cref="Item"/> of <see cref="Character"/> (one of the player's characters, or the open
-/// loot's body) a quarter where it lies, or at the nearest cell with room (<see cref="InventoryCommands.Rotate"/>).
+/// Meitou's item rotation in place: turns the grid item <see cref="Item"/> of <see cref="Character"/> (any character) a quarter where it lies, or
+/// at the nearest cell with room (<see cref="InventoryCommands.Rotate"/>).
 /// </summary>
 public sealed record RotateItem(CharacterId Character, InventoryItemToken Item) : SimCommand;
 

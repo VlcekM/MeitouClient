@@ -1094,7 +1094,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
 - **Rotating an item** (Meitou, optional: Advanced → Item rotation, `UserConfig.RotateItems`, default off; the original has no rotation; after
   ErasmianFolly's GetRotatedIdiot mod): the Rotate item control (`InputAction.RotateItem`, default the middle button, which stays the camera's
   orbit anywhere else) turns the item on the mouse a quarter (`RotateHeld`), else the grid item under the pointer in a character's window, one of the
-  player's or the open loot's body (`RotateItem`, `InventoryCommands.Rotate`: at its own cell when the turned footprint is free there, else the nearest
+  player's or the open loot's body (`RotateItem`, which the simulation applies to any character's inventory, as the mod does; `InventoryCommands.Rotate`: at its own cell when the turned footprint is free there, else the nearest
   cell with room, refused when none). A turned item (`ItemInstance.Rotated`) has its footprint's sides swapped and its icon drawn turned
   clockwise; square items do not turn. Only the grids hold turned items (`main` of a character, stock, storage or container, and
   `backpack_content`): any other section sets the item upright, and an item put back from the mouse lies as it did when lifted. Saved as bool
