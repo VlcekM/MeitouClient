@@ -32,6 +32,10 @@ navigation geometry from render meshes alone. Source collision decoding: [collis
 Runtime face/edge filters include doors/base walls, water-avoidance and interior restrictions.
 Havok paths, local steering and unloaded-platoon movement are distinct code paths.
 
+### Refit snap
+
+**Verified** (`FUN_1403a2fa0`, `FUN_1403a2300`, `FUN_140cf5710`, `FUN_140d95b80`): a player town's centre (docs/game/buildings-production.md "Outposts") is put on the navmesh in two steps. Step 1: the 3D closest point in a cube of half size 500, door and water faces skipped. Step 2: from that point, boxes of 20, 40 then 80 units (always +-20 vertically); the faces in the box give boundary loops, each loop's 2D convex hull is grown by 20 units (8 segments per corner), and the point nearest the start that clears those shapes, projected back onto the mesh, wins (first box with a point; else step 1's). So the centre ends about 20 units inside the mesh boundary. **Observed**: the player towns' tiles are regenerated at run time with the buildings' collision boxes as geometry (no margin, no erosion) and saved as `zone/tileX.Y.hkt` in the save. Meitou: `RefitSnap` (`Simulation/Construction`) over `IWalkability.SurfaceFaces` (`NavSurfaceFaces`); step 2 uses plain distance to open edges instead of the grown hulls (engine choice). Meitou's navmesh at a player town carries the placed buildings through `NavRuntimeBuildings` (zone hash and rebuild); it does not read the save's tiles. Reading them would mean converting an `OriginalNavMesh` (faces, edge kinds, no area data) into a `ZoneNavMesh` (kept flags, neighbours, heights, doors, interiors) and keeping it until the next placement rebuilds the zone: not small, not done. The Slow refit test reads them directly (`OriginalNavTiles.Exterior`). **Unknown**: whether Meitou's carve of building collision boxes equals the regenerated tile (not compared).
+
 ## Speed and orders
 
 **Observed** S=max(11,(V-11)*leg*hunger*replacement*encumbrance*statScale+11),
