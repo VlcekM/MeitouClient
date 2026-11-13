@@ -1716,7 +1716,8 @@ sealed class GameLoop(GameHost host)
         if (host.Nav is not null) host.Nav.Covered = covered;
         // The loading screen follows the interface's mode as it is now (the settings can switch it at any time); only the Faithful mode counts loads.
         bool faithfulUi = host.Player.UiMode == Data.Ui.UiMode.Faithful;
-        host.LoadBar.Update(faithfulUi ? host.PendingLoads() : 0);
+        // Behind the Faithful title nothing is drawn, so nothing loads: the waiting requests would hold an empty bar up.
+        host.LoadBar.Update(faithfulUi && !host.TitleHidesWorld ? host.PendingLoads() : 0);
         host.Player.LoadBar = host.LoadBar;
         if (host.Loading is not null) (host.Loading.LoadBar, host.Loading.Faithful) = (host.LoadBar, faithfulUi);
         if (sceneLoading && host.SkyArrival is { AtStars: true })
