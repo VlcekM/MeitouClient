@@ -226,7 +226,9 @@ public static class BuildingSave
     static Dictionary<(int C, int CS), int> ReadTowns(SaveGame save, World world, GameDatabase db, string playerFactionId, int playerIndex,
         PopulationData? population)
     {
-        var byId = save.Quick.Records.ToDictionary(record => record.StringId, StringComparer.Ordinal);
+        var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
+        foreach (var record in save.Quick.Records) byId[record.StringId] = record;
+
         var byInstance = new Dictionary<string, PlayerTown>(StringComparer.Ordinal);
 
         if (save.TownInstanceList is { } list)
