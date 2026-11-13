@@ -158,8 +158,18 @@ no shadow, motion or reflection pass sees it either; the simulation, the host's 
 Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not human fallback.
 Portraits use the same content/shading with a dedicated camera/render target; avoid mutating
 world draw state. Asset/appearance failure must not corrupt another instance or portrait.
-Portrait cells redraw only when their character, appearance, size, camera serial or streamed
-texture images/swizzle change, or the look below does; animation and frame counts do not. The original is event-driven too, with no periodic redraw (**Verified**, decompile): `FUN_140787550` sets a 1 s countdown on the character (a new request restarts it), `FUN_140788a00` counts it down by the frame time and draws at most one portrait a frame (`FUN_140414b40`). Requests come from registering a portrait (`FUN_1404139b0`), the whole world's list on a load (`FUN_1405f5d10` -> `FUN_140412870`), an appearance rebuild (`FUN_140539020`), and attaching or removing an item of some kinds only (`FUN_14052e0f0`, `FUN_14052e290`, filter `FUN_14052dff0`), plus `FUN_14052bba0`, `FUN_140538360`, `FUN_1405334d0` (their meaning: **Unknown**). Meitou has neither the delay nor the one-a-frame limit.
+Portrait cells redraw only when their character, appearance, size, camera serial, swizzle or a *sharper* streamed
+texture image (another file, an image where there was none, more pixels) changes, or the look below does; animation and frame counts do not.
+The texture cache swaps a character texture for a smaller image of the same file while the characters are far from the camera and back when they
+are near (`WorldTextureCache` replacing/refining), so a travelling camera swapped the images of all 15-20 squad portraits together: they all redrew in one
+frame, 4-5 ms of GPU each (studio shadow, sky, depth, occlusion, the 1024 px portrait, resolve), a 50-90 ms frame every 0.4-1.5 s (**Observed**, play
+bench `settle,idle,pan,travel`, save 111, Mac mini M6, Medium tier, 1080p native, a Metal System Trace; the log of which `Due` condition fired named the
+swapped textures, 182 smaller and 131 bigger swaps in a run). A cell already showing the larger image is not stale (`CharacterRenderer.Sharper`), and
+refreshes caused by textures alone draw at most one a frame (`PortraitsPerFrame`, not under a loading screen); a new cell, another character,
+appearance or camera still draws at once. **Observed** (same run, before -> after): travel frames over 30 ms of GPU 23 -> 0, over 33 ms of frame time
+31 -> 8, p99 55.7 -> 29.9 ms, 66 -> 72 fps (one pair; the simulation's own spikes differ from run to run).
+**Unknown:** a normal map that goes from none to loaded 53 times in the run (the cache unloading and reloading it for the far squad) still redraws its
+cells, one a frame. The original is event-driven too, with no periodic redraw (**Verified**, decompile): `FUN_140787550` sets a 1 s countdown on the character (a new request restarts it), `FUN_140788a00` counts it down by the frame time and draws at most one portrait a frame (`FUN_140414b40`). Requests come from registering a portrait (`FUN_1404139b0`), the whole world's list on a load (`FUN_1405f5d10` -> `FUN_140412870`), an appearance rebuild (`FUN_140539020`), and attaching or removing an item of some kinds only (`FUN_14052e0f0`, `FUN_14052e290`, filter `FUN_14052dff0`), plus `FUN_14052bba0`, `FUN_140538360`, `FUN_1405334d0` (their meaning: **Unknown**). Meitou has neither the delay nor the one-a-frame limit.
 
 ### Meitou stage and portraits
 
