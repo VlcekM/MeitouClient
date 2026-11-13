@@ -1003,7 +1003,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   a booking or a witnessed crime; engine: the countdown), else after 45 s of being seen (engine: one meter per target,
   rate not decoded); only the nearest free police-like looker acts. MILITARY threshold: engine 2000 (original 4000 or 2000);
   the police-like NPCs of the five towns `CrimeInstallTests` loads are MILITARY (**Observed**).
-  A police-like NPC in its own town acts on an escaped prisoner (`CharacterCold.Escaped`) it sees. `AggroSystem` no longer
+  A police-like NPC in its own town acts on an escaped prisoner (`CharacterCold.Escaped`) it sees, unless a disguise hides it (`EscapeShows`). `AggroSystem` no longer
   attacks wanted characters.
 - **Spotting talks** (`ArrestSystem.Talk`, the dialogue system, while its event lines are on): the looker fires event 44 (escapee: 45) at the target
   (`DialogueSystem.FireEvent`, a bubble now) and the data decides ([economy 11.7](game/economy.md#117-arrest)): DA 29 arrests (`ArrestFromDialogue`,

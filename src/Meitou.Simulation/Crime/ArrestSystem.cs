@@ -550,6 +550,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     #region Spotting
 
     /// <summary>
+    /// Whether lookers can tell an escaped prisoner: event 45's test in <c>FUN_140859680</c> (<b>Verified</b>) wants the escaped flag and either
+    /// no disguise level at all (status <c>+0x100</c> at 0: any uniform piece hides it, not only a working disguise) or a running blown cooldown
+    /// (<c>+0x110</c>).
+    /// </summary>
+    static bool EscapeShows(CharacterCold c) => c.Escaped && (c.RecentlyWanted > 0 || c.DisguiseLevel <= 0);
+
+    /// <summary>
     /// The spotting pass over the suspects in slot order: slave catching, the recognition meter from the lookers that see the target, then event
     /// 44/45 or the engine's arrest, and a hunt for a seen bounty.
     /// </summary>
@@ -591,7 +598,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 // A working disguise hides the bounty: only a looker that sees through it recognises it (Disguise; disguiseMods' bounty branch needs
                 // no disguise level).
                 bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
-                bool escapee = c.Escaped && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
+                bool escapee = EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = HuntsFor(wc, c);
                 if (!spots && !escapee && !hunts) continue;
                 float v = world.Sight.Sees(w, s, next[w].Position, at, Settings.SpotRange, sneaking ? stealth : -1);

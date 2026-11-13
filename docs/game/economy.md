@@ -543,7 +543,9 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   (`FUN_140856cb0`, fires above 1.0; rate `5 + 40 * k`, `k` a 1..2 value from the target's stats scaled by status factors 0.5 / 0.6 /
   0.75 and x2, not decoded); not while the target is carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44). The same function
   handles escaped slaves (events 36 / 40). `EV_ESCAPED_PRISONER_SPOTTED` (45) fires in `FUN_140859680` for a target with the
-  escaped flag, seen by a police-like looker (or one of a bandit town's faction) in his own town.
+  escaped flag, seen by a police-like looker (or one of a bandit town's faction) in his own town, only while the target's disguise
+  level (`+0x100`) is 0 or its blown cooldown (`+0x110`) runs (**Verified**: any uniform piece hides an escapee, not only a working
+  disguise) and it is not imprisoned. Meitou: `ArrestSystem.EscapeShows`.
 - **Bounty hunters** (**Verified** by probe): squads "Bounty hunters wandering between towns", "Bounty hunters low", "Bounty Hunter
   Solo Shek", rebirth "Bounty hunters" (faction Bounty Hunters, `legal system` United Cities) run "hang out in a bar" / "Wandering
   from town to town" / "Patrol map (short range) LOOTING", none of which has goal 204 or a cage goal. Their dialogue answers
