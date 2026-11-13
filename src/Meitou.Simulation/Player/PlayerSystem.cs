@@ -222,12 +222,14 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     }
 
     /// <summary>
-    /// Turns a grid item of one of the player's characters a quarter in place (<see cref="Items.RotateItem"/>).
+    /// Turns a grid item a quarter in place (<see cref="Items.RotateItem"/>) in a character window the player has open: one of the player's
+    /// characters, or the open loot's body.
     /// </summary>
     static void RotateItem(World world, Items.RotateItem rotate)
     {
         if (!world.Characters.TryResolveNext(rotate.Character, out int slot)) return;
-        if (world.Characters.Cold(slot) is not { IsPlayer: true, Inventory: { } inventory }) return;
+        if (world.Characters.Cold(slot) is not { Inventory: { } inventory } cold) return;
+        if (!cold.IsPlayer && world.SystemOf<Carrying.CarrySystem>()?.OpenLoot(world)?.Body != rotate.Character) return;
 
         Items.InventoryCommands.Rotate(inventory, rotate.Item);
     }

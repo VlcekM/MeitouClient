@@ -388,7 +388,7 @@ sealed class InventoryWindows(PlayerInterface player)
 
     /// <summary>
     /// The Rotate item control at <paramref name="p"/> (docs/game/ui-screens.md "Rotating an item"): turns the held item a quarter, else the grid
-    /// item under the pointer in a window of one of the player's characters. False when there is nothing to turn there (the control is then free for
+    /// item under the pointer in a character's window (one of the player's, or the open loot's body). False when there is nothing to turn there (the control is then free for
     /// what else it is bound to, the camera's orbit by default).
     /// </summary>
     internal bool RotateAt(Vector2 p)
@@ -415,12 +415,12 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// Turns grid item <paramref name="code"/> of a character window where it lies (<see cref="RotateItem"/>); false for a loot's window, a slot's
-    /// item or a square one.
+    /// Turns grid item <paramref name="code"/> of a character window (the loot's body's too) where it lies (<see cref="RotateItem"/>); false for a
+    /// slot's item or a square one.
     /// </summary>
     bool RotateInPlace(string screen, int code)
     {
-        if (IsLootWindow(screen) || WindowCharacter(screen) is not { IsPlayer: true, ItemGrid: { } grid } owner) return false;
+        if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner) return false;
         if (grid.Items.FirstOrDefault(i => i.Index == code) is not { } item) return false;
         if (!InventoryCommands.IsGridSection(item.Section) || item.Width == item.Height) return false;
 

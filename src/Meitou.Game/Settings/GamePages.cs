@@ -710,7 +710,7 @@ sealed class GamePages(SettingsMenu menu)
 
         result.Add(new("Item rotation",
             "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the "
-            + "item under the pointer in your own characters' grids, so long items fit across. Worn items are never turned. In the game items "
+            + "item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items "
             + "cannot be turned. From ErasmianFolly's GetRotatedIdiot.",
             Toggle: new("Item rotation", () => menu.Config.RotateItems, SetRotateItems)));
     }
