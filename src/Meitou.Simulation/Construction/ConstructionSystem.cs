@@ -4,6 +4,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -408,9 +409,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             if (Place(world, plan) is { } site) placed.Add(site);
 
         TownForWalls(world, placed);
+        AssignFinalTowns(world, placed);
         AttachWalls(world.Buildings, Data, placed);
         // Once, with the last placed building's town (FUN_1404d72a0), not once per town the batch touched.
-        if (placed.Count > 0) TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
+        if (placed.Count > 0 && !placed[^1].InNoTown)
+            TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
 
         // Confirm ends by sending the selection to build the last building created (FUN_1404d72a0: order 2 through FUN_1407f9e20, Shift ignored).
         if (placed.Count > 0) OrderBuild(world, world.Player.Selection.ToArray(), Root(reg, placed[^1]), queued: false);
@@ -714,8 +717,74 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (data.LinksTogether || !data.CreatesPlayerTown) return 0;
         var town = reg.AddTown(site.Position + boundsSize, faction);   // the ghost's position plus its bounds' size (FUN_1404d6d90)
         foreach (var s in reg.All)
-            if (s.Owner == faction && NearestTown(reg, s.Position, AdoptRange) == town.Number) s.Town = town.Number;
+            if (s.Owner == faction && (s.ForeignTown is null || s.InNoTown) && NearestTown(reg, s.Position, AdoptRange) == town.Number)
+            {
+                s.Town = town.Number;
+                s.ForeignTown = null;
+                s.InNoTown = false;
+            }
         return town.Number;
+    }
+
+    /// <summary>
+    /// Resolves each placed site against the actual player-town radii after the ghost's candidate-town search; a site outside every player town gets
+    /// the canonical NO_TOWN handle. A parent in a level building keeps its existing NPC-town association.
+    /// </summary>
+    void AssignFinalTowns(World world, List<BuildSite> placed)
+    {
+        foreach (var site in placed)
+        {
+            if (site.Parent is { } parent)
+            {
+                if (world.Buildings.Find(parent) is { } home)
+                {
+                    site.Town = home.Town;
+                    site.ForeignTown = home.ForeignTown;
+                    site.InNoTown = home.InNoTown;
+                    continue;
+                }
+
+                if (LevelTownOf(world, parent, site.Position) is { } centre && DistanceXz(centre, site.Position) <= JoinTownRange)
+                    continue;
+            }
+
+            var proposed = world.Buildings.FindTown(site.Town);
+            var town = proposed is { } candidate && candidate.Owner == world.Player.Faction
+                    && DistanceXz(candidate.Position, site.Position) <= candidate.Radius
+                ? candidate
+                : ClosestContainingTown(world, site.Position);
+            if (town is not null)
+            {
+                site.Town = town.Number;
+                site.ForeignTown = null;
+                site.InNoTown = false;
+                continue;
+            }
+
+            site.Town = 0;
+            site.ForeignTown = Hand.NoTown;
+            site.InNoTown = true;
+        }
+    }
+
+    /// <summary>
+    /// The closest player town whose actual radius contains <paramref name="at"/> (horizontal distance); null when none contains it.
+    /// </summary>
+    static PlayerTown? ClosestContainingTown(World world, Vector3 at)
+    {
+        PlayerTown? closest = null;
+        float best = float.MaxValue;
+        foreach (var town in world.Buildings.Towns)
+        {
+            if (town.Owner != world.Player.Faction) continue;
+
+            float distance = DistanceXz(town.Position, at);
+            if (distance > town.Radius || distance >= best) continue;
+
+            (closest, best) = (town, distance);
+        }
+
+        return closest;
     }
 
     /// <summary>

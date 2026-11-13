@@ -33,8 +33,9 @@ public class GoldenHashTests(ITestOutputHelper output)
                 0xDA3B5602FE390AAFUL, 0xC79F375D67DD2472UL],
         ["crime"] = [0x5F1E7FA7DCA3336FUL, 0x57BA11A34C4F7A6CUL, 0x688EEFA67194F2D8UL, 0xB92D3366FF5E3C8DUL, 0xB201D14B045E7150UL,
                 0x6B6B0C35D3FFF881UL],
-        ["build"] = [0x0BF1D83B68110C29UL, 0x8CDF4E3FDDB903F9UL, 0x6709321EE82A44C3UL, 0xB3CE185610D2C597UL, 0x6F72AD8287A51649UL,
-                0xE022324A21B2E6F4UL, 0x4EA708C861457CBCUL, 0xE2979945B2E5291DUL],
+        // NO_TOWN is now hashed for new wilderness placements; refreshed on Linux, Windows verification remains outstanding.
+        ["build"] = [0x0BF1D83B68110C29UL, 0x7A9C9611B54FBDE2UL, 0xDDDD08F79CFCFA98UL, 0x52AE84471B4C087BUL, 0x2D7F1497E07AAD59UL,
+                0xD8ADDC8F368EBAEAUL, 0x755B4618A26657CEUL, 0x63E9859D5B5674D9UL],
         ["dialogue"] = [0x3490F7D063916E12UL, 0x9165C58C27428685UL, 0x3945A13DE6585665UL, 0xEACC172C541DFE42UL, 0xF7399D1586A7168EUL,
                 0x19A50D35A2EFE793UL],
         ["ai"] = [0x2F2DEF3752748483UL, 0x0977E18299290134UL],
@@ -122,6 +123,7 @@ public class GoldenHashTests(ITestOutputHelper output)
     {
         var run = Scenarios.Single(s => s.Name == name).Run;
         var one = run(1);
+        output.WriteLine($"[\"{name}\"] = [{string.Join(", ", one.Select(h => $"0x{h:X16}UL"))}],");
 
         Assert.Equal(one, run(4));
         Assert.Equal(one, run(16));

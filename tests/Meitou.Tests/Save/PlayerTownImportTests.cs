@@ -150,7 +150,7 @@ public class PlayerTownImportTests
     public void A_handle_a_non_player_building_carries_keeps_the_building_in_that_town(string carrierOwner, bool carried, bool noTown)
     {
         var builder = new SaveBuilder(7);
-        var handle = new Hand((int)FcsRecordType.Town, 511, -1064864767, 0, 0);
+        var handle = new Hand((int)FcsRecordType.Town, 510, 55, 0, 0);
         var record = new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building };
         var db = new GameDatabase();
         var file = new FcsFile();
@@ -183,6 +183,38 @@ public class PlayerTownImportTests
         Assert.Equal(noTown, site.InNoTown);
         BuildingSave.Write(builder.Game, world, Player);
         Assert.Equal(carried ? handle : Hand.Null, Hand.Read(zone.BuildingStates.First(s => s.StringId != "carrier-state"), "town"));
+    }
+
+    /// <summary>
+    /// NO_TOWN is a fixed live handle, including in a new save with no faction-less level buildings carrying it.
+    /// </summary>
+    [Fact]
+    public void The_canonical_no_town_handle_round_trips_without_a_non_player_carrier()
+    {
+        var builder = new SaveBuilder(7);
+        var db = new GameDatabase();
+        var file = new FcsFile();
+        file.Records.Add(new FcsRecord { StringId = "building", RecordType = FcsRecordType.Building });
+        db.Apply(file, "test.mod");
+        using (var source = World())
+        {
+            var site = Site("1-zone16.16-INGAME", new Vector3(100, 300, 100), 0);
+            site.ForeignTown = Hand.NoTown;
+            site.InNoTown = true;
+            source.Buildings.Add(site);
+            BuildingSave.Write(builder.Game, source, Player);
+        }
+
+        using var world = World();
+        Assert.Equal(1, BuildingSave.Read(builder.Game, world, db, Player, 7));
+        var read = Assert.Single(world.Buildings.All);
+
+        Assert.Equal(0, read.Town);
+        Assert.Equal(Hand.NoTown, read.ForeignTown);
+        Assert.True(read.InNoTown);
+        BuildingSave.Write(builder.Game, world, Player);
+        var state = Assert.Single(builder.Game.Zones.Values).BuildingStates.Single();
+        Assert.Equal(Hand.NoTown, Hand.Read(state, "town"));
     }
 
     /// <summary>

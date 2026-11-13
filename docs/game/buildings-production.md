@@ -260,7 +260,34 @@ shows the first failing message in this order (**Verified** unless marked):
   No residents: the template lists none, and the resident pick (`Town::chooseResidents` `FUN_1409370d0`, from the building
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
-- **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`, `FUN_1406bd000`): the saved `town` handle is resolved as a handle; when its town was removed or never existed, the building stores the canonical null town. A handle that DOES resolve to a town that is no player outpost keeps the building there (**Observed**, original `Beep Fan Club 1` and its dismantle result, round 5): a level town's handle, or NO_TOWN's (type 13, shared by the 176 faction-less buildings of the whole world, 140000 x 99000 apart, and by the player's Wind Generator II `1099-zone28.30-INGAME`, a generator built outside every radius). The refit does not count such a building for the nearest outpost (excluding 1099 reproduces Goonrock's saved 2545.56 exactly, counting it gives 2758.76), and a generator in NO_TOWN joins no frame (NO_TOWN is no frame). Meitou: `BuildSite.ForeignTown` (a player building whose handle a non-player building state or town state of the save carries; written back as read), `InNoTown` (the carrier is `nofac`), `TownLookup.KeyOf` gives such a building `LevelOwned` and `ProductionSystem.PowerTown` gives NO_TOWN `NoPowerTown`. A building Meitou places outside every town keeps town 0 (the original's NO_TOWN at placement is **Unknown**). It is not reassigned by position on first use, a tick, another placement or dismantling. It is absent from the player-town panel until a refit: the next reassessment resolves a building with no town by the NEAREST non-nest town (any owner, no cap; `FUN_1400f6c20`) and counts it for that town's centre, radius and emptiness, and a dismantle of it reassesses that town (Meitou `TownLookup.KeyOf`; the site keeps `Town` 0; a bought NPC-town house is of its level town and never counted).
+- **Town at materialization** (**Verified**, GOG executable: placement commit `0x1404d6c40`, building creation
+  `0x14057c610`, containment lookup `0x140927fd0`; decompile names `FUN_1404d72a0`, `FUN_14057cc70`,
+  `FUN_140928890`): the 5000-unit ghost lookup above proposes a town; creation rejects a player town when the
+  building's root position is outside its actual radius (X/Z, boundary included). It then chooses the nearest
+  containing non-nest town; no containing town gives the live `NO_TOWN` object. Its fixed handle is
+  `(TYPE=13, C=511, CS=-1064864767, I=0, S=0)` (**Verified**, GOG `TownNull` constructor `0x140934720`,
+  decompile `FUN_140934fe0`, and the zero initial slot/serial from `RootObjectBase`; **Observed** in the original's
+  saved Wind Generator II `1099-zone28.30-INGAME`). NO_TOWN contributes to no outpost radius or power frame.
+  Meitou: `ConstructionSystem` checks the actual radius after the ghost/wall town passes and records `Hand.NoTown`
+  in `BuildSite.ForeignTown` with `InNoTown`; furniture inherits its placed parent's town state.
+- **Later adoption** (**Verified**, GOG founding path `0x1404d6730`, decompile `FUN_1404d6d90`): founding an
+  outpost explicitly moves existing player buildings into it when their town is a player town or NO_TOWN and their
+  nearest town of any faction within 8000 is the new one. An NPC-town building is excluded. Meitou clears the old
+  foreign handle and NO_TOWN flag when adopting. Merely extending a town's radius over a NO_TOWN building does
+  not adopt it: refit finds members by their existing resolved town, not by containment (`FUN_1405488f0`,
+  `FUN_1409fb880`, `FUN_1400f6c20`); its live NO_TOWN handle keeps resolving to NO_TOWN. Reassessment for a
+  last-placed NO_TOWN building does nothing (`TownNull` slot 77 `FUN_1409510d0` returns null;
+  `FUN_14054d080` requires a town).
+- **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`,
+  `FUN_1406bd000`, `FUN_1400f6c20`, `FUN_1409f9100`): a null or truly dangling handle (such as a removed
+  outpost) resolves to the nearest non-nest town, any owner and no distance cap, for refit, emptiness,
+  reassessment and power. A live level-town or NO_TOWN handle keeps that membership instead. Meitou preserves
+  it through `BuildSite.ForeignTown`, with `InNoTown` for NO_TOWN; `TownLookup.KeyOf` excludes it from player
+  refits and `ProductionSystem.PowerTown` excludes NO_TOWN from grids. `BuildingSave` recognizes the canonical
+  NO_TOWN handle even in a new save with no faction-less building carrying it, and writes it back unchanged.
+  A loaded null/dangling handle keeps `Town=0` and the nearest-town fallback; it remains distinct from a new
+  townless placement. **Observed**, original save and dismantle result: excluding generator 1099 reproduces
+  Goonrock's saved radius 2545.56 exactly; counting it gives 2758.76.
 
   **Research** (**Observed**, `FUN_14029be00` / `FUN_14029b8d0`; faction accessor `FUN_140594640` verified from executable bytes): bench level and operated progress require a player-owned bench, not a resolved town. Meitou likewise permits completed player benches in NPC houses and with missing town handles. No unresolved-town flag is needed. Exact powered-bench throughput remains **Unknown**.
 
