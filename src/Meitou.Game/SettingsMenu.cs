@@ -41,8 +41,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// The pages, in their buttons' order (the indices of <see cref="Page"/>).
     /// </summary>
-    static readonly string[] Pages =
+    internal static readonly string[] Pages =
         ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
+    /// <summary>
+    /// The Graphics page, the one with tabs (<see cref="GraphicsPages"/>).
+    /// </summary>
+    internal const int GraphicsPageIndex = 1;
     /// <summary>
     /// The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.
     /// </summary>
@@ -206,6 +210,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// Draws the menu's controls.
     /// </summary>
     internal SettingsCanvas Canvas => field ??= new(this);
+    /// <summary>
+    /// The header's search box and its results.
+    /// </summary>
+    internal SettingsSearch Search => field ??= new(this);
 
     /// <summary>
     /// A drop-down: its options, the chosen one, and what choosing does.
@@ -297,6 +305,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             ActiveChoice = null;
             ResetPending = false;
             PresetNaming.Open = false;
+            Search.Clear();
             Focus = -1;
             Notice = "";
             EditingNumber = null;
@@ -326,6 +335,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         GraphicsPage = tab;
         ActiveChoice = null;
         PresetNaming.Open = false;
+        Search.Clear();
         ScrollOffset = ScrollTarget = 0;
     }
 
@@ -353,6 +363,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         ActiveChoice = null;
         Rebinding = null;
         Notice = "";
+        Search.Clear();
     }
 
     /// <summary>
@@ -885,20 +896,33 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The rows of the page shown.
+    /// The rows shown: the search's results while it has a query, else the page's, the Display and Graphics ones folded into features
+    /// (on Display, the upscaler's and the HDR output's settings under their rows).
     /// </summary>
     internal List<Entry> Entries()
     {
-        if (Page == 1) return GraphicsRows(GraphicsPages[GraphicsPage]);
+        if (Search.Active) return Search.Results();
+
+        var rows = PageRows(Page, GraphicsPage);
+
+        return Page is 0 or GraphicsPageIndex ? Grouping.Grouped(rows) : rows;
+    }
+
+    /// <summary>
+    /// The rows of page <paramref name="page"/> (of its tab <paramref name="tab"/> on Graphics) in their order, unfolded.
+    /// </summary>
+    internal List<Entry> PageRows(int page, int tab)
+    {
+        if (page == GraphicsPageIndex) return GraphicsRows(GraphicsPages[tab]);
 
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = Values.Sliders
-            .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[Page] && ReliefSliderShown(s.Label))
+            .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[page] && ReliefSliderShown(s.Label))
             .OrderBy(s => RowOrder(CatalogueKey(s.Label)))
             .Select(SliderEntry)
             .ToList();
 
-        switch (Page)
+        switch (page)
         {
             case 0:
                 return DisplayRows(result);
@@ -926,7 +950,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A Graphics tab's rows: its switches, then its sliders (look rows marked against the look), grouped by feature.
+    /// A Graphics tab's rows: its switches, then its sliders (look rows marked against the look), in their features' order.
     /// </summary>
     List<Entry> GraphicsRows(string section)
     {
@@ -966,7 +990,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             .OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)
             .Select(Restarting);
 
-        return Grouping.Grouped([.. grouped]);
+        return [.. grouped];
     }
 
     /// <summary>
@@ -999,7 +1023,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their
-    /// sliders, and the upscaler's and the HDR output's settings fold under their rows.
+    /// sliders.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
@@ -1021,10 +1045,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         result.RemoveAll(e => !ShownNow(e));
         result = [.. result.OrderBy(e => RowOrder(e.Raw ?? ""))];
-        result = [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
 
-        // As the Graphics tabs: a feature's settings fold under its row (HDR output, the upscaler).
-        return Grouping.Grouped(result);
+        return [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
     }
 
     /// <summary>
@@ -1137,6 +1159,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (button != MouseButton.Left) return true;
 
+        // A press anywhere leaves the search box; one on it focuses it again.
+        Search.Focused = false;
+
         if (EditingNumber is not null)
         {
             if (NumberBounds.Contains(at.X, at.Y)) return true;
@@ -1230,7 +1255,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return true;
         if (ActiveChoice is { } choice)
             ChoiceScroll = Math.Clamp(ChoiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
-        else if (Page == ModsPageIndex && ModsPage.ModsDetail.Contains(Pointer.X, Pointer.Y))
+        else if (Page == ModsPageIndex && !Search.Active && ModsPage.ModsDetail.Contains(Pointer.X, Pointer.Y))
             ModsPage.ModsDetailScroll -= steps * 40;
         else ScrollTarget = Math.Clamp(ScrollTarget - steps * 60 * Scale, 0, MaxScroll);
 
@@ -1267,6 +1292,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 ResetPending = false;
             }
             else if (ActiveChoice is not null) ActiveChoice = null;
+            else if (Search.Active) Search.Clear();
             else Visible = false;
 
             return true;
@@ -1306,11 +1332,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A key: the preset name dialog, else the typed value's keys (Esc, Enter, Tab, the caret and selection), else as without Ctrl.
+    /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, the caret and
+    /// selection), else as without Ctrl.
     /// </summary>
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
+        if (Search.Focused && Visible) return Search.OnKey(key);
+        if (key == Key.F && ctrl && Visible && EditingNumber is null && Rebinding is null) return Search.Begin();
         if (EditingNumber is null) return KeyDown(key, shift);
 
         switch (key)
@@ -1363,13 +1392,19 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A typed character: to the preset name dialog, else to a typed value (digits and the number's signs).
+    /// A typed character: to the preset name dialog, else to the search box, else to a typed value (digits and the number's signs).
     /// </summary>
     public void TextInput(char value)
     {
         if (PresetNaming.Open && Visible)
         {
             PresetNaming.OnText(value);
+            return;
+        }
+
+        if (Search.Focused && Visible)
+        {
+            Search.OnText(value);
             return;
         }
 
@@ -1620,13 +1655,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Controls.Add(new("settings-close", "Button", close, "", "settings:close", "Kenshi_CloseButtonSkin", true,
             new Dictionary<string, string>(), Vector4.Zero));
         Hits.Add(new(close, () => Visible = false, Label: "Close"));
+        Search.DrawBox();
         Canvas.Rect(Canvas.R(20, 44, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
         Canvas.Rect(Canvas.R(192, 56, 1, 610), SettingsCanvas.MainInk with { W = 0.12f });
 
         for (int i = 0; i < Pages.Length; i++)
         {
             int index = i;
-            Canvas.Button(Pages[i], Canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), Page == i);
+            Canvas.Button(Pages[i], Canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), Page == i && !Search.Active);
         }
 
         Canvas.Text(Canvas.Meitou ? "MEITOU" : "FAITHFUL", Canvas.R(28, 592, 148, 18), 11, SettingsCanvas.MutedInk);
@@ -1636,15 +1672,15 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The page's title, the Graphics page's look bar and tabs, its entries (or the mods) and the scroll bar.
+    /// The page's title, the Graphics page's look bar and tabs, its entries (or the mods, or the search's results) and the scroll bar.
     /// </summary>
     void DrawPage()
     {
         Canvas.Surface(Canvas.R(212, 56, 888, 34), "paper");
-        Canvas.Text(Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        Canvas.Text(Search.Active ? "Search results" : Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
         float top = 98;
 
-        if (Page == 1)
+        if (Page == GraphicsPageIndex && !Search.Active)
         {
             // The Look and Quality rows (LookBar), then the tabs, one per subject, on two rows across the page.
             LookBar.DrawLookBar();
@@ -1669,7 +1705,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         Viewport = Canvas.R(212, top, 888, 666 - top);
-        if (Page == ModsPageIndex) ModsPage.DrawMods();
+        if (Page == ModsPageIndex && !Search.Active) ModsPage.DrawMods();
         else Canvas.DrawEntries(top);
 
         Motion.AnimationScope = "chrome";

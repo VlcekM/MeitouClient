@@ -16,6 +16,10 @@ restart. Display and Graphics rows come from the launcher's catalogue (`Launcher
 value text, choices, impact, order), so the game and the [launcher](launcher.md#graphics) show them alike; the Tab panel slider
 only reads and writes the value.
 
+Search (`SettingsSearch`, the header box; a click or Ctrl+F focuses it): every row of every page but Mods whose name or hint holds each
+typed word (as written or translated) is listed, unfolded, under its page's name (Graphics > tab), with its live control. A row its
+effect hides is not found. Esc empties the box, then closes; a page button leaves the search.
+
 Mods (`ModsPage`): the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy
 button for the selected mod and one for all problems; a summary line under the version text opens it. Separator files (`[1]---[...]---.mod`) are listed without detail.
 Under a mod's row, a Settings group holds the settings its code registered (`ModSettingsRows`, [modding](modding.md), "Settings"),
