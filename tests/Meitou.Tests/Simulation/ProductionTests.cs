@@ -239,6 +239,11 @@ public class ProductionTests
         return tank;
     }
 
+    /// <summary>
+    /// The record of the installed Wind Generator, by name; null when the data set has none.
+    /// </summary>
+    static string? WindGeneratorId(GameDatabase db) => db.OfType(FcsRecordType.Building).FirstOrDefault(r => r.Name == "Wind Generator")?.StringId;
+
     sealed class Rig : IDisposable
     {
         public SimWorld World { get; }
@@ -1236,13 +1241,15 @@ public class ProductionTests
         var db = InstallData.BaseGame;
 
         Assert.SkipWhen(db is null, "Kenshi install not found");
+        string? windId = WindGeneratorId(db!);
+        Assert.SkipWhen(windId is null, "this data set has no Wind Generator");
 
         var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0 }).StringId;
         var at = At + new Vector3(30, 0, 0);
         var zone = new ZoneCoordinate(32, 32);
         var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone)
         {
-            Buildings = [new TownBuilding("wind", "1999-gamedata.base", "Wind Generator", at, 0, false, false, []) { Zone = zone }],
+            Buildings = [new TownBuilding("wind", windId!, "Wind Generator", at, 0, false, false, []) { Zone = zone }],
         };
         var population = new PopulationData { Db = db, Sites = [site], Factions = [] };
         using var rig = new Rig(db, GameConstants.FromDatabase(db), [consumer], town: 0, population: population);
@@ -1266,13 +1273,15 @@ public class ProductionTests
         var db = InstallData.BaseGame;
 
         Assert.SkipWhen(db is null, "Kenshi install not found");
+        string? windId = WindGeneratorId(db!);
+        Assert.SkipWhen(windId is null, "this data set has no Wind Generator");
 
         var consumer = db!.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is
             { IsConsumer: true, IsLight: false, Farm: null, PowerOperators: 0, PowerOutput: -40 }).StringId;
         var turret = db.OfType(FcsRecordType.Building).First(r => MachineData.From(db, r) is { Function: 12, PowerOutput: -5 }).StringId;
         var at = At + new Vector3(30, 0, 0);
         var zone = new ZoneCoordinate(32, 32);
-        var buildings = new List<TownBuilding> { new("wind", "1999-gamedata.base", "Wind Generator", at, 0, false, false, []) { Zone = zone } };
+        var buildings = new List<TownBuilding> { new("wind", windId!, "Wind Generator", at, 0, false, false, []) { Zone = zone } };
         for (int i = 0; i < turrets; i++) buildings.Add(new TownBuilding("turret" + i, turret, "Turret", at, 0, false, false, []) { Zone = zone });
         var site = new TownSite(0, new TownData { Id = "npc", Name = "Npc Town", Type = TownType.Town }, at, zone) { Buildings = buildings };
         var population = new PopulationData { Db = db, Sites = [site], Factions = [] };

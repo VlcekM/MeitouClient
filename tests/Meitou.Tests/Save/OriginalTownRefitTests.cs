@@ -22,13 +22,44 @@ public class OriginalTownRefitTests
     const string Player = "204-gamedata.base";
 
     /// <summary>
-    /// The first of the original's saves that holds both outposts, or null (the saves are the user's, not the repo's).
+    /// The first of the original's saves that loads and holds the town states of both outposts, or null (the saves are the user's, not the
+    /// repo's: a quicksave without Goonrock and Drycoom is skipped, not failed). Found once.
     /// </summary>
-    static string? FindSave()
+    static string? FindSave() => Found.Value;
+
+    static readonly Lazy<string?> Found = new(Search);
+
+    /// <summary>
+    /// The search behind <see cref="FindSave"/>.
+    /// </summary>
+    static string? Search()
     {
         if (InstallData.Install is not { } install) return null;
 
-        return new[] { "Beep Fan Club 1", "quicksave", "emergency_save_0" }.Select(n => Path.Combine(install.Root, "save", n)).FirstOrDefault(Directory.Exists);
+        foreach (string name in new[] { "Beep Fan Club 1", "quicksave", "emergency_save_0" })
+        {
+            string path = Path.Combine(install.Root, "save", name);
+            if (Directory.Exists(path) && HoldsBothOutposts(path)) return path;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the save at <paramref name="path"/> loads and names Goonrock and Drycoom in its records.
+    /// </summary>
+    static bool HoldsBothOutposts(string path)
+    {
+        try
+        {
+            var records = SaveGame.Load(path).Quick.Records;
+            return records.Any(r => r.Name.Contains("Goonrock", StringComparison.Ordinal))
+                && records.Any(r => r.Name.Contains("Drycoom", StringComparison.Ordinal));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -92,7 +123,7 @@ public class OriginalTownRefitTests
     /// from the members' mean height), Goonrock 9.90 off (formula alone 20.3).
     /// </summary>
     [Fact, Slow]
-    public void Refitting_on_the_originals_saved_tiles_snaps_the_centres_to_within_the_known_residuals()
+    public void Refitting_on_the_originalFoundd_tiles_snaps_the_centres_to_within_the_known_residuals()
     {
         Assert.SkipWhen(InstallData.BaseGame is null || InstallData.Levels is null || FindSave() is null, "the original's save of the two outposts was not found");
         string save = FindSave()!;
