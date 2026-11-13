@@ -363,7 +363,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
   in the dark windows. The bar's own people stand and sit in it: its residents' leader (Barman) at a shopkeeper node and first squad member (Ninja Guard) at a guard
   node, 3 patrons of the town's `bar squads` on the next seats and 3 at general nodes, all beyond the same 41, rolled with fixed seeds. Their clips run at the
-  record's `play speed`; one without `loop` holds its last frame, as the simulation holds a one-shot clip, so a mod's sit-down seat clip is not replayed (#242);
+  record's `play speed`, a seat's at the sitter's 0.55 of it ([animation](animation.md#at-a-machine-or-on-a-seat)); one without `loop` holds its last frame, as the simulation holds a one-shot clip, so a mod's sit-down seat clip is not replayed (#242);
   the edited character's stance preview follows the same rule.
   Base data has none: its seat clips loop (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data).
   The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`). The bar stands on

@@ -202,7 +202,7 @@ bed's functionality `animation` clip (field `+0x408`, `sleepinbed` in the base d
 record's `play speed`); an action in progress (`gotobed`) runs by the normal rules. In a cage the functionality supplies three clips, entry 0 of each list (`UseableStuff::UseableStuff` `FUN_1402a0900`, **Verified**): `+0x408` `animation`
 (the Cage: `stand 1`), `+0x410` `animation KO` (`foetal`), `+0x418` `animation dazed` (`sitting dazed`). The pick: when character vfunc `0x30` (unconscious) is true, the KO clip at
 rate 1.0; else `Character+0x51c` (`MedicalSystem::dazedOrAlert`, KenshiLib name **Observed**) at or under 0.05, or a leg-collapse state, gives `+0x418` at rate 0.025, at or under 0.2 `+0x418` at 0.5, else `+0x408` at 0.5; a running `stand 1` action is dropped first.
-Meitou: a sleeper plays `CharacterCold.OperateClip` as a held clip at its `play speed`; a prisoner (`CharacterCold.CageClips`) plays the KO clip while down, the dazed clip
+Meitou: a sleeper plays `CharacterCold.OperateClip` as a held clip at that flat 0.1 (`AnimationSystem.BedRate`; #634: a mod's `sleepinbed` `play speed` 0.2 does not speed it up); a prisoner (`CharacterCold.CageClips`) plays the KO clip while down, the dazed clip
 with a leg down (engine reading of dazedOrAlert), else the idle clip, at the records' play speeds.
 
 ### At a machine or on a seat

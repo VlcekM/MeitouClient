@@ -134,6 +134,10 @@ public sealed class CharacterAnimation
     /// The factor the held clip's play speed is scaled by (the lock picker's skill speed); 1 for none.
     /// </summary>
     public float HeldRate = 1;
+    /// <summary>
+    /// <see cref="HeldRate"/> is the held clip's rate itself, whatever its record's play speed (a bed's clip). Derived, not hashed.
+    /// </summary>
+    public bool HeldFlat;
 
     #endregion
 
@@ -392,11 +396,22 @@ public sealed class AnimationSystem(
     #region Held clips
 
     /// <summary>
-    /// The rate an operator plays its machine's clip at, times the record's <c>play speed</c>: from <see cref="OperateRateUnskilled"/> at skill 0
-    /// to <see cref="OperateRateSkilled"/> at 100 of the machine's <c>stat used</c>, at most <see cref="OperateRateMax"/> (Verified,
-    /// Task_OperateMachine's update FUN_14035bc90; docs/animation.md "At a machine or on a seat").
+    /// The rate an operator plays its machine's clip at, times the record's <c>play speed</c>, at skill 0 of the machine's <c>stat used</c>, and so
+    /// a sitter's on a chair, which has no stat (Verified, Task_OperateMachine's update FUN_14035bc90; docs/animation.md "At a machine or on a
+    /// seat").
     /// </summary>
-    const float OperateRateUnskilled = 0.55f, OperateRateSkilled = 2, OperateRateMax = 1.5f;
+    public const float OperateRateUnskilled = 0.55f;
+
+    /// <summary>
+    /// The operating rate at skill 100, and the most it reaches (same source).
+    /// </summary>
+    const float OperateRateSkilled = 2, OperateRateMax = 1.5f;
+
+    /// <summary>
+    /// The rate of a bed's clip under a sleeper, whatever the record's <c>play speed</c> (Observed, the out-of-combat pick @ 140520500;
+    /// docs/animation.md "In a bed or a cage").
+    /// </summary>
+    const float BedRate = 0.1f;
 
     /// <summary>
     /// The rate of the clip of the machine or seat the character uses (<see cref="OperateRateUnskilled"/> and on): by its level in the machine's
@@ -1004,6 +1019,7 @@ public sealed class AnimationSystem(
         var lower = lowerScratch ?? [];
         var upper = upperScratch ?? [];
         a.HeldIndex = -1;
+        a.HeldFlat = false;
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal)
@@ -1154,7 +1170,8 @@ public sealed class AnimationSystem(
         if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain)
         {
             wanted.Add((lain, 1));
-            if (cold.LeavingBed) (a.HeldIndex, a.HeldRate) = (lain, -1);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
+            (a.HeldIndex, a.HeldRate, a.HeldFlat) = (lain, BedRate, true);
+            if (cold.LeavingBed) (a.HeldRate, a.HeldFlat) = (-1, false);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
         }
 
         // Out cold in a cage: its `animation KO` (the Cage's foetal; the out-of-combat pick @ 140520500, docs/animation.md "In a bed or a cage").
@@ -1211,6 +1228,10 @@ public sealed class AnimationSystem(
         {
             a.HeldIndex = held;
             a.HeldRate = HeldRateOf(task, cold, held, tick);
+
+            // In a bed (the only place the sleep task holds a clip): the bed's flat rate.
+            if (task == CharacterTask.Sleep && !cold.LeavingBed) (a.HeldRate, a.HeldFlat) = (BedRate, true);
+
             wanted.Add((held, 1));
             a.Idle = -1;
         }
@@ -1650,6 +1671,7 @@ public sealed class AnimationSystem(
             }
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
+            else if (layer.Definition == a.HeldIndex && a.HeldFlat) layer.Time += dt * a.HeldRate;
             else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
 
             // a one-shot clip holds its last frame
