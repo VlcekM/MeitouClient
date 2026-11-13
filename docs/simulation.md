@@ -872,6 +872,9 @@ sneaking culprit is seen only once the witness's spot meter is full ([perception
 the aggro scan's meters, kept for every NPC looker, not saved).
 NPC culprits: an NPC's non-defensive attack order, and each of its landed blows, sets a pending Assault (not an
 animal's; the victim may be a player character), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); both are booked like a player's (**Verified**, the witness function `FUN_140854d10` ends in the booking call with no player test; a Bandit, Diplomat or LawEnforcement class is never booked).
+Every witness that sees the culprit reacts, not only the first after the booking (the witness function runs per looker, `FUN_1408580d0`): with a
+stop there, a police 1480 off in sight range booked a slave hunter's assault at Sho-Battai's gate and the gate guards 40 away never reacted
+(**Observed**, headless, a player quicksave).
 The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same. A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running; not a Trespassing
 (an NPC gets one from a DA 33 in a private home), whose event-17 line only restarts a chase forever (#519). So a town's

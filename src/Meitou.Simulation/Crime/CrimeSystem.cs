@@ -421,8 +421,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // ("intruder law", DA 6 chase forever) needs no range, and repeating it only restarts the chase (#519).
             if (first || !c.IsPlayer && p.Code != CrimeCode.Trespassing && !wc.InCombat && IsPoliceLike(world, wc))
                 world.Defer(new Dialogue.DialogueEvent(witness, table.IdOf(culprit), WitnessEvent(world, wc, p)) { Tick = world.Tick + 1 });
+
+            // No stop once booked: the original runs the witness function per looker, so every witness reacts. A booking police far off
+            // (in sight range, too far for its lines) would otherwise keep the guards beside the crime from ever reacting.
             if (!p.Booked && IsPoliceLike(world, wc) && Factions.Books(wf)) Book(world, culprit, wf, witness);
-            if (p.Booked) return;
         }
     }
 
