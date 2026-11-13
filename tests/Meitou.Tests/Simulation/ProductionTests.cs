@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
@@ -14,6 +15,7 @@ using Meitou.Simulation.Movement;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
+using Meitou.Simulation.Towns;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using SimWorld = Meitou.Simulation.World;
 
@@ -314,6 +316,22 @@ public class ProductionTests
 
         public Machine Machine(int site) => World.Machines.Find(Sites[site])!;
         public void Dispose() => World.Dispose();
+    }
+
+    /// <summary>
+    /// <c>machines-power</c> prints the grid a complete power machine joins, also one with no town (it was null there).
+    /// </summary>
+    [Fact]
+    public void Machines_power_names_the_grid_of_a_machine_with_no_town()
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp]);
+        rig.World.RunTick();
+        var site = rig.World.Buildings.Find(rig.Sites[1])!;
+
+        using var doc = JsonDocument.Parse(TownReport.MachinesJson(rig.World, null));
+        var row = doc.RootElement.GetProperty("machines").EnumerateArray().First(m => m.GetProperty("site").GetString() == rig.Sites[1]);
+
+        Assert.Equal(rig.Production.GridOf(rig.World, site), row.GetProperty("grid").GetInt32());
     }
 
     // ------------------------------------------------------------------ determinism

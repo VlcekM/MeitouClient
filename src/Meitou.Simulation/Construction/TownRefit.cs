@@ -68,7 +68,7 @@ static class TownRefit
     /// (<see cref="RefitSnap"/>) where the walkability knows its faces, else the 2D closest walkable point (<see cref="WalkableSpots.Closest"/>);
     /// null when there is none (the town keeps its position).
     /// </summary>
-    static Vector2? Snap(IWalkability walk, Vector3 centre)
+    internal static Vector2? Snap(IWalkability walk, Vector3 centre)
     {
         if (walk.SurfaceFaces(centre, SnapReach) is { } faces)
             return RefitSnap.Snap(faces, centre) is { } snapped ? new Vector2(snapped.X, snapped.Z) : null;

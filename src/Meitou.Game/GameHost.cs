@@ -213,6 +213,10 @@ sealed partial class GameHost(
     /// </summary>
     internal AgentPlay AgentPlay = null!;
     /// <summary>
+    /// The agent control channel's town commands.
+    /// </summary>
+    internal AgentTowns AgentTowns = null!;
+    /// <summary>
     /// The agent control channel's world commands.
     /// </summary>
     internal AgentWorld AgentWorld = null!;
@@ -267,6 +271,7 @@ sealed partial class GameHost(
         DevConsoleHost = new(this);
         AgentChannel = new(this);
         AgentPlay = new(this);
+        AgentTowns = new(this);
         AgentWorld = new(this);
         PlayBench = new(this);
         ScreenshotScenes = new(this);
