@@ -369,13 +369,15 @@ sealed partial class GameHost
 
     /// <summary>
     /// The world's characters for a host without the player interface (the Metal loop): the same interpolation and ragdoll
-    /// blending as <see cref="FillDrawListCore"/>, without the editor previews and the portraits.
+    /// blending as <see cref="FillDrawListCore"/>, without the editor previews; the loop fills the portrait requests itself.
     /// </summary>
     internal void FillWorldDrawList(CharacterDrawList list)
     {
         var current = Session.CurrentSnapshot;
         IndexPrevious();
         float alpha = Session.SimulationAlpha;
+        GatherPortraitKeys(Gpu.Characters);
+        HatLooks.Begin();
         foreach (var c in current.Characters)
         {
             if (c.Appearance is null) continue;
@@ -401,7 +403,10 @@ sealed partial class GameHost
             BlendLayers(before, c, alpha, poses);
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
                 ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
-            list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer));
+            var look = HatLooks.WorldLook(c, out var hatless);
+            var instance = Drawn(c, look, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer);
+            list.Add(instance);
+            if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);
         }
     }
 
@@ -468,7 +473,7 @@ sealed partial class GameHost
     /// <summary>
     /// The draw key a character's portrait is drawn from: its own, or its hatless instance's (Hide hats, portraits only).
     /// </summary>
-    long PortraitKey(CharacterId id) => HatLooks.PortraitKey(DrawKey(id));
+    internal long PortraitKey(CharacterId id) => HatLooks.PortraitKey(DrawKey(id));
 
     /// <summary>
     /// A character beyond reach into the distant list: its look (with its tool), its snapshot place, and what loading and the kept textures read.
@@ -535,14 +540,24 @@ sealed partial class GameHost
     /// </summary>
     bool BeginDistant(CharacterDrawList list, WorldSnapshot current, CharacterRenderer? reachOf)
     {
-        _portraitKeys.Clear();
-        // A portrait drawn from the character's hatless instance (HiddenHatLooks) counts as the character's.
-        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key & ~HiddenHatLooks.KeyBit);
+        GatherPortraitKeys(reachOf);
         var distantKey = (current, current.Tick, worldEpoch: Saves.WorldEpoch);
         bool distant = reachOf is not null && distantKey != DistantFor;
         if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
         DistantFor = reachOf is null ? default : distantKey;
         return distant;
+    }
+
+    /// <summary>
+    /// The keys of the characters <paramref name="characters"/>' portrait requests name (none without it); a portrait drawn from the character's
+    /// hatless instance (<see cref="HiddenHatLooks"/>) counts as the character's.
+    /// </summary>
+    void GatherPortraitKeys(CharacterRenderer? characters)
+    {
+        _portraitKeys.Clear();
+        if (characters is null) return;
+
+        foreach (var r in characters.PortraitRequests) _portraitKeys.Add(r.Key & ~HiddenHatLooks.KeyBit);
     }
 
     /// <summary>

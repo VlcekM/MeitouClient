@@ -856,7 +856,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void CreateCharacters()
     {
         // Characters: WorldFrame.CreateGpu already made the `--crowd` harness; otherwise the live loop supplies the
-        // simulation's snapshot list. The player interface is not booted here, so the source has no editor previews/portraits.
+        // simulation's snapshot list. The player interface is not booted here, so the source has no editor previews.
         _characters = _worldGpu.Characters;
         if (_characters is not null) Console.WriteLine($"metal     crowd ready ({_characters.Assets} appearances)");
         else if (host.Scene.Database is { } characterDb && !host.GameOptions.NoPopulation)
@@ -2704,7 +2704,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _characters.PortraitRequests.Clear();
             if (_hud is not null)
                 foreach (var (member, cell) in _hud.PortraitBar.SquadBarMembers().Select((member, cell) => (member, cell)))
-                    _characters.PortraitRequests.Add(new PortraitRequest(host.DrawKey(member.Id), cell, member.PortraitSerial));
+                    _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
         }
         var hoverKeys = new List<(long Key, Vector4 Colour)>();
         bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Visible != true;
