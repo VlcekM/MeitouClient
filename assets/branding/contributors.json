@@ -28,8 +28,8 @@
     "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 7,
-    "areas": "Benchmarks, Crossbow tracers"
+    "commits": 8,
+    "areas": "Benchmarking, Crossbow bolt tracers"
   },
   "lucasskrewer": {
     "commits": 12,
