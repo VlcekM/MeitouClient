@@ -72,6 +72,10 @@ static class MeitouShadowShaders
         };
         // While set (kenshiLight, the traced sun's term): the cascades are left out; the rays hold their casters.
         bool msTraced = false;
+        // The cross product of the world position's derivatives (the surface's plane), taken by kenshiLight before a branch around the lookup (derivatives need
+        // the whole quad), and whether it is set: the lookup then uses it instead of its own.
+        vec3 msPlane = vec3(0.0);
+        bool msPlaneSet = false;
         uniform sampler2D uShadowTerrain;   // per world grid sample: (height of the shadow's top, distance to the occluder)
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
@@ -224,7 +228,7 @@ static class MeitouShadowShaders
         {
             if (uShadowOrigin.w < 0.5) return 1.0;
             // The surface's own plane (the triangle's, not the shading normal, which may carry a normal map), facing like n.
-            vec3 ng = cross(dFdx(world), dFdy(world));
+            vec3 ng = msPlaneSet ? msPlane : cross(dFdx(world), dFdy(world));
             float len = length(ng);
             ng = len > 1e-20 ? ng / len : n;
             if (dot(ng, n) < 0.0) ng = -ng;

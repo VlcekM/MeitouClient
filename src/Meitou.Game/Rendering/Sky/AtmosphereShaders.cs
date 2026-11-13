@@ -552,8 +552,18 @@ static class AtmosphereShaders
             vec3 sunBase = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world);
             vec3 shadowPoint = world + vec3(0.0, atmoShadowLift, 0.0);
             float tracedShare = atmoTracedShare(world);
+            vec3 ns = atmoSunNormal(n);
+            float nl = clamp(dot(ns, l), 0.0, 1.0);
+            // The sun's term multiplies the diffuse N.L (diffuseNl) and the glint (nl) alone: where both are 0 (a surface turned from the sun with no
+            // translucency), the sun is 0 (night, a fully clouded sun) or the surface shades itself out, no shadow lookup can change the colour.
+            // The lookup's plane comes from the derivatives of the world position, taken here where every lane of the quad is (not inside the branch).
+            #ifdef MEITOU_FRAGMENT
+            msPlane = cross(dFdx(world), dFdy(world));
+            msPlaneSet = true;
+            #endif
+            bool sunReaches = max(max(nl, max(diffuseNl.x, max(diffuseNl.y, diffuseNl.z))), 0.0) > 0.0 && max(sunBase.x, max(sunBase.y, sunBase.z)) > 0.0 && atmoSelfShadow > 0.0;
             // The sun shadow term (deferred.hlsl: lightColor * shadow); what the traced sun takes over leaves the colour, shadowed by the characters' layers alone.
-            vec3 sun = tracedShare < 1.0 ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
+            vec3 sun = tracedShare < 1.0 && sunReaches ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
             vec3 tracedSun = vec3(0.0);
             if (tracedShare > 0.0)
             {
@@ -561,10 +571,9 @@ static class AtmosphereShaders
                 tracedSun = sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * tracedShare;
                 msTraced = false;
             }
+            msPlaneSet = false;
             gloss = clamp(gloss, 0.0, 1.0);
             float roughness = 1.0 - gloss * 0.99, a = roughness * roughness, a2 = a * a;
-            vec3 ns = atmoSunNormal(n);
-            float nl = clamp(dot(ns, l), 0.0, 1.0);
             vec3 diffuse = ATMO_PI * diffuseNl * sun * fresnelDiffuse;
             vec3 h = normalize(v + l);
             float nh = clamp(dot(ns, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);

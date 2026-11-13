@@ -864,7 +864,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _characters = new CharacterRenderer(_ctx, host.Install, characterDb, host.Assets, host.CharacterRigs)
             {
                 DrawDistance = GameplaySettings.NpcRange(host.Install),
-                Source = host.FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = host.WorldOptions.CharacterLod,
+                Source = host.FillWorldDrawList, SettleFirst = true, GeneratedLod = host.WorldOptions.CharacterLod,
                 SkinShading = host.WorldOptions.SkinShading, SkinRaces = host.Config.SkinRaces, EnhancedIcons = host.WorldOptions.MeitouIcons,
                 PoseClock = () => host.RealTime.Elapsed.TotalSeconds,
             };

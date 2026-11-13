@@ -25,9 +25,100 @@ public sealed class MetalUploads : IGpuUploads
     public MetalUploads(MetalContext ctx) => this._ctx = ctx;
 
     /// <summary>
-    /// A new batch with its own command buffer; its copies run when it is disposed.
+    /// The batch the open <see cref="Scope"/> shares (made with the first batch begun in it), and the thread that opened the scope.
     /// </summary>
-    public IGpuUploadBatch Begin() => new MetalUploadBatch(_ctx);
+    MetalUploadBatch? _shared;
+    /// <summary>
+    /// Whether a scope is open, and the managed thread it belongs to: other threads' batches stay their own.
+    /// </summary>
+    bool _scoped;
+    int _scopeThread;
+
+    /// <summary>
+    /// A new batch with its own command buffer, whose copies run when it is disposed; inside a <see cref="Scope"/>, the scope's thread gets a
+    /// view of one shared batch instead, committed when the scope ends.
+    /// </summary>
+    public IGpuUploadBatch Begin()
+    {
+        if (!_scoped || Environment.CurrentManagedThreadId != _scopeThread) return new MetalUploadBatch(_ctx);
+        return new SharedBatch(_shared ??= new MetalUploadBatch(_ctx));
+    }
+
+    /// <summary>
+    /// Opens a scope on this thread: every batch begun here until it is disposed records into one command buffer (a queue holds 64 of them, and
+    /// <c>commandBuffer</c> blocks while it is full: one per 512 KB slab stalled the render thread for 8 to 17 ms). Disposing commits it. Scopes do not nest.
+    /// </summary>
+    public IDisposable Scope()
+    {
+        if (_scoped) return new NoScope();
+        (_scoped, _scopeThread) = (true, Environment.CurrentManagedThreadId);
+        return new OpenScope(this);
+    }
+
+    /// <summary>
+    /// The scope's end: commits the shared batch, if any was begun.
+    /// </summary>
+    void EndScope()
+    {
+        _scoped = false;
+        var shared = _shared;
+        _shared = null;
+        shared?.Dispose();
+    }
+
+    /// <summary>
+    /// A scope that does nothing (an inner one).
+    /// </summary>
+    sealed class NoScope : IDisposable
+    {
+        /// <summary>
+        /// Nothing to close.
+        /// </summary>
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// The open scope: its disposal ends it.
+    /// </summary>
+    sealed class OpenScope(MetalUploads uploads) : IDisposable
+    {
+        /// <summary>
+        /// Ends the scope.
+        /// </summary>
+        public void Dispose() => uploads.EndScope();
+    }
+
+    /// <summary>
+    /// A batch begun inside a scope: the scope's shared batch, whose disposal here commits nothing (the scope's end does).
+    /// </summary>
+    sealed class SharedBatch(MetalUploadBatch inner) : IGpuUploadBatch
+    {
+        /// <summary>
+        /// The shared batch's commands.
+        /// </summary>
+        public IGpuCommandList Commands => inner.Commands;
+
+        /// <summary>
+        /// Makes a texture through the shared batch.
+        /// </summary>
+        public GpuTexture Create(TextureDesc desc) => inner.Create(desc);
+
+        /// <summary>
+        /// Records a texture copy into the shared batch.
+        /// </summary>
+        public void Write(GpuTexture target, int level, int layer, in PixelRect region, ReadOnlySpan<byte> data) =>
+            inner.Write(target, level, layer, in region, data);
+
+        /// <summary>
+        /// Records a buffer copy into the shared batch.
+        /// </summary>
+        public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data) => inner.Write(target, offset, data);
+
+        /// <summary>
+        /// Nothing: the scope's end commits.
+        /// </summary>
+        public void Dispose() { }
+    }
 
     /// <summary>
     /// One upload batch: its copies are recorded into its own command buffer through a blit encoder, staged in a growing shared buffer.

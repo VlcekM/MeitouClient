@@ -190,7 +190,10 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   `MetalPipelines` (an `MTLRenderPipelineState` per description; depth clip mode is the *encoder's*
   on Metal, set when the pipeline binds), `MetalSamplers` (Metal's sampler has no LOD bias; the
   description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
-  blit copies from a shared staging ring, committed in order before the frame's own).
+  blit copies from a shared staging ring, committed in order before the frame's own; `IGpuUploads.Scope` lets the render thread's batches
+  share one command buffer, which `WorldTextureCache.Pump` uses: a queue holds 64 command buffers and `commandBuffer` blocks while it is full, so
+  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). Encoders are labelled with the
+  innermost `BeginLabel` (else the list's name), for Metal System Trace.
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
   the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or
   `pixelFormatView` usage, so Metal may compress it losslessly: its views are the base image), views (`NewTextureView`),
@@ -821,6 +824,12 @@ METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run
   clip space top-down). `RenderTargetsBottomUp` still selects the depth/post convention. UI scissor rectangles are
   top-left on Metal and bottom-up on Vulkan; using Vulkan's flip on Metal shifted clipped controls (the trader stock
   grid and HUD name plates) down by the panel height.
+- **Encoders and program state.** A render or compute encoder starts with no bindings, so `MetalCommandList.BeginRendering` advances the list's epoch
+  (`Invalidate`): `LegacyProgram.Flush` pushes its sets again once per epoch. Before, two passes of one program with the same bindings in one native
+  segment (the low-resolution particles' two depth passes) left the second encoder with no scene depth bound: the far depth stayed 0, the far draw
+  rejected every sprite, and dust was missing beside thin silhouettes (blue fringes in fog). **Observed** (owner, quarter and half size,
+  false-colour views of the upsample: the far depth was the reject value at every block, also at silhouettes); the fringes are gone after the change
+  (**Observed**, owner, in play at quarter and half size).
 - **Cube stand-ins.** A dummy cube's `TextureDesc.Layers` is 1: its six faces are the cube type's slices, not array
   layers. Passing 6 made `GpuTexture.View` ask for 36 slices and `MTL_DEBUG_LAYER=1` abort at the first cube
   sampler (the UI's first frame after the painter was added). `MetalContext.Dummy` now passes 1.

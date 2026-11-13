@@ -25,6 +25,11 @@ public sealed class MetalCommandList : IGpuCommandList
     /// </summary>
     readonly string _name;
     /// <summary>
+    /// The labels opened by <see cref="BeginLabel"/> and not yet closed; the innermost names the encoders made while it is open, so a GPU trace
+    /// (Metal System Trace) lists each pass by name.
+    /// </summary>
+    readonly Stack<string> _labels = new();
+    /// <summary>
     /// The command buffer the encoders record into.
     /// </summary>
     MTLCommandBuffer _command;
@@ -244,7 +249,12 @@ public sealed class MetalCommandList : IGpuCommandList
         }
 
         _render = _command.RenderCommandEncoder(descriptor);
+        _render.Label = EncoderLabel();
         _encoderSerial++;
+
+        // A new encoder has no bindings: a program that last pushed its sets to the encoder before must push them again (LegacyProgram.Flush skips
+        // a push in the same epoch; two passes of one program with the same bindings in one native segment read nothing in the second).
+        Invalidate();
         Array.Clear(_vertexBufferState);
         Array.Clear(_vertexOffsetState);
         Array.Clear(_fragmentBufferState);
@@ -1131,9 +1141,15 @@ public sealed class MetalCommandList : IGpuCommandList
 
     #region Labels
 
+    /// <summary>
+    /// The name of an encoder made now: the innermost open label, else the list's name.
+    /// </summary>
+    NSString EncoderLabel() => (NSString)(_labels.Count > 0 ? _labels.Peek() : _name);
+
     /// <inheritdoc/>
     public void BeginLabel(string name)
     {
+        _labels.Push(name);
         if (_render.NativePtr != IntPtr.Zero) _render.PushDebugGroup((NSString)name);
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PushDebugGroup((NSString)name);
         else _command.PushDebugGroup((NSString)name);
@@ -1142,6 +1158,7 @@ public sealed class MetalCommandList : IGpuCommandList
     /// <inheritdoc/>
     public void EndLabel()
     {
+        if (_labels.Count > 0) _labels.Pop();
         if (_render.NativePtr != IntPtr.Zero) _render.PopDebugGroup();
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PopDebugGroup();
         else _command.PopDebugGroup();
@@ -1163,6 +1180,7 @@ public sealed class MetalCommandList : IGpuCommandList
 
         EndCompute();
         _blit = _command.BlitCommandEncoder();
+        _blit.Label = EncoderLabel();
         _ownsBlit = true;
         return _blit;
     }
@@ -1205,6 +1223,7 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_render.NativePtr != IntPtr.Zero) throw new InvalidOperationException("a compute pass inside a rendering");
 
         _compute = _command.ComputeCommandEncoder();
+        _compute.Label = EncoderLabel();
         _encoderSerial++;
         _pushSent.Clear();
         _lastCompute = default;

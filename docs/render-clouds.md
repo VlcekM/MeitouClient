@@ -47,6 +47,12 @@ plane distance, spheres/beams ignored; Meitou `cloudfog` switch), else the swamp
 map before world/reflection shading. GI hits and shaft samples read this map only with `gihybrid`'s `clouds` part
 ([GI](render-gi.md) "Hybrid GI"; `AtmosphereShaders.CloudShadow`, the same function; look and cost **Unknown**).
 
+Row order: the march image, the history and the shadow map are looked up by clip position (`vNdc * 0.5 + 0.5`, the history's reprojection) and by world
+position (`(hit - origin) / span`), so their rows must run with `vUv`. Vulkan's targets do (row 0 at NDC -1); Metal's row 0 is NDC +1, so on Metal the
+three passes draw with `PostProcessShaders.VertexRowsDown` (clip y negated, `vUv` unchanged). **Observed** (owner, in play on Metal: the clouds look right
+with it): without it the shadow map was mirrored in z about the eye, and the history resolve paired each pixel's ray with the distance of the mirrored one
+(by code reading; the cloud shadows and the history's ghosting were not compared separately).
+
 ## Limits and verification
 
 Free camera inside/above slab does not occlude foreground geometry with clouds. Short shallow

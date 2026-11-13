@@ -340,11 +340,11 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void BuildShadingRate(Vector3 eye) { }
 
     /// <summary>
-    /// Applies the pending fog volumes and SSAO to the scene colour, when either is on.
+    /// Applies the pending light shafts and fog volumes and the SSAO to the scene colour, when any is on.
     /// </summary>
     public void ApplySsao()
     {
-        if (_sceneColour is null || (!_volumesPending && !Options.Ssao)) return;
+        if (_sceneColour is null || (!_volumesPending && !Options.Ssao && !_composite.ShaftsPending)) return;
         var cmd = (MetalCommandList)_ctx.BeginNative("post scene effects");
         _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams);
         _ctx.EndNative(cmd);
