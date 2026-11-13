@@ -1,5 +1,6 @@
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Towns;
 
 namespace Meitou.Game.DevTools.Agents;
@@ -29,6 +30,10 @@ sealed class AgentTowns(GameHost host)
         add("dismantle-site", "dismantle-site <site id>", "debug: dismantle one of the player's buildings at once, through the building panel's "
             + "confirmed Dismantle (refund, furniture lost, the outpost reassessed or removed), not the level editor's clear; queued, runs on the next tick "
             + "(step when paused); ids from town or observe.buildings.own", ControlDismantleSite);
+
+        add("navnear", "navnear <x> <z> [radius]", "debug: JSON of the navmesh polygons of the loaded zones within radius (default 200) of the point: "
+            + "zone, polygon, area, walkable flag, vertices; the zones under it and whether they are loaded; and the closest walkable point the town "
+            + "refit's snap would take for the point (same query and 500 box)", ControlNavNear);
     }
 
     /// <summary>
@@ -119,4 +124,38 @@ sealed class AgentTowns(GameHost host)
         world.Commands.Enqueue(new ConfirmDismantle(site.Id) { Tick = world.Tick });
         con.Print($"dismantle of {site.Id} ({site.Record}, outpost {site.Town}) queued; it runs on the next tick");
     }
+
+    /// <summary>
+    /// The <c>navnear</c> command (usage and help at its registration in <see cref="RegisterControlTownCommands"/>).
+    /// </summary>
+    void ControlNavNear(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!host.AgentWorld.Loaded(con)) return;
+        if (args.Count is < 2 or > 3 || !TryNumber(args[0], out float x) || !TryNumber(args[1], out float z))
+        {
+            Usage(con);
+            return;
+        }
+
+
+        float radius = NavNear.DefaultRadius;
+        if (args.Count == 3 && (!TryNumber(args[2], out radius) || radius <= 0))
+        {
+            Usage(con);
+            return;
+        }
+
+        host.AgentChannel.PrintData(con, NavNear.Json(host.Session.World.Walkability, x, z, radius));
+    }
+
+    /// <summary>
+    /// Prints the usage of <c>navnear</c>.
+    /// </summary>
+    static void Usage(DevConsole con) => con.Error("usage: navnear <x> <z> [radius]");
+
+    /// <summary>
+    /// Reads a finite number written with a dot.
+    /// </summary>
+    static bool TryNumber(string text, out float value) =>
+        float.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
 }
