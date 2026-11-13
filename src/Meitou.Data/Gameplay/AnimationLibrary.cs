@@ -320,7 +320,7 @@ public sealed class AnimationLibrary
     /// Every ANIMAL_CHARACTER's clip set from its <c>animations</c> list (docs/game/animals.md "Animations"): the movement clips (non-zero <c>move
     /// speed</c>), the idles (<c>idle</c>, by <c>idle chance</c>) and its <c>sleeponfloor</c> records (the one that does not loop is the fall, the
     /// looping one the lying clip), each followed by every other <c>sleeponfloor</c> record as a fallback (engine choice: most lists name one or
-    /// none; the system takes the first whose clip the skeleton has). A clip whose <c>stealth mode</c> is 1 (sneaking only) is dropped: an animal is
+    /// none; the system takes the first whose clip the skeleton has), and the rest by record name (the clips a job plays, <c>eat</c>). A clip whose <c>stealth mode</c> is 1 (sneaking only) is dropped: an animal is
     /// never sneaking, so its clip filter (<c>FUN_14051d660</c>) never keeps it (Inferred for movement picks).
     /// </summary>
     void BuildAnimals(GameDatabase db)
@@ -345,7 +345,8 @@ public sealed class AnimationLibrary
                 a.StringId, race,
                 [.. defs.Where(i => _all[i].MoveSpeed != 0).OrderBy(i => _all[i].Id, StringComparer.Ordinal)],
                 [.. defs.Where(i => _all[i].Idle && _all[i].MoveSpeed == 0).Select(i => (i, (float)Math.Max(_all[i].IdleChance, 0)))],
-                Pick(listed, loop: false), Pick(listed, loop: true));
+                Pick(listed, loop: false), Pick(listed, loop: true),
+                [.. listed.Where(r => r.Name != AnimalLyingRecord).Select(r => (r.Name, index[r.StringId])).Where(x => !_all[x.Item2].Idle && _all[x.Item2].MoveSpeed == 0)]);
         }
     }
 
@@ -690,8 +691,10 @@ public sealed class AnimationLibrary
 
 /// <summary>
 /// The clips an ANIMAL_CHARACTER plays, as indices into its <see cref="AnimationLibrary"/> (<see cref="AnimationLibrary.Animal"/>): from its own
-/// <c>animations</c> list, the movement clips, the idles with their weights, and the fall and lying candidates in order (its own first).
+/// <c>animations</c> list, the movement clips, the idles with their weights, the fall and lying candidates in order (its own first), and the other
+/// clips by record name (<paramref name="Actions"/>).
 /// <paramref name="RaceId"/> picks the skeleton's clip lengths (<see cref="AnimationLengths.For"/>). Its techniques are the creature techniques of
 /// its weapon's category, which the combat system chooses.
 /// </summary>
-public sealed record AnimalClips(string RecordId, string? RaceId, int[] Movement, (int Index, float Weight)[] Idles, int[] Fall, int[] Lying);
+public sealed record AnimalClips(string RecordId, string? RaceId, int[] Movement, (int Index, float Weight)[] Idles, int[] Fall, int[] Lying,
+    (string Name, int Index)[] Actions);
