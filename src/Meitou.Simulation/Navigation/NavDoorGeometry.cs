@@ -10,7 +10,8 @@ namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// Where a building's doors are: the box of door i's collision (the shapes the navmesh paints as the door, docs/game/pathfinding.md) in the
-/// building's frame, scaled by the building's <c>scale</c>, not rotated or moved. Read once per (BUILDING, door) from the data; safe from any thread.
+/// building's frame, turned to the leaf's own line (<see cref="Fit"/>), scaled by the building's <c>scale</c>, not otherwise rotated or moved. Read
+/// once per (BUILDING, door) from the data; safe from any thread.
 /// </summary>
 public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 {
@@ -73,8 +74,7 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 
         float scale = building.GetFloat("scale", 1);
         var node = Matrix4x4.CreateScale(scale <= 0 ? 1 : scale);
-        var lo = new Vector3(float.MaxValue);
-        var hi = new Vector3(float.MinValue);
+        var points = new List<Vector3>();
         Vector3? slide = null;
         foreach (var mesh in WorldObjectLayout.Building(db, building, "", Vector3.Zero, Quaternion.Identity))
         {
@@ -90,25 +90,75 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
             }
 
             foreach (var shape in prepared.Shapes)
-            {
-                foreach (var v in shape.Vertices)
-                {
-                    var p = Vector3.Transform(v, node);
-                    lo = Vector3.Min(lo, p);
-                    hi = Vector3.Max(hi, p);
-                }
-            }
+                points.AddRange(shape.Vertices.Select(v => Vector3.Transform(v, node)));
         }
 
-        if (lo.X > hi.X) return null;
+        if (points.Count == 0) return null;
 
-        var size = hi - lo;
-        var spot = size.X <= size.Z
-            ? new DoorSpot((lo + hi) / 2, Vector3.UnitX, size.Z / 2, size.Y / 2)
-            : new DoorSpot((lo + hi) / 2, Vector3.UnitZ, size.X / 2, size.Y / 2);
-        return spot with { Slide = slide ?? Vector3.Zero };
+        return Fit(points) with { Slide = slide ?? Vector3.Zero };
 
         static Vector3 Unit(float x, float y, float z) =>
             new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+    }
+
+    /// <summary>
+    /// The leaf's box from its collision points: the normal is the thinnest horizontal direction of their footprint, so a leaf turned in its building
+    /// (the Saloon's, an outpost gate's) keeps its own line and width; a leaf along the building's axes gets its plain box, normal +X or +Z. Every
+    /// door leaf of the base game is one box, whose footprint is its rectangle; an outline of several shapes could give a slanted side instead.
+    /// </summary>
+    internal static DoorSpot Fit(IReadOnlyList<Vector3> points)
+    {
+        var hull = NavGeometry.ConvexHull2D([.. points.Select(p => new Vector2(p.X, p.Z))]);
+        float yLo = points.Min(p => p.Y);
+        float yHi = points.Max(p => p.Y);
+        var normal = Thinnest(hull);
+        var along = new Vector2(-normal.Y, normal.X);
+        var (nLo, nHi) = Extent(hull, normal);
+        var (aLo, aHi) = Extent(hull, along);
+        var centre = normal * ((nLo + nHi) / 2) + along * ((aLo + aHi) / 2);
+
+        return new DoorSpot(new Vector3(centre.X, (yLo + yHi) / 2, centre.Y), new Vector3(normal.X, 0, normal.Y), (aHi - aLo) / 2,
+            (yHi - yLo) / 2);
+    }
+
+    /// <summary>
+    /// The unit normal of the hull's side across which the hull is thinnest (the thinnest box of a convex outline has a side along one of its sides),
+    /// signed so its larger component is positive; +X for a hull of fewer than two points. A tie keeps the first side.
+    /// </summary>
+    static Vector2 Thinnest(Vector2[] hull)
+    {
+        var best = Vector2.UnitX;
+        if (hull.Length < 2) return best;
+
+        float bestWidth = float.MaxValue;
+        for (int i = 0; i < hull.Length; i++)
+        {
+            var side = hull[(i + 1) % hull.Length] - hull[i];
+            if (side.LengthSquared() < 1e-12f) continue;
+
+            var n = Vector2.Normalize(new Vector2(-side.Y, side.X));
+            var (lo, hi) = Extent(hull, n);
+            if (hi - lo < bestWidth) (best, bestWidth) = (n, hi - lo);
+        }
+
+        float larger = MathF.Abs(best.X) >= MathF.Abs(best.Y) ? best.X : best.Y;
+        return larger < 0 ? -best : best;
+    }
+
+    /// <summary>
+    /// The lowest and highest of the hull's points along <paramref name="axis"/>.
+    /// </summary>
+    static (float Lo, float Hi) Extent(Vector2[] hull, Vector2 axis)
+    {
+        float lo = float.MaxValue;
+        float hi = float.MinValue;
+        foreach (var p in hull)
+        {
+            float d = Vector2.Dot(p, axis);
+            lo = MathF.Min(lo, d);
+            hi = MathF.Max(hi, d);
+        }
+
+        return (lo, hi);
     }
 }

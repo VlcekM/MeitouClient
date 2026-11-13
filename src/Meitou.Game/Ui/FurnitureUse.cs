@@ -411,7 +411,7 @@ sealed class FurnitureUse(PlayerInterface player)
             if (mesh.Count == 0) continue;
 
             var at = door.Origin + door.Slide * state.Open;
-            var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, door.Yaw);
+            var turn = door.Rotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitY, door.Yaw);
 
             if (player.GroundItemPicks.RayNears(ray, mesh, at, turn) && WorldPicking.RayMesh(ray, mesh, at, turn) is { } t && t < bestT
                 && !player.Hidden(ray, t - DoorPickSlack))
