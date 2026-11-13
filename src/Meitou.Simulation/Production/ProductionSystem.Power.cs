@@ -143,7 +143,9 @@ public sealed partial class ProductionSystem
     void PowerTick(World world, float dt)
     {
         foreach (var list in _grids.Values) list.Clear();
-        _townLayout = TownLayout(world);
+        int layout = TownLayout(world);
+        if (layout != _townLayout) _powerTowns.Clear();   // every entry is stale now, and the removed sites' are gone with them
+        _townLayout = layout;
         foreach (var m in world.Machines.All)
         {
             // Slot 59 (isIndoors): interior furniture standing in a building; slot 164: a light building outdoors works only while it is not daytime.
