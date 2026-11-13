@@ -62,13 +62,20 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// A character put <paramref name="captive"/> in a cage (<c>Task_PutInSomething</c> for the cage, <c>FUN_140358670</c>, <b>Observed</b>): the
-    /// captive's squad remembers the captor with the long-term tag 5 MY_CAPTOR. Wired to <see cref="FactionDeeds.CagedHook"/>.
+    /// captive's squad remembers the captor with the long-term tag 5 MY_CAPTOR. Wired to <see cref="FactionDeeds.CagedHook"/>. Engine choice, no
+    /// counterpart in the original: the captive's squad drops its TEMP_ENEMY tags on the captor's faction too. With the captor's side alone
+    /// cleared (the original's rule), a released player character on Hold or with the Attacking enemies job went for its jailers on sight for up
+    /// to 7 hours, an Assault that jailed it again (#599).
     /// </summary>
     public void Captured(World world, int captor, int captive)
     {
         var table = world.Characters;
-        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is not null)
+        if (table.Cold(captive) is { SquadId: >= 0 } cc && table.Cold(captor) is { } oc)
+        {
             Memory.Remember(world, cc.SquadId, table.IdOf(captor), MemoryTag.Captor);
+            Memory.ClearShortOfFaction(world, cc.SquadId, oc.Faction, MemoryTag.TempEnemy);
+        }
+
         Forgive(world, captor, table.IdOf(captive));
     }
 

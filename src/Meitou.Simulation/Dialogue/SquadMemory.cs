@@ -162,6 +162,24 @@ public sealed class SquadMemory
     }
 
     /// <summary>
+    /// Clears a short-term tag on every character of <paramref name="faction"/> the squad remembers (<see cref="ClearShort"/> on each).
+    /// </summary>
+    public void ClearShortOfFaction(World world, int squad, int faction, int tag)
+    {
+        if (squad < 0 || (uint)tag > 31) return;
+
+        List<CharacterId>? tagged = null;
+        foreach (var ((q, who), e) in _entries)
+        {
+            if (q != squad || (e.Short >> tag & 1) == 0) continue;
+            if (world.Characters.TryResolveNext(who, out int s) && world.Characters.Cold(s)?.Faction == faction) (tagged ??= []).Add(who);
+        }
+
+        if (tagged is null) return;
+        foreach (var who in tagged) ClearShort(squad, who, tag);
+    }
+
+    /// <summary>
     /// Whether the squad holds short-term <paramref name="tag"/> on the character (<c>FUN_140678830</c>): TEMP_ALLY on a player-faction character is
     /// the squad's player flag.
     /// </summary>

@@ -61,6 +61,7 @@ static class SaveProbe
             case ("near", >= 1): Near(probe, float.Parse(a[0])); return true;
             case ("crowd", >= 1): Crowd(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("fight", >= 1): Fight(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
+            case ("crime", >= 1): Crime(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 10); return true;
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
@@ -211,6 +212,90 @@ static class SaveProbe
 
             probe.Tick(interval);
         }
+    }
+
+    /// <summary>
+    /// The characters named like <paramref name="name"/> as the law sees them every <paramref name="interval"/> ticks, <paramref name="rounds"/>
+    /// times: the pending crime, bounties and wanted flags, then everyone who targets one with its goal and its squad's memory tags of it.
+    /// </summary>
+    static void Crime(ProbeWorld probe, string name, int rounds, int interval)
+    {
+        var t = probe.Characters;
+        var combat = probe.World.Systems.OfType<CombatSystem>().First();
+        var memory = probe.World.Systems.OfType<DialogueSystem>().FirstOrDefault()?.Memory;
+        SavedMemory(probe, name);
+
+        for (int round = 0; round < rounds; round++)
+        {
+            foreach (int slot in probe.Named(name))
+            {
+                string law = CrimeLine(probe, memory, slot);
+                Console.WriteLine($"tick {probe.World.Tick} {probe.Who(slot)}{Down(t.Cold(slot)!)} {law} target={Target(probe, slot)}");
+                foreach (int i in probe.Near(t.Next[slot].Position, 400))
+                {
+                    if (i == slot || combat.StateOf(t.IdOf(i)).TargetSlot != slot || t.Cold(i) is not { } c) continue;
+
+                    Console.WriteLine($"  {probe.Who(i)} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} source={c.Running?.Source} "
+                        + $"row={c.Running?.Row} tags=[{Tags(probe, memory, c.SquadId, t.IdOf(slot))}]");
+                }
+            }
+
+            probe.PrintMessages();
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The saved squad memory of the platoons holding a character named like <paramref name="name"/>: per remembered character the game hour of
+    /// the last note, the long and short tag bits and its platoon. The loader drops the entries whose character is not in the world yet.
+    /// </summary>
+    static void SavedMemory(ProbeWorld probe, string name)
+    {
+        var everyone = probe.Save.Platoons.SelectMany(p => p.Characters).ToList();
+        Console.WriteLine($"saved squad memory at hour {probe.World.GameHours:F2}");
+        foreach (var platoon in probe.Save.Platoons.Where(p => p.Characters.Any(c => c.GameState?.Name.Contains(name) == true)))
+        {
+            for (int n = 0; platoon.Record.Ints.ContainsKey(MemorySave.LongKey + n); n++)
+            {
+                var hand = Meitou.Data.Save.Hand.Read(platoon.Record, MemorySave.HandleKey + n);
+                var who = everyone.FirstOrDefault(c => c.Handle.C == hand.C && c.Handle.I == hand.I);
+                Console.WriteLine($"  {platoon.Name} hour={platoon.Record.Floats.GetValueOrDefault(MemorySave.TimeKey + n):F2} "
+                    + $"long={platoon.Record.Ints[MemorySave.LongKey + n]:x} short={platoon.Record.Ints.GetValueOrDefault(MemorySave.ShortKey + n):x} "
+                    + $"on '{who?.GameState?.Name}' of {who?.Platoon.Name}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A character's pending crime, bounties, the flags the police read and how many characters its own squad holds TEMP_ENEMY on.
+    /// </summary>
+    static string CrimeLine(ProbeWorld probe, SquadMemory? memory, int slot)
+    {
+        var c = probe.Characters.Cold(slot)!;
+        int enemies = memory?.Snapshot(c.SquadId)?.Entries.Count(e => (e.Short >> MemoryTag.TempEnemy & 1) != 0) ?? 0;
+        string pending = c.Pending is { } p
+            ? $"{p.Code} vs {probe.Faction(p.VictimFaction)} victim={p.Victim.Slot} timer={p.Timer:F1} booked={p.Booked} witnessed={p.Witnessed}"
+            : "-";
+        var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}") ?? [];
+        return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
+            + $"ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies}";
+    }
+
+    /// <summary>
+    /// The short-term memory tags squad <paramref name="squad"/> holds on <paramref name="who"/>.
+    /// </summary>
+    static string Tags(ProbeWorld probe, SquadMemory? memory, int squad, CharacterId who)
+    {
+        if (memory is null || squad < 0) return "";
+
+        (int Tag, string Name)[] tags =
+        [
+            (MemoryTag.Aggressor, "AGGRESSOR"),
+            (MemoryTag.TempAlly, "TEMP_ALLY"),
+            (MemoryTag.TempEnemy, "TEMP_ENEMY"),
+            (MemoryTag.Criminal, "CRIMINAL"),
+        ];
+        return string.Join(" ", tags.Where(x => memory.HasShort(probe.World, squad, who, x.Tag)).Select(x => x.Name));
     }
 
     /// <summary>
@@ -593,6 +678,7 @@ static class SaveProbe
               near <radius>            characters near the player's squad leader
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
+              crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags
               nests                    the wild layout's nests whose first candidate spot the original would refuse
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
