@@ -165,8 +165,7 @@ public class OrderSaveTests
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
 
-        string[] roots = [InstallData.Install!.SaveDirectory,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")];
+        string[] roots = [InstallData.Install!.SaveDirectory, .. InstallData.Install.UserSaveDirectories];
         var marker = "tjobP"u8.ToArray();
         var found = roots.Where(Directory.Exists).SelectMany(Directory.EnumerateDirectories).OrderByDescending(Directory.GetLastWriteTimeUtc).Take(40)
             .FirstOrDefault(dir => Directory.Exists(Path.Combine(dir, "platoon")) && Directory.EnumerateFiles(Path.Combine(dir,

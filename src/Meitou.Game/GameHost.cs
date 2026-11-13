@@ -861,10 +861,9 @@ sealed partial class GameHost(
     {
         if (Sandbox.IsSandbox) Player.ReservedKeys.UnionWith([Key.Z, Key.X, Key.C, Key.Y, Key.P, Key.G]);
 
-        string localSaves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
         string credits = Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "";
         Player.Frontend.ConfigureFrontend(Scene.Database,
-            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, Install.SaveDirectory, localSaves), credits);
+            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, [Install.SaveDirectory, .. Install.UserSaveDirectories]), credits);
 
         // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges
         // (docs/formats/fcs-mod.md): logged, not a problem.

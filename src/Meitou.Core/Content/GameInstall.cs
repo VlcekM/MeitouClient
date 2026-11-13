@@ -44,6 +44,23 @@ public sealed class GameInstall
     /// The install's <c>save</c> folder, one subfolder per save.
     /// </summary>
     public string SaveDirectory => Path.Combine(Root, "save");
+    /// <summary>
+    /// The original's per-user save folders (docs/formats/save.md "Where saves live"): <c>%LOCALAPPDATA%/kenshi/save</c>, then, for a Steam
+    /// install, the one inside the Proton prefix (<c>steamapps/compatdata/233860/pfx/.../AppData/Local/kenshi/save</c>), where the game run
+    /// through Proton on Linux saves. Either may be missing.
+    /// </summary>
+    public IReadOnlyList<string> UserSaveDirectories
+    {
+        get
+        {
+            string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
+            if (SteamAppsDirectory is not { } steamapps) return [local];
+
+            string proton = Path.Combine(steamapps, "compatdata", "233860", "pfx", "drive_c", "users", "steamuser", "AppData", "Local",
+                "kenshi", "save");
+            return [local, proton];
+        }
+    }
 
     /// <summary>
     /// The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).
@@ -59,12 +76,25 @@ public sealed class GameInstall
     {
         get
         {
+            if (SteamAppsDirectory is not { } steamapps) return null;
+
+            var dir = Path.Combine(steamapps, "workshop", "content", "233860");
+            return Directory.Exists(dir) ? dir : null;
+        }
+    }
+
+    /// <summary>
+    /// The Steam library's <c>steamapps</c> folder when the install sits in its <c>common</c> folder, else null.
+    /// </summary>
+    string? SteamAppsDirectory
+    {
+        get
+        {
             var common = Path.GetDirectoryName(Path.GetFullPath(Root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var steamapps = common is null ? null : Path.GetDirectoryName(common);
             if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase))
                 return null;
-            var dir = Path.Combine(steamapps, "workshop", "content", "233860");
-            return Directory.Exists(dir) ? dir : null;
+            return steamapps;
         }
     }
 
