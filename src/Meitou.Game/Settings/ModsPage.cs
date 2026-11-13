@@ -22,6 +22,17 @@ sealed class ModsPage(SettingsMenu menu)
     const int ModIssueCap = 200;
 
     /// <summary>
+    /// The text area's height, about eight lines (it scrolls), and its top over the page's bottom (666), in the menu's units; the list takes the
+    /// page above the Copy buttons.
+    /// </summary>
+    const float DetailHeight = 130, DetailTop = 666 - DetailHeight;
+
+    /// <summary>
+    /// The Copy buttons' top, and the list's top and bottom, in the menu's units.
+    /// </summary>
+    const float ButtonsTop = DetailTop - 38, ListTop = 98, ListBottom = ButtonsTop - 8;
+
+    /// <summary>
     /// The selected mod's row; -1 for none.
     /// </summary>
     int _modsSelected = -1;
@@ -39,7 +50,7 @@ sealed class ModsPage(SettingsMenu menu)
     /// <summary>
     /// The text area under the list (and its Copy buttons), in pixels.
     /// </summary>
-    internal UiRect ModsDetail => menu.Canvas.R(212, 440, 888, 226);
+    internal UiRect ModsDetail => menu.Canvas.R(212, DetailTop, 888, DetailHeight);
 
     /// <summary>
     /// The summary line under the version text, left of the page buttons' divider; a click opens the MODS page.
@@ -63,19 +74,19 @@ sealed class ModsPage(SettingsMenu menu)
         var report = menu.Player.TitleMenu.Mods;
         var rows = report?.Rows ?? [];
         var lines = Settings.ModsLines(rows);
-        menu.Viewport = menu.Canvas.R(212, 98, 888, 296);
+        menu.Viewport = menu.Canvas.R(212, ListTop, 888, ListBottom - ListTop);
         menu.MaxScroll = Math.Max(0, lines.Sum(LineHeight) * menu.Scale - menu.Viewport.Height);
         menu.Motion.AdvanceScroll();
-        float y = 98 - menu.ScrollOffset / menu.Scale;
+        float y = ListTop - menu.ScrollOffset / menu.Scale;
         foreach (var line in lines)
         {
             float height = LineHeight(line);
-            if (y + height >= 98 && y <= 394) DrawModsLine(rows, line, y);
+            if (y + height >= ListTop && y <= ListBottom) DrawModsLine(rows, line, y);
             y += height;
         }
 
-        menu.Canvas.Button("Copy", menu.Canvas.R(212, 402, 120, 28), CopyMod);
-        menu.Canvas.Button("Copy all problems", menu.Canvas.R(340, 402, 200, 28), CopyProblems);
+        menu.Canvas.Button("Copy", menu.Canvas.R(212, ButtonsTop, 120, 28), CopyMod);
+        menu.Canvas.Button("Copy all problems", menu.Canvas.R(340, ButtonsTop, 200, 28), CopyProblems);
         DrawFoldButtons();
         DrawModsDetail(report);
     }
@@ -179,15 +190,15 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Canvas.Rect(area, new(0.07f, 0.06f, 0.05f, 0.6f));
         string text = SelectedMod(report) is { } row ? ModText(row, ModIssueCap) : SummaryText(report);
         float height = menu.Canvas.TextHeight(text, 864, 12);
-        float max = Math.Max(0, height + 12 - 226);
+        float max = Math.Max(0, height + 12 - DetailHeight);
         ModsDetailScroll = Math.Clamp(ModsDetailScroll, 0, max);
-        var textAt = menu.Canvas.R(224, 446 - ModsDetailScroll, 864, height + 2);
+        var textAt = menu.Canvas.R(224, DetailTop + 6 - ModsDetailScroll, 864, height + 2);
         menu.Canvas.Text(text, textAt, 12, SettingsCanvas.MainInk, "Left Top", area, wrap: true, translate: false);
         if (max <= 0) return;
 
-        float thumb = Math.Max(24, 226 * 226 / (226 + max));
-        menu.Canvas.Rect(menu.Canvas.R(1092, 440, 3, 226), SettingsCanvas.MainInk with { W = 0.1f });
-        menu.Canvas.Rect(menu.Canvas.R(1092, 440 + (226 - thumb) * ModsDetailScroll / max, 3, thumb), SettingsCanvas.Brass with { W = 0.75f });
+        float thumb = Math.Max(24, DetailHeight * DetailHeight / (DetailHeight + max));
+        menu.Canvas.Rect(menu.Canvas.R(1092, DetailTop, 3, DetailHeight), SettingsCanvas.MainInk with { W = 0.1f });
+        menu.Canvas.Rect(menu.Canvas.R(1092, DetailTop + (DetailHeight - thumb) * ModsDetailScroll / max, 3, thumb), SettingsCanvas.Brass with { W = 0.75f });
     }
 
     /// <summary>
