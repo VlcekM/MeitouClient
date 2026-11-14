@@ -278,15 +278,10 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
-    /// How far round the footprint this building's collision is taken to reach (a wall's thickness, a foundation's skirt): the movement pick's
-    /// wall reach (<see cref="FloorSurfaces"/>).
+    /// How far round the room footprint the building's collision is taken to reach (a foundation's skirt, a porch, eaves), world units: an engine
+    /// choice past what the Flats Lagoon houses showed (their foundations stand more than 4 units out, scratch ray probe).
     /// </summary>
-    public const float CollisionReach = 4;
-
-    /// <summary>
-    /// Whether (x, z) lies in the footprint widened by <see cref="CollisionReach"/>, whatever the height: a collision hit there is this building's.
-    /// </summary>
-    public bool Over(float x, float z) => Footprint.Length >= 3 && _edges.Holds(new Vector2(x, z), CollisionReach);
+    const float CollisionReach = 50;
 
     /// <summary>
     /// Where the ray first meets this building's collision at or below the viewed floor, when that is a face nobody stands on

@@ -1391,17 +1391,6 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// Whether a loaded building with rooms stands over (x, z) (<see cref="InteriorVolume.Over"/>): its own collision answers a pick there.
-    /// </summary>
-    public bool HasInteriorOver(float x, float z)
-    {
-        foreach (var zone in _streamer.AllZones)
-            foreach (var room in zone.Interiors)
-                if (room.Over(x, z)) return true;
-        return false;
-    }
-
-    /// <summary>
     /// The nearest distance along the ray at which it enters a loaded building seen from outside (not in <see cref="InteriorView"/>), within
     /// <paramref name="maxDistance"/>: characters and items beyond it are hidden from the pointer. Null when none is in the way.
     /// </summary>

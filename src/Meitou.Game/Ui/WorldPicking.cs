@@ -28,9 +28,9 @@ sealed class WorldPicking(PlayerInterface player)
     public Func<Vector3, Vector3, float, float?>? InteriorFaceHit { get; set; }
 
     /// <summary>
-    /// The host's test for a building with rooms standing over (x, z): its collision is <see cref="InteriorFaceHit"/>'s to answer.
+    /// The host's test for a level building (by placement key) having rooms: its collision is <see cref="InteriorFaceHit"/>'s to answer.
     /// </summary>
-    public Func<float, float, bool>? InteriorOver { get; set; }
+    public Func<string, bool>? HasRooms { get; set; }
 
     /// <summary>
     /// The host's height of the highest walkable surface at a point's (x, z) that is not above it; null when there is none.
@@ -65,6 +65,16 @@ sealed class WorldPicking(PlayerInterface player)
     #region Ray and ground
 
     /// <summary>
+    /// How much nearer than the destination a steep face has to be met to end the ray, world units (engine choice).
+    /// </summary>
+    const float FaceMargin = 1;
+
+    /// <summary>
+    /// The slope past which a collision face is no ground: the navigation slope limit, as the floor pick's.
+    /// </summary>
+    static readonly float SteepCos = MathF.Cos(40 * MathF.PI / 180);
+
+    /// <summary>
     /// The movement destination on a raised walkable surface or a building floor, or the terrain when neither is in front of it. A steep face of
     /// a building met before it (a foundation's side, a wall) ends the ray: the destination is the foot of that face on the camera's side
     /// (docs/game/ui-input.md "Movement marker").
@@ -82,19 +92,10 @@ sealed class WorldPicking(PlayerInterface player)
         if (FaceHit(origin, direction, distance - FaceMargin) is not { } face) return pick;
 
         var at = origin + direction * face;
-        var foot = FootOf(at, direction);
+        if (FootOf(at, direction) is not { } foot) return pick;
+
         return surface is { } top && TopOf(top, at, foot) ? pick : foot;
     }
-
-    /// <summary>
-    /// How much nearer than the destination a steep face has to be met to end the ray, world units (engine choice).
-    /// </summary>
-    const float FaceMargin = 1;
-
-    /// <summary>
-    /// The slope past which a collision face is no ground: the navigation slope limit, as the floor pick's.
-    /// </summary>
-    static readonly float SteepCos = MathF.Cos(40 * MathF.PI / 180);
 
     /// <summary>
     /// The distance within <paramref name="limit"/> at which the ray first meets a steep building face: of a building with rooms
@@ -121,7 +122,9 @@ sealed class WorldPicking(PlayerInterface player)
         foreach (var candidate in host.Placement.StaticAlong(origin, direction, limit))
         {
             var b = candidate.Placement;
-            if (candidate.Plot || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
+            // A building with rooms answers for its own collision (InteriorFaceHit): its hidden floors do not count, its walls drop to the floor
+            // inside, and a click on a closed house's wall goes in.
+            if (candidate.Plot || HasRooms?.Invoke(b.Key) == true || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
 
             var mesh = CollisionMeshOf(b.BuildingId);
             float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
@@ -132,10 +135,6 @@ sealed class WorldPicking(PlayerInterface player)
             if (RayMeshHit((origin, direction), mesh, new Vector3(b.Position.X, y, b.Position.Z), b.Rotation) is not { } hit || hit.T >= nearest)
                 continue;
 
-            // A building with rooms answers for its own collision: its hidden floors do not count and its walls drop to the floor inside.
-            var p = origin + direction * hit.T;
-            if (InteriorOver?.Invoke(p.X, p.Z) == true) continue;
-
             nearest = hit.T;
             steep = MathF.Abs(hit.Normal.Y) < SteepCos;
         }
@@ -145,9 +144,10 @@ sealed class WorldPicking(PlayerInterface player)
 
     /// <summary>
     /// Where a character stands at the foot of a face met at <paramref name="at"/>: a little back towards the camera, on the highest walkable
-    /// surface not above the hit, else on the terrain. The steps back are engine choices: the navmesh keeps clear of a wall.
+    /// surface not above the hit; null when there is none there (a wall standing in water: the seabed is no foot). The steps back are engine
+    /// choices: the navmesh keeps clear of a wall.
     /// </summary>
-    Vector3 FootOf(Vector3 at, Vector3 direction)
+    Vector3? FootOf(Vector3 at, Vector3 direction)
     {
         var flat = new Vector3(direction.X, 0, direction.Z);
         var back = flat.LengthSquared() < 1e-9f ? Vector3.Zero : -Vector3.Normalize(flat);
@@ -158,17 +158,16 @@ sealed class WorldPicking(PlayerInterface player)
             if (SurfaceBelow?.Invoke(p) is { } y) return new Vector3(p.X, y, p.Z);
         }
 
-        var near = at + back;
-        return new Vector3(near.X, player.Ground(near.X, near.Z), near.Z);
+        return null;
     }
 
     /// <summary>
     /// Whether the raised surface picked at <paramref name="top"/> is the top of the face met at <paramref name="at"/> (a wall walk behind its
-    /// parapet): beside the hit, not above it, and more than a step (5) over the <paramref name="foot"/>. A surface level with the foot is the
+    /// parapet): within 4 units of the hit (a wall's thickness), not above it, and more than a step (5) over the <paramref name="foot"/>. A surface level with the foot is the
     /// ground beyond a wall, which the face hides.
     /// </summary>
     static bool TopOf(Vector3 top, Vector3 at, Vector3 foot) =>
-        Vector2.Distance(new(top.X, top.Z), new(at.X, at.Z)) <= Data.World.InteriorVolume.CollisionReach
+        Vector2.Distance(new(top.X, top.Z), new(at.X, at.Z)) <= 4
         && top.Y <= at.Y + 0.5f
         && top.Y > foot.Y + 5;
 
