@@ -697,7 +697,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   (1.0 here, 0.3 for the public toggle, 0.4 for For sale) is the button's share of the row, at its right; at 1.0 the key is not shown
   (**Observed**: the owner's screenshots of a Defensive Gate III and a bought town house, `HudLine.ButtonWidth` in Meitou). Meitou engine choices: a moving door reads by where
   it heads (opening: open, closing: closed), and an open door that wants its lock reads `Locked` with "The door will lock when it closes.".
-- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`): 3 `Town:`, `Training:` (function 7), `Cost to use:`
+- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`): 3 `Town:`, `Training:` (function 7, any `stat used`: the
+  label `Training:` with the editor stat name `FUN_140888440` of +0x3f8 appended, no separator, as the label of an empty-valued line; **Verified**
+  decompile; Meitou puts a space between), `Cost to use:`
   `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`, `Empty`; 6 `Healing bonus:`
   `x{1,num}` (beds), `Max Skill Level:` (training); 0xf `Money:`. Turrets, machines, generators and batteries have their own lines
   (`FUN_14030d620`, `FUN_140300090`, `FUN_140307bf0` ...: Working / No power / Out of resource / Output full, power, workers, fuel).
@@ -709,7 +711,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   owner faction, `Town:` The Hub, `Workers:` 0/1, `Efficiency:` 0%, `Max efficiency:` 100%, Condition. Meitou (`BuildingSelection.PickFurnitureAt`):
   beds, containers and cages by their fixtures, seats by their seat spots, everything else of a town building's interior layout but nodes
   (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
-  house it stands in and Condition, without the lock, Empty and worker rows. A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
+  house it stands in and Condition, without the lock, Empty and worker rows, except a training dummy's `Training:`, `Workers:` (its fixture's machine, 0/max
+  before anyone used it) and `Max Skill Level:` (`TrainingLines`). A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
   camp near The Hub), the Campfire though its part has no `xml collision` (base data); its panel says it is out of fuel while it burns. Meitou: a
   camp bed by its bed, any other camp building (`WorldSnapshot.NestBuildings`) among the buildings by distance, by its collision, else the hull of
   its parts' bounds as a site without collision (`BuildingSelection.PickCampBuildingAt`); its panel has its name, owner and Condition.

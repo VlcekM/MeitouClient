@@ -28,6 +28,11 @@ sealed class BuildingSelection(PlayerInterface player)
     internal SelectedBuilding? Selected;
 
     /// <summary>
+    /// The training dummy lines of the building panel.
+    /// </summary>
+    internal TrainingLines Training { get; } = new(player);
+
+    /// <summary>
     /// A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.
     /// </summary>
     public bool DeselectBuildings { get; set; } = true;
@@ -436,6 +441,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
+        Training.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
@@ -513,6 +519,11 @@ sealed class BuildingSelection(PlayerInterface player)
             (status, bad) = ProductionWindows.ProductionStatus(0, e);
             stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
             ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
+        }
+        else
+        {
+            // A dummy with no machine of the player's (a town's piece of furniture) still shows its Workers and Max Skill Level.
+            Training.AddStatsLines(focus, stats);
         }
     }
 

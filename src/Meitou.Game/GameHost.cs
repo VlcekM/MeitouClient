@@ -1147,6 +1147,9 @@ sealed partial class GameHost(
         selection.DowngradeOf = record => PopData is { } d ? Simulation.Construction.BuildingUpgrades.DowngradeOf(d.Db, record) : null;
         selection.BuildingData = BuildingDataOf;
         selection.PowerOutput = record => PopData?.Db.Find(record)?.GetInt("power output");
+        selection.Training.MachineData = record => PopData is { } d && d.Db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r
+            ? Data.Gameplay.Construction.MachineData.From(d.Db, r)
+            : null;
     }
 
     /// <summary>
