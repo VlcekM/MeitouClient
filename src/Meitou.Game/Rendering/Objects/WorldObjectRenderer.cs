@@ -1378,16 +1378,26 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// How far along the ray a floor pick looks when it meets the terrain at <paramref name="ground"/> inside a loaded building's rooms: there the
-    /// terrain is cut (docs/render-interior-cut.md), so the pick goes on to where the ray leaves the room (a tower's ground floor below a hillside,
-    /// feedback #712). Null when the terrain there is outside every room.
+    /// How far outside a room's hull a terrain hit is still tested against its drawn mask (engine choice): the cheap test before the mask's.
+    /// </summary>
+    const float CutMargin = 10;
+
+    /// <summary>
+    /// How far along the ray a floor pick looks when the terrain it meets at <paramref name="ground"/> is cut by a loaded building's interior mask
+    /// (<see cref="InteriorVolume.CutsGround"/>): the pick goes on to where the ray leaves that room's box (a tower's ground floor below a hillside,
+    /// feedback #712). Null when no mask cuts the terrain there.
     /// </summary>
     public float? CutGroundReach(Vector3 origin, Vector3 direction, Vector3 ground)
     {
+        float distance = Vector3.Distance(origin, ground);
         float? reach = null;
         foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
-                if (room.Contains(ground) && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0)) reach = exit;
+            {
+                if (room.Contains(ground, CutMargin) && room.CutsGround(origin, direction, distance)
+                    && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0))
+                    reach = exit;
+            }
         return reach;
     }
 
