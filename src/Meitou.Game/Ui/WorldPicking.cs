@@ -110,16 +110,25 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// The distance within <paramref name="limit"/> at which the ray first meets the collision of a level building without rooms (a wall, a
-    /// prop), when the triangle met is steep; null when the first one met can be stood on, or none is met.
+    /// The distance within <paramref name="limit"/> at which the ray first meets the collision of a building without rooms (a wall, a prop), a
+    /// level one or one of the player's sites, when the triangle met is steep; null when the first one met can be stood on, or none is met.
     /// </summary>
     float? StaticFaceHit(Vector3 origin, Vector3 direction, float limit)
     {
         if (player.Build.Services is not { } host) return null;
 
-        float nearest = limit;
-        bool steep = false;
-        foreach (var candidate in host.Placement.StaticAlong(origin, direction, limit))
+        var nearest = (T: limit, Steep: false);
+        LevelFaces(host, origin, direction, ref nearest);
+        SiteFaces(host, origin, direction, ref nearest);
+        return nearest.Steep ? nearest.T : null;
+    }
+
+    /// <summary>
+    /// Takes into <paramref name="nearest"/> the first hit of the ray on the collision of a level building without rooms, when nearer.
+    /// </summary>
+    void LevelFaces(BuildServices host, Vector3 origin, Vector3 direction, ref (float T, bool Steep) nearest)
+    {
+        foreach (var candidate in host.Placement.StaticAlong(origin, direction, nearest.T))
         {
             var b = candidate.Placement;
             // A building with rooms answers for its own collision (InteriorFaceHit): its hidden floors do not count, its walls drop to the floor
@@ -132,14 +141,32 @@ sealed class WorldPicking(PlayerInterface player)
             if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax) is null)
                 continue;
 
-            if (RayMeshHit((origin, direction), mesh, new Vector3(b.Position.X, y, b.Position.Z), b.Rotation) is not { } hit || hit.T >= nearest)
-                continue;
-
-            nearest = hit.T;
-            steep = MathF.Abs(hit.Normal.Y) < SteepCos;
+            if (RayMeshHit((origin, direction), mesh, new Vector3(b.Position.X, y, b.Position.Z), b.Rotation) is { } hit && hit.T < nearest.T)
+                nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
         }
+    }
 
-        return steep ? nearest : null;
+    /// <summary>
+    /// Takes into <paramref name="nearest"/> the first hit of the ray on the collision of one of the player's sites without rooms (a wall, a gate,
+    /// a machine), when nearer: placed as <see cref="BuildMode.PickSiteAt"/> places it.
+    /// </summary>
+    void SiteFaces(BuildServices host, Vector3 origin, Vector3 direction, ref (float T, bool Steep) nearest)
+    {
+        foreach (var site in player.Session.CurrentSnapshot.Buildings)
+        {
+            // Not drawn above the viewed floor of an opened house: no face there.
+            if (HasRooms?.Invoke(site.Id) == true || player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
+            if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
+
+            var mesh = CollisionMeshOf(site.Record);
+            var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
+            var hull = footprint.Place(site.Position, yaw);
+            float y = site.Position.Y;
+            if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + footprint.YMin, y + footprint.YMax) is null) continue;
+
+            if (RayMeshHit((origin, direction), mesh, site.Position, yaw) is { } hit && hit.T < nearest.T)
+                nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
+        }
     }
 
     /// <summary>

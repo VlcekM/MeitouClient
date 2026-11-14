@@ -1350,10 +1350,12 @@ sealed class BuildMode(PlayerInterface player)
             // The original's target is the building hit's x, z at the terrain height, which the path's goal snap puts on the floor inside or the
             // ground outside; a pick that went on through the roof or wall to the terrain beyond takes that point instead, so the character goes in
             // rather than to the ground behind. A building floor the pick found (a site with an interior, the hidden roof above it nearer) stays:
-            // the terrain under the roof hit lay below the floor.
+            // the terrain under the roof hit lay below the floor. "Beyond" is measured across the ground: the foot of a wall's face the pick
+            // stopped at lies short of the wall, though lower.
             float distance = Vector3.Distance(ray.Origin, hit);
             bool throughBuilding = player.Picking.BuildingMoveHit?.Invoke(ray.Origin, ray.Direction, distance + 1) is null;
-            if (throughBuilding && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id && at.T + 1 < distance)
+            if (throughBuilding && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id
+                && FlatDistance(ray.Origin, ray.Origin + ray.Direction * at.T) + 1 < FlatDistance(ray.Origin, hit))
             {
                 var p = ray.Origin + ray.Direction * at.T;
                 hit = new Vector3(p.X, player.Ground(p.X, p.Z), p.Z);
