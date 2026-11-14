@@ -155,6 +155,16 @@ public sealed class SaveItem
     public const string ModRotatedKey = "GETROTATEDIDIOT_ROTATED_V1";
 
     /// <summary>
+    /// Meitou's string <see cref="ModTagKey"/>: a code mod's mark on the item (docs/modding.md "Item use"; empty: none).
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
+    /// The Meitou key of <see cref="ModTag"/>, written only when the tag is not empty (the original ignores it: keys are read by name).
+    /// </summary>
+    public const string ModTagKey = "meitou mod tag";
+
+    /// <summary>
     /// The record the item was last written as, so a handle known only once every character has one can be put on it.
     /// </summary>
     public FcsRecord? Written { get; private set; }
@@ -237,6 +247,7 @@ public static class SaveInventory
         Source = r,
         StolenFrom = r.Strings.GetValueOrDefault(SaveItem.StolenFromKey),
         Rotated = r.Bools.GetValueOrDefault(SaveItem.RotatedKey) || r.Bools.GetValueOrDefault(SaveItem.ModRotatedKey),
+        ModTag = r.Strings.GetValueOrDefault(SaveItem.ModTagKey, ""),
     };
 
     /// <summary>
@@ -311,6 +322,8 @@ public static class SaveInventory
         r.Bools.Remove(SaveItem.ModRotatedKey);
         if (item.Rotated) r.Bools[SaveItem.RotatedKey] = true;
         else r.Bools.Remove(SaveItem.RotatedKey);
+        if (item.ModTag.Length > 0) r.Strings[SaveItem.ModTagKey] = item.ModTag;
+        else r.Strings.Remove(SaveItem.ModTagKey);
         r.Bools["in inventory"] = true;
         item.WrittenAs(r);
         return r;

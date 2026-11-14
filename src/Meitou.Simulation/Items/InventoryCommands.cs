@@ -418,11 +418,11 @@ public static class InventoryCommands
 
     /// <summary>
     /// Whether a held item joins the stack it is dropped on (<c>FUN_140715560</c>): same record (so type), material and quality, of a type that
-    /// stacks; Meitou also keeps stolen, death and unique items apart, as <see cref="Inventory.Add"/> does.
+    /// stacks; Meitou also keeps stolen, death, unique and differently mod-tagged items apart, as <see cref="Inventory.Add"/> does.
     /// </summary>
     public static bool Stackable(ItemInstance a, ItemInstance b) => !NeverStacks(a.Type) && a.Record == b.Record && a.MaterialId == b.MaterialId
             && a.Quality == b.Quality
-        && a.Mark == b.Mark && a.Death == b.Death && a.Unique == b.Unique && a.Contents is null && b.Contents is null;
+        && a.ModTag == b.ModTag && a.Mark == b.Mark && a.Death == b.Death && a.Unique == b.Unique && a.Contents is null && b.Contents is null;
 
     /// <summary>
     /// Moves <paramref name="units"/> of <paramref name="from"/> onto the stack <paramref name="into"/>. Partial charges combine: a stack is full
