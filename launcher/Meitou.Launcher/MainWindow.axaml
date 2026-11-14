@@ -229,7 +229,7 @@
               <DataTemplate x:DataType="l:ModRow">
                 <DockPanel>
                   <TextBlock DockPanel.Dock="Left" Classes="handle" Text="≡" VerticalAlignment="Center" Margin="0,0,10,0"
-                             PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order" />
+                             PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together" />
                   <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
                   <!-- A workshop mod's link to its Steam page: a box with an arrow leaving it -->
                   <Button DockPanel.Dock="Right" Classes="icon" VerticalAlignment="Center" Margin="10,0,0,0" Click="ModPage_Click"
