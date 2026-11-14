@@ -139,10 +139,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         bool inReach = !st.Ranged && !behind && aimGap <= stand && CombatTuning.Gap(n.Position, aim, cold, tc) <= endReach
             && !CombatSystem.OtherFloor(world, i, n.Position, t, next[t].Position) // a target on the floor below is walked to by the stairs (#292)
             && !CombatSystem.PathChasing(cold, t); // one behind bars or a wall is walked round to (#439)
-        bool waitsOut = !fleeing && WaitsOut(world, cold, tc, in st, t, d);
-        if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding || waitsOut)
+        if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding)
         {
-            // In reach, mid-swing or staggered (the hit reaction carries it), holding position or held off within its waiting band: stand.
+            // In reach, mid-swing or staggered (the hit reaction carries it), or holding position: stand and fight.
             if ((n.Flags & PathFlags) != 0) DropPath(ref n, cold);
 
             return;
@@ -351,35 +350,13 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     static bool InWait(World world, in CombatSlot st) => st.AttackTech < 0 && st.ReactTech < 0 && world.Tick < st.PauseUntil;
 
     /// <summary>
-    /// Whether its target holds it off (state 6, <c>WaitingStateAI</c>): neither swinging nor defending, and not engaged or in its wait.
-    /// </summary>
-    static bool HeldOff(World world, in CombatSlot st) => st.AttackTech < 0 && st.ReactTech < 0 && (!st.Engaged || InWait(world, in st));
-
-    /// <summary>
-    /// The waiting band's near and far ends round target <paramref name="t"/> by the fighters at it (<see cref="CombatTuning.CircleNear"/>,
-    /// <see cref="CombatTuning.CircleFar"/>).
+    /// The waiting band's near and far ends round target <paramref name="t"/> by the fighters at it (<see cref="CombatSystem.FightersAt"/>,
+    /// <see cref="CombatTuning.CircleNear"/>, <see cref="CombatTuning.CircleFar"/>).
     /// </summary>
     (float Near, float Far) WaitBand(World world, int t)
     {
         int around = combat.FightersAt(world, t);
         return (around * 0.25f + CombatTuning.CircleNear, 3 * around + CombatTuning.CircleFar);
-    }
-
-    /// <summary>
-    /// Whether a fighter its target holds off (<see cref="HeldOff"/>) already stands within its waiting band's far end, <paramref name="d"/> the way to
-    /// the target: in its footwork but off the fight steering (its line blocked, a path chase's timer) it stands there rather than walk its path into
-    /// reach, where a crowd round one target stood packed in a heap (engine choice, #705). Joining needs no reach: once let in it walks on. A runner
-    /// runs on into its footwork, as on the steering.
-    /// </summary>
-    bool WaitsOut(World world, CharacterCold cold, CharacterCold? tc, in CombatSlot st, int t, Vector3 d)
-    {
-        if (st.Ranged || cold.CombatRunning || !HeldOff(world, in st)) return false;
-
-        var (near, far) = WaitBand(world, t);
-        float r = CombatTuning.Footprint(cold);
-        float gap = MathF.Sqrt(d.X * d.X + d.Z * d.Z) - r - CombatTuning.Footprint(tc);
-
-        return gap <= CombatSteering.Band(near, far, r * (cold.Medical?.ScaleK ?? 1)).Max;
     }
 
     /// <summary>
