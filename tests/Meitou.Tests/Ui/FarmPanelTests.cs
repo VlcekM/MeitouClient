@@ -3,6 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Game;
+using Meitou.Game.Host;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
