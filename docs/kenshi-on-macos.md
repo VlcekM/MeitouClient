@@ -1,7 +1,8 @@
 # Getting Kenshi for Meitou on macOS
 
 MeitouClient does **not** include Kenshi's data. It reads the original game's files from a Kenshi installation you already
-own. The launcher only needs a folder containing `data/gamedata.base`; it does not run Steam or install Kenshi for you.
+own. The launcher only needs a folder containing `data/gamedata.base`; it does not start Steam or install Kenshi for you.
+Its one use of Steam is the optional [Workshop sync](#workshop-mods) below.
 
 Kenshi is a Windows build. The Steam client on macOS therefore disables its install button; this is a Kenshi/Steam
 distribution limit, not something the launcher can bypass. The options below are for users who own Kenshi.
@@ -50,6 +51,15 @@ This is an **external, unsupported** route:
 
 This route may be affected by Steam's terms and the game's EULA; use it only for a copy you are entitled to. The
 launcher deliberately does not automate Steam credentials or depot downloads.
+
+## Workshop mods
+
+The Steam client on macOS cannot install Kenshi, but it does download the Workshop items you are subscribed to (subscribe in the Steam client
+or on the Workshop web pages). Start Steam, open the launcher's **Mods** page and click **Sync workshop**: the launcher asks the running client to
+download or update them and lists them when they are installed. They are read from
+`~/Library/Application Support/Steam/steamapps/workshop/content/233860`, wherever your Kenshi folder is, also when Steam is closed later.
+The button needs Steam installed in the usual place and an account that owns Kenshi; the launcher never starts Steam or asks for credentials.
+Details and what is verified: [launcher](launcher.md#workshop-sync-macos).
 
 ## If the folder is not found
 
