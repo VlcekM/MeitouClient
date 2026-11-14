@@ -233,7 +233,10 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
 
                 // Task_Pickup sounds when any of the stack went in.
                 if (item.Item.Quantity < before) world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
-                world.Post($"{c.Name}: Not enough room in my inventory");
+
+                // The notice is for the player's own characters (engine choice): an NPC or animal whose goal keeps trying an item it has no
+                // room for (ground food, a weapon while unarmed) would post it at every try (#683).
+                if (c.IsPlayer) world.Post($"{c.Name}: Not enough room in my inventory");
             }
         }
     }
