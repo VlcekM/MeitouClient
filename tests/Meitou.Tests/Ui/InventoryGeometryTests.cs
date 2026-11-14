@@ -10,6 +10,33 @@ namespace Meitou.Tests.Ui;
 public class InventoryGeometryTests
 {
     /// <summary>
+    /// A resized main grid keeps clear of the bottom controls, and its heading stays directly above it.
+    /// </summary>
+    [Theory]
+    [InlineData(100)]
+    [InlineData(250)]
+    public void CharacterGridKeepsItsBottomAndHeading(float height)
+    {
+        var layout = MyGuiReader.ParseLayout("""
+            <MyGUI type="Layout"><Widget type="Window" name="Root" position="0 0 500 600">
+              <Widget name="InventoryMainTitle" position="250 295 200 20"/>
+              <Widget name="main" position="250 320 200 230"/>
+              <Widget name="ArrangeButton" position="300 560 100 25"/>
+            </Widget></MyGUI>
+            """);
+        var geometry = new InventoryGeometry(layout, 1920, 1080, 1, 1);
+        geometry.FitCharacter(new(200, height));
+        var bindings = new UiBindings();
+        geometry.Bind(bindings);
+        var controls = MyGuiPresentation.Arrange(layout, 1920, 1080, bindings, []);
+        var main = controls.Single(c => c.Name == "main").Bounds;
+        var title = controls.Single(c => c.Name == "InventoryMainTitle").Bounds;
+        Assert.Equal(550, main.Y + main.Height);
+        Assert.Equal(5, main.Y - title.Y - title.Height);
+        Assert.Equal(560, controls.Single(c => c.Name == "ArrangeButton").Bounds.Y);
+    }
+
+    /// <summary>
     /// Storage keeps its layout minimum, expands only by positive grid deltas and remains natural-sized when larger than the viewport.
     /// </summary>
     [Theory]

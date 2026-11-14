@@ -125,6 +125,19 @@ sealed class InventoryGeometry
     }
 
     /// <summary>
+    /// The character's main section retains its original bottom edge after its height changes; its heading moves by the same amount.
+    /// </summary>
+    internal void FitCharacter(Vector2 size)
+    {
+        if (!_named.TryGetValue("main", out var main)) return;
+
+        float delta = main.Bounds.Height - size.Y;
+        main.Resize(size.X, size.Y);
+        main.Move(main.Bounds.X, main.Bounds.Y + delta);
+        if (_named.TryGetValue("InventoryMainTitle", out var title)) title.Move(title.Bounds.X, title.Bounds.Y + delta);
+    }
+
+    /// <summary>
     /// Writes each child position, including anonymous panels and template pieces, relative to its final parent.
     /// </summary>
     static void BindChildren(Node parent, UiBindings bindings)

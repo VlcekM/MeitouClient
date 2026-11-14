@@ -837,6 +837,10 @@ fixed backpack grids centre horizontally and retain their top offset. No 80%-of-
 storage layout, with ARRANGE for unrestricted grids, rather than the research layout. Meitou preserves the frame's natural dimensions even when
 larger than the viewport; visible pixels remain clipped to the screen.
 
+Character main-grid alignment (**Verified**, `FUN_14014eee0`): after setting section dimensions, keep `main`'s original bottom edge by shifting its
+top and `InventoryMainTitle` together. The character frame keeps its layout size. Meitou applies this before drawing the cells, including pinned
+and looted character windows; resizing the grid downwards alone can otherwise overlap ARRANGE.
+
 `Kenshi_InventoryResearchWindow` (**Verified**, layout read): `ResearchButton` "SHOW RESEARCH" over `backpack_content`, `ArrangeButton` "ARRANGE" under it
 (HCenter Bottom). Meitou: ARRANGE arranges the bench's grid as an inventory's (`ArrangeMachine`, `InventoryCommands.Arrange`; #639).
 

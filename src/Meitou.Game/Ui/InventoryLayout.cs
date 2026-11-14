@@ -28,6 +28,15 @@ sealed class InventoryLayout(PlayerInterface player)
             }
         }
 
+        if (InventoryWindows.ScreenKind(id) is "inventory" or "loot"
+            && player.InventoryWindows.WindowCharacter(id)?.ItemGrid is { } grid)
+        {
+            var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
+                player.InterfaceScale, player.UiScale);
+            geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCell));
+            geometry.Bind(b);
+        }
+
         if (id == "trader") player.TradeWindows.BindTraderGeometry(b);
     }
 
