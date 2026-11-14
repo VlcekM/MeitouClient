@@ -50,6 +50,10 @@ body covers ends the walk short. A re-issued order within 2 units of the last go
 Combat/follow steering ramps15/s, with turning/backward/arrival caps. Combat-move-speed multiplier
 and water factors 0.75/0.5/0.4 apply separately (`FUN_14065dba0`, by water state 1/2/3; Meitou scales the fight steering by the water factors, `MovementSystem`). No independent slope-speed term was found.
 
+A speed order (standing orders 0-2 and 16, `FUN_1405caa50`) writes the mover's own mode (CharMovement `+0x20`) and Task_Move's update applies
+that mode every frame (`FUN_1405c68a0`), so a change takes effect during the walk (**Verified**, decompile). Meitou: `Orders.SetRunSpeed` gives
+the new mode to a walk under way in the old one (#691); a walk a task started in another mode keeps it (engine choice).
+
 ### Force speed
 
 The squad template's `force speed` is copied onto its platoon (`+0xb0`, `FUN_1407ee2d0`; **Verified**; absent key taken as 4, **Unknown** whether the original's lookup gives 0): 3 (grouped, the value of 848 of 961 base templates) becomes 4 = no change; 0 walk, 1 jog (cap 55), 2 run (cap 999) are
