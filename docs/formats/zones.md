@@ -228,11 +228,15 @@ TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` fro
 - A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
   Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
   match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). How the exe reaches the field is **Unknown**: the string "nest" does
-  not appear in the decompile. Whether such a nest's `debris building` and meshes are stood up, and the reach, are **Unknown**. Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
+  not appear in the decompile. Whether such a nest's `debris building` and meshes are stood up is **Unknown**. Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
   the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
+  - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, one roll per home, on its floor or
+    the ground beside it; none round the town's centre unless a home stands there. The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
+    1630 from the centre; The Old Prison's 16 within 349 of the Broken Watchtower (`nest armoury ruin`, 350). Measured against Meitou's boot housing; 5 items of 403 lie further.
 Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
-items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town lays its residents' nests' items once when first made in a
-zone the save has no file of, round its centre, as its own camp's (`PopulationSystem.ResidentNestDrops`); their buildings and meshes are not stood up.
+items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town lays its residents' nests' items once when first made, round
+each home whose template names the nest and whose zone the save has no file of, as its own camp's (`PopulationSystem.ResidentNestDrops`); their buildings and meshes are not
+stood up.
 
 ## Open questions
 
