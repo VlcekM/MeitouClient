@@ -525,17 +525,19 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         code is not (CrimeCode.Burglary or CrimeCode.Looting or CrimeCode.Trespassing or CrimeCode.CropTheft or CrimeCode.UniformTheft);
 
     /// <summary>
-    /// DA 33 CRIME_ALARM said by <paramref name="speaker"/> at <paramref name="target"/> (<c>FUN_140680560</c>, <b>Observed</b>): the speaker turns
-    /// on the target (its perception marks it hostile, <c>FUN_140858f40</c>), the target's crime timer is set to 30 and it is recently wanted
-    /// (<c>FUN_140851f40</c>); with no crime pending, a target inside the speaker's own home that is not public gets a pending Trespassing. Then the
-    /// alarm of the speaker's town is raised at the target for its pending crime (<see cref="TownAlarm"/>).
+    /// DA 33 CRIME_ALARM said by <paramref name="speaker"/> at <paramref name="target"/> (<c>FUN_140680560</c>, <b>Observed</b>): the speaker
+    /// notices the target (the forced sense with its alarm flag, <c>FUN_140858f40</c>, <b>Verified</b>: the sense entry is marked seen and alert
+    /// 5 s; no attack order and no squad tag, so a Holy Nation civilian crying out at a skeleton starts no fight, #648), the target's crime timer
+    /// is set to 30 and it is recently wanted (<c>FUN_140851f40</c>); with no crime pending, a target inside the speaker's own home that is not
+    /// public gets a pending Trespassing. Then the alarm of the speaker's town is raised at the target for its pending crime
+    /// (<see cref="TownAlarm"/>).
     /// </summary>
     public void Alarm(World world, int speaker, int target)
     {
         var table = world.Characters;
         if (table.Cold(speaker) is not { } s || table.Cold(target) is not { } t) return;
         var targetId = table.IdOf(target);
-        world.Defer(new Combat.AttackOrder([table.IdOf(speaker)], targetId) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+        world.SystemOf<AggroSystem>()?.Alarm(world, table.IdOf(speaker), targetId);
         var squad = s.SquadId >= 0 ? world.Squads.Find(s.SquadId) : null;
         int town = squad?.Town ?? -1;
         if (t.Pending is { } p) p.Timer = AlarmTimer;
