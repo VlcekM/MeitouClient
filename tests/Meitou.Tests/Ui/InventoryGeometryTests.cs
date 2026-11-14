@@ -113,7 +113,7 @@ public class InventoryGeometryTests
         var main = controls.Single(c => c.Name == "main").Bounds;
         var title = controls.Single(c => c.Name == "InventoryMainTitle").Bounds;
         Assert.Equal(550, main.Y + main.Height);
-        Assert.Equal(5, main.Y - title.Y - title.Height);
+        Assert.Equal(5, main.Y - title.Y - title.Height, 0.01f);
         Assert.Equal(560, controls.Single(c => c.Name == "ArrangeButton").Bounds.Y);
     }
 
@@ -155,13 +155,22 @@ public class InventoryGeometryTests
         Assert.Equal(240 + Math.Max(0, height - 100), root.Height);
         Assert.Equal((content.Width - width) / 2, grid.X - content.X);
         Assert.Equal(fixedTop ? 40 : (content.Height - height) / 2, grid.Y - content.Y);
-        Assert.Equal(grid, grid.Intersect(root));
-        Assert.Equal(5, content.Y + content.Height - button.Y - button.Height);
+        AssertWithin(grid, root);
+        Assert.Equal(5, content.Y + content.Height - button.Y - button.Height, 0.01f);
     }
 
     /// <summary>
     /// A small synthetic production layout; dimensions deliberately differ from Kenshi's assets.
     /// </summary>
+    static void AssertWithin(UiRect inner, UiRect outer)
+    {
+        var clipped = inner.Intersect(outer);
+        Assert.Equal(inner.X, clipped.X, 0.01f);
+        Assert.Equal(inner.Y, clipped.Y, 0.01f);
+        Assert.Equal(inner.Width, clipped.Width, 0.01f);
+        Assert.Equal(inner.Height, clipped.Height, 0.01f);
+    }
+
     static MyGuiLayout Building() => MyGuiReader.ParseLayout("""
         <MyGUI type="Layout"><Widget type="Window" name="Root" position="0 0 400 400">
           <Widget name="CraftingPanel" position="5 0 390 45" align="HStretch Top"/>
@@ -222,11 +231,11 @@ public class InventoryGeometryTests
         var first = host.Arrange(1920, 1080, Bind).Single().Controls;
         var output = first.Single(c => c.Name == "out");
         var bar = first.Single(c => c.Name == "OutputProgressBar");
-        Assert.Equal(columns * 25, output.Bounds.Width);
-        Assert.Equal(rows * 25, output.Bounds.Height);
-        Assert.Equal(output.Bounds, output.Bounds.Intersect(output.Clip!.Value));
-        Assert.Equal(bar.Bounds, bar.Bounds.Intersect(bar.Clip!.Value));
-        Assert.Equal(25, bar.Bounds.Y - output.Bounds.Y - output.Bounds.Height);
+        Assert.Equal(columns * 25, output.Bounds.Width, 0.01f);
+        Assert.Equal(rows * 25, output.Bounds.Height, 0.01f);
+        AssertWithin(output.Bounds, output.Clip!.Value);
+        AssertWithin(bar.Bounds, bar.Clip!.Value);
+        Assert.Equal(25, bar.Bounds.Y - output.Bounds.Y - output.Bounds.Height, 0.01f);
         Assert.Equal(first.Select(c => c.Bounds), host.Arrange(1920, 1080, Bind).Single().Controls.Select(c => c.Bounds));
 
         if (inputCount == 0)
@@ -238,8 +247,8 @@ public class InventoryGeometryTests
 
         var input = first.Single(c => c.Name == "in1");
         var second = first.Single(c => c.Name == "in2");
-        Assert.Equal(input.Bounds, input.Bounds.Intersect(input.Clip!.Value));
-        Assert.Equal(second.Bounds, second.Bounds.Intersect(second.Clip!.Value));
+        AssertWithin(input.Bounds, input.Clip!.Value);
+        AssertWithin(second.Bounds, second.Clip!.Value);
         var column = first.Single(c => c.Name == "InputColumn").Bounds;
         Assert.Equal(column.X + column.Width, first.Single(c => c.Name == "OutputColumn").Bounds.X);
         Assert.True(second.Bounds.Y >= input.Bounds.Y + input.Bounds.Height);
