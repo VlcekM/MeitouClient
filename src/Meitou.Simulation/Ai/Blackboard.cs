@@ -601,13 +601,14 @@ public sealed class Blackboard
     }
 
     /// <summary>
-    /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, with no target.
+    /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, aimed at <paramref name="target"/> (none: the
+    /// save named none, or a character that is not in the world).
     /// </summary>
-    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null)
+    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null)
     {
         Contract = package;
         ContractEnd = end;
-        MissionTarget = CharacterId.None;
+        MissionTarget = target ?? CharacterId.None;
         Start(package, -1, rules);
     }
 

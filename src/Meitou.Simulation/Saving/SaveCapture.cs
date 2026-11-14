@@ -287,8 +287,8 @@ public static partial class SaveCapture
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> OrderTargets = [];
         /// <summary>
-        /// The jobs on a character (Staying close, Bodyguard) whose target's handle is written once every character has one, so a character new to
-        /// this save is named too (#447); one not saved keeps the handle the job was written with.
+        /// The jobs on a character (Staying close, Bodyguard) and the contracts' mission targets whose target's handle is written once every
+        /// character has one, so a character new to this save is named too (#447); one not saved keeps the handle the record was written with.
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> JobTargets = [];
         /// <summary>
@@ -831,6 +831,16 @@ public static partial class SaveCapture
     }
 
     /// <summary>
+    /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>); the handle of its contract's mission target is written
+    /// once every character has one (<see cref="MemoryPass.JobTargets"/>), one not saved keeps the handle the save named.
+    /// </summary>
+    static void WriteAi(FcsRecord platoon, AiSave? ai)
+    {
+        AiSave.Write(platoon, ai);
+        if (ai is { Contract: not null, Target.IsNone: false }) s_memoryPass?.JobTargets.Add((platoon, AiSave.TargetKey, ai.Target));
+    }
+
+    /// <summary>
     /// Holds back the target handles of the character's jobs on a character until every character has one (<see cref="MemoryPass.JobTargets"/>).
     /// </summary>
     static void DeferJobTargets(FcsRecord ai, CharacterCold cold)
@@ -991,7 +1001,7 @@ public static partial class SaveCapture
             if (p is not null && (p.Dead || platoon.Record.Bools.ContainsKey("dead"))) platoon.Record.Bools["dead"] = p.Dead;   // +0x1f0
             if (p is not null) platoon.Record.Bools["intact"] = p.IntactFlag;   // +0x100
             ShopSave.Write(platoon.Record, squad is not null ? squad.Shop : sp.Shop, world);
-            AiSave.Write(platoon.Record, squad is not null ? AiSave.Of(squad.Ai) ?? squad.SavedAi : sp.Ai);
+            WriteAi(platoon.Record, squad is not null ? AiSave.Of(squad.Ai) ?? squad.SavedAi : sp.Ai);
 
             // A wild one the AI ran: its package, persistent while it occupies a town (as the original's occupation).
             if (sp.Wild is not null && p is not null && (squad?.Ai?.Current?.Id ?? p.Package) is { } package)
@@ -1383,7 +1393,7 @@ public static partial class SaveCapture
                 record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
             else record.Strings.Remove(MissionTownKey);
             ShopSave.Write(record, shop, _world);
-            AiSave.Write(record, ai);
+            WriteAi(record, ai);
             NoteMemory(record, memory);
 
             WriteMapArea(record, _data, lead.Position);

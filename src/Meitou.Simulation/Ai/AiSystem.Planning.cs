@@ -156,6 +156,18 @@ public sealed partial class AiSystem
                 return true;
             }
 
+            // A follow goal aimed at the squad's mission (44 of a bodyguard contract) is its own plan too (engine choice): the row needs a target
+            // and has no finder, its target being the goal's own, the contract's mission target, which is a character and no place to plan a
+            // walk to. The following is the movement system's.
+            if (TaskBehaviours.Of(type) == AiBehaviour.Follow && goal.Task.Target == TaskTargetType.SquadMission)
+            {
+                if (!_world.Characters.IsAlive(_board.MissionTarget)) return false;
+
+                _mind.Plan.Clear();
+                _mind.Plan.Add(new PlanStep(type, default));
+                return true;
+            }
+
             if (TaskDataTable.Of(type) is not { } row)
             {
                 _mind.Plan.Clear();

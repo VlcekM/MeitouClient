@@ -2691,7 +2691,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (squad.SavedAi is { } saved)
         {
             _rules.Bind(this, world, squad);
-            saved.Apply(squad.Ai, data.Ai, _rules);
+            saved.Apply(squad.Ai, data.Ai, _rules, world.Saved is { } population ? population.CharacterOf : null);
             squad.SavedAi = null;
         }
 
