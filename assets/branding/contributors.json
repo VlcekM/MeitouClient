@@ -28,8 +28,8 @@
     "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 8,
-    "areas": "Benchmarking, Crossbow bolt tracers"
+    "commits": 9,
+    "areas": "Benchmarks, Proton saves, Tracers"
   },
   "lucasskrewer": {
     "commits": 12,
@@ -48,15 +48,15 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 35,
-    "areas": "Doors, Animals, Medics, General bugfixing"
+    "commits": 39,
+    "areas": "Carried bodies, Animals, Medics, Saves"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 7,
-    "areas": "Metal renderer, Settings window"
+    "commits": 12,
+    "areas": "Metal rendering, Launcher"
   }
 }
