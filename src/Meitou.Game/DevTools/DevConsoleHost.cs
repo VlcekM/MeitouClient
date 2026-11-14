@@ -630,7 +630,7 @@ sealed class DevConsoleHost(GameHost host)
     void ConsoleMaxstats(IReadOnlyList<string> args, DevConsole con)
     {
         if (!Need(args, 0, 0, Self("maxstats"))) return;
-        Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.MaxSkills, ""));
+        Report(con, host.DebugMenu.DebugMaxAll());
     }
 
     /// <summary>

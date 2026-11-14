@@ -142,7 +142,7 @@ teleport, spawn, items, money, healing, skills and damage.
 ### Acceptance
 
 - Open the menu, teleport the selected squad, spawn a hostile NPC, give an item, add money, heal,
-  max skills and apply damage.
+  edit a character's stats and apply damage.
 - The menu closes on Esc/Ctrl+F10 and does not leak keys into the camera or UI.
 - Opening settings still works with F10.
 
