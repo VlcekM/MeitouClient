@@ -176,6 +176,21 @@ holds refuses the second mod.
   package and the members' minds. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
+- **World hooks** (engine API, not in the original; serial phases; untested in play): `PopulationSystem.RequestCampaign` queues a
+  FACTION_CAMPAIGN against a town as a dialogue trigger does (the request pass then applies the game's gates); `PopulationSystem.SpawnPlatoon`
+  adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads and saves like a roaming
+  one (-1 and nothing added when no walkable point is found); the `VisitTown` command sends a squad running a wandering trader package to a
+  player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
+  trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
+  pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
+  keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused.
+- **Driving NPCs** (engine API; serial phases; untested in play): `PopulationSystem.HoldPlatoon` stops a roaming platoon's trips and its
+  stand-in's travel (not saved: hold again after a load; it still unloads and despawns as any platoon). `CharacterCold.Engaged` keeps the AI
+  off one member (self-preservation still answers an attack); the mod then drives it with what the engine's own duties use: `TaskStart.Walk`,
+  `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
+  a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
+  takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
+  that comes before the game's rule (not saved), for a captive the mod's squad carries.
 
 ## Harmony
 

@@ -200,7 +200,7 @@ public sealed partial class PopulationSystem
     {
         if (!Kept(p) && (p.ReplacedHome || !Wanted(p))) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
-        if (p.OrphanSeconds <= OrphanLimitSeconds) StandIn(world, p, dt);
+        if (p.OrphanSeconds <= OrphanLimitSeconds && !p.Held) StandIn(world, p, dt);
     }
 
     /// <summary>
@@ -664,6 +664,7 @@ public sealed partial class PopulationSystem
         }
 
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
+        if (p.Held) return;   // a code mod runs it (HoldPlatoon)
 
         // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when
         // it gives way.
@@ -1281,6 +1282,89 @@ public sealed partial class PopulationSystem
         world.Platoons.Add(platoon);
         ChooseNext(world, platoon);
         Activate(world, platoon);
+    }
+
+    #endregion
+
+    #region Code-mod spawns
+
+    /// <summary>
+    /// Placement tries of a code mod's platoon (<see cref="SpawnPlatoon"/>; engine choice, as a campaign squad's 8).
+    /// </summary>
+    const int ModPlaceTries = 8;
+
+    /// <summary>
+    /// A code mod's spawn (engine API, not in the original): an unloaded platoon of the squad template <paramref name="templateId"/> for
+    /// <paramref name="faction"/>, homed at the site <paramref name="homeSite"/>, at a walkable point between <paramref name="minRadius"/> and
+    /// <paramref name="maxRadius"/> of <paramref name="around"/> (<see cref="ModSpot"/>; never outside that ring). Its package and job come from the
+    /// template (<see cref="PlatoonJobs.For"/>), so a trader template walks as a trader; it loads like any roaming platoon near the player (its squad
+    /// id is then <see cref="Platoon.SquadId"/>) and is saved with them. Its purse starts at <paramref name="money"/>. Returns the platoon id, or -1,
+    /// adding nothing, for an unknown template, faction or site, a point or radius that is not finite, a template that plans no one, or a ring with
+    /// no walkable point found. Serial phases only.
+    /// </summary>
+    public int SpawnPlatoon(World world, int faction, string templateId, int homeSite, Vector2 around, float minRadius, float maxRadius,
+        long money = 0)
+    {
+        if (faction < 0 || faction >= _data.Factions.Count || homeSite < 0 || homeSite >= _data.Sites.Count) return -1;
+        if (!float.IsFinite(around.X) || !float.IsFinite(around.Y) || !float.IsFinite(minRadius) || !float.IsFinite(maxRadius)) return -1;
+        if (_data.Db.Find(templateId) is not { Type: FcsRecordType.SquadTemplate } record) return -1;
+
+        var template = SquadTemplate.From(record);
+        int id = world.Platoons.NextId();
+        ulong key = Rng.Mix(SeedSalts.ModPlatoon ^ (ulong)id << 8 ^ (ulong)faction << 40);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
+        if (plan.TotalMembers == 0 || ModSpot(world, key, around, minRadius, maxRadius) is not { } spot) return -1;
+
+        var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        world.Platoons.Add(new Platoon
+        {
+            Id = id,
+            Origin = homeSite,
+            TemplateId = template.Id,
+            Faction = faction,
+            Key = key,
+            Size = plan.TotalMembers,
+            Position = spot,
+            Package = package?.Id,
+            Job = job,
+            Money = Math.Max(0, money),
+        });
+        return id;
+    }
+
+    /// <summary>
+    /// A code mod takes over a platoon's movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip orders and its
+    /// stand-in stays where it is, so the mod can walk its members itself (<see cref="CharacterCold.Engaged"/> keeps the AI off a member; its
+    /// self-preservation still answers an attack). False for an unknown platoon, a town's own or a campaign's. Serial phases only.
+    /// </summary>
+    public static bool HoldPlatoon(World world, int platoon, bool held)
+    {
+        if (world.Platoons.Find(platoon) is not { Pinned: false, Campaign: null } p) return false;
+
+        p.Held = held;
+        return true;
+    }
+
+    /// <summary>
+    /// A walkable point in the ring round <paramref name="around"/> (<see cref="SpawnPlatoon"/>; radii below 0 count as 0, a smaller outer one as the
+    /// inner one): uniform angle and distance, tried <see cref="ModPlaceTries"/> times. Null when none is walkable (engine choice: the centre is no
+    /// fallback, as it lies outside a ring with an inner radius).
+    /// </summary>
+    static Vector2? ModSpot(World world, ulong key, Vector2 around, float minRadius, float maxRadius)
+    {
+        float inner = Math.Max(0, Math.Min(minRadius, maxRadius));
+        float outer = Math.Max(inner, maxRadius);
+        for (int k = 0; k < ModPlaceTries; k++)
+        {
+            ulong angleKey = Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.ModPlatoonPlace + (ulong)(2 * k));
+            ulong distanceKey = Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.ModPlatoonPlace + (ulong)(2 * k + 1));
+            float angle = Rng.Float(angleKey) * MathF.Tau;
+            float distance = inner + Rng.Float(distanceKey) * (outer - inner);
+            var spot = around + distance * new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+            if (world.Walkability.IsWalkable(spot.X, spot.Y)) return spot;
+        }
+
+        return null;
     }
 
     #endregion
