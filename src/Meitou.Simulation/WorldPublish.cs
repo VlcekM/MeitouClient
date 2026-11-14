@@ -602,7 +602,7 @@ public sealed partial class World
         s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
         s.Light = sneaking ? Sight.PeekLight(i) : 1;
         s.Watchers = watchers;
-        s.Bar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? TrainBar(cold) : null;
+        s.Bar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? CutBar(cold, state[i].Task) ?? TrainBar(cold) : null;
         s.Prison = cold is { IsImprisoned: true }
             ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }),
                 cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours)
@@ -829,6 +829,24 @@ public sealed partial class World
         float chance = Locks.Lockpicking.RollChance(c, l.Level);
         string text = Loc.Tr("Lockpicking (Chance {1}%)", MathF.Round(chance * 100));
         return new TaskBar(text, l.NextRoll > 0 ? Math.Clamp(l.PickTime / l.NextRoll, 0, 1) : 0);
+    }
+
+    /// <summary>
+    /// The bar of Task_CutLock and Task_CutShackles (docs/game/locks.md "Cutting and breaking"): "Cutting: {n}", n the lock's hardness x 10 cut to a
+    /// whole number (<c>FUN_140359f80</c>, <b>Verified</b>), while the cutter is at the lock (not walking to it). The original sets the caption only;
+    /// the fill stays empty (engine choice).
+    /// </summary>
+    TaskBar? CutBar(CharacterCold c, byte task)
+    {
+        if (task == (byte)CharacterTask.GoTo) return null;
+
+        var l = c.ForcingLock is { } id && c.Force == Locks.LockForce.Tools ? Fixtures.Find(id)?.Lock
+            : c.Shackles is { Work: Locks.ShackleWork.Cut } job && Characters.TryResolveNext(job.Wearer, out int w)
+                ? Locks.LockSystem.WornShackles(Characters.Cold(w))?.Lock
+                : null;
+        if (l is not { EffectivelyLocked: true }) return null;
+
+        return new TaskBar(Loc.Tr("Cutting: {1,num}", (int)(l.Hardness * 10)), 0);
     }
 
     /// <summary>
