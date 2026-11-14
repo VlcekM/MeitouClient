@@ -1378,6 +1378,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// How far along the ray a floor pick looks when it meets the terrain at <paramref name="ground"/> inside a loaded building's rooms: there the
+    /// terrain is cut (docs/render-interior-cut.md), so the pick goes on to where the ray leaves the room (a tower's ground floor below a hillside,
+    /// feedback #712). Null when the terrain there is outside every room.
+    /// </summary>
+    public float? CutGroundReach(Vector3 origin, Vector3 direction, Vector3 ground)
+    {
+        float? reach = null;
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+                if (room.Contains(ground) && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0)) reach = exit;
+        return reach;
+    }
+
+    /// <summary>
     /// The nearest distance within <paramref name="maxDistance"/> at which the ray first meets a loaded building's collision on a face nobody
     /// stands on (<see cref="InteriorVolume.FaceHit"/>, floors up to <paramref name="floor"/>); null for none.
     /// </summary>

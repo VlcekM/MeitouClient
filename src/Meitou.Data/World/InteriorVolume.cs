@@ -248,6 +248,35 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
+    /// How far along the ray it leaves the volume's box (footprint box by height range); null when it misses the box or the box is behind it.
+    /// </summary>
+    public float? BoxExit(Vector3 origin, Vector3 direction)
+    {
+        if (Footprint.Length < 3) return null;
+
+        var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
+        var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
+        float near = 0, far = float.MaxValue;
+        for (int i = 0; i < 3; i++)
+        {
+            if (MathF.Abs(direction[i]) < 1e-9f)
+            {
+                if (origin[i] < min[i] || origin[i] > max[i]) return null;
+
+                continue;
+            }
+
+            float a = (min[i] - origin[i]) / direction[i];
+            float b = (max[i] - origin[i]) / direction[i];
+            near = MathF.Max(near, MathF.Min(a, b));
+            far = MathF.Min(far, MathF.Max(a, b));
+            if (near > far) return null;
+        }
+
+        return far;
+    }
+
+    /// <summary>
     /// Whether the building's own collision (its floors, stairs, walls, roofs and slab undersides, <see cref="FloorSurfaces.Cuts"/>) cuts into
     /// <paramref name="prism"/> by more than <paramref name="tolerance"/>; false for a volume made by hand.
     /// </summary>

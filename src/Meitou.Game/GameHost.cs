@@ -847,6 +847,7 @@ sealed partial class GameHost(
     {
         Player.Picking.MeshHit = (id, origin, direction) => Gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         Player.Picking.BuildingMoveHit = (origin, direction, distance) => Gpu.Objects?.MoveHit(origin, direction, Interiors.ViewedFloorValue, distance);
+        Player.Picking.CutGroundReach = (origin, direction, ground) => Gpu.Objects?.CutGroundReach(origin, direction, ground);
         Player.Picking.SurfaceMoveHit = Interiors.SurfaceMoveHit;
         Player.Picking.InteriorFaceHit = (origin, direction, distance) => Gpu.Objects?.FaceHit(origin, direction, Interiors.ViewedFloorValue, distance);
         Player.Picking.HasRooms = key => Gpu.Objects?.InteriorFor(key) is not null;

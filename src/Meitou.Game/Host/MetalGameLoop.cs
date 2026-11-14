@@ -1098,6 +1098,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         hud.Picking.MeshHit = (id, origin, direction) => _characters?.RayHit(host.DrawKey(id), origin, direction);
         hud.Floor = (() => host.Interiors.ViewedFloorValue, host.Interiors.StepFloor);
         hud.Picking.BuildingMoveHit = (origin, direction, distance) => _objects?.MoveHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
+        hud.Picking.CutGroundReach = (origin, direction, ground) => _objects?.CutGroundReach(origin, direction, ground);
         hud.Picking.SurfaceMoveHit = host.Interiors.SurfaceMoveHit;
         hud.Picking.InteriorFaceHit = (origin, direction, distance) => _objects?.FaceHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
         hud.Picking.HasRooms = key => _objects?.InteriorFor(key) is not null;
