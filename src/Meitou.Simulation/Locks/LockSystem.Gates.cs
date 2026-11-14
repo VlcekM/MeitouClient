@@ -216,7 +216,8 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Gives the free NPC attackers whose target is in another region behind a route that is not open the first gate on that route to bash, when the
-    /// planner says so (<see cref="GatePlan"/>); false when it gave none (the house doors are looked at then).
+    /// planner says so (<see cref="GatePlan"/>), or to unlock when it is their own faction's (<see cref="UnlocksOwn"/>); false when it gave none
+    /// (the house doors are looked at then).
     /// </summary>
     bool FindGateBasher(World world, int s, int t, CharacterCold c)
     {
@@ -229,7 +230,9 @@ public sealed partial class LockSystem
         // No gate leads there: 270 falls back to a wall of the attacker's region (FUN_1405a3f60), planned through 272 Smashing.
         if (gate is null) return FindWallBasher(world, s, t, c, a);
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return false;
-        if (!_gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
+
+        // Its own faction's locked gate is unlocked at the leaf, not bashed (see UnlocksOwn).
+        if (!UnlocksOwn(main.Door, c) && !_gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
         c.Bashing = main.Door.Id;
         c.BashTime = 0;
         return true;
