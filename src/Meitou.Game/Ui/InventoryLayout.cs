@@ -14,11 +14,17 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Window placement
 
     /// <summary>
+    /// The main inventory has an opening position to retain when closed and reopened.
+    /// </summary>
+    bool _inventoryPlaced;
+
+    /// <summary>
     /// A window's geometry at the inventory scale: a bag window sized to its bag, the trader's own.
     /// </summary>
     internal void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = player.UiScale;
+        b.WindowPosition = new Vector2(InventoryPlacement.Margin(player.Width, player.Height));
         if (InventoryWindows.ScreenKind(id) is "bag" or "loot-bag")
         {
             var owner = player.InventoryWindows.WindowCharacter(id);
@@ -33,7 +39,8 @@ sealed class InventoryLayout(PlayerInterface player)
         {
             var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
                 player.InterfaceScale, player.UiScale);
-            geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCell));
+            if (!TradeWindows.IsAnimal(player.InventoryWindows.WindowCharacter(id)!))
+                geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCell));
             geometry.Bind(b);
         }
 
@@ -68,34 +75,44 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// Lays the open character, loot and bag windows out in one row, left to right: the limbs window, the character's bag, the character, the looted
-    /// or traded character, its bag. The row is centred with the character's top (the limbs window keeps its margin top), so no window slides over
-    /// another when the row is wider than the pair that placed them. A row wider than the screen spans it, its windows overlapping evenly rather than
-    /// the host stacking the last ones on the right edge.
+    /// Places a newly opened independent character inventory after the other inventory windows, using another row when necessary.
+    /// </summary>
+    internal void PlaceCharacterWindow(bool newCharacter = false)
+    {
+        if (_inventoryPlaced && !newCharacter) return;
+        _inventoryPlaced = true;
+
+        var roots = WindowRoots();
+        if (!roots.TryGetValue("inventory", out var own)) return;
+
+        var occupied = roots.Where(p => p.Key != "inventory" && InventoryWindows.ScreenKind(p.Key) is "inventory" or "bag")
+            .Select(p => p.Value).ToArray();
+        var position = InventoryPlacement.FindSpace(player.Width, player.Height, own.Width, occupied);
+        foreach (string machine in new[] { "building", "bench", "storage" })
+        {
+            if (roots.TryGetValue(machine, out var r)) position.X = Math.Max(position.X, r.X + r.Width);
+        }
+
+        player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset("inventory") + position - new Vector2(own.X, own.Y));
+    }
+
+    /// <summary>
+    /// Places linked loot windows edge to edge at the opening margin: limbs, own bag, own inventory, looted bag, looted character.
     /// </summary>
     internal void PlaceWindowRow()
     {
         var roots = WindowRoots();
-        var row = new[] { "limbs", "bag", "inventory", "loot", "loot-bag" }.Where(roots.ContainsKey).ToArray();
-        if (row.Length < 2) return;
-
-        float gap = 6 * player.UiScale;
-        float total = row.Sum(s => roots[s].Width) + gap * (row.Length - 1);
-        if (total > player.Width)
-        {
-            gap -= (total - player.Width) / (row.Length - 1);
-            total = player.Width;
-        }
-
-        float x = (player.Width - total) / 2;
-        float y = (roots.TryGetValue("inventory", out var lead) ? lead : roots[row[0]]).Y;
-        float margin = 0.05f * Math.Min(player.Width, player.Height);
+        var row = new[] { "limbs", "bag", "inventory", "loot-bag", "loot" }.Where(roots.ContainsKey).ToArray();
+        float margin = InventoryPlacement.Margin(player.Width, player.Height);
+        float before = row.TakeWhile(s => s != "inventory").Sum(s => roots[s].Width);
+        var own = roots.GetValueOrDefault("inventory", new(margin, margin, 0, 0));
+        float x = Math.Max(margin, own.X - before), y = own.Y;
         foreach (string screen in row)
         {
             var r = roots[screen];
             var move = new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y);
             player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + move);
-            x += r.Width + gap;
+            x += r.Width;
         }
     }
 
@@ -136,15 +153,21 @@ sealed class InventoryLayout(PlayerInterface player)
     /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left
     /// edge, vertically centred; an open inventory (with its bag) under it moves right of it.
     /// </summary>
-    internal void PlaceMachineWindow(string id)
+    internal void PlaceMachineWindow(string id, bool linked = false)
     {
+        if (linked)
+        {
+            PlaceInventoryBeside(id, left: false);
+            return;
+        }
+
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
 
         var move = new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y);
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
         float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
-        float push = window.Width + 6 * player.UiScale - left;
+        float push = window.Width - left;
         if (push <= 0) return;
 
         foreach (string screen in new[] { "inventory", "bag" })
@@ -161,7 +184,7 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
 
-        float gap = 6 * player.UiScale;
+        const float gap = 0;
         float x = left ? own.X - other.Width - gap : own.X + own.Width + gap;
 
         // Make room for the pair before the screen host clamps either window to the viewport.

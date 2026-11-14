@@ -32,6 +32,11 @@ sealed class ProductionWindows(PlayerInterface player)
     internal string? ShownMachine, ClosedMachine;
 
     /// <summary>
+    /// Whether the shown building window is currently placed beside its looter's inventory.
+    /// </summary>
+    bool _machineLinked;
+
+    /// <summary>
     /// The research tab's selected category, and the blueprint whose description shows.
     /// </summary>
     internal string? ResearchCategory, ResearchFocus;
@@ -87,7 +92,16 @@ sealed class ProductionWindows(PlayerInterface player)
             return;
         }
 
-        if (m is null || ShownMachine == m.Site || ClosedMachine == m.Site) return;
+        if (m is null || ClosedMachine == m.Site) return;
+
+        bool alone = !m.IsContainer && player.Build.StorageWithInventory != m.Site;
+        bool linked = !alone && player.FaithfulScreens.IsOpen("inventory");
+        if (ShownMachine == m.Site)
+        {
+            if (_machineLinked != linked) player.InventoryLayout.PlaceMachineWindow(MachineScreen(m), linked);
+            _machineLinked = linked;
+            return;
+        }
 
         ShownMachine = m.Site;
         string screen = MachineScreen(m);
@@ -96,12 +110,12 @@ sealed class ProductionWindows(PlayerInterface player)
         // The character's inventory opens with an order-driven container window (the original's order 26 opens the looter's own window and the
         // target's together) and with a machine's; selecting a selected machine, storage, bench or mined rock shows its window alone (the original's
         // windows of a selected ore storage and electrical workbench have no inventory beside them).
-        bool alone = !m.IsContainer && player.Build.StorageWithInventory != m.Site;
         if (!alone && player.Selected().Count > 0 && !player.FaithfulScreens.IsOpen("inventory"))
             player.FaithfulScreens.Open("inventory");
 
         player.FaithfulScreens.Open(screen);
-        player.InventoryLayout.PlaceMachineWindow(screen);
+        _machineLinked = !alone && player.FaithfulScreens.IsOpen("inventory");
+        player.InventoryLayout.PlaceMachineWindow(screen, _machineLinked);
     }
 
     /// <summary>

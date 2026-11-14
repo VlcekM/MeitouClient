@@ -259,17 +259,12 @@ sealed class InventoryWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// Opens the inventory for the character selected after pinning, left of the pinned window or of its bag when that is open.
+    /// Opens the inventory for the character selected after pinning in the next free inventory position.
     /// </summary>
     void OpenBesidePinned()
     {
         player.FaithfulScreens.Open("inventory");
-        if (PinnedInventories.FirstOrDefault(p => p.Value == _pinnedFrom).Key is { } slot)
-        {
-            string bag = PinnedBagOf(slot);
-            string anchor = player.FaithfulScreens.IsRegistered(bag) && player.FaithfulScreens.IsOpen(bag) ? bag : slot;
-            player.InventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
-        }
+        player.InventoryLayout.PlaceCharacterWindow(newCharacter: true);
 
         _pinnedFrom = CharacterId.None;
     }

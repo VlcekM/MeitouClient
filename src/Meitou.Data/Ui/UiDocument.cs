@@ -32,6 +32,11 @@ public sealed partial class UiBindings
     /// Shrink a window to the viewport. Inventory frames retain the size required by their cells, including oversized mod inventories.
     /// </summary>
     public bool FitWindowToViewport { get; set; } = true;
+
+    /// <summary>
+    /// A window's base top-left before its kept drag offset; null centres the window. Inventory windows use the original's opening margin.
+    /// </summary>
+    public Vector2? WindowPosition { get; set; }
     /// <summary>
     /// Captions the code sets, by widget name; <see cref="Coded"/> translates a message of the game's catalog.
     /// </summary>

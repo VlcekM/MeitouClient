@@ -874,6 +874,14 @@ name; otherwise ghost none, `OutputText` `-`, bar 0 and `CraftingName` `#afa68b`
 `CraftingName` (so it shows only until the first update) and `OutputTitleText` the translated "Output" upper-cased.
 Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a section holds only its ingredient, so "Invalid item!" never shows; the output ghost is the queue front's item (its record and model).
 
+Inventory opening geometry (**Verified**, `FUN_1406e4960`; constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5): independent character
+windows start at the integer margin `0.05 × min(screen width, screen height)`, after other inventory windows on that row. A full row advances by
+twice the margin, trying up to five rows. A linked target starts immediately at its partner's right edge and top; each character's bag precedes
+that character, with no six-pixel gap. Meitou no longer centres or deliberately overlaps the loot row. A dragged main window retains its top when
+linked loot opens. Pinned characters use the same independent placement search. A selected machine's standalone left-centred position remains
+**Observed**, from the screenshots below; the order-opened container goes right of the looter and returns to standalone placement when the
+inventory closes. Exact integer rounding of all nested MyGUI rectangles remains **Unknown**; Meitou retains fractional coordinates.
+
 Opening (**Observed**, owner's screenshots of the original, 2026-10-24): selecting a machine, bench or storage shows its window alone, with no inventory.
 A right click that sends a character to a storage opens the character's inventory with the storage window beside it; once the inventory closes, the
 storage window is back where it stood (the screen's lower left). Meitou: the same for a window already shown alone, and a window the player closed
@@ -1203,8 +1211,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     icon; a stump's race item never sits in the slot. Labels `-ARMS-` / `-LEGS-`; `figure.png` never changes. The slots are built on open (a limb lost meanwhile shows on reopening,
     **Observed**; Meitou refreshes live).
   The pin button (`Kenshi_PinButtonSkin` in the `Kenshi_WindowCXP` caption, drawn "O"; the skin's `*_checked` states while pinned) keeps the inventory window on the character shown
-  when it was pressed, and another squad member's inventory opens in a second window, so several show at once (**Observed** by the owner in the original). Engine choices: selecting
-  someone else after pinning opens their inventory left of the pinned one; I on a pinned character raises their window; unpinning gives the window back to the selection (closes it when
+  when it was pressed, and another squad member's inventory opens in a second window, so several show at once (**Observed** by the owner in the original). Opening uses the next free inventory position (the original manager's rule): selecting
+  someone else after pinning opens their inventory after the existing windows; I on a pinned character raises their window; unpinning gives the window back to the selection (closes it when
   the inventory is already open); a pinned window has its own bag window (OPEN BAG; a bag open when pinning stays open beside it) but no limbs window. A pinned window can still be dragged (**Observed** by the owner). A right click moves the item to the other character's window as below; with several open, Meitou picks the one on top (engine choice). The snapshot carries every pinned character's grid (`ShowInventoryCommand`).
   Esc while trading closes the trader and the character's windows in one press, whichever was clicked last (engine choice, as for loot).
   With a loot or container window open, the inventory window shows its looter while that one is selected, else the lead selected character. The original shows the lead even when another selected member looted (**Observed** by a player, #389); Meitou's choice keeps the looter's items beside the loot (`InventoryWindows.InventoryOwner`).

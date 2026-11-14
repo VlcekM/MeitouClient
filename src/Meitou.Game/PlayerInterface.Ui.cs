@@ -734,7 +734,11 @@ sealed partial class PlayerInterface
             else if (action == "inventory" && InventoryWindows.InventoryOwner() is { } lead
                 && InventoryWindows.PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key is { } slot)
                 FaithfulScreens.Open(slot);
-            else FaithfulScreens.Open(action);
+            else
+            {
+                FaithfulScreens.Open(action);
+                if (action == "inventory") InventoryLayout.PlaceCharacterWindow();
+            }
         }
         else if (action == "help") ToggleHelpWindow();
         else if (action == "extendedstats") InfoExpanded = !InfoExpanded;

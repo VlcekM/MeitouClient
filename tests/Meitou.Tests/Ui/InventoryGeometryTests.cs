@@ -1,4 +1,7 @@
 using System.Numerics;
+using Meitou.Content;
+using Meitou.Data;
+using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
 using Meitou.Game.Ui;
 
@@ -9,6 +12,72 @@ namespace Meitou.Tests.Ui;
 /// </summary>
 public class InventoryGeometryTests
 {
+    /// <summary>
+    /// Opening uses the original pixel margin, appends without gaps and tries another row when the current one is full.
+    /// </summary>
+    [Fact]
+    public void IndependentInventoriesAppendAndWrapAtTheOpeningMargin()
+    {
+        Assert.Equal(new Vector2(54, 54), InventoryPlacement.FindSpace(1920, 1080, 500, []));
+        Assert.Equal(new Vector2(554, 54), InventoryPlacement.FindSpace(1920, 1080, 500, [new(54, 54, 500, 600)]));
+        Assert.Equal(new Vector2(54, 162), InventoryPlacement.FindSpace(1920, 1080, 500, [new(54, 54, 1500, 600)]));
+    }
+
+    /// <summary>
+    /// An explicit inventory origin is stable across size changes and still moves with the host's drag offset.
+    /// </summary>
+    [Fact]
+    public void InventoryOriginKeepsItsTopLeftWhenItsFrameGrows()
+    {
+        var host = new MyGuiScreenHost(new());
+        host.Register("inventory", Building());
+        host.Open("inventory");
+        float width = 400;
+        UiBindings Bind(string _)
+        {
+            var bindings = new UiBindings { WindowPosition = new(54, 54), FitWindowToViewport = false };
+            bindings.Positions["Root"] = new(0, 0, width, 400);
+            return bindings;
+        }
+
+        host.SetOffset("inventory", new(100, 20));
+        var before = host.Arrange(1920, 1080, Bind).Single().Controls[0].Bounds;
+        width = 2200;
+        var after = host.Arrange(1920, 1080, Bind).Single().Controls[0].Bounds;
+        Assert.Equal(new Vector2(154, 74), new(before.X, before.Y));
+        Assert.Equal(new Vector2(before.X, before.Y), new(after.X, after.Y));
+        Assert.Equal(2200, after.Width);
+    }
+
+    /// <summary>
+    /// The installed layout and expanded window skin must enclose a well's complete output and bar at several viewport/interface scales.
+    /// </summary>
+    [Theory, Slow]
+    [InlineData(1920, 1080, 1)]
+    [InlineData(1600, 900, 1)]
+    [InlineData(1920, 1080, 1.25f)]
+    public void InstalledBuildingLayoutEnclosesTallOutput(int width, int height, float scale)
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "No Kenshi install configured");
+        var files = OgreScriptResources.ForInstall(install!, LoadOrder.FromInstall(install!));
+        var resources = MyGuiResources.Load("kenshi_init.xml", name => files.Find(name), "kenshi_fonts.xml");
+        var layout = MyGuiTemplates.Expand(MyGuiReader.ReadLayout(files.Find("Kenshi_GenericBuildingWindow.layout")!), resources);
+        float uiScale = height / 1080f * scale;
+        var geometry = new InventoryGeometry(layout, width, height, scale, uiScale);
+        geometry.FitBuilding([], new(4 * 25 * uiScale, 5 * 25 * uiScale), false, false);
+        var bindings = new UiBindings { TemplateScale = uiScale };
+        bindings.Hidden.UnionWith(["CraftingPanel", "InputColumn", "InputTitleText"]);
+        geometry.Bind(bindings);
+        var controls = MyGuiPresentation.Arrange(layout, width, height, bindings, resources.Layers);
+        foreach (string name in new[] { "out", "OutputProgressBar" })
+        {
+            var c = controls.Single(c => c.Name == name);
+            Assert.InRange(Math.Abs(c.Bounds.Height - c.Bounds.Intersect(c.Clip!.Value).Height), 0, 0.01f);
+            Assert.InRange(Math.Abs(c.Bounds.Width - c.Bounds.Intersect(c.Clip!.Value).Width), 0, 0.01f);
+        }
+    }
+
     /// <summary>
     /// A resized main grid keeps clear of the bottom controls, and its heading stays directly above it.
     /// </summary>
