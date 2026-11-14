@@ -1143,9 +1143,10 @@ public sealed class AnimationSystem(
             a.Idle = -1;
         }
 
-        // In deep water a race that swims plays its swimming clips (category 4), the ordinary ones where none fits.
+        // In deep water a race that swims plays its swimming clips (category 4), the ordinary ones where none fits. One with a leg down swims
+        // too: the category decides before the crawl, and the movement filter reads no posture (FUN_140520500, FUN_14051d660).
         else if (!pose.FullTechnique && technique < 0 && !pose.Carried && cold is { WaterState: 3, Race.Swims: true }
-            && Swim(a, stance, speed, lower))
+            && Swim(a, stance with { Prone = false }, speed, lower))
         {
         }
 
