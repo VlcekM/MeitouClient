@@ -211,6 +211,11 @@ public sealed class Platoon
     /// The goal <see cref="Route"/> was worked out for.
     /// </summary>
     public Vector2? RouteGoal { get; set; }
+    /// <summary>
+    /// A code mod runs it (<c>PopulationSystem.HoldPlatoon</c>, engine API): the population gives it no trip and moves no stand-in of it; it still
+    /// loads, unloads and despawns as any platoon. Not saved: the mod holds it again after a load.
+    /// </summary>
+    public bool Held { get; set; }
 }
 
 /// <summary>
@@ -354,6 +359,7 @@ public sealed class PlatoonRegistry
             h.Add(p.SquadId);
             h.Add(p.UnloadAtTick);
             h.Add(p.OrderCooldown);
+            if (p.Held) h.Add(0x48656C64);   // only when held, so worlds without code mods hash as before
             if (p.Job != Ai.PlatoonJob.None || p.Point is not null)
             {
                 // Only for platoons whose package gives an off-screen job, so worlds without AI packages hash as before.
