@@ -324,8 +324,9 @@ public sealed class Fixture
     /// </summary>
     public bool IsGate { get; init; }
     /// <summary>
-    /// Doors: the building's whole placement turn, tilt included, where it is known (null: a turn of <see cref="Yaw"/> about +Y); it places the leaf
-    /// (<see cref="FixtureRegistry.DoorSpotOf"/>). Derived from the data, not hashed or saved.
+    /// Doors and beds standing on their own: the building's whole placement turn, tilt included, where it is known (null: a turn of
+    /// <see cref="Yaw"/> about +Y); it places the leaf (<see cref="FixtureRegistry.DoorSpotOf"/>) and leans the sleeper
+    /// (<see cref="FixtureRegistry.LeanOf"/>). Derived from the data, not hashed or saved.
     /// </summary>
     public Quaternion? Rotation { get; init; }
     /// <summary>

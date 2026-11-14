@@ -433,6 +433,10 @@ sealed partial class GameHost
                 yaw = CarrierYaw(current, c, yaw, alpha);
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
+            else
+            {
+                rotation = Leaning(c, yaw);
+            }
             var poses = new CharacterPose[DrawnLayerCount(before, c)];
             BlendLayers(before, c, alpha, poses);
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
@@ -677,8 +681,19 @@ sealed partial class GameHost
             yaw = CarrierYaw(current, c, yaw, alpha);
             (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
         }
+        else
+        {
+            rotation = Leaning(c, yaw);
+        }
         return (position, yaw, rotation, before);
     }
+
+    /// <summary>
+    /// The whole rotation of a sleeper whose bed leans (<see cref="CharacterSnapshot.Lean"/>): its drawn yaw, then the bed's lean. Null: it is
+    /// turned by the yaw only.
+    /// </summary>
+    static Quaternion? Leaning(CharacterSnapshot c, float yaw) =>
+        c.Lean is { } lean ? lean * Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw) : null;
 
     /// <summary>
     /// The poses of <paramref name="c"/>'s animation layers between the ticks (none when it is not <paramref name="posed"/>), in its kept

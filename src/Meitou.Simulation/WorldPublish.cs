@@ -414,7 +414,10 @@ public sealed partial class World
 
         s.Id = id;
         s.Appearance = cold?.Appearance;
-        s.Position = DrawnPosition(cold, state[i].Position);
+        s.Lean = cold is { InSomething: Locks.HeldState.Bed, InWhat: { } lainIn } && Fixtures.Find(lainIn) is { } bed
+            ? Locks.FixtureRegistry.LeanOf(bed)
+            : null;
+        s.Position = DrawnPosition(cold, state[i].Position, s.Lean);
         s.Yaw = state[i].Yaw;
         s.Animations = cold?.Animation is { } anim && _animations is not null
             ? _animations.Publish(anim, s.Layers)
@@ -659,11 +662,12 @@ public sealed partial class World
     /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands
     /// on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/> (the same
     /// surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or
-    /// a downed body. One lying in a bed is raised by <see cref="BedLift"/>.
+    /// a downed body. One lying in a bed is raised by <see cref="BedLift"/>, along the up axis of a bed that leans (<paramref name="lean"/>).
     /// </summary>
-    Vector3 DrawnPosition(CharacterCold? cold, Vector3 at)
+    Vector3 DrawnPosition(CharacterCold? cold, Vector3 at, Quaternion? lean)
     {
-        if (cold?.InSomething == Locks.HeldState.Bed) return at with { Y = at.Y + BedLift };
+        if (cold?.InSomething == Locks.HeldState.Bed)
+            return lean is { } leaning ? at + Vector3.Transform(Vector3.UnitY, leaning) * BedLift : at with { Y = at.Y + BedLift };
 
         if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone
             || at.Y > Data.World.WorldWater.Height + Speed.WaterSlack)

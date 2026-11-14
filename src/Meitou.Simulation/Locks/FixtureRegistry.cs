@@ -401,6 +401,11 @@ public sealed partial class FixtureRegistry
     const float SavedSpotReach = 1;
 
     /// <summary>
+    /// A bed's up axis this close to +Y (its y) counts as level: no lean (<see cref="LeanOf"/>).
+    /// </summary>
+    const float LevelUp = 0.9999f;
+
+    /// <summary>
     /// Registers the fixtures of a town's buildings (<see cref="TownSite.Buildings"/>) once, then binds the held characters whose
     /// <see cref="CharacterCold.InWhat"/> names one. Their rooms and lamps go to <see cref="World.Sight"/> with them.
     /// </summary>
@@ -769,12 +774,25 @@ public sealed partial class FixtureRegistry
         Owner = owner,
         Position = at,
         Yaw = TownBuildings.YawOf(rotation),
+        Rotation = rotation.LengthSquared() > 1e-12f ? Quaternion.Normalize(rotation) : null,
         Marker = WorldObjectLayout.PositionMarker(db, record, at, rotation),
         UseRange = 15,
         RecordId = record.StringId,
         HostRecordId = record.StringId,
         Bed = bed,
     };
+
+    /// <summary>
+    /// How a bed standing on a slope leans its sleeper: the turn that, applied after the sleeper's own yaw about +Y, gives the bed's whole
+    /// orientation turned to that yaw (the original writes the direction marker's whole quaternion to a sleeper, tilt included: <c>FUN_1405cf130</c>,
+    /// <c>FUN_140549720</c>, docs/game/locks.md "Lie spot"). Null for a level bed or one whose tilt is not known.
+    /// </summary>
+    public static Quaternion? LeanOf(Fixture bed)
+    {
+        if (bed.Rotation is not { } whole || Vector3.Transform(Vector3.UnitY, whole).Y >= LevelUp) return null;
+
+        return whole * Quaternion.CreateFromAxisAngle(Vector3.UnitY, -bed.Yaw);
+    }
 
     /// <summary>
     /// A nest's buildings leave the world: whoever its cages hold is let out first.

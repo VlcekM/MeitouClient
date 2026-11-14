@@ -567,6 +567,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public Carrying.CarryAttach? Carry { get; internal set; }
     /// <summary>
+    /// The lean of the bed it lies in, applied after its yaw (<see cref="Locks.FixtureRegistry.LeanOf"/>: a bed on a slope); null: none.
+    /// </summary>
+    public Quaternion? Lean { get; internal set; }
+    /// <summary>
     /// The bone of another character this one is drawn on (<see cref="CharacterCold.DrawAnchor"/>); null: none.
     /// </summary>
     public DrawAnchor? Anchor { get; internal set; }
