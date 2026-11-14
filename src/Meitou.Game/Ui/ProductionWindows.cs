@@ -1266,6 +1266,31 @@ sealed class ProductionWindows(PlayerInterface player)
     string? _craftStation, _craftFocus;
 
     /// <summary>
+    /// How far the item rows are scrolled and their pitch (0 until they are laid out).
+    /// </summary>
+    float _craftScroll, _craftStep;
+
+    /// <summary>
+    /// The panel the item rows scroll in.
+    /// </summary>
+    UiRect _craftArea;
+
+    /// <summary>
+    /// The wheel over the item rows scrolls them a row per notch; clamped when the rows are laid out.
+    /// </summary>
+    internal bool CraftWheel(Vector2 p, float steps)
+    {
+        if (!player.FaithfulScreens.IsOpen("overview") || player.FaithfulScreens.GetTab("overview", "TabsMain") != CraftTab
+            || _craftStep <= 0 || !_craftArea.Contains(p.X, p.Y))
+        {
+            return false;
+        }
+
+        _craftScroll -= MathF.Sign(steps) * _craftStep;
+        return true;
+    }
+
+    /// <summary>
     /// The player's crafting benches.
     /// </summary>
     List<MachineSnapshot> CraftStations() => [.. player.Session.CurrentSnapshot.Machines.Where(m => m.Craft is not null)];
@@ -1318,6 +1343,7 @@ sealed class ProductionWindows(PlayerInterface player)
             _craftStation = stations.FirstOrDefault(s => s.Site == e.Text)?.Site
                 ?? stations.FirstOrDefault(s => StationName(s) == e.Text)?.Site
                 ?? _craftStation;
+            _craftScroll = 0;
         }
         else if (e.Widget == "QueueRepeat" && _craftStation is not null && Machine(_craftStation)?.Craft is { } craft)
             player.Say(new RepeatCrafts(_craftStation, !craft.Repeat) { Tick = player.Session.World.Tick });
@@ -1353,14 +1379,22 @@ sealed class ProductionWindows(PlayerInterface player)
         if (controls.FirstOrDefault(c => c.Name == "QueueItemsPanel") is { } panel)
         {
             var rows = options.OrderBy(o => o.Kind).ThenBy(o => o.Level).ThenBy(o => o.Name, StringComparer.Ordinal).ToList();
+            var area = panel.Bounds;
+            _craftArea = area;
+            _craftStep = line;
+            _craftScroll = Math.Clamp(_craftScroll, 0, Math.Max(0, rows.Count * line - area.Height));
 
             for (int i = 0; i < rows.Count; i++)
             {
+                // A row outside the panel is left out: the clip only cuts its drawing, and it would take clicks over the description below.
+                float top = area.Y + i * line - _craftScroll, middle = top + line / 2;
+                if (middle < area.Y || middle > area.Y + area.Height) continue;
+
                 var o = rows[i];
-                controls.Add(new($"craft-row-{i}", "Button", new(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line),
+                controls.Add(new($"craft-row-{i}", "Button", new(area.X + 6, top, area.Width - 12, line),
                     o.Name, o.Unlocked ? "craft-queue:" + o.Key : "craft-focus:" + o.Key, "", true, face, Vector4.Zero,
                     TextColour: o.Unlocked ? ink : new Vector4(0.75f, 0.35f, 0.3f, 1), HoverColour: new(0, 1, 0, 1), Pickable: true,
-                    Clip: panel.Bounds));
+                    Clip: area));
             }
         }
 

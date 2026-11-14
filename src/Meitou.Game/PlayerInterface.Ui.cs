@@ -1203,6 +1203,7 @@ sealed partial class PlayerInterface
         if (SquadWindows.SquadsWheel(p, steps)) return true;
         if (FactionWindow.FactionWheel(p, steps)) return true;
         if (Production.ResearchWheel(p, steps)) return true;
+        if (Production.CraftWheel(p, steps)) return true;
         return CharacterEditor.EditorWheel(p, steps) || FaithfulScreens.Wheel(p, steps);
     }
 
