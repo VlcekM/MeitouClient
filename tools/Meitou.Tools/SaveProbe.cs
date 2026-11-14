@@ -69,6 +69,7 @@ static class SaveProbe
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("assault", >= 1): Assault(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
+            case ("pace", >= 3): Pace(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
@@ -506,6 +507,38 @@ static class SaveProbe
         var target = new Vector3(x, probe.World.Walkability.TerrainHeight(x, z), z);
         probe.World.Commands.Enqueue(new MoveOrder(ids, target) { Tick = probe.World.Tick });
         Watch(probe, name, rounds);
+    }
+
+    /// <summary>
+    /// Orders the character named like <paramref name="name"/> alone to walk to (<paramref name="x"/>, <paramref name="z"/>), then every 40 ticks,
+    /// <paramref name="rounds"/> times, each of its squad mates' speed: order mode, walk mode, speed group, task, path, top and current speed (#729).
+    /// </summary>
+    static void Pace(ProbeWorld probe, string name, float x, float z, int rounds)
+    {
+        var t = probe.Characters;
+        int walker = probe.Named(name)[0];
+        var target = new Vector3(x, probe.World.Walkability.TerrainHeight(x, z), z);
+        probe.World.Commands.Enqueue(new MoveOrder([t.IdOf(walker)], target) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(40);
+            foreach (var member in probe.World.Squads.Find(t.Cold(walker)!.SquadId)!.Members) PrintPace(probe, member.Slot);
+        }
+    }
+
+    /// <summary>
+    /// One character's line of <see cref="Pace"/>.
+    /// </summary>
+    static void PrintPace(ProbeWorld probe, int slot)
+    {
+        var t = probe.Characters;
+        ref readonly var n = ref t.Next[slot];
+        var c = t.Cold(slot)!;
+        bool path = ((MoveFlags)n.Flags & MoveFlags.HasPath) != 0;
+        float speed = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
+        Console.WriteLine($"tick {probe.World.Tick} {c.Name,-10} order={c.RunSpeed} mode={n.Mode} group={c.SpeedGroup} task={(CharacterTask)n.Task} "
+            + $"path={path} top={n.MaxSpeed:F1} speed={speed:F1}");
     }
 
     /// <summary>

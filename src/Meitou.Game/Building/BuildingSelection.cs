@@ -445,7 +445,8 @@ sealed class BuildingSelection(PlayerInterface player)
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
-        if (detail?.Bed is { } bed)
+        // A skeleton bed's section 6 is the machine lines, not the Healing bonus (UseableStuff slot 40 FUN_140304e90 shows it for BF_BED alone).
+        if (detail?.Bed is { } bed && !Useable.IsSkeletonBed(site?.Record ?? focus.Record))
         {
             if (bed.Cost != 0)
                 state.Add(new("Cost to use:", bed.Cost < 0 ? Loc.Tr("Private") : $"({Loc.Tr("Pay c.{1,num}", bed.Cost)})"));
@@ -507,7 +508,8 @@ sealed class BuildingSelection(PlayerInterface player)
         if (rich is { } richness && player.Production.Machine(focus.SiteId)?.Farm is null)
             ProductionWindows.AddRichnessLine(richness, stats);
 
-        if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
+        bool bedLines = detail?.Bed is not null && !Useable.IsSkeletonBed(focus.Record ?? player.Production.Machine(focus.SiteId)?.Record);
+        if (!bedLines && own && player.Production.Machine(focus.SiteId) is { } machine)
         {
             Simulation.Combat.TurretPanelView? turretPanel =
                 player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;

@@ -222,33 +222,71 @@ sealed class LoadingScreen : IDisposable
     /// </summary>
     void DrawPanels(int width, int height, bool background, float opacity, float s, UiRect box, UiRect tipBox)
     {
-        if (_painter is not null && _layout is not null && _resources is not null)
+        if (_painter is null || _layout is null || _resources is null)
         {
-            var b = new UiBindings();
-            if (!background) b.Hidden.Add("BackgroundImage");
-            var image = new Dictionary<string, string> { ["Alpha"] = opacity.ToString(CultureInfo.InvariantCulture) };
-            if (_picture is not null) image["ImageTexture"] = _picture;
-            b.Properties["BackgroundImage"] = image;
-            b.Positions["LoadingPanel"] = tipBox;
-            b.Positions["MessageText"] = new UiRect(tipBox.X + 8 * s, tipBox.Y + 8 * s, tipBox.Width - 16 * s, tipBox.Height - 16 * s);
-            b.Hidden.Add("LoadingText");
-            b.Text["MessageText"] = _tip;
-            b.Properties["MessageText"] = new Dictionary<string, string>
-            {
-                ["Static"] = "true",
-                ["WordWrap"] = "true",
-                ["TextAlign"] = "Center",
-                ["FontName"] = "Kenshi_StandardFont_Medium",
-                ["FontPixels"] = Math.Max(8, (int)MathF.Round(16 * s)).ToString(CultureInfo.InvariantCulture)
-            };
-            var controls = MyGuiPresentation.Arrange(_layout, width, height, b, _resources.Layers).ToList();
-            // The loading panel in the tip panel's frame (Kenshi_FloatingPanelSkin, the layout's LoadingPanel skin).
-            controls.Add(new UiControl("LoadingBox", "Widget", box, "", "", "Kenshi_FloatingPanelSkin", true,
-                new Dictionary<string, string>(), Vector4.Zero));
-            _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
+            _overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
+            return;
         }
-        else _overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
+
+        // A tip wrapped to more lines than the text box holds (three at 120 rows) grows its panel upwards, so the last line is not cut off; never
+        // past the top of the screen.
+        var controls = ArrangePanels(width, height, background, opacity, s, tipBox);
+        float overflow = Math.Min(TipOverflow(controls, s), tipBox.Y);
+        if (overflow > 0)
+        {
+            tipBox = tipBox with { Y = tipBox.Y - overflow, Height = tipBox.Height + overflow };
+            controls = ArrangePanels(width, height, background, opacity, s, tipBox);
+        }
+
+        // The loading panel in the tip panel's frame (Kenshi_FloatingPanelSkin, the layout's LoadingPanel skin).
+        controls.Add(new UiControl("LoadingBox", "Widget", box, "", "", "Kenshi_FloatingPanelSkin", true,
+            new Dictionary<string, string>(), Vector4.Zero));
+        _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
     }
+
+    /// <summary>
+    /// The layout arranged for the Meitou screen: the picture, and the layout's panel at <paramref name="tipBox"/> holding only the tip.
+    /// </summary>
+    List<UiControl> ArrangePanels(int width, int height, bool background, float opacity, float s, UiRect tipBox)
+    {
+        var b = new UiBindings();
+        if (!background) b.Hidden.Add("BackgroundImage");
+        var image = new Dictionary<string, string> { ["Alpha"] = opacity.ToString(CultureInfo.InvariantCulture) };
+        if (_picture is not null) image["ImageTexture"] = _picture;
+        b.Properties["BackgroundImage"] = image;
+        b.Positions["LoadingPanel"] = tipBox;
+        b.Positions["MessageText"] = new UiRect(tipBox.X + 8 * s, tipBox.Y + 8 * s, tipBox.Width - 16 * s, tipBox.Height - 16 * s);
+        b.Hidden.Add("LoadingText");
+        b.Text["MessageText"] = _tip;
+        b.Properties["MessageText"] = new Dictionary<string, string>
+        {
+            ["Static"] = "true",
+            ["WordWrap"] = "true",
+            ["TextAlign"] = "Center",
+            ["FontName"] = "Kenshi_StandardFont_Medium",
+            ["FontPixels"] = TipPixels(s).ToString(CultureInfo.InvariantCulture)
+        };
+        return MyGuiPresentation.Arrange(_layout!, width, height, b, _resources!.Layers).ToList();
+    }
+
+    /// <summary>
+    /// The rows the tip's wrapped lines need beyond <c>MessageText</c>'s text box (its skin's text part), measured as the painter draws the caption;
+    /// 0 when they fit.
+    /// </summary>
+    float TipOverflow(List<UiControl> controls, float s)
+    {
+        int text = controls.FindIndex(c => c.Name == "MessageText");
+        if (text < 0 || _tip.Length == 0) return 0;
+
+        var area = UiTextLayout.ContentRect(_resources!, controls[text]);
+        float needed = _painter!.MeasurePixelText(_tip, area.Width, TipPixels(s), s).Height;
+        return MathF.Ceiling(Math.Max(0, needed - area.Height));
+    }
+
+    /// <summary>
+    /// The tip's font size in pixels: 16 at 1080 rows, scaled with the height, at least 8.
+    /// </summary>
+    static int TipPixels(float s) => Math.Max(8, (int)MathF.Round(16 * s));
 
     /// <summary>
     /// The loading panel's row: LOADING... and the running step, the spinner and the progress bar along the panel's bottom.

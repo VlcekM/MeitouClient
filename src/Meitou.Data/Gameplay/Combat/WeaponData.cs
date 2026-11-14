@@ -114,7 +114,8 @@ public sealed record WeaponData
     /// <summary>
     /// The category it animates as (<c>Sword::Sword</c> <c>+0x238</c>, <b>Verified</b>): <c>skill category animation override</c> unless that is 21
     /// (the default), else <see cref="SkillCategory"/>. 9 base weapons override (cleavers, jittes, heavy polearms, the Topper), so they take another
-    /// class's clips and techniques while training their own skill.
+    /// class's clips while training their own skill; their techniques stay those of <see cref="SkillCategory"/> (CharStats <c>+0x1f0</c> is
+    /// the weapon's <c>+0x234</c>, <c>FUN_140897f30</c>, <b>Verified</b>).
     /// </summary>
     public int AnimationCategory { get; init; }
 

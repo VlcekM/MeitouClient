@@ -328,7 +328,7 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.
 - **Task_PutInSomething** for a bed (99; the body's task type 100; `FUN_140358170`, `FUN_140358670`): a player-faction carrier pays the rent first: its own
-  cost, or the body's when that is non-negative and lower (a refusal fails the task). Once the put-down clip is below 0.2 and the bed is free for the
+  cost, or the body's when that is non-negative and lower (a refusal fails the task). What gives the body row 100 is **Unknown**: the task factory `FUN_14032ebd0` makes Task_UseBed for it, but the enter path below starts no task on the body (#718). Once the put-down clip is below 0.2 and the bed is free for the
   body, both are unlinked and the body enters the bed, then is placed at the bed's nearest type-4 node (`FUN_14038ab50`). A bed that is not free for the body at that moment ends the task
   (**Verified**, `FUN_140358670`: no new bed search, the carrier keeps the body; nothing is tested while walking); Meitou: `BedSystem.Step` tests only on arrival (`LayIn`), put-in job 106 picks again. A relation event follows
   (faction vfunc 5 with the task's +0x7c; amount **Unknown**).

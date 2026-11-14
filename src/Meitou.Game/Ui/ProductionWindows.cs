@@ -950,9 +950,18 @@ sealed class ProductionWindows(PlayerInterface player)
                 bad = true;
             }
 
-            stats.Add(new("Power:", $"{F(pw.Granted)}/{F(pw.Demand)}", PlayerInterface.MainColour,
-                pw.Granted < pw.Demand ? PlayerInterface.BadColour : null));
+            stats.Add(ConsumerPowerLine(pw.Granted, pw.Demand));
         }
+    }
+
+    /// <summary>
+    /// A consumer's <c>Power:</c> line (slot 153): granted over demand, the value Bad while it gets less than it asks.
+    /// </summary>
+    internal static PlayerInterface.HudLine ConsumerPowerLine(float granted, float demand)
+    {
+        static string F(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+        return new("Power:", $"{F(granted)}/{F(demand)}", PlayerInterface.MainColour, granted < demand ? PlayerInterface.BadColour : null);
     }
 
     /// <summary>
