@@ -185,6 +185,12 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
 - The bar at the top right is the background loading bar below, not part of this window.
 - Meitou (`LoadingScreen`, Faithful mode): as above. `tips.txt` is read as UTF-8, else Windows-1252, since the French, German and Spanish files are
   Windows-1252 (engine choice: how the original shows those bytes is **Unknown**). The Meitou mode keeps its own panel, spinner, bar and slide-out.
+- Tip box: `MessageText`'s text is inset by its skin's text part (`Kenshi_GenericTextBoxSkin`: `18 14 149 74` of `186 102`), so at 1920 x 1080
+  the original's box is 553 x 172 px (**Verified** against `Kenshi_LoadingScreen.layout` and `kenshi_skins.xml`). At 1680 x 1050 it shows the
+  longest tip (`tips.txt`, 221 characters) whole, in four centered lines (**Observed** 2026-11-14, 1.0.68 full screen, a mod whose `tips.txt`
+  holds only that tip); at smaller resolutions **Unknown**. Meitou mode (engine choice): the tip panel is 480 x 120 at 1080 rows with 16 px
+  text, a box of 427 x 76 px that holds three lines; a tip that wraps to more grows the panel upwards, never past the top of the screen
+  (**Observed** 2026-11-14: at 1080 rows a 172-character tip takes four lines, at 1440 rows the longest takes five, all shown).
 
 ### Background loading bar
 
