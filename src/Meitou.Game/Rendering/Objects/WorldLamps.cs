@@ -508,7 +508,7 @@ internal sealed class WorldLamps : IDisposable
             float inner = MathF.Min(l.InnerAngle, l.OuterAngle), outer = MathF.Max(l.InnerAngle, l.OuterAngle);
             int row = k * DataWidth;
             _dataValues[row] = new Vector4(l.Position, l.Radius);
-            _dataValues[row + 1] = new Vector4(l.Colour * power, l.Type == WorldLightType.Spot ? 1 : 0);
+            _dataValues[row + 1] = new Vector4(LampWarmth.Of(l.Colour) * power,l.Type == WorldLightType.Spot ? 1 : 0);
             _dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
             float falloff = l.Falloff > 0 ? l.Falloff : 1;
             _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), falloff, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));

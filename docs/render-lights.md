@@ -33,6 +33,11 @@ The game draws these lights in both looks, so this is not a Faithful / Meitou sw
 - **Shading.** `kenshiLight` adds every light of the pixel's cell, lit the way the sun is: diffuse `π · N·L · radiance · 0.96` times the
   albedo, plus the same GGX specular as the sun's. Here `radiance = colour · power · Attenuation(d, radius) [· SpotFactor]`, with the
   game's attenuation and spot cone (`WorldLights.Attenuation` / `SpotFactor`, ported to GLSL). There are no shadows, as in the game, unless the [`lampshadows`](#traced-lamp-shadows) switch is on.
+  - **Lamp warmth** (`lampwarmth` switch, Meitou, default; `LampWarmth`). Faithful: the LIGHT `diffuse` as is. Meitou: a lamp whose blue is its
+    weakest channel and whose green is above 0.808 of its red (the torches' FFCE5E ratio) has its green lowered to that ratio, and its blue by
+    the same factor, weighted by `(min(r, g) − b) / max` over 0.25 (capped at 1), then scaled back to its Rec. 709 luminance. Hues:
+    `indoor_lamp_light` E9FF9B → FFCF7E, `spotlight powerful` F1FFC4 → FFE1AE, `street_light_yellow` F1E8B4 → FFD6A5; torches, fires and the
+    cyan lamps are unchanged. Applied where the rows are written, so the probes, tiles and the editor bar's fill follow. Look on a GPU **Unknown**.
   - Pulsing and shimmering lights get the game's effect factor on the CPU, from a clock in seconds × 60. The unit of the game's clock
     value is **Unknown**.
 - **Native and legacy.** The legacy programs take the uniform and the three samplers by name. The native frame block has `lightGrid` at

@@ -213,7 +213,7 @@ An option whose Effect names a settings row sets that row for the run only: the 
 | `--meitou <ids>` | comma list of ids, or `all` | all | Turns the listed Meitou enhancements on. |
 | `--faithful <ids>` | comma list of ids, or `all` | | Turns the listed enhancements off, giving the game's look. |
 
-Ids (`Enhancements.cs`): `ao`, `contact`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`, `footprints`, `parallax`, `displace`, `weld`, `tracers`, `fog`, `gihybrid`, `chars2` (off by default), `trails`, `contactfoam`, `dof`, `gtao` (off by default, also needs `ao`; `--meitou all` turns it on), `lampshadows` (off by default, in no look), `ssr` (off by default), `traced`. The strength of each is a Tab slider.
+Ids (`Enhancements.cs`): `ao`, `contact`, `dither`, `haze`, `aa`, `shadows`, `range`, `impostors`, `reach`, `water`, `particles`, `lod`, `gi`, `tonemap`, `shafts`, `heathaze`, `night`, `planetshine`, `stars`, `nightgrade`, `clouds`, `cloudshadows`, `cloudfog`, `interiorgi`, `charlod`, `skin`, `interiorlamps`, `icons`, `blood`, `bloodsurfaces`, `footprints`, `parallax`, `displace`, `weld`, `tracers`, `fog`, `gihybrid`, `chars2` (off by default), `trails`, `contactfoam`, `dof`, `gtao` (off by default, also needs `ao`; `--meitou all` turns it on), `lampshadows` (off by default, in no look), `ssr` (off by default), `traced`, `lampwarmth`. The strength of each is a Tab slider.
 
 ### Benchmarks and A/B (`--screenshot`, offscreen)
 
