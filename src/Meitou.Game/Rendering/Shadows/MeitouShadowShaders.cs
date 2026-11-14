@@ -129,6 +129,15 @@ static class MeitouShadowShaders
         // Interleaved gradient noise (Jimenez 2014): a per-pixel angle whose neighbours differ, so a few taps look like many.
         float msNoise(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 
+        // The direction the tile's v runs along light-space y: 1 where it runs with it (Vulkan), -1 where it runs against it (Metal: ShadowPass.ReceiverTile
+        // flips v, as its render targets are top-down). Both axes are rows of the matrices, taken in world space, so their dot product has the sign.
+        float msTileV(int c)
+        {
+            vec3 v = vec3(uShadowTile[c][0][1], uShadowTile[c][1][1], uShadowTile[c][2][1]);
+            vec3 y = vec3(uShadowLight[0][1], uShadowLight[1][1], uShadowLight[2][1]);
+            return dot(v, y) < 0.0 ? -1.0 : 1.0;
+        }
+
         // One cascade: the point moved off its surface by a normal offset of a quarter to half a texel, a blocker search in the half-resolution map
         // (when there is one) for the penumbra's width, then a rotated Vogel disk of bilinear comparisons whose depths follow the
         // receiver's plane. -1 when the point (with the filter) is not in the cascade's box, e.g. one drawn some frames ago. (No out
@@ -143,9 +152,9 @@ static class MeitouShadowShaders
             float radius = uMsSlice[c].z;
             float reach = uMsBox[c].z + uShadowExtent[c].y * 2.0;
             if (any(lessThan(t.xy, vec2(reach))) || any(greaterThan(t.xy, vec2(1.0 - reach))) || t.z >= 1.0) return -1.0;
-            // The receiver's plane in tile units: depth change per unit of tile UV (steep planes clamped).
+            // The receiver's plane in tile units: depth change per unit of tile UV (steep planes clamped). The light-space y is turned to run with v.
             float nz = max(cosL, 0.25);
-            vec2 slope = vec2(nl.x, nl.y) * (uMsBox[c].x / (nz * uMsBox[c].y));
+            vec2 slope = vec2(nl.x, nl.y * msTileV(c)) * (uMsBox[c].x / (nz * uMsBox[c].y));
             // The bias, all of it the receiver's (the casters are drawn with none): its plane's depth change over one texel each way (a bilinear
             // compare reads the four texels round its point, each up to a texel off it) and a quarter texel. A caster's bias by its own slope left
             // every shadow short of its caster's foot by up to ten texels along the light: lit bands under stair treads and cart sides.

@@ -819,6 +819,17 @@ static partial class TerrainShaders
             return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
         }
 
+        // How near xz is to the edge of level k's square: 0 further than BakeFade texels in from where bakeHolds stops holding it, rising smoothly to 1 there.
+        // The cache blends towards the next coarser level over it, so the step to that level at the edge (which it reads alone beyond) is not a line.
+        const float BakeFade = 512.0;
+        float bakeEdge(int k, vec2 xz)
+        {
+            vec4 o = uBakeOrigin[k];
+            vec2 r = (xz - o.xy) / o.z;
+            vec2 d = min(r, vec2(o.w) - r) - 4.0;
+            return 1.0 - smoothstep(0.0, BakeFade, min(d.x, d.y));
+        }
+
         // The cache's relief height (0 to 1, as reliefHeight) at xz from level k; with kc another level, only what k holds finer than kc (+ 0.5),
         // the whole as much as whole.
         float bakedHeight(int k, int kc, float whole, vec2 xz)
@@ -884,10 +895,17 @@ static partial class TerrainShaders
         // A layer from the near arrays where its pair has a slot there and the sample's level is under uFarLod, else from the far arrays: at uFarLod and
         // beyond the far arrays' levels are the near arrays' (docs/render-terrain.md, "Layer arrays").
         vec4 layerDiffuse(GradCoord c, float near, float far) { return near >= 0.0 && c.lod < uFarLod ? tex(uDiffuse, c, near) : tex(uDiffuseFar, c, far); }
-        // A layer's normal: the near arrays hold BC5 (x and y, deblocked at load: TerrainTextures.LoadNearNormal), z is rebuilt here; the far arrays BC1 as stored.
+        // A layer's normal: the near arrays hold BC5 (x and y of the unit vector, deblocked at load: TerrainTextures.LoadNearNormal), z is rebuilt here; the far
+        // arrays BC1 as stored, which is not unit length (blue 1 over any x and y), so it is normalised here as the near arrays were at load and as the game's
+        // shaders do: without it the two tiers differ in the bump's strength and the tier's jagged edge shows (docs/render-terrain.md, "Layer arrays").
         vec4 layerNormal(GradCoord c, float near, float far)
         {
-            if (near < 0.0 || c.lod >= uFarLod) return tex(uNormalFar, c, far);
+            if (near < 0.0 || c.lod >= uFarLod)
+            {
+                vec4 f = tex(uNormalFar, c, far);
+                vec3 v = f.rgb * 2.0 - 1.0;
+                return vec4(normalize(v + vec3(0.0, 0.0, 1e-5)) * 0.5 + 0.5, 1.0);
+            }
             vec4 n = tex(uNormal, c, near);
             vec2 xy = n.rg * 2.0 - 1.0;
             return vec4(n.rg, sqrt(max(1.0 - dot(xy, xy), 0.0)) * 0.5 + 0.5, 1.0);
@@ -1337,15 +1355,24 @@ static partial class TerrainShaders
             if (uBakeLevels > 0 && !uFeature && uTextured && nearWeight > 0.0 && distance < uBakeReach && n.y > BakeMinUp)
             {
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
-                float level = log2(max(hi / min(ceil(hi / lo), 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias;
-                cacheLive = clamp(-2.0 * level, 0.0, 1.0);
+                // The footprint's short axis, the long one at most 8 times it: continuous. (hi / min(ceil(hi / lo), 8) jumped by up to 0.58 of a level wherever
+                // the stretch crossed a whole number, and the cache layer chosen with it changed sharpness in patches along those lines.)
+                float level = log2(max(max(lo, hi / 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias;
+                // The layers' share also rises over the last fifth of the reach (the cache ends there), so the cache does not stop in a line round the eye.
+                cacheLive = max(clamp(-2.0 * level, 0.0, 1.0), smoothstep(0.8 * uBakeReach, uBakeReach, distance));
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
+                if (k + 1 < uBakeLevels && bakeHolds(k + 1, texWorld.xz)) t = max(t, bakeEdge(k, texWorld.xz));
+                // The coarsest level has none to blend towards: the layers' share rises over its edge instead.
+                if (k == uBakeLevels - 1) cacheLive = max(cacheLive, bakeEdge(k, texWorld.xz));
                 if (cacheLive >= 1.0) k = uBakeLevels;
                 // Only a level at most twice as coarse as the biased footprint is read (the layers' sampler takes the bias, so a coarser cache is the blurry patch beside
-                // sharp layers: a close ground beyond the fine levels' square, a raised eye): beyond that the layers are shaded.
-                if (k < uBakeLevels && float(k) - level > 1.0) k = uBakeLevels;
+                // sharp layers: a close ground beyond the fine levels' square, a raised eye): beyond that the layers are shaded, mixed in over the next half level
+                // (cacheLive) so the cache does not end in a line against sharp layers.
+                float tooCoarse = float(k) - level - 1.0;
+                if (k < uBakeLevels && tooCoarse >= 0.5) k = uBakeLevels;
+                else if (k < uBakeLevels) cacheLive = max(cacheLive, smoothstep(0.0, 0.5, tooCoarse));
                 if (k < uBakeLevels)
                 {
                     vec2 at = texWorld.xz;
@@ -1622,6 +1649,7 @@ static partial class TerrainShaders
             }
             if (uDebug == 3) colourOut = vec3(0.5) * (0.3 + 0.7 * diff);
             colourOut = atmoApply(colourOut, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
+
             if (uGrid && max(abs(vWorld.x), abs(vWorld.z)) <= 500.0)
             {
                 // Anti-aliased lines a pixel wide (two on the hundreds), by the distance to the nearest line in screen derivatives.
