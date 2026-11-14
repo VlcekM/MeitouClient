@@ -1536,18 +1536,19 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (s.EmployerTags && s.Employer >= 0 && c.Faction == s.Employer)
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
 
-        if (BanditFightTag(ref s, e, c, at))
+        if (BanditFightTag(ref s, e, c))
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
     }
 
     /// <summary>
     /// The sight pass's squad-memory tag (<c>FUN_140859680</c> ending in <c>FUN_1406744a0(looker, target, 4)</c>, <b>Verified</b>; "event 4" in the
     /// swarm notes is the memory tag TEMP_ENEMY, not a dialogue event): a sensed character that is no ally and not down or an animal, while the
-    /// looker or it is in combat mode or it has a pending crime, outside every town, with a bandit (NPC class 8) as looker or target, is tagged
+    /// looker or it is in combat mode or it has a pending crime, with no status town (<see cref="CharacterCold.StatusTown"/>, the original's status
+    /// <c>+0x88</c>: a town entered holds out to 1.5 x its radius), with a bandit (NPC class 8) as looker or target, is tagged
     /// TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY tag). The
     /// original's gates on the looker's view flag (<c>+0x1a9</c>) and its sleeping are treated as open (engine choice, as the assault hooks above).
     /// </summary>
-    static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at)
+    static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c)
     {
         if (s.Cold is not { } me || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != 0 || c.Fighter?.IsAnimal == true || me.SlaveState == 1
             || me.IsImprisoned)
@@ -1558,7 +1559,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (!(me.InCombat || c.InCombat || c.Pending is not null)) return false;
         if (me.NpcClass != FundamentalType.Bandit && c.NpcClass != FundamentalType.Bandit) return false;
 
-        return s.Towns is { } towns && AiSystem.TownAt(towns, s.World, at).IsNone;
+        // Without town data no status town is kept (ArrestSystem), so nobody counts as outside one.
+        return s.Towns is not null && c.StatusTown.IsNone;
     }
 
     /// <summary>
