@@ -48,15 +48,15 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 39,
-    "areas": "Carried bodies, Animals, Medics, Saves"
+    "commits": 45,
+    "areas": "Animals, Medic, Crime, Doors"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 12,
+    "commits": 13,
     "areas": "Metal rendering, Launcher"
   }
 }
