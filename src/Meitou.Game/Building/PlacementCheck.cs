@@ -600,7 +600,7 @@ public static class PlacementCheck
     /// <summary>
     /// Whether the point is inside the convex polygon or on its edge.
     /// </summary>
-    static bool Contains(Vector2[] polygon, Vector2 point) => Distance(polygon, point) <= 0;
+    internal static bool Contains(Vector2[] polygon, Vector2 point) => Distance(polygon, point) <= 0;
 
     /// <summary>
     /// The distance from a point to a convex polygon, 0 inside it (either winding).

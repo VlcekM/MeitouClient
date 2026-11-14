@@ -808,6 +808,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (button == MouseButton.Right && !OverHud(p) && Build.WallCancel()) return true;
         if (button == MouseButton.Right && !OverHud(p) && LevelEditorPanel.LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.BuildDiscard()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && Build.BuildPickUp(p)) return true;
         if (button == MouseButton.Left) return LeftDown(p);
         if (button == MouseButton.Right && WorldMap.InventoryRightClick(p, shift)) return true;
         if (button == MouseButton.Right && ContextMenuWindow.CloseContextMenu()) return true;

@@ -655,6 +655,48 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
+    /// A right click in build mode with no building held: the queued ghost under the cursor leaves the queue and is held again, as it was turned,
+    /// to be placed anew (the original's click handler <c>FUN_1404e27e0</c>). True: a ghost was picked up.
+    /// </summary>
+    internal bool BuildPickUp(Vector2 p)
+    {
+        if (!Active || CurrentBuilding() is not null || player.Ray(p) is not { } ray) return false;
+
+        int index = BuildQueue.FindLastIndex(q => UnderRay(q, ray));
+        if (index < 0) return false;
+
+        var picked = BuildQueue[index];
+        BuildQueue.RemoveAt(index);
+        Hold(picked);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the ray meets the queued ghost's footprint at the height it stands.
+    /// </summary>
+    static bool UnderRay(QueuedGhost ghost, (Vector3 Origin, Vector3 Direction) ray)
+    {
+        if (ghost.Hull is not { } hull || MathF.Abs(ray.Direction.Y) < 1e-6f) return false;
+
+        float t = (ghost.Position.Y - ray.Origin.Y) / ray.Direction.Y;
+        var at = ray.Origin + ray.Direction * t;
+        return t > 0 && PlacementCheck.Contains(hull, new Vector2(at.X, at.Z));
+    }
+
+    /// <summary>
+    /// Chooses a queued ghost's building in the lists again and takes its turn for the ghost at the cursor.
+    /// </summary>
+    void Hold(QueuedGhost ghost)
+    {
+        _buildCategory = ghost.Building.Category;
+        BuildDiscarded = false;
+        _buildGroup = Math.Max(0, BuildGroups().ToList().FindIndex(g => g.Members.Contains(ghost.Building)));
+        BuildMember = ghost.Building;
+        _ghostYaw = PlacementCheck.YawOf(ghost.Rotation);
+        _ghostLift = 0;
+    }
+
+    /// <summary>
     /// A right click in build mode while a line is laid: drops the line (true: taken).
     /// </summary>
     internal bool WallCancel()
@@ -942,7 +984,8 @@ sealed class BuildMode(PlayerInterface player)
                 BuildMember = null;
                 break;
             case ("BuildingsList", "select"):
-                if (!BuildDiscarded && (int)e.Value == _buildGroup)
+                // The level editor's tool drops its choice on a click on the chosen row; the player's build mode keeps it, as the original's list.
+                if (player.LevelEditorPanel.LevelBuild && !BuildDiscarded && (int)e.Value == _buildGroup)
                 {
                     player.LevelEditorPanel.DropPlacementChoice();
                     break;
