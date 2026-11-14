@@ -813,10 +813,11 @@ public sealed partial class CombatSystem : IProjectileSource
         bool shooterAlive = p.Shooter < prev.Length && prev[p.Shooter].Alive && prev[p.Shooter].Generation == p.ShooterGeneration;
         if (shooterAlive && intended) _write[p.Shooter].Landed++;
 
-        // No police-hit rule: the original's bolt hit (FUN_140439c90) never reaches the hit outcome FUN_140665fa0 that holds it, nor the crime
-        // setter (docs/game/economy.md "Hitting the police"), so a stray bolt from a guard does not make its victim the culprit. An NPC shooter's
-        // aimed hit still renews its Assault, as its landed blow does (CrimeSystem.Hit).
-        if (shooterAlive && intended && world.Characters.Cold(p.Shooter) is { IsPlayer: false }) Crimes?.Assault(world, p.Shooter, v);
+        // No police-hit rule: the original's bolt hit (FUN_140439c90) does not call the hit outcome FUN_140665fa0 that holds it, nor the crime
+        // setter directly (docs/game/economy.md "Hitting the police"), so a stray bolt from a guard does not make its victim the culprit. An NPC
+        // shooter's aimed hit still renews its Assault, as its landed blow does (CrimeSystem.Hit; an engine choice).
+        if (shooterAlive && intended && world.Characters.Cold(p.Shooter) is { IsPlayer: false })
+            Crimes?.Assault(world, p.Shooter, v);
 
         if (shooterAlive && !medical.Incapacitated)
         {

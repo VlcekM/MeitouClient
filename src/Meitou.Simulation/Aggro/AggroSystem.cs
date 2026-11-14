@@ -707,6 +707,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         /// </summary>
         public Func<World, int, bool>? SightLines;
         /// <summary>
+        /// The looker's <see cref="SightLines"/> answer once asked: 0 not yet, 1 yes, -1 no.
+        /// </summary>
+        public sbyte LookerSees;
+        /// <summary>
         /// The looker's slot, faction and squad.
         /// </summary>
         public int Self, Faction, Squad;
@@ -1547,7 +1551,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (s.EmployerTags && s.Employer >= 0 && c.Faction == s.Employer)
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
 
-        if (BanditFightTag(ref s, e, c))
+        if (BanditFightTag(ref s, e, c, at))
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
     }
 
@@ -1555,26 +1559,31 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// The sight pass's squad-memory tag (<c>FUN_140859680</c> ending in <c>FUN_1406744a0(looker, target, 4)</c>, <b>Verified</b>; "event 4" in the
     /// swarm notes is the memory tag TEMP_ENEMY, not a dialogue event): a sensed character that is no ally and not down or an animal, while the
     /// looker or it is in combat mode or it has a pending crime, with no status town (<see cref="CharacterCold.StatusTown"/>, the original's status
-    /// <c>+0x88</c>: a town entered holds out to 1.5 x its radius), with a bandit (NPC class 8) as looker or target, is tagged
-    /// TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY tag). Only a
+    /// <c>+0x88</c>: a town entered holds out to 1.5 x its radius) and outside every town's radius, with a bandit (NPC class 8) as looker or target,
+    /// is tagged TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY
+    /// tag). The looker must be free (slave state 0), not an escaped prisoner and without a pending crime of its own (<b>Verified</b>). Only a
     /// looker whose dialogue has a sight line tags (<see cref="SightLines"/>: the original's sight pass does nothing else while its Dialogue
-    /// <c>+0x28</c> flag is clear). The
-    /// original's gates on the looker's view flag (<c>+0x1a9</c>) and its sleeping are treated as open (engine choice, as the assault hooks above).
+    /// <c>+0x28</c> flag is clear). The view gate is <see cref="HookRuns"/>'s; the looker's sleeping is treated as open (engine choice).
     /// </summary>
-    static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c)
+    static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at)
     {
-        if (s.Cold is not { } me || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != 0 || c.Fighter?.IsAnimal == true || me.SlaveState == 1
-            || me.IsImprisoned)
+        if (s.Cold is not { } me || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != 0 || c.Fighter?.IsAnimal == true || me.SlaveState != 0
+            || me.Escaped || me.Pending is not null || me.IsImprisoned)
         {
             return false;
         }
 
         if (!(me.InCombat || c.InCombat || c.Pending is not null)) return false;
         if (me.NpcClass != FundamentalType.Bandit && c.NpcClass != FundamentalType.Bandit) return false;
-        if (s.SightLines is { } lines && !lines(s.World, s.Self)) return false;
+        if (s.SightLines is { } lines)
+        {
+            if (s.LookerSees == 0) s.LookerSees = lines(s.World, s.Self) ? (sbyte)1 : (sbyte)-1;
+            if (s.LookerSees < 0) return false;
+        }
 
-        // Without town data no status town is kept (ArrestSystem), so nobody counts as outside one.
-        return s.Towns is not null && c.StatusTown.IsNone;
+        // Inside a town's radius the status town is always set; the radius test also covers a status town not yet written (the arrest system's
+        // pass after a load or a spawn) and a world that keeps none (no Crime part).
+        return c.StatusTown.IsNone && s.Towns is { } towns && AiSystem.TownAt(towns, s.World, at).IsNone;
     }
 
     /// <summary>
