@@ -115,8 +115,19 @@ public delegate bool DialogueConditionHandler(DialogueCheck check);
 public delegate void DialogueEffectHandler(DialogueAct act);
 
 /// <summary>
-/// What code mods add to the simulation (docs/modding.md): extra systems at anchors and dialogue codes. Filled once at startup, before the first
-/// world is built, and read by <see cref="StandardSystems.Build"/> for every world; never changed while a world runs.
+/// A right click on an item whose record a mod handles (docs/modding.md "Item use"), run in a serial step: the player character whose own window
+/// holds the item, the item, and that character's inventory (the item may be in a bag inside it; <see cref="Items.Inventory.RemoveOne"/> finds it).
+/// </summary>
+public readonly record struct ItemUse(World World, CharacterId User, Items.ItemInstance Item, Items.Inventory Inventory);
+
+/// <summary>
+/// A mod's item use: true when it used the click (the handler removes a used-up item itself), false to let the click equip or move the item as usual.
+/// </summary>
+public delegate bool ItemUseHandler(ItemUse use);
+
+/// <summary>
+/// What code mods add to the simulation (docs/modding.md): extra systems at anchors, dialogue codes and item uses. Filled once at startup, before
+/// the first world is built, and read by <see cref="StandardSystems.Build"/> for every world; never changed while a world runs.
 /// </summary>
 public sealed class SimulationExtensions
 {
@@ -137,11 +148,16 @@ public sealed class SimulationExtensions
     /// The mods' dialogue effects by code.
     /// </summary>
     public Dictionary<int, DialogueEffectHandler> DialogueEffects { get; } = [];
+    /// <summary>
+    /// The mods' item uses by item record string id.
+    /// </summary>
+    public Dictionary<string, ItemUseHandler> ItemUses { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether the mods add nothing.
     /// </summary>
-    public bool IsEmpty => Systems.Count == 0 && DialogueConditions.Count == 0 && DialogueEffects.Count == 0;
+    public bool IsEmpty => Systems.Count == 0 && DialogueConditions.Count == 0 && DialogueEffects.Count == 0
+        && ItemUses.Count == 0;
 
     /// <summary>
     /// Each extra system's factory, for log lines that name the mod and the system; weak, so a dropped world's systems go with it.

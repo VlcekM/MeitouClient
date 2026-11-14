@@ -498,7 +498,7 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a
   full (physics-settled) quaternion, target an ITEM record (type 4, name "0", flags 0) of the same file, id `<n>-zone<X>.<Y>-INGAME` of the zone it was made in (an item
   moved to another zone keeps it). Its keys are INVENTORY_ITEM_STATE's with `in inventory` false and `section` "": `base data sid`, `material sid`, `company sid`,
-  `color sid`, `item function`, `level`, `quantity`, `charges`, `quality`, `inventory x/y` 0, `death` ([death item](../game/animals.md#death-items)), null-able `ownedby` and `insideBuilding` handles (Meitou adds bool `meitou rotated`, written only when true, on an INVENTORY_ITEM_STATE in a grid: the item lies turned a quarter,
+  `color sid`, `item function`, `level`, `quantity`, `charges`, `quality`, `inventory x/y` 0, `death` ([death item](../game/animals.md#death-items)), null-able `ownedby` and `insideBuilding` handles (Meitou adds string `meitou mod tag` when a code mod tagged the item, [modding](../modding.md#registration-surface); bool `meitou rotated`, written only when true, on an INVENTORY_ITEM_STATE in a grid: the item lies turned a quarter,
   [Rotating an item](../game/ui-screens.md#6-inventory-trade-dialogue-build); the GetRotatedIdiot mod's bool `GETROTATEDIDIOT_ROTATED_V1` is read
   as it and not written back; and string `meitou stolen from` on any INVENTORY_ITEM_STATE: the FACTION id a stolen item was stolen from, also
   for marks naming no character; absent: not stolen); `uniform` on 49, a
