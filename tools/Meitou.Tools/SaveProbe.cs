@@ -551,12 +551,14 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// A container fixture's record name, owner, lock, storage fields and what it holds.
+    /// A container fixture's record name, owner with its faction's lock level and spread, lock, storage fields and what it holds.
     /// </summary>
     static void Container(ProbeWorld probe, Fixture f)
     {
         var r = probe.Db.Find(f.RecordId);
-        Console.WriteLine($"  '{r?.Name}' owner={probe.Faction(f.Owner)} lock={f.Lock?.Level} locked={f.Lock?.Locked} "
+        var owner = f.Owner >= 0 && f.Owner < probe.Data.Factions.Count ? probe.Data.Factions[f.Owner] : null;
+        Console.WriteLine($"  '{r?.Name}' owner={probe.Faction(f.Owner)} ({owner?.DoorsLockLevel} +- {owner?.LockLevelRandom}) lock={f.Lock?.Level} "
+            + $"locked={f.Lock?.Locked} units={f.Contents?.Items.Sum(i => i.Quantity)} "
             + $"grid={f.Contents?.Width}x{f.Contents?.Height} typeLimit={r?.GetInt("itemtype limit", 4)} "
             + $"limited={r?.GetReferences("limit inventory").Count}");
         foreach (var it in f.Contents?.Items ?? [])

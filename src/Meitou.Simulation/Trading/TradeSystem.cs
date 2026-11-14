@@ -759,7 +759,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// A housed squad with <c>vendors</c> that is no trader (a resident's <c>house contents</c>): the building filler fills its home's storage
     /// containers as a trader's (the squad factory <c>FUN_140583a10</c> tests <c>vendors</c>, not <c>is trader</c>, <b>Observed</b>), unlocking them;
-    /// here each unit goes into the first container with room and what fits nowhere is lost. Engine choice: again every <c>vendors refresh time</c>
+    /// the units are spread over them as the filler does (<see cref="HomeStock"/>) and what fits nowhere is lost. Engine choice: again every <c>vendors refresh time</c>
     /// hours, but only while the containers hold nothing but unique items (a loaded save keeps what they hold); the purse is not touched.
     /// </summary>
     void FillHome(World world, Squad squad, SquadTemplate template, Meitou.Data.World.TownBuilding home)

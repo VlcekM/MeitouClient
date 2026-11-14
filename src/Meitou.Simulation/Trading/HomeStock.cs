@@ -33,9 +33,19 @@ sealed record StockBox(Fixture Fixture, MachineData? Data)
     public IReadOnlyList<string> Limit => Data?.StorageLimit ?? [];
 
     /// <summary>
-    /// The share of its cells that hold something.
+    /// How full it is (<c>FUN_140746fe0</c>): the share of its cells that hold something; a one-item storage with a capacity (its <c>stackable
+    /// bonus mult</c>) instead its first stack's quantity over that capacity.
     /// </summary>
-    public float Fill => Grid.Items.Where(i => i.Section == "main").Sum(i => i.Width * i.Height) / (float)(Grid.Width * Grid.Height);
+    public float Fill
+    {
+        get
+        {
+            if (Limit.Count == 1 && Data is { StackBonusMult: > 0 } data)
+                return Grid.Items.Count == 0 ? 0 : Grid.Items[0].Quantity / data.StackBonusMult;
+
+            return Grid.Items.Where(i => i.Section == "main").Sum(i => i.Width * i.Height) / (float)(Grid.Width * Grid.Height);
+        }
+    }
 
     /// <summary>
     /// Puts the item in when the container's section takes it (a WEAPON-limited one only weapons, a limited one only its list;
