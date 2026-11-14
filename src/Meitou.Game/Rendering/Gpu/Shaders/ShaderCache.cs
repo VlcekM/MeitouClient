@@ -34,7 +34,7 @@ static class ShaderCache
         }
 
         Add("v" + version);
-        Add($"reversed={o.DepthReversed};vb={o.VertexBindingBase};fb={o.FragmentBindingBase}");
+        Add($"reversed={o.DepthReversed};vb={o.VertexBindingBase};fb={o.FragmentBindingBase};demote={o.DemoteDiscard}");
         Add(vertex);
         Add(fragment);
         sha.TransformFinalBlock([], 0, 0);

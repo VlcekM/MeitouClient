@@ -50,6 +50,23 @@ loose uniforms; resolve handles ahead. Native program layouts come from reflecti
 assumed global set scheme. FrameGlobals publishes render-thread getters, Version invalidates
 resolution, ApplyCount permits within-application caching; jobs consume prepared values.
 
+A fragment stage's `discard` is compiled as a demote on Vulkan (`ShaderCompileOptions.DemoteDiscard`, set where the device has
+`shaderDemoteToHelperInvocation`, core in 1.3; `GlslProgramCompiler.OptionLines` adds the extension and `#define discard demote`): the
+fragment is dropped and its invocation runs on as a helper, so derivatives and implicit-LOD lookups after it stay defined in the 2x2 quad.
+Metal keeps `discard`.
+- **Verified** (opcode scan of the shader cache, 2026-11-14): the bundled shaderc (Silk.NET.Shaderc.Native 2.23.0, Vulkan 1.3 target) turns a
+  plain `discard` into `OpTerminateInvocation`, after which derivatives are undefined; with the option a Hub run's 241 new modules hold
+  `OpDemoteToHelperInvocation` (44 of them) and neither `OpTerminateInvocation` nor `OpKill`.
+- **Verified** (validation layer, `--headless --no-gi`): the modules need the device feature (VUID-VkShaderModuleCreateInfo-pCode-08740
+  without it, 0 errors with it). The `StorageImageExtendedFormats` capability needs no enabled feature.
+- **Verified** (`--screenshot --new-game --ticks 60`, RTX 4070): demote against terminate differs in 102 of 1228800 pixels (largest step
+  32/255), at dithered objects' edges; two runs of one build are identical.
+- **Observed** (RX 580, AMD driver 25.8.1, release 0.19.0, two screenshots): with terminate, dark pixels along the triangle edges of
+  characters and cut-out cloth in both shadow modes, and of opaque objects (a barrel, a pole's straps) with the Meitou shadows, whose
+  receiver plane (`cross(dFdx(world), dFdy(world))`) is taken after the `discard`; terrain, whose shaders have no `discard`, is clean.
+  With FSR every edge kept its render-resolution steps; with TAA edges were smooth.
+- **Unknown**: whether that driver renders the demote build correctly (no AMD hardware to test on), and why FSR did not accumulate there.
+
 The renderers state their draw state, their formats and their resources in the GL vocabulary, not
 in Vulkan's: DepthFunction, BlendingFactor, FrontFaceDirection, CullMode, PolygonKind,
 BlendOperation, ColorMask, PrimitiveType, PixelViewport, PixelRect, InternalFormat, LoadOp,

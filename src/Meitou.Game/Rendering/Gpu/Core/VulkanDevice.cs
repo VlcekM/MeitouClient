@@ -549,6 +549,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public bool HasSynchronization2 { get; private set; }
     /// <summary>
+    /// <c>shaderDemoteToHelperInvocation</c> is on (core in Vulkan 1.3): the fragment shaders' <c>discard</c> is compiled as a demote
+    /// (<c>ShaderCompileOptions.DemoteDiscard</c>).
+    /// </summary>
+    public bool HasDemoteToHelperInvocation { get; private set; }
+    /// <summary>
     /// Timeline semaphores (core in Vulkan 1.2; a device without them is not picked).
     /// </summary>
     public bool HasTimelineSemaphore { get; private set; }
@@ -1540,6 +1545,7 @@ public sealed unsafe class VulkanDevice : IDisposable
     {
         HasDynamicRendering = v13.DynamicRendering;
         HasSynchronization2 = v13.Synchronization2;
+        HasDemoteToHelperInvocation = v13.ShaderDemoteToHelperInvocation;
         HasTimelineSemaphore = v12.TimelineSemaphore;
         HasExtendedDynamicState = true;
         HasExtendedDynamicState2 = extEds2 && eds2.ExtendedDynamicState2;
@@ -1585,6 +1591,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = v13.PNext,
             DynamicRendering = true,
             Synchronization2 = true,
+            ShaderDemoteToHelperInvocation = HasDemoteToHelperInvocation,
             SubgroupSizeControl = v13.SubgroupSizeControl,
             ComputeFullSubgroups = v13.ComputeFullSubgroups,
             PrivateData = v13.PrivateData,   // NVIDIA's NGX (DLSS) creates private data slots

@@ -11,7 +11,8 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 /// <summary>
 /// Compiles the renderers' GLSL 3.30 programs (a vertex and a fragment shader linked by name, loose uniforms) to SPIR-V for Vulkan 1.3 with shaderc:
 /// interface locations injected so the stages agree, the stages' resource bindings kept apart (vertex 0.., fragment 32.., descriptor set 0), the
-/// depth convention's define, in-memory and on-disk caches. Names are kept in the SPIR-V for <see cref="SpirvReflection"/>.
+/// depth convention's define, a fragment's <c>discard</c> as a demote where the options ask, in-memory and on-disk caches. Names are kept in the
+/// SPIR-V for <see cref="SpirvReflection"/>.
 /// </summary>
 public sealed partial class GlslProgramCompiler
 {
@@ -118,36 +119,51 @@ public sealed partial class GlslProgramCompiler
     }
 
     /// <summary>
-    /// The GLSL that is compiled: locations injected, and the depth convention's define when the options ask for it.
+    /// The GLSL that is compiled: locations injected, and the lines the options ask for (the depth convention's define, the fragment stage's
+    /// demote).
     /// </summary>
     public static (string Vertex, string Fragment) Preprocess(string vertexGlsl, string fragmentGlsl, ShaderCompileOptions? options = null)
     {
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
         if (options is null) return (vs, fs);
 
-        return (Define(vs, options), Define(fs, options));
+        return (Define(vs, options, fragment: false), Define(fs, options, fragment: true));
     }
 
     /// <summary>
-    /// Inserts <c>#define MEITOU_DEPTH_REVERSED 1</c> after the first <c>#version</c> line (at the top when there is none) when
-    /// <see cref="ShaderCompileOptions.DepthReversed"/> is set: it selects the reversed branch of <see cref="DepthConvention.Glsl"/>.
+    /// Inserts the options' lines (<see cref="OptionLines"/>) after the first <c>#version</c> line (at the top when there is none).
     /// </summary>
-    static string Define(string glsl, ShaderCompileOptions o)
+    static string Define(string glsl, ShaderCompileOptions o, bool fragment)
     {
-        if (!o.DepthReversed)
-        {
-            return glsl;
-        }
+        string lines = OptionLines(o, fragment);
+        if (lines.Length == 0) return glsl;
 
-        const string define = "#define MEITOU_DEPTH_REVERSED 1";
         var version = VersionRegex().Match(glsl);
-        if (!version.Success)
-        {
-            return define + "\n" + glsl;
-        }
+        if (!version.Success) return lines + "\n" + glsl;
 
         int at = version.Index + version.Length;
-        return glsl[..at] + "\n" + define + glsl[at..];
+        return glsl[..at] + "\n" + lines + glsl[at..];
+    }
+
+    /// <summary>
+    /// The lines the options add to a stage, joined by newlines ("" for none). <see cref="ShaderCompileOptions.DemoteDiscard"/>, in a fragment
+    /// stage: the demote extension, and <c>discard</c> defined as <c>demote</c> (the preprocessor replaces the keyword in every statement).
+    /// <see cref="ShaderCompileOptions.DepthReversed"/>: <c>MEITOU_DEPTH_REVERSED</c>, which selects the reversed branch of
+    /// <see cref="DepthConvention.Glsl"/>.
+    /// </summary>
+    static string OptionLines(ShaderCompileOptions o, bool fragment)
+    {
+        var lines = new List<string>();
+        if (fragment && o.DemoteDiscard)
+        {
+            // An extension directive comes before everything but #version.
+            lines.Add("#extension GL_EXT_demote_to_helper_invocation : require");
+            lines.Add("#define discard demote");
+        }
+
+        if (o.DepthReversed) lines.Add("#define MEITOU_DEPTH_REVERSED 1");
+
+        return string.Join("\n", lines);
     }
 
     /// <summary>
@@ -221,7 +237,7 @@ public sealed partial class GlslProgramCompiler
         }
         else
         {
-            spirv = CompileStage(Define(glsl, options), kind, stage, 0, legacy: false);
+            spirv = CompileStage(Define(glsl, options, kind == ShaderKind.FragmentShader), kind, stage, 0, legacy: false);
 
             // The cache file holds a pair; a single stage is stored twice.
             if (options.UseDiskCache) ShaderCache.Write(dir, key, NativeCacheVersion, spirv, spirv);
