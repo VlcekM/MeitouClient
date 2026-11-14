@@ -1349,6 +1349,12 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   good the shop rolls on (`TradeSystem.Fences`), whoever it was stolen from, with the roll's own odds shown capped at 100% (the original prints `int(odds x 100)`, so 110% for a good nobody looks for); `Stolen goods?` when the shop does not roll. Differences left
   (**Observed**): the original prints a chance for an owner of the trader's faction even when its squad does not roll, and prints nothing for an owner whose faction has `+0x250` set; Meitou follows the roll. Stealing from a stock shows `Stealing chance:`; illegal goods
   checked first, against the culture of the trader's faction: `ILLEGAL GOODS!` / `NO!` (`DAT_141707808`) in Bad, or for a trader with `+0xed` (buys illegal) `Illegal goods?` / `No problem!` in Good (**Verified**, decompiled; whose faction is read is **Observed**). Meitou reads the trader's town's faction, as the sale check.
+- **Stealing chance** (**Observed**, `FUN_140712920` per open inventory window, `FUN_1407138b0`): for the item under the mouse in a window (not its `outside`
+  section) whose partner window (the opener's, `FUN_14070dcd0`) would steal it (`FUN_140711740`: not a CAMPING building, not the player's own; its
+  character branch, vtable `+0x248` and `FUN_1405cb320`, is **Unknown**), `Stealing chance:` and `{1,num}%` of the steal chance `FUN_1407944d0`(opener,
+  owner, item) x 100 in the Bad colour; a trader's window takes the fencing branch instead. The item is passed, so an equipped item shows the x0.75 the
+  drag's roll leaves out. Meitou (`CrimeSystem.StealChanceOf`, `InventoryItemView.StealChance`): a `STEALING CHANCE:` row in the item's tooltip, as the
+  fencing row, capped at 100%, for the open loot (only while the owner watches: a down body shows none) and the open container (#702).
 - **Burden row** under Total Weight (**Verified**, `FUN_1405d4260`): by the carry speed factor, >= 0.95 `-Weightless`, >= 0.75 `-Lightweight`, >= 0.5 `-Moderate` (Main), >= 0.1 `-Heavy`,
   else `-Overloaded` (both Bad). The same function gives a trading character's panel its name, `Money:`, `Merchant Info:`, `Prices:` +/-N % and `Buys Stolen Goods` lines.
 - Colour tags in code (**Verified**, static initialisers `FUN_14158a...`): #afa68b, #140806, #492620, #59231a, #bf4834, #a8b774, #444444, #777777, #14ffdc. The strings `DAT_141f49248` + 0x28 k (k = 0..8; initialisers `FUN_14158a2a0` + 0x40 k, **Verified** 2026-10-23) are #afa68b, #140806, #492620, #59231a, #bf4834, #a8b774, #a8b774 again, #444444, #777777.

@@ -316,6 +316,9 @@ public sealed partial class World
         if (Player.OpenContainer is not { } id || Fixtures.Find(id) is not { Contents: not null } f) return null;
 
         var grid = Items.ContainerAccess.GridOf(this, f, out var region);
+        float? steal = Characters.TryResolveNext(Player.ContainerOpener, out int thief)
+            ? Crime.CrimeSystem.StealChanceOf(this, thief, Crime.StealSource.Of(f))
+            : null;
         var storage = new InventoryView(region.Width, region.Height, 0, 0,
             Array.AsReadOnly(grid.Items
                 .Select((item, index) => (item, index))
@@ -331,7 +334,8 @@ public sealed partial class World
                     Level = e.item.Level,
                     Charges = e.item.Charges,
                     MaxCharges = e.item.MaxCharges,
-                    Unique = e.item.Unique
+                    Unique = e.item.Unique,
+                    StealChance = steal
                 })
                 .ToArray()));
         return new Production.MachineSnapshot(id, f.RecordId, [], null, storage, null, 0, 0, 0) { IsContainer = true };
@@ -474,7 +478,7 @@ public sealed partial class World
         s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
         s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id))
             && cold!.Inventory is { } grid
-            ? InventoryViewOf(cold, grid, population, bodyConstants) : null;
+            ? InventoryViewOf(cold, grid, population, bodyConstants, id == Player.OpenLoot ? LootStealChance(i) : null) : null;
         s.Bounties = detailed && cold!.Bounties is not null
             ? Crime.CrimeSystem.Lines(cold, Tick, TickSeconds, LocalFaction(cold, state[i].Position, population))
             : [];
@@ -786,14 +790,15 @@ public sealed partial class World
     /// and a living holder's death items left out, as the original's panel <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum from the
     /// holder's strength times the stats multiplier (an animal's age) and the burden factor from its strength.
     /// </summary>
-    InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants)
+    InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants,
+        Func<Items.ItemInstance, float?>? steal)
     {
         float items = grid.ContentWeight(Player.Held, skipDeath: cold.Medical is not { Dead: true });
         bool carrying = !cold.Carrying.IsNone;
         float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
         var stats = constants is null ? null : cold.Stats;
         return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0,
-            ItemsOf(grid, cold.Faction, population))
+            ItemsOf(grid, cold.Faction, population, steal))
         {
             TotalWeight = constants is null ? items : Encumbrance.CarriedWeight(constants, items, carrying),
             CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength * stats.Scale, strengthMult),
@@ -802,9 +807,21 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The inventory panel's items shown in a grid.
+    /// The stealing chance of an item of the open loot, slot <paramref name="owner"/>, for its opener
+    /// (<see cref="Crime.CrimeSystem.StealChanceOf(World, int, int, Items.ItemInstance)"/>); null when no one holds the window open.
     /// </summary>
-    static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population) =>
+    Func<Items.ItemInstance, float?>? LootStealChance(int owner)
+    {
+        if (!Characters.TryResolveNext(Player.LootOpener, out int thief)) return null;
+
+        return item => Crime.CrimeSystem.StealChanceOf(this, thief, owner, item);
+    }
+
+    /// <summary>
+    /// The inventory panel's items shown in a grid, with <paramref name="steal"/>'s stealing chance of each (null: none).
+    /// </summary>
+    static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population,
+        Func<Items.ItemInstance, float?>? steal = null) =>
         Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section,
             shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality)
         {
@@ -819,7 +836,8 @@ public sealed partial class World
             MaxCharges = shown.Item.MaxCharges,
             StolenFrom = shown.Item.IsStolenFor(faction, population) ? shown.Item.StolenFrom : -1,
             Unique = shown.Item.Unique,
-            BagItems = shown.Item.Contents?.Items.Count ?? -1
+            BagItems = shown.Item.Contents?.Items.Count ?? -1,
+            StealChance = steal?.Invoke(shown.Item)
         }).ToArray());
 
     /// <summary>

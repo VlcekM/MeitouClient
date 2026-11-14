@@ -324,6 +324,11 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// How many items a bag holds (-1: not a bag); an empty one's tooltip name ends in " (empty)".
     /// </summary>
     public int BagItems { get; init; } = -1;
+    /// <summary>
+    /// The chance a take of it goes unseen, for an item of the open loot or container that its opener would steal
+    /// (<see cref="Crime.CrimeSystem.StealChanceOf(World, int, int, Items.ItemInstance)"/>): the tooltip's stealing chance. Null otherwise.
+    /// </summary>
+    public float? StealChance { get; init; }
 }
 
 /// <summary>
