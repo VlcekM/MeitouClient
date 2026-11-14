@@ -191,8 +191,8 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// A jobs row: the type's text and the building it targets. The engineer works every site, not the one it was ordered on, so its row is plain
-    /// "Engineer" (<b>Observed</b> in the original by players, #348/#353).
+    /// A jobs row: the type's text and the building, training dummy or character it targets. The engineer works every site, not the one it was
+    /// ordered on, so its row is plain "Engineer" (<b>Observed</b> in the original by players, #348/#353).
     /// </summary>
     string JobRowText(Simulation.Production.PermaJob job)
     {
@@ -204,6 +204,13 @@ sealed class OrdersPanel(PlayerInterface player)
 
         if (job.Site is { } dummyId && player.Session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
             return text + ": " + (player.Build.Services?.ItemName(dummy.Record) ?? dummy.Record);
+
+        // A job per target (TaskData +8: Bodyguard, Staying close) names its character (docs/game/ui-screens.md, jobs list); Obedient Slave does not.
+        if (!job.Character.IsNone && Simulation.Production.PermaJobs.PerTarget(job.Type)
+            && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == job.Character) is { Name.Length: > 0 } target)
+        {
+            return text + ": " + target.Name;
+        }
 
         return text;
     }

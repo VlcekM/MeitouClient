@@ -498,7 +498,8 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   height / 1080) tall and the box's width less 4 × width / 1920, less the bar's when the rows overflow; text `#afa68b` + (index + 1) + ": " + the
   TaskData's name (+0x138), then ": " + the target's name when TaskData +8 is set and the target resolves; alpha 0.5 when the jobs switch is off and the
   type does not run without it (`FUN_14050c1c0`). **Observed** (owner screenshot 2026-11-07): machine rows read "3: Operating machine" with no
-  building, so for them the suffix is empty or the target does not resolve (**Unknown** which). Meitou keeps the building after the number and lays
+  building, so for them the suffix is empty or the target does not resolve (**Unknown** which). A follow row names its character: "1: Staying close:
+  Kashyk" on the player's dog (**Observed** in the original, 2026-11-14). Meitou keeps the building, training dummy or character after the number and lays
   each row from the layout, dragged to reorder. Hold = hold position; Block = defensive mode (CharStats +0x128, read by the block chance, defence and dodge; the buttons' standing orders: [combat.md](combat.md#fight-lifecycle-and-orders)) (+20 melee defence, no attacks; **Verified**
   against the tooltip string in the exe: "gain 20 to his melee defense skill ... will not attempt to make any
   attacks"); Passive = non-combat mode (tooltip strings; all the orders panel's tooltips: [Tooltips](#tooltips)).

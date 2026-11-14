@@ -1364,7 +1364,8 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     the field +0x1a4 itself was not traced to the record. The bar shows the stat's fraction (+0x3a4). Meitou reads it as the stat's fractional part (`TrainBar`; **Observed**). The row's conditions are 38 `hasOneWorkingArm`, 73, `isAtLocation`.
     The XP is the user's own stat, not the injured one. Meitou: [simulation](../simulation.md#job-lists).
 - **UI** (strings, `FUN_14072b540` JobsPanel): "No jobs assigned", "To add jobs, hold shift key when giving an order", the Jobs toggle "If this is
-  disabled then the character won't do any of the jobs listed."; tutorial: jobs are reordered by dragging and removed with X. Row text: **Unknown**.
+  disabled then the character won't do any of the jobs listed."; tutorial: jobs are reordered by dragging and removed with X.
+  Row text: [Jobs list](ui-screens.md#4-hud-mainbargui).
 - **Unknown:** what list A/B mean per job type in detail (operating 87: A `IS_WORKING`; B free slot, power, inputs not
   empty, output not full, at the machine); how 124 "Hauling to" gets the items it needs (B 67 `haveSomeResourcesFor`; no row's effect is 67).
 
