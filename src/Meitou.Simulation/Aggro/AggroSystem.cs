@@ -1385,6 +1385,21 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     #region Sensing one character
 
     /// <summary>
+    /// The sight ray of the spot meter (<c>FUN_1408533a0</c>, <b>Verified</b> literals): it starts this far over the looker's feet.
+    /// </summary>
+    const float SightRayFrom = 18;
+
+    /// <summary>
+    /// The sight ray ends this far over the target's feet (half of <see cref="SightRayFrom"/>).
+    /// </summary>
+    const float SightRayTo = 9;
+
+    /// <summary>
+    /// A hit of the sight ray nearer than this to the target does not block it.
+    /// </summary>
+    const float SightRaySlack = 2;
+
+    /// <summary>
     /// Whether the looker senses <paramref name="slot"/> now (<c>FUN_1408593d0</c>: seen by <c>FUN_140857b10</c>, else heard by
     /// <c>FUN_140857500</c>). A sneaking target of another side fills the spot meters of a looker that keeps them (<see cref="Scan.Meters"/>,
     /// exposing the sneaker), and counts as seen in view only once its meter was full before this look, or when it is the looker's own fight target
@@ -1400,6 +1415,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (sneaking && c.Faction != s.Faction && !(s.Player && c.IsPlayer))
         {
             float v = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth);
+            if (v > 0 && !ClearSight(ref s, other.Position)) v = 0;
+
             bool full = SpotOf(s.Spots, slot, other.Generation) > 1;
 
             if (s.Meters)
@@ -1432,6 +1449,21 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         return seen || heard;
+    }
+
+    /// <summary>
+    /// Whether nothing solid stands between the looker and a sneaker at <paramref name="target"/> (the spot meter's line of sight,
+    /// <c>FUN_140856cb0</c> calling <c>FUN_1408533a0</c>): the terrain and the buildings' collision (walls, floors, stairs, furniture and roofs;
+    /// not doors or passable parts, <see cref="SolidHits"/>) on the ray from <see cref="SightRayFrom"/> over the looker's feet to
+    /// <see cref="SightRayTo"/> over the target's, a hit within <see cref="SightRaySlack"/> of the target not counting.
+    /// </summary>
+    static bool ClearSight(ref Scan s, Vector3 target)
+    {
+        var from = s.Eye + new Vector3(0, SightRayFrom, 0);
+        var seg = target + new Vector3(0, SightRayTo, 0) - from;
+        float hit = SolidHits.Hit(s.World.Walkability, s.Fights?.Buildings, from, seg, RangedTuning.TerrainStep, out _);
+
+        return hit < 0 || hit * seg.Length() >= Vector3.Distance(s.Eye, target) - SightRaySlack;
     }
 
     /// <summary>

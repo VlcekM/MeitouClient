@@ -82,9 +82,13 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
-looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), no line-of-sight ray, f = 0.5,
+looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), f = 0.5,
 dt = the scan interval; a meter decays also when the target is out of range (the original's rule there is **Unknown**). Crime
-witnesses and the stealth knock-out read the same meters. A sneaking player
+witnesses and the stealth knock-out read the same meters. Line of sight (`AggroSystem.ClearSight`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
+looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
+furniture 19..22, unwalkable roofs 27; not doors 5 or passable parts 23..26), with foliage 6 and 14 added (`0x87fde44`) when the looker is inside a building. Meitou tests the terrain and
+the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty (the original erases the entry). **Unknown**: the ray's early
+"not seen" under 40 units when the looker's `+0x260` type is not 0xb, the offset it adds from the looker's movement, and the exception for a hit on the handle at target `+0x300`. The plain (non-sneaking) sight test still has no ray. A sneaking player
 character gets the arrows (`MarkerRenderer`, both passes like the movement marker, lit by the sun; no green) and the original's stealth icon left of its name in the tag
 colours: seen if any watcher detects, almost seen if any notices, else hidden, and the light-level icon from its `SightMap` light.
 The list (`CharacterCold.Watchers`, 4 s, a carried looker left out) is fed by the spot meter (`AggroSystem.Visit`, sight only, as in the original) and by the forced
