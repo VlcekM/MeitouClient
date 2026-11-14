@@ -1102,7 +1102,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   slave walking out of Rebirth is tagged just past the south gate, and once down is carried back and caged as a slave.
 - **Escape far from the owner** (`ArrestSystem.EscapeFarFromOwner`, on the spotting cadence; facts: [carry-loot](game/carry-loot.md#a-slave-far-from-its-owner-escapes)): any
   slave (state 1), player or NPC, outside every town (its status town, `CharacterCold.StatusTown`, [rule](game/carry-loot.md#the-status-town), as for `Freed`) and farther than about 3 536 from its owner becomes an escaped slave. The owner is the
-  master squad's leader (`ObedientSlave.OwnerOf`); without a master squad or pending saved owner handle, a slave becomes escaped even inside town.
+  master squad's leader (`ObedientSlave.OwnerOf`); without a master squad or pending saved owner handle, a slave becomes escaped even inside town. Not one held in a cage that has an owner (`ArrestSystem.CagedByOwner`): the original's cage entry gives it the cage's owner handle (`FUN_140330600`), and Meitou's stand-in, the resident squad, is missing for a cage with none (Rebirth's Prisoner Poles; **Observed**, #647 save: the start prisoner turned escaped slave in its cage within 30 ticks).
   A master squad or saved owner still waiting to load is kept; measuring to an unloaded platoon's position is not modelled.
 - **Slave trading** (DA 41 / 42, `CharacterTrading`; facts: [economy 12](game/economy.md#12-slaves-prisoners-animals)): the line ends the conversation and the window
   opens as it closes (a speech-bubble line opens it at once; only for a player-character target). Rows, prices and the confirm's effects as in the original, with these **engine**

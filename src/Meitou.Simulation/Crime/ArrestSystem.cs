@@ -504,7 +504,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// slave (state 1) while the status object's current town (<c>+0x88</c>) is null and its squared distance to the owner is above
     /// <see cref="EscapeDistanceSquared"/> (<b>Verified</b>; the town is <see cref="CharacterCold.StatusTown"/>). The owner is the master squad's
     /// leader (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle). With no owner handle the slave escapes in town
-    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept.
+    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept, and so is a slave held in
+    /// an owned cage (<see cref="CagedByOwner"/>).
     /// </summary>
     void EscapeFarFromOwner(World world)
     {
@@ -515,7 +516,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c) continue;
             if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner)
             {
-                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false }) FixtureRegistry.TagEscaped(world, c);
+                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false } && !CagedByOwner(world, c)) FixtureRegistry.TagEscaped(world, c);
 
                 continue;
             }
@@ -526,6 +527,14 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (Vector3.DistanceSquared(at, table.Next[owner.Slot].Position) > EscapeDistanceSquared) FixtureRegistry.TagEscaped(world, c);
         }
     }
+
+    /// <summary>
+    /// Whether a slave is held in a cage that has an owner. Entering a cage gives the slave the cage's owner handle (<c>FUN_140330600</c>), a
+    /// registered object, so the original's ownerless escape never applies there; Meitou's stand-in for that handle, the resident squad of the
+    /// cage's building, is missing for a cage without one (a Prisoner Pole), which made a start prisoner an escaped slave in its cage (#647).
+    /// </summary>
+    static bool CagedByOwner(World world, CharacterCold c) =>
+        c is { IsImprisoned: true, InWhat: { } id } && world.Fixtures.Find(id) is { Kind: FixtureKind.Cage, Owner: >= 0 };
 
     /// <summary>
     /// Whether the character is a guard or target of an arrest, or the hunter of a hunt that is not resting.
