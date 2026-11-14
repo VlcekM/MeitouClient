@@ -22,9 +22,11 @@ public static class SavedKit
     /// <summary>
     /// The items as an inventory, at their saved sections and cells. Items whose record the game data lacks are left out and named in
     /// <paramref name="notes"/>. The main grid is the <paramref name="owner"/>'s (<see cref="ItemFactory.MainSize"/>: 8 x 10 for a person, the
-    /// vanilla screenshot's pocket grid, <b>Observed</b>, docs/game/ui-screens.md), as tall as the saved items need.
+    /// vanilla screenshot's pocket grid, <b>Observed</b>, docs/game/ui-screens.md), as tall as the saved items need. A worn item the owner's
+    /// <paramref name="race"/> may not wear (an animal: one whose <c>races</c> lacks it) is auto-added instead (<see cref="Fits"/>).
     /// </summary>
-    public static Inventory ToInventory(IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes = null, GameRecord? owner = null)
+    public static Inventory ToInventory(IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes = null, GameRecord? owner = null,
+        string? race = null)
     {
         var (width, height) = ItemFactory.MainSize(owner);
 
@@ -35,9 +37,15 @@ public static class SavedKit
         }
 
         var inventory = new Inventory(width, height);
-        Fill(inventory, items, factory, notes, "main", owner is not null);
+        var wearer = owner is null ? (Wearer?)null : new Wearer(race, owner.Type == FcsRecordType.AnimalCharacter);
+        Fill(inventory, items, factory, notes, "main", wearer);
         return inventory;
     }
+
+    /// <summary>
+    /// The character whose inventory is loaded: its RACE id (null: not in the data, no limit) and whether it is an animal (an ANIMAL_CHARACTER).
+    /// </summary>
+    readonly record struct Wearer(string? Race, bool Animal);
 
     /// <summary>
     /// Restores the saved items of one inventory as the original's load does (<c>FUN_14074c0e0</c>, <b>Verified</b> by decompile,
@@ -46,7 +54,7 @@ public static class SavedKit
     /// <see cref="Inventory.AddTo"/>), and one that finds no room is lost. The rejected items are auto-added after the rest are placed (the bag is
     /// then known), an engine choice.
     /// </summary>
-    static void Fill(Inventory inventory, IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes, string gridSection, bool character)
+    static void Fill(Inventory inventory, IReadOnlyList<SaveItem> items, ItemFactory factory, List<string>? notes, string gridSection, Wearer? wearer)
     {
         List<ItemInstance>? rejected = null;
 
@@ -59,9 +67,9 @@ public static class SavedKit
             }
 
             if (s.Contents is { } contents && item.Contents is { } bag)
-                Fill(bag, contents, factory, notes, "backpack_content", character);
+                Fill(bag, contents, factory, notes, "backpack_content", wearer);
 
-            if (Fits(inventory, item, character)) inventory.Items.Add(item);
+            if (Fits(inventory, item, wearer)) inventory.Items.Add(item);
             else (rejected ??= []).Add(item);
         }
 
@@ -78,11 +86,12 @@ public static class SavedKit
     }
 
     /// <summary>
-    /// Whether a loaded item may take its saved place: inside its grid or slot and over no item placed there. In a
-    /// <paramref name="character"/>'s inventory a section it has no slot for (a mod's slot whose mod is gone, docs/formats/save.md) takes nothing,
-    /// so its item is auto-added; a machine's storage keeps its saved sections.
+    /// Whether a loaded item may take its saved place: inside its grid or slot and over no item placed there. In a character's inventory
+    /// (<paramref name="wearer"/> set) a section it has no slot for (a mod's slot whose mod is gone, docs/formats/save.md) takes nothing, and a
+    /// worn section takes no item the wearer's race may not wear (the section check <c>FUN_14074bc30</c> asks the <c>RaceLimiter</c>,
+    /// <b>Verified</b> by decompile), so its item is auto-added; a machine's storage keeps its saved sections.
     /// </summary>
-    static bool Fits(Inventory inventory, ItemInstance item, bool character)
+    static bool Fits(Inventory inventory, ItemInstance item, Wearer? wearer)
     {
         var (w, h) = item.Section is "main" or "backpack_content" ? (inventory.Width, inventory.Height) : InventoryCommands.SectionSize(item.Section);
 
@@ -93,9 +102,12 @@ public static class SavedKit
         }
 
         if (InventoryCommands.IsEquipmentSection(item.Section) || InventoryCommands.IsLimbSection(item.Section))
-            return !inventory.Items.Any(i => i.Section == item.Section);
+        {
+            return !inventory.Items.Any(i => i.Section == item.Section)
+                && (wearer is not { } who || item.WearableBy(who.Race, who.Animal));
+        }
 
-        return !character;
+        return wearer is null;
     }
 
     /// <summary>

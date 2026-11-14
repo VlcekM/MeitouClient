@@ -464,7 +464,7 @@ internal static class SavedCharacters
         if (race is not null && stats is not null && medical is not null)
         {
             assembly.AttachSaved(cold, race, stats, medical, p.Record,
-                p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record) : null),
+                p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record, race.StringId) : null),
                 sc.GameState is { } aged && aged.Floats.TryGetValue("age", out float age) ? age : 1);
         }
         else if (race is not null)
