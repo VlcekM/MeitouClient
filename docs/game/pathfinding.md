@@ -413,6 +413,9 @@ Its platform has overlapping upward faces near Y122/133; the lower face lacks he
 **Door joins** (engine choice): an interior's door polygons link to the exterior's door polygons of the same door; when none face them,
 to any kept exterior polygon facing their open edges. **Observed** (zone18.35): the L-House `13-rebirth-INGAME` and `15-rebirth-INGAME`
 door leaves sit 5..14 inside the interior hull, so the hull-carved exterior got no door polygons and the rooms were sealed.
+When the door's exterior polygons are all pruned yet touch a kept polygon, the interior's door polygons link to those and the carry keeps them. **Observed**
+(zone 38.29, `meitou-tools navmesh --verbose`, issue #436): the Waystation bar, L-House `3-rebirth-INGAME`, has a 14.4 doorway whose kept landing meets
+the door polygons over edges of 8.9 and 5.7, under the narrow-portal 9, so the bar was an island; now a path from the street reaches its floor.
 When neither joins, the interior polygons connected to the door polygons within 32 units of them join the exterior polygons their open
 edges face: a raised sill reached by steps (~47..52°) that cross the hull, whose lower part is the exterior's (cut at the hull: Y351 for
 `29-rebirth-INGAME`, door Y365..380; Y418 for `27-`, door Y430..441) and upper part the interior's, meeting on the hull's edge.

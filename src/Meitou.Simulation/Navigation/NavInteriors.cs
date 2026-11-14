@@ -223,8 +223,10 @@ internal static class NavInteriors
             var inside = Enumerable.Range(first, count).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
             if (inside.Count == 0) continue;
 
-            var outside = Enumerable.Range(0, exteriorCount).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
-            join.JoinDoor(inside, outside, doorIds[door]);
+            var ofDoor = Enumerable.Range(0, exteriorCount).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
+            var outside = ofDoor.Where(p => kept[p]).ToList();
+            var cutOff = ofDoor.Where(p => !kept[p] && neighbours[p].Any(n => n >= 0 && kept[n])).ToList();
+            join.JoinDoor(inside, outside, cutOff, doorIds[door]);
         }
 
         // A doorless interior (an open doorway): the hull cuts the exterior and the interior along the same line, so their edges meet there.
@@ -283,14 +285,20 @@ internal static class NavInteriors
         Action<string>? log)
     {
         /// <summary>
-        /// Links the interior's polygons of one door to the exterior: to the exterior's polygons of the same door, else along the hull's edge round
-        /// the doorway, else from the door's approach.
+        /// Links the interior's polygons of one door to the exterior: to the exterior's polygons of the same door, else to those the pruning cut
+        /// off (<paramref name="cutOff"/>: not kept, beside a kept polygon), else along the hull's edge round the doorway, else from the door's
+        /// approach.
         /// </summary>
-        public void JoinDoor(List<int> inside, List<int> outside, string doorId)
+        public void JoinDoor(List<int> inside, List<int> outside, List<int> cutOff, string doorId)
         {
             // An edge that faces several polygons links to all of them, so which edges are open is decided before any link is added.
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
             if (Link(openInside, OpenEdges(outside), doorId) > 0) return;
+
+            // A landing whose edge along the doorway is split into pieces shorter than a portal: the seed flood stops there, so the door's own
+            // exterior polygons are pruned and the kept landing's edges toward them are not open (Observed: the Waystation's L-House
+            // 38.29:3-rebirth-INGAME, a 14.4 doorway met by edges of 8.9 and 5.7). Joined, the carry keeps them.
+            if (Link(openInside, OpenEdges(cutOff), $"{doorId} (door behind a narrow edge)") > 0) return;
 
             // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
             // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
