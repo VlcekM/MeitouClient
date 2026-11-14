@@ -558,7 +558,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Where an operator walks to: a turret's gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>), else the floor point at or next to the building's
-    /// place (furniture cuts a hole in the floor's navmesh; <see cref="MovementSystem.GoToFloor"/>).
+    /// place, a rock's middle (furniture cuts a hole in the floor's navmesh; <see cref="MovementSystem.GoToFloor"/>).
     /// </summary>
     Vector2 GoalOf(World world, BuildSite site, Machine m)
     {
@@ -569,7 +569,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return new Vector2(spot.X, spot.Z);
         }
 
-        var at = world.Walkability.FloorNear(site.Position.X, site.Position.Z, site.Position.Y, MovementSystem.FloorSlack) ?? site.Position;
+        // A rock is walked to at its bounds' middle, which its footprint holds (its origin can lie off its pile).
+        var to = _naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Centre : site.Position;
+        var at = world.Walkability.FloorNear(to.X, to.Z, to.Y, MovementSystem.FloorSlack) ?? to;
         return new Vector2(at.X, at.Z);
     }
 
@@ -629,8 +631,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site?.Parent is not null;
 
     /// <summary>
-    /// Whether the operator is at the machine: a turret's gunner at its spot or within the turret's use range, a rock's within its footprint or use
-    /// range, else within reach of the site; a gunner also at its spot's height, a machine's operator at the site's.
+    /// Whether the operator is at the machine: a turret's gunner at its spot or within the turret's use range, a rock's within
+    /// <see cref="RockReach"/> of its footprint, else within reach of the site; a gunner also at its spot's height, a machine's operator at the site's.
     /// </summary>
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {
@@ -643,13 +645,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return near && MathF.Abs(n.Position.Y - turret.Spot.Y) < SiteReach.HeightLimit(door: false, site.Parent is not null);
         }
 
-        // A rock: inside its footprint scaled 1.2, or within its use range of the box's centre (the original measures to its position marker; a
-        // rock's origin can lie off its pile).
-        if (_naturalBounds.TryGetValue(site.Id, out var rock))
-        {
-            return rock.Touches(n.Position)
-                || SiteReach.Within(n, Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), rock.Flat), m.Data.UseRange);
-        }
+        // A rock: at its footprint (engine choice, #587: the original's use range of the position marker, doubled when stopped, has a copper
+        // rock mined from 100 to 200 off its middle).
+        if (_naturalBounds.TryGetValue(site.Id, out var rock)) return SiteReach.Within(n, rock.Gap(n.Position), RockReach);
 
         // The machine's use range (UseableStuff::getReachRange).
         if (!SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)) return false;
@@ -666,8 +664,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// The X/Z gap from <paramref name="from"/> to a site (<see cref="SiteReach.Gap"/>). A rock's BUILDING footprint is not scaled like the rock, so
-    /// a rock is measured to its mesh's footprint as placed (engine choice for the original's 1.2 x bounds box of a foliage building, which also
-    /// wants a movement flag; a circle of its longest half-extent left miners standing off a long rock's side), else to its position.
+    /// a rock is measured to its mesh's footprint as placed (engine choice; a circle of its longest half-extent left miners standing off a long
+    /// rock's side), else to its position.
     /// </summary>
     float GapTo(BuildSite site, Vector3 from)
     {

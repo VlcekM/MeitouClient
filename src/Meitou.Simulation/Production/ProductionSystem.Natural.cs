@@ -20,12 +20,18 @@ public sealed partial class ProductionSystem
     const string NaturalPrefix = "natural:";
 
     /// <summary>
+    /// How near (X/Z) its rock's footprint an operator works it, twice that once stopped (<see cref="SiteReach.Within"/>). Engine choice (#587): the
+    /// original takes the rock's bounds box scaled 1.2 or its <c>use range</c> (50 iron, 100 copper) of its position marker.
+    /// </summary>
+    const float RockReach = 10;
+
+    /// <summary>
     /// The rocks' sites by id, made on first use (null: the id names no rock).
     /// </summary>
     readonly Dictionary<string, BuildSite?> _naturalSites = new(StringComparer.Ordinal);
     /// <summary>
     /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's
-    /// transform when the source has the mesh: an operator inside them has reached the rock.
+    /// transform when the source has the mesh: an operator at the footprint has reached the rock (<see cref="RockReach"/>).
     /// </summary>
     readonly record struct RockBounds(Vector3 Centre, float Radius, RockShape? Shape, Matrix4x4 Transform)
     {
@@ -47,20 +53,6 @@ public sealed partial class ProductionSystem
             var edge = shape.NearestXz(new Vector2(local.X, local.Z));
             var nearest = Vector3.Transform(new Vector3(edge.X, local.Y, edge.Y), Transform);
             return Vector2.Distance(at, new Vector2(nearest.X, nearest.Z));
-        }
-
-        /// <summary>
-        /// Whether <paramref name="from"/> is inside the footprint scaled 1.2 about the box's middle (taken at the box's height), else inside the
-        /// bounds circle scaled 1.2.
-        /// </summary>
-        public bool Touches(Vector3 from)
-        {
-            if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse))
-                return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
-
-            var local = Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse);
-            var mid = new Vector2((shape.Min.X + shape.Max.X) / 2, (shape.Min.Z + shape.Max.Z) / 2);
-            return shape.InsideXz(mid + (new Vector2(local.X, local.Z) - mid) / 1.2f);
         }
     }
 
