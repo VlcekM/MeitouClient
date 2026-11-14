@@ -155,6 +155,11 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- The load (`FUN_14062a130`, `FUN_14074a3d0`, **Verified** by decompile): when the new animal wears a bag, each entry of its squad template's `vendors` list, or with none there of its own
+  `inventory` list (VENDOR_LISTs too; no base animal has one), puts the list's `items count` items (40 when below 1) into the bag: picks as an item slot's
+  ([`FUN_1409540d0`](factions-squads-towns.md#loose-items-in-buildings), for the animal's faction), at most twice as many tries, a pick that does not fit is destroyed. No chance, weight or
+  `is trader` test. So the pack animals of any squad with `vendors` carry goods: all a Traders Guild `Caravan` sells ([who trades](economy.md#who-trades)). Meitou: `PackLoad`, not for a
+  homeless trader squad, whose squad stock stands in for its bags.
 - The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
   shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
   and `athletics mult` are not separately verified, **Unknown**). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.

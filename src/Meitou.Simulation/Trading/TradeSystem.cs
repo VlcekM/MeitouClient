@@ -611,8 +611,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// A trade opened with a member of a squad that has no shop yet: a trader squad gets its shop now; any other trades from what the original's
     /// window shows (docs/game/economy.md "Who trades"): a squad with no home building (the Traders Guild's <c>Caravan</c>: <c>vendors</c> but no
-    /// <c>is trader</c>) from an empty stock that is never filled, standing in for its members' bags; a housed one from its home's stock containers,
-    /// lent for the trade (<see cref="Stock"/> hands them back), none without.
+    /// <c>is trader</c>) from a stock that is never filled and takes what its members' worn bags hold (<see cref="TakeBags"/>: the pack animals'
+    /// loads, <see cref="Items.PackLoad"/>); a housed one from its home's stock containers, lent for the trade (<see cref="Stock"/> hands them
+    /// back), none without.
     /// </summary>
     void StockFor(World world, int t)
     {
@@ -627,6 +628,25 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         squad.Shop = UnfilledShop(squad, TemplateRecord(_data, squad.TemplateId));
         if (squad.Shop is { Building: not null } lent) TakeContents(world, lent);
+        else if (squad.Shop is { } carried) TakeBags(world, squad, carried);
+    }
+
+    /// <summary>
+    /// A homeless squad's new unfilled shop takes what its living members' worn bags hold: the original's window shows those bags merged
+    /// (<c>FUN_140953850</c>, docs/game/ui-screens.md section 6). <b>Engine choice</b>: the goods stay in the squad's stock from then on, as a
+    /// trader squad's do; what the stock has no room for stays in its bag.
+    /// </summary>
+    static void TakeBags(World world, Squad squad, Shop shop)
+    {
+        var table = world.Characters;
+
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int slot) || table.Cold(slot) is not { DiedTick: < 0, Inventory.Backpack.Contents: { } bag }) continue;
+
+            foreach (var item in bag.Items.ToList())
+                if (shop.Stock.Add(item)) bag.Items.Remove(item);
+        }
     }
 
     /// <summary>

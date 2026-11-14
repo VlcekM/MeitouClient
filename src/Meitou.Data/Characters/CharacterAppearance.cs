@@ -664,13 +664,16 @@ public sealed class CharacterAppearance
         {
             items.AddRange(ChooseClothing(db, character, random));
 
-            // backpack: (1, chance), val1 an absolute chance (fcs.def). Without a seed: worn if the chance is 50 or more.
+            // backpack: (1, chance), val1 an absolute chance (fcs.def), 0 counting as 100 (CharacterGenerator.RollBackpack). Without a seed: worn
+            // if the chance is 50 or more.
             foreach (var r in character.GetReferences("backpack"))
-                if (db.Find(r.TargetStringId) is { } pack && (random is null ? r.Values.Value1 >= 50 : random.Next(100) < r.Values.Value1))
-                {
-                    items.Add(pack);
-                    break;
-                }
+            {
+                int chance = r.Values.Value1 == 0 ? 100 : r.Values.Value1;
+                if (db.Find(r.TargetStringId) is not { } pack || (random is null ? chance < 50 : random.Next(100) >= chance)) continue;
+
+                items.Add(pack);
+                break;
+            }
         }
 
         return (items, materials, colours);

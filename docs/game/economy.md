@@ -52,7 +52,7 @@ constructor), ITEM its record value, others 0; 7 reads as 0. An ITEM of function
 meat included) and its `trade item` flag cleared (so it always sells at the loot fraction, no "Avg. Price"); function 3 with a single charge becomes 0 (no food), 15 stays.
 Base data: 17 of the 18 food and raw-meat ITEMs lose their `trade item` flag (Human Teeth, 15 with one charge, keeps it). **Starting items** (**Verified**, `CharacterHuman::setupInventorySections` `FUN_14062c4e0`, `FUN_14075d570`): a
 single unit (v0 = 1) of a CHARACTER `inventory` entry with current charges above 1 starts with a random whole number in [1, trunc(max)]; stacks, blueprints, loadout gear and death items stay
-full, and an ANIMAL_CHARACTER's list (`FUN_14062a130`) is not rolled. Meitou: `ItemFactory.Build` with the spawn seed, key and entry index (`Rng` Spawn).
+full; an ANIMAL_CHARACTER's `inventory` names vendor lists instead ([pack animals](animals.md#pack-animals)). Meitou: `ItemFactory.Build` with the spawn seed, key and entry index (`Rng` Spawn).
 
 ## Shops and transactions
 
@@ -102,12 +102,16 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
   Samurai no. Of 125 trader templates with vendors in the probe load order, 89 mark a member CHARACTER `is trader`.
 - DA_TRADE needs no stock: the window shows the trader's squad stock, for a squad with no home building its members' worn bags merged ([trader window](ui-screens.md#6-inventory-trade-dialogue-build)),
   so a squad that was never filled trades what those bags hold and buys with its purse. `Caravan` (1161, Traders Guild) and `Caravan NW` (43970) have `vendors` (`caravan (survival
-  items)`) but no `is trader`, and their boss's Trade line (48150) has no condition: in the unmodded game they open an unfilled window (**Verified**: the factory and the restock reach the
+  items)`) but no `is trader`, and their boss's Trade line (48150) has no condition: in the unmodded game the squad stock is never filled (**Verified**: the factory and the restock reach the
   squad filler only through `FUN_1404ff5e0`, which refuses a homeless squad without `is trader`; the filler without that test, `FUN_1404fe970`, has no caller: no call, jump or pointer
-  to it or its thunk in the exe). **Observed**: the owner's saves with ~100 mods (1.0.65, 1.0.68) hold Caravans stocked from that list with an `inventory refresh time`, which the saver
-  writes only for `is trader` (`FUN_140372ef0`), so a mod sets it; which one is **Unknown**. Their boss wears no bag either (**Observed**, decompile of `CharacterHuman::setupInventorySections` `FUN_14062c4e0`; the weight is read off its `crossbows` loop, the decompile drops the argument here: a `backpack` entry counts with
-  val0 above 0 and weighs its val1, one is drawn when a roll in [0, 100) is below the sum; `Caravan trader boss` lists `Trader's Wooden Backpack` as (1, 0), chance 0, like 33 of the base data's 66 CHARACTER entries;
-  an animal gets every entry, `FUN_14062a130`, so the Pack Beast carries its empty Garru Backpack), which is what #657 shows. Meitou (`TradeSystem.StockFor`): such a squad gets an empty shop, never filled, at its first trade; a
+  to it or its thunk in the exe). What they sell is their pack animals' loads: a new animal's bag is filled from its squad template's `vendors` whether or not the squad trades
+  ([pack animals](animals.md#pack-animals), **Verified**), so a Caravan's 1 to 3 Pack Beasts carry up to 40 survival items each, once, with no restock. The boss and the `Caravan trader`s
+  wear their `Trader's Wooden Backpack`, empty: a CHARACTER `backpack` entry counts with val0 above 0 and weighs its val1, a val1 of 0 weighing 100 (`CharacterHuman::setupInventorySections`
+  `FUN_14062c4e0`, **Verified** by disassembly at `14062d12b`: the zero weight is replaced by 100.0 before the entry is added; 33 of the base data's 66 CHARACTER entries are (1, 0), the Hive
+  Caravan Boss's among them), and one is drawn when a roll in [0, 100) is below the sum. `weapons` do the same with val2; `crossbows` do not (a val1 of 0 never draws). **Observed**: the owner's
+  saves with ~100 mods (1.0.65, 1.0.68) hold Caravans with an `inventory refresh time`, which the saver writes only for `is trader` (`FUN_140372ef0`), so a mod sets it; which one is
+  **Unknown**. Meitou (#657): `PackLoad` fills a new pack animal's bag; at its first trade such a squad gets a shop that is never filled and takes what its living members' worn bags hold
+  (`TradeSystem.TakeBags`; engine choice: the goods then stay in the squad's stock, as a trader squad's, whose pack animals get no load of their own). A
   housed squad without a shop trades from its home's stock containers, lent to the trade and handed back when it ends (none without containers).
 - Meitou (the right-click Trade verb, engine): a member of a shop squad, or of a homeless squad whose template has `vendors` (a Caravan), whose record sets `is trader` or whose
   dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked). A trader held in a cage or on a pole offers no Trade and an open trade with one closes (engine choice, #641; the original's case is **Unknown**).
