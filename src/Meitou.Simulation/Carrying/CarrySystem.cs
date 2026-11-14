@@ -527,7 +527,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 break;
             case TaskType.StealthKnockout:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.StealthKnockout, TaskSource.Order, order.Target, CharacterTask.Idle);
-                if (table.Cold(slot) is { } sneaker) sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
+                if (table.Cold(slot) is { } sneaker)
+                {
+                    sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
+                    sneaker.PathFailed = false;   // a failure from before is not this walk's
+                }
                 break;
         }
     }

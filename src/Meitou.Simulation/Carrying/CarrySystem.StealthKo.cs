@@ -162,14 +162,31 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// Where the attacker walks (<c>Task_StealthKO</c> <c>FUN_14034cd80</c>, <b>Verified</b>): the point behind the target, or, for a target in a bed
-    /// or imprisoned, that building's position marker nearest the attacker (<see cref="Locks.FixtureRegistry.PositionMarker"/>: the nearest use node,
-    /// else its marker).
+    /// or imprisoned, that building's position marker nearest the attacker on its floor (<see cref="Locks.FixtureRegistry.FloorMarker"/>: the
+    /// nearest use node with a floor beside it, else its marker); with the height of the floor walked to.
     /// </summary>
-    static Vector2 KnockoutGoal(World world, CharacterCold target, in CharacterHot targetHot, in CharacterHot attacker)
+    static Vector3 KnockoutGoal(World world, CharacterCold target, in CharacterHot targetHot, in CharacterHot attacker)
     {
         if (target.InSomething != Locks.HeldState.None && target.InWhat is { } id
-            && world.Fixtures.PositionMarker(id, attacker.Position, world.GameHours) is { } marker) return new Vector2(marker.X, marker.Z);
-        return Behind(targetHot);
+            && world.Fixtures.FloorMarker(id, attacker.Position, world.Walkability, world.GameHours) is { } marker) return marker;
+
+        var behind = Behind(targetHot);
+        return new Vector3(behind.X, targetHot.Position.Y, behind.Y);
+    }
+
+    /// <summary>
+    /// The walk cannot get to the target: no path, or one that ends farther than <see cref="KnockoutStartRange"/> from the goal or off its floor (the
+    /// walkability answers an unreachable goal with the way to the reachable point nearest it). <c>AITaskSytem::update</c> ends a task whose target
+    /// the movement cannot reach (<c>FUN_14050d970</c>, <b>Verified</b>, docs/game/combat.md); before, the attacker stood on the task for good (#649).
+    /// </summary>
+    static bool Unreachable(CharacterCold cold, in CharacterHot n)
+    {
+        if (cold.PathFailed) return true;
+        if ((n.Flags & (ushort)MoveFlags.HasPath) == 0 || cold.Path.Length == 0) return false;
+
+        var end = MovementSystem.PathEnd(cold, n);
+        return Vector2.Distance(new Vector2(end.X, end.Z), n.Goal) > KnockoutStartRange
+            || !float.IsNaN(cold.GoalHeight) && MathF.Abs(end.Y - cold.GoalHeight) > MovementSystem.FloorSlack;
     }
 
     /// <summary>
@@ -196,8 +213,9 @@ public sealed partial class CarrySystem
                 End(world, i);
                 continue;
             }
-            var goal = KnockoutGoal(world, target, next[t], n);
-            bool sameFloor = MathF.Abs(n.Position.Y - next[t].Position.Y) <= MovementSystem.FloorSlack;   // not swung at through a floor (#292)
+            var aim = KnockoutGoal(world, target, next[t], n);
+            var goal = new Vector2(aim.X, aim.Z);
+            bool sameFloor = MathF.Abs(n.Position.Y - aim.Y) <= MovementSystem.FloorSlack;   // not swung at through a floor (#292)
             if (cold.LiftTime < 0 && sameFloor && Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) < KnockoutStartRange)
             {
                 // The target's sense entry: heard on this last step (the sneaking hearing roll at the step's speed; the original's pass cadence is
@@ -214,11 +232,18 @@ public sealed partial class CarrySystem
             }
             n.TaskTime -= dt;
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
+            if (cold.LiftTime < 0 && !asking && Unreachable(cold, n))
+            {
+                cold.PathFailed = false;
+                End(world, i);
+                continue;
+            }
+
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0
                 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;
-            (cold.GoalHeight, cold.GoalHeightAt) = (next[t].Position.Y, goal);   // the target's floor, not the attacker's (#292)
+            (cold.GoalHeight, cold.GoalHeightAt) = (aim.Y, goal);   // the target's floor, not the attacker's (#292)
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;

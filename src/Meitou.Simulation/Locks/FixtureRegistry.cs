@@ -904,6 +904,31 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// <see cref="PositionMarker"/> on the floor: of a cage's use nodes those with a floor within <see cref="MovementSystem.FloorSlack"/> of their
+    /// height (<see cref="IWalkability.FloorNear"/>), the one nearest <paramref name="from"/>, moved onto that floor; <see cref="PositionMarker"/>
+    /// for a bed or when no node has one (engine choice: the cage cuts a hole in the floor mesh, and a node at a floor's edge stands over the storey
+    /// below, so an attacker downstairs was sent under an upstairs cage, #649).
+    /// </summary>
+    public Vector3? FloorMarker(string fixtureId, Vector3 from, IWalkability walk, double now = 0)
+    {
+        if (Find(fixtureId) is not { } f) return null;
+        if (f.Kind == FixtureKind.Bed || f.UseNodes is not { Length: >= 2 } nodes) return PositionMarker(fixtureId, from, now);
+
+        var turn = Matrix4x4.CreateRotationY(f.Yaw);
+        Vector3? best = null;
+        float bestD = float.MaxValue;
+        foreach (var node in nodes)
+        {
+            var at = f.Position + Vector3.Transform(node.At, turn);
+            float d = Vector3.DistanceSquared(at, from);
+            if (d >= bestD || walk.FloorNear(at.X, at.Z, at.Y, MovementSystem.FloorSlack) is not { } floor) continue;
+            (best, bestD) = (floor, d);
+        }
+
+        return best ?? PositionMarker(fixtureId, from, now);
+    }
+
+    /// <summary>
     /// The use node of <paramref name="f"/> nearest <paramref name="from"/> in the world (squared 3D distance), with its facing; null with no nodes.
     /// </summary>
     static (Vector3 At, float Yaw)? Nearest(Fixture f, UseNode[]? nodes, Vector3 from, Func<int, bool>? skip = null)

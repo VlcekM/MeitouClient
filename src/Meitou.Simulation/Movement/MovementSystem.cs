@@ -162,6 +162,14 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason) { }
 
     /// <summary>
+    /// Where the path is known to lead: the end of its navmesh part. A provisional route (the goal unreachable over the loaded zones: a medic shut in
+    /// a locked house) runs on from the reachable point nearest the goal to the goal itself, so its last waypoint is the goal; the medic waited at
+    /// that point for ever.
+    /// </summary>
+    public static Vector3 PathEnd(CharacterCold cold, in CharacterHot n) =>
+        cold.PathExact >= cold.Path.Length ? cold.Path[^1] : cold.PathExact > 0 ? cold.Path[cold.PathExact - 1] : n.Position;
+
+    /// <summary>
     /// <see cref="GoTo"/> onto the floor at <paramref name="at"/>'s height (serial phases only). Furniture cuts holes in a building's floor mesh and
     /// a goal there resolves to the storey above or the ground below, so the goal moves to the nearest floor point
     /// (<see cref="IWalkability.FloorNear"/>) and keeps its height. Returns the X/Z goal.
