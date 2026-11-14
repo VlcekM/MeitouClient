@@ -141,15 +141,16 @@ public sealed class Inventory(int width, int height)
     /// cell (the item itself goes into the last cell, split-off copies into the others). True when every unit found a place; otherwise what did not
     /// fit stays in <paramref name="item"/>'s <see cref="ItemInstance.Quantity"/> (the caller keeps or drops it) and the units placed stay placed.
     /// Units with a buyback receipt top up only stacks of the same trade and direction; with no free cell left they join plain stacks too and lose
-    /// the receipt (docs/simulation.md, trading).
+    /// the receipt (docs/simulation.md, trading). <paramref name="mainShut"/>: the main grid takes nothing, only the backpack does (a live animal's,
+    /// <see cref="InventoryCommands.MainClosed"/>).
     /// </summary>
-    public bool Add(ItemInstance item)
+    public bool Add(ItemInstance item, bool mainShut = false)
     {
         var bag = Backpack?.Contents;
-        if (TopUp(this, item, false) || (bag is not null && TopUp(bag, item, false))) return true;
-        if (Place(this, "main", item)) return true;
+        if ((!mainShut && TopUp(this, item, false)) || (bag is not null && TopUp(bag, item, false))) return true;
+        if (!mainShut && Place(this, "main", item)) return true;
         if (bag is not null && Place(bag, "backpack_content", item)) return true;
-        return item.Buyback is not null && (TopUp(this, item, true) || (bag is not null && TopUp(bag, item, true)));
+        return item.Buyback is not null && ((!mainShut && TopUp(this, item, true)) || (bag is not null && TopUp(bag, item, true)));
     }
 
     /// <summary>

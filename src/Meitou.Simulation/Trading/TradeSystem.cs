@@ -1099,31 +1099,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var bought = item.WithQuantity(units);
         bought.Buyback = receipt;
         long price = Price(m, item, units, false, shop.Terms, squad.Faction);
-        int placed;
-
-        if (item.Contents is not null)
-        {
-            // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
-            placed = TransferContainer(shop.Stock, buy.Item, cold.Inventory!, buy.Section, buy.X, buy.Y, buy.Equip, cold);
-            if (placed > 0) item.Buyback = receipt;
-            if (placed > 0 && InventoryCommands.IsEquipmentSection(item.Section)) _assembly.RefreshEquipment(cold);
-        }
-        else if (buy.Section == "backpack_attach") placed = 0;
-        else if (buy.Section is { } section) placed = PlaceAt(cold.Inventory!, bought, units, section, buy.X, buy.Y);
-        else if (buy.Equip && InventoryCommands.TryEquip(cold.Inventory!, bought.WithQuantity(1), cold))
-        {
-            // One unit is worn; the rest of a stack goes where it fits.
-            _assembly.RefreshEquipment(cold);
-            placed = 1;
-
-            if (units > 1)
-            {
-                var rest = bought.WithQuantity(units - 1);
-                rest.Buyback = bought.Buyback?.Skip(1);
-                placed += Place(cold.Inventory!, rest, units - 1);
-            }
-        }
-        else placed = Place(cold.Inventory!, bought, units);
+        int placed = PutBought(buy, shop.Stock, item, bought, units, receipt, cold);
 
         if (placed == 0)
         {
@@ -1137,6 +1113,38 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         world.Player.Money -= price;
         squad.Money += price;
         world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+    }
+
+    /// <summary>
+    /// Puts the bought units into the receiving character's inventory: at the cell dropped on, worn (a right click), else wherever they fit; the
+    /// units placed. A live animal's shut grid takes nothing (<see cref="InventoryCommands.MainClosed"/>), only its worn bag does: stock
+    /// right-clicked into a bagless dog's window is "No room for that item." in the original.
+    /// </summary>
+    int PutBought(BuyItem buy, Inventory stock, ItemInstance item, ItemInstance bought, int units, TradeReceipt? receipt, CharacterCold cold)
+    {
+        var into = cold.Inventory!;
+        bool shut = InventoryCommands.MainClosed(cold);
+
+        if (item.Contents is not null)
+        {
+            // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
+            int moved = TransferContainer(stock, buy.Item, into, buy.Section, buy.X, buy.Y, buy.Equip, cold);
+            if (moved > 0) item.Buyback = receipt;
+            if (moved > 0 && InventoryCommands.IsEquipmentSection(item.Section)) _assembly.RefreshEquipment(cold);
+            return moved;
+        }
+
+        if (buy.Section == "backpack_attach") return 0;
+        if (buy.Section is { } section) return PlaceAt(into, bought, units, section, buy.X, buy.Y, shut);
+        if (!buy.Equip || !InventoryCommands.TryEquip(into, bought.WithQuantity(1), cold)) return Place(into, bought, units, shut);
+
+        // One unit is worn; the rest of a stack goes where it fits.
+        _assembly.RefreshEquipment(cold);
+        if (units == 1) return 1;
+
+        var rest = bought.WithQuantity(units - 1);
+        rest.Buyback = bought.Buyback?.Skip(1);
+        return 1 + Place(into, rest, units - 1, shut);
     }
 
     /// <summary>
@@ -1320,7 +1328,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory.
+    /// Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory. A live
+    /// animal's shut grid (<see cref="InventoryCommands.MainClosed"/>) takes none, only its bag slot.
     /// </summary>
     static int TransferContainer(Inventory from, InventoryItemToken token, Inventory into, string? section, int x, int y, bool equip,
         CharacterCold? wearer)
@@ -1329,6 +1338,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (section == "backpack_attach")
             return InventoryCommands.Transfer(from, token, into, section, 0, 0, wearer: wearer) ? 1 : 0;
         if (equip && InventoryCommands.Transfer(from, token, into, "backpack_attach", 0, 0, wearer: wearer)) return 1;
+        if (InventoryCommands.MainClosed(wearer)) return 0;
         if (section == "main" && InventoryCommands.Transfer(from, token, into, section, x, y)) return 1;
 
         var item = Find(from, token);
@@ -1370,11 +1380,13 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// Puts the units at the cell they were dropped on (the trade window's <c>placeItemFromMouse</c>): the cell of <paramref name="section"/> in
     /// <paramref name="root"/> (the backpack's contents for <c>backpack_content</c>) when the footprint is inside the grid, free and the stack within
-    /// the limit; otherwise wherever they fit, as <see cref="Place"/>.
+    /// the limit; otherwise wherever they fit, as <see cref="Place"/>. <paramref name="mainShut"/>: the main grid takes nothing.
     /// </summary>
-    static int PlaceAt(Inventory root, ItemInstance copy, int units, string section, int x, int y)
+    static int PlaceAt(Inventory root, ItemInstance copy, int units, string section, int x, int y, bool mainShut = false)
     {
-        var grid = section == "main" ? root : section == "backpack_content" ? root.Backpack?.Contents : null;
+        var grid = section == "main" && !mainShut ? root
+            : section == "backpack_content" ? root.Backpack?.Contents
+            : null;
 
         if (grid is not null && x >= 0 && y >= 0 && x + copy.Width <= grid.Width && y + copy.Height <= grid.Height && units <= grid.LimitOf(copy)
             && grid.IsFree(section, x, y, copy.Width, copy.Height))
@@ -1386,16 +1398,17 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return units;
         }
 
-        return Place(root, copy, units);
+        return Place(root, copy, units, mainShut);
     }
 
     /// <summary>
-    /// Puts the units wherever they fit in <paramref name="into"/>'s main grid; the units placed.
+    /// Puts the units wherever they fit in <paramref name="into"/> (<see cref="Inventory.Add"/>; <paramref name="mainShut"/>: its backpack only); the
+    /// units placed.
     /// </summary>
-    internal static int Place(Inventory into, ItemInstance copy, int units)
+    internal static int Place(Inventory into, ItemInstance copy, int units, bool mainShut = false)
     {
         copy.Section = "main";
-        return into.Add(copy) ? units : units - copy.Quantity;
+        return into.Add(copy, mainShut) ? units : units - copy.Quantity;
     }
 
     /// <summary>
