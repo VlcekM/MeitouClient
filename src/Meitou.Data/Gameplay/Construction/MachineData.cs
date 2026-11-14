@@ -305,15 +305,27 @@ public sealed record MachineData
                 or NaturalMineFunction);
 
     /// <summary>
-    /// The cells of a building's own inventory. A building whose <c>limit inventory</c> names exactly one item is as big as that item's <c>inventory
-    /// footprint</c> (the original's building loader, <c>cmp count, 1</c>; two or more items, or none, take <c>storage size</c>; Observed), so a
-    /// storage for steel bars is 6 x 1.
+    /// The cells of a building's own inventory. A resource storage whose <c>limit inventory</c> names exactly one item is as big as that item's
+    /// <c>inventory footprint</c> (the <c>StorageBuilding</c> constructor <c>FUN_1402a30d0</c>, <c>cmp count, 1</c>; two or more items, or none,
+    /// take <c>storage size</c>; Observed), so a storage for steel bars is 6 x 1.
     /// </summary>
     public static (int Width, int Height) StorageGrid(GameDatabase db, GameRecord building)
     {
-        if (building.GetReferences("limit inventory") is [var only] && db.Find(only.TargetStringId) is { } item)
+        if (Limits(db, building) is [var only] && db.Find(only.TargetStringId) is { } item)
             return (Math.Max(1, item.GetInt("inventory footprint width", 1)), Math.Max(1, item.GetInt("inventory footprint height", 1)));
         return (Math.Max(1, building.GetInt("storage size width", 18)), Math.Max(1, building.GetInt("storage size height", 18)));
+    }
+
+    /// <summary>
+    /// The building's <c>limit inventory</c> list where the original reads it: only a function 2 BF_RESOURCE_STORAGE building is a
+    /// <c>StorageBuilding</c>, whose constructor (<c>FUN_1402a30d0</c>) reads the list (the factory <c>FUN_14057cc70</c>, <b>Verified</b>). Any other
+    /// building's inventory (<c>FUN_140554530</c>) is its <c>storage size</c> with no list, so the Wooden Barrel (function 13, list: Cactus Rum)
+    /// is a plain 10 x 10 container (docs/game/buildings-production.md "Storage").
+    /// </summary>
+    public static IReadOnlyList<GameReference> Limits(GameDatabase db, GameRecord building)
+    {
+        var function = building.GetReferences("functionality") is [var link, ..] ? db.Find(link.TargetStringId) : null;
+        return function?.GetInt("function", -1) == ResourceStorageFunction ? building.GetReferences("limit inventory") : [];
     }
 
     /// <summary>
@@ -350,7 +362,7 @@ public sealed record MachineData
         // A bench gets a section per ingredient of its widest recipe when it lists fewer (engine choice: the original's section count for such
         // benches is Unknown).
         if (craft is not null && !craft.OverridesIngredients) AddBenchSections(db, craft, inputs);
-        var limits = building.GetReferences("limit inventory");
+        var limits = Limits(db, building);
         var (storageWidth, storageHeight) = StorageGrid(db, building);
         return new MachineData
         {

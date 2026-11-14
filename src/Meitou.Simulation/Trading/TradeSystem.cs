@@ -1,5 +1,6 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Data.Gameplay.Economy;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -518,6 +519,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     #region Shops
 
     /// <summary>
+    /// Sets the stream that spreads a home's stock over its containers apart from the one that rolled the stock.
+    /// </summary>
+    const ulong SpreadSalt = 0x5EEDB0C5UL;
+
+    /// <summary>
     /// The squad templates by id, as shops and homes read them (null: no such template).
     /// </summary>
     readonly Dictionary<string, SquadTemplate?> _templates = new(StringComparer.Ordinal), _homeTemplates = new(StringComparer.Ordinal);
@@ -796,23 +802,60 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     {
         if (home.Turret is not null) return;
 
-        var boxes = new List<Locks.Fixture>();
-        foreach (var f in home.Fixtures)
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Contents: not null } box) boxes.Add(box);
-        if (boxes.Count == 0 || boxes.Any(b => b.Contents!.Items.Any(i => !i.Unique))) return;
+        var boxes = StockBoxes(world, home);
+        if (boxes.Count == 0 || boxes.Any(b => b.Grid.Items.Any(i => !i.Unique))) return;
         if (Shop.ForBuilding(home, terms) is not { } merged) return;
+
+        // The filler unlocks every stock container, then keeps those that can hold what the lists make (FUN_14095b210, FUN_14095a5b0).
+        foreach (var box in boxes)
+            if (box.Fixture.Lock is { } l) l.Locked = false;
+
+        var usable = HomeStock.Usable(boxes, VendorEntries(template, FactionRecord(terms.Faction)));
+        if (usable.Count == 0) return;
 
         merged.Fills = (int)world.Tick;
         ShopFiller.Fill(merged, template, Market(world), _data, world.Seed, key, specials: first);
 
-        foreach (var item in merged.Stock.Items)
+        // Engine: the special items are spread with the vendor items (the original gives each to a container of a shuffle of its own first).
+        var rng = new RandomStream(world.Seed, Rng.Mix(key ^ SpreadSalt ^ ((ulong)merged.Fills << 40)), RngPurpose.Trade);
+        HomeStock.Spread(usable, merged.Stock.Items, Market(world).BaseValue, ref rng);
+
+        foreach (var box in usable)
+            if (box.Fixture.Lock is { } l) l.Locked = box.Grid.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
+    }
+
+    /// <summary>
+    /// The home's stock containers (<see cref="Meitou.Data.World.TownFixture.HoldsShopStock"/>) with their records' storage rules.
+    /// </summary>
+    List<StockBox> StockBoxes(World world, Meitou.Data.World.TownBuilding home)
+    {
+        var boxes = new List<StockBox>();
+
+        foreach (var f in home.Fixtures)
         {
-            foreach (var box in boxes)
-                if (box.Contents!.Add(item)) break;
+            if (!f.HoldsShopStock || world.Fixtures.Find(f.Id) is not { Contents: not null } box) continue;
+
+            var record = _data.Db.Find(box.RecordId);
+            boxes.Add(new StockBox(box, record is null ? null : Data.Gameplay.Construction.MachineData.From(_data.Db, record)));
         }
 
-        foreach (var box in boxes)
-            if (box.Lock is { } l) l.Locked = box.Contents!.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
+        return boxes;
+    }
+
+    /// <summary>
+    /// Every entry of the vendor lists the template stocks from (<see cref="ShopFiller.VendorLinks"/>).
+    /// </summary>
+    List<VendorEntry> VendorEntries(SquadTemplate template, Data.GameRecord? faction)
+    {
+        var entries = new List<VendorEntry>();
+
+        foreach (var link in ShopFiller.VendorLinks(template, faction))
+        {
+            if (_data.Db.Find(link.Id) is { Type: Data.Fcs.FcsRecordType.VendorList } record)
+                entries.AddRange(VendorList.From(_data.Db, record).Entries);
+        }
+
+        return entries;
     }
 
     /// <summary>

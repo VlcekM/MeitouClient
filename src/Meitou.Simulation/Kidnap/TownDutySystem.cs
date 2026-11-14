@@ -1294,7 +1294,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                     is Data.World.TownBuildings.ResourceStorageFunction or Data.World.TownBuildings.GeneralStorageFunction)
         {
             made = (true, (Data.Fcs.FcsRecordType)record.GetInt("itemtype limit", (int)Data.Fcs.FcsRecordType.Item),
-                    [.. record.GetReferences("limit inventory").Select(r => r.TargetStringId)]);
+                    [.. Data.Gameplay.Construction.MachineData.Limits(data.Db, record).Select(r => r.TargetStringId)]);
         }
 
         return _storageRecords[f.RecordId] = made;

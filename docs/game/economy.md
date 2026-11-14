@@ -154,11 +154,22 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   A faction test (`+0x250 == 0`, meaning **Unknown**) gates both. `FUN_14095b210` also refuses a child object (door, mounted turret; [squad factory](factions-squads-towns.md)). So a resident without `is trader` (e.g. `flotsam refuge`, vendors `house contents`) gets its home's containers stocked. A trader template with no `vendors` but a designation list is filled the same way (`TradeSystem.HomeTemplateOf` accepts a trader whose vendors are empty; one with vendors goes through the shop path); in the merged base and mod data one template is affected (Ninja Gang of rebirth.mod: `is trader`, designation list, no `vendors`), none of the base game.
 - **Restock** (`ActivePlatoon::vfunc_4` calls `FUN_1404ff5e0(platoon, 0)` once `inventory refresh time` passes): the home branch skips a building whose interior object's `+0x10` is set
   (meaning **Unknown**); the first fill passes 1 and never skips.
-- Meitou, non-traders (`TradeSystem.FillHome`, engine choices): the stock rolls as a building shop's, then each unit goes into the first stock container with room (their own grids and
-  stack bonus), what fits nowhere is lost, the containers holding something are locked, the empty ones unlocked, the purse is untouched; refilled every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
-- **Containers** (`FUN_1409562f0`): the home's interior objects whose functionality is 2 BF_RESOURCE_STORAGE, 9 BF_SHOP or 13 BF_GENERAL_STORAGE and that have an inventory.
-  The filler unlocks their locks, sorts them (key **Unknown**), optionally clears them, puts special items first, then the vendor items; what fits nowhere is destroyed; then
-  `FUN_1409565e0` locks each that holds something.
+- Meitou, non-traders (`TradeSystem.FillHome`, `StockEmptyHome`): the stock rolls as a building shop's and is spread as below (`HomeStock`); engine choices: the special items are
+  spread with the vendor items, the purse is untouched, and a refill comes every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
+- **Containers** (`FUN_1409562f0`): the home's interior objects whose functionality is 2 BF_RESOURCE_STORAGE, 9 BF_SHOP or 13 BF_GENERAL_STORAGE and that have an inventory. Each
+  has a type (a function 2 `StorageBuilding`'s `itemtype limit`, ITEM for any other building), its section's `limit inventory` list (function 2 only,
+  [storage](buildings-production.md)) and its lock's level (0 without a lock).
+- **Spread** (**Verified** by decompile, `FUN_14095b210`, `FUN_14095a5b0`, `FUN_1409565e0`, score `FUN_140952df0`; **Observed** in the original, #685's video of the Flotsam Safehouse:
+  bread, dried meat, kits and clothes over every barrel and basket). The filler unlocks every container, then drops those that cannot hold what the template's vendor lists make: one of
+  another type than ITEM with no entry of that record type, one with a list holding none of the entries. With none left nothing is made. The rest are ordered by lock level,
+  highest first, optionally cleared (unique items stay), and each special item goes into the first container that takes it of a `random_shuffle` of them. The vendor items are made one unit
+  each and ordered by value, highest first. The first half of them (trunc(count x 0.5), at least one): the containers at least half full (used cells / cells; a one-item storage:
+  quantity / capacity) are dropped from a working copy for good, each other gets score + U(0, 1) x 0.01, and the item goes into the first that takes it, highest score first.
+  Score: 0 when the lock level is above 0 and the item's value is below 10 x the level (not for a money item); else level + 1, for an ITEM container as it is without a
+  list, + 150 for a listed item, 0 for an unlisted one; for a container of another type x 1.5 for an item of that record type, else 0; x 100 for a money item (`item function` 14).
+  Each later item: the whole list is shuffled again and the item goes into the first that takes it. "Takes" (`FUN_140954480`) is the section's own test
+  ([by hand](buildings-production.md): a WEAPON-limited container only weapons, a listed one only its list), topping up stacks first, then the first free cell row by row. What fits
+  nowhere is destroyed; then each container holding something is locked. So cheap goods never score for a locked container and a Weapon Cabinet ends up with the weapons only.
 - **Special items** (`FUN_140958740`, **Verified**): on a refresh with specials, the template's `special items` (ITEM, 34 templates) and then its `special map items` (MAP_ITEM, 10), both when both exist: v0 of each,
   in stacks of at most the record's raw `stackable` (a map item too; the stack limit of 1 for map items is not used here), flagged unique with their quantity, offered to the building inventories first; what fits nowhere is destroyed. Meitou: on a squad's first fill, into
   the stock before the vendor items; the unique flag is not modelled.

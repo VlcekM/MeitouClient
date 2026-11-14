@@ -532,7 +532,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their occupants.
+    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their occupants; a
+    /// container also with its lock, grid and items.
     /// </summary>
     static void Cages(ProbeWorld probe, string name)
     {
@@ -545,7 +546,21 @@ static class SaveProbe
         {
             Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)} "
                 + $"designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
+            if (f.Kind == FixtureKind.Container) Container(probe, f);
         }
+    }
+
+    /// <summary>
+    /// A container fixture's record name, owner, lock, storage fields and what it holds.
+    /// </summary>
+    static void Container(ProbeWorld probe, Fixture f)
+    {
+        var r = probe.Db.Find(f.RecordId);
+        Console.WriteLine($"  '{r?.Name}' owner={probe.Faction(f.Owner)} lock={f.Lock?.Level} locked={f.Lock?.Locked} "
+            + $"grid={f.Contents?.Width}x{f.Contents?.Height} typeLimit={r?.GetInt("itemtype limit", 4)} "
+            + $"limited={r?.GetReferences("limit inventory").Count}");
+        foreach (var it in f.Contents?.Items ?? [])
+            Console.WriteLine($"    {it.Quantity} x {it.Name} ({it.Record}) at {it.X},{it.Y} size {it.Width}x{it.Height}");
     }
 
     /// <summary>
@@ -826,7 +841,7 @@ static class SaveProbe
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
-              cages <name>             fixtures within 300 of a character, with occupants and building designation
+              cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects

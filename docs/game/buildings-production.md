@@ -1089,9 +1089,12 @@ wind; a level building's mult comes from its data as its sound emitter's efficie
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
 **Storage** (**Verified**, 603 buildings): 87 have `has inventory`; default 18 x 18, `itemtype limit` 4; `stackable bonus
-mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the building loader): a building whose `limit inventory`
+mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the `StorageBuilding` constructor `FUN_1402a30d0`): a function 2 building whose `limit inventory`
 names exactly one item is that item's `inventory footprint` (Iron Plates 4 x 3, Building Materials 6 x 3, steel bars 6 x 1), else
-`storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Its window (**Observed**, screenshots) is
+`storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Only function 2 BF_RESOURCE_STORAGE makes a `StorageBuilding`
+(the factory `FUN_14057cc70`, **Verified**), the one class that reads `limit inventory`; any other building's inventory is `storage size` with no list
+(`FUN_140554530`). Merged base data: 46 buildings have a list, all function 2 but the `Wooden Barrel` (function 13, list Cactus Rum, 10 x 10), which is
+a plain 10 x 10 container taking anything (**Observed** in the original, #685's video; Meitou `MachineData.Limits`). Its window (**Observed**, screenshots) is
 `Kenshi_InventoryGenericWindow`: caption STORAGE, the one limited item's name as heading, `Max Capacity: N` with N the `stackable bonus
 mult`, the line red with "(Full)" once the first stack reaches it (exact red **Unknown**). Locks and containers: [locks](locks.md).
 Water Tower takes only Water and `Storage: Ore` only Raw Iron, both with mult 100 and functionality `Resource
