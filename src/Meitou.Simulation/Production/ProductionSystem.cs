@@ -419,6 +419,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case MoveJob move: MoveJobTo(world, move); break;
                 case PutInMachine put: Put(world, put); break;
                 case TakeFromMachine take: Take(world, take); break;
+                case ArrangeMachine arrange when world.Machines.Find(arrange.Site) is { Storage: { } grid, Closed: false }:
+                    if (InventoryCommands.Arrange(grid)) world.Machines.Touch();
+                    break;
                 case FocusCommand look: _focus = look.Position; break;
                 case QueueResearch queue: Queue(world, queue.Research); break;
                 case CancelResearch cancel: world.Research.Dequeue(cancel.Research); break;

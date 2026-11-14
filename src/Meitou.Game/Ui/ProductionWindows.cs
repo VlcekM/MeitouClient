@@ -195,7 +195,8 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// A research bench's window: the RESEARCH button (hidden below tech level 1) and the window sized around its storage grid.
+    /// A research bench's window: the RESEARCH button (hidden below tech level 1), the layout's ARRANGE under the grid and the window sized
+    /// around its storage grid.
     /// </summary>
     void BindBenchScreen(MachineSnapshot? m, UiBindings b)
     {
@@ -204,7 +205,8 @@ sealed class ProductionWindows(PlayerInterface player)
         if (m is not { TechLevel: > 0 }) b.Hidden.Add("ResearchButton");
 
         b.Disabled.Remove("ArrangeButton");
-        b.Hidden.Add("ArrangeButton");
+        b.Actions["ArrangeButton"] = "ArrangeButton";
+        if (m?.Storage is null) b.Hidden.Add("ArrangeButton");
 
         if (m?.Storage is { } grid)
         {
@@ -593,7 +595,8 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// A machine window event: the bench's RESEARCH opens the overview's research tab, the building's QUEUE its Craft tab.
+    /// A machine window event: the bench's RESEARCH opens the overview's research tab, its ARRANGE arranges its grid, the building's QUEUE opens
+    /// its Craft tab.
     /// </summary>
     internal void MachineAction(MyGuiEvent e)
     {
@@ -602,6 +605,8 @@ sealed class ProductionWindows(PlayerInterface player)
             player.FaithfulScreens.Open("overview");
             player.FaithfulScreens.SetTab("overview", "TabsMain", TutorialPanel.ResearchTab);
         }
+        else if (e.Screen == "bench" && e.Widget == "ArrangeButton" && ShownMachine is not null)
+            player.Say(new ArrangeMachine(ShownMachine) { Tick = player.Session.World.Tick });
         else if (e.Screen == "building" && e.Widget == "QueueButton" && ShownMachine is not null)
             OpenCraftTab(ShownMachine);
     }
