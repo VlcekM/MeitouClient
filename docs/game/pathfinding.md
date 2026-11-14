@@ -157,7 +157,7 @@ body states and stealth modify distinct branches. Movement modes0 walk,1 cap55,2
 mode3 follows group's slowest. The HUD sets them as character orders 2/1/0/0x10 → modes 0/1/2/3
 (Walk/Jog/Run/Group; **Verified**, character vtable slot 0x308 FUN_1405caa50, [ui-screens.md](ui-screens.md)). "Group"
 is the selection, not the squad: [speed groups](#squads-travelling-together). Meitou keys the group to the
-selection given the order (`CharacterCold.SpeedGroup`); NPCs in mode3 take their squad's slowest. FCS force-speed3 means NO_SPEED_CHANGE and remaps to4, not runtime
+selection given the order (`CharacterCold.SpeedGroup`); NPCs in mode3 take their squad's slowest walker. FCS force-speed3 means NO_SPEED_CHANGE and remaps to4, not runtime
 mode3. FCS `MoveSpeed` (editor enum, **Verified**): WALK 0, JOG 1, RUN 2, GROUPED 3, NO_SPEED_CHANGE 4. Follow/avoidance/formation use character footprint and previous neighbour state.
 Squad formations: [squads travelling together](#squads-travelling-together). Off-screen arrival remains unknown. Whether living characters block each other beyond the
 separation steering is **Unknown**; sitting characters are never pushed (**Observed** in play) (Meitou adds solid body contact: [simulation](../simulation.md#movement-and-paths)).
@@ -219,7 +219,11 @@ House roof storey, stood "Following leader" on the floors below).
 `SpeedGroup`; nothing else creates one (**Observed**: no other callers), so NPC squads never use it. `SpeedGroup::getSpeed` (`1407f5740`),
 once per frame: speed = the lowest max speed of members not down and not carried, centre = their mean position, direction = the sum
 of their velocities. A member ahead of the centre (positive dot with the direction) gets speed × max(0.8, 1 − 0.001 × XZ distance to
-the centre); others the plain group speed.
+the centre); others the plain group speed. `assignSpeedGroup` (`1407f97c0`) also runs on each formation move order (`1407f9e20`); with fewer
+than two selected it changes nothing, and it groups only when someone selected is in mode 3 (**Observed**). Whether a save keeps the group is
+**Unknown**. Engine choice (#729): Meitou's group is runtime only and made by the speed order alone, so a player's character in mode 3
+without a group of two or more (after a load, or set alone) takes the lowest max speed of its squad mates ordered to mode 3, not down and
+not carried, whatever they are doing (followers steering straight at their slot have no path and must still count).
 
 ## Own builder
 
