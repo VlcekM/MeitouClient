@@ -1019,6 +1019,7 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   is engine, the data's line being unreachable): he walks up
   (`Engaged`, so the AI leaves him alone), and within 40 takes the fine when the player's money is above it, erasing his
   faction's entry; else, when the target runs past 800 or after 60 s, and for any bigger bounty: arrest.
+- **Town leash** (`ArrestSystem.OffLeash`, [arrest chain](game/ai-tasks.md#arrest-and-prison-rows)): a dialogue capture ends when its guard stands in no home town or its target in no town.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight

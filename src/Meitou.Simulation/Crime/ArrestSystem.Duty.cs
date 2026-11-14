@@ -41,7 +41,7 @@ public sealed partial class ArrestSystem
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, gc);
                 if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HuntBounties) ? 1 : 0;
                 if (listed[role] == 0 || !FreeCageExists(world, g) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
-                Start(world, g, t, force: true);
+                Start(world, g, t, force: true, leashed: false);   // goal 204 lifts with row 68, which has no town needs
             }
         }
     }

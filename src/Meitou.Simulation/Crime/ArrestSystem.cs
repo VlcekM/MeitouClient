@@ -162,6 +162,11 @@ public sealed class Arrest
     /// Row 181 ran: once per arrest (a locked weapon item stays on the target, which the strip does not move).
     /// </summary>
     public bool Stripped { get; set; }
+    /// <summary>
+    /// The dialogue's capture order (task 240, DA 29): it runs only while the guard stands in a home town and the target in a town
+    /// (<see cref="ArrestSystem.OffLeash"/>). A goal-204 arrest (its lift is row 68), a hand-over and slave catching are not leashed.
+    /// </summary>
+    public bool Leashed { get; init; }
 
     /// <summary>
     /// Adds the arrest's state (the cage as a stable hash of its id, the flags as tags) to the world hash.
@@ -180,6 +185,7 @@ public sealed class Arrest
         if (Enslave) h.Add(0x536C6176);
         if (Takeover) h.Add(0x54616B65);
         if (Stripped) h.Add(0x53747270);
+        if (Leashed) h.Add(0x4C656173);
     }
 }
 
@@ -823,8 +829,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// <paramref name="capture"/> false: the guard attacks instead of arresting, in his own town too (a dialogue's animal target).
+    /// <paramref name="leashed"/>: the arrest is the dialogue's capture order (<see cref="Arrest.Leashed"/>), which has no plan while the target
+    /// stands in no town, so nothing starts then.
     /// </summary>
-    void Start(World world, int g, int t, bool force, bool capture = true)
+    void Start(World world, int g, int t, bool force, bool capture = true, bool leashed = true)
     {
         var table = world.Characters;
         var gc = table.Cold(g)!;
@@ -838,7 +846,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Note(world, ArrestEventKind.Attack, guard, target, gc.Faction, bounty);
             return;
         }
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction };
+
+        if (leashed && Towns is { } towns && StatusTownNow(towns, world, t).IsNone) return;
+
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Leashed = leashed };
         _arrests.Add(arrest);
         gc.Engaged = true;   // the AI leaves him alone until the arrest ends
         if (!force && bounty is > 0 and < FineLimit)
@@ -918,6 +929,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return End(world, a, ArrestEventKind.GaveUp);
         if (tc.IsImprisoned && a.Phase != ArrestPhase.Walk) return End(world, a, ArrestEventKind.GaveUp);
 
+        if (OffLeash(world, a, g, t, gc)) return Recall(world, a, g, t, gc);
+
         a.Time += dt;
         ref var gn = ref table.Next[g];
         float gap = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z));
@@ -931,6 +944,87 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         }
         return true;
     }
+
+    /// <summary>
+    /// The town needs of the capture order (docs/game/ai-tasks.md "Arrest chain": row 240's list B starts with 95 isAtHomeTown and 113
+    /// targetAtATown, and the order is planned again on every AI update) until the guard carries the target: true when the guard stands in no home
+    /// town or the target in no town. Without town data there is no leash.
+    /// </summary>
+    bool OffLeash(World world, Arrest a, int g, int t, CharacterCold gc)
+    {
+        if (!a.Leashed || Towns is not { } towns || a.Phase is ArrestPhase.Fine or ArrestPhase.Walk || gc.Carrying == a.Target) return false;
+
+        return !AtHomeTown(towns, world, g, gc) || StatusTownNow(towns, world, t).IsNone;
+    }
+
+    /// <summary>
+    /// The character's status town as its next update would write it (<see cref="AiSystem.StatusTownAt"/>): the kept one is a spotting pass old.
+    /// </summary>
+    static CampaignTown StatusTownNow(PopulationData towns, World world, int slot) =>
+        AiSystem.StatusTownAt(towns, world, world.Characters.Next[slot].Position, world.Characters.Cold(slot)!.StatusTown);
+
+    /// <summary>
+    /// State 95 isAtHomeTown (<c>FUN_140997fe0</c>, <b>Verified</b>): the character's status town is set and is its faction's or houses a squad of
+    /// its faction (Town vfunc <c>0x2c0</c> <c>FUN_140952060</c>: the town's own faction, else its set of factions <c>+0xe8</c>, which the housing
+    /// <c>FUN_14057f820</c> fills with each housed squad's faction). A player town is nobody else's home.
+    /// </summary>
+    static bool AtHomeTown(PopulationData towns, World world, int slot, CharacterCold c)
+    {
+        int site = StatusTownNow(towns, world, slot).Site;
+        if (site < 0) return false;
+        if (site < towns.SiteFactions.Count && towns.SiteFactions[site] == c.Faction) return true;
+
+        foreach (var squad in world.Squads.All)
+            if (squad.Faction == c.Faction && squad.Town == site && squad.TownOwn) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// The capture order off its leash: a guard out of his home town plans 127 Retreating fast (the only provider of 95) and one whose target left
+    /// every town plans nothing (113 has no provider). <b>Engine choice</b>: the arrest ends either way (the original keeps the order queued and
+    /// plans it again each update; when it drops it is <b>Unknown</b>; here the next spotting or crime starts a new one), the fight is called off
+    /// (<see cref="CallOff"/>) and a guard out of town runs back to it. Always false: the arrest is over.
+    /// </summary>
+    bool Recall(World world, Arrest a, int g, int t, CharacterCold gc)
+    {
+        bool free = CallOff(world, g, t);
+        End(world, a, ArrestEventKind.GaveUp);
+
+        if (free && Towns is { } towns && !AtHomeTown(towns, world, g, gc) && world.Squads.Find(gc.SquadId) is { } squad)
+            TaskStart.Walk(world, g, squad.HomeCentre, SpeedMode.Run, TaskType.RunAwayHometown, TaskSource.Npc);
+
+        return false;
+    }
+
+    /// <summary>
+    /// The guard and the squad mates fighting the target with him leave that fight, but those the target itself fights: theirs is a fight of its
+    /// own, which has no leash (docs/game/combat.md "Fight lifecycle and orders"). True when the guard is out of it.
+    /// </summary>
+    bool CallOff(World world, int g, int t)
+    {
+        if (world.SystemOf<CombatSystem>() is not { } combat) return true;
+
+        var table = world.Characters;
+        var guard = table.IdOf(g);
+        var target = table.IdOf(t);
+        bool free = true;
+        foreach (var m in world.Squads.Find(table.Cold(g)!.SquadId)?.Members ?? [guard])
+        {
+            if (!Fights(combat, m, target)) continue;
+
+            if (Fights(combat, target, m)) free &= m != guard;
+            else combat.Disengage(table, m);
+        }
+
+        return free;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="who"/>'s combat target is <paramref name="whom"/>.
+    /// </summary>
+    static bool Fights(CombatSystem combat, CharacterId who, CharacterId whom) =>
+        combat.TargetOf(who.Slot, who.Generation) == (whom.Slot, whom.Generation);
 
     /// <summary>
     /// The fine: the guard walks after the target and, in talking range, takes the fine or, unpaid, fights; a fight, the leash or the time also
