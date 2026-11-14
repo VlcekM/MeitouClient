@@ -360,8 +360,9 @@ public sealed partial class FirstAidSystem
 
     /// <summary>
     /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look.
-    /// Gates: awake, not carried and not fighting; an NPC also waits while its squad fights or it carries someone (stand-ins for the goal's desire
-    /// <c>FUN_140998410</c>: 0.01 with enemies about, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none. A
+    /// Gates: awake, not carried and not fighting; an NPC also waits while it carries someone, and one the AI does not weigh the goal for while its
+    /// squad fights (stand-ins for the goal's desire <c>FUN_140998410</c>, <see cref="AiSystem.MedicDesire"/>: 0.01 under threat, 0.05 with
+    /// enemies sensed, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none. A
     /// patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a
     /// score of at least 0.95; passes 1, 2 and 4 skip a patient being eaten.
     /// <list type="number">
@@ -450,10 +451,13 @@ public sealed partial class FirstAidSystem
                 || cold.IsImprisoned || !TaskStart.Eligible(world, cold, ordered ? TaskType.FirstAidOrder : TaskType.JobMedic))
             return false;
 
-        // No fight in the squad: an NPC's stand-in for its goal's desire (FUN_140998410 is 0.01 with enemies about). The finder has no such test and
+        // No fight in the squad: the stand-in for the goal's desire of an NPC the AI weighs no goals for (an AI-run one's think weighs its own
+        // senses, AiSystem.MedicDesire: a jailer treats its prisoners while squad mates fight across town, #643). The finder has no such test and
         // the job list keeps any job whose desire is above 0 (FUN_14050e5b0), so a player's medic job and Medic order treat a downed mate while the
         // squad fights.
-        if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad))
+        bool weighed = cold.Ai is { Engine: false };
+        if (!cold.IsPlayer && !weighed && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad
+                && CharacterFacts.SquadFighting(table, squad))
             return false;
 
         // Nor while it carries someone (the goal's 0.1 then): the carrying goal (a kidnap, a rescue) keeps it, so a carrier does not walk off after a

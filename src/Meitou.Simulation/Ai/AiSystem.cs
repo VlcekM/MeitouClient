@@ -683,13 +683,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A combat goal: its own desire's zeros and factors, times its finder's factor (an attack goal's 1 with a target, a protect goal's fight
             // threat; AiSystem.Fights.cs).
             AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind) is var want and > 0 ? want * FightFactor(world, self.Slot, type, mind) : 0,
-            // The Medic goal: the finder's score from the serial sweep (its desire's fight and carrying cases are gates of the finder).
-            AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore : 0,
+            // The Medic goal: its desire times the finder's score from the serial sweep (the desire's carrying case is a gate of the finder).
+            AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore * MedicDesire(world, self.Slot) : 0,
             // A captive goal: the desire its job start kept on the sweep turn of a seated character (0 for the rest, whose jobs the sweep starts
             // itself; Kidnap/CaptiveSystem.Offers.cs).
             AiBehaviour.Captive => mind.CaptiveDesire(type),
             _ => 1,
         };
+    }
+
+    /// <summary>
+    /// The Medic goal's desire (<c>FUN_140998410</c>, <b>Verified</b> by disassembly): 0.01 while the medic's senses hold a threat towards it (AI
+    /// <c>+0xb0</c>), else 0.05 while they count an enemy (<c>+0xbc</c>, <c>numEnemies</c>), else 1. Its own senses, not its squad's fights.
+    /// </summary>
+    internal static float MedicDesire(World world, int slot)
+    {
+        if (Bodies.CharacterFacts.Senses(world, slot) is not { } senses) return 1;
+        if (senses.ThreatToMe > 0) return 0.01f;
+        return senses.Enemies > 0 ? 0.05f : 1;
     }
 
     /// <summary>
