@@ -165,6 +165,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public Dialogue.SquadMemory? Memory { get; set; }
 
     /// <summary>
+    /// Whether a character's dialogue has a sight line (the dialogue system's <see cref="Dialogue.DialogueSystem.HasSightLines"/>, the original's
+    /// Dialogue <c>+0x28</c> flag): a looker without one sets no bandit fight tag (<see cref="BanditFightTag"/>). Null: every looker has one.
+    /// </summary>
+    public Func<World, int, bool>? SightLines { get; set; }
+
+    /// <summary>
     /// Brings the slots and the census up to the table before the looks (<see cref="Sync"/>).
     /// </summary>
     public void Schedule(World world) => Sync(world.Characters);
@@ -697,6 +703,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         /// </summary>
         public Dialogue.SquadMemory? Memory;
         /// <summary>
+        /// Whether a character's dialogue has a sight line (<see cref="AggroSystem.SightLines"/>; null: every one has).
+        /// </summary>
+        public Func<World, int, bool>? SightLines;
+        /// <summary>
         /// The looker's slot, faction and squad.
         /// </summary>
         public int Self, Faction, Squad;
@@ -984,6 +994,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             Relations = Relations,
             World = world,
             Memory = Memory,
+            SightLines = SightLines,
             Self = i,
             Faction = cold.Faction,
             Squad = cold.SquadId,
@@ -1545,7 +1556,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// swarm notes is the memory tag TEMP_ENEMY, not a dialogue event): a sensed character that is no ally and not down or an animal, while the
     /// looker or it is in combat mode or it has a pending crime, with no status town (<see cref="CharacterCold.StatusTown"/>, the original's status
     /// <c>+0x88</c>: a town entered holds out to 1.5 x its radius), with a bandit (NPC class 8) as looker or target, is tagged
-    /// TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY tag). The
+    /// TEMP_ENEMY by the looker's squad (<c>FUN_1406744a0</c> skips an allied faction and one the looker regards as friendly: the ALLY tag). Only a
+    /// looker whose dialogue has a sight line tags (<see cref="SightLines"/>: the original's sight pass does nothing else while its Dialogue
+    /// <c>+0x28</c> flag is clear). The
     /// original's gates on the looker's view flag (<c>+0x1a9</c>) and its sleeping are treated as open (engine choice, as the assault hooks above).
     /// </summary>
     static bool BanditFightTag(ref Scan s, in SenseEntry e, CharacterCold c)
@@ -1558,6 +1571,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
         if (!(me.InCombat || c.InCombat || c.Pending is not null)) return false;
         if (me.NpcClass != FundamentalType.Bandit && c.NpcClass != FundamentalType.Bandit) return false;
+        if (s.SightLines is { } lines && !lines(s.World, s.Self)) return false;
 
         // Without town data no status town is kept (ArrestSystem), so nobody counts as outside one.
         return s.Towns is not null && c.StatusTown.IsNone;

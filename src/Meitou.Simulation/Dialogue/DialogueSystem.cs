@@ -585,6 +585,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
+    /// Whether the character's dialogue has a line for one of the sight events (<see cref="DialogueEvents.Sight"/>): the original's Dialogue
+    /// <c>+0x28</c> flag, without which its sight pass reacts to nobody it sees (docs/game/dialogue.md "Sight").
+    /// </summary>
+    public bool HasSightLines(World world, int slot)
+    {
+        var set = SetOf(world, slot);
+        foreach (int ev in DialogueEvents.Sight)
+            if (set.For(ev).Count > 0) return true;
+        return false;
+    }
+
+    /// <summary>
     /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first
     /// trade), and its record says <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other
     /// members of a trader squad do not, nor does a trader held in a cage (engine choice).

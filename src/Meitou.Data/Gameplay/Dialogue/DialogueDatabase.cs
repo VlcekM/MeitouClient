@@ -54,6 +54,12 @@ public static class DialogueEvents
     public const int PlayerTalkToMe = 1, Announcement = 2;
 
     /// <summary>
+    /// The events whose lines open a character's sight pass (<c>FUN_14067e220</c> sets Dialogue <c>+0x28</c> when a line for one of them is added, an
+    /// Unfinished one excepted; <c>FUN_140859680</c> skips its sighting reactions while the flag is clear; <b>Verified</b>, 1.0.68 disassembly).
+    /// </summary>
+    public static readonly int[] Sight = [3, 4, 17, 27, 34, 36, 40, 66, 67];
+
+    /// <summary>
     /// The highest event number (EV_MAX is 75).
     /// </summary>
     public const int Max = 75;
