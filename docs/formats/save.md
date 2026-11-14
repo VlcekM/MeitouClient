@@ -589,6 +589,8 @@ Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`; the
 - GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since).
 - GAMESTATE_BUILDING `meitou lock <layout index>` (int level x 4 + broken x 2 + locked) for each interior cage or container whose lock is locked or broken (their ids are not mapped, see above).
 
+Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simulation.md#items-and-eating); the original keeps the same fact as each placement group's own `respawn time`, [loose items](../game/factions-squads-towns.md#loose-items-in-buildings), which Meitou does not write): GAMESTATE_BUILDING `meitou slot due item<n>` (float, the absolute game hour the empty slot n of the building's interior is next due), written for each empty slot of a building whose slots are registered and that has a state record in the save, removed when the slot holds an item again; a building whose slots were not registered keeps the loaded save's keys. A loaded hour is capped at now plus the group's longest respawn time.
+
 ### Player outposts
 
 Towns made in play are saved in `quick.save` only, as entries of its one GAMESTATE_TOWN_INSTANCE_LIST (type 38, name "0",
