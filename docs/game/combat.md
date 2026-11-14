@@ -89,7 +89,11 @@ list unless `is block` or `is dodge` (then the defence list), in data order. Eac
   with no incoming swing noticed in between. Meitou: `CombatSlot.LastTech`; it also clears on the in-fight re-pick of a target (**Unknown**
   in the original).
 - The clip is the technique's `anim name` plus a suffix (none, or " override" for a defence started over a running one), found by name
-  (`FUN_1405b7800`, `FUN_1400f4aa0`): no second choice by weapon or chance (**Verified**).
+  (`FUN_1405b7800`, `FUN_1400f4aa0`; the lookups `FUN_1405c5660` and `FUN_1405b5270` take the name alone and draw nothing): no second
+  choice by weapon or chance (**Verified**).
+- Meitou, base data, 12 headless duels per weapon at skill 40 (**Measured**; the original's mix is **Unknown**, the gap at each swing's
+  start decides it): katana 63 % Cut left, 33 % Downward combo, 4 % heavy downcut v2; sabre 81 % / 19 % Cut left / heavy downcut v2;
+  blunt, hackers and heavy weapons about half heavy swing, half heavy downcut v2.
 
 Consequences (base data): "Cut left static" (−999) is never an attack. Fists reach `attack distance` + 9, so
 "ma badpunch" (−4, the only punch up to martial arts 20) needs a gap of 5 or less. An armed fighter beyond every weapon reach may kick or punch.
