@@ -79,7 +79,17 @@ list unless `is block` or `is dodge` (then the defence list), in data order. Eac
   the robots' fists (`53668-rebirth.mod`) are 18 long; no other race has `fists lv1`.
 - Weight: c = min(a, b)/max(a, b), a = gap + 3, b = k·(`attack distance` + L/4) + 3. Multiply by f, by 0.02 under
   `attack distance min vs static`, by 0.2 for the previous technique unless the target is in state 8, and by `chance`.
-  Pick by cumulative weight (`FUN_1408a8c80`, `FUN_1409b1c80`).
+  Pick by cumulative weight (`FUN_1408a8c80`, `FUN_1409b1c80`): a map keyed by the running total, a draw of `rand()`/32768 × total, the
+  first key above it; weights of 0 or less are left out (**Verified**, decompile).
+- The category (CharStats +0x1f0) is the bound weapon's `skill category` (weapon +0x234, `FUN_140897f30`, `FUN_140898ae0`), not its
+  `skill category animation override` (+0x238): a cleaver takes the hackers' techniques (**Verified**).
+- The previous technique is CombatClass +0x150 unless it is a block (+0x2c). Writers (**Verified**, every write in the combat functions): the
+  attack start; every defence start that finds a swing (`FUN_140609290`: the defence picked, or none when it is too early, the roll fails or
+  the defender is an animal); cleared at the task start and the fight's end (`FUN_1406659b0`). So the ×0.2 applies only to a second attack
+  with no incoming swing noticed in between. Meitou: `CombatSlot.LastTech`; it also clears on the in-fight re-pick of a target (**Unknown**
+  in the original).
+- The clip is the technique's `anim name` plus a suffix (none, or " override" for a defence started over a running one), found by name
+  (`FUN_1405b7800`, `FUN_1400f4aa0`): no second choice by weapon or chance (**Verified**).
 
 Consequences (base data): "Cut left static" (−999) is never an attack. Fists reach `attack distance` + 9, so
 "ma badpunch" (−4, the only punch up to martial arts 20) needs a gap of 5 or less. An armed fighter beyond every weapon reach may kick or punch.

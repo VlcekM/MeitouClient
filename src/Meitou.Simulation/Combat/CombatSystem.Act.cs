@@ -1327,6 +1327,10 @@ public sealed partial class CombatSystem
     {
         var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
+
+        // The start writes the current technique (+0x150) whatever comes of it: the defence picked, or none when it is too early, the roll fails or
+        // the defender is an animal (FUN_140609290, Verified). So the next attack choice has no last technique to weigh down.
+        s.LastTech = -1;
         if (!Startable(in swing, i))
         {
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
@@ -1412,7 +1416,6 @@ public sealed partial class CombatSystem
 
         s.ReactCheckTick = now + (int)MathF.Ceiling(CombatTuning.DefenceRecheckSeconds / dt);
         s.DefendReadyTick = Math.Max(s.DefendReadyTick, now + (int)MathF.Ceiling(CombatTuning.DefenceStartedSeconds / dt));
-        s.LastTech = -1;   // the original's current technique (+0x150) is now a defence, which the next attack choice does not count as its last
         if (pick == s.ReactTech) return;   // the same technique again: its clip plays on (FUN_1405b7600 finds the playing layer)
 
         var reaction = _techniques[pick];
