@@ -711,8 +711,13 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   owner faction, `Town:` The Hub, `Workers:` 0/1, `Efficiency:` 0%, `Max efficiency:` 100%, Condition. Meitou (`BuildingSelection.PickFurnitureAt`):
   beds, containers and cages by their fixtures, seats by their seat spots, everything else of a town building's interior layout but nodes
   (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
-  house it stands in and Condition, without the lock, Empty and worker rows, except a training dummy's `Training:`, `Workers:` (its fixture's machine, 0/max
-  before anyone used it) and `Max Skill Level:` (`TrainingLines`). A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
+  house it stands in and Condition, without the lock and Empty rows; a training dummy adds `Training:`. In a town, the original's UseableStuff and
+  StorageBuilding (and town level buildings of those classes) add Workers (the seat's or dummy's machine, 0/max before anyone used it) and Efficiency /
+  Max efficiency (condition, power and yield 1, `output rate`) or a dummy's `Max Skill Level:` (`UseableLines`); not covered: beds' Workers rows
+  (function 25), lights and power consumers (daytime and a town's power are not in the snapshot). Which class a BUILDING gets (**Verified**, factory
+  `FUN_14057cc70`, after the wall-gate, links-together and farm tests): with a functionality, 0 and 0x12 a plain building, 1/4 Production, 2 Storage, 3 Research,
+  5/0x17 Generator (WindGenerator without inputs), 8 Torture or UseableStuff (by a test not read), 10 Crafting, 0xc Turret, 0xe Furnace, 0xf Light,
+  0x1a RainCollector, any other UseableStuff (`FUN_1402a0900`): beds, dummies, chairs (17), thrones (24), general storage (13), tables. A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
   camp near The Hub), the Campfire though its part has no `xml collision` (base data); its panel says it is out of fuel while it burns. Meitou: a
   camp bed by its bed, any other camp building (`WorldSnapshot.NestBuildings`) among the buildings by distance, by its collision, else the hull of
   its parts' bounds as a site without collision (`BuildingSelection.PickCampBuildingAt`); its panel has its name, owner and Condition.

@@ -28,9 +28,9 @@ sealed class BuildingSelection(PlayerInterface player)
     internal SelectedBuilding? Selected;
 
     /// <summary>
-    /// The training dummy lines of the building panel.
+    /// The UseableStuff and StorageBuilding lines of a building with no machine of the player's.
     /// </summary>
-    internal TrainingLines Training { get; } = new(player);
+    internal UseableLines Useable { get; } = new(player);
 
     /// <summary>
     /// A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.
@@ -441,7 +441,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
-        Training.AddStateLine(site?.Record ?? focus.Record, state);
+        Useable.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
@@ -522,8 +522,8 @@ sealed class BuildingSelection(PlayerInterface player)
         }
         else
         {
-            // A dummy with no machine of the player's (a town's piece of furniture) still shows its Workers and Max Skill Level.
-            Training.AddStatsLines(focus, stats);
+            // Furniture with no machine of the player's (a town's) shows the UseableStuff lines all the same.
+            Useable.AddStatsLines(focus, stats);
         }
     }
 
