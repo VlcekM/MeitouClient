@@ -18,13 +18,14 @@ The game locks the DLL: `kh stop` before reinstalling.
 
 Run the installed `kh.exe` (`<Kenshi>\mods\KenshiHarness\kh.exe`). Commands run one at a time, in the order they arrive. Exit code 0 ok, 1 the command failed
 (reason on stderr), 2 no game. Coordinates are window pixels. The game needs no focus and the real
-mouse is not touched; `kh start` gives the focus back to the window that had it.
+mouse is not touched; `kh start` gives the focus back to the window that had it. It starts the game hidden (no window or
+taskbar entry, the launcher dialog included) and muted; a hidden game still renders, so every command works as shown.
 
 | Command | Does |
 | --- | --- |
-| `start [save]` | Starts Kenshi, presses the launcher's OK, waits for the main menu, loads the save |
+| `start [save] [--show]` | Starts Kenshi, presses the launcher's OK, waits for the main menu, loads the save; hidden and muted unless `--show` |
 | `load <save>` | Loads a save (a folder name under the game's save path) and waits until it is in play |
-| `stop` | Ends the game process |
+| `stop` | Unmutes the game, then ends its process |
 | `ping` | Frame counter; answers even while the game renders nothing (loading) |
 | `cancel` | Ends the command in progress (a long `wait`), which then fails |
 | `shot <file.png>` | Screenshot of the frame, GUI included |
@@ -40,7 +41,9 @@ mouse is not touched; `kh start` gives the focus back to the window that had it.
 | `wait <seconds>`, `wait frames <n>`, `wait hours <game hours>` | Lets the game run |
 | `camera <x> <y> <z>`, `camera <character>` | Moves the camera's centre, keeping angle and zoom |
 | `select <character>...`, `select none` | The selection |
-| `window back [handle]`, `window front` | Gives away or takes the keyboard focus |
+| `window back [handle]`, `window front` | Gives away or takes the keyboard focus (a hidden window cannot take it) |
+| `window hide\|show` | Hides the window or shows it again (without taking the focus) |
+| `sound off\|on` | Mutes or unmutes the game in Windows' mixer |
 | `peek <address> [bytes]`, `sym <dll> <export>`, `fault` | For working on the harness: memory dump (`peek ou+580*+2B0 24`), an export's address, the fault guard's test |
 
 `--stall=<seconds>` (any command): how long the game may render no frame before the command fails (default 30).
@@ -77,6 +80,8 @@ are the raw skill levels.
 - `src/ui.c`: MyGUI's widget tree through `MyGUIEngine_x64.dll`'s exports and RTTI.
 - `src/game.c`, `state.c`, `control.c`: the game through `KenshiLib.dll`'s exports (the game's functions by C++ name),
   with member offsets from KenshiLib's headers, each checked with `kh peek`.
+- `src/sound.c`: the mute is the process's audio session (`ISimpleAudioVolume`). Windows keeps it after the game exits, per
+  executable and device, so the plugin unmutes when it loads and `kh stop` before ending the game.
 - `src/abi.c`: the game's VC++ 2010 `std::string`, `lektor` and RTTI layouts.
 
 Adding a reading to `state`: find the member in KenshiLib's `Include/kenshi/*.h`, check it with `kh peek`, add it in

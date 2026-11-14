@@ -1,8 +1,8 @@
 // kh - the command line of KenshiHarness: sends one command to the plugin inside a running Kenshi and prints the reply.
 //
 //   kh <command> [arguments]     README.md lists the commands; exit code 0 ok, 1 the command failed, 2 no game to talk to
-//   kh start [save]              starts Kenshi (the install this kh.exe sits in: <Kenshi>\mods\KenshiHarness), waits for the
-//                                main menu and loads the save
+//   kh start [save] [--show]     starts Kenshi (the install this kh.exe sits in: <Kenshi>\mods\KenshiHarness), waits for the
+//                                main menu and loads the save; hidden and muted unless --show
 //   kh load <save>               loads a save and waits until it is in play
 //   kh stop                      ends the game process
 //   --stall=<seconds>            how long the game may render no frame before a command fails (default 30)
@@ -109,6 +109,21 @@ static void full_path(char** argument)
     if (GetFullPathNameA(*argument, MAX_PATH, path, NULL)) *argument = path;
 }
 
+// start [save] [--show]
+static int start(int count, char** arguments)
+{
+    const char* save = NULL;
+    int show = 0;
+
+    for (int i = 1; i < count; i++)
+    {
+        if (strcmp(arguments[i], "--show") == 0) show = 1;
+        else if (!save) save = arguments[i];
+    }
+
+    return start_game(save, show);
+}
+
 int main(int argc, char** argv)
 {
     char* arguments[64];
@@ -123,11 +138,11 @@ int main(int argc, char** argv)
 
     if (count == 0)
     {
-        fprintf(stderr, "usage: kh <command> [arguments]; kh start [save]; kh stop (see README.md)\n");
+        fprintf(stderr, "usage: kh <command> [arguments]; kh start [save] [--show]; kh stop (see README.md)\n");
         return 2;
     }
 
-    if (strcmp(arguments[0], "start") == 0) return start_game(count > 1 ? arguments[1] : NULL);
+    if (strcmp(arguments[0], "start") == 0) return start(count, arguments);
     if (strcmp(arguments[0], "stop") == 0) return stop_game();
     if (strcmp(arguments[0], "load") == 0 && count > 1) return load_save(arguments[1]);
     if (strcmp(arguments[0], "shot") == 0 && count > 1) full_path(&arguments[1]);

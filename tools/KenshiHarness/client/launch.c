@@ -1,5 +1,6 @@
 // Starting the game unattended: Kenshi opens with a launcher dialog (its OK button is pressed here with a window message),
-// restarts itself as RE_Kenshi's copy of the executable, and reaches the main menu, where a save can be loaded.
+// restarts itself as RE_Kenshi's copy of the executable, and reaches the main menu, where a save can be loaded. Unless asked
+// to show, the game runs hidden and muted: the windows are hidden as they appear, the plugin keeps them so and mutes it.
 #include "launch.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +9,8 @@
 
 #define PIPE L"\\\\.\\pipe\\kenshi-harness"
 #define GAME_EXE L"kenshi_x64.exe"
+#define RENDER_WINDOW_CLASS L"OgreD3D11Wnd"
+#define LAUNCHER_CLASS L"#32770"
 
 // ---- The game process ---------------------------------------------------------------------------------------------------
 
@@ -32,6 +35,12 @@ int stop_game(void)
         fprintf(stderr, "no Kenshi with the harness is running\n");
         return 2;
     }
+
+    // Windows would keep the mute for the next start by hand (src/sound.c).
+    char* sound[2] = {"sound", "on"};
+    char* reply;
+    request(2, sound, 5000, &reply);
+    free(reply);
 
     TerminateProcess(process, 0);
     WaitForSingleObject(process, 10000);
@@ -58,10 +67,11 @@ static int game_folder(wchar_t folder[MAX_PATH])
     return GetFileAttributesW(exe) != INVALID_FILE_ATTRIBUTES;
 }
 
-static int launch(const wchar_t* folder)
+// The launcher dialog takes its first show from the start-up info, so a hidden start hides it too.
+static int launch(const wchar_t* folder, int show)
 {
     wchar_t command[MAX_PATH + 8];
-    STARTUPINFOW startup = {.cb = sizeof startup};
+    STARTUPINFOW startup = {.cb = sizeof startup, .dwFlags = STARTF_USESHOWWINDOW, .wShowWindow = show ? SW_SHOWNORMAL : SW_HIDE};
     PROCESS_INFORMATION process;
     swprintf(command, MAX_PATH + 8, L"\"%ls\\%ls\"", folder, GAME_EXE);
 
@@ -102,14 +112,27 @@ static BOOL CALLBACK press_ok(HWND child, LPARAM pressed)
     return FALSE;
 }
 
-static BOOL CALLBACK find_launcher(HWND window, LPARAM pressed)
+// What one pass over the desktop's windows does: presses the launcher's OK, and in a hidden start hides the game's windows.
+typedef struct
 {
+    int show;
+    int pressed;
+} Sweep;
+
+static BOOL CALLBACK sweep_window(HWND window, LPARAM state)
+{
+    Sweep* sweep = (Sweep*)state;
     wchar_t class[16] = L"";
     GetClassNameW(window, class, 16);
 
-    if (wcscmp(class, L"#32770") == 0 && IsWindowVisible(window) && is_game_window(window))
-        EnumChildWindows(window, press_ok, pressed);
+    int launcher = wcscmp(class, LAUNCHER_CLASS) == 0;
+    int render = wcscmp(class, RENDER_WINDOW_CLASS) == 0;
+    if (!(launcher || render) || !is_game_window(window)) return TRUE;
 
+    if (!sweep->show) ShowWindow(window, SW_HIDE);
+
+    // A shown start presses only a dialog on screen, as before; a hidden one also those it hid.
+    if (launcher && (!sweep->show || IsWindowVisible(window))) EnumChildWindows(window, press_ok, (LPARAM)&sweep->pressed);
     return TRUE;
 }
 
@@ -126,18 +149,18 @@ static int answers(const char* command, const char* argument, const char* expect
     return ok;
 }
 
-// Presses the launcher's OK whenever the dialog is up, until the plugin answers.
-static int wait_for_plugin(int seconds)
+// Presses the launcher's OK whenever the dialog is up (and hides the windows), until the plugin answers.
+static int wait_for_plugin(int seconds, int show)
 {
     ULONGLONG until = GetTickCount64() + (ULONGLONG)seconds * 1000;
 
     while (GetTickCount64() < until)
     {
-        int pressed = 0;
+        Sweep sweep = {.show = show};
         if (answers("ping", NULL, "harness")) return 1;
 
-        EnumWindows(find_launcher, (LPARAM)&pressed);
-        Sleep(500);
+        EnumWindows(sweep_window, (LPARAM)&sweep);
+        Sleep(200);
     }
 
     return 0;
@@ -200,7 +223,7 @@ int load_save(const char* save)
 
 // Starts the game unless one with the plugin runs already: 1 when this call started it, 0 when it ran, -1 (having said
 // why) when it could not be started.
-static int launch_if_needed(void)
+static int launch_if_needed(int show)
 {
     wchar_t folder[MAX_PATH];
     if (game_process()) return 0;
@@ -211,7 +234,7 @@ static int launch_if_needed(void)
         return -1;
     }
 
-    if (!launch(folder))
+    if (!launch(folder, show))
     {
         fprintf(stderr, "could not start %ls\\%ls (error %lu)\n", folder, GAME_EXE, GetLastError());
         return -1;
@@ -232,17 +255,33 @@ static void return_focus(HWND before)
     free(reply);
 }
 
-int start_game(const char* save)
+// Shows and unmutes the game, or hides and mutes it.
+static void set_presence(int show)
+{
+    char* window[2] = {"window", show ? "show" : "hide"};
+    char* sound[2] = {"sound", show ? "on" : "off"};
+    char* reply;
+
+    request(2, window, 5000, &reply);
+    free(reply);
+
+    if (request(2, sound, 5000, &reply) && reply) fprintf(stderr, "%s\n", reply);
+    free(reply);
+}
+
+int start_game(const char* save, int show)
 {
     HWND before = GetForegroundWindow();
-    int launched = launch_if_needed();
+    int launched = launch_if_needed(show);
     if (launched < 0) return 2;
 
-    if (!wait_for_plugin(180))
+    if (!wait_for_plugin(180, show))
     {
         fprintf(stderr, "Kenshi did not load the harness plugin within 3 minutes (is KenshiHarness.mod enabled?)\n");
         return 2;
     }
+
+    set_presence(show);
 
     if (!wait_for_menu(300))
     {

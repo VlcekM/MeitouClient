@@ -42,6 +42,12 @@ int screen_size(int* width, int* height);
 int cmd_shot(Command* c);
 int cmd_window(Command* c);
 
+// ---- sound.c: the game's audio session -----------------------------------------------------------------------------------
+
+// Unmutes (`on`) or mutes the game's audio session; 0 with the failing call in `why` when there is none.
+int sound_set(int on, int* muted, const char** why);
+int cmd_sound(Command* c);
+
 // ---- ui.c: the game's MyGUI widgets -------------------------------------------------------------------------------------
 
 int ui_init(void);

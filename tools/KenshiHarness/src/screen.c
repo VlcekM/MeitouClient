@@ -84,34 +84,49 @@ int cmd_shot(Command* c)
 
 // ---- The window's place among the desktop's windows ---------------------------------------------------------------------
 
+// Ogre's Direct3D 11 render window class: found by class rather than visibility, since `window hide` hides it.
+#define RENDER_WINDOW_CLASS "OgreD3D11Wnd"
+
 static BOOL CALLBACK find_own_window(HWND window, LPARAM found)
 {
+    char name[32] = "";
     DWORD process = 0;
     GetWindowThreadProcessId(window, &process);
-    if (process != GetCurrentProcessId() || !IsWindowVisible(window) || GetWindow(window, GW_OWNER)) return TRUE;
+    if (process != GetCurrentProcessId()) return TRUE;
+
+    GetClassNameA(window, name, sizeof name);
+    if (strcmp(name, RENDER_WINDOW_CLASS) != 0) return TRUE;
 
     *(HWND*)found = window;
     return FALSE;
 }
 
-// window back [handle] | window front: gives the keyboard focus to another window (the one with that handle, in hex, or
-// the desktop), or takes it. The game takes the focus when it starts; the harness needs it nowhere, so `kh start` hands
-// it back to the window that had it. Windows lets only the process that has the focus pass it on, which is why this is
-// done in here.
+// window back [handle]: gives the keyboard focus to that window (in hex), or the desktop. The game takes the focus when it
+// starts; the harness needs it nowhere, so `kh start` hands it back to the window that had it. Windows lets only the
+// process that has the focus pass it on, which is why this is done in here.
+static void give_focus_away(Command* c)
+{
+    HWND other = (HWND)(uintptr_t)strtoull(arg(c, 1, "0"), NULL, 16);
+    SetForegroundWindow(IsWindow(other) ? other : GetShellWindow());
+}
+
+// window back [handle] | front | hide | show: the focus, or whether the window is on the desktop at all. A hidden window
+// still renders, so screenshots, the GUI, input and the state all work as before.
 int cmd_window(Command* c)
 {
-    const char* where = arg(c, 0, "");
+    const char* what = arg(c, 0, "");
     HWND own = NULL;
     EnumWindows(find_own_window, (LPARAM)&own);
+    if (!own) return fail(c, "no render window");
 
-    if (_stricmp(where, "front") == 0) SetForegroundWindow(own);
-    else if (_stricmp(where, "back") == 0)
-    {
-        HWND other = (HWND)(uintptr_t)strtoull(arg(c, 1, "0"), NULL, 16);
-        SetForegroundWindow(IsWindow(other) ? other : GetShellWindow());
-    }
-    else return fail(c, "usage: window back [handle] | window front");
+    if (_stricmp(what, "front") == 0) SetForegroundWindow(own);
+    else if (_stricmp(what, "back") == 0) give_focus_away(c);
+    else if (_stricmp(what, "hide") == 0) ShowWindow(own, SW_HIDE);
+    else if (_stricmp(what, "show") == 0) ShowWindow(own, SW_SHOWNOACTIVATE);
+    else return fail(c, "usage: window back [handle] | front | hide | show");
 
-    text_add(&c->reply, "{\"focused\":%s}", GetForegroundWindow() == own ? "true" : "false");
+    const char* focused = GetForegroundWindow() == own ? "true" : "false";
+    const char* visible = IsWindowVisible(own) ? "true" : "false";
+    text_add(&c->reply, "{\"focused\":%s,\"visible\":%s}", focused, visible);
     return 1;
 }

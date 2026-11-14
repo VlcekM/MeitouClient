@@ -17,7 +17,7 @@ $flags = @("-target", "x86_64-windows-gnu", "-O2", "-fms-extensions", "-Wall", "
 $plugin = Get-ChildItem (Join-Path $root "src") -Filter *.c | ForEach-Object FullName
 $client = Get-ChildItem (Join-Path $root "client") -Filter *.c | ForEach-Object FullName
 
-& $Zig cc @flags -shared -o (Join-Path $mod "KenshiHarness.dll") @plugin (Join-Path $root "src\harness.def")
+& $Zig cc @flags -shared -o (Join-Path $mod "KenshiHarness.dll") @plugin (Join-Path $root "src\harness.def") -lole32
 if ($LASTEXITCODE -ne 0) { throw "the plugin did not build" }
 
 & $Zig cc @flags -o (Join-Path $mod "kh.exe") @client
