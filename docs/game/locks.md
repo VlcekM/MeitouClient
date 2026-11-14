@@ -337,7 +337,7 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   +0x26c (the construction position, set in the constructor `FUN_14055ca90`) and the orientation the building's; else the usage node nearest the
   character (squared 3D distance; nodes in the bad-node map +0x300 skipped), turned by Quaternion(w -0.707107, y 0.707107): the node's yaw - 90°, as for
   town nodes ([ai-tasks](ai-tasks.md#town-goals)). Data (**Verified**, base game probe): `Bed` and `Skeleton Repair Bed` hold two `Node Use` (node type 4)
-  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. `sleepinbed` holds `Bip01` at about
+  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. A bed with exactly one node (Forgotten Buildings' `Bed with Pillow`, its node at Z -11.05 turned 180°; the mod also gives `Old Bed` one) lies at the marker but faces that node's yaw - 90° (`FUN_140549720` reads any node; #718: Meitou faced the bed's own yaw, 90° off, and the sleeper lay across). `sleepinbed` holds `Bip01` at about
   (-11.8, 6.7, -1.5) in model space (`gotobed` moves it there from the origin), so from a node the pelvis lands on the mattress centre. Meitou:
   `FixtureRegistry.LieSpot`, also applied to a sleeper bound on load (engine choice), which also takes the bed's clip again (it is not saved; without it a loaded sleeper lay on the floor at the node).
   **Bad nodes** (**Verified**): with 2 or more use nodes `getPositionMarker` skips every node in the building's bad-node map (`+0x318` / `+0x338`) and returns node 0 when all are skipped. `FUN_14054d410(building, position)` marks the node
