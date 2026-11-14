@@ -799,6 +799,7 @@ static partial class WorldFrame
             objects.ObjectDistance = Math.Min(distance, reflection.ObjectReach);
             objects.LandmarkDistance = Math.Min(landmarks,
                 reflection.ObjectReach);   // the mirrored scene has no landmarks beyond the reflection's own object range
+            objects.StandInDistance = distance;   // stand-ins start where the scene's do, not at the reflection's shorter reach (#668)
             objects.MirrorCull = reflection.CullToWater ? reflection.MayShow : null;
             objects.AllFloors = true;   // the game shows every floor in the water reflection (docs/formats/zones.md "Interior view")
 
@@ -810,6 +811,7 @@ static partial class WorldFrame
             StageClock.Sub("refl up to objects");
             objects.ObjectDistance = distance;
             objects.LandmarkDistance = landmarks;
+            objects.StandInDistance = 0;
             objects.LodBias = bias;
         }
 

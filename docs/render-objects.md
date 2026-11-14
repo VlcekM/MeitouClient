@@ -40,8 +40,9 @@ wall line is cut unevenly (#667, Port North): `Wall3_Section01.mesh` (Defensive 
 
 Stand-in colour, **Verified** (mesh probe): a building's `distant mesh` carries its look in vertex colours alone, which need not match the
 building (`hivehut-distant.mesh`: 13 triangles, mean colour 0.58 0.56 0.37, khaki, for the purple-brown Hive Commune Hut). The water
-reflection draws real parts to its own shorter reach (`ReflectionPass.ObjectDistance`, 2000) and stand-ins beyond it, so a hut the scene
-still shows as built mirrors as its stand-in (#668).
+reflection draws real parts to its own shorter reach (`ReflectionPass.ObjectDistance`, 2000) but starts stand-ins and distant towns where
+the scene does (`WorldObjectRenderer.StandInDistance`), so a hut the scene still shows as built never mirrors as its stand-in (#668);
+between the two reaches a building mirrors nothing.
 
 Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
 of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
