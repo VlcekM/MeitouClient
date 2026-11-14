@@ -766,7 +766,7 @@ public static partial class SaveCapture
         sc.Position = hot.Position;
         var link = cold.Save;
         sc.Rotation = link is not null && MathF.Abs(SaveRotation.Difference(hot.Yaw, link.Yaw)) < 1e-4f ? link.Rotation : SaveRotation.OfYaw(hot.Yaw);
-        if (sc.GameState is { } g) WriteGameState(g, builder, world, data, options, clock, buildings, sc, cold, id, isLeader, orders, link);
+        if (sc.GameState is { } g) WriteGameState(g, builder, world, data, options, clock, buildings, sc, cold, id, isLeader, orders, link, isNew);
 
         // Body: stats and medical state, from the host, else the loaded ones, else (for a new character) defaults.
         var (stats, medical) = (id.IsNone ? null : options.Bodies?.Invoke(id)) ?? (null, null);
@@ -787,7 +787,7 @@ public static partial class SaveCapture
     /// </summary>
     static void WriteGameState(FcsRecord g, SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
         IReadOnlyDictionary<string, FcsRecord> buildings, SaveCharacter sc, CharacterCold cold, CharacterId id, bool isLeader, bool orders,
-        SavedCharacterLink? link)
+        SavedCharacterLink? link, bool isNew)
     {
         g.Strings["name"] = cold.Name;
         g.Bools["is leader"] = isLeader;
@@ -812,7 +812,8 @@ public static partial class SaveCapture
             });
         }
 
-        HeldSave.Write(g, cold, link, world.Fixtures, buildings);
+        // A new record has no held keys of the save to leave as read: a captive of a save's platoon split into one of its own (#677).
+        HeldSave.Write(g, cold, isNew ? null : link, world.Fixtures, buildings);
 
         // Carrying or carried: the bool says which, the partner's handle is written once every character has one.
         g.Bools["carrying"] = !cold.Carrying.IsNone;
@@ -1247,6 +1248,21 @@ public static partial class SaveCapture
             && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
 
         /// <summary>
+        /// A captive split off a wild or homeless squad (<c>PopulationSystem.SplitCaptives</c>) has a platoon of its own and no town, and no other
+        /// writer holds it: it is written here, townless, and loads as a homeless wild platoon (#677).
+        /// </summary>
+        bool TownlessCaptive(Platoon? platoon, int faction) =>
+            platoon is { Saved: null, Wild: false } and ({ SeparatedFrom: >= 0 } or { SeparatedFromSquad: >= 0 })
+            && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
+
+        /// <summary>
+        /// Whether a squad of the town, platoon and faction is written here (<see cref="Writable"/>, <see cref="MadeWild"/>,
+        /// <see cref="TownlessCaptive"/>).
+        /// </summary>
+        bool Written(int town, Platoon? platoon, int faction) =>
+            Writable(town, faction) || MadeWild(platoon, faction) || TownlessCaptive(platoon, faction);
+
+        /// <summary>
         /// The squads in the world (not a save's platoon), with their dead; a made never-made platoon wiped out keeps its record unless the original
         /// would drop it.
         /// </summary>
@@ -1262,7 +1278,7 @@ public static partial class SaveCapture
                     if (roamer is null || roamer.Saved is not null && roamer.Stored is null) continue;   // a save's platoon (WriteSavedNpcs)
                 }
 
-                if (!Writable(squad.Town, squad.Faction) && !MadeWild(roamer, squad.Faction)) continue;
+                if (!Written(squad.Town, roamer, squad.Faction)) continue;
 
                 // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
                 var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false } c && OwnRecord(c)).ToList();
@@ -1322,7 +1338,7 @@ public static partial class SaveCapture
             foreach (var p in _world.Platoons.All)
             {
                 if (p is not { State: PlatoonState.Unloaded, Stored: { } stored }) continue;
-                if (!Writable(p.Origin, p.Faction) && !MadeWild(p, p.Faction)) continue;
+                if (!Written(p.Origin, p, p.Faction)) continue;
 
                 // A made never-made one with no one left (the dead are not stored) keeps its record too, but declared dead: the original drops an
                 // unloaded dead platoon.
@@ -1408,6 +1424,14 @@ public static partial class SaveCapture
         /// </summary>
         void SetTown(FcsRecord record, int town, string templateId, bool roaming, TownBuilding? homeBuilding, string? package)
         {
+            // A townless platoon (TownlessCaptive): the roaming pool, kept only as its platoon says (the callers mark a persistent one).
+            if (town < 0)
+            {
+                record.Ints["sqt"] = 2;
+                record.Bools["persistent"] = false;
+                return;
+            }
+
             var site = _data.Sites[town];
 
             // The TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement).
