@@ -252,6 +252,10 @@ no artifacts, as Meitou adds no state for a town a loaded save lacks. Tests: `Ar
 
 Ledgers are per wanted faction; crimes pending at deed time and witness booking are distinct.
 The per-character crime tick `FUN_1405cbb80` (bounty expiry, skipped while imprisoned; then the pending timer at ledger `+0x90`: at or below 0.0 clears the code and victim, else it is reduced by the tick delta) is jumped over by the character tick `FUN_1405d00b0` for a dead character (`+0x5bc`): **Verified**. A dead body's bounties never expire and its pending crime stays frozen.
+Nothing else clears it on death (decompile: no other writer of Character `+0x148`; the ragdoll path `FUN_1405d0db0` zeroes `+0x58` of
+slot 0x68's object `+0x650 + 0x28`, not the ledger), and neither the HUD's `BountyPanel` test nor the status entry checks for death: a corpse
+killed mid-crime keeps "Committing Crime!" with its frozen timer. **Verified** in the original 1.0.65 with the kh harness (an unprovoked
+attack, KO, Re_Dev Squish to death: "(18)" stayed on the dead character while the game ran; #696).
 CONSTANTS categories define theft/assault/murder/looting values. Expiry is0.04 hours/cat and
 permanent from10000; capture, claiming, bail and prison sentences use separate paths.
 Witness/innocence details remain partly unknown; a killing is no crime (11.6), only relation events.
