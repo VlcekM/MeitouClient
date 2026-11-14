@@ -835,7 +835,7 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The stats lines of a selected machine: the farm's crop and growth, the output's progress, then (section 6: slots 155, 154, 153) Workers and
+    /// The stats lines of a selected machine: the farm's yield and growth rate, the output's progress, then (section 6: slots 155, 154, 153) Workers and
     /// Efficiency per <see cref="AddEfficiencyLines"/>, the power lines, and the bench's tech level.
     /// </summary>
     internal void AddMachineLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, List<PlayerInterface.HudLine> extended, ref string status,
@@ -871,7 +871,7 @@ sealed class ProductionWindows(PlayerInterface player)
     static string Percent(float v) => ((int)(Math.Clamp(v, 0, 1) * 100)).ToString(CultureInfo.InvariantCulture) + "%";
 
     /// <summary>
-    /// The status word and the lines of a machine's product: a mine's or rock's status, a farm's growth, or the output's stock.
+    /// The status word and the lines of a machine's product: a mine's or rock's status, a farm's yield and growth rate, or the output's stock.
     /// </summary>
     static void AddOutputLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, ref string status, ref bool bad, RichnessView? rich)
     {
@@ -888,16 +888,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 _ => "Growing",
             };
             bad = f.Status is FarmStatus.NoWater or FarmStatus.OutputFull;
-            stats.Add(new("Growth:", Percent(MathF.Min(f.Growth, 1)), PlayerInterface.MainColour));
-
-            if (f.Growth >= 1)
-            {
-                stats.Add(new("Ripeness:", Percent(f.Ripeness), PlayerInterface.MainColour,
-                    f.Growth >= 2 ? PlayerInterface.BadColour : PlayerInterface.GoodColour));
-            }
-
-            if (f.Death > 0)
-                stats.Add(new("Dying:", Percent(f.Death), PlayerInterface.MainColour, PlayerInterface.BadColour));
+            FarmPanel.AddStats(m, stats);
         }
         else if (m.Output is { } o)
         {

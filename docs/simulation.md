@@ -1665,7 +1665,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - Selecting a machine opens its window at the screen's left edge, vertically centred, an open inventory moved right of it (**Observed**, original screenshot 2026-10-26, mined iron rock): `Kenshi_GenericBuildingWindow`, or for a bench
     `Kenshi_InventoryResearchWindow`. Items are held in and out with the mouse (an input takes its record up to its capacity; `out` takes nothing).
   - The site menu gains Operate (also the quick right click); Shift + quick right click adds a job instead ([job lists](#production)).
-  - The HUD shows the farm's growth, ripeness and fertility, the output, workers and tech level.
+  - The HUD shows the farm's crop yield and growth rate, workers, and crop bars (growth, condition, remaining plants and harvest deadline;
+    [farm panel](game/ui-screens.md#selected-building)); the separate machine window shows its input/output stock.
   - A crafting bench's window shows the current craft and QUEUE... (opens the Craft tab); finished items are lifted out of `out`.
   - The overview's Craft tab lists stations, their crafts (click to queue; red: locked), the queue (click to cancel),
     Repeat Queue and the hovered craft's time and inputs.

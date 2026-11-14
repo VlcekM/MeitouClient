@@ -716,7 +716,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   functionality, a line by `world resource mining`: 1 `Iron Quality:`, 2 `Stone Richness:`, 3 `Copper Quality:`, 4 `Carbon Quality:`, 5 `Water Available:`, 6
   `Ground Fertility:` (other: no label); value `{1,num}` of int(yield × 100) (slot 92, no `%`), coloured r = clamp(0.8 − y), g = clamp(0.8 y), b 0.1; tooltip "The
   richness of natural {1} present in this location. Anything over 50% is considered good.", {1} the resource's name (`FUN_140a0c300`: Iron, Stone, Copper, Carbon,
-  Water, Fertility) lower-cased. No owner test: rocks, NPC and player mines, farms and wells. Meitou: the player's machines and rocks (before mining too,
+  Water, Fertility) lower-cased. No owner test: rocks, NPC and player mines and wells; farms override slot 186 with their crop lines below. Meitou: the player's machines and rocks (before mining too,
   `WorldSnapshot.InspectedRichness`); a mine without a resource shows no line; town buildings are not covered.
 - **Production building** (**Verified** decompile of ProductionBuilding's slots, the strings `OK` / `-` / `+` read from the exe bytes; the formulas match the owner's
   screenshot of a worked Iron Resource: Iron Quality 100, Workers 1/3, Efficiency 40%, Max efficiency 120%). Section 6 (`FUN_1402ffeb0`) is slot 186 (richness),
@@ -755,6 +755,20 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     `#140806` when slot 109 × 100 >= 90, else `#59231a`. Its tooltip has no slot 156 rows: `Damage:` and `Power:` (a consumer; granted / slot 163, which on a
     farm `FUN_1400df330` is |power output + research increase|, no operator share) as above, `No Water:` int((drought − 1) × 100)% (Bad) while out of water,
     `Total:`.
+    **Farm panel** (**Observed**, 1.0.68 decompilation `FUN_1400e09b0` slot 186, `FUN_1400e21a0` section 4; constants checked in the exe data):
+    the clean GOG `Kenshi_MainPanel.layout` supplies Stats and MedicalPanel/LifeBar rows; `Kenshi_GenericBuildingWindow.layout` supplies only the
+    separate input/output window. The farm replaces Ground Fertility with `Crop Yield` and `Growth Rate` (no colons), then the existing `Workers:`.
+    Yield = clamp(0.5 + 1.5 × average effective Farming / 100, 0, 1) × crop match × fertility; without workers the skill factor is 1.
+    Growth rate = fertility × health × power when it consumes power (otherwise no health/power factor), × drought multiplier in state 0.
+    Both display int(value × 100)`%`, Bad below 0.3. Yield's tooltip has Environment, Farmers Skill (the clamped skill factor, `--` without workers)
+    and the yield explanation, adding the crop-suitability warning below 0.15. Growth's tooltip has normal growth hours, Environment Effect
+    (omitted for hydroponics), Power (consumers), No Water (state 0), and actual hours int(growth time / rate), `-` at zero rate.
+    After building Condition, the yellow bars are `Growing` (clamp((growth − plant start)/(1 − plant start), −0.5, 1), percent rounded with
+    floor(x + 0.5), `--` at fertility <= 0.01), `Plant Condition` (clamp(1 − death/death threshold, 0, 1), floored percent),
+    `Number of Plants` (layout count − harvested, fill remaining/count), and `Time left to harvest`. The last is hidden/disabled while growth <= 1
+    or death >= threshold; otherwise hours = harvest time × max(2 − growth, 0) + death time × (threshold − (growth >= 2 ? death : 0)), floored,
+    with `hr`/`hrs`. Its fill is hours/(harvest time + death time × threshold), zero when drought death time > 0 and the first water input level is 0.
+    Meitou: `FarmPanel`, `FarmView` (immutable crop data, planting start, average farmer skill and water level); no simulation/save formula changes.
   - Turret gun lines (**Observed**, `GunClassTurret` slot 14 `FUN_14030d620` section 6; the base `GunClass` `FUN_14030ce20` draws only section 4's `Loaded` bar;
     suffixes `x` / `*` / `+` **Verified** exe bytes): P = gun slot 19 (0.8 e + 0.2, e = slot 109), M = slot 18 (mount), h = `FUN_140435f60` from the building to
     gun `+0x118` (the last aim point, written with the building's `+0x4a8` by slot 5 `FUN_140435100`; 1 while it is 0), D = Building slot 120. Lines (labels Main,

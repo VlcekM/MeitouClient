@@ -19,6 +19,22 @@ public readonly record struct FarmView(float Growth, float Death, int Harvested,
     /// Each plant's growth (a copy; -10 harvested): what its crop mesh is drawn at.
     /// </summary>
     public IReadOnlyList<float> PlantGrowth { get; init; } = [];
+    /// <summary>
+    /// The crop's immutable data, for the farm panel's growth time and death threshold.
+    /// </summary>
+    public FarmData? Data { get; init; }
+    /// <summary>
+    /// The lowest growth at planting: the Growing bar measures progress from this value to 1.
+    /// </summary>
+    public float Start { get; init; }
+    /// <summary>
+    /// The operators' average effective Farming level divided by 100; 1 with no operators (the original panel's default).
+    /// </summary>
+    public float FarmerSkill { get; init; } = 1;
+    /// <summary>
+    /// The first water input's level is nonzero: a dry ripe crop keeps its harvest time text but has no time bar.
+    /// </summary>
+    public bool Watered { get; init; } = true;
 }
 
 /// <summary>
@@ -328,7 +344,11 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         FarmView? farm = m.Farm is { } f && m.Data.Farm is { } fd
             ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch, ProductionSystem.Ripeness(f))
             {
-                PlantGrowth = [.. f.Plants]
+                PlantGrowth = [.. f.Plants],
+                Data = fd,
+                Start = f.Start,
+                FarmerSkill = m.Operators > 0 ? m.FarmerSkillTotal / m.Operators : 1,
+                Watered = m.Inputs.Length == 0 || m.Inputs[0].Level != 0,
             }
             : null;
 

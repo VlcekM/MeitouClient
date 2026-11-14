@@ -936,6 +936,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             m.LastOperators = m.Operators;
             m.Operators = 0;
+            m.FarmerSkillTotal = 0;
             if (m.Data.IsResearch && CanResearch(world, m))
                 bench = Math.Max(bench, m.Data.TechLevel);
         }
@@ -1139,6 +1140,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
         else if (m.Farm is not null)
         {
+            m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
+
             // A growing crop with water is tended: the operator plays the farm's clip (engine reading of task 87's start conditions,
             // docs/game/buildings-production.md "Farming").
             worked = HarvestStep(world, m, skill, s, dt) || Tended(m);

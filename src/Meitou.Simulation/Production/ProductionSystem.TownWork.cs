@@ -294,6 +294,8 @@ public sealed partial class ProductionSystem
         var stat = (StatsEnumerated)m.Data.Stat;
         float skill = m.Data.Stat > 0 ? Effective(cold, stat) : -1;
         float s = skill < 0 ? 1 : Lerp(0.5f, 1.4f, skill / 100);
+        if (m.Farm is not null) m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
+
         cold.Operating = m.Farm is not null ? HarvestStep(world, m, skill, s, dt) || Tended(m) : ProduceStep(world, m, s, dt);
         OperatingXp(world, cold, m.Data.Stat, dt);
     }
