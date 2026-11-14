@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
 
@@ -412,7 +413,8 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
-    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
+    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>) or either side of an open doorway
+    /// (<see cref="AcrossOpenDoor"/>), within <see cref="SameFloorHeight"/> in height, and
     /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
     /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
     /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
@@ -420,7 +422,7 @@ public sealed partial class CombatSystem
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
-        if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t)) return false;
+        if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t) && !AcrossOpenDoor(world, a, t)) return false;
 
         var prev = world.Characters.Previous;
         Vector3 from = prev[a].Position;
@@ -436,6 +438,20 @@ public sealed partial class CombatSystem
         var end = world.Walkability.SurfacePoint(to, SteerLineInset);
         var line = new Vector2(end.X - start.X, end.Z - start.Z);
         return world.Walkability.Slide(start, line, SteerLineRadius) == line;
+    }
+
+    /// <summary>
+    /// Whether one of the two stands outdoors and the other inside a building with a door open or broken (<see cref="FixtureRegistry.HasOpenDoor"/>):
+    /// the line test then decides, as the original's navmesh line query knows no places (engine reading, #632: a fighter on the step of a bar's
+    /// broken door and its foe inside, 8 apart, path-chased each other on paths that ended where they stood and never swung). Across closed doors
+    /// it stays a blocked line: the line test does not see doors.
+    /// </summary>
+    static bool AcrossOpenDoor(World world, int a, int t)
+    {
+        string? inA = world.Sight.BuildingOf(a), inT = world.Sight.BuildingOf(t);
+        if ((inA is null) == (inT is null)) return false;
+
+        return world.Fixtures.HasOpenDoor(inA ?? inT!);
     }
 
     /// <summary>
