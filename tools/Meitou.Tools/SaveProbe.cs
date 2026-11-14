@@ -66,6 +66,7 @@ static class SaveProbe
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("assault", >= 1): Assault(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
@@ -272,7 +273,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// A character's pending crime, bounties, the flags the police read and how many characters its own squad holds TEMP_ENEMY on.
+    /// A character's pending crime, bounties with the booking faction's relation to its faction, the flags the police read and how many characters
+    /// its own squad holds TEMP_ENEMY on.
     /// </summary>
     static string CrimeLine(ProbeWorld probe, SquadMemory? memory, int slot)
     {
@@ -281,7 +283,9 @@ static class SaveProbe
         string pending = c.Pending is { } p
             ? $"{p.Code} vs {probe.Faction(p.VictimFaction)} victim={p.Victim.Slot} timer={p.Timer:F1} booked={p.Booked} witnessed={p.Witnessed}"
             : "-";
-        var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}") ?? [];
+        var relations = probe.Data.Relations;
+        var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}"
+            + (relations.Contains(e.Faction) && relations.Contains(c.Faction) ? $" relation={relations.Get(e.Faction, c.Faction):F0}" : "")) ?? [];
         return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
             + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies}";
     }
@@ -340,6 +344,61 @@ static class SaveProbe
             probe.PrintMessages();
             probe.Tick(40);
         }
+    }
+
+    /// <summary>
+    /// The player's squad attacks (Attack Unprovoked) the nearest character named like <paramref name="victim"/> that is up; then every
+    /// <paramref name="interval"/> ticks the characters within 400 of the leader that are up and not the player's: indoors or out, task, goal, fight
+    /// target and how their senses hold the leader (#665: who joins a fight at the gate from inside a shop).
+    /// </summary>
+    static void Assault(ProbeWorld probe, string victim, int rounds, int interval)
+    {
+        var t = probe.Characters;
+        var mine = probe.World.Squads.Find(probe.World.Player.Squad)!;
+        var up = probe.Named(victim)
+            .Where(i => t.Cold(i) is { Medical.Incapacitated: false })
+            .OrderBy(i => Vector3.Distance(t.Next[i].Position, probe.LeaderPosition))
+            .ToList();
+        if (up.Count == 0)
+        {
+            Console.WriteLine($"nobody named like '{victim}' is up");
+            return;
+        }
+
+        Console.WriteLine($"attacking {probe.Who(up[0])}");
+        probe.World.Commands.Enqueue(new AttackOrder([.. mine.Members], t.IdOf(up[0])) { Picked = true, Unprovoked = true, Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(interval);
+            Console.WriteLine($"tick {probe.World.Tick}");
+            for (int i = 0; i < t.HighWater; i++)
+            {
+                if (!t.Next[i].Alive || t.Cold(i) is not { Medical.Incapacitated: false } c || c.SquadId == mine.Id
+                        || Vector3.Distance(t.Next[i].Position, probe.LeaderPosition) > 400)
+                    continue;
+
+                Console.WriteLine($"  {i} '{c.Name}' {probe.Faction(c.Faction)} sq={c.SquadId} {(probe.World.Sight.PlaceOf(i) >= 0 ? "indoors" : "outdoors")} "
+                    + $"task={(CharacterTask)t.Next[i].Task} goal={c.Ai?.Goal?.Task.Type} target={Target(probe, i)} senses={SensesOfLeader(probe, i)}");
+            }
+
+            probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
+    /// How character <paramref name="i"/>'s senses hold the player's leader: seen or heard at the last look and its tags, "-" for no entry.
+    /// </summary>
+    static string SensesOfLeader(ProbeWorld probe, int i)
+    {
+        var t = probe.Characters;
+        var leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader;
+        if (Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, i) is not { } senses) return "-";
+
+        foreach (var e in senses.Entries)
+            if (e.Target == leader.Slot && e.Generation == leader.Generation) return $"{(e.Seen ? "seen" : e.Heard ? "heard" : "stale")}/{e.Tags}";
+
+        return "-";
     }
 
     /// <summary>
@@ -763,6 +822,7 @@ static class SaveProbe
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
+              assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
