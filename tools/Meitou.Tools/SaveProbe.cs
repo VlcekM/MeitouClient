@@ -10,6 +10,8 @@ using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Navigation;
+using Meitou.Simulation.Perception;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
@@ -88,6 +90,7 @@ static class SaveProbe
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("places", >= 1) when probe.Nav is not null: Places(probe, float.Parse(a[0]), a.Count > 1 ? float.Parse(a[1]) : 4); return true;
             case ("layout", >= 1) when probe.Nav is not null: Layout(probe, a[0]); return true;
             default: return false;
         }
@@ -908,6 +911,60 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The place test (<see cref="SightMap.PlaceAtPoint"/>, what <c>SteersAt</c> compares) over the walkable surface round the leader, every
+    /// <paramref name="step"/> within <paramref name="radius"/>: the points each building's place takes, the outdoor-mesh points it counts as
+    /// indoors and the indoor-mesh points it counts as outdoors, with a sample of each. Needs <c>--nav</c>.
+    /// </summary>
+    static void Places(ProbeWorld probe, float radius, float step)
+    {
+        var world = probe.Nav!.Walkability.World;
+        var centre = probe.LeaderPosition;
+        var heights = new List<float>();
+        var odd = new Dictionary<string, (int Count, Vector3 Sample)>();
+        int outdoor = 0, indoor = 0;
+        for (float x = centre.X - radius; x <= centre.X + radius; x += step)
+        {
+            for (float z = centre.Z - radius; z <= centre.Z + radius; z += step)
+            {
+                heights.Clear();
+                world.HeightsAt(x, z, heights);
+                foreach (float h in heights) NotePlace(probe, world, new Vector3(x, h, z), odd, ref outdoor, ref indoor);
+            }
+        }
+
+        Console.WriteLine($"{outdoor} outdoor-mesh and {indoor} indoor-mesh points within {radius} of {centre:F0}");
+        foreach (var (what, (count, sample)) in odd.OrderByDescending(e => e.Value.Count))
+            Console.WriteLine($"  {count,6} {what}  e.g. {sample:F0}");
+    }
+
+    /// <summary>
+    /// Counts one surface point for <see cref="Places"/>: the building whose place it gets, and a mismatch between the place and whether it lies on an
+    /// interior polygon.
+    /// </summary>
+    static void NotePlace(ProbeWorld probe, NavWorld world, Vector3 at, Dictionary<string, (int Count, Vector3 Sample)> odd, ref int outdoor,
+        ref int indoor)
+    {
+        if (!world.TryFindPolygon(at, 0.5f, out var face, out _)) return;
+
+        bool interior = face.Polygon >= world.Mesh(face.Zone).InteriorStart;
+        int place = probe.World.Sight.PlaceAtPoint(at);
+        if (interior) indoor++;
+        else outdoor++;
+
+        string? key = place >= 0 ? probe.World.Sight.PlaceKey(place) : null;
+        if (key is not null) Tally(odd, $"place {key}", at);
+        if (interior == key is not null) return;
+
+        Tally(odd, key is not null ? $"outdoor mesh, place {key}" : "indoor mesh, outdoors by the place test", at);
+    }
+
+    /// <summary>
+    /// Adds one to <paramref name="what"/>'s count, keeping its first point as the sample.
+    /// </summary>
+    static void Tally(Dictionary<string, (int Count, Vector3 Sample)> odd, string what, Vector3 at) =>
+        odd[what] = odd.TryGetValue(what, out var seen) ? (seen.Count + 1, seen.Sample) : (1, at);
+
+    /// <summary>
     /// A town building's layout names now (a town override or the save may have relaid it) and each object of its interior layout as placed: record,
     /// floor, path mode, world position. Needs <c>--nav</c>, which hands the population its layouts.
     /// </summary>
@@ -972,6 +1029,7 @@ static class SaveProbe
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
               recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
+              places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
