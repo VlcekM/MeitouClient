@@ -513,6 +513,11 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
   its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
   the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou (`FeedSystem.GroundFood`): the ground pass only; a player character's 259 is a source of the [decision step](../simulation.md#decision-step).
+  The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14); where the food is held in
+  between is **Unknown** (the animal window shows no grid). Meitou: fetched food (`CharacterCold.FetchingFood`) may go into the animal's
+  [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); the animal fetches only while Feed Animals is on, and checks the food
+  again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free
+  can turn out to be the shop's.
 - **Food from storage** (**Verified**, decompile; registration of 243 in `FUN_140319a60`, desire `AI` slot 26 → 24 → 25): 243's desire is 0 for an animal while a global
   byte (`DAT_142134690+0x114`) is clear, the byte the eating rule `FUN_1405d29c0` tests for animals, so the squad option Feed Animals (**Observed**: writer not traced); 0 outside a town (status `+0x88`); 0 in a town of another faction unless town slot
   88 (`+0x2c0`) holds for the player faction: the town's owner (`+0x10`) or a member of its `factionsResidentHere` set (`+0xe8`, KenshiLib 1ce4a16). Slot 24 itself adds the player
