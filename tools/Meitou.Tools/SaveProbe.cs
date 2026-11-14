@@ -76,6 +76,8 @@ static class SaveProbe
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
                 return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
+            case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
+            case ("recruit", >= 1): Recruit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
             case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : DialogueEvents.PlayerTalkToMe); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
@@ -547,6 +549,67 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// Recruits the first character named like <paramref name="name"/> into the player's squad, then unloads the save's platoon it was made from
+    /// and lists that platoon's members: one not gone would be made again when the platoon comes back (#701).
+    /// </summary>
+    static void Recruit(ProbeWorld probe, string name)
+    {
+        var world = probe.World;
+        if (probe.Named(name) is not [int slot, ..]) { Console.WriteLine($"nobody named {name}"); return; }
+        var cold = probe.Characters.Cold(slot)!;
+        var saved = cold.Save is { } link ? world.Saved?.Platoons.FirstOrDefault(sp => sp.Name == link.PlatoonName) : null;
+        Console.WriteLine($"recruiting {probe.Who(slot)} from {saved?.Name ?? "no saved platoon"}");
+        world.Systems.OfType<DialogueSystem>().First().JoinPlayer(world, slot, cold);
+        if (saved is null) return;
+
+        SavedCharacters.Store(world, saved, saved.Anchor);
+        foreach (var m in saved.Members)
+            Console.WriteLine($"  member {m.Slot} {probe.Db.Find(m.Source.RecordId)?.Name ?? m.Source.RecordId} gone={m.Gone} dead={m.Dead}");
+    }
+
+    /// <summary>
+    /// The unique-character table (entries whose record name contains <paramref name="name"/>, all when null): claimed, state, player flag and
+    /// handle, then every character in the world made from that record with its squad, platoon and template, so a duplicated unique shows twice.
+    /// </summary>
+    static void Uniques(ProbeWorld probe, string? name)
+    {
+        var holders = UniqueHolders(probe);
+        foreach (var (id, e) in probe.World.Uniques.All)
+        {
+            string recordName = probe.Db.Find(id)?.Name ?? id;
+            if (name is not null && !recordName.Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
+            Console.WriteLine($"{recordName} ({id}) claimed={e.Claimed} state={e.State} player={e.Player} handle={e.Handle} saved={e.SavedHandle}");
+            foreach (int i in holders.GetValueOrDefault(id) ?? []) Console.WriteLine("  " + UniqueHolder(probe, i));
+        }
+    }
+
+    /// <summary>
+    /// The slots of the characters in the world by CHARACTER record id.
+    /// </summary>
+    static Dictionary<string, List<int>> UniqueHolders(ProbeWorld probe)
+    {
+        var holders = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        for (int i = 0; i < probe.Characters.HighWater; i++)
+        {
+            if (!probe.Characters.Next[i].Alive || probe.Characters.Cold(i) is not { } c) continue;
+            if (!holders.TryGetValue(c.RecordId, out var list)) holders[c.RecordId] = list = [];
+            list.Add(i);
+        }
+
+        return holders;
+    }
+
+    /// <summary>
+    /// One line for a character holding a unique record: who, its squad's platoon and template, and the character id.
+    /// </summary>
+    static string UniqueHolder(ProbeWorld probe, int i)
+    {
+        var c = probe.Characters.Cold(i)!;
+        var squad = probe.World.Squads.Find(c.SquadId);
+        return $"{probe.Who(i)} id={probe.Characters.IdOf(i)} platoon={squad?.PlatoonId} template={squad?.TemplateId} town={squad?.Town}";
+    }
+
+    /// <summary>
     /// The characters named like <paramref name="name"/> with their slave state, owner, shaven head and every item they carry (section, locked).
     /// </summary>
     static void Kit(ProbeWorld probe, string name)
@@ -877,6 +940,8 @@ static class SaveProbe
               cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
+              uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
+              recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent

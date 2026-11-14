@@ -131,10 +131,11 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// Takes <paramref name="me"/> out of its squad, passing the lead to a successor when it led it.
+    /// Takes <paramref name="me"/> out of its squad, passing the lead to a successor when it led it, and out of the save's platoon it was made from.
     /// </summary>
     internal static void Leave(World world, CharacterId me, CharacterCold mc)
     {
+        world.Saved?.Leave(mc);
         if (world.Squads.Find(mc.SquadId) is not { } old) return;
         old.Members.Remove(me);
         if (old.Leader == me) old.Leader = SquadRegistry.Successor(old.Members, world.Characters);

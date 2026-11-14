@@ -371,6 +371,8 @@ original's table (CHARACTER → claimed, live character, state 1/0/2, player fla
 - **Release**: a squad leaving for good without being kept (Faithful despawn, a wild site unloading, a town squad remade by regeneration) frees its
   living uniques so its template makes them again, only when the entry is that character's (Meitou: knocked-out but alive counts as living); the
   dead stay claimed. Town squads stored on unload keep their claims.
+- **Recruits**: a character leaving its squad for another (recruited, bought, split off) leaves the save's platoon record it was made from too
+  (`SavedPopulation.Leave`); kept there, the record's unload kept it and the platoon made it again, a second copy of a recruited unique (#701).
 - **Seed**: at the first population look, the uniques of each template's first `prisoners` template are imprisoned and unclaimed (kept when a
   save already has them).
 - **Save**: CAMERA `usedUniques*` as the original (claimed entries; prisoners derived again). Handles are the written character's for player
