@@ -373,15 +373,17 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the shops and the wages; then the open trade follows the selection, and the customer's walk
+    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the wages and the shops; then the open trade follows the selection, and the customer's walk
     /// opens the trade in talk range, keeps it within <see cref="TradeSettings.PassRange"/> or closes it.
     /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Tick % Settings.CheckEveryTicks == 0)
         {
-            Stock(world);
+            // The wages first: a new squad's members are paid as they are made (Character::giveBirth), before its shop's first fill sets the
+            // purse (FUN_14095b210), so a trader with a waged guard starts with the fill's purse, not the guard's wages (#659).
             _wages.Pay(world);
+            Stock(world);
         }
 
         if (_open) FollowSelection(world);

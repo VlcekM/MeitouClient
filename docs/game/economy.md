@@ -119,7 +119,7 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
 - **Wages** (CHARACTER `wages`, 108 non-zero; `Character::giveBirth` / `Character::dailyUpdate`, **Verified**): a character not of the player's faction with wages >= 1 *sets* its squad's money to them
   when made and every day (the last waged member wins). "Made" is a character born without saved state: `giveBirth` (`FUN_14062b210`) skips the wages, like the bounty
   roll and `slave`, when it is given one (**Observed**, decompile), so a character coming back from a save or from out of the world keeps its squad's purse. Meitou
-  (`SquadWages.Pay`, run by `TradeSystem`): on each game-day change, and once for a squad first seen after the system's first pass unless it is `Squad.Restored`.
+  (`SquadWages.Pay`, run by `TradeSystem`): on each game-day change, and once for a squad first seen after the system's first pass unless it is `Squad.Restored`; the pass runs before the shop fills, as `giveBirth` precedes a new shop's first fill, whose purse replaces the wages (`FUN_14095b210` sets the platoon's money `+0x88`, **Verified**: a "Shop Guard" (wages 2000) does not leave its trader with 2000).
 - **Spawn money** (CHARACTER `money item prob` / `min` / `max`; `RootObjectFactory::process`, **Verified**): a newly made non-player character gets money items worth U[min, max]
   when a [0, 1) roll is at most prob (so 80-100 always pass); what does not fit is lost. Meitou: one stack of the `Cats` item (`ItemFactory.AddSpawnMoney`).
 
