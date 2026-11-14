@@ -1082,7 +1082,8 @@ public sealed class CharacterCold
     /// <summary>
     /// Its head is shaven (<c>CharacterHuman::isHeadShaven</c>, Character vslot 124 <c>0x3e0</c>: the appearance's <c>shaved</c>, <b>Verified</b>;
     /// false in every other class). Processing a slave shaves it and an ex-slave's hair grows back once it is free
-    /// (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>); the watchers leave a shaven slave that looks like one alone.
+    /// (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>) or the in-play editor opens on it
+    /// (<see cref="Editing.InPlayEditorOpened"/>: a plastic surgeon); the watchers leave a shaven slave that looks like one alone.
     /// From the CHARACTER's or the saved GAMESTATE_CHARACTER's <c>shaved</c> (<see cref="Saving.SlaveSave"/>); hashed while set.
     /// </summary>
     public bool Shaved { get; set; }

@@ -710,8 +710,12 @@ Meitou: [simulation, captives](../simulation.md#captives).
   RECAPTURED_A_SLAVE also comes from the cuffing task ([capture](#slave-work-shout-and-capture)).
   - Vslot 124 returns 0 in `Character` and `CharacterAnimal` (`FUN_1405e1f20`). `CharacterHuman` overrides it with its appearance's `shaved` (`FUN_1405b24c0`:
     `animation` `+0x448`, `appearance` `+0xe8`, `shaved` `+0x168`; RTTI vtables, KenshiLib offsets).
-  - An ex-slave's hair grows back when it goes free after 4 days (`StateBroadcastData::periodicUpdate` `FUN_1405a4f50`, `shaveHead(false)`). The other
-    `shaveHead` callers (`0x140585dc8`, `0x1405f58cf`) are **Unknown**.
+  - An ex-slave's hair grows back when it goes free after 4 days (`StateBroadcastData::periodicUpdate` `FUN_1405a4f50`, `shaveHead(false)`).
+  - Opening the character editor in play (mode 1) grows back every listed human's hair at once (**Verified**, decompile: the constructor
+    `FUN_1405f4dd0` calls `shaveHead(false)` at `0x1405f58cf` for each character with a human body when its mode is 1; the mode-1 openers are a
+    surgeon's DA_CHARACTER_EDITOR (DA 11, `FUN_140680560` -> `FUN_1407f3670`), DA 3 recruiting and animal buying). So visiting a plastic
+    surgeon restores a shaven head, even if the editor is then cancelled. Meitou: `InPlayEditorOpened` -> `CharacterEditing.GrowHair`.
+    The caller `0x140585dc8` is **Unknown**.
   - Meitou: `CaptiveSystem` fires 35 or 37 and shaves `CharacterCold.Shaved`, saved as `shaved`. The look is built with the character's shave
     (`CharacterOptions.Shaved`; the CHARACTER's `shaved` for a new character and a loaded one without a state record): no hair, and cut horns
     on a mesh with `bone_horns_top_short` (whether a shave in play cuts them in the original is **Unknown**; Meitou follows the one appearance

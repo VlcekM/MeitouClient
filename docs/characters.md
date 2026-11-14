@@ -411,7 +411,8 @@ same line (val0), gated by `DC_PLAYERMONEY` (2) strictly greater. "plastic surge
 "bar plastic surgeon" / "plastic surgeon": Holy Nation, Empire Peasants, United Cities, Deadcat, Waystation, Bark, Sho-Battai...) 200;
 "doctor shop" (hospital squads' `dialog leader` package) 500; Doctor Chung (Mud Town) 200, no money check; Thieves Guild surgeon free
 behind `DC_FACTION_RANK`; Grey free for escaped slaves. Meitou: the surgeon is talked to; its line's DA 8 pays and DA 11 opens the editor in
-mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
+mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). Opening it in mode 1 grows back a shaven head
+([ai-tasks](game/ai-tasks.md), "Processing a slave shaves its head"). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
 a line gated only by money or `DC_IS_RECRUITABLE`.
 **Observed** (the user, base game): the surgeon's editor (its `NameText`) is the only way to rename a squad member; the portrait's `NameText`
 EditBox takes no typing. Meitou matches.
