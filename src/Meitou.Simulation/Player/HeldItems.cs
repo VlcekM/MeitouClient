@@ -708,8 +708,8 @@ sealed class HeldItems(PopulationData? data)
     /// <summary>
     /// Gives the held item to a character in the world (<c>FUN_1407136a0</c>): someone other than its window's owner, within <see cref="GiveRange"/>
     /// (<see cref="StealRange"/> for a non-player window's item; "Out of trading range."), added where it fits in its inventory
-    /// (<see cref="Inventory.Add"/>), else in a free slot that takes it. Nothing fits: "No room for that item." and it goes back; what does not fit
-    /// stays on the mouse. Stock is not given away.
+    /// (<see cref="Inventory.Add"/>; a live animal's worn bag only, <see cref="InventoryCommands.MainClosed"/>), else in a free slot that takes it.
+    /// Nothing fits: "No room for that item." and it goes back; what does not fit stays on the mouse. Stock is not given away.
     /// </summary>
     void Give(World world, GiveHeld give)
     {
@@ -740,8 +740,12 @@ sealed class HeldItems(PopulationData? data)
         var mark = item.Mark;
         int before = item.Quantity;
         (item.Death, item.Mark) = (false, HeldItemTheft.MarkFor(world, held, taker, overwrite: true));
-        // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting.
-        bool all = into.Add(item);
+        // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting. A live
+        // animal's shut grid takes nothing (InventoryCommands.MainClosed), only its worn bag does: food given to a bagless dog is "No room for that
+        // item." in the original.
+        bool all = InventoryCommands.MainClosed(taker)
+            ? into.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", item)
+            : into.Add(item);
 
         // Engine choice, as a pick-up: what no grid takes goes into a free slot that takes it (a polearm fits no grid, only the back slot).
         bool worn = !all && item.Quantity == before
