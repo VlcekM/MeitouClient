@@ -142,7 +142,7 @@ public sealed class HoverOutlineRenderer
         {
             var rects = new List<PixelRect>();
             foreach (var (centre, sphereRadius) in hover.Spheres)
-                if (Bounds(centre, sphereRadius, viewProjection, width, height, outline + 1) is { } r) rects.Add(r);
+                if (Bounds(centre, sphereRadius, viewProjection, width, height, outline + 1, _gpu.RenderTargetsBottomUp) is { } r) rects.Add(r);
             Join(rects, height);
             foreach (var scissor in rects)
             {
@@ -195,10 +195,11 @@ public sealed class HoverOutlineRenderer
     }
 
     /// <summary>
-    /// The scissor round the sphere's projection, <paramref name="pad"/> pixels wider, in the picture's attachment rows (the UI's top-left rectangle
-    /// turned as the overlay turns it); the whole picture when the sphere reaches behind the eye, null when it is off screen.
+    /// The scissor round the sphere's projection, <paramref name="pad"/> pixels wider, in the picture's attachment rows: measured from the bottom
+    /// when <paramref name="bottomUp"/> (Vulkan's targets), else from the top (Metal's, <see cref="IGpuContext.RenderTargetsBottomUp"/> false); the
+    /// whole picture when the sphere reaches behind the eye, null when it is off screen.
     /// </summary>
-    internal static PixelRect? Bounds(Vector3 centre, float radius, Matrix4x4 viewProjection, int width, int height, int pad)
+    internal static PixelRect? Bounds(Vector3 centre, float radius, Matrix4x4 viewProjection, int width, int height, int pad, bool bottomUp)
     {
         float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
         for (int corner = 0; corner < 8; corner++)
@@ -213,6 +214,6 @@ public sealed class HoverOutlineRenderer
         int left = Math.Max(0, (int)MathF.Floor(x0) - pad), right = Math.Min(width, (int)MathF.Ceiling(x1) + pad);
         int top = Math.Max(0, (int)MathF.Floor(y0) - pad), bottom = Math.Min(height, (int)MathF.Ceiling(y1) + pad);
         if (right <= left || bottom <= top) return null;
-        return new PixelRect(left, height - bottom, (uint)(right - left), (uint)(bottom - top));
+        return new PixelRect(left, bottomUp ? height - bottom : top, (uint)(right - left), (uint)(bottom - top));
     }
 }
