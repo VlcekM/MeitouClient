@@ -743,9 +743,7 @@ sealed class HeldItems(PopulationData? data)
         // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting. A live
         // animal's shut grid takes nothing (InventoryCommands.MainClosed), only its worn bag does: food given to a bagless dog is "No room for that
         // item." in the original.
-        bool all = InventoryCommands.MainClosed(taker)
-            ? into.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", item)
-            : into.Add(item);
+        bool all = into.Add(item, mainShut: InventoryCommands.MainClosed(taker));
 
         // Engine choice, as a pick-up: what no grid takes goes into a free slot that takes it (a polearm fits no grid, only the back slot).
         bool worn = !all && item.Quantity == before
