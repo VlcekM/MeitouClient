@@ -71,6 +71,11 @@ public sealed partial class World
     SnapshotBuffer? _shownBuffer, _previousBuffer, _olderBuffer;
 
     /// <summary>
+    /// The other factions' squads the world map shows (<see cref="WorldSnapshot.MapSquads"/>).
+    /// </summary>
+    readonly Population.MapSquads _mapSquads = new();
+
+    /// <summary>
     /// The buffer's object to fill for slot <paramref name="i"/>: never one another buffer of the ring still shows (a far character's object is
     /// shared across publishes and the render thread may be reading it). The two the buffer owns alternate; one more is made only when both are shown
     /// elsewhere.
@@ -276,6 +281,7 @@ public sealed partial class World
             MachinesVersion = Machines.Version,
             Research = _production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty,
             Outposts = _production?.OutpostView(this) ?? [],
+            MapSquads = _mapSquads.Published(this),
             Crafts = _production?.CraftsView(this) ?? Snapshot.Crafts,
             Smiths = _production?.SmithsView(this) ?? Snapshot.Smiths
         };

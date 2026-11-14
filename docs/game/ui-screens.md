@@ -974,8 +974,15 @@ whether they show zoomed in is **Unknown**. Meitou pans the map itself and never
   (0.652, 0.903, 1.0) is built in. Player faction: Player (Selected when selected); else Ally, Enemy (relation below −30 or a faction flag), Neutral (`14048f320`).
 - **Camera marker:** `Camera` group, colour Player, every frame at the camera focus, turned by the angle between the level view direction and −Z
   (negative towards −X). Size 32 × 32 from the layout (**Observed**).
-- **Characters:** `Character` group × UI scale, centred, every 1 s; the player's characters (plus ones campaigns and AI packages track, not modelled);
-  hidden at zoom level 0. Downed or dead get nothing special (**Observed**).
+- **Characters:** `Character` group × UI scale, centred, every 1 s (`140498e40`), hidden at zoom level 0: the player's characters, and one
+  marker per tracked platoon at the platoon's position. The tracked set (MapScreen +0x140, emptied on a new game or load) is filled by
+  `CampaignInstance` slot 1 (`1409c3a30`: the leader platoon and every platoon of the campaign; run at the start, at each join `1409c4720` and
+  at load `1409c9dc0`, whatever the target) and by `AIPackage` slot 15 (`140285ac0`, called from the package setups: the package's platoon,
+  with its signal, when one of its three target hands belongs to the player's faction). Nothing was found removing an entry: a marker goes
+  when its platoon does. Colour (`14048f320`): a platoon registered with signal 15 or 33 is Ally, then the ally / enemy tests against the
+  player, then the faction's relation. **Verified** by reading the decompile. Meitou (`MapSquads`, `WorldSnapshot.MapSquads`): every platoon
+  with a campaign, at its leader or its stand-in's place, in its faction's colour, and every squad under a contract whose mission target is a
+  player character, as Ally. Downed or dead get nothing special (**Observed**).
 - **Movement marker:** only after a map right click: at the order point, bottom-centre anchored, colour Movement, for 3 s of real time; opening the map
   hides it.
 - **Towns** (`140491700`, `14048e230`): every placed TOWN except type 8 (NestMarker) and 10, only when its state is `discovered`. Group by type: Outpost

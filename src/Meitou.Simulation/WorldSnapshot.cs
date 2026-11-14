@@ -982,6 +982,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];
     /// <summary>
+    /// The other factions' squads the world map shows (<see cref="Population.MapSquads"/>): campaign platoons and squads hired by the player.
+    /// </summary>
+    public IReadOnlyList<Population.MapSquadSnapshot> MapSquads { get; init; } = [];
+    /// <summary>
     /// Loose items lying in the world (<see cref="Items.GroundItems"/>), oldest first.
     /// </summary>
     public IReadOnlyList<Items.GroundItemSnapshot> GroundItems { get; init; } = [];
