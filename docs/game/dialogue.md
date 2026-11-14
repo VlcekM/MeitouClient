@@ -171,6 +171,10 @@ further tests that return without firing (partly read).
 Event 17's guard dialogue `intruder law` (64870-rebirth.mod: monologue, no conditions, repetition limit 0; "Intruder!", "Infiltration!",
 ...) has one line whose effect is DA 6 ATTACK_CHASE_FOREVER; packages `Npc MILITARY Law 3` and `Empire Noble Bodyguard` (inherited) and the
 Samurai Sergeant / Elite, Traders Guard and Fark Guard characters carry it (**Verified** by probe against the base data).
+Event 44's guard root for a bounty under 1050 (44146-Dialogue.mod; DA 2 on "I knew it, you're a convict!") goes on, while the target runs
+(DC 32), to "/SEIZE/ /HIM/!" with DA 29 and DA 6 on the one line, so a runner with a small bounty is chased with no leash (#666;
+**Verified** by `probe talk <name> 44` on a Samurai Gate Sergeant). In which order the original applies the two is **Unknown** (DA 6
+clears the speaker's queue, so after DA 29 it would drop the capture tasks).
 
 ### Choosing a line
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -74,7 +75,7 @@ static class SaveProbe
                 return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
-            case ("talk", >= 1): Talk(probe, a[0]); return true;
+            case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : DialogueEvents.PlayerTalkToMe); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
@@ -536,9 +537,9 @@ static class SaveProbe
 
     /// <summary>
     /// Whether the characters named like <paramref name="name"/> can be talked to (by anyone, and by the nearest player character) and the roots
-    /// of their talk event.
+    /// of their talk event; for another event <paramref name="ev"/>, its roots with every line's conditions and effects.
     /// </summary>
-    static void Talk(ProbeWorld probe, string name)
+    static void Talk(ProbeWorld probe, string name, int ev)
     {
         var t = probe.Characters;
         var dialogue = probe.World.Systems.OfType<DialogueSystem>().First();
@@ -550,7 +551,25 @@ static class SaveProbe
             Console.WriteLine($"{probe.Who(i)} record={t.Cold(i)!.RecordId} canTalk={dialogue.CanTalk(probe.World, i)} "
                 + $"withTalker={dialogue.CanTalk(probe.World, i, t.IdOf(talker))} talker={t.Cold(talker)!.Name}");
             Console.WriteLine("  talk roots: " + string.Join(", ", dialogue.SetOf(probe.World, i).For(1).Select(r => r.ToString())));
+            if (ev == DialogueEvents.PlayerTalkToMe) continue;
+
+            var seen = new HashSet<DialogueNode>();
+            foreach (var root in dialogue.SetOf(probe.World, i).For(ev)) PrintLines(root, 1, seen);
         }
+    }
+
+    /// <summary>
+    /// A dialogue node and the lines under it: id, conditions (condition, compare, who, value), effects (action:value) and the first text.
+    /// </summary>
+    static void PrintLines(DialogueNode node, int depth, HashSet<DialogueNode> seen)
+    {
+        if (!seen.Add(node)) return;
+
+        string conditions = string.Join(" ", node.Conditions.Select(c => $"C{c.Condition}/{c.CompareBy}/{c.Who}/{c.Value}"));
+        string effects = string.Join(" ", node.Effects.Select(e => $"DA{e.Action}:{e.Value}"));
+        string text = node.Texts.Count > 0 ? node.Texts[0] : "";
+        Console.WriteLine($"{new string(' ', depth * 2)}{node.StringId} [{conditions}] [{effects}] {text}");
+        foreach (var child in node.Children) PrintLines(child, depth + 1, seen);
     }
 
     /// <summary>
@@ -750,7 +769,7 @@ static class SaveProbe
               cages <name>             fixtures within 300 of a character, with occupants and building designation
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
-              talk <name>              whether a character can be talked to, and its talk roots
+              talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
