@@ -20,7 +20,9 @@ Each `PartMaterial` keeps its last record and is written again only in a new epo
 or unloaded; LOD bias, stand-in, sampler generation, skin settings) or after its own fields changed (blend, body build). The records live
 in `CharacterMaterialTable`, a persistent storage buffer (binding 7) with a slot per material: a record that came out different goes to a
 new slot (frames in flight still read the old one), uploaded in one copy; a slot comes back FramesInFlight + 1 frames after its material
-changed or went 600 updates undrawn. Texture needs
+changed or went 600 updates undrawn. An update lists the parts it draws (`CollectSlotParts`): those shown in the world and, for a
+character with a portrait request, the stowed weapon its portrait shows while the weapon is in the hands; a part drawn unlisted would read
+a stale record or slot -1. Texture needs
 are offered, and the textures marked used, only on the frame `CharacterTextureBudget` commits (every 500 ms, under the cache's 2 s idle limit).
 CharacterShaders set0 bindings: bones6, materials7 (persistent), morphs8, previous bones9; material20 texture
 slots. CharacterLayoutTests pins CPU/GLSL layouts. Push depthIndex is near-depth bindless index

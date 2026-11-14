@@ -1579,7 +1579,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     /// <summary>
-    /// The parts shown on the live characters (<see cref="_slotParts"/>, each once), with their nearest distance from <paramref name="eye"/>.
+    /// The parts this update draws of the live characters (<see cref="_slotParts"/>, each once), with their nearest distance from
+    /// <paramref name="eye"/>: the ones shown in the world and the ones a portrait shows instead.
     /// </summary>
     void CollectSlotParts(Vector3 eye)
     {
@@ -1588,9 +1589,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             ref var l = ref _live[i];
             float distance = Vector3.Distance(eye, l.Centre);
+
+            // A portrait shows the weapon stowed whatever is in the hands (ShowsInPortrait): a part drawn without being listed here has a stale
+            // record, or none (slot -1). The stage's character is listed too, though drawn as in the world.
+            bool still = l.WeaponDrawn && _portraitKeys.Contains(l.Key);
             foreach (var part in l.Asset.Parts)
             {
-                if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
+                bool shown = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn) || still && ShowsInPortrait(part, in l);
+                if (!shown) continue;
                 if (part.MaterialFrame != _updateStamp)
                 {
                     part.MaterialFrame = _updateStamp;

@@ -363,6 +363,8 @@ internal sealed unsafe partial class CharacterRenderer
         if (_attach.Length < _attachCount + l.Asset.AttachCount)
             Array.Resize(ref _attach, _attachCount + l.Asset.AttachCount);
         _portraitAttach.AsSpan(0, l.Asset.AttachCount).CopyTo(_attach.AsSpan(_attachCount));
+
+        // Stowed: the parts ShowsInPortrait names, whose records the update kept.
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (0, _attachCount, false, false);
 
         return pose;
@@ -377,6 +379,12 @@ internal sealed unsafe partial class CharacterRenderer
         (_bones, _previousBones) = (pose.Bones, pose.PreviousBones);
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (pose.BoneBase, pose.AttachBase, pose.Weapon, pose.Ranged);
     }
+
+    /// <summary>
+    /// Whether <paramref name="part"/> shows in <paramref name="l"/>'s portrait: as with the weapon stowed (<see cref="BeginPortraitPose"/>), so
+    /// <see cref="CollectSlotParts"/> keeps its material's record while the weapon is in the hands.
+    /// </summary>
+    static bool ShowsInPortrait(AssetPart part, in Live l) => part.ShowsWith(false, false, l.Shots, l.BackDrawn);
 
     /// <summary>
     /// The posed portrait character (<see cref="_portraitLive"/>) into <paramref name="rect"/> (cleared first) of the open pass, with
