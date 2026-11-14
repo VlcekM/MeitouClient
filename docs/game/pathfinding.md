@@ -867,6 +867,13 @@ player characters apart, ~1,400 characters loaded, 75 s of flights between them)
 the search was 77 % of the simulation's busy CPU. The golden section (was 14 ternary steps, 28 detours) answered 14 % more searches in the same
 time and moved pinned path points by about a unit.
 
+A polygon keeps one entry point (engine choice). Of two entries the one kept has the lower cost so far plus the straight way on to the goal at
+the polygon's own cost factor, not the lower cost so far: across a large water polygon the cheaper entry can lie much farther from the goal, and
+the heuristic (the lowest factor, 1 with land about) does not show it. **Observed** (#607, zones 24.18/24.19, `meitou-tools navmesh --path`
+-34608,-60194 to -35446,-62230 down an open channel, water cost 7): the route swam to the west bank and back, 2511 for 2202 straight; with the
+rule 2217. Over 400 random pairs (scratch run) weighted cost fell 5.9 % there and 1.5 % in 18.39, and rose 0.01 % in the dry 18.35 and 20.32;
+polygons expanded within 1 % (18.39: 5 % fewer).
+
 Unreachable goals were most of the rest. **Observed** (same run): a town's residents in zone 14.23 kept asking for goals in a building they cannot
 enter (radius 4 found no way in, radius 0 did: an unjoined seam on its door stair, "Inner seams"), 300-600 ms each: the exact search, up to four
 off-mesh start retries, then the nearest-point search, each exploring all the ground they reach. Engine choices since: a goal found unreachable

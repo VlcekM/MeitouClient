@@ -108,6 +108,11 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         /// </summary>
         public float G, F;
         /// <summary>
+        /// What two entries into the polygon are compared by: the cost so far plus the straight way on to the goal at the polygon's own cost
+        /// factor (<see cref="Relax"/>).
+        /// </summary>
+        public float Through;
+        /// <summary>
         /// The <see cref="NavRef.Key"/> of the node it was reached from; -1 for the start.
         /// </summary>
         public long Parent = -1;
@@ -169,6 +174,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             if (_used == _made.Count) _made.Add(new Node());
             var node = _made[_used++];
             (node.Ref, node.Position, node.G, node.F, node.Parent, node.Closed) = (at, position, g, f, -1, false);
+            node.Through = float.MaxValue;
             return node;
         }
     }
@@ -426,11 +432,18 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             node = search.Scratch.Take(to, mid, float.MaxValue, 0);
             nodes[to.Key] = node;
         }
-        if (node.Closed || g >= node.G) return;
+
+        // A polygon keeps one entry point. Of two, the cheaper so far is not the better one when it lies farther from the goal across a large
+        // polygon of costly ground: the way on is counted at the polygon's own factor (docs/game/pathfinding.md, "Search cost").
+        float toGoal = Vector3.Distance(mid, search.GoalPoint);
+        float through = g + toGoal * Factor(area, agent);
+        if (node.Closed || through >= node.Through) return;
+
+        node.Through = through;
         node.G = g;
         node.Position = mid;
         node.Parent = from.Ref.Key;
-        node.F = g + Vector3.Distance(mid, search.GoalPoint) * search.MinFactor;
+        node.F = g + toGoal * search.MinFactor;
         search.Scratch.Open.Enqueue(node, node.F);
     }
 
