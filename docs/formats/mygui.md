@@ -200,6 +200,9 @@ rectangles are converted before issuing Vulkan scissors. **Verified** by
   runtime parchment paragraphs/list rows use that ink while dark panels can set
   light text explicitly. No original colour rules are inferred from the debug
   overlay's light text default.
+- **Observed** in the workshop mod "Redone UI - Clean Grey UI" (1686585724, `kenshi_templates.xml`): a colour value may be
+  `#rrggbb` instead of `r g b` (`TextColour value="#b3c1cc"`; MyGUI `Colour::parse` takes both). The install's own files use
+  hex only in `kenshi_colours.xml`. `MyGuiColours.Parse` reads both; a hex one used to fall back to black (#660).
 - **Observed** in `Kenshi_GenericTextBoxSkin` and `Kenshi_Button1Skin`: SimpleText
   `offset` / `align` specify an inset text rectangle, separately from the atlas
   pieces. The painter now wraps, aligns and clips inside that rectangle, after any
