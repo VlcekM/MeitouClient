@@ -15,6 +15,7 @@ public static class TerrainMaterialCache
     /// The cache is used (false: every pixel shades the layers; the levels keep what they hold).
     /// </summary>
     public static bool Enabled { get; set; } = !GpuContext.DiagNoMaterialCache;
+
 }
 
 /// <summary>
@@ -137,9 +138,10 @@ sealed class MaterialCache : IDisposable
     static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
     /// <summary>
-    /// Bakes what the cache levels need this frame round <paramref name="eye"/> (before the scene, outside a pass).
+    /// Bakes what the cache levels need this frame round <paramref name="eye"/>, each level's square moved towards <paramref name="focus"/> (what the camera
+    /// looks at) by up to a quarter of its side (before the scene, outside a pass).
     /// </summary>
-    public void Record(Vector3 eye)
+    public void Record(Vector3 eye, Vector3 focus)
     {
         // Switched off, the levels keep what they hold (an A/B alternation finds them whole); the strips catch up when it is back on.
         if (!TerrainMaterialCache.Enabled) return;
@@ -162,7 +164,7 @@ sealed class MaterialCache : IDisposable
         Span<(int X, int Y, int W, int H)> rects = stackalloc (int, int, int, int)[9];
         int budget = CacheRows, build = CacheBuildRows;
         for (int k = 0; k < CacheLevels; k++)
-            BakeLevel(k, eye, ref cmd, ref c, rects, ref budget, ref build);
+            BakeLevel(k, Centre(k, eye, focus), ref cmd, ref c, rects, ref budget, ref build);
         if (cmd is not null)
         {
             cmd.Order();
@@ -186,13 +188,27 @@ sealed class MaterialCache : IDisposable
     }
 
     /// <summary>
+    /// The centre of level <paramref name="k"/>'s square: the eye, moved towards the focus by at most a quarter of the side, so the eye stays well inside.
+    /// A camera that orbits a point some way off (the game's) sees most of the picture beyond that point, not round its own feet; a square centred on the
+    /// eye put the focus at the finest level's edge, where the pixels fell to the next coarser level in a hard step.
+    /// </summary>
+    static Vector2 Centre(int k, Vector3 eye, Vector3 focus)
+    {
+        var toFocus = new Vector2(focus.X - eye.X, focus.Z - eye.Z);
+        float reach = CacheTexel * (1 << k) * CacheSide / 4, length = toFocus.Length();
+        if (length > reach) toFocus *= reach / length;
+
+        return new Vector2(eye.X, eye.Z) + toFocus;
+    }
+
+    /// <summary>
     /// Bakes what level <paramref name="k"/> needs this frame: its strips when it moved, else its first bake's next chunk.
     /// </summary>
-    void BakeLevel(int k, Vector3 eye, ref IGpuCommandList? cmd, ref TerrainConstants c, Span<(int X, int Y, int W, int H)> rects,
+    void BakeLevel(int k, Vector2 centre, ref IGpuCommandList? cmd, ref TerrainConstants c, Span<(int X, int Y, int W, int H)> rects,
         ref int budget, ref int build)
     {
         float texel = CacheTexel * (1 << k), side = texel * CacheSide, step = texel * CacheStep;
-        var want = new Vector2(MathF.Floor((eye.X - side / 2) / step) * step, MathF.Floor((eye.Z - side / 2) / step) * step);
+        var want = new Vector2(MathF.Floor((centre.X - side / 2) / step) * step, MathF.Floor((centre.Y - side / 2) / step) * step);
         var current = _cacheOrigin[k];
         if (current.W > 0)
         {

@@ -27,6 +27,11 @@ camera's focus point, moved only while the sun turns and the point is 200+ units
 the eye, the first cascade's grid slid boom x sun turn under the squad). Least filter radius 1.5
 texels: a 0.06° sun turn changed 0.36 % of a Hub view by more than 8 levels, 0.56 % at 1 texel.
 
+Receiver plane (`msTileV`; **Code reading**, not compared on a GPU): the filter's taps and the blocker search shift their reference depth by the receiver plane's tilt along
+the offset, `dot(o, slope)` in tile UV. `ReceiverTile` flips v on Metal, so light-space y runs against v there and the plane's y tilt flips with it; `msTileV` takes the sign from the
+tile's v axis against the light's y axis (-1 on Metal, +1 on Vulkan, whose slope is unchanged). Without it, taps on one side of a lit slope on Metal compared against a reference
+up to 2 x radius x tilt too deep, beyond the bias.
+
 ## Scheduling and casters
 
 Near cascades refresh rapidly; far cascades cache/stagger according to camera/sun changes.

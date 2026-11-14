@@ -723,7 +723,7 @@ static partial class WorldFrame
     {
         var gpu = f.Gpu;
         if (gpu.Decals is { } decals && gpu.DecalStore is { } decalStore) decals.Record(decalStore, f.Eye);
-        gpu.Terrain.RecordMaterialCache(f.Eye);
+        gpu.Terrain.RecordMaterialCache(f.Eye, f.Camera.Target);
         gpu.Terrain.Decals = gpu.DecalStore is null ? null : gpu.Decals;
         RecordTrails(gpu, f.Camera.Target);
     }

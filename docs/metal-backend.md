@@ -158,6 +158,10 @@ Two sharp edges:
   the window's size times the scale factor. Without it the drawable is 1x1 and the window shows
   one magnified pixel.
 
+**No LOD bias in the table** (**Code reading**, not on a GPU): a Metal sampler has no LOD bias, and `MetalBindless` stores only the sampler's resource id, so the
+upscaler's `LodBias` (`SamplerDesc.LodBias`) reaches only the legacy samplers bound through the encoder (`MetalCommandList`, which passes it as the LOD clamps). Textures read through the
+table (terrain layers, objects, foliage, characters) sample at the unbiased level under MetalFX or TAA; Vulkan's sampler adds the bias there. **Unknown**: how much sharper they look with it.
+
 ## The backend so far
 
 - `src/Meitou.Game/Rendering/Metal/` - the backend (macOS only, outside the solution so the Windows build never
