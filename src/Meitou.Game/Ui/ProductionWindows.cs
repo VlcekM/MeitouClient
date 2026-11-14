@@ -43,18 +43,12 @@ sealed class ProductionWindows(PlayerInterface player)
         site is null ? null : player.Session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
 
     /// <summary>
-    /// The storage window's layout pixels above its grid (caption and item heading) and in all around it, with the two-line Max Capacity text below
-    /// (measured on the original's window).
-    /// </summary>
-    const float StorageAbove = 86, StorageChrome = 150;
-
-    /// <summary>
     /// The window a machine opens: the building window (inputs, an output or no storage), the storage window (a plain storage), else the bench
     /// window.
     /// </summary>
     internal static string MachineScreen(MachineSnapshot m) =>
         m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building"
-        : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage"
+        : m.TechLevel == 0 ? "storage"
         : "bench";
 
     /// <summary>
@@ -184,12 +178,16 @@ sealed class ProductionWindows(PlayerInterface player)
         else b.Hidden.Add("CapacityText");
 
         b.Disabled.Remove("ArrangeButton");
-        b.Hidden.Add("ArrangeButton");
+        if (m is { StorageCapacity: > 0 }) b.Hidden.Add("ArrangeButton");
+        else
+        {
+            b.Actions["ArrangeButton"] = "ArrangeButton";
+            b.Hidden.Add("TypeText");
+        }
 
         if (m?.Storage is { } sg)
         {
-            b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.UiScale,
-                Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.UiScale));
+            player.InventoryLayout.BindContainerGeometry("storage", b, sg.Width, sg.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -211,8 +209,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (m?.Storage is { } grid)
         {
-            b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.UiScale,
-                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.UiScale));
+            player.InventoryLayout.BindContainerGeometry("bench", b, grid.Width, grid.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -402,8 +399,7 @@ sealed class ProductionWindows(PlayerInterface player)
     {
         if (m.Storage is not { } grid) return;
 
-        player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-        if (id == "bench") PlaceResearchButton(controls);
+        player.InventoryLayout.ArrangeContainerGrid(id, controls);
         if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
 
         var area = slot.Bounds;
@@ -418,23 +414,6 @@ sealed class ProductionWindows(PlayerInterface player)
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
                 slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
-    }
-
-    /// <summary>
-    /// The research button keeps its height under HCenter Top alignment when the bench grows to fit its grid (#434).
-    /// </summary>
-    void PlaceResearchButton(List<UiControl> controls)
-    {
-        int index = controls.FindIndex(c => c.Name == "ResearchButton");
-        var root = controls.FirstOrDefault(c => c.Type == "Window");
-        if (index < 0 || root is null) return;
-
-        float scale = player.UiScale;
-        var bounds = root.Bounds;
-        controls[index] = controls[index] with
-        {
-            Bounds = new(bounds.X + 18 * scale, bounds.Y + 50 * scale, Math.Max(0, bounds.Width - 40 * scale), 32 * scale),
-        };
     }
 
     /// <summary>
@@ -551,7 +530,7 @@ sealed class ProductionWindows(PlayerInterface player)
             player.FaithfulScreens.Open("overview");
             player.FaithfulScreens.SetTab("overview", "TabsMain", TutorialPanel.ResearchTab);
         }
-        else if (e.Screen == "bench" && e.Widget == "ArrangeButton" && ShownMachine is not null)
+        else if (e.Screen is "bench" or "storage" && e.Widget == "ArrangeButton" && ShownMachine is not null)
             player.Say(new ArrangeMachine(ShownMachine) { Tick = player.Session.World.Tick });
         else if (e.Screen == "building" && e.Widget == "QueueButton" && ShownMachine is not null)
             OpenCraftTab(ShownMachine);

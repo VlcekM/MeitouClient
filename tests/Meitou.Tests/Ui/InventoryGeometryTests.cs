@@ -10,6 +10,48 @@ namespace Meitou.Tests.Ui;
 public class InventoryGeometryTests
 {
     /// <summary>
+    /// Storage keeps its layout minimum, expands only by positive grid deltas and remains natural-sized when larger than the viewport.
+    /// </summary>
+    [Theory]
+    [InlineData(100, 50, false)]
+    [InlineData(400, 500, false)]
+    [InlineData(400, 500, true)]
+    public void ContainerGridRetainsItsChromeAndAlignment(int width, int height, bool fixedTop)
+    {
+        var layout = MyGuiReader.ParseLayout("""
+            <MyGUI type="Layout"><Widget type="Window" name="Root" position="0 0 200 240">
+              <Widget name="Content" position="5 40 190 195" align="Stretch">
+                <Widget name="backpack_content" position="20 40 150 100"/>
+                <Widget name="ArrangeButton" position="45 160 100 30" align="HCenter Bottom"/>
+              </Widget>
+            </Widget></MyGUI>
+            """);
+        var host = new MyGuiScreenHost(new());
+        host.Register("storage", layout);
+        host.Open("storage");
+        UiBindings Bind(string id)
+        {
+            var bindings = new UiBindings();
+            var geometry = new InventoryGeometry(host.Layout(id), 320, 240, 1, 1);
+            geometry.FitContainer(new(width, height), fixedTop);
+            geometry.Bind(bindings);
+            return bindings;
+        }
+
+        var controls = host.Arrange(320, 240, Bind).Single().Controls;
+        var root = controls.Single(c => c.Name == "Root").Bounds;
+        var content = controls.Single(c => c.Name == "Content").Bounds;
+        var grid = controls.Single(c => c.Name == "backpack_content").Bounds;
+        var button = controls.Single(c => c.Name == "ArrangeButton").Bounds;
+        Assert.Equal(200 + Math.Max(0, width - 150), root.Width);
+        Assert.Equal(240 + Math.Max(0, height - 100), root.Height);
+        Assert.Equal((content.Width - width) / 2, grid.X - content.X);
+        Assert.Equal(fixedTop ? 40 : (content.Height - height) / 2, grid.Y - content.Y);
+        Assert.Equal(grid, grid.Intersect(root));
+        Assert.Equal(5, content.Y + content.Height - button.Y - button.Height);
+    }
+
+    /// <summary>
     /// A small synthetic production layout; dimensions deliberately differ from Kenshi's assets.
     /// </summary>
     static MyGuiLayout Building() => MyGuiReader.ParseLayout("""

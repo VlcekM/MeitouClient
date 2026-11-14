@@ -11,7 +11,8 @@ public sealed partial class UiBindings
     /// compared by identity.
     /// </summary>
     public bool ContentEquals(UiBindings other) =>
-        TemplateScale == other.TemplateScale && OpenCombo == other.OpenCombo && TextHeight == other.TextHeight
+        TemplateScale == other.TemplateScale && FitWindowToViewport == other.FitWindowToViewport
+        && OpenCombo == other.OpenCombo && TextHeight == other.TextHeight
         && Same(Text, other.Text) && Same(Actions, other.Actions) && Hidden.SetEquals(other.Hidden) && Disabled.SetEquals(other.Disabled)
         && HiddenWidgets.SetEquals(other.HiddenWidgets) && Same(Positions, other.Positions) && Same(RelativePositions, other.RelativePositions)
         && Same(SelectedTabs, other.SelectedTabs) && Same(Progress, other.Progress) && Same(States, other.States)

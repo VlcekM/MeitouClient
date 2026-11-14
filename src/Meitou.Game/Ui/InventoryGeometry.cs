@@ -106,8 +106,22 @@ sealed class InventoryGeometry
     /// </summary>
     internal void Bind(UiBindings bindings)
     {
+        bindings.FitWindowToViewport = false;
         bindings.Positions[Root.Widget.Name] = Root.Bounds;
         BindChildren(Root, bindings);
+    }
+
+    /// <summary>
+    /// Fits a generic storage/research grid or a fixed backpack grid, keeping the layout's minimum size and chrome.
+    /// </summary>
+    internal void FitContainer(Vector2 size, bool fixedTop)
+    {
+        var section = this["backpack_content"];
+        float dx = Math.Max(0, size.X - section.Bounds.Width), dy = Math.Max(0, size.Y - section.Bounds.Height);
+        section.Resize(size.X, size.Y);
+        Root.Resize(Root.Bounds.Width + dx, Root.Bounds.Height + dy);
+        var content = this["Content"].Bounds;
+        section.Move((content.Width - size.X) / 2, fixedTop ? section.Bounds.Y : (content.Height - size.Y) / 2);
     }
 
     /// <summary>

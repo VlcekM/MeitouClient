@@ -27,6 +27,11 @@ public sealed partial class UiBindings
     /// Scale pixel-based template chrome along with viewport-relative layouts.
     /// </summary>
     public float TemplateScale { get; set; } = 1;
+
+    /// <summary>
+    /// Shrink a window to the viewport. Inventory frames retain the size required by their cells, including oversized mod inventories.
+    /// </summary>
+    public bool FitWindowToViewport { get; set; } = true;
     /// <summary>
     /// Captions the code sets, by widget name; <see cref="Coded"/> translates a message of the game's catalog.
     /// </summary>

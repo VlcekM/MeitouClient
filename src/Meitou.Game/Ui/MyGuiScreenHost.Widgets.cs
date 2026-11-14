@@ -667,8 +667,11 @@ public sealed partial class MyGuiScreenHost
             var (min, max) = SizeLimits(root);
             w = Math.Max(min.X, Math.Min(w, max.X));
             h = Math.Max(min.Y, Math.Min(h, max.Y));
-            w = Math.Clamp(w, 0, Math.Max(0, width - 24));
-            h = Math.Clamp(h, 0, Math.Max(0, height - 24));
+            if (b.FitWindowToViewport)
+            {
+                w = Math.Clamp(w, 0, Math.Max(0, width - 24));
+                h = Math.Clamp(h, 0, Math.Max(0, height - 24));
+            }
             var (x, y) = OnScreen(s, viewport, new(w, h), (width - w) / 2 + s.Offset.X, (height - h) / 2 + s.Offset.Y);
             b.Positions[root.Name] = new(x, y, w, h);
             if (!first) continue;

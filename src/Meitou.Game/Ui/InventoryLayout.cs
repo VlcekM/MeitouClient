@@ -24,8 +24,7 @@ sealed class InventoryLayout(PlayerInterface player)
             var owner = player.InventoryWindows.WindowCharacter(id);
             if (owner?.ItemGrid is { } bag)
             {
-                b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.UiScale,
-                    Math.Min(player.Height * 0.8f, bag.BagHeight * player.InventoryCell + 108 * player.UiScale));
+                BindContainerGeometry(id, b, bag.BagWidth, bag.BagHeight, fixedTop: true);
             }
         }
 
@@ -297,48 +296,35 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Grids
 
     /// <summary>
-    /// The grid is laid in the window with <paramref name="above"/> (default 50) layout pixels over it and <paramref name="below"/> (default 58)
-    /// under it.
+    /// Sizes a storage, research or backpack window from its original layout and the inventory's dimensions.
     /// </summary>
-    internal void ArrangeContainerGrid(string id, List<UiControl> controls, int columns, int rows, float above = 50, float below = 58)
+    internal void BindContainerGeometry(string id, UiBindings bindings, int columns, int rows, bool fixedTop = false)
     {
-        int index = controls.FindIndex(c => c.Name == "backpack_content");
-        var root = controls.FirstOrDefault(c => c.Type == "Window");
-        if (index < 0 || root is null) return;
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
+            player.InterfaceScale, player.UiScale);
+        geometry.FitContainer(new(columns * player.InventoryCell, rows * player.InventoryCell), fixedTop);
+        geometry.Bind(bindings);
+    }
 
-        float scale = player.UiScale;
-        float cell = player.InventoryCell;
-        var r = root.Bounds;
-        float top = above * scale;
-        var view = new UiRect(r.X + 18 * scale, r.Y + top, Math.Max(0, r.Width - 40 * scale), Math.Max(0, r.Height - top - below * scale));
-        float maximum = Math.Max(0, rows * cell - view.Height);
-        if (maximum < 0.01f) maximum = 0;
-        float scroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault(id), 0, maximum);
-        player.ScrollBars.InventoryScroll[id] = scroll;
-        player.ScrollBars.InventoryViews[id] = (view, maximum);
+    /// <summary>
+    /// Applies the inventory cell tile to the grid already positioned inside its frame. Generic inventories have no artificial height cap or scroll.
+    /// </summary>
+    internal void ArrangeContainerGrid(string id, List<UiControl> controls)
+    {
+        player.ScrollBars.InventoryScroll.Remove(id);
+        player.ScrollBars.InventoryViews.Remove(id);
+        player.ScrollBars.InventoryTracks.Remove(id);
+        int index = controls.FindIndex(c => c.Name == "backpack_content");
+        if (index < 0) return;
 
         var slot = controls[index];
         controls[index] = slot with
         {
-            Bounds = new(view.X, view.Y - scroll, columns * cell, rows * cell),
-            Clip = view.Intersect(slot.Clip ?? view),
-            Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {cell}") },
+            Properties = new Dictionary<string, string>(slot.Properties)
+            {
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+            },
         };
-        int arrange = controls.FindIndex(c => c.Name == "ArrangeButton");
-        if (arrange >= 0)
-        {
-            var button = new UiRect(r.X + (r.Width - 110 * scale) / 2, r.Y + r.Height - 44 * scale, 110 * scale, 32 * scale);
-            controls[arrange] = controls[arrange] with { Bounds = button };
-        }
-
-        if (maximum <= 0)
-        {
-            player.ScrollBars.InventoryTracks.Remove(id);
-            return;
-        }
-
-        var track = new UiRect(r.X + r.Width - 22 * scale, view.Y, 17 * scale, view.Height);
-        player.ScrollBars.AddScrollBar(id, controls, track, view.Height, rows * cell, scroll, maximum, root.Clip);
     }
 
     #endregion

@@ -830,6 +830,13 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
 `Kenshi_GenericTextBoxFlat`, which draws a panel even with an empty caption. Meitou hides it when there is no restricted-item name, so general
 storage has no blank heading panel over its inventory grid.
 
+Generic inventory sizing (**Verified**, Kenshi 1.0.68 decompile `FUN_14014e530`, fixed `FUN_14014e870`): set the grid to cells × skin cell size;
+grow the frame only by positive differences from the layout's initial grid. Generic storage and research grids centre in `Content` on both axes;
+fixed backpack grids centre horizontally and retain their top offset. No 80%-of-screen height cap or added scrollbar. `BackpackInventoryLayout`
+(`FUN_140155d30`) uses `Kenshi_InventoryGenericFixedWindow`; Meitou uses it for player, pinned and looted bags. Ordinary containers use the generic
+storage layout, with ARRANGE for unrestricted grids, rather than the research layout. Meitou preserves the frame's natural dimensions even when
+larger than the viewport; visible pixels remain clipped to the screen.
+
 `Kenshi_InventoryResearchWindow` (**Verified**, layout read): `ResearchButton` "SHOW RESEARCH" over `backpack_content`, `ArrangeButton` "ARRANGE" under it
 (HCenter Bottom). Meitou: ARRANGE arranges the bench's grid as an inventory's (`ArrangeMachine`, `InventoryCommands.Arrange`; #639).
 

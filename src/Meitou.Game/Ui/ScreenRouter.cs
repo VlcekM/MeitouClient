@@ -351,7 +351,7 @@ sealed class ScreenRouter(PlayerInterface player)
         bool bagWindow = id is "bag" or "loot-bag";
         string gridSection = bagWindow ? "backpack_content" : "main";
         int columns = bagWindow ? grid.BagWidth : grid.Width, rows = bagWindow ? grid.BagHeight : grid.Height;
-        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(screen, controls, columns, rows);
+        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(screen, controls);
         else if (id == "limbs") player.InventoryLayout.ArrangeLimbSlots(controls, lead);
         else
         {
