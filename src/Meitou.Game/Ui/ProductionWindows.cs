@@ -37,6 +37,16 @@ sealed class ProductionWindows(PlayerInterface player)
     bool _machineLinked;
 
     /// <summary>
+    /// The last positioned machine and its standalone offset before it was linked to a character inventory.
+    /// </summary>
+    string? _placedMachine;
+
+    /// <summary>
+    /// A standalone position to restore after the character inventory closes, including a position dragged by the player.
+    /// </summary>
+    Vector2? _standaloneMachineOffset;
+
+    /// <summary>
     /// The research tab's selected category, and the blueprint whose description shows.
     /// </summary>
     internal string? ResearchCategory, ResearchFocus;
@@ -98,8 +108,7 @@ sealed class ProductionWindows(PlayerInterface player)
         bool linked = !alone && player.FaithfulScreens.IsOpen("inventory");
         if (ShownMachine == m.Site)
         {
-            if (_machineLinked != linked) player.InventoryLayout.PlaceMachineWindow(MachineScreen(m), linked);
-            _machineLinked = linked;
+            if (_machineLinked != linked) PositionMachine(MachineScreen(m), m.Site, linked);
             return;
         }
 
@@ -114,8 +123,24 @@ sealed class ProductionWindows(PlayerInterface player)
             player.FaithfulScreens.Open("inventory");
 
         player.FaithfulScreens.Open(screen);
-        _machineLinked = !alone && player.FaithfulScreens.IsOpen("inventory");
-        player.InventoryLayout.PlaceMachineWindow(screen, _machineLinked);
+        PositionMachine(screen, m.Site, !alone && player.FaithfulScreens.IsOpen("inventory"));
+    }
+
+    /// <summary>
+    /// Links a building beside the looter or restores its prior standalone position when the character inventory closes.
+    /// </summary>
+    void PositionMachine(string screen, string site, bool linked)
+    {
+        if (_placedMachine != site) _standaloneMachineOffset = null;
+        else if (linked && !_machineLinked) _standaloneMachineOffset = player.FaithfulScreens.GetOffset(screen);
+
+        if (!linked && _machineLinked && _standaloneMachineOffset is { } offset)
+            player.FaithfulScreens.SetOffset(screen, offset);
+        else
+            player.InventoryLayout.PlaceMachineWindow(screen, linked);
+
+        _placedMachine = site;
+        _machineLinked = linked;
     }
 
     /// <summary>
