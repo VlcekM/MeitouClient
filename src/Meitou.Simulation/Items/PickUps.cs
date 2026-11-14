@@ -39,7 +39,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
         {
             walker.PickingLock = null;
             walker.Shackles = null;
-            walker.PickingUpItem = item;
+            (walker.PickingUpItem, walker.FetchingFood) = (item, false);
             if (request.Task == CharacterTask.GoTo)
                 MovementSystem.GoToFloor(world, slot, request.Point, walker.RunSpeed);
             return;
@@ -196,8 +196,13 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                     c.PickingUpItem = null;
                 continue;
             }
-            c.PickingUpItem = null;
+            bool fetch = c.FetchingFood;
+            (c.PickingUpItem, c.FetchingFood) = (null, false);
             if (next[s].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, s);
+
+            // Fetched food is checked again on arrival: after a load a shop slot claims its loose items only once its building is set up, so the food
+            // can turn out to be the shop's, and the animal leaves it rather than steal it.
+            if (fetch && !Items.FeedSystem.FreeFood(item, c)) continue;
 
             // An animal takes a limb in its mouth and eats it later; one with no mouth point leaves it on the ground
             // (docs/game/character-stats.md "Eating", "Mouth").
@@ -215,7 +220,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear or a bag that does not fit is worn when its slot
             // is free.
             bool wear = false;
-            if (Stow(world, inventory, item.Item, c) || item.Item.Quantity == before
+            if (Stow(world, inventory, item.Item, c, fetch) || item.Item.Quantity == before
                 && (wear = Items.InventoryCommands.TryEquip(inventory, item.Item, c)
                         || Items.InventoryCommands.TryWearBag(inventory, item.Item, c)))
             {
@@ -243,12 +248,16 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
 
     /// <summary>
     /// A picked-up item into the grids (<see cref="Items.Inventory.Add"/>), into the backpack first for a player character with
-    /// <see cref="World.TakeIntoBackpack"/>; a live animal's shut grid (<see cref="Items.InventoryCommands.MainClosed"/>) leaves only its bag.
+    /// <see cref="World.TakeIntoBackpack"/>; a live animal's shut grid (<see cref="Items.InventoryCommands.MainClosed"/>) leaves its bag, then the
+    /// grid only for food it <paramref name="fetch"/>es to eat (<see cref="CharacterCold.FetchingFood"/>).
     /// </summary>
-    static bool Stow(World world, Items.Inventory inventory, Items.ItemInstance item, CharacterCold c)
+    static bool Stow(World world, Items.Inventory inventory, Items.ItemInstance item, CharacterCold c, bool fetch)
     {
         var bag = inventory.Backpack?.Contents;
-        if (Items.InventoryCommands.MainClosed(c)) return bag is not null && bag.AddTo("backpack_content", item);
+
+        // Food fetched to eat (259 Picking up food) goes in even with no bag: a bagless dog eats meat dropped beside it in the original.
+        if (Items.InventoryCommands.MainClosed(c))
+            return bag is not null && bag.AddTo("backpack_content", item) || fetch && Items.FeedSystem.IsFood(item) && inventory.AddTo("main", item);
 
         if (bag is not null && c.IsPlayer && world.TakeIntoBackpack && bag.AddTo("backpack_content", item)) return true;
         return inventory.Add(item);
