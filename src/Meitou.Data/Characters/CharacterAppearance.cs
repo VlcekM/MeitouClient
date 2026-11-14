@@ -356,7 +356,7 @@ public sealed class CharacterAppearance
     public string? PartMap { get; private init; }
 
     /// <summary>
-    /// The head: the body file's, else the race's first (or rolled) <c>heads male</c> / <c>heads female</c>.
+    /// The head: the body file's when the race lists it, else the race's first (or rolled) <c>heads male</c> / <c>heads female</c>.
     /// </summary>
     public GameRecord? Head { get; private init; }
 
@@ -583,6 +583,23 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
+    /// The head: the body file's when the race lists it among its <c>heads male</c> / <c>heads female</c> (<paramref name="g"/>), else the
+    /// race's first (or rolled) one; a race that lists no head keeps the body file's.
+    /// </summary>
+    static GameRecord? HeadOf(GameDatabase db, GameRecord race, string g, AppearanceFile? body, Random? random)
+    {
+        var heads = race.GetReferences($"heads {g}");
+        var own = body?.HeadId is { } id ? db.Find(id) : null;
+
+        // The original's AppearanceHuman::updateCharaterTexture (FUN_140533b50) keeps a head only when the race's list for the gender has it
+        // (FUN_14007c9e0) and picks from that list otherwise: a body file made for another race (Eyegore's, a Hive Soldier Drone's, on a
+        // South Hive soldier) takes the race's head (docs/characters.md "Body files").
+        if (own is not null && heads.Any(h => h.TargetStringId == own.StringId)) return own;
+
+        return Pick(db, heads, random, r => Math.Max(r.Values.Value0, 1)) ?? own;
+    }
+
+    /// <summary>
     /// The appearance with its body meshes and textures, head and hair colour; its notes and pose weights are added by the caller.
     /// </summary>
     static CharacterAppearance CreateResult(
@@ -599,8 +616,7 @@ public sealed class CharacterAppearance
             bodyMesh = "human_male.mesh";
             notes.Add($"race '{race.Name}' has no {g} mesh: 'human_male.mesh' is drawn, as the original does");
         }
-        var head = (body?.HeadId is { } hid ? db.Find(hid) : null)
-            ?? Pick(db, race.GetReferences($"heads {g}"), random, r => Math.Max(r.Values.Value0, 1));
+        var head = HeadOf(db, race, g, body, random);
 
         return new CharacterAppearance
         {

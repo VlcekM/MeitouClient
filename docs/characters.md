@@ -115,6 +115,11 @@ follows this, not traced). The candidates (`Faction::chooseARace` `FUN_1407ff1a0
 when all of those give none (engine fallback; the 19 base-game CHARACTERs with a body and no race list either have an unreadable old-format body or are mod characters). With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
 (`FUN_140074f00`, `FUN_140538360`, **Verified** read), so a translation mod that renames it changes nothing.
 
+The body file's `head` is kept only when the race lists it. **Verified** (read, `AppearanceHuman::updateCharaterTexture` `FUN_140533b50`, a vtable slot): a `head` that names no HEAD record, or one missing from the
+race's `heads male` / `heads female` for the gender (`FUN_14007c9e0`), is replaced by a weighted pick from that list (`FUN_14007c880`, written back to the appearance); an empty list picks nothing and the
+head stays. So `Eyegore` (race `Hive Soldier Drone South Hive`, whose `Eyegore.bod2` names the Western `Hive Soldier Drone` and its head `StickPeopleHead02`) draws the South Hive head texture.
+Meitou: `CharacterAppearance.HeadOf` (the list's first head; **Observed** on the base game's Eyegore, #692).
+
 ### Hidden body parts (Verified, `@ 140075600`, `@ 140071f90`, `@ 140531cc0`; HLSL `skin.hlsl`)
 
 | Colour | RGB | Bit | PartMapColours |
