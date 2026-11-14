@@ -1,6 +1,6 @@
 // KenshiHarness - an RE_Kenshi plugin that lets a program outside the game see and drive a running Kenshi: screenshots,
 // the GUI as text, the world's state as JSON, and keys and mouse fed through the game's own input listener (so the window
-// needs no focus and the real cursor is left alone). tools/scripts/KenshiHarness/README.md has the commands.
+// needs no focus and the real cursor is left alone). tools/KenshiHarness/README.md has the commands.
 //
 // How: each request on the named pipe waits its turn for the game thread, which runs it from an
 // Ogre frame listener (frameRenderingQueued: the frame is drawn and not yet shown, so a screenshot is the frame in full).

@@ -1,4 +1,4 @@
-// state: the game's world as JSON, for comparing a situation with the same one in MeitouClient.
+// state: the game's world, as text to read or as JSON (--json), for comparing a situation with the same one in MeitouClient.
 #include "harness.h"
 #include "game.h"
 #include <stdio.h>
@@ -150,6 +150,94 @@ static void add_characters(Text* out, const char* key, const Lektor* list, int d
     text_add(out, "]");
 }
 
+// ---- The same as text, for reading ---------------------------------------------------------------------------------------
+
+static void say_parts(Text* out, const char* medical)
+{
+    const Lektor* anatomy = (const Lektor*)(medical + MEDICAL_ANATOMY);
+    char name[64];
+
+    text_add(out, "    health:");
+
+    for (uint32_t i = 0; i < anatomy->count && i < 32; i++)
+    {
+        const char* part = anatomy->items[i];
+        float stun = *(float*)(part + PART_STUN);
+        record_name(*(void**)(part + PART_RECORD), name, sizeof name);
+
+        text_add(out, "%s %s %.0f/%.0f", i ? "," : "", name, *(float*)(part + PART_FLESH), *(float*)(part + PART_MAX));
+        if (stun > 0) text_add(out, " (stun %.0f)", stun);
+    }
+
+    text_add(out, "\n");
+}
+
+// Six stats to a line.
+static void say_stats(Text* out, const char* stats)
+{
+    for (size_t i = 0; i < sizeof STATS / sizeof STATS[0]; i++)
+    {
+        text_add(out, "%s%s %.0f", i % 6 ? ", " : i ? "\n           " : "    stats: ", STATS[i].name, *(float*)(stats + STATS[i].offset));
+    }
+
+    text_add(out, "\n");
+}
+
+static void say_character(Text* out, void* character, int detailed)
+{
+    char name[128], faction[128];
+    int x, y;
+    V3 position = character_position(character);
+    V3 body = {position.x, position.y + BODY_HEIGHT, position.z};
+    const char* medical = character_medical(character);
+
+    character_name(character, name, sizeof name);
+    character_faction(character, faction, sizeof faction);
+
+    text_add(out, "  %s [%s]", name, faction);
+    if (character_is_selected(character)) text_add(out, " selected");
+    if (medical[MEDICAL_DEAD]) text_add(out, " DEAD");
+    else if (medical[MEDICAL_UNCONSCIOUS]) text_add(out, " unconscious");
+
+    text_add(out, "  at %.0f, %.0f, %.0f", position.x, position.y, position.z);
+    if (game_project(body, &x, &y)) text_add(out, "  screen %d,%d", x, y);
+    text_add(out, "  blood %.0f  hunger %.0f\n", *(float*)(medical + MEDICAL_BLOOD), *(float*)(medical + MEDICAL_HUNGER) * 100);
+
+    if (!detailed) return;
+
+    say_parts(out, medical);
+    if (character_stats(character)) say_stats(out, character_stats(character));
+}
+
+static void say_characters(Text* out, const char* title, const Lektor* list, int detailed, int playersToo)
+{
+    text_add(out, "%s:\n", title);
+
+    for (uint32_t i = 0; list && i < list->count; i++)
+    {
+        if (playersToo || !character_is_players(list->items[i])) say_character(out, list->items[i], detailed);
+    }
+}
+
+static void say_state(Text* out, const Lektor* squad, float radius, int detailed)
+{
+    char save[128];
+    double hours = game_hours();
+    int minutes = (int)(hours * 60) % (24 * 60);
+    V3 eye = game_camera_position();
+    V3 centre = game_camera_centre();
+    world_save_name(save, sizeof save);
+
+    text_add(out, "Day %d %02d:%02d (%.2f hours)  ", (int)(hours / 24), minutes / 60, minutes % 60, hours);
+    if (world_is_paused()) text_add(out, "PAUSED");
+    else text_add(out, "speed %gx", world_speed());
+
+    text_add(out, "  save %s  frame %ld\n", save, frame_number());
+    text_add(out, "camera at %.0f, %.0f, %.0f looking at %.0f, %.0f, %.0f\n", eye.x, eye.y, eye.z, centre.x, centre.y, centre.z);
+    say_characters(out, "squad", squad, detailed, 1);
+    if (radius > 0) say_characters(out, "near", game_characters_near(centre, radius, 256), detailed, 0);
+}
+
 // ---- The command --------------------------------------------------------------------------------------------------------
 
 static float option_radius(const Command* c)
@@ -171,18 +259,21 @@ static void add_clock(Text* out)
              minutes / 60, minutes % 60);
 }
 
-// state [--near=<radius>] [--brief]: the clock, the speed, the camera and the player's characters with their health and
-// stats; with --near also everyone else within that distance of the point the camera looks at. `screen` is where a
-// character's body is in the window (a point to click), absent when it is out of view. --brief leaves out body parts and stats.
+// state [--near=<radius>] [--brief] [--json]: the clock, the speed, the camera and the player's characters with their
+// health and stats; with --near also everyone else within that distance of the point the camera looks at. `screen` is
+// where a character's body is in the window (a point to click), absent when it is out of view. --brief leaves out body
+// parts and stats. Text by default; --json gives the same as JSON, with every figure unrounded.
 int cmd_state(Command* c)
 {
     const Lektor* squad = game_squad();
     if (!squad) return fail(c, "the game world is not up yet");
 
     // No player characters: the main menu (whose world has no clock yet) or a save still loading.
+    int json = option(c, "--json");
     if (squad->count == 0)
     {
-        text_add(&c->reply, "{\"frame\":%ld,\"inGame\":false,\"squad\":[]}", frame_number());
+        if (json) text_add(&c->reply, "{\"frame\":%ld,\"inGame\":false,\"squad\":[]}", frame_number());
+        else text_add(&c->reply, "not in a game (the main menu, or a save still loading)\n");
         return 1;
     }
 
@@ -191,6 +282,12 @@ int cmd_state(Command* c)
     float radius = option_radius(c);
     int detailed = !option(c, "--brief");
     world_save_name(save, sizeof save);
+
+    if (!json)
+    {
+        say_state(out, squad, radius, detailed);
+        return 1;
+    }
 
     text_add(out, "{");
     add_clock(out);

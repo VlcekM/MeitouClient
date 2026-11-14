@@ -163,7 +163,7 @@ static int wait_for_menu(int seconds)
 
     while (GetTickCount64() < until)
     {
-        if (answers("ui", "NewGameButton", "NewGameButton") || answers("state", "--brief", "\"squad\":[{")) return 1;
+        if (answers("ui", "NewGameButton", "NewGameButton") || answers("state", "--json", "\"squad\":[{")) return 1;
         Sleep(500);
     }
 
@@ -182,9 +182,9 @@ int load_save(const char* save)
 
     // The squad empties while the save loads (and the game renders no frame for part of it), then fills again.
     ULONGLONG emptyBy = GetTickCount64() + 8000;
-    while (GetTickCount64() < emptyBy && answers("state", "--brief", "\"squad\":[{")) Sleep(200);
+    while (GetTickCount64() < emptyBy && answers("state", "--json", "\"squad\":[{")) Sleep(200);
 
-    if (!wait_until("state", "--brief", "\"squad\":[{", 600))
+    if (!wait_until("state", "--json", "\"squad\":[{", 600))
     {
         fprintf(stderr, "the save '%s' did not load (no player characters after 10 minutes)\n", save);
         return 1;

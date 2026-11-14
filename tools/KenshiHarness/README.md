@@ -29,7 +29,7 @@ mouse is not touched; `kh start` gives the focus back to the window that had it.
 | `cancel` | Ends the command in progress (a long `wait`), which then fails |
 | `shot <file.png>` | Screenshot of the frame, GUI included |
 | `ui [filter] [--all]` | The GUI as text: class, `"caption"`, `name=`, `@x,y` (where a click lands), size |
-| `state [--near=<radius>] [--brief]` | JSON: clock, speed, camera, squad (position, `screen` point, health parts, stats); `--near` adds everyone else around the camera's centre |
+| `state [--near=<radius>] [--brief] [--json]` | Clock, speed, camera, squad (position, `screen` point, health parts, stats); `--near` adds everyone else around the camera's centre; text, or JSON with `--json` |
 | `click <x> <y> [left\|right\|middle]` | A click; `--double`, `--hold=<ms>`, `--shift`, `--ctrl`, `--alt` |
 | `click <caption or name> [button]` | A click on a widget; `--nth=<n>` when several match |
 | `mouse <point>`, `mouse down\|up [button]` | Moves the cursor; presses or releases a button where it is |
@@ -45,8 +45,9 @@ mouse is not touched; `kh start` gives the focus back to the window that had it.
 
 `--stall=<seconds>` (any command): how long the game may render no frame before the command fails (default 30).
 
-`state` units: `hours` is the game clock (day = hours / 24, as the GUI shows it), positions are world units, `hunger` is
-the GUI's figure / 100, `parts` are `[health, stun damage, full health]`, `stats` are the raw skill levels.
+`state --json` units: `hours` is the game clock (day = hours / 24, as the GUI shows it), positions are world units,
+`hunger` is the GUI's figure / 100 (the text shows the GUI's), `parts` are `[health, stun damage, full health]`, `stats`
+are the raw skill levels.
 
 ### Playing
 
@@ -62,9 +63,9 @@ the GUI's figure / 100, `parts` are `[health, stun damage, full health]`, `stats
 
 ## The reference instance
 
-- Other plugins change behaviour. For a vanilla reference KEP's fixes are all off
-  (`mods\KenshiExtensionPlugin\plugin\kep_settings.json`; the original is beside it as `.orig`). RE_Kenshi's own
-  switches are in `RE_Kenshi.ini` (`FixRNG` is on).
+- Other plugins change behaviour. For a vanilla reference the fixes are off, each file's original beside it as `.orig`:
+  KEP's (`mods\KenshiExtensionPlugin\plugin\kep_settings.json`), RE_Kenshi's (`RE_Kenshi.ini`: `FixRNG`,
+  `FixModListScroll`) and Re_Dev's fast travel (`mods\kep-devtools\kep_devtools_settings.json`).
 - The game is 1.0.65, our decompile 1.0.68.
 
 ## How it works
