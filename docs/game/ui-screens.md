@@ -837,10 +837,19 @@ storage has no blank heading panel over its inventory grid.
 (`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (layout INPUTS / OUTPUT, but the constructor `FUN_140155f90` **Verified** overwrites them with the translated `Input` / `Inputs` by the input count, hidden at 0, and `Output`), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
 slot `inN`, `InputNProgressBar`), output (`out` slot, `OutputProgressBar`, `OutputText`, `OutputDataPanel`). The `inN` / `out` inventory
 sections are the recipe item's `inventory footprint width` × `inventory footprint height` cells (**Verified**, `FUN_14029e7b0` code read); a crafting bench's `out` is as large as the largest thing it makes
-([Crafting](buildings-production.md#crafting)). The grid
-sits centred under its label and progress bar (**Observed**, owner's screenshot of an electrical workbench, 2026-10-24); the rule behind it and whether the bar
-moves for a tall grid are **Unknown**. Meitou keeps the layout's top, centres the grid on the bar (a grid wider than the bar keeps the slot's left edge)
-and pushes the bar under an overlapping grid. For a machine with only an output (a mined rock) the original's window size is **Unknown**; Meitou drops the input column and crafting row and shrinks the window around the output panel. The layout's bar sits under the `out` slot (`OutputContent`: slot `0 0 0.88 0.29`, bar `0 0.53 1 0.29`, Left Bottom; **Verified**, layout read), so an output taller than the slot (a well's water, #638) pushed the bar out of the shrunk window; the window now grows to keep it, up to the layout's height.
+([Crafting](buildings-production.md#crafting)). The grid geometry is **Verified** by the original layout and the decompiled layout setup routines (Kenshi 1.0.68):
+
+- `FUN_1401536c0` gets the cell dimensions from `Kenshi_InventorySlotSkin` (25 × 25 in the clean GOG skin).
+- `FUN_140155f90` removes the crafting row for non-crafting buildings, moves the titles and contents up, and shortens the frame by that row's height.
+- `FUN_140150e20` (production), `FUN_1401524f0` (crafting) and `FUN_140151a30` (furnace) size each section to its cell dimensions, grow its panel by
+  the positive difference from the layout slot, stack inputs vertically, and put the output column immediately beside them. The outer frame
+  changes by the difference between the initial and final content dimensions; crafting/furnace width never shrinks below the initial frame.
+- Grids and bars centre independently in their content panels. A panel's growth moves its bottom-aligned bar with it, retaining the layout gap.
+  Output-only production retains one panel column, with its header aligned over it. No previous frame participates in sizing.
+
+Meitou: `InventoryGeometry` resolves real positions once, preserves child alignment during panel growth, then binds the complete geometry before
+placing the window. `ProductionWindows` supplies the section dimensions for every production/crafting/furnace window (#671).
+
 
 Crafting window contents (**Verified**, `CraftingBuilding::updateInventoryWindow` `FUN_1402b6110` and the `BuildInventoryLayout` setters `FUN_14014db60` ... `FUN_14014e330`; field
 names KenshiLib 1ce4a16, **Observed**). Each `inN` and the `out` section get a plain `ImageBox` child made by the layout constructor (`FUN_140155f90`): top-left aligned, no mouse
