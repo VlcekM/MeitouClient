@@ -190,8 +190,14 @@
         <DockPanel x:Name="ModsPage" IsVisible="False">
           <Border DockPanel.Dock="Top" Classes="header" Margin="0,0,0,10">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="aside" Content="Refresh" Click="RefreshMods_Click"
-                      ToolTip.Tip="List the mods folder and the Steam workshop items again" />
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                <Button x:Name="SyncWorkshopButton" Classes="aside" IsVisible="False" Click="SyncWorkshop_Click"
+                        ToolTip.Tip="Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam">
+                  <TextBlock x:Name="SyncWorkshopText" Text="Sync workshop" />
+                </Button>
+                <Button Classes="aside" Content="Refresh" Click="RefreshMods_Click"
+                        ToolTip.Tip="List the mods folder and the Steam workshop items again" />
+              </StackPanel>
               <TextBlock Text="Mods" />
             </DockPanel>
           </Border>
@@ -218,13 +224,18 @@
           <TextBlock x:Name="ModDetails" DockPanel.Dock="Bottom" Classes="desc" Margin="0,8,0,0" MaxLines="2" TextTrimming="CharacterEllipsis" />
           <Panel>
           <TextBlock x:Name="ModsEmpty" Classes="empty" IsVisible="False" />
-          <ListBox x:Name="ModListBox" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
+          <ListBox x:Name="ModListBox" SelectionMode="Multiple" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="l:ModRow">
                 <DockPanel>
                   <TextBlock DockPanel.Dock="Left" Classes="handle" Text="≡" VerticalAlignment="Center" Margin="0,0,10,0"
-                             PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order" />
+                             PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together" />
                   <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
+                  <!-- A workshop mod's link to its Steam page: a box with an arrow leaving it -->
+                  <Button DockPanel.Dock="Right" Classes="icon" VerticalAlignment="Center" Margin="10,0,0,0" Click="ModPage_Click"
+                          IsVisible="{Binding WorkshopPage, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="{Binding PageTip}">
+                    <Path Data="M0,2 H6 V4 H2 V12 H10 V8 H12 V14 H0 Z M8,0 H14 V6 H12 V3.4 L6.7,8.7 L5.3,7.3 L10.6,2 H8 Z" />
+                  </Button>
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Classes="name" Text="{Binding Name}" />
                     <TextBlock Classes="desc" Text="{Binding Detail}" />

@@ -110,8 +110,7 @@ public sealed partial class DialogueSystem
         if (force)
         {
             if (!CanSpeak(world.Characters, n) || _open is { } o && (o.Npc == npc || o.Player == npc)) return false;
-            _bubbles.RemoveAll(b => b.C.Npc == npc || b.Speaker == npc);
-            _shown.Remove(npc);
+            DropBubbles(npc);
         }
         else if (!Awake(world.Characters, n) || BubbleOf(npc)) return false;
         var c = new Conversation { Npc = npc, Player = whom, Event = ev, Root = root };
@@ -122,6 +121,16 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// Drops what <paramref name="npc"/> is saying: its bubble chains, the chains it speaks in and its shown bubble, without the end step (no
+    /// counter), as when the original overwrites the character's one dialogue state with a new start.
+    /// </summary>
+    void DropBubbles(CharacterId npc)
+    {
+        _bubbles.RemoveAll(b => b.C.Npc == npc || b.Speaker == npc);
+        _shown.Remove(npc);
+    }
+
+    /// <summary>
     /// <paramref name="ev"/> fired at <paramref name="npc"/> with <paramref name="whom"/> as its target outside a player conversation
     /// (<c>FUN_140684990</c>): a line is chosen from the NPC's list for the event and said as a speech bubble, the rest of its chain after it.
     /// Returns whether a line was said.
@@ -129,7 +138,7 @@ public sealed partial class DialogueSystem
     bool Fire(World world, CharacterId npc, CharacterId whom, int ev)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(npc, out int n) || !Awake(table, n) || BubbleOf(npc)) return false;
+        if (!table.TryResolveNext(npc, out int n) || !Awake(table, n) || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
         var c = new Conversation { Npc = npc, Player = whom, Event = ev };
         if (Pick(world, c, SetOf(world, n).For(ev)) is not { } picked || picked.Speaker.IsNone || picked.Speaker == whom || Busy(picked.Speaker, c))
             return false;

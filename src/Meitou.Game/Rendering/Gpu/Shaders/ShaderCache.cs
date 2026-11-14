@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Gpu.Shaders;
@@ -15,10 +16,9 @@ static class ShaderCache
     const uint Magic = 0x4D535056;
 
     /// <summary>
-    /// The default cache directory: <c>Meitou/shader-cache</c> in the local application data.
+    /// The default cache directory: <see cref="LoadCaches.Root"/>'s <c>shader-cache</c>.
     /// </summary>
-    public static string DefaultDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "shader-cache");
+    public static string DefaultDirectory => LoadCaches.Folder("shader-cache");
 
     /// <summary>
     /// A program's cache key: the SHA-256 (hex) of the version, the options that change the output, and both sources.
@@ -34,7 +34,7 @@ static class ShaderCache
         }
 
         Add("v" + version);
-        Add($"reversed={o.DepthReversed};vb={o.VertexBindingBase};fb={o.FragmentBindingBase}");
+        Add($"reversed={o.DepthReversed};vb={o.VertexBindingBase};fb={o.FragmentBindingBase};demote={o.DemoteDiscard}");
         Add(vertex);
         Add(fragment);
         sha.TransformFinalBlock([], 0, 0);

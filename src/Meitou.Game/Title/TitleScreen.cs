@@ -133,8 +133,7 @@ sealed class TitleScreen(GameHost host)
             SaveGame? save = host.StartSave;
             if (save is null)
             {
-                var slots = SaveCatalog.Scan(QuickSave.DefaultRoot, host.Install.SaveDirectory,
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save"));
+                var slots = SaveCatalog.Scan(QuickSave.DefaultRoot, [host.Install.SaveDirectory, .. host.Install.UserSaveDirectories]);
                 if (slots.FirstOrDefault() is { } slot) save = SaveGame.Load(slot.Folder);
             }
 

@@ -61,7 +61,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             vec4 shoreRect;
             vec4 shore;
             vec4 waveFade;
-            vec4 clarity;
+            vec4 clarity;         // absorption scale, far clarity, see-through distance, 1 when render targets have row 0 at the top (Metal)
             vec4 screenReflect;   // 1 / target xy, reflect, refract
             mat4 reflectionViewProjection;
             vec4 skySun;
@@ -154,7 +154,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         /// </summary>
         [FieldOffset(192)] public Vector4 WaveFade;
         /// <summary>
-        /// The clarity: the inverse clarity, the far clarity and the clear distance.
+        /// The clarity: the inverse clarity, the far clarity and the clear distance; w is 1 when the render targets have row 0 at the top (Metal), so the
+        /// reflection's lookup flips its V (the mirrored view's clip y runs bottom-up in Vulkan's targets, top-down in Metal's).
         /// </summary>
         [FieldOffset(208)] public Vector4 Clarity;
         /// <summary>
@@ -350,6 +351,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uReflection;  // the scene mirrored about the water (ReflectionPass), looked up with uReflectionViewProjection
         uniform mat4 uReflectionViewProjection;
         uniform float uReflect;         // 1 with a reflection this frame, else the sky colour is reflected
+        uniform float uReflectFlip;     // 1 when the reflection's row 0 is at the top (Metal), else 0
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
         {
@@ -434,6 +436,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 vec2 offset = n.xz * (60.0 / rc.w);
                 offset *= min(1.0, 0.04 / max(length(offset), 1e-5));
                 vec2 uv = rc.xy / rc.w * 0.5 + 0.5 + offset;
+                uv.y = mix(uv.y, 1.0 - uv.y, uReflectFlip);
                 // Past the picture's border there is nothing to reflect: fade to the sky colour.
                 vec2 inside = smoothstep(vec2(0.0), vec2(0.04), uv) * smoothstep(vec2(0.0), vec2(0.04), 1.0 - uv);
                 reflected = mix(reflected, min(texture(uReflection, uv).rgb, vec3(3.0)), inside.x * inside.y);
@@ -739,6 +742,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform sampler2D uReflection;
         uniform mat4 uReflectionViewProjection;
         uniform float uReflect;
+        uniform float uReflectFlip;     // 1 when the reflection's row 0 is at the top (Metal), else 0
         uniform sampler2D uRefraction;  // the scene under the water, copied at half size before it (CaptureScene)
 
         // The scene under the water at a screen position, from the half-size copy: its four texels weighed by how near the depths they were made of are to this pixel's
@@ -1008,6 +1012,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 vec2 offset = n.xz * (60.0 / rc.w);
                 offset *= min(1.0, 0.04 / max(length(offset), 1e-5));
                 vec2 uv = rc.xy / rc.w * 0.5 + 0.5 + offset;
+                uv.y = mix(uv.y, 1.0 - uv.y, uReflectFlip);
                 vec2 inside = smoothstep(vec2(0.0), vec2(0.04), uv) * smoothstep(vec2(0.0), vec2(0.04), 1.0 - uv);
                 vec3 mirrored = min(texture(uReflection, uv).rgb, vec3(3.0));
                 // The sun's glint only where the mirror shows sky: where it shows land (darker than the sky the same way), the land hides the
@@ -1361,6 +1366,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uClarity"] = "water.clarity.xyz",
         ["uScreen"] = "water.screenReflect.xy",
         ["uReflect"] = "water.screenReflect.z",
+        ["uReflectFlip"] = "water.clarity.w",
         ["uRefract"] = "water.screenReflect.w",
         ["uReflectionViewProjection"] = "water.reflectionViewProjection",
         ["uSkySun"] = "water.skySun.xyz",
@@ -2446,7 +2452,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             ShoreRect = _shore is { Ready: true } s ? s.Rect : Vector4.Zero,
             Shore = _waves.Shore,
             WaveFade = new Vector4(WaveFadeStart, WaveFadeEnd, ShoreFadeStart, ShoreFadeEnd),
-            Clarity = new Vector4(1f / Math.Max(Clarity, 0.01f), Math.Clamp(FarClarity, 0f, 1f), Math.Max(ClearDistance, 100f), 0f),
+            Clarity = new Vector4(1f / Math.Max(Clarity, 0.01f), Math.Clamp(FarClarity, 0f, 1f), Math.Max(ClearDistance, 100f),
+                Gpu.RenderTargetsBottomUp ? 0f : 1f),
             ScreenReflect = new Vector4(1f / Math.Max(targets.Width, 1), 1f / Math.Max(targets.Height, 1), reflect ? 1f : 0f, refract ? 1f : 0f),
             ReflectionViewProjection = reflect ? reflection!.ViewProjection : Matrix4x4.Identity,
             SkySun = new Vector4(colours.Sun, 0f),

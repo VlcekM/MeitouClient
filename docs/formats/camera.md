@@ -84,7 +84,9 @@ not the game speed, so the camera works while the game is paused. Several inputs
   direction is not touched. The pivot then closes on its goal: a gap of 0.1 or less at once, else at **10 × the gap per second**, the
   speed taken when the goal changes (a moving goal is followed with a lag of about 0.1 s). A pivot or eye starting inside geometry
   leaves the height alone (**Observed**). Placing the camera finds the goal at once. Engine: every building's floor-0 ordinary parts
-  within 400 units are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
+  whose collision can reach the point (its record's farthest floor-part vertex from the origin, at the placement's scale; base game up to 2003 for
+  Large Dock Wreck02, 1193 for Flats Lagoon's Lagoon Platform, 216 of 7819 floor buildings past 400, **Verified** by making every placement's floors;
+  zones searched within 2100) are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
   without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
   floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
   ray or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
@@ -146,10 +148,15 @@ overshoots by up to one step); the eye is never left below the clearance by the 
 follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the
 ground by the same clearance, as it does for the squad tour's arcs, [viewer.md](../viewer.md#squad-tour)); rotating pins the pointer as the game does (put back after every move, no
 marker drawn); `mouse_rotate` is the middle button or Ctrl (Ctrl+right click is also Meitou's carry binding); the free camera keeps its own
-engine feel (its Q/E turn the view left/right as named, not as the strategy camera's; each wheel notch scales its speed by 2^(1/4), 1/16 to
+engine feel (the mouse turns the view without a button held, the pointer pinned; photo mode keeps the drag; its Q/E turn the view left/right as named, not as the strategy camera's; each wheel notch scales its speed by 2^(1/4), 1/16 to
 16 times, so scrolling back always reaches 100%; a label shows the speed for 3 s after a change; Shift does not boost it). The sea height clamps the camera's ground
 (**Observed**: the water node's height is the water height, 100). The settings above are constants of `CameraSettings`, not read
 from `settings.cfg`; `.`/`,` are no longer the time-step keys (they tilt, as in the game).
+**Follow camera offset** (Meitou, optional: Advanced → Follow camera offset, `UserConfig.FollowCameraOffset`, default off; the game has none;
+after ErasmianFolly's Camera Tweaks mod; `FollowFocus`): while the strategy camera follows a character the target is moved from the game's
+position + 10: up by Follow camera height (-10 to 30, default 17, about a person's head), or with Follow camera head lock to the height of the
+tracked character's `Bip01 Head` as last drawn (its last height over the target while it is not drawn), then sideways along the camera's right
+by Follow camera side (-40 to 40; positive puts the character left of the middle). The pivot stays on the character.
 The free camera more than 3000 above the ground under its eye stops moving the world's focus (`KenshiCamera.FlightHeight`, engine choice; the
 strategy camera never gets that high): the loaded zones, their squads and navmesh stay where the flight left the ground and load round the
 focus again once it comes down, so a high flight spawns and builds nothing.

@@ -605,7 +605,7 @@ sealed class HudPanels(PlayerInterface player)
         string faction = player.FactionName?.Invoke(lead.Faction) ?? "";
         player.AddLines(controls, "NameText", [new(lead.Name, faction, PlayerInterface.TitleColour, PlayerInterface.TitleColour)], row, sidePixels);
         player.AddLines(controls, "StateText", StateLines(lead, player.SpeedUnit), row, sidePixels);
-        if (lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null)
+        if (TooltipRuntime.ShowsBountyPanel(lead))
             player.AddLines(controls, "BountyText", [TooltipRuntime.StatusLine(lead) ?? TooltipRuntime.BountyLine(lead.Bounties)], row, sidePixels);
 
         // The base game draws the stats labels in the painted face (Observed: glyph shapes and widths match Sentencia at its resized 22 pt); the

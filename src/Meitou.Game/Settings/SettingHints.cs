@@ -25,10 +25,18 @@ static class SettingHints
         "Texture quality" => "Texture resolution; terrain changes need a restart.",
         "Blood decals drawn" => "The most blood marks on walls and objects and bloody footprints drawn in a frame, the nearest first.",
         "Anisotropic filtering" => "Keep textures sharp when viewed at an angle.",
-        "Metal upscaling" => "Sets the render scale. MetalFX temporal by default; spatial is an alternative.",
+        "Use Metal upscaling" => "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. "
+            + "Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose.",
+        "Metal upscaling preset" => "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative.",
+        "Full Retina resolution" => "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter "
+            + "of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution.",
+        "Render resolution" => "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the "
+            + "window's size.",
+        "Render UI in screen resolution" => "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller "
+            + "render resolution), so it stays sharp. Off: it is drawn at the render size with the picture.",
         "Render scale" => "Internal rendering resolution relative to the window.",
         "Metal render scale" => "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at "
-            + "least; Native always renders at full size).",
+            + "least). Only with Use Metal upscaling on.",
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
         "DLSS preset" => "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more.",
         "Object draw distance" => "Maximum distance at which objects remain visible.",
@@ -138,6 +146,7 @@ static class SettingHints
         "Item icons" => "Draw inventory item icons supersampled, without jagged edges.",
         "Blood cells" => "Draw blood on every terrain cell within decal range, not only the 8 nearest.",
         "Interior lamps" => "Keep the lamps of building interiors lit by day too. Stealth counts their light.",
+        "Lamp warmth" => "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were.",
         "Shadow cascade 5 (Meitou)" => "Add a fifth shadow cascade for distant scenery.",
         "Mesh welding" => "Store the game's models more compactly: about half the video memory, the same look.",
         "Bolt tracers" => "Draw a faint streak behind a crossbow bolt in flight.",
@@ -230,6 +239,8 @@ static class SettingHints
         InputAction.Prospect => "Prospect the ground with the selected character nearest the camera.",
         InputAction.Rest => "The selection sits down to rest.",
         InputAction.PutDown => "The selected carriers put their bodies down.",
+        InputAction.RotateItem => "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the "
+            + "Advanced page).",
         InputAction.TogglePhotoMode => "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, "
             + "time of day and composition guides takes pictures.",
         _ => $"Choose the control for {SettingsMenu.ActionLabel(action).ToLowerInvariant()}.",

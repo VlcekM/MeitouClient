@@ -24,13 +24,13 @@ public static class SaveModList
     const int MaxCount = 64 * 1024 * 1024;
 
     /// <summary>
-    /// The folders the game lists saves from: Meitou's own, the install's <c>save</c> folder and the original's per-user one.
+    /// The folders the game lists saves from: Meitou's own, the install's <c>save</c> folder and the original's per-user ones.
     /// </summary>
     public static IReadOnlyList<(string Folder, string Label)> Roots(GameInstall install)
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return [(Path.Combine(local, "Meitou", "save"), "Meitou"), (install.SaveDirectory, "Kenshi"),
-            (Path.Combine(local, "kenshi", "save"), "Kenshi user")];
+            .. install.UserSaveDirectories.Select(folder => (folder, "Kenshi user"))];
     }
 
     /// <summary>

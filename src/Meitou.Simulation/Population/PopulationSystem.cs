@@ -327,6 +327,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         RefreshStates(world);
         RefreshZones(world);
         StepRoaming(world);
+        RejoinSeparated(world);
         StepCampaigns(world);
         StepWarManager(world);
         world.ItemSlots.Step(world, _data);
@@ -1191,6 +1192,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             FootprintRadius = race?.GetFloat("pathfind footprint radius") ?? 0,
         };
         _assembly.Attach(table.PeekNextId(), cold, ref hot, record, race, world.Seed, plan.IsAnimal ? plan.Age : 1);
+
+        // A new pack animal's bag takes its squad's goods (FUN_14062a130, Verified).
+        if (plan.IsAnimal && record is not null && cold.Inventory is { } carried)
+        {
+            ulong key = Rng.Key(table.PeekNextId());
+            Items.PackLoad.Fill(_data, carried, record, built.Plan.Template, built.Home is null, squad.Faction, world.Seed, key);
+        }
 
         // The fresh-character factory (FUN_140581770) gives organic members of a malnourished template 170 hunger, not its free-food floor.
         if (plan.Malnourished && cold is { Race.IsRobot: false, Medical: { } medical }) medical.Hunger = 1.7f;

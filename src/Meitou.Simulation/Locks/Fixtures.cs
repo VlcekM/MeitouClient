@@ -75,7 +75,7 @@ public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed,
 /// <summary>
 /// What a bed's BUILDING says (docs/game/locks.md "Beds"): its functionality's <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED), the clip it is lain in
 /// (the functionality's <c>animation</c>: <c>sleepinbed</c>, <c>sleeponfloor</c>), the sum of its construction materials (the bed search weighs a bed
-/// that needs more than 1 three times) and its use nodes (null with fewer than 2: it is lain in at its own origin and facing).
+/// that needs more than 1 three times) and its use nodes (null with none; with fewer than 2 it is lain in at its position marker, facing its lone node's way or its own).
 /// </summary>
 public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
 
@@ -324,8 +324,9 @@ public sealed class Fixture
     /// </summary>
     public bool IsGate { get; init; }
     /// <summary>
-    /// Doors: the building's whole placement turn, tilt included, where it is known (null: a turn of <see cref="Yaw"/> about +Y); it places the leaf
-    /// (<see cref="FixtureRegistry.DoorSpotOf"/>). Derived from the data, not hashed or saved.
+    /// Doors and beds standing on their own: the building's whole placement turn, tilt included, where it is known (null: a turn of
+    /// <see cref="Yaw"/> about +Y); it places the leaf (<see cref="FixtureRegistry.DoorSpotOf"/>) and leans the sleeper
+    /// (<see cref="FixtureRegistry.LeanOf"/>). Derived from the data, not hashed or saved.
     /// </summary>
     public Quaternion? Rotation { get; init; }
     /// <summary>

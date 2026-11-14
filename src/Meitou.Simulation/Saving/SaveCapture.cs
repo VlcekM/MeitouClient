@@ -132,6 +132,7 @@ public static partial class SaveCapture
 
         // The war states name the campaign platoons by the handles they were just written with.
         WriteWars(game, world, data, loaded, fresh, outposts);
+        WriteSeparated(game, world, loaded, fresh);
 
         // The wild: the nests made so far in the town list the original's way, and the wild squads in the world as new platoons of their nest
         // or sector.
@@ -206,7 +207,7 @@ public static partial class SaveCapture
         world.Fixtures.WriteResidents(data, buildings);
         ResearchSave.Write(game.Research, world.Research);
         var outposts = data.PlayerFaction >= 0
-            ? BuildingSave.Write(game, world, data.Factions[data.PlayerFaction].Id, options.Seed)
+            ? BuildingSave.Write(game, world, data.Factions[data.PlayerFaction].Id, options.Seed, data.Db)
             : new Dictionary<int, Hand>();
 
         // Again, with the states of the buildings first written now (job targets name them by handle).
@@ -286,8 +287,8 @@ public static partial class SaveCapture
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> OrderTargets = [];
         /// <summary>
-        /// The jobs on a character (Staying close, Bodyguard) whose target's handle is written once every character has one, so a character new to
-        /// this save is named too (#447); one not saved keeps the handle the job was written with.
+        /// The jobs on a character (Staying close, Bodyguard) and the contracts' mission targets whose target's handle is written once every
+        /// character has one, so a character new to this save is named too (#447); one not saved keeps the handle the record was written with.
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> JobTargets = [];
         /// <summary>
@@ -590,9 +591,10 @@ public static partial class SaveCapture
         var kept = new HashSet<string>(StringComparer.Ordinal);
         foreach (var squad in order.Concat(world.Squads.All.Where(s => s.PlatoonId < 0 && !order.Contains(s))))
         {
-            // A member of a loaded platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the file);
-            // only the resident squads the population system made, which have no link, are left out by the player test.
-            var alive = squad.Members.Where(m => table.IsAlive(m) && (table.Cold(m.Slot)!.IsPlayer || table.Cold(m.Slot)!.Save is not null)).ToList();
+            // A member of a loaded player platoon is written whoever owns it (a prisoner or slave kept in the squad is not the player's but is in the
+            // file). An NPC of a saved NPC platoon now in a squad of its own (a slave handed over or bought free) stays in that platoon's file
+            // (WriteSavedMembers): written here it came back as the player's (#619).
+            var alive = squad.Members.Where(m => table.IsAlive(m) && InPlayerFile(table.Cold(m.Slot)!, spawned)).ToList();
             int index = order.IndexOf(squad);
 
             // A player's squad is written even when empty: the original keeps empty squads (the squads screen removes them).
@@ -627,6 +629,13 @@ public static partial class SaveCapture
     }
 
     /// <summary>
+    /// Whether a character belongs in a player platoon file: a player character, or one made from a slot of a loaded player platoon
+    /// (<paramref name="spawned"/>).
+    /// </summary>
+    static bool InPlayerFile(CharacterCold cold, HashSet<(string Platoon, int Slot)> spawned) =>
+        cold.IsPlayer || cold.Save is { } link && spawned.Contains((link.PlatoonName, link.Slot));
+
+    /// <summary>
     /// The platoon of a player-side squad: its own, by the file it was loaded from (never by its members: a character moved between squads would
     /// carry the platoon with it), else a new one; placed at its first member, its memory noted, and named as the tabs show it.
     /// </summary>
@@ -646,6 +655,7 @@ public static partial class SaveCapture
 
         kept.Add(platoon.Name);
         NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
+        AutonomySave.Write(platoon.Record, squad);
         if (index >= 0)
         {
             // The name the tabs show is the record's name; the string id stays the file's (Observed: rename writes the record's name,
@@ -756,7 +766,7 @@ public static partial class SaveCapture
         sc.Position = hot.Position;
         var link = cold.Save;
         sc.Rotation = link is not null && MathF.Abs(SaveRotation.Difference(hot.Yaw, link.Yaw)) < 1e-4f ? link.Rotation : SaveRotation.OfYaw(hot.Yaw);
-        if (sc.GameState is { } g) WriteGameState(g, builder, world, data, options, clock, buildings, sc, cold, id, isLeader, orders, link);
+        if (sc.GameState is { } g) WriteGameState(g, builder, world, data, options, clock, buildings, sc, cold, id, isLeader, orders, link, isNew);
 
         // Body: stats and medical state, from the host, else the loaded ones, else (for a new character) defaults.
         var (stats, medical) = (id.IsNone ? null : options.Bodies?.Invoke(id)) ?? (null, null);
@@ -777,7 +787,7 @@ public static partial class SaveCapture
     /// </summary>
     static void WriteGameState(FcsRecord g, SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
         IReadOnlyDictionary<string, FcsRecord> buildings, SaveCharacter sc, CharacterCold cold, CharacterId id, bool isLeader, bool orders,
-        SavedCharacterLink? link)
+        SavedCharacterLink? link, bool isNew)
     {
         g.Strings["name"] = cold.Name;
         g.Bools["is leader"] = isLeader;
@@ -802,7 +812,8 @@ public static partial class SaveCapture
             });
         }
 
-        HeldSave.Write(g, cold, link, world.Fixtures, buildings);
+        // A new record has no held keys of the save to leave as read: a captive of a save's platoon split into one of its own (#677).
+        HeldSave.Write(g, cold, isNew ? null : link, world.Fixtures, buildings);
 
         // Carrying or carried: the bool says which, the partner's handle is written once every character has one.
         g.Bools["carrying"] = !cold.Carrying.IsNone;
@@ -818,6 +829,16 @@ public static partial class SaveCapture
 
         // The character's slot 0x398 (FUN_1406280a0): an animal's age, 1 for people (docs/game/animals.md "Ageing"; Verified in vanilla saves).
         if ((cold.Stats ?? link?.Stats) is { } aged) g.Floats["age"] = aged.Scale;
+    }
+
+    /// <summary>
+    /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>); the handle of its contract's mission target is written
+    /// once every character has one (<see cref="MemoryPass.JobTargets"/>), one not saved keeps the handle the save named.
+    /// </summary>
+    static void WriteAi(FcsRecord platoon, AiSave? ai)
+    {
+        AiSave.Write(platoon, ai);
+        if (ai is { Contract: not null, Target.IsNone: false }) s_memoryPass?.JobTargets.Add((platoon, AiSave.TargetKey, ai.Target));
     }
 
     /// <summary>
@@ -981,7 +1002,7 @@ public static partial class SaveCapture
             if (p is not null && (p.Dead || platoon.Record.Bools.ContainsKey("dead"))) platoon.Record.Bools["dead"] = p.Dead;   // +0x1f0
             if (p is not null) platoon.Record.Bools["intact"] = p.IntactFlag;   // +0x100
             ShopSave.Write(platoon.Record, squad is not null ? squad.Shop : sp.Shop, world);
-            AiSave.Write(platoon.Record, squad is not null ? AiSave.Of(squad.Ai) ?? squad.SavedAi : sp.Ai);
+            WriteAi(platoon.Record, squad is not null ? AiSave.Of(squad.Ai) ?? squad.SavedAi : sp.Ai);
 
             // A wild one the AI ran: its package, persistent while it occupies a town (as the original's occupation).
             if (sp.Wild is not null && p is not null && (squad?.Ai?.Current?.Id ?? p.Package) is { } package)
@@ -1053,17 +1074,23 @@ public static partial class SaveCapture
     /// The PLATOON handle of every world platoon the save holds: the loaded save's (stand-ins and saved platoons, by name; not those despawned) and
     /// the ones just written (<paramref name="fresh"/>).
     /// </summary>
-    static Dictionary<int, Hand> PlatoonHands(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    static Dictionary<int, Hand> PlatoonHands(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh) =>
+        WrittenPlatoons(game, world, loaded, fresh).ToDictionary(kv => kv.Key, kv => kv.Value.Handle);
+
+    /// <summary>
+    /// The save's PLATOON of every world platoon it holds, by world platoon id (see <see cref="PlatoonHands"/>).
+    /// </summary>
+    static Dictionary<int, SavePlatoon> WrittenPlatoons(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
     {
         var byName = new Dictionary<string, SavePlatoon>(StringComparer.Ordinal);
         foreach (var x in game.Platoons) byName.TryAdd(x.Name, x);
 
-        var hands = new Dictionary<int, Hand>();
+        var platoons = new Dictionary<int, SavePlatoon>();
         if (loaded is not null)
         {
             foreach (var (id, name) in loaded.RoamingPlatoons)
             {
-                if (byName.TryGetValue(name, out var sp)) hands[id] = sp.Handle;
+                if (byName.TryGetValue(name, out var sp)) platoons[id] = sp;
             }
         }
 
@@ -1071,12 +1098,28 @@ public static partial class SaveCapture
         {
             foreach (var sp in saved.Platoons)
             {
-                if (sp.PlatoonId >= 0 && !sp.Despawned && byName.TryGetValue(sp.Name, out var written)) hands[sp.PlatoonId] = written.Handle;
+                if (sp.PlatoonId >= 0 && !sp.Despawned && byName.TryGetValue(sp.Name, out var written)) platoons[sp.PlatoonId] = written;
             }
         }
 
-        foreach (var (id, sp) in fresh) hands[id] = sp.Handle;
-        return hands;
+        foreach (var (id, sp) in fresh) platoons[id] = sp;
+        return platoons;
+    }
+
+    /// <summary>
+    /// The <c>separated</c> hand of each platoon split off its squad since the world began (<see cref="Platoon.SeparatedFrom"/>): the handle the
+    /// platoon it was split from was just written with, null when the save does not hold that one. A save's own hands stay as they were read.
+    /// </summary>
+    static void WriteSeparated(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    {
+        var written = WrittenPlatoons(game, world, loaded, fresh);
+        foreach (var (id, sp) in written)
+        {
+            if (world.Platoons.Find(id) is not { SeparatedFrom: >= 0 } p) continue;
+
+            var parent = written.TryGetValue(p.SeparatedFrom, out var from) ? from.Handle : Hand.Null;
+            parent.Write(sp.Record, "separated");
+        }
     }
 
     /// <summary>
@@ -1205,6 +1248,21 @@ public static partial class SaveCapture
             && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
 
         /// <summary>
+        /// A captive split off a wild or homeless squad (<c>PopulationSystem.SplitCaptives</c>) has a platoon of its own and no town, and no other
+        /// writer holds it: it is written here, townless, and loads as a homeless wild platoon (#677).
+        /// </summary>
+        bool TownlessCaptive(Platoon? platoon, int faction) =>
+            platoon is { Saved: null, Wild: false } and ({ SeparatedFrom: >= 0 } or { SeparatedFromSquad: >= 0 })
+            && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
+
+        /// <summary>
+        /// Whether a squad of the town, platoon and faction is written here (<see cref="Writable"/>, <see cref="MadeWild"/>,
+        /// <see cref="TownlessCaptive"/>).
+        /// </summary>
+        bool Written(int town, Platoon? platoon, int faction) =>
+            Writable(town, faction) || MadeWild(platoon, faction) || TownlessCaptive(platoon, faction);
+
+        /// <summary>
         /// The squads in the world (not a save's platoon), with their dead; a made never-made platoon wiped out keeps its record unless the original
         /// would drop it.
         /// </summary>
@@ -1220,10 +1278,10 @@ public static partial class SaveCapture
                     if (roamer is null || roamer.Saved is not null && roamer.Stored is null) continue;   // a save's platoon (WriteSavedNpcs)
                 }
 
-                if (!Writable(squad.Town, squad.Faction) && !MadeWild(roamer, squad.Faction)) continue;
+                if (!Written(squad.Town, roamer, squad.Faction)) continue;
 
                 // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
-                var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
+                var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false } c && OwnRecord(c)).ToList();
                 var alive = every.Where(m => table.Cold(m.Slot)!.DiedTick < 0).ToList();
                 var into = Into(roamer);
                 if (alive.Count == 0)
@@ -1246,8 +1304,15 @@ public static partial class SaveCapture
                     .ToList();
                 var sp = WriteWorldSquad(squad, roamer, members, into);
                 if (roamer is not null) _written[roamer.Id] = sp;
+                if (roamer is { Persistent: true }) sp.Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
             }
         }
+
+        /// <summary>
+        /// Whether a character gets a record of its own here: one the population made, or one made from a save's platoon it has left since (a
+        /// captive split off its squad, <c>PopulationSystem.SplitCaptives</c>). Any other character of a save is written into its own platoon.
+        /// </summary>
+        bool OwnRecord(CharacterCold cold) => cold.Save is not { } link || _world.Saved?.MemberOf(link) is { Gone: true };
 
         /// <summary>
         /// Writes one squad in the world, with its platoon's state when it has one.
@@ -1273,7 +1338,7 @@ public static partial class SaveCapture
             foreach (var p in _world.Platoons.All)
             {
                 if (p is not { State: PlatoonState.Unloaded, Stored: { } stored }) continue;
-                if (!Writable(p.Origin, p.Faction) && !MadeWild(p, p.Faction)) continue;
+                if (!Written(p.Origin, p, p.Faction)) continue;
 
                 // A made never-made one with no one left (the dead are not stored) keeps its record too, but declared dead: the original drops an
                 // unloaded dead platoon.
@@ -1344,7 +1409,7 @@ public static partial class SaveCapture
                 record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
             else record.Strings.Remove(MissionTownKey);
             ShopSave.Write(record, shop, _world);
-            AiSave.Write(record, ai);
+            WriteAi(record, ai);
             NoteMemory(record, memory);
 
             WriteMapArea(record, _data, lead.Position);
@@ -1359,6 +1424,14 @@ public static partial class SaveCapture
         /// </summary>
         void SetTown(FcsRecord record, int town, string templateId, bool roaming, TownBuilding? homeBuilding, string? package)
         {
+            // A townless platoon (TownlessCaptive): the roaming pool, kept only as its platoon says (the callers mark a persistent one).
+            if (town < 0)
+            {
+                record.Ints["sqt"] = 2;
+                record.Bools["persistent"] = false;
+                return;
+            }
+
             var site = _data.Sites[town];
 
             // The TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement).
@@ -1515,9 +1588,10 @@ public static partial class SaveCapture
     #region Locks and buildings
 
     /// <summary>
-    /// The registered buildings' locks, doors and container contents, and the homes a lock-up round locked, into their zones' state records. A
-    /// building the save has no record of is left out, except a level placement (one placed during the session) whose containers hold items: it gets
-    /// a state record in its zone's file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt without them.
+    /// The registered buildings' locks, doors, container contents and empty loose-item slots' waits, and the homes a lock-up round locked, into
+    /// their zones' state records. A building the save has no record of is left out, except a level placement (one placed during the session) whose
+    /// containers hold items: it gets a state record in its zone's file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt
+    /// without them.
     /// </summary>
     static void WriteLocks(SaveGame game, World world, Dictionary<string, FcsRecord> buildings, WorldLevelData? levels)
     {
@@ -1542,6 +1616,8 @@ public static partial class SaveCapture
             if (locks.IsHouseLocked(world, b)) state.Bools[Locks.LockSystem.HouseLockedKey] = true;
             else state.Bools.Remove(Locks.LockSystem.HouseLockedKey);
         }
+
+        world.ItemSlots.WriteDue(world, buildings);
     }
 
     /// <summary>

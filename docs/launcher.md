@@ -186,7 +186,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
 - Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour, Post FX, Interface)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
-  is on the game's Advanced page only.
+  is on the game's Advanced page only, as is Lamp warmth.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
   Traced), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid). The switches they stand for
   (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at start, so the launcher's choice wins
@@ -223,7 +223,13 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, a slider with `modes`
   (named values; render scale's Ultra performance 0.33 to DLAA 1.00) a drop-down of them and Custom with the slider under it, locked to the
   mode's value but under Custom (the game's Display page alike; a value none of them reads Custom), any other slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A setting with `shownWhen` (`key`, `value`)
-  is shown only while that setting is at that value (the DLSS preset while anti-aliasing is DLSS; the game's Display page alike). A look setting that differs from the look's
+  is shown only while that setting is at that value (the DLSS preset while anti-aliasing is DLSS; the game's Display page alike); with `not`
+  at any other value, and with `and` another condition must hold too (older launchers ignore both). A setting with `renderer` (`vulkan`
+  or `metal`) is shown only while Play would start the game with that renderer (`GraphicsRenderer`, as `SetUpRenderer` picks it; no
+  `renderer`: always): the Vulkan anti-aliasing and upscaling rows are Vulkan's, and on macOS the schema adds Metal's Display rows
+  after the world tick: the switch `metalUseUpscaling` (default on) and two trees under it. On: `metalUpscaler` (MetalFX temporal, MetalFX
+  spatial, TAA) and `metalRenderScale` (modes). Off: `metalRetinaResolution` (while `fullScreen` is off), `metalRenderDivisor` (while it is on) and `metalUiAtScreenResolution` (always;
+  [metal-backend](metal-backend.md)). A look setting that differs from the look's
   value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
   as in the game's menu. Reset graphics, in a footer
   under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
@@ -262,6 +268,8 @@ interpolated string, which no translation could match.
 
 - Shown as the original launcher shows it: enabled mods in `mods.cfg` order first, then the rest after their header dependencies.
   Mods in a dependency cycle are kept at the end, where the original drops them. Mods not in `__mods.list` are new and start enabled.
+- Ctrl+click and Shift+click select several mods; dragging a selected row's handle or Alt+Up / Alt+Down moves them all together,
+  keeping their gaps, and stops at the list's ends.
 - Every change to the list (a tick, a drag, a preset, Arrange, From save) and Play write `mods.cfg` (enabled `<name>.mod`, list
   order, CRLF) and `__mods.list` (every listed name, plus old names not on disk). These are the files the original game reads, so the mod list applies to it too.
 - Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Play and the
@@ -280,6 +288,40 @@ interpolated string, which no translation could match.
   (preliminary: DLLs and initialization are checked only at start); **Arrange** proposes an
   order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a
   contradiction moves nothing and is shown ([dependencies](modding-dependencies.md#launcher)).
+
+## Workshop sync (macOS)
+
+Kenshi has no Mac build, so the macOS Steam client never installs it, but it still downloads the Kenshi Workshop items of an account that owns
+the game. The mods page's **Sync workshop** button (`WorkshopSync`, `SteamUgc`, `MacSteam` in `Meitou.Core/Steam`) asks that client to download
+or update the subscribed items and waits until they are installed; subscribing and unsubscribing stay in Steam (client or web).
+
+- The button is shown only on macOS and only when the client's own `libsteam_api.dylib` exists
+  (`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/Frameworks/Steam Helper.app/Contents/MacOS/`, hardcoded). Without it
+  nothing is done. Meitou ships no Steam binary.
+- Steam is not started: when its process (`steam_osx`) is absent, the status asks the user to start it and sign in first.
+- The sync runs in a **child process**: the launcher's own executable started with `--macos-workshop-sync` (`WorkshopSyncChild`, no window), which
+  prints `meitou-sync:`-prefixed `progress`, `result` or `problem` lines that `WorkshopSyncRunner` reads. Steam counts the account as playing Kenshi
+  until the process that initialised Steamworks exits, not until `SteamAPI_Shutdown`; in the launcher's own process the client then waited on
+  "Kenshi" when quitting (**Observed**: `gameprocess_log.txt` tracked the launcher's PID from the sync until Steam itself quit, while the spike's
+  short-lived processes were untracked at exit).
+- The child sets `SteamAppId`/`SteamGameId` (233860) in the real process environment (`setenv`; .NET's own copy is not seen by native code),
+  calls `SteamAPI_InitFlat`, lists `GetSubscribedItems`, calls `DownloadItem` for each item not installed and current, polls `GetItemState`
+  (current = Installed without NeedsUpdate, Downloading or DownloadPending) every 0.5 s and prints `installed of total`; then `SteamAPI_Shutdown`
+  and it exits. The mod list is read again at the end.
+- While it runs, Steam shows the account as playing Kenshi. The button reads **Stop syncing** meanwhile; stopping (or closing the launcher) kills
+  the child, Steam keeps downloading by itself.
+- Items land in the client's `steamapps/workshop/content/233860/<id>/` (one `.mod` each). `GameInstall.WorkshopDirectory` falls back to that
+  folder on macOS when the install is not inside a Steam library, so the launcher and the game find them whether or not Steam is running.
+
+**Verified** (macOS Steam client, the owner's account, 19 subscribed items, 7.3 GB, Kenshi not installed): `SteamAPI_InitFlat` succeeds as app
+233860 with the bundled dylib; `GetSubscribedItems` lists all 19; after `DownloadItem` all read state 5 (Subscribed|Installed, before: 9) with their
+folders; `SubscribeItem` alone downloads an item within a second (11 KB), `UnsubscribeItem` drops the count and Steam deletes the folder within about
+20 s; with Steam closed `SteamAPI_InitFlat` fails ("Could not determine Steam client install directory") and does not start it.
+**Observed**: Steam's `content_log.txt` shows the subscriptions' download starting when the first process that queried them ran as app 233860, and
+`DownloadItem` only raising its priority ("Priority First"); `GetItemDownloadInfo` reported 0 bytes throughout, so progress is the installed count.
+**Unknown**: whether the dylib path survives Steam updates; whether pre-UGC (legacy `ISteamRemoteStorage`) items download this way (Valve's
+[Workshop guide](https://partner.steamgames.com/doc/features/workshop/implementation) says `DownloadItem` covers ISteamUGC items only); how a sync
+behaves offline or without a Kenshi licence beyond Steam's init message.
 
 ## Continue
 

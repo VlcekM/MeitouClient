@@ -141,15 +141,16 @@ public sealed class Inventory(int width, int height)
     /// cell (the item itself goes into the last cell, split-off copies into the others). True when every unit found a place; otherwise what did not
     /// fit stays in <paramref name="item"/>'s <see cref="ItemInstance.Quantity"/> (the caller keeps or drops it) and the units placed stay placed.
     /// Units with a buyback receipt top up only stacks of the same trade and direction; with no free cell left they join plain stacks too and lose
-    /// the receipt (docs/simulation.md, trading).
+    /// the receipt (docs/simulation.md, trading). <paramref name="mainShut"/>: the main grid takes nothing, only the backpack does (a live animal's,
+    /// <see cref="InventoryCommands.MainClosed"/>).
     /// </summary>
-    public bool Add(ItemInstance item)
+    public bool Add(ItemInstance item, bool mainShut = false)
     {
         var bag = Backpack?.Contents;
-        if (TopUp(this, item, false) || (bag is not null && TopUp(bag, item, false))) return true;
-        if (Place(this, "main", item)) return true;
+        if ((!mainShut && TopUp(this, item, false)) || (bag is not null && TopUp(bag, item, false))) return true;
+        if (!mainShut && Place(this, "main", item)) return true;
         if (bag is not null && Place(bag, "backpack_content", item)) return true;
-        return item.Buyback is not null && (TopUp(this, item, true) || (bag is not null && TopUp(bag, item, true)));
+        return item.Buyback is not null && ((!mainShut && TopUp(this, item, true)) || (bag is not null && TopUp(bag, item, true)));
     }
 
     /// <summary>
@@ -190,7 +191,8 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// Moves units of <paramref name="item"/> into stacks of <paramref name="into"/> with room left (of <paramref name="section"/>, else of its
-    /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left.
+    /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left. Partial charges combine as in
+    /// <see cref="InventoryCommands.Merge"/>.
     /// </summary>
     static bool TopUp(Inventory into, ItemInstance item, bool dropReceipt, string? section = null)
     {
@@ -207,7 +209,11 @@ public sealed class Inventory(int width, int height)
             other.Quantity += move;   // clears other's receipt; the joined one is set after
             if (kept is not null) other.Buyback = kept.Append(coming!.Take(move));
             item.Quantity -= move;
-            if (item.Quantity == 0) return true;
+            if (item.Quantity > 0) continue;
+
+            // The last units bring the stack's partly used one: its charges join the kept stack's instead of being dropped (#620).
+            InventoryCommands.JoinPart(other, item.Charges);
+            return true;
         }
         return false;
     }
@@ -293,7 +299,8 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Adds the items (record, place, quantity, level, quality, charges, the unique flag, buy-back coins, a bag's contents) to the world hash.
+    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, buy-back coins, a bag's contents) to the world
+    /// hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -309,6 +316,7 @@ public sealed class Inventory(int width, int height)
             h.Add(i.Quality);
             h.Add(i.Charges);
             if (i.Unique) h.Add(Rng.StableHash("Unique"));
+            if (i.Rotated) h.Add(Rng.StableHash("Rotated"));
             if (i.Buyback is { } receipt)
             {
                 h.Add(Rng.StableHash("Buyback"));

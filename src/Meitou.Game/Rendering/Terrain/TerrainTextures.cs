@@ -1309,8 +1309,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             var key = $"{NormalCacheVersion}|{size}|{path.ToLowerInvariant()}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
             var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key));
             var hash = Convert.ToHexString(digest)[..24].ToLowerInvariant();
-            var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return Path.Combine(localData, "Meitou", "terrain", "normals", hash + ".bc5");
+            return LoadCaches.Folder("terrain", "normals", hash + ".bc5");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -2031,7 +2030,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>
-    /// The world colour map's disk cache, <c>%LOCALAPPDATA%\Meitou\terrain</c> (neither read nor written with <c>--no-load-cache</c>): decoding the
+    /// The world colour map's disk cache, <see cref="LoadCaches.Root"/>'s <c>terrain</c> (neither read nor written with <c>--no-load-cache</c>): decoding the
     /// 64 colour tiles (2048² PNGs) to shrink them took over a second of every start. Named by a hash of the tiles' paths, sizes and times and the
     /// map's size, so a mod's tile counts.
     /// </summary>
@@ -2045,8 +2044,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         var digest = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key.ToString()));
         var hash = Convert.ToHexString(digest)[..24].ToLowerInvariant();
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "terrain",
-            $"worldcolour_{hash}.bin");
+        return LoadCaches.Folder("terrain", $"worldcolour_{hash}.bin");
     }
 
     /// <summary>

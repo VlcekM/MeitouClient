@@ -472,6 +472,11 @@ public static class Enhancements
             () => Characters.PreviewStudio.Bar, v => Characters.PreviewStudio.Bar = v,
             "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with "
                 + "your graphics settings"),
+        new("lampwarmth", "Lamp warmth", "the game's colours", "amber",
+            () => Objects.LampWarmth.Enabled, v => Objects.LampWarmth.Enabled = v,
+            "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly "
+                + "yellow-green on walls and skin; Meitou draws such lamps amber, towards the game's own torch colour and as bright as they were; "
+                + "torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"),
     ];
 
     #endregion

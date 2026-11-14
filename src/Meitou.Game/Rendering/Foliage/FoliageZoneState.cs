@@ -1,3 +1,4 @@
+using Meitou.Simulation.Navigation;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Frame;
 
@@ -55,6 +56,12 @@ sealed class FoliageZoneState
     /// What the job in flight lays out.
     /// </summary>
     public FoliageZoneTier JobTier;
+
+    /// <summary>
+    /// The player's towns the job in flight lays out with (<see cref="FoliageRenderer.SetPlayerTowns"/> skips a zone while its job runs, so the
+    /// renderer compares them with the current ones when the job ends).
+    /// </summary>
+    public PlayerFoliageTowns? JobTowns;
 
     /// <summary>
     /// The laid-out groups: the instances of one mesh each.

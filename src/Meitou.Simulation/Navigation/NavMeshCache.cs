@@ -15,7 +15,7 @@ public sealed class NavMeshCache
     /// <summary>
     /// Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).
     /// </summary>
-    public const int BuilderVersion = 55;
+    public const int BuilderVersion = 58;
 
     /// <summary>
     /// The layout version of the cache file; a file with another is not read.
@@ -27,11 +27,11 @@ public sealed class NavMeshCache
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
     /// <summary>
-    /// A cache in <paramref name="directory"/>; null: <c>%LOCALAPPDATA%\Meitou\navmesh</c>.
+    /// A cache in <paramref name="directory"/>; null: <see cref="LoadCaches.Root"/>'s <c>navmesh</c>.
     /// </summary>
     public NavMeshCache(string? directory = null)
     {
-        Directory = directory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "navmesh");
+        Directory = directory ?? LoadCaches.Folder("navmesh");
     }
 
     /// <summary>

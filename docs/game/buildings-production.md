@@ -160,10 +160,11 @@ original's spread round it (the usage nodes).
 
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
-hull) or, unknown, its position. A rock's operator has arrived inside its mesh's footprint (the convex hull of its vertices
-seen from above) as the instance places it, scaled 1.2 about the box's middle (a circle of 1.2 x its radius without the mesh; the bounds box without the movement flag let
-miners work a scattered or long rock from 20 m off, #332), or within the `use range` (doubled once stopped) of the box's centre, which
-stands in for the position marker (engine choice; a rock's origin can lie off its pile); it faces that centre. Taking its ore
+hull) or, unknown, its position. A rock's operator has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of
+its vertices seen from above) as the instance places it (its bounds circle without the mesh); it walks to the bounds box's centre and
+faces it (a rock's origin can lie off its pile). Engine choice, nearer than the original: its rule above has a copper rock (`use range`
+100) mined from 100 to 200 off its position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off
+(#332). **Observed** (navmesh walks at the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. Taking its ore
 measures 40 to the footprint's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal; a builder measures a `ceiling placement` site from the floor under it (`ConstructionSystem.FloorHeight`), as the same-floor test passes it (#592: lamps hang 26 to 48 over a swamp house floor).
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when
@@ -215,7 +216,7 @@ shows the first failing message in this order (**Verified** unless marked):
 | "Cannot build inside incomplete buildings." | the building under the ghost is incomplete |
 | "Must be placed outside or on a roof." / "Must be placed inside a building." | indoor/outdoor rule; the first for `BF_RAIN_COLLECTOR` (26) |
 | "Can only be placed on certain locations (marked by blue nodes)." | `PreviewBuilding_Snapping` not on a snap node ([snapping](#snapping-to-a-building); Meitou never fails it) |
-| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid. Meitou (`PlacementCheck.HullBlock`) overlaps footprints in 2D instead, leaving out the sites and ghosts on another floor of the building the ghost stands in (the boxes are 3D). Inside a building, the footprint must lie in its convex indoor hull, and its prism (2 over the floor to 2 under its top) must not reach more than 1 into that building's own collision (walls, floors, roofs; `FootprintPrism`): the hull takes in the walls, so a footprint inside it could stand in a Storm house's sloped wall |
+| "Too close to another building." / "No valid usage nodes." | a footprint node box overlaps physics shapes (group mask 0xfffde40, up to 32) or another queued ghost; second text when every usage node is invalid. Meitou (`PlacementCheck.HullBlock`) overlaps footprints in 2D instead, leaving out the sites and ghosts on another floor of the building the ghost stands in (the boxes are 3D). Inside a building, the footprint must lie in its convex indoor hull, and its prism (2 over the floor to 2 under its top) must not reach more than 1 into that building's own collision (walls, floors, roofs; `FootprintPrism`): the hull takes in the walls, so a footprint inside it could stand in a Storm house's sloped wall; from 12 over the floor up, nor more than 1 into the building's drawn roofs and ceilings (its parts' render-mesh triangles within 40° of level, `RoofCover`), as some parts lack that collision (Swamp House upper storey: collision for its floor only, so a wind generator went up through the roof) |
 | "There are characters in the way." | an object in a node box is rejected by `FUN_1407d1440` (**Observed**) |
 | "The building blocks another building use nodes." | the footprint covers another building's usage node |
 | "The building has one or more parts on invalid ground." | a BUILDING_PART with `ground type` LAND has its node centre below y = 98 (water level, **Observed**) |
@@ -254,20 +255,70 @@ shows the first failing message in this order (**Verified** unless marked):
 - **The outpost** (**Verified**, `FUN_140934e10`): a `Town` made from the TOWN `player_town_template` (base data: name
   "Your Outpost", type 1, `town radius mult` 1, no faction), owned by the player faction, named "Your Outpost",
   `public` false, `plevel` 0, `discovered` and `explored` (+0x180/+0x181, KenshiLib 1ce4a16 `TownBase`), added to the player-town list (town manager +0x68) that the save writes
-  ([player outposts](../formats/save.md#player-outposts)). On load (`FUN_14092ae80`) a player-faction town within the
-  radius of another player town is removed with "Player town '<a>' withing boundaries of <b>".
+  ([player outposts](../formats/save.md#player-outposts)). On load (`FUN_14092ae80`) a player-faction town whose centre lies strictly inside the
+  radius of its nearest other player-owned, non-nest town is removed (the one reached first in list order; its buildings keep their `town` handle,
+  become unassigned if that handle no longer resolves) with "Player town '<a>' withing boundaries of <b>" ([rule](../formats/save.md#importing-a-game-savemanagerimportgame-fun_140378a30)).
   No residents: the template lists none, and the resident pick (`Town::chooseResidents` `FUN_1409370d0`, from the building
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
-- **Centre and radius** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
-  `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` / `FUN_14054fea0` and town merge
-  `FUN_140931840`): a player town's centre (+0x48) becomes a weighted mean of its buildings' position markers (two building
-  sets, the first weighted x4; which buildings each holds is **Unknown**), put on the ground and on the navmesh within 500 (kept
-  when no point is found); the radius (+0x51c) becomes the farthest building's X/Z distance from it + 200, at least 1250, clamped
-  to [1000, 20000]. A town with no buildings at all is removed. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player
-  town (2500 while it is at most 1), and `type`-based radii (table above) otherwise; campaigns' arrival and in-town tests
-  (`FUN_140926d50`) use it. So the first building's spot stops being the centre as the base grows. Meitou:
-  `ConstructionSystem.ReassessTown`, a plain mean of the town's outdoor sites (engine choice), also on load.
+- **Town at materialization** (**Verified**, GOG executable: placement commit `0x1404d6c40`, building creation
+  `0x14057c610`, containment lookup `0x140927fd0`; decompile names `FUN_1404d72a0`, `FUN_14057cc70`,
+  `FUN_140928890`): the 5000-unit ghost lookup above proposes a town; creation rejects a player town when the
+  building's root position is outside its actual radius (X/Z, boundary included). It then chooses the nearest
+  containing non-nest town of any owner; no containing town gives the live `NO_TOWN` object. Its fixed handle is
+  `(TYPE=13, C=511, CS=-1064864767, I=0, S=0)` (**Verified**, GOG `TownNull` constructor `0x140934720`,
+  decompile `FUN_140934fe0`, and the zero initial slot/serial from `RootObjectBase`; **Observed** in the original's
+  saved Wind Generator II `1099-zone28.30-INGAME`). NO_TOWN contributes to no outpost radius or power frame.
+  Town-creating buildings use a separate nearest-town path (`FUN_140927e40`); Meitou founds their outpost directly.
+  Meitou: `ConstructionSystem` retains a containing proposed player town, otherwise compares all registered towns and
+  non-nest `PopulationData.Sites` by distance within their radii. Level towns keep `Town = 0`, `ForeignTown = null`,
+  `InNoTown = false`, using the existing nearest-town power fallback. Only no containing town records `Hand.NoTown`
+  with `InNoTown`; furniture inherits its placed parent's town state. **Unknown:** exact level-town identity persistence
+  for a new placement when another non-containing town is nearer; this fallback does not store the selected level handle.
+- **Later adoption** (**Verified**, GOG founding path `0x1404d6730`, decompile `FUN_1404d6d90`): founding an
+  outpost explicitly moves existing player buildings into it when their town is a player town or NO_TOWN and their
+  nearest town of any faction within 8000 is the new one. An NPC-town building is excluded. Meitou clears the old
+  foreign handle and NO_TOWN flag when adopting. Merely extending a town's radius over a NO_TOWN building does
+  not adopt it: refit finds members by their existing resolved town, not by containment (`FUN_1405488f0`,
+  `FUN_1409fb880`, `FUN_1400f6c20`); its live NO_TOWN handle keeps resolving to NO_TOWN. Reassessment for a
+  last-placed NO_TOWN building does nothing (`TownNull` slot 77 `FUN_1409510d0` returns null;
+  `FUN_14054d080` requires a town).
+- **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`,
+  `FUN_1406bd000`, `FUN_1400f6c20`, `FUN_1409f9100`): a null or truly dangling handle (such as a removed
+  outpost) resolves to the nearest non-nest town, any owner and no distance cap, for refit, emptiness,
+  reassessment and power. A live level-town or NO_TOWN handle keeps that membership instead. Meitou preserves
+  it through `BuildSite.ForeignTown`, with `InNoTown` for NO_TOWN; `TownLookup.KeyOf` excludes it from player
+  refits and `ProductionSystem.PowerTown` excludes NO_TOWN from grids. `BuildingSave` recognizes the canonical
+  NO_TOWN handle even in a new save with no faction-less building carrying it, and writes it back unchanged.
+  A loaded null/dangling handle keeps `Town=0` and the nearest-town fallback; it remains distinct from a new
+  townless placement. **Observed**, original save and dismantle result: excluding generator 1099 reproduces
+  Goonrock's saved radius 2545.56 exactly; counting it gives 2758.76.
+
+  **Research** (**Observed**, `FUN_14029be00` / `FUN_14029b8d0`; faction accessor `FUN_140594640` verified from executable bytes): bench level and operated progress require a player-owned bench, not a resolved town. Meitou likewise permits completed player benches in NPC houses and with missing town handles. No unresolved-town flag is needed. Exact powered-bench throughput remains **Unknown**.
+
+  **Power** (**Verified**, `FUN_14092d850`): the power manager advances frames from the registered town list; `NO_TOWN` is not a frame. **Observed** (`FUN_140299370`, `FUN_140296940`): the sound-emitter power query answers powered when the machine's resolved power town is null. **Observed** (`FUN_140296940`, `FUN_1409f9180`, `FUN_140927f10`, `FUN_1402973f0`, `FUN_14092da80`, `FUN_140296e00`): the machine's power town is its building's town handle when that is a town; otherwise the NEAREST non-nest town by horizontal distance, whatever its owner and with no distance cap (so a machine of a bought NPC-town house uses that town's frame). Only with no town at all is it never registered: its stored power stays 0 and a machine that draws power has satisfaction 0 (one that draws nothing counts as 1). Meitou: a machine whose building has no town number resolves to the nearest player town or placed non-nest town of the level data (`PopulationData.Sites`, nest types excluded here; a tie goes to a player town) and shares that town's grid (`ProductionSystem.PowerTown`); an NPC town gets a frame of its own among Meitou's grids, holding the machines that resolve to it (Meitou builds machines for player buildings only) plus the generation of the generators placed in that town's level data (`ProductionSystem.NpcGeneration`, [NPC generator state](#npc-generator-state): saved switch and construction health, unlimited NPC fuel output, wind scaled by its rotor), so a machine there with no running generator gets no power. **Observed** (`FUN_14092d850`, `vfunc 0x270` is the nest test): the original runs a frame for every non-nest town, NPC towns included, with the output of every generator registered to it (`FUN_1402973f0` registers by the building's town, whatever its owner); **Verified** (base data, scratch probe): 170 generator placements, all `power on`, all with a town handle, 123 wind generators and 47 fuel generators with an empty tank (`consumption amount-0` 0), no batteries, no rain collectors; 72 of 261 towns have a generator, 53 a wind generator. **Observed** (round-4 parity, `FUN_1402a1750`, `FUN_14092cd60`): a level building registers through its saved state, so an NPC town's turrets, searchlights, spotlights, wells, mines and refineries (base data: draws 3 to 40 against a Wind Generator II's 100) are consumers of the same water-filling frame. Meitou: `ProductionSystem.NpcDraws` adds one pseudo consumer per standing level building of that town whose functionality has a negative `power output` (a light only outside daytime; houses and stalls have no functionality and are left out), so the player's machine gets what the NPC loads leave (wind 100, three turrets at 5 and a mine at 40: a machine drawing 50 gets 45); generator state follows the rules below. No town in the world gives satisfaction 0 for a power-drawing machine. **Unknown**: whether the original's nest test also excludes a nest marker, and the exact parent-chain test for furniture inside a building.
+- **Centre, radius and placement-time merge** (**Verified**, `Town::reassessTownPosition` `FUN_1405488f0`, read from the disassembly of the Steam and the GOG 1.0.68 `kenshi_*x64.exe`: the instructions are identical
+  and the constants agree; the Ghidra text is wrong at the division, so build nothing from it; via `TownList::reassessTownPositions` `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` /
+  `FUN_14054fea0` and town merge `FUN_140931840`). Only for a town of the player faction. The buildings of a town are those whose root object's town handle resolves to it, else the NEAREST non-nest town by
+  horizontal distance (`FUN_1400f6c20`; so a building left with a dangling handle by a load that removed an overlapping outpost belongs to the nearest town and is counted at the next refit). The building
+  function keys come from the constructors (house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
+  `(4 x sum of the marker positions of the houses (19) and gates (21) + 1 x sum of the top-level REFINERY (4) buildings that are not foliage) / (4 nA + nB)`, X and Z (the move, slot 32 `FUN_140933b90`, sets the town's Y to the terrain height; **Observed**, round-4 parity); with no such building
+  nothing changes (no centre, no radius; the town is removed only when it has no building at all). It is then put on the closest navmesh point within a 500 box (doors and water excluded) and
+  **keeps its old position when none is found**. The radius (+0x51c) is the farthest building's X/Z distance from the new position + 200 over every building that is not a wall piece (gates, doors, storage, turrets
+  and children count; wall pieces never do), from 1250, clamped to [1000, 20000]. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player town (2500 while it is at most 1), and `type`-based radii
+  (table above) otherwise; campaigns' arrival and in-town tests (`FUN_140926d50`) use it. So the first building's spot stops being the centre as the base grows. Not modelled: the marker position of a building
+  with two or more entrances (nearest to the old centre; **Unknown** exclusion set; Meitou uses the site position), the ray down onto a wall piece that moves the centre to that wall (**Observed**, rare), and
+  the zone set the finder searches (**Unknown**). Meitou: `TownRefit` (`ConstructionSystem.ReassessTown`, `TownLookup`, `WalkableSpots.Closest`; the walkability is 2D, ring search with 8-unit spacing). Loading does not reassess at all
+  (the saved centre and radius stay as saved; **Verified**: `loadGame` only normalises overlaps, `FUN_14092ae80`). **Verified** (`FUN_14054d080`, `FUN_140931840`, `FUN_140927060`, `FUN_14092b3c0`): the touched town
+  is refitted, then every other player-faction town (an empty one is removed), then the first overlapping player-faction town in list order is merged, using `distance² < (radiusA + radiusB)²`; there is no early exit
+  when the touched town has no centre building (Meitou: the merge scan is skipped only when the touched town was removed; the original's stale-centre behaviour then is **Unknown**). A building whose town is not a player
+  outpost (a level town) still triggers the other-town refit. The larger-radius town survives (ties keep the reassessed town), the other town's buildings move to it, and the other town is removed. The survivor is reassessed again, allowing chained merges. Not modelled:
+  the other-town refit covers only towns with a loaded zone in the original (**Unknown**), and a batch placement scans for merges once, for the last building's town (Meitou `ConstructionSystem.PlaceAll` does the same).
+  **Original's own result** (**Observed**, GOG 1.0.68, save `Beep Fan Club 1`, after it dismantled Goonrock's Animal Feeder and saved): both outposts were refitted (Drycoom too, untouched): Goonrock (-17121.15, -9089.42) radius 2545.56, Drycoom (82078.01, -77670.35) radius 2846.43; the radius rule reproduces both exactly at those centres (Goonrock only without the NO_TOWN generator 1099, see Unresolved building towns). Meitou on open ground gives the formula centres, Goonrock (-17103.31, -9099.17) radius 2529.42 and Drycoom (82069.34, -77698.09) radius 2869.47, so the centres differ by 20.3 and 29.1 units and the radii follow (-16.1, +23.0); with a real navmesh Goonrock's snap adds 80 units (63.5 off). **Tested and not the cause** (round 5): the weights and sets (no weighting of any building class reproduces either centre), the marker position (the 4 + 5 buildings have no use node or position-marker part; use nodes of a refinery move the centre 5 units the wrong way), null-handle refineries (the two near Drycoom stand inside the Snailhouse, so are no members), the cell window of the finder (all members lie within one cell of the old centre), the ray onto a wall (no wall piece lies at either centre; a wall's marker is its origin), a pure closest-point snap on the original's `navtiles` (Goonrock's nearest face is 74 units away at (-17153, -9045), the original's centre 54 units from any face; Drycoom's C0 is on a face). **Unknown**: the remaining gap. Drycoom's original centre lies 19.3 units off the line of the gate's connector and 8 units from C0, which stands 8 units from that wall line, so the original probably moved C0 out of a wider footprint cut than Meitou's thin wall carve (Meitou's mesh shows C0 walkable); Goonrock's C0 stands in a large unwalkable area of Meitou's walkability but 54 units from any face of the original's tiles. Test: `OriginalTownRefitTests` (Slow, needs the install and a saved game of the two outposts).
+  **Round 6** (**Observed**, same GOG 1.0.68 save, the Drycoom Longhouse dismantled and saved; reproduced by `OriginalTownRefitTests`): the original refitted Drycoom to (82004.72, -77760.71) radius 2907.50, and the formula gives (82004.48, -77759.97) with the radius inside 1 unit, so the **sets, weights (4 for the Watchtower, Snailhouse and gate) and building origins are exact**; the earlier 20 to 30 unit gaps are therefore the navmesh snap, not the formula. That centre lies on the +x side of the gate (local 55, 43), outside the gate's footprint; with the Longhouse the formula centre (82069.34, -77698.09) is local (-33, 56) of the gate and the original's (82078.01, -77670.35) local (-61, 45), 27 units further out along the gate's -x side: the original moved the centre out of the gate's footprint, so its runtime navmesh carries a cut of about 60 units half width there that Meitou's thin carve lacks. A load and save alone does **not** refit: a game loaded and saved without a change (save `Beep Fan Club 1 - Loaded - then - Saved`) keeps both old centres (Goonrock (-16713.25, -9280.78), Drycoom (82029.61, -77481.41)); only a dismantle (the original's refit of every town) moves them. **Verified** in the exe (`FUN_1405488f0`): after the weighted mean (houses and gates x4 plus top-level refinery-function buildings, divided by 4 times their count plus the refinery count) the centre goes through a ray straight down from 1000 units above it (mask 0x204) and, only when the ray hits a building, is replaced by that building's marker; then a Havok closest point on the navmesh with a box of 500 (second extent 20, the filter ignores doors and water) sets the town position. A wall or gate building's marker (`WallBuilding`, `FUN_140562260`) is its origin moved by (-90, 0, half its link length x scale) in its own frame, not the origin; it matters only for the ray hit, no wall lay under either formula centre. **Unknown**: the footprint the original cuts for a wall or gate, and why Goonrock's centre lies 20 units from a formula centre that Meitou's walkability puts 80 units from walkable ground (no building stands near it).
+  **Round 8** (**Verified** decode of the snap, `FUN_1403a2fa0` / `FUN_1403a2300`, parity round 7; **Observed** residuals on the original's own saved tiles): the snap has two steps. Step 1 is the 3D closest point from the centre, whose height is the weighted mean of the members' world Y with the same weights as X and Z (cube of half size 500, door and water faces skipped). Step 2 searches boxes of 20, 40 and 80 units horizontally, always +-20 vertically, for the point nearest step 1's that stays 20 units clear of the boundary of the faces in the box; the first box with a point wins, else step 1's point stays. Meitou: `RefitSnap` over `IWalkability.SurfaceFaces` (the navmesh's kept faces; a stand-in without faces falls back to the old 2D `WalkableSpots.Closest`). Engine choice: step 2 uses plain distance to the mesh's open edges on a 0.25-unit grid, not the original's convex hulls of boundary loops grown by 20 with 8 segments per corner (**Unknown** where they differ). The town keeps the terrain height as its Y. On the saved tiles of `Beep Fan Club 1` (`zone/tile49.15.hkt`, `tile28.30.hkt`, the tiles the original regenerated with the buildings in them; test `Refitting_on_the_originals_saved_tiles_snaps_the_centres_to_within_the_known_residuals`): Drycoom with 4 buildings is 1.39 off the original's centre (formula alone 29.06; step 2 moves it 22.5 inward), Drycoom with 3 buildings 2.01 off (formula alone 0.78: the 3D step slides it 2.2 down the slope because the members' mean height lies 15.6 above the face; the original's centre fits a height at the face, so the original's centre height is **Unknown**), Goonrock 9.90 off (formula alone 20.3; the face's slope direction differs from the original's shift by about 25 degrees at every height tried, so the residual is the tile under it or the centre height, **Unknown**). Meitou's own game does not read the save's tiles: its mesh at a player town is built from the shipped terrain plus the placed buildings' collision (`NavRuntimeBuildings`) and, since round 10, without the `avoid towns` foliage the player's towns keep away ([foliage](../formats/foliage.md) "Towns"; the shipped Goonrock hole was three such boulders), which round 11 compared with the saved tile, see [pathfinding](pathfinding.md#refit-snap). **Round 11** (**Observed**, live on Meitou's own mesh after dismantling Goonrock's Animal Feeder, GOG data): the 3D step must follow each navmesh polygon's real surface, not the plane through its corners (a polygon spans slopes its corner heights do not follow; the live mesh was up to 30 units off the saved tile's heights, which slid Goonrock's step 1 by 15 units); the original's terrain mesh is cut from every second height sample (36 units). Goonrock (-17110.45, -9087.41) r 2534.68 is 10.89 off the original's (22.55 before; offline on the saved tile 9.90), Drycoom with 4 buildings (82077.94, -77669.04) r 2845.17 is 1.31 off (0.88 before), Drycoom with 3 buildings (Longhouse dismantled; 82004.88, -77760.00) r 2906.87 is 0.73 off (2.75 in round 8). The remaining Goonrock gap is what the offline run on the original's own tile leaves (**Unknown**: the original's centre height or its in-memory tile at refit time).
+  **Saves lose buildings the clean data cannot build** (**Observed**, same save before and after the original's load and save, 2026-11-12): 474 player sites before, 380 after = the dismantled Feeder, 156 sites of mods the clean GOG data lacks (Mindoors, Short Wall Ramp, ...; Meitou skips an unknown record too) and 93 furniture items of known records standing inside two houses of the `Flipped Buildings` mod (an unknown record): the original builds no interior for a missing parent, so the children vanish. Meitou keeps those children as orphans; not changed (only a missing mod causes it).
+  **Verified** (`FUN_14054d080`, `FUN_1402a2860`, `FUN_14054fea0`): the placement/dismantle reassessment removes a player town only when no eligible non-foliage buildings remain (`FUN_1405488f0`); load-time normalization does not apply this empty-town removal. Meitou checks every `BuildSite` of the town, including indoor/orphan sites; foliage resource nodes live outside that registry.
 - **Slope** (slot 31 `FUN_1404daa20`): ground normal from four rays at the rotated bounding-box corners (outdoors) or
   one ray (indoors); slope = angle from vertical, compared with `max slope` in degrees. With `match slope` (forced for
   interior furniture and nodes) the ghost tilts to the ground and a slope over the limit fails; without it the tilt is
@@ -454,6 +505,11 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - WallBuilding damage `clamp((hit1 x 2 + hit0 x 0.5) x 0.5, 10, 60) x 0.003` off health (slot 62, **Verified**).
 
 ### Build menu
+
+**Verified** (Kenshi 1.0.68 executable, `FUN_1404e65e0`, `FUN_1404e5210`, `FUN_1404d2a10`, `FUN_1404d1870`): each entry creates a new build
+window and exit destroys it. The constructor clears both lists and fills only the categories; the selected category starts empty. The building list
+is filled after a category click (`FUN_1404d5ff0` -> `FUN_1404d5df0`). No previous category or list highlight is restored. Meitou clears its retained
+list selections on entry and leaves the building list empty until a category is chosen. **Unknown**: live comparison of reopening the original's menu.
 
 **Verified** (`FUN_1406bff30`, `FUN_1404e4480`, `FUN_1404e4210`, `FUN_14082ea60`, `FUN_140830b40`): every BUILDING is a
 candidate; category = `building category` (default "misc"), group = `building group` or the building's own name.
@@ -655,6 +711,9 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   (MATERIAL_SPECS_WEAPON models), `crossbow crafts`, `backpack crafts`, `robotics crafts`. A weapon bench crafts every
   WEAPON in the `PLAYER_WEAPONS` manufacturer's `weapon types` in each listed model; the model's level is that
   manufacturer's `weapon models` v0 (Rusted Junk 5 ... Edge Type 3 80). `tech level` caps the made level (0: none).
+- **Output section** (**Verified**, `FUN_1402b9aa0` code read): `out` is max `inventory footprint width` x max `inventory
+  footprint height` (each taken on its own, at least 1) over the records of the item, armour, crossbow, backpack and robotics
+  lists; a bench with `weapon crafts` adds every WEAPON record of the database. Meitou: `CraftBench.OutputWidth` / `OutputHeight`.
 - **Queue item** (`FUN_1402b5ca0`): seconds = hours x G/24, progress, critical state (2 not rolled, 1 critical, 0 none).
 - **Tick** (`CraftingBuilding::vfunc_150` `FUN_1402b5a40`), state 2 with a queue: amount = `output rate x production
   mult` (/ `max operators` when above 1, `FUN_1402b9aa0`) `x health x s x option x P x dt / seconds`. The critical is
@@ -733,7 +792,7 @@ the [layout's plant count](#farm-plants), not `amount`.
 - **Status** (`+0x468`): 3 growing with water, 0 no water, 2 harvestable or dead, 1 output full.
 - **Save** (GAMESTATE_BUILDING, after the [production keys](#production)): floats `plant growth` (farm growth), `plant death` (d),
   `plant start`, `save time` (game hours); int `plants harvested`. A load with more than an hour since `save time`
-  simulates the gap (`FUN_1400df6e0`); with no farm keys, growth is random (`FUN_1409b1c10`).
+  simulates the gap (`FUN_1400df6e0`); with no farm keys, the farm growth (not the plants) is `rand() / 32768` (`FUN_1409b1c10`, **Verified**, `FUN_1400e3de0`), which the first tick that grows the plants takes back to the lowest of them, so such a farm is in effect freshly planted. The base game's level files carry no farm keys for town farms (**Verified**: none in `rebirth/zone.21.42.zone`, Shark). The live tick tests no owner (**Verified**, `FUN_1400e5580`): a town farm grows, draws water and is rained on as the player's; only the catch-up ignores water for it.
 
 ### Farm plants
 
@@ -791,6 +850,11 @@ Meitou: the *Production far away* switch ([simulation](../simulation.md)); Faith
 zones keeps its stamp and catches up when its zone is active again; generators burn no fuel unloaded).
 
 ## Research
+
+**Null-town bench** (**Verified**, research contribution `FUN_14029b8d0`): the original's research-building tick
+requires the building's town pointer to resolve before it contributes to the global research manager. A complete
+player research bench whose saved town resolves to `NO_TOWN` therefore does not raise the research bench level.
+Meitou applies the same `Town != 0` gate; the research state itself remains global.
 
 `ResearchBuilding::vfunc_150` (`FUN_14029b8d0`, **Observed**): an operator of a player-owned bench posts event 8 with
 `outputRate x upgrade x health x powerSat x s` (s from `stat used` 4, science); the dispatcher `FUN_1407b65b0` passes it
@@ -878,7 +942,8 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   generator; output < 0 a consumer. Function 5 without `consumes` is a wind generator, otherwise fuelled; batteries
   (23) share the generator class (factory `FUN_14057cc70`).
 - **Generator output** (`GeneratorBuilding::getPowerOutput`): health x (output + increase) when switched on (`power on`) and
-  fuelled ("Out of fuel" otherwise); **Verified** `FUN_140297760`, health the construction fraction. A battery's output is the same health x rate while it holds charge,
+  fuelled for a player owner ("Out of fuel" otherwise; NPC output ignores empty inputs, [below](#npc-generator-state)); **Verified**
+  `FUN_140297760`, health the construction fraction. A battery's output is the same health x rate while it holds charge,
   and its capacity health x (capacity + increase) (`FUN_140297650`). Meitou the same (`ProductionSystem.Output`, `Capacity`).
 - **Wind generators** (**Verified**, decompiled): output = the share x the above, 0 when below 1 (`WindGeneratorBuilding::getPowerOutput`); the share
   (`PhysicsCollection::getWindRotationPower`) is the first ROTATION_WIND_SPEED part's wind share ([rotating parts](#rotating-parts)) among the parts the placement actually spawned (FUN_140848950 spawns only the chosen random-group parts, so the rotor depends on the position's seed; Meitou: `WorldObjectLayout.WindRotor`, per machine), 0 with none or without
@@ -945,6 +1010,56 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   research: Upgraded Small Generators +15, Amplified Generators +15, Battery Power / Advanced +10 each, Battery
   Capacity / Advanced +60 each.
 
+### NPC generator state
+
+**Verified** (private decompile `FUN_140297760`, checked against GOG `kenshi_GOG_x64.exe` at `0x140297100` with `objdump`):
+NPC fuel generators supply `construction fraction x power output` while `power on`. The empty-input test (slot 149,
+`FUN_140298b70`) suppresses output **only for a player-faction owner** (faction slot 11, player marker `+0x250`;
+`FUN_140546dd0`). An empty NPC tank therefore supplies power indefinitely. The base game's 47 empty fuel-generator
+placements are not evidence of zero generation; this affects the base game as well as mods. Research increases apply
+only to the player's buildings (`FUN_14082ec70`). No separate `broken` or `destroyed` check exists in this output getter;
+construction damage scales the result rather than imposing a broken-flag cutoff.
+
+**Verified** (private decompile `FUN_140297600`, `FUN_140298700`, `FUN_14029a510`, `FUN_14029a370`, `FUN_1402fdd80`):
+the ordinary production path can consume stocked inputs, scaled by generator load, without an ownership exemption.
+This does not make fuel a prerequisite for NPC grid output: exhausting that stock still leaves the NPC-output exemption.
+Meitou's NPC grid does not simulate those generators' inventory production or drain; its output needs no fuel state.
+
+**Verified** (private decompile `FUN_1409ffad0`, `FUN_14036d7e0`, `FUN_14036b140`, `FUN_140552b70`,
+`FUN_1402a1750`): the loader context byte at `+0x10` is the zone's `newGameFirstTimeLoaded` flag. It is set
+when no saved zone loads, when a town reset discards its old building list, or when `0-buildinglist` contains the
+bool key `imported` (presence, regardless of value). Zone loading passes it through the container to building creation.
+Only a non-fresh zone or a player-faction owner loads `batterycharge`, `gets battery`, `power on`, `broken` and
+production/fuel state. A fresh NPC building instead completes construction and switches on. Thus a sparse NPC level
+state without `construction progress` still has full health in a fresh zone; its level switch and partial progress are
+ignored too. Meitou uses `World.SavedZones` for this guard, excluding imported zones; the saved owner takes precedence,
+else the level player override or the town's faction applies. Town-override zone resets beyond this set are **Unknown**.
+
+**Verified** (`FUN_140555650`, `FUN_1400b0ab0`, `FUN_140559ad0`, fraction getter `FUN_140547200`): when the guard
+allows loading, a present state's missing `power on` is false and missing progress is zero. Progress divided by the
+material target, capped at 1, supplies health; positive infinity means the full target, and a zero target completes
+immediately. The original's complete flag does not replace a partial progress value. Meitou's player-site import
+currently differs: `BuildingSave.Read` substitutes the target when `is complete` is true. NPC generation follows the
+original fraction. `FixtureRegistry.Saved` replaces the whole `TownBuilding.LevelState` when present, without inheriting
+missing keys. No state gives a complete, switched-on building (`FUN_140562340`). `broken` is not a separate output cutoff;
+the existing ruined-placement exclusion remains. Construction targets are cached with the database version.
+
+**Verified** (`FUN_140297810`, GOG `0x1402971b0`, and [rotating parts](#rotating-parts)): wind multiplies that switched,
+health-scaled output by the first spawned wind-speed rotor's share; a result below 1 gives zero. No rotor or no loaded
+physics collection gives zero. Meitou uses the placement's rotor and local weather, retaining its existing choice to
+model every placed rotor even when no render entity is loaded.
+
+**Verified** (factory `FUN_14057cc70`, cases 5 and 23; RTTI vtable list): there is no separate solar generator class or
+sunlight/daylight branch. Function 5 without `consumes` creates a wind generator, which still requires a wind rotor;
+with `consumes` it creates a fuel generator. Naming a mod building "Solar" does not add a sunlight rule. Behaviour of
+code-injected solar generators is **Unknown** and is not inferred from their name.
+
+**Verified** (clean GOG base load order, installed-level check): all 170 placed generators have a level state and
+`construction progress`; missing progress count is 0. The 47 fuel placements provide 3560 rated power in a fresh-zone
+simulation using their real building records and level states, with fuel unused. This is an aggregate harness check,
+not a runtime measurement or a per-town distribution; wind output still depends on local weather. Sparse mod states
+are covered synthetically. No original-game runtime measurement is claimed.
+
 ### Rotating parts
 
 **Verified** (decompiled `RotatingEnt` constructor `FUN_140556250`, `update` `140547ca0` with its disassembly, `weatherUpdated` `140549c60`,
@@ -974,9 +1089,12 @@ wind; a level building's mult comes from its data as its sound emitter's efficie
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
 **Storage** (**Verified**, 603 buildings): 87 have `has inventory`; default 18 x 18, `itemtype limit` 4; `stackable bonus
-mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the building loader): a building whose `limit inventory`
+mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the `StorageBuilding` constructor `FUN_1402a30d0`): a function 2 building whose `limit inventory`
 names exactly one item is that item's `inventory footprint` (Iron Plates 4 x 3, Building Materials 6 x 3, steel bars 6 x 1), else
-`storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Its window (**Observed**, screenshots) is
+`storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Only function 2 BF_RESOURCE_STORAGE makes a `StorageBuilding`
+(the factory `FUN_14057cc70`, **Verified**), the one class that reads `limit inventory`; any other building's inventory is `storage size` with no list
+(`FUN_140554530`). Merged base data: 46 buildings have a list, all function 2 but the `Wooden Barrel` (function 13, list Cactus Rum, 10 x 10), which is
+a plain 10 x 10 container taking anything (**Observed** in the original, #685's video; Meitou `MachineData.Limits`). Its window (**Observed**, screenshots) is
 `Kenshi_InventoryGenericWindow`: caption STORAGE, the one limited item's name as heading, `Max Capacity: N` with N the `stackable bonus
 mult`, the line red with "(Full)" once the first stack reaches it (exact red **Unknown**). Locks and containers: [locks](locks.md).
 Water Tower takes only Water and `Storage: Ore` only Raw Iron, both with mult 100 and functionality `Resource
@@ -1016,6 +1134,10 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. Only producers run: a research bench counts for the player's
   research alone and a crafting bench with no queue refuses an operator, so both stay pretence. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)). Row 94 (`WANT_TO_FILL_MACHINE`, effect 66) and its finder `FUN_14059d9b0` (**Verified**: for each input item of the target machine in list order, `FUN_14059d000` looks for a cached earlier pick, then loose ground items, then the nearest building whose production component's output lists the item (identity for ITEM records, same record type otherwise) with some in it, the buildings split by the owner test of vfunc `0x3b0`, within the sight range of the AI's range mode) give the chain 92 at the source, 94, 93 at the machine, 87: Meitou plans it (`PlanContext.Find` row 94, states 66 / 67 on machine targets), the worker walks to the source (`AiSystem.StepBuilding`), `TownWorkers` empties it (92), fills the inputs (93, `FillInputs`) and operates. Not modelled (**Unknown** or undecoded): the cached pick, ground items, the `0x3b0` split and the building mask `0x4002436` (the town's workplaces stand in). A machine exists only once a worker has been at its building; the original's has its empty output from the start, so a source with no output yet is none in both. Unpowered: town machines draw no player grid (power held true).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
+  Town farms (#625): every town building whose record is a farm has its machine as soon as its zone is active (`ProductionSystem.TownFarms`; a ruin has none), starting as a farm with no saved keys
+  does ([farming](#farming)), so it grows whether a worker came; a worker of 87 at it harvests and tends it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
+  empties. Whether the planner sends town farmers to a ripe farm is the planner's ([farming](#farming): status 3 has no provider of 87). The player's Use and Loot on a town machine:
+  [ui-input](ui-input.md#building-picking-and-selection). Crop eaters (232) still look only in player towns (`CaptiveSystem.CropsToEat`).
 ### Hauling
 
 - **Tasks** (**Verified** classes, **Observed** meaning): `Task_EmptyMachine` (92 "Collecting resource", 284 "Looting")
@@ -1046,7 +1168,10 @@ interior meshes but no functionality record, their level states lack `sell home`
 
 **Verified** (decompile): the squad setup `FUN_14057f1f0` calls slot 104 (set destroyed) on the squad's home with `building ruined` of its template and slot 105
 (`FUN_14055b520`, can be destroyed): true when the building's class (+0x198) is 7, GatewayBuilding, the `is wall gate` building (**Verified**, [pathfinding](pathfinding.md)), or it, or a part reached through `parts` at any depth, has a
-`destroyed mesh`. So a home whose template is not ruined is set intact. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
+`destroyed mesh`. So a home whose template is not ruined is set intact, a ruin of the level file too: set destroyed with false (`FUN_140557280`) clears the flag
+(+0x1a1) and builds the standing building, and `FUN_14057f4c0` runs the setup for every home, a template with no members too (**Verified**, decompile).
+**Observed** (the original's save `bench-bases-2026-10-27`): Blister Hill's Small Shack `23.22:667-Newwworld-INGAME`, destroyed in the level file, is saved
+standing under `Civilian solo holy -small`. **Observed** (data, base game and its mods): 26 SQUAD_TEMPLATEs set `building ruined`, among
 them `_ruined empty building (DEFAULT)` (`44421-rebirth.mod`), the `default resident` of Old Village (Deadcat, `50243-rebirth.mod`), whose level states are
 intact and name no template. Its houses are ruins in the original (issue #145).
 
@@ -1060,14 +1185,18 @@ fixtures or item slots).
 
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,
-the library ruins). A saved `destroyed` false does not undo a level ruin unless the player's repair saved it (`meitou town construction`; engine choice: saves
-made before this pass wrote those buildings intact). A town's baked distant mesh is a fixed file of the install, drawn as it is (as in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class. Not modelled: setting a level ruin intact (13 level ruins get a template that is not ruined, e.g. Bast's and Endin's
-`Trashed building w/squatters`, yet those towns are ruins in the original, so where the original skips the call is **Unknown**).
+the library ruins). Any other home the level file has destroyed is set standing (`WorldLevelData.ResidentRestored`, `TownBuilding.RestoredByResidents`); 34 base-game
+buildings, e.g. the Snailhouse bar of the Waystation in The Hook (`17.53:4-rebirth-INGAME`, issue #630), the Lost Library, the Lost Armoury, Mourn's shop, and one or
+two `Trashed building` homes each in Bast and Endin, whose other buildings are ruins by their default resident. A saved `destroyed` false does not undo a level ruin
+unless the player's repair saved it (`meitou town construction`; engine choice: saves made before this pass wrote those buildings intact). A saved `destroyed` true
+does not ruin a home the residents stand up while the save has the same `residents template` in it and no `meitou town construction` (engine choice: saves made before
+the homes were stood up wrote the level file's ruin; `FixtureRegistry.SavedLevelRuin`). A home housing ruins now stands when the save has it intact under another `residents template` that is not `building ruined` (engine choice, `FixtureRegistry.SavedStanding`: the save was housed differently, e.g. before a mod added residents; **Verified** headless on issue #673's save, where `Bounty hunting for minor factions.mod` adds a Hub resident and the squatters' ruined template lands on the bar's Storm House `20.32:4933-Newwworld-INGAME`). A town's baked distant mesh is a fixed file of the install, drawn as it is (as
+in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class.
 
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
 (`FixtureRegistry.ApplyTownRuins`) sets each of the town's buildings in its own zone that is not the player's: a home of a ruined template that can be destroyed is a
-ruin, any other as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state, but such a home there becomes a ruin
-too. A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
+ruin, any other home stands, and a building with nobody is as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state,
+but a home of a ruined template there becomes a ruin too (not modelled: standing a ruin up there). A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
 buildings' level placements (drawing, navmesh, lamps) and drops a ruin's particle effects (a standing one's come back); doors, locks and indoor sight follow. **Observed** (data):
 95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.
 

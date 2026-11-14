@@ -1,4 +1,5 @@
 using System.Globalization;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Foliage;
 
 namespace Meitou.Game.Rendering.Impostors;
@@ -54,13 +55,13 @@ public sealed class ImpostorCache
     int _running;
 
     /// <summary>
-    /// A cache in <paramref name="root"/> (null: <c>MEITOU_IMPOSTOR_CACHE</c>, else the local application data folder) capped at
+    /// A cache in <paramref name="root"/> (null: <c>MEITOU_IMPOSTOR_CACHE</c>, else <see cref="LoadCaches.Root"/>'s <c>impostors</c>) capped at
     /// <paramref name="maxBytes"/> (null: <see cref="DefaultMaxBytes"/>).
     /// </summary>
     public ImpostorCache(string? root = null, long? maxBytes = null)
     {
         Root = root ?? Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_CACHE")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "impostors");
+            ?? LoadCaches.Folder("impostors");
         MaxBytes = maxBytes ?? DefaultMaxBytes;
     }
 

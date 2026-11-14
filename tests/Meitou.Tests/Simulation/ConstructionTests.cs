@@ -62,6 +62,7 @@ public class ConstructionTests
         var outpost = Rec(Outpost, FcsRecordType.Building, "Test Camp Hut");
         outpost.Ints["build materials"] = 2;
         outpost.Bools["creates player town"] = true;
+        outpost.References["interior"] = [new FcsReference("93-t", 0, 0, 0)];   // a house: it alone sets the outpost's centre
         FcsRecord Wall(string id, string name, int linkType, float length, int materials)
         {
             var r = Rec(id, FcsRecordType.Building, name);
@@ -192,6 +193,68 @@ public class ConstructionTests
         return hashes;
     }
 
+    /// <summary>
+    /// Dismantling a loaded outpost's last building removes its saved instance and states, even with no other player towns left.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_dismantled_outpost_does_not_return_after_saving(bool keepOtherTown)
+    {
+        const string player = "204-gamedata.base";
+        var save = new SaveBuilder(7).Game;
+        using (var source = new Rig())
+        {
+            var town = source.World.Buildings.AddTown(HutAt, Rig.PlayerFaction);
+            if (keepOtherTown)
+            {
+                // The other outpost holds a building: a reassessment removes an outpost without one.
+                var otherAt = HutAt + new Vector3(8000, 0, 0);
+                var other = source.World.Buildings.AddTown(otherAt, Rig.PlayerFaction);
+                source.World.Buildings.Add(new BuildSite
+                {
+                    Id = SiteId(2, otherAt), Record = Hut, Position = otherAt, Town = other.Number, Owner = Rig.PlayerFaction,
+                    Materials = [], Complete = true, Target = 1, Progress = 1,
+                });
+            }
+
+            source.World.Buildings.Add(new BuildSite
+            {
+                Id = SiteId(1, HutAt), Record = Hut, Position = HutAt, Town = town.Number, Owner = Rig.PlayerFaction,
+                Materials = [], Complete = true, Target = 1, Progress = 1,
+            });
+            BuildingSave.Write(save, source.World, player);
+        }
+        var original = save.TownInstanceList!.Instances[0];
+        var oldStates = original.States.ToArray();
+        var builder = new SaveBuilder(save, 7);
+        var npc = builder.AddTown("NPC", "npc", "foreign", false, null, hand: new Hand(13, 100, 100, 0, 0));
+        var nest = builder.AddTown("Nest", "nest", "foreign", true, null, hand: new Hand(85, 101, 101, 0, 0));
+        save.TownInstanceList.Instances.Add(new FcsInstance { Id = "npc", Target = "npc", States = { npc.Record.StringId } });
+        save.TownInstanceList.Instances.Add(new FcsInstance { Id = "nest", Target = "nest", States = { nest.Record.StringId } });
+
+        using var rig = new Rig();
+        BuildingSave.Read(save, rig.World, rig.Db, player, Rig.PlayerFaction);
+        var worker = rig.Add(HutAt.X, HutAt.Z + 10, Unit);
+        var site = rig.World.Buildings.All.Single(s => s.Id == SiteId(1, HutAt));
+        rig.Say(new DismantleOrder([worker], site.Id) { Tick = rig.World.Tick });
+        for (int t = 0; t < 3000 && rig.World.Buildings.Find(site.Id) is not null; t++) rig.World.RunTick();
+        Assert.Equal(keepOtherTown ? 1 : 0, rig.World.Buildings.Count);
+        Assert.Equal(keepOtherTown ? 1 : 0, rig.World.Buildings.Towns.Count);
+
+        BuildingSave.Write(save, rig.World, player);
+        save.Reindex();
+        using var reloaded = new Rig();
+        BuildingSave.Read(save, reloaded.World, reloaded.Db, player, Rig.PlayerFaction);
+        Assert.Equal(keepOtherTown ? 1 : 0, reloaded.World.Buildings.Towns.Count);
+        Assert.DoesNotContain(save.TownInstanceList.Instances, instance => instance.Id == original.Id);
+        Assert.DoesNotContain(save.Quick.Records, state => oldStates.Contains(state.StringId));
+        Assert.Contains(npc.Record, save.Quick.Records);
+        Assert.Contains(nest.Record, save.Quick.Records);
+        Assert.Contains(save.TownInstanceList.Instances, instance => instance.Id == "npc");
+        Assert.Contains(save.TownInstanceList.Instances, instance => instance.Id == "nest");
+    }
+
     // ------------------------------------------------------------------ a site built, a building taken apart
 
     [Fact]
@@ -300,9 +363,9 @@ public class ConstructionTests
         rig.World.RunTicks(2);
         var town = Assert.Single(rig.World.Buildings.Towns);
 
-        // Made at the hut, then reassessed: centred between its two buildings, the radius 200 beyond them but at least 1250.
-        Assert.Equal((1, PlayerTown.DefaultName, (ShedAt + campAt) / 2, Rig.PlayerFaction), (town.Number, town.Name, town.Position, town.Owner));
-        Assert.Equal(1700, town.Radius);
+        // Made at the hut, then reassessed: centred on its house (the shed does not move the centre), the radius 200 beyond the farthest building.
+        Assert.Equal((1, PlayerTown.DefaultName, campAt, Rig.PlayerFaction), (town.Number, town.Name, town.Position, town.Owner));
+        Assert.Equal(3200, town.Radius);
         Assert.All(rig.World.Buildings.All, s => Assert.Equal(1, s.Town));
 
         var builder = new SaveBuilder(1);
@@ -343,6 +406,146 @@ public class ConstructionTests
         {
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
+    }
+
+    /// <summary>
+    /// A regular placement joins a town of any owner whose actual radius contains it; the 5000-unit candidate search does not extend town ownership.
+    /// </summary>
+    [Theory]
+    [InlineData(1249, true, false)]
+    [InlineData(1249, true, true)]
+    [InlineData(1250, true, false)]
+    [InlineData(1250, true, true)]
+    [InlineData(1251, false, false)]
+    [InlineData(1251, false, true)]
+    [InlineData(5001, false, false)]
+    [InlineData(5001, false, true)]
+    public void A_placed_building_joins_only_a_town_that_contains_it(float distance, bool contained, bool levelTown)
+    {
+        var population = levelTown ? new PopulationData
+        {
+            Db = Database(), Factions = [],
+            Sites = [new TownSite(0, new TownData { Id = "npc", Name = "NPC outpost", Type = TownType.Outpost },
+                new Vector3(0, 300, 0), new ZoneCoordinate(32, 32))],
+        } : null;
+        using var rig = new Rig(population: population);
+        var town = rig.World.Buildings.AddTown(new Vector3(0, 300, 0), Rig.PlayerFaction);
+        town.Override = levelTown ? 1 : 1250;
+        if (levelTown) town.Position = new Vector3(-3000, 300, 0);
+        rig.World.Buildings.Add(new BuildSite
+        {
+            Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = new Vector3(0, 300, 0), Town = town.Number,
+            Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
+        });
+
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, new Vector3(distance, 300, 0), Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+
+        var placed = rig.World.Buildings.All.Single(site => site.Record == Shed);
+        Assert.Equal(contained && !levelTown ? town.Number : 0, placed.Town);
+        if (contained && levelTown) Assert.Equal(-1, TownLookup.KeyOf(rig.World, placed));
+        Assert.Equal(!contained, placed.InNoTown);
+        Assert.Equal(!contained, placed.ForeignTown is not null);
+    }
+
+    /// <summary>
+    /// A new outpost adopts nearby existing player buildings in NO_TOWN and clears that association; a later refit alone does not adopt one.
+    /// </summary>
+    [Fact]
+    public void Founding_adopts_no_town_buildings_but_refitting_does_not()
+    {
+        using var rig = new Rig();
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, ShedAt, Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+        var orphan = rig.World.Buildings.All.Single();
+        Assert.True(orphan.InNoTown);
+        var foreignTown = new BuildSite
+        {
+            Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Shed, Position = ShedAt + new Vector3(1000, 0, 0),
+            Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
+            ForeignTown = new Hand(13, 511, -77, 0, 0),
+        };
+        rig.World.Buildings.Add(foreignTown);
+
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Outpost, ShedAt + new Vector3(3000, 0, 0), Quaternion.Identity)]) { Tick = 2 });
+        rig.World.RunTicks(2);
+        var town = Assert.Single(rig.World.Buildings.Towns);
+        Assert.Equal(town.Number, orphan.Town);
+        Assert.Null(orphan.ForeignTown);
+        Assert.False(orphan.InNoTown);
+        Assert.Equal(0, foreignTown.Town);
+        Assert.Equal(new Hand(13, 511, -77, 0, 0), foreignTown.ForeignTown);
+
+        var outsideAt = town.Position + new Vector3(10000, 0, 0);
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, outsideAt, Quaternion.Identity)]) { Tick = rig.World.Tick });
+        rig.World.RunTicks(2);
+        var outside = rig.World.Buildings.All.Single(site => site.Position == outsideAt);
+        Assert.True(outside.InNoTown);
+
+        var fartherMemberAt = town.Position + new Vector3(15000, 0, 0);
+        rig.World.Buildings.Add(new BuildSite
+        {
+            Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Shed, Position = fartherMemberAt, Town = town.Number,
+            Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
+        });
+        ConstructionSystem.ReassessTown(rig.World, town);
+        var fromCentre = new Vector2(outside.Position.X - town.Position.X, outside.Position.Z - town.Position.Z);
+        Assert.True(fromCentre.Length() <= town.Radius);
+        Assert.Equal(0, outside.Town);
+        Assert.Equal(Hand.NoTown, outside.ForeignTown);
+        Assert.True(outside.InNoTown);
+    }
+
+    /// <summary>
+    /// A child of a placed townless building inherits its NO_TOWN association from the parent.
+    /// </summary>
+    [Fact]
+    public void A_placed_child_inherits_its_townless_parent_association()
+    {
+        using var rig = new Rig();
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, ShedAt + new Vector3(10000, 0, 0), Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+        var parent = rig.World.Buildings.All.Single();
+
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, parent.Position + new Vector3(10, 0, 0), Quaternion.Identity,
+            Parent: parent.Id)]) { Tick = 2 });
+        rig.World.RunTicks(2);
+
+        var child = rig.World.Buildings.All.Single(site => site.Id != parent.Id);
+        Assert.Equal(0, child.Town);
+        Assert.Equal(Hand.NoTown, child.ForeignTown);
+        Assert.True(child.InNoTown);
+    }
+
+    /// <summary>
+    /// A batch placement reassesses once, with the last placed building's town (<c>FUN_1404d72a0</c>, docs/game/buildings-production.md
+    /// "Outposts"): a shed beside town A and one beside far town C, with A overlapping B, merge nothing, as only C's merge scan runs; a batch whose
+    /// last shed is beside A merges A and B.
+    /// </summary>
+    [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 2)]
+    public void A_batch_runs_the_merge_scan_once_for_the_last_buildings_town(bool lastBesideA, int towns)
+    {
+        using var rig = new Rig();
+        foreach (var x in new[] { 0f, 2000f, 30000f })
+        {
+            var town = rig.World.Buildings.AddTown(new Vector3(x, 300, 0), Rig.PlayerFaction);
+            town.Override = 1500;
+            var member = new BuildSite
+            {
+                Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = new Vector3(x, 300, 0), Town = town.Number,
+                Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
+            };
+            rig.World.Buildings.Add(member);
+        }
+
+        float first = lastBesideA ? 30050 : 50, last = lastBesideA ? 50 : 30050;
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, new Vector3(first, 300, 40), Quaternion.Identity),
+            new PlannedBuilding(Shed, new Vector3(last, 300, 40), Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTicks(2);
+
+        Assert.Equal(towns, rig.World.Buildings.Towns.Count);
     }
 
     // ------------------------------------------------------------------ walls

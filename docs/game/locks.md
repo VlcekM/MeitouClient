@@ -115,7 +115,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Cut** (`Task_CutShackles` slot 2, **Observed**): needs `hasTools` (state 122). Each update: hardness -=
   `clamp(0.01 x a x b, 0.05, 0.2) x dt x 2`, where a is the stat-based multiplier `FUN_1406457e0(stats, 1, 1)` (**Verified**, `FUN_140359f80`: the hunger term only, no limb, light or damage terms) and b the strength stat; the break test below uses every term (`FUN_140338090`). Meitou: `Lockpicking.CutStrength`. At <= 0 the
   best tool is consumed (a tool: ITEM `item function` 9, e.g. Hacksaw; `hasTools` `FUN_1405989e0` tests item `+0x124 == 9`, **Verified**) (aborts if none), the lock's broken flag is set, "Shackles broken!" (also for locks).
-  The bar shows hardness x 10. Same crime rule as picking (2 for own-target / buildings, 7 for another character).
+  The bar's caption is "Cutting: {1,num}" with the hardness x 10 as a whole number, set each update like the pick's (`FUN_1406e4910`, **Verified** `FUN_140359f80`; no fill is set there). Meitou: `World.CutBar`, the fill empty, for locks and shackles (#656: a safe of hardness 60 takes 270 s at strength 11 and showed nothing). Same crime rule as picking (2 for own-target / buildings, 7 for another character).
 - **Break** (`Task_BruteForceShackles` slot 2, **Observed**): instant; succeeds when effective strength x stat scale > 3 x hardness,
   else "I'm not strong enough to do that". Sets broken and the hardness to 0, plays Character_Unlock_Success, logs "Shackles broken!" and floats "*Crunck*" (both, **Verified** `FUN_140352c50`), and fires event 13 UNLOCK_MY_CAGE_OR_SHACKLES at the freed character (a cage's occupant, the shackles' wearer) from the breaker (`LockSystem.BruteForced`).
 - **Taking off** (`Task_TakeOffCuffs` 219, **Verified**): its update (slot 2, `FUN_140349d00`) queues a world event (kind 5, the
@@ -239,7 +239,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building no save has starts from them (**Verified** data, census of the merged `newland/leveldata` zones: 996 doored building
   states have `state0`: 547 closed, 442 open, 7 opening, `doa0` matching, `lock lvl0` 20..49; 265 have no door keys). Town gates
   (`Defensive Gate II-IV`, `Defensive Gate level 2`, `Makeshift Gate`) are mostly open (51 open, 22 closed, 29 closed and locked,
-  2 opening; all `wants lock`).
+  2 opening; all `wants lock`). Rebirth's Prisoner Poles carry `lock lvl` 16..35 (five) and 75 (four, `9034`..`9040-rebirth-INGAME`); a reporter saw only 15..35 in the
+  original (#642), so whether a new game re-rolls a cage's level is **Unknown**.
   That the original applies them on a new game is **Observed** (the save format: base buildings keep their level state's handle,
   [save](../formats/save.md#object-handles-and-slot-lists)). Meitou: lock and door state from the level state, the save's on top;
   only doors with a `state` key count as restored, so `initial door state` still applies to the others (**engine choice**, the
@@ -250,7 +251,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Entering** (`FUN_140330600` with a building, from Task_UseCage / Task_PutInSomething; **Verified**): `Character+0x2f8 = 2`,
   the prison handle at +0x300 (handle type +0x308 = 0 for a building), the character is moved to the cage position and placed
   at its node; AI movement flags 0x10 when `restrains movement` (pole), else 4. The cage's lock is set **locked** when the
-  cage has one (all cages do). **Observed**: prisoners with a bounty for the cage owner get a sentence ([economy](economy.md#115-bail-and-sentence)).
+  cage has one (all cages do). A prisoner with an owner handle (`+0x330` not 11: a slave, escaped slave or ex-slave) becomes the cage owner's slave (owner
+  `FUN_14032e430`, state 1) when the cage's building owner resolves and the cage's building (its parent's, `FUN_1400d5fa0`) designation `+0xc4` is not 7, the police
+  station (**Observed** by decompile; Meitou `FixtureRegistry.TakesSlave`). **Observed**: prisoners with a bounty for the cage owner get a sentence ([economy](economy.md#115-bail-and-sentence)).
   Unique characters are recorded separately.
 - **Facing in a cage** (**Verified** by decompile, `kenshi_x64.exe` 1.0.68): entering sets no orientation. The character update (`FUN_1405cf130`, every frame while
   `Character+0x2f8 != 0`) resolves the prison handle (`FUN_1402676e0`) and, for state 2 (cage, pole, peeler: one path), places the character at the building's position
@@ -283,9 +286,10 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Escaped flag** (`StateBroadcastData::isEscapedPrisoner` `+0xe8`, KenshiLib 1ce4a16; **Verified** by decompile: every write through `+0x1a0`). Set only by `FUN_14034fbe0`
   (lifted out) and `Task_GetOutOfCage` flag 1 (above). Cleared only by: being caged again (`FUN_140330600`'s put-in branch); `Task_GetOutOfCage`
   flag 0 (133, a release); `ActivePlatoon::periodicUpdate` (`FUN_1404ff060`, vtable slot +0x40): a squad split from another (`Platoon::isSeparatedSquad` `+0xb8`) whose parent
-  has an active platoon within squared distance 1.0404e7 (~3226 units) moves each member that is not imprisoned, not slave state 1 and passes two more tests (byte `+0x3d4` clear, vfunc +0x30 false; **Unknown**) into the parent, and
-  clears its escaped and kidnapped (`+0xe9`) flags. No timer and no town test clear it, so "Leave town to clear this status. Expires in 99999 hrs" ([ui-screens](ui-screens.md))
-  is never true for a player character. (The other `+0xe8` writes in `FUN_1408cb360` / `FUN_1407933a0` are the Blackboard's `homeIsLockedUp`.)
+  has an active platoon within squared distance 1.0404e7 (~3226 units) moves each member that is in nothing (`+0x2f8` = 0), not slave state 1, not carried (`+0x3d4`) and not down (vfunc +0x30) into the parent, and
+  clears its escaped and kidnapped (`+0xe9`) flags ([the merge](factions-squads-towns.md), Meitou `PopulationSystem.RejoinSeparated`); the status update `FUN_1405a4f50` (**Verified**; an array-form write, `param_1[0x3a]`, which `field_writes.txt` does not index):
+  cleared on each update while the status town (`+0x88`, [rule](carry-loot.md#the-status-town)) is null, as the freed flag `+0xea` is. So "Leave town to clear this status"
+  ([ui-screens](ui-screens.md)) is true; no timer clears it, the 99999 hrs is text only. Meitou: `ArrestSystem.DropTownStatusOutsideTowns`. (The other `+0xe8` writes in `FUN_1408cb360` / `FUN_1407933a0` are the Blackboard's `homeIsLockedUp`.)
 - **Exit spot** (**Observed** from decompile, `FUN_140330600` → `FUN_140661f90`): clearing the hold resets the character's movement body while `+0x2f8` and the handle are
   still set, so it looks up the held building's `Node Use` (type 4) node nearest the character's position (`FUN_14038ab50`; the character stands at the cage origin) and
   moves the body there after a physics ray query at the node (`FUN_1403a2fa0`, door hit filter; the ray's exact use is **Unknown**). No node (Prisoner Pole): it stays.
@@ -333,7 +337,7 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   +0x26c (the construction position, set in the constructor `FUN_14055ca90`) and the orientation the building's; else the usage node nearest the
   character (squared 3D distance; nodes in the bad-node map +0x300 skipped), turned by Quaternion(w -0.707107, y 0.707107): the node's yaw - 90°, as for
   town nodes ([ai-tasks](ai-tasks.md#town-goals)). Data (**Verified**, base game probe): `Bed` and `Skeleton Repair Bed` hold two `Node Use` (node type 4)
-  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. `sleepinbed` holds `Bip01` at about
+  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. A bed with exactly one node (Forgotten Buildings' `Bed with Pillow`, its node at Z -11.05 turned 180°; the mod also gives `Old Bed` one) lies at the marker but faces that node's yaw - 90° (`FUN_140549720` reads any node; #718: Meitou faced the bed's own yaw, 90° off, and the sleeper lay across). `sleepinbed` holds `Bip01` at about
   (-11.8, 6.7, -1.5) in model space (`gotobed` moves it there from the origin), so from a node the pelvis lands on the mattress centre. Meitou:
   `FixtureRegistry.LieSpot`, also applied to a sleeper bound on load (engine choice), which also takes the bed's clip again (it is not saved; without it a loaded sleeper lay on the floor at the node).
   **Bad nodes** (**Verified**): with 2 or more use nodes `getPositionMarker` skips every node in the building's bad-node map (`+0x318` / `+0x338`) and returns node 0 when all are skipped. `FUN_14054d410(building, position)` marks the node
@@ -346,6 +350,11 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   Heights (**Verified**, base game probe of the clips and `bed1.mesh` / `camp_bed1.mesh` bounds): `sleepinbed` holds `Bip01` 6.7 above the spot, `Bed`'s mesh
   top is 7.36; `Camp Bed` plays `sleeponfloor` (`Bip01` 1.46) on a mesh 1.73 high. Drawn there, the body sinks into the mattress; Meitou draws a sleeper 1.5
   higher (`World.BedLift`, engine choice). How the original avoids the sinking is **Unknown**.
+  **Tilt** (**Observed** by decompile, `FUN_1405cf130` state 1 and `FUN_140549720`; the listing drops the operands of the two quaternion products, read as marker = building x (building inverse x marker)): the sleeper is given the direction marker's whole quaternion, written straight to its node
+  (`FUN_1405c8540` over `FUN_1405b1a30`), so on a bed placed on a slope the body leans with the bed. `FUN_140549720` returns the building's orientation (vfunc 0xc0) when the bed has no use node
+  (count 0, not the position marker's "fewer than 2"), else the nearest node's orientation turned -90° about Y; the nearest-node search there skips no bad node. Meitou: display only, the simulation keeps a yaw:
+  a bed standing on its own keeps its whole rotation (`Fixture.Rotation`), `FixtureRegistry.LeanOf` gives the snapshot's `Lean` (none for a level bed) and the host draws the body turned by its yaw, then
+  the lean, lifted along the bed's up axis; a tilted bed with use nodes still has its nodes placed by yaw only (`Nearest`), no base bed on its own has any (#688: sleepers on Camp Beds built on a hillside lay level and cut through the mattress).
 - **Getting out of bed** (`Task_GetOutOfBed`, **Verified**): the start `FUN_140345760` posts Get_Out / Character_Bed; when the bed's clip name (`FUN_140297330`) is `gotobed` the sleeper stays in bed, else it leaves at once (`FUN_140345620`). The update `FUN_140348480` plays `gotobed` at rate -1 and leaves once its progress is under 0.1. No base bed names `gotobed` (they use `sleepinbed`), so only modded beds animate the exit. Meitou: `FixtureRegistry.GetOutOfBed` (`CharacterCold.LeavingBed` / `BedExitDone`, `AnimationSystem.FinishBedExit`) for the AI's get-out step and the bed system's get-up; forced removals (carried off, kidnapped, an order) use `LeaveBed` at once. Meitou stands one getting out where it lay unless the bed's navmesh hole leaves no floor at its height there (a modded bunk's node lies 16 or more inside it); then it stands on the nearest floor point at that height within 40 (`FixtureRegistry.StandBeside`, engine choice: where the original's body lands is **Unknown**).
 - **Rent cost** (UseableStuff slot 152 `FUN_140330ab0(bed, character)`): 0 in this order: no bed faction; the faction's `not real` flag
   (+0x1d0; the FACTION loader `FUN_1407fe270` reads `not real` into it, **Verified**); ally(bed faction, character's) ([factions](factions-squads-towns.md) 3.3); a
@@ -381,7 +390,8 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   the list that no squad mate has as its sub-target (`FUN_1402690e0` count below 1, `howManyGuysWorkingOnThisSubTarget`) and that `UseableStuff` vfunc 0x4f0 (a place free) accepts is the target, passed over only when the squad's home is
   not the building the character is in (+0x128 hand compare, **Unknown**) and the bed's field behind vfunc 0x228 +0x28 is above 1 (**Unknown**, read as a price). The order inside a list is
   that of a set of pointers (steps 1 to 3), so it is not reproducible. Meitou: `FixtureRegistry.FindBedNpc` takes the first free bed of the squad's home building, else the nearest free bed of its
-  town (engine choices for steps 2 to 4 and the order). The search is the target finder of 153 / 239 Go home go to bed: its factor is 0 when it finds no bed
+  town that passes the finders' allies test below (engine choices for steps 2 to 4 and the order), so a town's homeless vagrants sleep in a bar's
+  beds, not in a private house where the residents call them trespassers. The search is the target finder of 153 / 239 Go home go to bed: its factor is 0 when it finds no bed
   (**Verified**), so a character without a bed does not want the goal and the next one is chosen. Meitou: a sleeper whose home has bed spots takes one of them;
   without (homeless, or a home with no bed) `AiSystem.SpareBed` runs the search (a squad without a town: own or allied beds within the bed search range,
   engine choice); with no bed found the goal's desire is 0. Only 175 Sleep on floor rests without a bed.
@@ -431,7 +441,7 @@ save already holds (zones visited), and the original ignores the key (**Unverifi
 ## Player orders on locks
 
 Engine orders built on the tasks above (`LockSystem.Force.cs`, `LockSystem.Cages.cs`; context-menu verbs in [ui-input](ui-input.md#context-menu-verbs)):
-- **Use Tools / Use Strength** (285 / 286, `ForceLockOrder`) on a door's, container's or cage's lock (an occupied one of another faction through its occupant's menu, `PrisonerVerbs`; the prisoner itself never forces it, whether the original lets a caged character run 286 on its own cage is **Unknown**): the nearest selected character walks to it (a door from the nearer side) and cuts it (hardness falls as the shackle cut, the best tool is used up, the lock is broken) or breaks it (one strength test, a broken door lock also breaks the door); the picking crime is booked each update (Burglary against the owner, or code 7 for a cage with a captive). **Verified** by vtables / **Observed**: the shackle tasks' update is shared (above); that doors and containers take the same formulas is an engine reading.
+- **Use Tools / Use Strength** (285 / 286, `ForceLockOrder`) on a door's, container's or cage's lock (an occupied one of another faction through its occupant's menu, `PrisonerVerbs`): a prisoner works its own cage's lock where it stands (**Observed**: slot 5 of Task_CutLock `FUN_140352af0` and Task_BruteForceLock `FUN_140353350` resolves a character target to the building it is held in, `+0x300`, and rows 285 / 286 have no imprisoned condition, as the pick; rows 76, 201, 185, 186, 285 and 286 carry category 0x55, which includes the chained repertoire 0x10, so a pole prisoner works its lock too, **Verified** row table), else the nearest selected character walks to it (a door from the nearer side) and cuts it (hardness falls as the shackle cut, the best tool is used up, the lock is broken) or breaks it (one strength test, a broken door lock also breaks the door); the picking crime is booked each update (Burglary against the owner, or code 7 for a cage with a captive). **Verified** by vtables / **Observed**: the shackle tasks' update is shared (above); that doors and containers take the same formulas is an engine reading.
 - **Smash** (226, a door only): the NPC basher (above) without an attack target; needs a weapon ("I need a weapon to smash that" otherwise), walks to the stand-off spot and swings once per `stonemine` cycle, the blow at 0.6 of it (`LockSystem.BashClipSeconds`: the clip length over its record play speed); Burglary is booked per update in reach.
 - **Set Free** (110, `SetFreeOrder`): the nearest selected character walks to the prisoner's cage and lets the prisoner out as `FixtureRegistry.Release` does (a locked cage of its own faction too, the release unlocks it; another faction's only unlocked: "It's locked."; refused for a dead, unconscious or carried prisoner, state 125 `FUN_14099a480`, **Verified**) (cage unlocked and emptied, sentence cleared). The release leaves the slave state (`FUN_1403570a0` never sets it, **Verified**): only bail (`FUN_1406ae170`) and buy-free (`FUN_1406add20`) clear it, and a releaser not of the player's faction takes a slave over (`FUN_14032e430`: new owner, same state). Out of another faction's cage a pending code 7 (Terrorism) is booked as for lifting a prisoner out. **Get in** (107, `GetInCageOrder`): the character walks into a free, unlocked cage and is imprisoned. **Put in** (108): `PutInCageOrder.Cage` names the cage; **Pick Lock** of an empty cage `PickLockOrder.Cage`. Engine choices: the walks and reaches.
 
@@ -451,7 +461,7 @@ Shackles: the item's INVENTORY_ITEM_STATE record carries the same four keys (`Lo
 | Gap | Engine choice |
 | --- | --- |
 | Noise or witness alert from a failed pick (nothing traced besides the pending crime and sounds) | none beyond the pending crime |
-| Whether KO'd, carried or restrained characters may pick (no explicit test besides task conditions) | require conscious, free arms, not on a pole |
+| Whether KO'd, carried or restrained characters may pick (no explicit test besides task conditions) | require conscious, free arms. A pole (restraint) prisoner may: the rows are registered for the chained repertoire and `FUN_1408ca230` has no restraint test (**Verified**; #642: the original's Rebirth start picks its own pole) |
 | Which tool cutting consumes when several are carried | the highest-quality one |
 | Exact strength terms of cut/break | settled (**Verified** `FUN_140338090`, `FUN_140641480`): multiplier flags hunger, limbs, limb items, gear (no light, no dust) x strength x CharStats scale `+0x34` (1 for people, the age for animals); Meitou `Lockpicking.Strength` |
 | Whether an awake prisoner can be lifted out of an unlocked cage (`FUN_14034fbe0`'s callers not traced) | allowed; the carry rules then knock out a non-friendly one on the shoulder and set a friendly one down |

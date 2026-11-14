@@ -58,6 +58,24 @@ internal sealed partial class ZoneGeometryGatherer
                 hash = Combine(hash, (uint)Stable(b.LayoutName(state, exterior: true) + "|" + b.LayoutName(state, exterior: false)));
             if (b.WithoutInterior) hash = Combine(hash, 0x1e7e1u);   // only then, so the other zones' keys stay as they were
         }
+        return IncludeFoliage ? CombineTowns(hash, zone) : hash;
+    }
+
+    /// <summary>
+    /// <paramref name="hash"/> with the player's towns that keep foliage away from the zone's mesh (it depends on them through the foliage
+    /// it is built with); unchanged when there is none, so the keys of every other zone stay as they were.
+    /// </summary>
+    uint CombineTowns(uint hash, ZoneCoordinate zone)
+    {
+        if (_runtime?.FoliageTowns is not { Towns.Count: > 0 } towns) return hash;
+
+        foreach (var t in towns.NearZone(zone))
+        {
+            hash = Combine(hash, (uint)(int)MathF.Round(t.At.X) ^ 0x70747774u);
+            hash = Combine(hash, (uint)(int)MathF.Round(t.At.Y));
+            hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(t.Range));
+            hash = Combine(hash, t.Owned ? 1u : 0u);
+        }
         return hash;
     }
 
@@ -450,7 +468,11 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var node = NodeMatrix(building, position, rotation);
         var doors = building.GetReferences("doors").Select(r => r.TargetStringId).ToHashSet();
-        foreach (var mesh in WorldObjectLayout.Building(_db, building, placementId, position, rotation, new BuildingState(destroyed)))
+
+        // With the `interior` list, as the navmesh takes it (AddBuilding): inner stairs, and the upper floors of the Watchtower, the Snailhouse and
+        // the outposts. Without it a body upstairs fell to the ground floor and a bolt or a line of sight passed the floors between (#608).
+        var state = new BuildingState(destroyed) { WithInterior = !destroyed };
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, placementId, position, rotation, state))
         {
             var part = mesh.Source;
             string path = mesh.CollisionPath(destroyed);

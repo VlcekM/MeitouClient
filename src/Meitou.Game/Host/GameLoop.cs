@@ -480,7 +480,7 @@ sealed class GameLoop(GameHost host)
                         _ => throw new ArgumentOutOfRangeException(nameof(index)) });
                     return $"UI mode: {host.Player.UiMode}";
                 })]);
-        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",
             Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
         _panel = new SettingsMenu(host.Player, values, host.Session.Bindings, SaveSettings, frameLimit, host.Config)
         {
@@ -503,6 +503,7 @@ sealed class GameLoop(GameHost host)
             GunnerFacingChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.GunnerFacesBarrel = on),
             PunchReachChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.PunchReachFix = on),
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
+            TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
             DoorsCloseChanged = on => EachSystem<Simulation.Locks.LockSystem>(locks => locks.DoorsCloseBehind = on),
             AnimalsPickUpChanged = on => EachSystem<Simulation.Player.PlayerSystem>(players => players.AnimalsPickUp = on),
@@ -1285,7 +1286,7 @@ sealed class GameLoop(GameHost host)
             _lastMouse = p;
             return;
         }
-        bool hold = _lastMouse is not null && host.OrbitHeld();
+        bool hold = _lastMouse is not null && host.MouseLook();
         host.Player.MouseMove(Pixels(hold ? _lastMouse!.Value : p));
         if (host.Player.UiCapturesPointer || host.Player.ModalOpen)
         {
@@ -1533,7 +1534,7 @@ sealed class GameLoop(GameHost host)
         StepControlPointer();
         // Rotation over on Linux: the pointer is let go where it was locked, in the cursor mode it had before, and before its position is read
         // (still locked, GLFW reports its virtual position, and the pointer was drawn there for a frame). The next move starts afresh.
-        if (_orbitAnchor is not null && !host.OrbitHeld())
+        if (_orbitAnchor is not null && !host.MouseLook())
         {
             _orbitAnchor = null;
             _lastMouse = null;
@@ -1690,7 +1691,7 @@ sealed class GameLoop(GameHost host)
             _frameGenTried = true;
             _frameGen = FrameGenerationSetup.CreateFrameGenerator(_display);
         }
-        bool frameGenWanted = !host.Covered && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
+        bool frameGenWanted = !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
         _frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
         host.Gpu.Post!.FrameGen = _frameGen;
         // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
@@ -1715,12 +1716,14 @@ sealed class GameLoop(GameHost host)
         if (host.Nav is not null) host.Nav.Covered = covered;
         // The loading screen follows the interface's mode as it is now (the settings can switch it at any time); only the Faithful mode counts loads.
         bool faithfulUi = host.Player.UiMode == Data.Ui.UiMode.Faithful;
-        host.LoadBar.Update(faithfulUi ? host.PendingLoads() : 0);
+        // Behind the Faithful title nothing is drawn, so nothing loads: the waiting requests would hold an empty bar up.
+        host.LoadBar.Update(faithfulUi && !host.TitleHidesWorld ? host.PendingLoads() : 0);
         host.Player.LoadBar = host.LoadBar;
         if (host.Loading is not null) (host.Loading.LoadBar, host.Loading.Faithful) = (host.LoadBar, faithfulUi);
         if (sceneLoading && host.SkyArrival is { AtStars: true })
             WorldFrame.DrawLoadingSky(host.Gpu, host.Scene, host.Camera, size.X, size.Y, host.PresentationHour ?? 0, (float)host.AnimSeconds,
                 host.WorldOptions.FogDistance);
+        else if (host.TitleHidesWorld) ClearBackbuffer(size);
         else if (!sceneLoading || host.SkyArrival is not null)
         {
             // The duel's laps and recorded flights replay exactly, and the play benchmark is deterministic from its save: their ticks stay in step
@@ -1730,6 +1733,17 @@ sealed class GameLoop(GameHost host)
             host.DrawWorld(size.X, size.Y);
             host.TickAhead = false;
         }
+    }
+
+    /// <summary>
+    /// Black in place of the world, for a frame the interface covers whole (<see cref="GameHost.TitleHidesWorld"/>).
+    /// </summary>
+    void ClearBackbuffer(Vector2D<int> size)
+    {
+        var cmd = _display.Context.BeginNative("backbuffer clear");
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(host.Gpu.Post!.Target!.Attachment(), LoadOp.Clear, default), default, size.X, size.Y));
+        cmd.EndRendering();
+        _display.Context.EndNative(cmd);
     }
 
     /// <summary>
@@ -1813,7 +1827,7 @@ sealed class GameLoop(GameHost host)
         }
         if (host.DebugMenu.DebugMenuOpen)
             host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
-                atRight: host.DebugMenu.StatsVisible);
+                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
         if (host.Player.WorldMap.MapPick is not null && host.Player.WorldMap.MapTabShown) host.DebugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.ExplodeClickOn) host.DebugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.InspectorMenuOpen) host.DebugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
@@ -1822,6 +1836,11 @@ sealed class GameLoop(GameHost host)
         host.DebugMenu.Profiler?.Draw(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.DrawVram(overlay, size.X, size.Y);
     }
+
+    /// <summary>
+    /// The debug menu's text scale: the framebuffer's pixels per window point (2 on a Retina display), 1 without a window.
+    /// </summary>
+    float DebugTextScale() => _window is null ? 1 : MathF.Max(1, _window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1));
 
     /// <summary>
     /// One line in a panel at the left below <paramref name="top"/>; returns the new bottom (the panels add their own 16 px margin).

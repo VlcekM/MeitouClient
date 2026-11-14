@@ -15,6 +15,9 @@ const core = [creator, 'Bazouz660', 'Demitrix2k'];
 const excluded = new Set(['claude']);
 // What a contributor outside the core team is known for, shown under their name.
 const roles = { spacecowboyserver: 'macOS port' };
+// People credited for work that came in without commits of their own (a mod built into the game), drawn after the committers with what it was;
+// they need no GitHub account: without one their initial stands in for the picture.
+const credited = [{ login: 'ErasmianFolly', credit: 'Camera offset, item rotation' }];
 const out = new URL('../../assets/branding/contributors.png', import.meta.url);
 
 const W = 1200, P = 4;
@@ -22,6 +25,8 @@ const W = 1200, P = 4;
 const muted = '#9a8263';
 const font = "Segoe UI, DejaVu Sans, Liberation Sans, sans-serif";
 const amber = '#e0a030';
+// Behind the initial of someone without a picture.
+const blank = '#3b3026';
 const esc = s => s.replace(/[&<>"]/g, c => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot' }[c]};`);
 
 const listed = (await all('/repos/{repo}/contributors'))
@@ -29,7 +34,8 @@ const listed = (await all('/repos/{repo}/contributors'))
 const byLogin = new Map(listed.map(c => [c.login.toLowerCase(), c]));
 const team = await Promise.all(core.map(async l => byLogin.get(l.toLowerCase()) ?? await api(`/users/${l}`)));
 const others = listed.filter(c => !core.some(l => l.toLowerCase() === c.login.toLowerCase()))
-  .sort((a, b) => b.contributions - a.contributions || a.login.localeCompare(b.login));
+  .sort((a, b) => b.contributions - a.contributions || a.login.localeCompare(b.login))
+  .concat(credited.filter(c => !byLogin.has(c.login.toLowerCase())).map(c => ({ ...c, contributions: 0 })));
 
 // At most five words on what each contributor outside the core team worked on, by Claude Haiku from their commit subjects. Saved in
 // contributors.json and asked again when someone's commit count changed or their saved areas run longer; without ANTHROPIC_API_KEY the
@@ -44,7 +50,7 @@ const fit = s => s.split(',').map(a => a.trim()).filter(Boolean)
   .reduce((kept, a) => kept.length && words([...kept, a].join(' ')) > maxWords ? kept : [...kept, a], [])
   .join(', ');
 const isStale = u => saved[key(u)]?.commits !== u.contributions || words(saved[key(u)].areas) > maxWords;
-const stale = others.filter(u => !roles[key(u)] && isStale(u));
+const stale = others.filter(u => !roles[key(u)] && !u.credit && isStale(u));
 if (stale.length && process.env.ANTHROPIC_API_KEY) {
   const work = await Promise.all(stale.map(async u => [`## ${u.login}`,
     ...(await all(`/repos/{repo}/commits?author=${u.login}`)).slice(0, 80).map(c => `- ${c.commit.message.split('\n')[0]}`)].join('\n')));
@@ -66,7 +72,7 @@ if (stale.length && process.env.ANTHROPIC_API_KEY) {
   }
   await writeFile(areasFile, `${JSON.stringify(saved, null, 2)}\n`);
 }
-const areas = u => roles[key(u)] ?? (saved[key(u)] && fit(saved[key(u)].areas));
+const areas = u => roles[key(u)] ?? u.credit ?? (saved[key(u)] && fit(saved[key(u)].areas));
 
 async function avatar(user, size) {
   const r = await fetch(`${user.avatar_url}${user.avatar_url.includes('?') ? '&' : '?'}s=${size * 2}`);
@@ -78,8 +84,12 @@ async function avatar(user, size) {
 let defs = '', body = '', clip = 0;
 async function face(user, cx, cy, r, ring) {
   const id = `c${clip++}`;
-  defs += `<clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>`;
-  body += `<image href="${await avatar(user, r * 2)}" x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" clip-path="url(#${id})"/>`;
+  if (user.avatar_url) {
+    defs += `<clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>`;
+    body += `<image href="${await avatar(user, r * 2)}" x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" clip-path="url(#${id})"/>`;
+  } else {
+    body += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${blank}"/>` + text(cx, cy + Math.round(r * 0.36), r, muted, user.login[0].toUpperCase(), 700);
+  }
   body += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ring}" stroke-width="${ring === amber ? 4 : 2}"/>`;
 }
 const fonts = { font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' } };

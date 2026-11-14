@@ -12,6 +12,11 @@ namespace Meitou.Simulation.Navigation;
 sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoorGate
 {
     /// <summary>
+    /// The navmesh walkability this adapts (read by <see cref="NavNear"/>).
+    /// </summary>
+    internal NavmeshWalkability Navmesh => nav;
+
+    /// <summary>
     /// A building whose doors are all locked is closed for every path (docs/simulation.md "Cages, beds and locks").
     /// </summary>
     public void SetDoorsBlocked(string buildingInstance, bool blocked) => nav.Doors.Set(buildingInstance, blocked);
@@ -53,7 +58,13 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
     public Vector2 Slide(Vector3 from, Vector2 step, float radius) => nav.Slide(from, step, radius);
 
     /// <inheritdoc/>
+    public bool LineOfSight(Vector3 from, Vector3 to) => nav.LineOfSight(from, to);
+
+    /// <inheritdoc/>
     public Vector3? FloorNear(float x, float z, float y, float slack) => nav.FloorNear(x, z, y, slack);
+
+    /// <inheritdoc/>
+    public IReadOnlyList<SurfaceFace>? SurfaceFaces(Vector3 centre, float reach) => NavSurfaceFaces.Of(nav.World, centre, reach);
 
     /// <summary>
     /// A path for the default human agent (the navmesh's own default).

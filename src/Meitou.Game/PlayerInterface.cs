@@ -118,6 +118,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal FurnitureUse Furniture => field ??= new(this);
     /// <summary>
+    /// What a right click does with a town building that is a machine (a farm, a mine).
+    /// </summary>
+    internal TownMachineUse TownMachines => field ??= new(this);
+    /// <summary>
     /// Squad management (docs/game/ui-screens.md "Squads tab", the original's SquadManagementScreen).
     /// </summary>
     internal SquadPanel SquadWindows => field ??= new(this);
@@ -129,6 +133,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The squad bar's portraits (both UI modes).
     /// </summary>
     internal PortraitBar PortraitBar => field ??= new(this);
+
+    /// <summary>
+    /// The portraits of CHARACTER records that code mods show.
+    /// </summary>
+    internal RecordPortraits RecordPortraits => field ??= new(this);
     /// <summary>
     /// The inventory windows (docs/game/ui-screens.md section 6).
     /// </summary>
@@ -299,9 +308,19 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     internal float UiScale => Height / 1080f * InterfaceScale;
 
     /// <summary>
-    /// An inventory cell's size, pixels: 25 at 1080 lines.
+    /// An inventory cell's dimensions from the loaded skin, scaled with the interface.
     /// </summary>
-    internal float InventoryCell => 25 * UiScale;
+    internal Vector2 InventoryCellSize => InventoryGeometry.CellSize(UiResources, UiScale);
+
+    /// <summary>
+    /// An inventory cell's width in pixels.
+    /// </summary>
+    internal float InventoryCell => InventoryCellSize.X;
+
+    /// <summary>
+    /// An inventory cell's height in pixels.
+    /// </summary>
+    internal float InventoryCellHeight => InventoryCellSize.Y;
 
     #endregion
 
@@ -784,10 +803,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         TooltipRuntime.HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
         if (button == MouseButton.Left && FeedbackPanel.FeedbackButtonDown(p)) return true;
         if (CharacterEditor.EditorPointerDown(button, p)) return true;
+        if (Session.Bindings.Get(InputAction.RotateItem).Contains(Binding.Of(button)) && InventoryWindows.RotateAt(p)) return true;
         if (button == MouseButton.Right && InventoryWindows.CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.WallCancel()) return true;
         if (button == MouseButton.Right && !OverHud(p) && LevelEditorPanel.LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.BuildDiscard()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && Build.BuildPickUp(p)) return true;
         if (button == MouseButton.Left) return LeftDown(p);
         if (button == MouseButton.Right && WorldMap.InventoryRightClick(p, shift)) return true;
         if (button == MouseButton.Right && ContextMenuWindow.CloseContextMenu()) return true;
@@ -886,6 +907,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (kind == WorldPicking.Picked.Cage && Furniture.CageClick(p)) return;
         if (kind == WorldPicking.Picked.Dummy && Furniture.DummyPress(p)) return;
         if (kind == WorldPicking.Picked.TownTurret && Furniture.TownTurretPress(p)) return;
+        if (kind == WorldPicking.Picked.TownMachine && TownMachines.Press(p)) return;
         if (kind == WorldPicking.Picked.Rock && Furniture.RockPress(p)) return;
         if (kind is WorldPicking.Picked.Site or WorldPicking.Picked.None && Build.SitePress(p)) return;
         if (Ray(p) is { } ray && Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
@@ -1075,20 +1097,24 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         }
         else
         {
-            // A click on another faction's character shows it in the information and medical panels and drops the squad's selection
+            // A click on another faction's character shows it in the information and medical panels and keeps the squad's selection
             // (docs/game/ui-screens.md section 4). Shift keeps the selection, a click on your own or on the ground clears the inspection.
-            var hit = Picking.Pick(p);
+            // Without Shift the nearest character under the cursor takes the click, the player's or another's, as the original's one ray does
+            // (docs/game/ui-input.md "Character picking"): a body carried on a squad member's shoulder is in front of its carrier.
+            var nearest = Picking.PickWhere(p, _ => true);
+            CharacterId? nearestOwn = nearest is { } first && Own(first) ? first : null;
+            var hit = shift ? Picking.Pick(p) : nearestOwn;
             if (hit is { } own && DeadOwn(own))
             {
                 Inspect(own);
                 return;
             }
 
-            var other = hit is null && !shift ? Picking.PickWhere(p, c => !c.IsPlayer) : null;
+            var other = hit is null && !shift ? nearest : null;
 
             // A building under the cursor (and no character) is selected and the characters keep their selection (docs/game/ui-input.md "Building
             // picking and selection").
-            if (hit is null && Picking.PickWhere(p, _ => true) is null && BuildingSelection.PickBuilding(p) is { } building)
+            if (hit is null && nearest is null && BuildingSelection.PickBuilding(p) is { } building)
             {
                 BuildingSelection.SetBuilding(building);
                 Inspect(CharacterId.None);
@@ -1108,6 +1134,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// (<c>FUN_1407f9000</c>, <c>FUN_1407f7f20</c>, docs/game/ui-input.md "Selection").
     /// </summary>
     bool DeadOwn(CharacterId id) => Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { Body.Dead: true };
+
+    /// <summary>
+    /// Whether the character is one of the player's.
+    /// </summary>
+    bool Own(CharacterId id) => Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { IsPlayer: true };
 
     /// <summary>
     /// Shows <paramref name="target"/> (another faction's character or your own dead one; <see cref="CharacterId.None"/> for nobody) in the HUD

@@ -141,6 +141,7 @@ public sealed class TownBuildingBuilder
             HasInterior = record.GetReferences("interior").Count > 0,
             Destroyed = resolved.Destroyed,
             RuinedByResidents = _levels.ResidentRuined.Contains(b.Key),
+            RestoredByResidents = _levels.ResidentRestored.Contains(b.Key),
             Turret = turret,
             ResidentsTemplate = state?.GetString("residents template") ?? "",
             LevelState = state,

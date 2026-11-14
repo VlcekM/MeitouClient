@@ -78,8 +78,8 @@ msgstr "Nome da nova predefinição"
 msgid "Save as preset"
 msgstr "Salvar predefinição"
 
-msgid "Drag to change the load order"
-msgstr "Arraste para alterar a ordem de carregamento"
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "Arraste para alterar a ordem de carregamento; Ctrl+clique ou Shift+clique seleciona vários mods para mover juntos"
 
 msgid "Versions"
 msgstr "Versões"

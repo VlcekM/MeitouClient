@@ -269,6 +269,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public float LandmarkDistance { get; set; }
 
     /// <summary>
+    /// Stand-ins and distant towns take over at this distance when it is past <see cref="ObjectDistance"/> (0: at the object distance). The water
+    /// reflection sets it to the scene's object distance while it draws real objects to its own shorter reach, so a building the scene still shows
+    /// as built never mirrors as its stand-in (#668); between the two it mirrors nothing.
+    /// </summary>
+    public float StandInDistance { get; set; }
+
+    /// <summary>
     /// Ogre's camera LOD bias as a distance factor: the LOD value is multiplied by it, so above 1 coarser levels come sooner, below 1 later.
     /// </summary>
     public float LodBias { get; set; } = 1;
@@ -326,6 +333,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// the object distance).
     /// </summary>
     float LandmarkReach => Math.Max(RealRange, LandmarkDistance * (_guard?.RangeScale ?? 1f));
+
+    /// <summary>
+    /// Where the stand-ins and distant towns fade in: <see cref="StandInDistance"/> times the guard's scale, never less than <see cref="RealRange"/>.
+    /// </summary>
+    float StandInRange => Math.Max(RealRange, StandInDistance * (_guard?.RangeScale ?? 1f));
 
     /// <summary>
     /// How far distant towns and stand-ins are drawn and streamed: <see cref="DistantRange"/> times the guard's scale.
@@ -1167,7 +1179,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         inst.TurretStamp = -1;   // a turret part is posed again (JointPoses.Pose)
         inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
-            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange)
+            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange,
+                isWall: inst.Placed.Owner.GetBool("links together") && !inst.Placed.Owner.GetBool("is wall gate"))
             : float.MaxValue;
         if (inst.Stand)
         {
@@ -1361,6 +1374,43 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     maxDistance = hit.Distance;
                     best = (hit.Position, room);
                 }
+        return best;
+    }
+
+    /// <summary>
+    /// How far outside a room's hull a terrain hit is still tested against its drawn mask (engine choice): the cheap test before the mask's.
+    /// </summary>
+    const float CutMargin = 10;
+
+    /// <summary>
+    /// How far along the ray a floor pick looks when the terrain it meets at <paramref name="ground"/> is cut by a loaded building's interior mask
+    /// (<see cref="InteriorVolume.CutsGround"/>): the pick goes on to where the ray leaves that room's box (a tower's ground floor below a hillside,
+    /// feedback #712). Null when no mask cuts the terrain there.
+    /// </summary>
+    public float? CutGroundReach(Vector3 origin, Vector3 direction, Vector3 ground)
+    {
+        float distance = Vector3.Distance(origin, ground);
+        float? reach = null;
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+            {
+                if (room.Contains(ground, CutMargin) && room.CutsGround(origin, direction, distance)
+                    && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0))
+                    reach = exit;
+            }
+        return reach;
+    }
+
+    /// <summary>
+    /// The nearest distance within <paramref name="maxDistance"/> at which the ray first meets a loaded building's collision on a face nobody
+    /// stands on (<see cref="InteriorVolume.FaceHit"/>, floors up to <paramref name="floor"/>); null for none.
+    /// </summary>
+    public float? FaceHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
+    {
+        float? best = null;
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+                if (room.FaceHit(origin, direction, floor, best ?? maxDistance) is { } t) best = t;
         return best;
     }
 
@@ -1784,14 +1834,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         BeginDraw();
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
-        float realBand = Math.Clamp(real * 0.1f, 50, 1500);
+        float standIn = StandInRange;
+        float standInBand = Math.Clamp(standIn * 0.1f, 50, 1500);
         float distantBand = Math.Clamp(DistantReach * 0.15f, 500, 4000);
         foreach (var zone in _landmarksOnly ? [] : _streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
                 foreach (var inst in zone.Real) DrawReal(zone, inst, real, eye, frustum, options, now);
             if (NoDistant) continue;
-            foreach (var inst in zone.Stand) DrawDistant(zone, inst, eye, frustum, now, real, realBand, distantBand);
+            foreach (var inst in zone.Stand) DrawDistant(zone, inst, eye, frustum, now, standIn, standInBand, distantBand);
         }
 
         // The landmarks (a few hundred, kept apart from the zones): the same test with their own reach, the part distance still applying.
@@ -1832,7 +1883,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             };
             if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
-            var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);
+            var fadeRange = new Vector4(standIn - standInBand, standIn, DistantReach - distantBand, DistantReach);
             if (wireMode != 2)
             {
                 PrepareDraws(options, wire: false);
@@ -1873,10 +1924,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// A zone's distant stand-in: drawn within the distant reach when visible, faded in past the real range and out at the reach's edge.
+    /// A zone's distant stand-in: drawn within the distant reach when visible, faded in past the stand-in range (<see cref="StandInRange"/>)
+    /// and out at the reach's edge.
     /// </summary>
-    void DrawDistant(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst, Vector3 eye, Vector4[] frustum, long now, float real, float realBand,
-        float distantBand)
+    void DrawDistant(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst, Vector3 eye, Vector4[] frustum, long now, float standIn,
+        float standInBand, float distantBand)
     {
         if (inst.Gpu is not { } gpu) return;
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu))
@@ -1887,7 +1939,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
         if (value >= DistantReach || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre, inst.Radius) == false
             || FogCull?.Hidden(inst.Centre, inst.Radius, FogVolumes.CullKind.Objects) == true) return;
-        float w = ObjectRanges.RiseWeight(value, real - realBand, realBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
+        float w = ObjectRanges.RiseWeight(value, standIn - standInBand, standInBand) * ObjectRanges.EdgeWeight(value, DistantReach, distantBand);
         if (w <= 0) return;
         inst.Mesh.LastUsed = now;
         DrawnInstances++;

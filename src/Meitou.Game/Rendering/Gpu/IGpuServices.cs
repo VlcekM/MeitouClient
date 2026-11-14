@@ -89,6 +89,29 @@ public interface IGpuUploads
     /// A batch of copies recorded into its own transfer commands, flushed when it is disposed.
     /// </summary>
     IGpuUploadBatch Begin();
+
+    /// <summary>
+    /// A scope in which the render thread's batches may share transfer commands, which are flushed when the scope is disposed (a backend whose
+    /// every batch costs a command buffer joins them; the default shares nothing). The copies still reach the device before any commands recorded
+    /// after the scope closes.
+    /// </summary>
+    IDisposable Scope() => NoScope.Instance;
+
+    /// <summary>
+    /// The scope of a backend that shares nothing.
+    /// </summary>
+    private sealed class NoScope : IDisposable
+    {
+        /// <summary>
+        /// The one instance.
+        /// </summary>
+        public static readonly NoScope Instance = new();
+
+        /// <summary>
+        /// Nothing to flush.
+        /// </summary>
+        public void Dispose() { }
+    }
 }
 
 /// <summary>

@@ -55,6 +55,7 @@ Population builds are queued/applied at frame boundaries without advancing game 
 navmesh-gated spawns are retried while loading. Warm-up and the flight hold the simulation paused.
 Which title shows is the Interface setting Main menu style (`MeitouMainMenu` in `meitou.user.json`, default Meitou), independent of the UI mode; the main-menu sky flight needs the Meitou title.
 The Faithful title does not wait: its picture is opaque, so the start ends with the splash ([ui-screens](game/ui-screens.md#splash)) and the boot.
+While it is up the world is not drawn (`GameHost.TitleHidesWorld`: a black backbuffer, no frame generation; Vulkan host), so its streaming waits for a game's warm-up.
 The Meitou title waits for terrain, scenery, character assets and used textures (including deferred loads), then
 one full second of <40ms frames (max5s of ready content for frame pacing, so slow GPUs reach the menu). Its menu artwork/fonts/pipelines warm under the opaque cover too;
 streaming uploads retire and a compacting GC completes before that final smooth run.

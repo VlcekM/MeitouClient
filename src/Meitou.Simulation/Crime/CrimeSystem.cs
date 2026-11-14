@@ -305,13 +305,14 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 if (p.Timer <= 0) c.Pending = null;
                 else p.Timer -= seconds;
             }
-            if (!c.CarriedBy.IsNone) continue;   // a carried suspect is not looked at (the game's witness function)
+            // A carried or imprisoned suspect is not looked at (the game's witness function): a prisoner's crime runs out and its bounty shows.
+            if (!c.CarriedBy.IsNone || c.IsImprisoned) continue;
             if (!c.IsPlayer)
             {
                 if (c.Pending is not null) Witnesses(world, s, c, false, null, seconds);
                 continue;
             }
-            bool kidnapping = !c.Carrying.IsNone && table.TryResolveNext(c.Carrying, out int body) && Innocent(c, table.Cold(body)!);
+            bool kidnapping = !c.Carrying.IsNone && table.TryResolveNext(c.Carrying, out int body) && Bodies.CharacterFacts.Kidnapped(table.Cold(body)!);
             var premises = PremisesOf(world, s);
             if (c.Pending is null && !kidnapping && premises is null) continue;
             Witnesses(world, s, c, kidnapping, premises, seconds);
@@ -331,7 +332,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// Whether the witness has spotted the sneaking culprit: its spot meter, kept by <see cref="AggroSystem"/> for every looker, is full (without
     /// one, never).
     /// </summary>
-    bool Spotted(World world, int witness, CharacterId culprit)
+    internal bool Spotted(World world, int witness, CharacterId culprit)
     {
         if (!_aggroLooked)
         {
@@ -342,16 +343,21 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// A carried body whose carrying is a kidnapping when seen (carry-loot.md 4.6, the game's "innocent victim", <b>Observed</b>; its status flag
-    /// <c>+0xe9</c> is <b>Unknown</b> and read here as: an NPC of another, real, non-bandit faction, not a bandit and with no bounty).
+    /// Whether a witness of faction <paramref name="wf"/> takes the carrying of a kidnapped <paramref name="body"/> for a kidnapping
+    /// (<c>FUN_1408549f0</c>, <b>Verified</b>; carry-loot.md 4.6): never an enemy of the body's faction; one that is friendly to it always; any
+    /// other only while the carrier stands in a town, the body's faction is real and the body has no bounty with the witness's faction.
     /// </summary>
-    bool Innocent(CharacterCold carrier, CharacterCold body) =>
-        !body.IsPlayer && body.Faction != carrier.Faction && !Factions.Lawless(body.Faction) && body.NpcClass != FundamentalType.Bandit
-            && body.Bounties is not { Any: true };
+    bool MindsKidnapping(int wf, CharacterCold carrier, CharacterCold body)
+    {
+        if (AggroSystem.IsEnemy(Relations, wf, body.Faction)) return false;
+        if (Friendly(wf, body.Faction)) return true;
+
+        return !carrier.StatusTown.IsNone && !Factions.NotReal(body.Faction) && !(body.Bounties?.AmountFor(wf) > 0);
+    }
 
     /// <summary>
     /// Every awake NPC that sees the culprit, in slot order, reacts as the game's witness function does (<c>FUN_140854d10</c>, <b>Observed</b>): not
-    /// of the culprit's faction, not carried, with no pending crime of its own; nothing when its faction is hostile to the victim's, when the
+    /// of the culprit's faction, not carried, not imprisoned (nor is the culprit), with no pending crime of its own; nothing when its faction is hostile to the victim's, when the
     /// victim's is lawless, when it books bounties and the victim's is a bandit faction, or when it regards the culprit as friendly and the victim is
     /// of another faction. Theft and Looting need it to care about the victim (same faction or allied); Looting also that it does not regard the
     /// culprit as friendly; Kidnapping a victim and that care; an Assault a victim that it does not regard as an enemy; a Murder nothing more. One
@@ -373,7 +379,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         for (int w = 0; w < table.HighWater; w++)
         {
             if (w == culprit || !next[w].Alive) continue;
-            if (table.Cold(w) is not { IsPlayer: false, Medical.Incapacitated: false } wc || !wc.CarriedBy.IsNone || wc.Pending is not null) continue;
+            if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false } wc) continue;
+            if (!wc.CarriedBy.IsNone || wc.Pending is not null) continue;
             int wf = wc.Faction;
             if (wf == c.Faction || !Relations.Contains(wf)) continue;
             float range = AggroSystem.RangeOf(wc, Settings.Sight);
@@ -383,7 +390,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 if (v <= 0 || !Spotted(world, w, culpritId)) continue;
             }
             else if (world.Sight.Sees(w, culprit, next[w].Position, at, range) <= 0) continue;
-            if (body is not null && !Friendly(wf, c.Faction) && Friendly(wf, body.Faction))
+            if (body is not null && !Friendly(wf, c.Faction) && MindsKidnapping(wf, c, body))
                 SetPending(world, culprit, CrimeCode.Kidnapping, body.Faction, c.Carrying, KidnapTimer, viaWrapper: true);
             if (premises is { } house && Trespasses(world, wc, c, house))
                 SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);
@@ -518,17 +525,19 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         code is not (CrimeCode.Burglary or CrimeCode.Looting or CrimeCode.Trespassing or CrimeCode.CropTheft or CrimeCode.UniformTheft);
 
     /// <summary>
-    /// DA 33 CRIME_ALARM said by <paramref name="speaker"/> at <paramref name="target"/> (<c>FUN_140680560</c>, <b>Observed</b>): the speaker turns
-    /// on the target (its perception marks it hostile, <c>FUN_140858f40</c>), the target's crime timer is set to 30 and it is recently wanted
-    /// (<c>FUN_140851f40</c>); with no crime pending, a target inside the speaker's own home that is not public gets a pending Trespassing. Then the
-    /// alarm of the speaker's town is raised at the target for its pending crime (<see cref="TownAlarm"/>).
+    /// DA 33 CRIME_ALARM said by <paramref name="speaker"/> at <paramref name="target"/> (<c>FUN_140680560</c>, <b>Observed</b>): the speaker
+    /// notices the target (the forced sense with its alarm flag, <c>FUN_140858f40</c>, <b>Verified</b>: the sense entry is marked seen and alert
+    /// 5 s; no attack order and no squad tag, so a Holy Nation civilian crying out at a skeleton starts no fight, #648), the target's crime timer
+    /// is set to 30 and it is recently wanted (<c>FUN_140851f40</c>); with no crime pending, a target inside the speaker's own home that is not
+    /// public gets a pending Trespassing. Then the alarm of the speaker's town is raised at the target for its pending crime
+    /// (<see cref="TownAlarm"/>).
     /// </summary>
     public void Alarm(World world, int speaker, int target)
     {
         var table = world.Characters;
         if (table.Cold(speaker) is not { } s || table.Cold(target) is not { } t) return;
         var targetId = table.IdOf(target);
-        world.Defer(new Combat.AttackOrder([table.IdOf(speaker)], targetId) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+        world.SystemOf<AggroSystem>()?.Alarm(world, table.IdOf(speaker), targetId);
         var squad = s.SquadId >= 0 ? world.Squads.Find(s.SquadId) : null;
         int town = squad?.Town ?? -1;
         if (t.Pending is { } p) p.Timer = AlarmTimer;

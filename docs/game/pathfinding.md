@@ -32,6 +32,10 @@ navigation geometry from render meshes alone. Source collision decoding: [collis
 Runtime face/edge filters include doors/base walls, water-avoidance and interior restrictions.
 Havok paths, local steering and unloaded-platoon movement are distinct code paths.
 
+### Refit snap
+
+**Verified** (`FUN_1403a2fa0`, `FUN_1403a2300`, `FUN_140cf5710`, `FUN_140d95b80`): a player town's centre (docs/game/buildings-production.md "Outposts") is put on the navmesh in two steps. Step 1: the 3D closest point in a cube of half size 500, door and water faces skipped. Step 2: from that point, boxes of 20, 40 then 80 units (always +-20 vertically); the faces in the box give boundary loops, each loop's 2D convex hull is grown by 20 units (8 segments per corner), and the point nearest the start that clears those shapes, projected back onto the mesh, wins (first box with a point; else step 1's). So the centre ends about 20 units inside the mesh boundary. **Observed**: the player towns' tiles are regenerated at run time with the buildings' collision boxes as geometry (no margin, no erosion) and saved as `zone/tileX.Y.hkt` in the save. Meitou: `RefitSnap` (`Simulation/Construction`) over `IWalkability.SurfaceFaces` (`NavSurfaceFaces`); step 2 uses plain distance to open edges instead of the grown hulls (engine choice). A face carries `SurfaceHeight` (the polygon's own height, `ZoneNavMesh.HeightAt`: terrain samples or a stacked surface's grid) and the snap cuts it into triangles of at most 36 units (the original's terrain mesh resolution, every second 18-unit height sample) with those heights; the corner plane alone lets a large polygon on a slope shift step 1 by tens of units (**Observed**, Goonrock live: 22.55 off with corner heights, 10.89 with the surface). Meitou's navmesh at a player town carries the placed buildings through `NavRuntimeBuildings` (zone hash and rebuild); it does not read the save's tiles. Reading them would mean converting an `OriginalNavMesh` (faces, edge kinds, no area data) into a `ZoneNavMesh` (kept flags, neighbours, heights, doors, interiors) and keeping it until the next placement rebuilds the zone: not small, not done. The Slow refit test reads them directly (`OriginalNavTiles.Exterior`). **Unknown**: whether Meitou's carve of building collision boxes equals the regenerated tile (not compared).
+
 ## Speed and orders
 
 **Observed** S=max(11,(V-11)*leg*hunger*replacement*encumbrance*statScale+11),
@@ -45,6 +49,10 @@ body covers ends the walk short. A re-issued order within 2 units of the last go
 `FinalArrive`, `GoalOccupied`. A walker out of combat keeps the agent's velocity vector (previous tick's `Velocity`), moving it toward path direction x wanted speed by at most a x dt, so a turn costs the speed the change of direction takes (no cos cut, no turning on the spot); its facing is its velocity's direction (the path direction while it starts; engine reading: facing the path direction while the velocity lags makes it slide sideways through turns) and the drawn body follows it ([animation](../animation.md), drawn facing), and a corner the velocity has carried past counts as reached. Fighters and direct followers keep the older turn cut (engine choice). Corner braking (**Verified**, `FUN_140147fd0`, the corner from the funnel `FUN_140146a60`, constants 0.1 and 2.0 from the decompile's data table): in the walking state, once the distance to the corner along the velocity's direction, less 0.1 Havok units, is under the stopping distance v²/2a, the wanted speed drops to √(2a·|sin θ|) (Havok units), θ between the velocity and the direction to the corner; when the wanted speed already fits under it, the agent steers square across its velocity toward the corner's side at the wanted speed. Meitou: `MovementSystem.CornerBrake` on each waypoint but the last (in world units: 1 unit margin, √(2a·10·|sin θ|)). Whether the funnel's point tested is the corner or the point past it: **Unknown**; Meitou tests the point past it (engine reading, #429: tested against the corner, θ is about 0 on every head-on approach, so a walker over ~44 u/s braked toward a stop short of each waypoint, Observed in Meitou). A waypoint but the last is passed within 5 units, or within its stopping distance + 1 when longer (up to 30), where the cut to the next point is walkable for twice that (`CornerPass`, engine choice), so a fast walker rounds such corners without braking. Not yet: animal `turn rate`. A reached waypoint is passed in the same tick.
 Combat/follow steering ramps15/s, with turning/backward/arrival caps. Combat-move-speed multiplier
 and water factors 0.75/0.5/0.4 apply separately (`FUN_14065dba0`, by water state 1/2/3; Meitou scales the fight steering by the water factors, `MovementSystem`). No independent slope-speed term was found.
+
+A speed order (standing orders 0-2 and 16, `FUN_1405caa50`) writes the mover's own mode (CharMovement `+0x20`) and Task_Move's update applies
+that mode every frame (`FUN_1405c68a0`), so a change takes effect during the walk (**Verified**, decompile). Meitou: `Orders.SetRunSpeed` gives
+the new mode to a walk under way in the old one (#691); a walk a task started in another mode keeps it (engine choice).
 
 ### Force speed
 
@@ -409,6 +417,9 @@ Its platform has overlapping upward faces near Y122/133; the lower face lacks he
 **Door joins** (engine choice): an interior's door polygons link to the exterior's door polygons of the same door; when none face them,
 to any kept exterior polygon facing their open edges. **Observed** (zone18.35): the L-House `13-rebirth-INGAME` and `15-rebirth-INGAME`
 door leaves sit 5..14 inside the interior hull, so the hull-carved exterior got no door polygons and the rooms were sealed.
+When the door's exterior polygons are all pruned yet touch a kept polygon, the interior's door polygons link to those and the carry keeps them. **Observed**
+(zone 38.29, `meitou-tools navmesh --verbose`, issue #436): the Waystation bar, L-House `3-rebirth-INGAME`, has a 14.4 doorway whose kept landing meets
+the door polygons over edges of 8.9 and 5.7, under the narrow-portal 9, so the bar was an island; now a path from the street reaches its floor.
 When neither joins, the interior polygons connected to the door polygons within 32 units of them join the exterior polygons their open
 edges face: a raised sill reached by steps (~47..52°) that cross the hull, whose lower part is the exterior's (cut at the hull: Y351 for
 `29-rebirth-INGAME`, door Y365..380; Y418 for `27-`, door Y430..441) and upper part the interior's, meeting on the hull's edge.
@@ -518,6 +529,16 @@ it (error 1.3 cells): a strip one cell deep along the edge loses its edge vertex
 (zone 19.29, scratch probe): the Longhouse `4-Newwworld-INGAME`'s outside ramp ends on the tile line z−13152 one row short of its
 doorstep, which was cut off from the street and its door never joined; with the border the path from the street reaches the room.
 Kept area grows by 0.04..1.1% (zones 20.32, 21.32, 20.29, 18.35) while polygons drop 20..45%.
+Facing border edges of two tiles (`NavTileStitcher.Link`) and of two zones (`NavWorld.LinkZones`) are linked when their own heights at the
+middle of their overlap are within the climb, or (surfaces) when the two polygons' surfaces are within it at every cell of the overlap
+(`BorderSurfacesMeet`: the tiles' own height samples, on at least one side; `NavWorld.SurfacesMeet`: `ZoneNavMesh.HeightAt`). Contours are
+simplified in X/Z only, so a border edge up to a tile long runs straight in height over a dune's dip or from a stair's top to the floor past
+its foot, 10..30 off the ground in its middle; by the middle alone such a seam stayed shut for its whole length, and in the debug view its two
+edges stood apart in height as a thin wedge. **Observed** (`--path`, length before → after for the straight length): Squin's west gate, 18.35
+at x -63936, -63990,17000 → -63900,17000: 577 → 90 (#392, #585: -63923,17015 → -64200,17200, 547 → 334); 35.57 at x 17280, 17230,115450 →
+17330,115450: 676 → 100 (#415); 41.58 at z 120384: 659 → 90 (#416); 51.55 at x 90432: 841 → 74 (#419); 51.56 at z 114048: 1019 → 85 (#420);
+Flats Lagoon's deck stair on the border of 35.42 and 36.42, 18445,48200 → 18380,48160 at y 401: 414 → 76 (#408). There the stair's strip in
+35.42 now also joins the stair in 36.42 along its side.
 **Zone borders** (engine choice): each zone is pruned by its own seeds and cached that way; when the loaded set changes, every loaded zone's kept set is
 resolved again (`ZoneKeptClosure.Resolve`): its own, plus every region with an open edge on the zone's border line at ground level (edge middle within
 `SeedPruner.BorderGroundSlack` 30 of the terrain, or the water height over it; roofs and walkways crossing the border stay pruned) toward a side whose
@@ -541,6 +562,14 @@ seed keeps nothing (no largest-region fallback) and is kept through the closure 
 doors in 20.29; built only in 19.29 they had no door join and their 20.29 half was invisible to point queries. Now a path from the
 street reaches the door and the far end of the Y-House. Doorless interiors on a border (20.32/21.32 `20-`, `26-Newwworld`) lose their
 fallback island.
+**Shared boundaries** (engine choice): Recast runs the boundary two regions of a tile share straight between the points where a contour's
+neighbour changes, per contour. An obstacle touching that boundary with a corner only (a tree's cutter cell) is a change for the region it lies
+in and none for the other, so one contour bends at the corner and the other passes it: the triangle between belongs to no polygon, a hole a few
+units wide and up to a tile long with open edges on all sides. `NavContourJoints` (before the polygons are made) gives each contour, along its
+edges toward other regions, the raw outline points that another contour has as vertices (same cell corner, heights within 2 cells).
+**Observed** (zone 35.57, `--obj`, open edges off the tile seams): the hole 17458,116320 / 17458,116352 / 17482,116132 (32 by 220) and four
+shorter ones are gone, 514 → 516 polygons; zones 18.35, 17.35, 35.42, 51.55, 51.56 lose 5, 14, 6, 4 and 1 open edges of 40+ units, none added.
+The lines of #392, #408, #415, #416, #419 and #420 were not these but unlinked seams ("Tile seams", surfaces).
 **Narrow portals** (engine choice): between exterior polygons the kept set does not spread over an edge shorter than `SeedPruner.MinPortalWidth` 9 (in
 plan): not in the seed flood (`SeedPruner.Spread`: own seeds, `KeepAt`, the border rule, the neighbours' kept edges), not in the largest-region
 fallback's regions and not in the interiors' carry (`NavInteriors.CarryKeep`). Links (tile seams, inner seams, door and hull joins) and interior edges
@@ -859,6 +888,13 @@ exit log prints the searches, the polygons each expanded on average and how many
 player characters apart, ~1,400 characters loaded, 75 s of flights between them): ~12,000 searches of ~11,000 polygons each, under 1 % at the limit;
 the search was 77 % of the simulation's busy CPU. The golden section (was 14 ternary steps, 28 detours) answered 14 % more searches in the same
 time and moved pinned path points by about a unit.
+
+A polygon keeps one entry point (engine choice). Of two entries the one kept has the lower cost so far plus the straight way on to the goal at
+the polygon's own cost factor, not the lower cost so far: across a large water polygon the cheaper entry can lie much farther from the goal, and
+the heuristic (the lowest factor, 1 with land about) does not show it. **Observed** (#607, zones 24.18/24.19, `meitou-tools navmesh --path`
+-34608,-60194 to -35446,-62230 down an open channel, water cost 7): the route swam to the west bank and back, 2511 for 2202 straight; with the
+rule 2217. Over 400 random pairs (scratch run) weighted cost fell 5.9 % there and 1.5 % in 18.39, and rose 0.01 % in the dry 18.35 and 20.32;
+polygons expanded within 1 % (18.39: 5 % fewer).
 
 Unreachable goals were most of the rest. **Observed** (same run): a town's residents in zone 14.23 kept asking for goals in a building they cannot
 enter (radius 4 found no way in, radius 0 did: an unjoined seam on its door stair, "Inner seams"), 300-600 ms each: the exact search, up to four

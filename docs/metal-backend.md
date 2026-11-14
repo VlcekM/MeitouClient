@@ -116,7 +116,9 @@ The verified model (the MSL that spirv-cross makes, the pipeline reflection, and
   `MTLTexture.gpuResourceID`, a sampler's `MTLSamplerState.gpuResourceID`, at the members'
   offsets (`MetalBindlessTable`). A resource read only through the argument buffer must also be
   told to the encoder: `BindBindlessTable` does it in one batched `useResources:count:usage:` for the table's distinct
-  textures, once per encoder and table version (the residency stays for the encoder's life);
+  textures, once per encoder and table version (the residency stays for the encoder's life); `ReleaseTexture` drops the residency of every entry
+    naming the released images (`MetalBindlessTable.Forget`), since an owner may free its index late (the motion meshes' depth is freed only when it
+    next draws, which a Disabled upscaler never does): without it a resize left a freed texture in the resident list;
 - **every** descriptor set of a program translated with argument buffers becomes one (spirv-cross's
   `MslArgumentBuffers` is global). A set's buffer members are `constant T*` pointers, so the
   runtime fills them with the buffers' **GPU addresses** (`MTLBuffer.gpuAddress` + offset; the CPU
@@ -156,6 +158,10 @@ Two sharp edges:
   the window's size times the scale factor. Without it the drawable is 1x1 and the window shows
   one magnified pixel.
 
+**No LOD bias in the table** (**Code reading**, not on a GPU): a Metal sampler has no LOD bias, and `MetalBindless` stores only the sampler's resource id, so the
+upscaler's `LodBias` (`SamplerDesc.LodBias`) reaches only the legacy samplers bound through the encoder (`MetalCommandList`, which passes it as the LOD clamps). Textures read through the
+table (terrain layers, objects, foliage, characters) sample at the unbiased level under MetalFX or TAA; Vulkan's sampler adds the bias there. **Unknown**: how much sharper they look with it.
+
 ## The backend so far
 
 - `src/Meitou.Game/Rendering/Metal/` - the backend (macOS only, outside the solution so the Windows build never
@@ -188,7 +194,10 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   `MetalPipelines` (an `MTLRenderPipelineState` per description; depth clip mode is the *encoder's*
   on Metal, set when the pipeline binds), `MetalSamplers` (Metal's sampler has no LOD bias; the
   description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
-  blit copies from a shared staging ring, committed in order before the frame's own).
+  blit copies from a shared staging ring, committed in order before the frame's own; `IGpuUploads.Scope` lets the render thread's batches
+  share one command buffer, which `WorldTextureCache.Pump` uses: a queue holds 64 command buffers and `commandBuffer` blocks while it is full, so
+  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). Encoders are labelled with the
+  innermost `BeginLabel` (else the list's name), for Metal System Trace.
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
   the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or
   `pixelFormatView` usage, so Metal may compress it losslessly: its views are the base image), views (`NewTextureView`),
@@ -753,18 +762,50 @@ default.
   (`MEITOU_METAL_GI=1`): a save load with it enabled froze the test M1 Pro, so normal launches leave it off.
 - **Volumetric clouds and fog**: parity shots use `--faithful clouds,cloudshadows`; the Meitou cloud/fog path is
   step 6.
-- **Upscaler**: MetalFX Balanced at render scale 0.50 is the Metal default, with Native as the fallback when
-  MetalFX is unavailable; the choice is saved in `meitou.user.json`. TAA remains available for comparison; MEP-1
+- **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`, default on) splits the Display settings into two trees: on, the
+  upscaler (preset row and render scale); off, no upscaler (below). MetalFX Balanced at render scale 0.50 is the default; the switch turns
+  itself off when MetalFX is unavailable; the choice is saved in `meitou.user.json` (`metalUpscaler` keeps the upscaler while the switch is
+  off). A file of layout 2 or older with `metalUpscaler` 0 (the released Native) migrates to the switch off, without `metalUpscaler` and
+  `metalRenderScale`. TAA remains available for comparison; MEP-1
   fixed its Metal depth convention and sun-motion term, but it is still labelled experimental. The **F10 settings
-  panel** exposes the MetalFX scale presets Native 1.00, Super Quality 0.77, Quality 0.67, Balanced 0.59,
+  panel** exposes the presets Super Quality 0.77, Quality 0.67, Balanced 0.59,
   Performance 0.50, Performance 0.40, Spatial 0.50/0.40 alternatives and TAA 0.50, plus VSync, frame limit,
   full screen and the live Metal graphics controls. The preset sets the render scale; the "Metal render scale" slider
   below it changes it in 0.01 steps under the preset's upscaler (the row then reads Custom) and shows the scene's size
-  in backing pixels (`MetalContext.SceneSize`, Retina included); Native stays at 1.00. The lowest supported MetalFX scale is 0.40: 0.33 (3x) crashed before the
+  in backing pixels (`MetalContext.SceneSize`, Retina included); both rows are shown only with the switch on. The lowest supported MetalFX scale is 0.40: 0.33 (3x) crashed before the
   first frame on this device, and a hand-edited lower value is clamped.
-  `MEITOU_METAL_NO_TAA=1` is the clean native comparison (no jitter, no temporal resolve);
+  `MEITOU_METAL_NO_TAA=1` is Disabled (no jitter, no temporal resolve; in full screen at the saved render resolution);
   `MEITOU_METALFX_SPATIAL=1` starts in the performance tier; `MEITOU_METAL_SETTINGS=1` opens the settings panel for
   a still.
+
+### No upscaler and the render resolution (`MetalUpscaling`, METAL-IMPROVEMENTS.md proposal 1)
+
+With Use Metal upscaling off (`MetalUpscalerMode.Disabled`, formerly Native) there is no upscaler, jitter or temporal resolve; FXAA and the
+other composite passes stay as the options set them. Where the picture is as large as the window it is the old Native path. **Contract:**
+
+- In a window the scene is as large as the window's backing pixels, or with `metalRetinaResolution` off (default true; a row of the switch
+  off, in a window only) its virtual Retina pixels, one per point (`MetalRenderFraction`, the framebuffer's width over the window's),
+  stretched as below. Where the window has one pixel per point the switch changes nothing. The render scale and render resolution rows are not
+  shown.
+- In full screen the scene renders at the screen's size divided by `metalRenderDivisor` (1 to 4, whole numbers, default 1; the rows read
+  "WxH (screen / n)") and is stretched to the screen with the **nearest** pixel, sharp blocks of pixels, no filtering. Nearest is used for
+  every division: it is exact whenever the render size divides the screen's, and off by at most one pixel when it does not.
+  `metalRetinaResolution` is not used there.
+- `metalUiAtScreenResolution` (default true, a row of the switch off, used while the picture is stretched): the interface is drawn at the screen's
+  size over the stretched picture. Off, it is drawn at the render size with the picture (`MetalUpscaling.UiSize`; the pointer maps to
+  that size, `Pixels`), so it is larger and coarser.
+- Mechanism: `MetalContext.StretchPicture` (set by `MetalUpscaling.Update` before each frame) makes `Picture`, an Rgba8 target of the
+  render size apart from the backbuffer; the composite writes it (`MetalPostChain.Target`). With the interface at the screen's size
+  `ShowPicture` copies it to the backbuffer (`PostComposite.Stretch`, one nearest pass) and the overlays draw on the backbuffer;
+  otherwise the overlays draw into the picture and the present stretches it (`PresentPicture`). The present was already a nearest
+  sample into the drawable. Screenshots read the target the interface was drawn into.
+- The stats lines (F11/F12) always read `render WxH  screen WxH`.
+- Rows: the game's Display page (`Render resolution`, `Render UI in screen resolution`, via `SettingsMenu.DisplayRowShown`) and the
+  launcher's (schema keys `metalUseUpscaling`, `metalUpscaler`, `metalRenderScale`, `metalRetinaResolution`, `metalRenderDivisor`,
+  `metalUiAtScreenResolution`, [launcher](launcher.md)); `metalUpscaler` and `metalRenderScale` shown with the switch on, the last three with it off.
+
+**Unknown** (no run on the target Mac yet): the GPU cost of the stretch pass and the frame rate gain against the 1080p baseline in
+METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run.
 
 ### Resume notes (facts already established)
 
@@ -787,6 +828,12 @@ default.
   clip space top-down). `RenderTargetsBottomUp` still selects the depth/post convention. UI scissor rectangles are
   top-left on Metal and bottom-up on Vulkan; using Vulkan's flip on Metal shifted clipped controls (the trader stock
   grid and HUD name plates) down by the panel height.
+- **Encoders and program state.** A render or compute encoder starts with no bindings, so `MetalCommandList.BeginRendering` advances the list's epoch
+  (`Invalidate`): `LegacyProgram.Flush` pushes its sets again once per epoch. Before, two passes of one program with the same bindings in one native
+  segment (the low-resolution particles' two depth passes) left the second encoder with no scene depth bound: the far depth stayed 0, the far draw
+  rejected every sprite, and dust was missing beside thin silhouettes (blue fringes in fog). **Observed** (owner, quarter and half size,
+  false-colour views of the upsample: the far depth was the reject value at every block, also at silhouettes); the fringes are gone after the change
+  (**Observed**, owner, in play at quarter and half size).
 - **Cube stand-ins.** A dummy cube's `TextureDesc.Layers` is 1: its six faces are the cube type's slices, not array
   layers. Passing 6 made `GpuTexture.View` ask for 36 slices and `MTL_DEBUG_LAYER=1` abort at the first cube
   sampler (the UI's first frame after the painter was added). `MetalContext.Dummy` now passes 1.

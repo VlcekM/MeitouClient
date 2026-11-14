@@ -42,6 +42,11 @@ public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
 /// <summary>
+/// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit character sub-view).
+/// </summary>
+public sealed record DebugSetStats(IReadOnlyList<CharacterId> Characters, IReadOnlyList<StatsEnumerated> Stats, float Value) : DebugCommand;
+
+/// <summary>
 /// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats
 /// at <see cref="DebugCheats.GodStat"/> (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second;
 /// off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
@@ -171,17 +176,25 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
         FcsRecordType.LimbReplacement];
 
     /// <summary>
+    /// The <c>PLAYER_WEAPONS</c> models a weapon can be given (model record, name, level), in record order.
+    /// </summary>
+    public static IReadOnlyList<(string Model, string Name, int Level)> Grades(GameDatabase db) =>
+        [.. (db.Find(CraftBench.PlayerWeapons)?.GetReferences("weapon models") ?? [])
+            .Select(r => (Record: db.Find(r.TargetStringId), Level: r.Values.Value0))
+            .Where(m => m.Record is not null)
+            .Select(m => (m.Record!.StringId, m.Record.Name, m.Level))];
+
+    /// <summary>
     /// The <c>PLAYER_WEAPONS</c> model a weapon of <paramref name="quality"/> gets: the highest level at or below it, else the lowest (null without
     /// models).
     /// </summary>
     public static (string Model, string Name, int Level)? Grade(GameDatabase db, int quality)
     {
-        var models = (db.Find(CraftBench.PlayerWeapons)?.GetReferences("weapon models") ?? [])
-            .Select(r => (Record: db.Find(r.TargetStringId), Level: r.Values.Value0)).Where(m => m.Record is not null).ToList();
+        var models = Grades(db);
         if (models.Count == 0) return null;
-        var pick = models.Where(m => m.Level <= quality).OrderByDescending(m => m.Level).FirstOrDefault();
-        if (pick.Record is null) pick = models.OrderBy(m => m.Level).First();
-        return (pick.Record!.StringId, pick.Record.Name, pick.Level);
+
+        var below = models.Where(m => m.Level <= quality).ToList();
+        return below.Count > 0 ? below.MaxBy(m => m.Level) : models.MinBy(m => m.Level);
     }
 
     /// <summary>
@@ -288,7 +301,7 @@ public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
 
 /// <summary>
 /// Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/>
-/// radians (agent-playtest control channel: place-item).
+/// radians (agent-playtest control channel: place-item; the debug menu's Drop item row).
 /// </summary>
 public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand
 {
@@ -296,6 +309,12 @@ public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, flo
     /// A weapon's exact grade (the console's <c>--maker</c>, <c>--model</c>, <c>--level</c>).
     /// </summary>
     public DebugWeaponGrade? Exact { get; init; }
+
+    /// <summary>
+    /// The quality (0 to 100) for the types that have one, set as <see cref="DebugGiveItem"/> sets it: armour's quality and level, a weapon's grade,
+    /// a crossbow's and a limb's level; null: the record's defaults (or <see cref="Exact"/> alone).
+    /// </summary>
+    public int? Quality { get; init; }
 }
 
 /// <summary>
@@ -585,7 +604,11 @@ static class DebugCheats
                     break;
                 }
 
-                if (lay.Exact?.Apply(data.Db, laid, out string bad) == false)
+                if (lay.Quality is { } layQuality)
+                {
+                    if (!SetQuality(world, data, lay.Exact, layQuality, laid)) break;
+                }
+                else if (lay.Exact?.Apply(data.Db, laid, out string bad) == false)
                 {
                     world.Post(bad);
                     break;
@@ -616,6 +639,9 @@ static class DebugCheats
                 break;
             case DebugMaxSkills max:
                 MaxSkills(world, max);
+                break;
+            case DebugSetStats set:
+                SetStats(world, set);
                 break;
             case DebugDamage damage when data is not null:
                 foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
@@ -706,6 +732,19 @@ static class DebugCheats
     }
 
     /// <summary>
+    /// Sets the given stats of the characters to the value.
+    /// </summary>
+    static void SetStats(World world, DebugSetStats set)
+    {
+        var table = world.Characters;
+        foreach (var id in set.Characters)
+        {
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot)?.Stats is { } stats)
+                foreach (var stat in set.Stats) stats[stat] = set.Value;
+        }
+    }
+
+    /// <summary>
     /// Knocks the characters out for the given seconds; one that goes down stands still.
     /// </summary>
     static void KnockOut(World world, DebugKnockOut knock)
@@ -763,7 +802,7 @@ static class DebugCheats
             return;
         }
 
-        if (!SetQuality(world, data, give, item)) return;
+        if (!SetQuality(world, data, give.Exact, give.Quality, item)) return;
 
         var wearer = table.Cold(owner);
         if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
@@ -813,9 +852,9 @@ static class DebugCheats
     /// The given quality: an armour's quality and level, a weapon's grade (model and level), another graded item's level; a weapon or crossbow
     /// given an exact grade takes that instead. False (the reason posted) when the exact grade names a record that is not there.
     /// </summary>
-    static bool SetQuality(World world, PopulationData data, DebugGiveItem give, Items.ItemInstance item)
+    static bool SetQuality(World world, PopulationData data, DebugWeaponGrade? exact, int quality, Items.ItemInstance item)
     {
-        if (give.Exact is { } exact && item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
+        if (exact is not null && item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
         {
             if (exact.Apply(data.Db, item, out string bad)) return true;
 
@@ -824,10 +863,10 @@ static class DebugCheats
         }
 
         if (item.Type == FcsRecordType.Armour)
-            (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
-        else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
+            (item.Quality, item.Level) = (Math.Clamp(quality, 0, 100), Math.Clamp(quality, 0, 100));
+        else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, quality) is { } grade)
             (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
-        else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
+        else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(quality, 0, 100);
 
         return true;
     }

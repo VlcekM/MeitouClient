@@ -829,10 +829,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         {
             PoseDerived(scratch, setup, carrier);
             var at = scratch.DerivedPosition[bone] - new Vector3(0, setup.GroundOffset, 0);
+            var turned = scratch.DerivedRotation[bone];
             if (cold.Appearance is { } body && _rigs.For(body) is { Animal: true } animal)
-                return AnimalAttach(cold, body, animal, at, Quaternion.Normalize(scratch.DerivedRotation[bone] * setup.Rig.BindRotationInverse[bone]));
+                return AnimalAttach(cold, body, animal, at, Quaternion.Normalize(turned * setup.Rig.BindRotationInverse[bone]))?.On(at, turned);
 
-            return CarryPose.Attach(at, scratch.DerivedRotation[bone], CarryPose.Height01(cold.Appearance));
+            return CarryPose.Attach(at, turned, CarryPose.Height01(cold.Appearance)).On(at, turned);
         }
         finally
         {

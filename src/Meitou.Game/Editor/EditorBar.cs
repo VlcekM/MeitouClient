@@ -107,6 +107,10 @@ sealed class EditorBar
     /// </summary>
     public IReadOnlyList<(Vector3 Position, float Yaw, string Clip)> Seats { get; }
     /// <summary>
+    /// The sitting clips of the bar's seats: a clip of these is played at a sitter's rate (<see cref="EditorBarScene.EditorClipTime"/>).
+    /// </summary>
+    public IReadOnlySet<string> SeatClips { get; }
+    /// <summary>
     /// The bar's own people: a CHARACTER record (with its template's faction, if any), where it is, its yaw, the clip it holds and the seed of its
     /// rolled look.
     /// </summary>
@@ -149,6 +153,7 @@ sealed class EditorBar
             .OrderBy(s => Vector3.DistanceSquared(s.Position, focus));
         var seats = Spots(s => s.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && s.SitClip is not null).ToList();
         Seats = [.. seats.Take(MaxSeated).Select(s => (s.Position, s.Yaw, s.SitClip!))];
+        SeatClips = seats.Select(s => s.SitClip!).ToHashSet(StringComparer.Ordinal);
         Crowd = MakeCrowd(db, seats.Skip(MaxSeated), Spots(s => s.Kind == HomeSpotKind.Shopkeeper), Spots(s => s.Kind == HomeSpotKind.Guard),
             Spots(s => s.Kind == HomeSpotKind.General));
         Ground = MakeGround(world.Install, db, origin);

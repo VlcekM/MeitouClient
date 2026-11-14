@@ -26,6 +26,12 @@ sealed class BuildingFloor
     public required Vector3 Position { get; init; }
 
     /// <summary>
+    /// How far (units) from <see cref="Position"/> its floors can reach: its record's collision extent at its scale
+    /// (<see cref="FloorSurfaces.Reach"/>) and <see cref="BuildingFloors.ReachSlack"/>.
+    /// </summary>
+    public required float Reach { get; init; }
+
+    /// <summary>
     /// The building's <c>interior material</c> and <c>exterior material</c> (GroundType).
     /// </summary>
     public required int Interior { get; init; }
@@ -61,16 +67,23 @@ sealed class BuildingFloor
 /// character and, when the closest hit is a building, takes that building's <c>exterior material</c> or, with the character inside a building, its
 /// <c>interior material</c>) and for the strategy camera's ground (docs/formats/camera.md "Height"). Display only: the floors are read from the
 /// placements and their collision files, nothing of it reaches the simulation. A zone's buildings are listed on a worker on first need, a building's
-/// floor collision when a point first comes within <see cref="Reach"/>; until it is there the answer is "no building" and the caller keeps to the
+/// floor collision when a point first comes within the building's own reach (<see cref="BuildingFloor.Reach"/>); until it is there the answer is "no building" and the caller keeps to the
 /// terrain. A runtime placement added or removed (a dropped item too) lists the zone again, while the listing before it still answers, and an
 /// unchanged building keeps its collision: dropping the known floors for a few frames dipped the camera's pivot to the terrain (#204).
 /// </summary>
 sealed class BuildingFloors(WorldObjects objects)
 {
     /// <summary>
-    /// How far (units, X/Z) from a building's position its floors are looked for (engine choice: the largest buildings reach about this far).
+    /// How far (units, X/Z) round a point the zones are searched for buildings whose floors reach it (engine choice). The base game's farthest
+    /// floor is 2003 from its building's position (Large Dock Wreck02; Lagoon Platform, Flats Lagoon's deck, 1193), 216 of its 7819 floor
+    /// buildings reach past 400: <b>Verified</b> by making every placement's floors.
     /// </summary>
-    public const float Reach = 400;
+    public const float ZoneReach = 2100;
+
+    /// <summary>
+    /// Added to a building's reach (units), for a point at the very edge of its collision.
+    /// </summary>
+    public const float ReachSlack = 1;
 
     /// <summary>
     /// How far above the feet the ray starts (<c>FUN_14065f160</c>: 20), and how far below the feet a floor still counts as the one stood on (engine
@@ -118,25 +131,25 @@ sealed class BuildingFloors(WorldObjects objects)
     }
 
     /// <summary>
-    /// The buildings within <see cref="Reach"/> whose floors are made (asking for the rest); the list is reused by the next call.
+    /// The buildings whose floors can reach the point (<see cref="BuildingFloor.Reach"/>) and are made (asking for the rest); the list is reused by the next call.
     /// </summary>
     List<(BuildingFloor, FloorSurfaces)> Near(float x, float z)
     {
         _near.Clear();
 
-        // The zones the reach touches: its four corners.
+        // The zones the reach touches: its four corners (it is narrower than a zone).
         Span<ZoneCoordinate> touched = stackalloc ZoneCoordinate[4];
         int count = 0;
         for (int i = 0; i < 4; i++)
         {
-            var zone = WorldLayout.ZoneOf(x + ((i & 1) == 0 ? -Reach : Reach), z + ((i & 2) == 0 ? -Reach : Reach));
+            var zone = WorldLayout.ZoneOf(x + ((i & 1) == 0 ? -ZoneReach : ZoneReach), z + ((i & 2) == 0 ? -ZoneReach : ZoneReach));
             if (!zone.IsInsideGrid || touched[..count].Contains(zone)) continue;
             touched[count++] = zone;
         }
         foreach (var zone in touched[..count])
             foreach (var floor in Listed(zone))
             {
-                if (Vector2.DistanceSquared(new(floor.Position.X, floor.Position.Z), new(x, z)) > Reach * Reach) continue;
+                if (Vector2.DistanceSquared(new(floor.Position.X, floor.Position.Z), new(x, z)) > floor.Reach * floor.Reach) continue;
                 if (floor.Surfaces is { } surfaces) _near.Add((floor, surfaces));
                 else floor.Request();
             }

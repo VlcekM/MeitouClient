@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
 
@@ -37,24 +38,6 @@ public sealed partial class CombatSystem
     /// The height of the eyes above the feet for the alert's line test (engine choice, near <see cref="RangedTuning.BarrelHeight"/>).
     /// </summary>
     const float EyeHeight = 15;
-
-    /// <summary>
-    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is
-    /// not skipped).
-    /// </summary>
-    const float SteerLineStep = 2;
-
-    /// <summary>
-    /// The radius of the circle the steering's line test sweeps against the walkable surface's walls (engine choice: near a point, so the line
-    /// itself is tested; a bar line a step thin is crossed between two of the <see cref="SteerLineStep"/> points, #439).
-    /// </summary>
-    const float SteerLineRadius = 0.1f;
-
-    /// <summary>
-    /// How far inside its polygon's edge the line test puts a fighter that stands off it (<see cref="IWalkability.SurfacePoint"/>): clear of the
-    /// swept circle, so the edge it stands by does not stop the sweep at any angle.
-    /// </summary>
-    const float SteerLineInset = 2 * SteerLineRadius;
 
     /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
@@ -184,20 +167,23 @@ public sealed partial class CombatSystem
     /// (<see cref="SenseBlock.ThreatToAllies"/>), nobody fights it (<see cref="AttackerCount"/>, the engaged list), and its task target
     /// (<see cref="CombatSlot.TaskSlot"/>) is gone or down (dead or knocked out; carried too, engine reading). Engine choice: a task target its
     /// senses hold no entry of counts as gone, so a fighter does not wait for ever on a live target it lost (the entry decays 30 to 120 sense units
-    /// after it was last sensed); a world without senses never holds it. Reads the last tick's fights and the senses of the last look.
+    /// after it was last sensed); a world without senses never holds it. Engine choice: an enemy in a cage is not counted and a task target in a cage
+    /// counts as gone. The original ends such a fight through its goal (an arrest's effect 129 holds once the target is imprisoned), which the
+    /// engine's own fights (an arrest's, a joiner's) do not have: left in it, guards stood in combat mode at the cage and turned on the prisoner
+    /// once it was let out (#629). Reads the last tick's fights and the senses of the last look.
     /// </summary>
     bool NothingLeft(World world, int i, in CombatSlot s)
     {
         if (AttackerCount(world, i) > 0) return false;
 
         var senses = CharacterFacts.Senses(world, i);
-        if (senses is { Enemies: > 0 } or { ThreatToAllies: > 0 }) return false;
+        if (senses is { ThreatToAllies: > 0 } || senses is not null && senses.Enemies > senses.CagedEnemies) return false;
 
         var table = world.Characters;
         var prev = table.Previous;
         int t = s.TaskSlot;
         if ((uint)t >= (uint)prev.Length || !prev[t].Alive || prev[t].Generation != s.TaskGeneration || _read[t].Down
-            || table.Cold(t) is not { Medical.Incapacitated: false, CarriedBy.IsNone: true })
+            || table.Cold(t) is not { Medical.Incapacitated: false, CarriedBy.IsNone: true, IsImprisoned: false })
             return true;
 
         return senses is null || !senses.Knows(new CharacterId(t, s.TaskGeneration));
@@ -409,30 +395,30 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
-    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
-    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
-    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
-    /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
-    /// line to it, so nobody steered or swung at it (#559). Last tick's places; any thread after Sight's update.
+    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>) or either side of an open doorway
+    /// (<see cref="AcrossOpenDoor"/>), and the navmesh line of sight between them clear (<see cref="IWalkability.LineOfSight"/>, the face walk of
+    /// <c>FUN_1403a56e0</c>). Last tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
-        if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t)) return false;
+        if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t) && !AcrossOpenDoor(world, a, t)) return false;
 
         var prev = world.Characters.Previous;
-        Vector3 from = prev[a].Position;
-        Vector3 to = prev[t].Position;
-        if (MathF.Abs(to.Y - from.Y) > SameFloorHeight) return false;
+        return world.Walkability.LineOfSight(prev[a].Position, prev[t].Position);
+    }
 
-        var leg = new Vector2(to.X - from.X, to.Z - from.Z);
-        float length = leg.Length(), y = from.Y;
-        for (float d = SteerLineStep; d < length; d += SteerLineStep)
-            if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
+    /// <summary>
+    /// Whether one of the two stands outdoors and the other inside a building with a door open or broken (<see cref="FixtureRegistry.HasOpenDoor"/>):
+    /// the line test then decides, as the original's navmesh line query knows no places (engine reading, #632: a fighter on the step of a bar's
+    /// broken door and its foe inside, 8 apart, path-chased each other on paths that ended where they stood and never swung). Across closed doors
+    /// it stays a blocked line: the line test does not see doors.
+    /// </summary>
+    static bool AcrossOpenDoor(World world, int a, int t)
+    {
+        string? inA = world.Sight.BuildingOf(a), inT = world.Sight.BuildingOf(t);
+        if ((inA is null) == (inT is null)) return false;
 
-        var start = world.Walkability.SurfacePoint(from, SteerLineInset);
-        var end = world.Walkability.SurfacePoint(to, SteerLineInset);
-        var line = new Vector2(end.X - start.X, end.Z - start.Z);
-        return world.Walkability.Slide(start, line, SteerLineRadius) == line;
+        return world.Fixtures.HasOpenDoor(inA ?? inT!);
     }
 
     /// <summary>

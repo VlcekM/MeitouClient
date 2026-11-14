@@ -27,6 +27,11 @@ camera's focus point, moved only while the sun turns and the point is 200+ units
 the eye, the first cascade's grid slid boom x sun turn under the squad). Least filter radius 1.5
 texels: a 0.06° sun turn changed 0.36 % of a Hub view by more than 8 levels, 0.56 % at 1 texel.
 
+Receiver plane (`msTileV`; **Code reading**, not compared on a GPU): the filter's taps and the blocker search shift their reference depth by the receiver plane's tilt along
+the offset, `dot(o, slope)` in tile UV. `ReceiverTile` flips v on Metal, so light-space y runs against v there and the plane's y tilt flips with it; `msTileV` takes the sign from the
+tile's v axis against the light's y axis (-1 on Metal, +1 on Vulkan, whose slope is unchanged). Without it, taps on one side of a lit slope on Metal compared against a reference
+up to 2 x radius x tilt too deep, beyond the bias.
+
 ## Scheduling and casters
 
 Near cascades refresh rapidly; far cascades cache/stagger according to camera/sun changes.
@@ -52,6 +57,13 @@ when nothing is nearer the sun, and without it the terrain took 0.2 ms more. The
 terrain term and landmark term each cost under 0.05 ms. The full-tier filter takes the disk's even
 points first and returns when all 8 agree, adding the odd 8 only in a penumbra (same sum there):
 terrain -0.1 ms, screenshots within 7 levels.
+
+Metal receiver cost (**Observed** 2026-11-13, Mac mini M6, save `111`, 1920x1080 no upscaler, shadow map 2048, filter 1, 4 cascades; dev switches cutting
+`kenshiShadowMeitou` at one point each, play bench idle / orbit GPU 15.5 / 17.0 ms): the whole receiver 1.4 / 1.0 ms (returning 1 at once); the plane from derivatives
+and the noise 0; the cascades 1.1 / 0.7; the terrain and landmark terms 0.3 (far pixels); the blocker search 0.2 / 0.14 of the cascades. Cascade casting 0.5 ms, blockers and
+terrain sweep under 0.1, shafts 0.6 (a Metal System Trace with named encoders). Tried, no gain (within 0.1 ms): the coarse cascades' and the landmark's 8 taps as 4 + 4 with an early
+return; skipping the lookup where the sun is under 0.5 % of the surface's light; compiling out the probe GI branch of `kenshiLight`. Kept: no lookup where the sun's terms
+are 0 (`kenshiLight`: no diffuse N.L and no glint, no sun, or a self shadow of 0), the plane's derivatives taken before that branch (`msPlane`): about 0.2 ms in orbit, 0 idle.
 
 ## Traced sun
 

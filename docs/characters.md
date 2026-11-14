@@ -115,6 +115,11 @@ follows this, not traced). The candidates (`Faction::chooseARace` `FUN_1407ff1a0
 when all of those give none (engine fallback; the 19 base-game CHARACTERs with a body and no race list either have an unreadable old-format body or are mod characters). With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
 (`FUN_140074f00`, `FUN_140538360`, **Verified** read), so a translation mod that renames it changes nothing.
 
+The body file's `head` is kept only when the race lists it. **Verified** (read, `AppearanceHuman::updateCharaterTexture` `FUN_140533b50`, a vtable slot): a `head` that names no HEAD record, or one missing from the
+race's `heads male` / `heads female` for the gender (`FUN_14007c9e0`), is replaced by a weighted pick from that list (`FUN_14007c880`, written back to the appearance); an empty list picks nothing and the
+head stays. So `Eyegore` (race `Hive Soldier Drone South Hive`, whose `Eyegore.bod2` names the Western `Hive Soldier Drone` and its head `StickPeopleHead02`) draws the South Hive head texture.
+Meitou: `CharacterAppearance.HeadOf` (the list's first head; **Observed** on the base game's Eyegore, #692).
+
 ### Hidden body parts (Verified, `@ 140075600`, `@ 140071f90`, `@ 140531cc0`; HLSL `skin.hlsl`)
 
 | Colour | RGB | Bit | PartMapColours |
@@ -363,7 +368,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   characters of the editor's list sit on the seats nearest the far tables behind it, each over 41 across from it (beyond the orbit's reach; the source's chair spots and sitting clips). Night shows
   in the dark windows. The bar's own people stand and sit in it: its residents' leader (Barman) at a shopkeeper node and first squad member (Ninja Guard) at a guard
   node, 3 patrons of the town's `bar squads` on the next seats and 3 at general nodes, all beyond the same 41, rolled with fixed seeds. Their clips run at the
-  record's `play speed`; one without `loop` holds its last frame, as the simulation holds a one-shot clip, so a mod's sit-down seat clip is not replayed (#242);
+  record's `play speed`, a seat's at the sitter's 0.55 of it ([animation](animation.md#at-a-machine-or-on-a-seat)); one without `loop` holds its last frame, as the simulation holds a one-shot clip, so a mod's sit-down seat clip is not replayed (#242);
   the edited character's stance preview follows the same rule.
   Base data has none: its seat clips loop (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data).
   The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`). The bar stands on
@@ -406,7 +411,8 @@ same line (val0), gated by `DC_PLAYERMONEY` (2) strictly greater. "plastic surge
 "bar plastic surgeon" / "plastic surgeon": Holy Nation, Empire Peasants, United Cities, Deadcat, Waystation, Bark, Sho-Battai...) 200;
 "doctor shop" (hospital squads' `dialog leader` package) 500; Doctor Chung (Mud Town) 200, no money check; Thieves Guild surgeon free
 behind `DC_FACTION_RANK`; Grey free for escaped slaves. Meitou: the surgeon is talked to; its line's DA 8 pays and DA 11 opens the editor in
-mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
+mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). Opening it in mode 1 grows back a shaven head
+([ai-tasks](game/ai-tasks.md), "Processing a slave shaves its head"). An unpaid `EditCharacter` (no UI sends one) is checked against `SurgeonDialogues`:
 a line gated only by money or `DC_IS_RECRUITABLE`.
 **Observed** (the user, base game): the surgeon's editor (its `NameText`) is the only way to rename a squad member; the portrait's `NameText`
 EditBox takes no typing. Meitou matches.

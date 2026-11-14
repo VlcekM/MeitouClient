@@ -338,6 +338,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BenchFacingFix { get; set; } = true;
     /// <summary>
+    /// The player's pick-ups and right-click takes out of loot, containers and storage go into the character's backpack first, then its slots and
+    /// grid (Controls settings, off by default as in the game, where only an open bag window does that).
+    /// </summary>
+    public bool TakeIntoBackpack { get; set; }
+    /// <summary>
     /// The player: faction, money, selection.
     /// </summary>
     public PlayerState Player { get; } = new();
@@ -388,7 +393,7 @@ public sealed partial class World : IDisposable
     /// </summary>
     public HashSet<Meitou.Data.World.ZoneCoordinate> VisitedZones { get; } = [];
     /// <summary>
-    /// The zones the loaded save has a file of: the original's zones not loaded fresh (<c>ZoneMapContent::newGameFirstTimeLoaded</c> clear), where a
+    /// The zones the loaded save has a non-imported file of: the original's zones not loaded fresh (<c>ZoneMapContent::newGameFirstTimeLoaded</c> clear), where a
     /// nest lays no items.
     /// </summary>
     public HashSet<Meitou.Data.World.ZoneCoordinate> SavedZones { get; } = [];

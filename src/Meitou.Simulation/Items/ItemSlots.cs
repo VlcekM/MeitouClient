@@ -26,9 +26,10 @@ namespace Meitou.Simulation.Items;
 /// group's and a model.</item>
 /// <item>It lies at the slot laid flat, turned as the slot or at random (<c>random yaw</c>), owned by the building's faction
 /// (<see cref="GroundItem.OwnedBy"/>: taking it is stealing).</item>
-/// <item>Engine choices: the respawn times are not saved (a reload makes taken slots due at once); a loaded save's item lying in its slot (within
-/// <see cref="ClaimReach"/>, one of
-/// the group's records) is bound to it instead of a new one.</item>
+/// <item>Engine choices: an empty slot's due hour is saved as Meitou's own key on its building's state (<see cref="WriteDue"/>), and a slot
+/// saved empty waits for it; a loaded save's other slots each take the nearest item lying in them and nearer to them than to another slot of
+/// the building (within <see cref="ClaimReach"/>, one of the group's records) instead of a new one. A save from the original has no such key:
+/// a slot emptied in it is due at once after the load.</item>
 /// </list>
 /// Serial phases only (the population's slow-world step).
 /// </summary>
@@ -38,6 +39,13 @@ public sealed class ItemSlots
     /// How near a loaded item must lie to a slot (XZ; and within 10 in height) to be taken as its item.
     /// </summary>
     public const float ClaimReach = 2;
+
+    /// <summary>
+    /// Meitou's save key of an empty slot's due hour, then the slot's number in its building (<c>item3</c>): a float of the absolute game hour its
+    /// next item is due, in the building's GAMESTATE_BUILDING (the original keeps the respawn time in the interior's own group record, which Meitou
+    /// does not write).
+    /// </summary>
+    const string DueKey = "meitou slot due ";
 
     /// <summary>
     /// One loose-item slot.
@@ -194,11 +202,20 @@ public sealed class ItemSlots
                 Owner = owner,
                 Zone = WorldLayout.ZoneOf(s.Position.X, s.Position.Z),
             };
-            if (Lying(world, slot, group) is { } found)
+
+            // A slot saved empty waits until its saved hour, at most its longest respawn time from now, and takes no item lying near it (that
+            // item is a neighbouring slot's).
+            if (world.Fixtures.Saved?.GetValueOrDefault(b.Key) is { } saved
+                && saved.Floats.TryGetValue(DueKey + s.Id[(b.Key.Length + 1)..], out float due))
+            {
+                slot.DueAt = Math.Min(due, world.GameHours + Math.Max(group.MaxRespawnHours, group.MinRespawnHours));
+            }
+            else if (Lying(world, slot, group, b) is { } found)
             {
                 world.GroundItems.Claim(found, slot.Id, owner);
                 slot.Item = found;
             }
+
             _all.Add(slot);
         }
     }
@@ -232,19 +249,62 @@ public sealed class ItemSlots
     }
 
     /// <summary>
-    /// The id of a loaded ground item, of a record the group keeps, lying in <paramref name="slot"/>; null: none.
+    /// The nearest loaded ground item, of a record the group keeps, lying in <paramref name="slot"/> (within <see cref="ClaimReach"/> in XZ and 10 in
+    /// height) and nearer to it than to any other slot of its building <paramref name="b"/>, distances in 3D (slots lie closer together than the
+    /// reach: two shelf spots of the Hub's bar 1.6 apart, <b>Observed</b>, and shelves stand above one another, so an emptied slot must not take its
+    /// neighbour's item); the first found on a tie; null: none.
     /// </summary>
-    static int? Lying(World world, Slot slot, ItemPlacementGroup group)
+    static int? Lying(World world, Slot slot, ItemPlacementGroup group, TownBuilding b)
     {
+        int? nearest = null;
+        float best = float.MaxValue;
+
         foreach (var g in world.GroundItems.All)
         {
             if (g.Slot is not null || g.Item.Saved is null || MathF.Abs(g.Position.Y - slot.Position.Y) > 10) continue;
             if (Vector2.DistanceSquared(new(g.Position.X, g.Position.Z), new(slot.Position.X, slot.Position.Z)) > ClaimReach * ClaimReach)
                 continue;
-            foreach (var e in group.Items.Entries)
-                if (e.Id == g.Item.Record && Kept(e.Type)) return g.Id;
+
+            float d = Vector3.DistanceSquared(g.Position, slot.Position);
+            if (d >= best || !group.Items.Entries.Any(e => e.Id == g.Item.Record && Kept(e.Type))) continue;
+            if (b.ItemSlots.Any(o => o.Id != slot.Id && Vector3.DistanceSquared(g.Position, o.Position) < d)) continue;
+
+            nearest = g.Id;
+            best = d;
         }
-        return null;
+
+        return nearest;
+    }
+
+    /// <summary>
+    /// Writes each registered building's empty slots' due hours into its saved state (<see cref="DueKey"/>), in place of the keys it had: a slot
+    /// whose item has left the ground but which <see cref="Step"/> has not seen yet counts as empty, due as the step would make it. A building
+    /// with no slot registered this session keeps the keys of the save it was loaded from.
+    /// </summary>
+    public void WriteDue(World world, IReadOnlyDictionary<string, FcsRecord> buildings)
+    {
+        var lying = world.GroundItems.All
+            .Where(g => g.Slot is not null)
+            .Select(g => g.Id)
+            .ToHashSet();
+
+        foreach (var slots in _all.GroupBy(s => BuildingOf(s.Id)!, StringComparer.Ordinal))
+        {
+            if (!buildings.TryGetValue(slots.Key, out var state)) continue;
+
+            var stale = state.Floats.Keys
+                .Where(k => k.StartsWith(DueKey, StringComparison.Ordinal))
+                .ToList();
+            foreach (var key in stale) state.Floats.Remove(key);
+
+            foreach (var s in slots)
+            {
+                if (s.Item >= 0 && lying.Contains(s.Item)) continue;
+
+                double due = s.Item >= 0 ? NextDue(world, _groups[s.GroupId]!, s) : s.DueAt;
+                state.Floats[DueKey + s.Id[(slots.Key.Length + 1)..]] = (float)Math.Max(due, 0);
+            }
+        }
     }
 
     /// <summary>

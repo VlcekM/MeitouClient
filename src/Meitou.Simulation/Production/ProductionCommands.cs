@@ -71,6 +71,11 @@ public sealed record TakeFromMachine(CharacterId Character, string Site, int Slo
 }
 
 /// <summary>
+/// The ARRANGE button of a machine's storage window (a research bench's): its grid as <see cref="Items.InventoryCommands.Arrange(Items.Inventory)"/>.
+/// </summary>
+public sealed record ArrangeMachine(string Site) : SimCommand;
+
+/// <summary>
 /// Queues a research (paying its cost from the research benches when it was never paid).
 /// </summary>
 public sealed record QueueResearch(string Research) : SimCommand;

@@ -527,7 +527,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 break;
             case TaskType.StealthKnockout:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.StealthKnockout, TaskSource.Order, order.Target, CharacterTask.Idle);
-                if (table.Cold(slot) is { } sneaker) sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
+                if (table.Cold(slot) is { } sneaker)
+                {
+                    sneaker.Orders |= CharacterOrders.Sneak;   // not in stealth mode: set sneaking (FUN_140345eb0)
+                    sneaker.PathFailed = false;   // a failure from before is not this walk's
+                }
                 break;
         }
     }
@@ -990,6 +994,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         var c = table.Cold(carrier)!;
         var b = table.Cold(body)!;
+        LetKidnapVictimGo(world, carrier, body);
         c.Carrying = CharacterId.None;
         b.CarriedBy = CharacterId.None;
         b.CarriedAwake = false;
@@ -1304,7 +1309,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
         if (TakeLootMoney(world, i, t, owner, item, mark, death)) return;
 
-        int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, take.BagFirst,
+        int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
+            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack,
             out bool wear, cold);
         if (owner.Items.Contains(item)) item.Mark = mark;   // what stays keeps its mark
         if (moved == 0)

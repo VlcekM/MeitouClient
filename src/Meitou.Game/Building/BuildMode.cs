@@ -53,7 +53,7 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     bool _buildPausedGame;
     /// <summary>
-    /// The building category chosen in the menu; null for the first that shows.
+    /// The building category chosen in the menu; null until one is chosen after opening the window.
     /// </summary>
     string? _buildCategory;
     /// <summary>
@@ -186,6 +186,9 @@ sealed class BuildMode(PlayerInterface player)
             BuildDiscarded = false;
             player.InventoryWindows.CloseInventoryWindows();
             player.FaithfulScreens.Open("build");
+
+            // The original recreates the window on entry (FUN_1404e65e0); retained list selections must not override the fresh menu bindings.
+            FollowChoiceInLists(category: true);
             player.ContextMenuWindow.CloseContextMenu();
             // a player pause: the speed buttons and the pause key resume it
             if (player.Session.Simulation.Speed != 0)
@@ -211,6 +214,16 @@ sealed class BuildMode(PlayerInterface player)
     #region Menu
 
     /// <summary>
+    /// Drops the row the screen keeps highlighted in the buildings list (and the categories list with <paramref name="category"/>) after the code
+    /// changed the choice, so the highlight follows the chosen category and group again; a kept row outlives the window (#670).
+    /// </summary>
+    void FollowChoiceInLists(bool category)
+    {
+        if (category) player.FaithfulScreens.ClearSelection("build", "CategoriesList");
+        player.FaithfulScreens.ClearSelection("build", "BuildingsList");
+    }
+
+    /// <summary>
     /// The menu's categories with something unlocked (sorted by name while the level editor builds).
     /// </summary>
     IReadOnlyList<string> BuildCategories()
@@ -221,13 +234,12 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The chosen category: the first that shows until one is chosen, none when nothing is unlocked.
+    /// The chosen category, or none until one is chosen or when it is no longer unlocked.
     /// </summary>
     string? CurrentCategory()
     {
         var categories = BuildCategories();
-        if (categories.Count == 0) return null;
-        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : categories[0];
+        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : null;
     }
 
     /// <summary>
@@ -408,7 +420,8 @@ sealed class BuildMode(PlayerInterface player)
         if (building.LinksTogether) return (terrainHit, null, null);
 
         float length = Vector3.Distance(ray.Origin, terrainHit);
-        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, length) is { } floor) return (floor.Position, floor.Floor, null);
+        float reach = player.Picking.FloorReach(ray.Origin, ray.Direction, terrainHit);
+        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, reach) is { } floor) return (floor.Position, floor.Floor, null);
 
         // Engine stand-in for the original's ghost meeting the physics shapes: walls have no rooms, so a turret over a wall top went to the terrain
         // inside the wall (#431).
@@ -655,6 +668,49 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
+    /// A right click in build mode with no building held: the queued ghost under the cursor leaves the queue and is held again, as it was turned,
+    /// to be placed anew (the original's click handler <c>FUN_1404e27e0</c>). True: a ghost was picked up.
+    /// </summary>
+    internal bool BuildPickUp(Vector2 p)
+    {
+        if (!Active || CurrentBuilding() is not null || player.Ray(p) is not { } ray) return false;
+
+        int index = BuildQueue.FindLastIndex(q => UnderRay(q, ray));
+        if (index < 0) return false;
+
+        var picked = BuildQueue[index];
+        BuildQueue.RemoveAt(index);
+        Hold(picked);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the ray meets the queued ghost's footprint at the height it stands.
+    /// </summary>
+    static bool UnderRay(QueuedGhost ghost, (Vector3 Origin, Vector3 Direction) ray)
+    {
+        if (ghost.Hull is not { } hull || MathF.Abs(ray.Direction.Y) < 1e-6f) return false;
+
+        float t = (ghost.Position.Y - ray.Origin.Y) / ray.Direction.Y;
+        var at = ray.Origin + ray.Direction * t;
+        return t > 0 && PlacementCheck.Contains(hull, new Vector2(at.X, at.Z));
+    }
+
+    /// <summary>
+    /// Chooses a queued ghost's building in the lists again and takes its turn for the ghost at the cursor.
+    /// </summary>
+    void Hold(QueuedGhost ghost)
+    {
+        _buildCategory = ghost.Building.Category;
+        BuildDiscarded = false;
+        _buildGroup = Math.Max(0, BuildGroups().ToList().FindIndex(g => g.Members.Contains(ghost.Building)));
+        FollowChoiceInLists(category: true);
+        BuildMember = ghost.Building;
+        _ghostYaw = PlacementCheck.YawOf(ghost.Rotation);
+        _ghostLift = 0;
+    }
+
+    /// <summary>
     /// A right click in build mode while a line is laid: drops the line (true: taken).
     /// </summary>
     internal bool WallCancel()
@@ -814,7 +870,7 @@ sealed class BuildMode(PlayerInterface player)
         b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, c))];
         b.SelectedItems["CategoriesList"] = category is null ? -1 : categories.ToList().IndexOf(category);
         b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, g.Name))];
-        b.SelectedItems["BuildingsList"] = group is null ? -1 : groups.ToList().IndexOf(group);
+        b.SelectedItems["BuildingsList"] = group is null ? -1 : Math.Clamp(_buildGroup, 0, groups.Count - 1);
         b.Text["BuildingName"] = building?.Name ?? "";
         b.Text["DescriptionText"] = building is null || Services is null ? "" : Services.Description(building.Id);
         b.Properties["DescriptionText"] = new Dictionary<string, string>
@@ -940,9 +996,11 @@ sealed class BuildMode(PlayerInterface player)
                 BuildDiscarded = false;
                 _buildGroup = 0;
                 BuildMember = null;
+                FollowChoiceInLists(category: false);
                 break;
             case ("BuildingsList", "select"):
-                if (!BuildDiscarded && (int)e.Value == _buildGroup)
+                // The level editor's tool drops its choice on a click on the chosen row; the player's build mode keeps it, as the original's list.
+                if (player.LevelEditorPanel.LevelBuild && !BuildDiscarded && (int)e.Value == _buildGroup)
                 {
                     player.LevelEditorPanel.DropPlacementChoice();
                     break;
@@ -987,10 +1045,10 @@ sealed class BuildMode(PlayerInterface player)
     (BuildingSnapshot Site, Vector2 At, long Since)? _sitePending;
 
     /// <summary>
-    /// A storage the selection was sent to open (a quick right click) and when; it opens when one of them is near enough, or is dropped when they
-    /// stop short.
+    /// A storage (or a town building's machine) the selection was sent to open (a quick right click or Loot): its site id, where it stands, the
+    /// selection it opens as, and when; it opens when one of them is near enough, or is dropped when they stop short.
     /// </summary>
-    (BuildingSnapshot Site, long Since)? _storageOpening;
+    (string Id, Vector3 Position, BuildingSelection.SelectedBuilding Selection, long Since)? _storageOpening;
 
     /// <summary>
     /// The storage whose window shows the character's inventory beside it (opened by an order, not by selecting it).
@@ -1293,10 +1351,12 @@ sealed class BuildMode(PlayerInterface player)
             // The original's target is the building hit's x, z at the terrain height, which the path's goal snap puts on the floor inside or the
             // ground outside; a pick that went on through the roof or wall to the terrain beyond takes that point instead, so the character goes in
             // rather than to the ground behind. A building floor the pick found (a site with an interior, the hidden roof above it nearer) stays:
-            // the terrain under the roof hit lay below the floor.
+            // the terrain under the roof hit lay below the floor. "Beyond" is measured across the ground: the foot of a wall's face the pick
+            // stopped at lies short of the wall, though lower.
             float distance = Vector3.Distance(ray.Origin, hit);
             bool throughBuilding = player.Picking.BuildingMoveHit?.Invoke(ray.Origin, ray.Direction, distance + 1) is null;
-            if (throughBuilding && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id && at.T + 1 < distance)
+            if (throughBuilding && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id
+                && FlatDistance(ray.Origin, ray.Origin + ray.Direction * at.T) + 1 < FlatDistance(ray.Origin, hit))
             {
                 var p = ray.Origin + ray.Direction * at.T;
                 hit = new Vector3(p.X, player.Ground(p.X, p.Z), p.Z);
@@ -1310,10 +1370,16 @@ sealed class BuildMode(PlayerInterface player)
     /// A finished storage or furnace of the player's: the selection walks to it, and on arrival its window opens with the character's inventory
     /// beside it (the original's order 26, LOOT_TARGET, pointer search). A left click on a storage shows its window alone.
     /// </summary>
-    void OpenStorage(BuildingSnapshot site)
+    void OpenStorage(BuildingSnapshot site) => OpenMachineWindow(site.Id, site.Position, player.BuildingSelection.SiteBuilding(site));
+
+    /// <summary>
+    /// The selection walks to the machine of site <paramref name="id"/> at <paramref name="position"/>; on arrival its window opens with the
+    /// character's inventory beside it and <paramref name="selection"/> becomes the selected building.
+    /// </summary>
+    internal void OpenMachineWindow(string id, Vector3 position, BuildingSelection.SelectedBuilding selection)
     {
-        player.Move(site.Position, false);
-        _storageOpening = (site, System.Diagnostics.Stopwatch.GetTimestamp());
+        player.Move(position, false);
+        _storageOpening = (id, position, selection, System.Diagnostics.Stopwatch.GetTimestamp());
     }
 
     /// <summary>
@@ -1324,23 +1390,24 @@ sealed class BuildMode(PlayerInterface player)
         if (_storageOpening is not { } pending) return;
         var selected = player.Selected();
         double waited = System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds;
-        if (selected.Count == 0 || waited > 120 || player.Session.CurrentSnapshot.Buildings.All(b => b.Id != pending.Site.Id))
+        bool gone = player.Session.CurrentSnapshot.Buildings.All(b => b.Id != pending.Id) && player.Production.Machine(pending.Id) is null;
+        if (selected.Count == 0 || waited > 120 || gone)
         {
             _storageOpening = null;
             return;
         }
 
-        var at = new Vector2(pending.Site.Position.X, pending.Site.Position.Z);
+        var at = new Vector2(pending.Position.X, pending.Position.Z);
         if (selected.Any(c => Vector2.Distance(new(c.Position.X, c.Position.Z), at) <= StorageArrive))
         {
             _storageOpening = null;
             // A window shown alone (a left click) or closed by the player opens again through SyncMachineScreens, with the inventory beside it,
             // as when the order opens both.
-            bool docked = StorageWithInventory == pending.Site.Id && player.FaithfulScreens?.IsOpen("inventory") == true;
-            if (!docked && player.Production.ShownMachine == pending.Site.Id) player.Production.ShownMachine = null;
-            if (player.Production.ClosedMachine == pending.Site.Id) player.Production.ClosedMachine = null;
-            StorageWithInventory = pending.Site.Id;
-            player.BuildingSelection.SetBuilding(player.BuildingSelection.SiteBuilding(pending.Site));
+            bool docked = StorageWithInventory == pending.Id && player.FaithfulScreens?.IsOpen("inventory") == true;
+            if (!docked && player.Production.ShownMachine == pending.Id) player.Production.ShownMachine = null;
+            if (player.Production.ClosedMachine == pending.Id) player.Production.ClosedMachine = null;
+            StorageWithInventory = pending.Id;
+            player.BuildingSelection.SetBuilding(pending.Selection);
         }
         // they stopped short: another order was given
         else if (waited > 2 && selected.All(c => c.Task != Simulation.Movement.CharacterTask.GoTo)) _storageOpening = null;

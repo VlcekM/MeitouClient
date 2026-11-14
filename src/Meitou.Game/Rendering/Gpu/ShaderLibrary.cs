@@ -356,12 +356,14 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     #region Programs
 
     /// <summary>
-    /// A library on the device, compiling with reversed scene depth (<c>DepthReversed</c>).
+    /// A library on the device, compiling with reversed scene depth (<c>DepthReversed</c>) and, where the device has it, <c>discard</c> as a
+    /// demote (<c>DemoteDiscard</c>).
     /// </summary>
     public ShaderLibrary(VulkanDevice device)
     {
         this._device = device;
-        Compiler = new GlslProgramCompiler(new ShaderCompileOptions { DepthReversed = true });
+        var options = new ShaderCompileOptions { DepthReversed = true, DemoteDiscard = device.HasDemoteToHelperInvocation };
+        Compiler = new GlslProgramCompiler(options);
     }
 
     /// <summary>

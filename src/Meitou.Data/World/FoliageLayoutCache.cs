@@ -8,14 +8,34 @@ using Meitou.Content;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Switches for the derived-data load caches (<c>--no-load-cache</c>): when set nothing is read from or written to them.
+/// Switches for the derived-data caches: where they live (<c>--cache-root</c>) and whether the load caches are used (<c>--no-load-cache</c>).
 /// </summary>
 public static class LoadCaches
 {
     /// <summary>
+    /// The root set by <c>--cache-root</c>; null for the default.
+    /// </summary>
+    static string? s_root;
+
+    /// <summary>
     /// Nothing is read from or written to the load caches.
     /// </summary>
     public static bool Disabled { get; set; }
+
+    /// <summary>
+    /// The folder every derived-data cache lives under (<c>--cache-root</c>; default <c>%LOCALAPPDATA%\Meitou</c>). A cache's own environment
+    /// override (<c>MEITOU_OBJECT_LOD_CACHE</c> and the like) still wins over it.
+    /// </summary>
+    public static string Root
+    {
+        get => s_root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou");
+        set => s_root = Path.GetFullPath(value);
+    }
+
+    /// <summary>
+    /// <paramref name="parts"/> under <see cref="Root"/>.
+    /// </summary>
+    public static string Folder(params string[] parts) => Path.Combine([Root, .. parts]);
 }
 
 /// <summary>
@@ -102,12 +122,12 @@ public sealed class FoliageLayoutCache
 
     /// <summary>
     /// A cache for <paramref name="install"/>'s layouts of <paramref name="catalog"/> with <paramref name="towns"/>, in its own key's folder under
-    /// <paramref name="root"/> (default the local application data's <c>Meitou/foliage</c>), kept within <paramref name="maxBytes"/>.
+    /// <paramref name="root"/> (default <see cref="LoadCaches.Root"/>'s <c>foliage</c>), kept within <paramref name="maxBytes"/>.
     /// </summary>
     public FoliageLayoutCache(GameInstall install, FoliageCatalog catalog, IEnumerable<FoliageTown> towns, string? root = null, long? maxBytes = null)
     {
         this._catalog = catalog;
-        var rootFolder = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "foliage");
+        var rootFolder = root ?? LoadCaches.Folder("foliage");
         var list = towns as IReadOnlyCollection<FoliageTown> ?? [.. towns];
         _keyedOwned = list.Count(t => t.Owned);
         _key = FoliageLayoutCacheKey.Compute(install, catalog, list);

@@ -300,7 +300,7 @@ sealed class InterfaceSounds(PlayerInterface player)
         switch (InventoryWindows.ScreenKind(e.Screen))
         {
             case "title" or "menu" or "new-game" or "save" or "load" or "message" or "file": Sound("General_Click"); break;
-            case "inventory" or "bag" or "trader": if (e.Widget == "ArrangeButton") Sound("General_Click"); break;
+            case "inventory" or "bag" or "trader" or "bench": if (e.Widget == "ArrangeButton") Sound("General_Click"); break;
 
             // A pick in the research type list (FUN_14049b5e0): Research_Tabs is set to the item's text, the category; the same row again is no
             // change.

@@ -105,9 +105,11 @@ public sealed partial class DialogueSystem
                     MoneyEffect(world, effect, tc);
                     break;
                 case DialogueActions.AssignBounty or DialogueActions.CrimeAlarm or DialogueActions.PayBounty
-                    or DialogueActions.ArrestTargetsCarriedPerson or DialogueActions.EnslaveTargetsCarriedPerson or DialogueActions.ArrestTarget
-                    or DialogueActions.ClearBounty:
+                    or DialogueActions.ArrestTargetsCarriedPerson or DialogueActions.EnslaveTargetsCarriedPerson or DialogueActions.ClearBounty:
                     LawEffect(world, effect, me, mc, target, tc, ref takeOver, ref enslave);
+                    break;
+                case DialogueActions.ArrestTarget:
+                    if (tc is not null) ArrestEffect(world, line, me, mc, target, tc);
                     break;
                 case DialogueActions.GiveTargetMySlaves or DialogueActions.SurrenderNonHumans or DialogueActions.TagEscapedSlave
                     or DialogueActions.RemoveSlaveStatus:
@@ -311,13 +313,6 @@ public sealed partial class DialogueSystem
             case DialogueActions.EnslaveTargetsCarriedPerson when tc is { Carrying.IsNone: false }:
                 takeOver = enslave = true;
                 break;
-            case DialogueActions.ArrestTarget when tc is not null:
-                {
-                    bool capture = Arrests?.CapturesInTown(world, me, tc) == true;   // one answer for the memory and the task
-                    ArrestMemory(world, me, mc, target, tc, capture);
-                    Arrests?.ArrestFromDialogue(world, me, target, capture);
-                    break;
-                }
             case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null:
                 if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
                 if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count
@@ -328,6 +323,23 @@ public sealed partial class DialogueSystem
                 break;
         }
     }
+
+    /// <summary>
+    /// <c>DA_ARREST_TARGET</c> (29): the speaker captures the target in his own town, else attacks it, and the squads remember it. The capture is
+    /// leashed to the towns (<see cref="Crime.Arrest.Leashed"/>) unless <paramref name="line"/> also attacks (DA 6 / 7, the small-bounty runner's
+    /// line, docs/game/dialogue.md: in which order the original applies the two is <b>Unknown</b>, and that chase has no leash).
+    /// </summary>
+    void ArrestEffect(World world, DialogueNode line, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold tc)
+    {
+        bool capture = Arrests?.CapturesInTown(world, me, tc) == true;   // one answer for the memory and the task
+        ArrestMemory(world, me, mc, target, tc, capture);
+        Arrests?.ArrestFromDialogue(world, me, target, capture, leashed: !line.Effects.Any(Attacks));
+    }
+
+    /// <summary>
+    /// Whether the effect is one of the dialogue's attacks on the target (DA 6 chase forever, DA 7 stay near home).
+    /// </summary>
+    static bool Attacks(DialogueEffect effect) => effect.Action is DialogueActions.AttackChaseForever or DialogueActions.AttackStayNearHome;
 
     /// <summary>
     /// The slave effects: the speaker's slaves given to the target, non-humans surrendered, a slave tagged escaped or freed.

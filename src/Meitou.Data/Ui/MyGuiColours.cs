@@ -51,12 +51,14 @@ public static class MyGuiColours
     public static Vector4 Ink => Parse(InkText, default);
 
     /// <summary>
-    /// An "r g b" or "r g b a" string as a colour (alpha 1 when not given); <paramref name="fallback"/> when it is null, has another count or a
-    /// value that is not a finite number.
+    /// An "r g b" or "r g b a" string as a colour (alpha 1 when not given), or MyGUI's other form "#rrggbb" (a skin mod's templates write their
+    /// <c>TextColour</c> so); <paramref name="fallback"/> when it is null, has another count or a value that is not a finite number.
     /// </summary>
     public static Vector4 Parse(string? value, Vector4 fallback)
     {
         if (value is null) return fallback;
+        if (value.StartsWith('#')) return Hex(value) is { } rgb ? Parse(rgb, fallback) : fallback;
+
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length is not (3 or 4)) return fallback;
         var n = new float[parts.Length];

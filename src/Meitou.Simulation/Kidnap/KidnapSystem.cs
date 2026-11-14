@@ -180,7 +180,7 @@ public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, Chara
 /// <item><b>Carry</b>: a campaign carrier goes on with its squad (following its leader, else wandering home, <see cref="ResumeOf"/>) and, within a
 /// town of its faction (<see cref="KidnapSettings.TownSlack"/> x its radius), looks for a free
 /// cage there (its faction's or an ally's, <see cref="CageFor"/>); an AI squad's member starts only when such a cage is in range. At the cage it lets
-/// go and imprisons the victim (<see cref="CharacterCold.Kidnapped"/>: no sentence, no bail). No
+/// go and imprisons the victim (<see cref="CharacterCold.Kidnapped"/> in a cage of its own faction: no sentence, no bail). No
 /// free cage in the home town, or three failed walks: it drops the victim (<b>engine choice</b>; the original's give-up rule is Unknown).</item>
 /// </list>
 /// A marching carrier (a campaign's, or a squad's that lists a cannibal retreat package, which then needs no cage in range to lift) cages in the
@@ -520,7 +520,10 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 return Retry(world, a, g);
 
             if (table.TryResolveNext(a.Victim, out int caged)) Deeds?.Caged(world, g, caged);
-            tc.Kidnapped = true;
+
+            // The hold is the kidnappers' own: in another faction's cage (a public barracks' the carrier may use) the victim is that faction's
+            // prisoner, whose jailers free it once served, as the original's goal 211 does for any served occupant (#628).
+            tc.Kidnapped = cage.Owner == a.Faction;
             if (tc.IsPlayer) world.Post($"{tc.Name} has been kidnapped by {data.Factions[a.Faction].Name}");
             return End(world, a, KidnapEventKind.Caged);
         }

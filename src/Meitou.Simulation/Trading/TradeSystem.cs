@@ -1,5 +1,6 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Data.Gameplay.Economy;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -89,6 +90,10 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// The item's material record ("" none), which picks its icon.
     /// </summary>
     public string Material { get; init; } = "";
+    /// <summary>
+    /// The item lies turned a quarter (<see cref="Items.ItemInstance.Rotated"/>): its size is the turned footprint's, and the icon is drawn turned.
+    /// </summary>
+    public bool Rotated { get; init; }
     /// <summary>
     /// The COLOR_DATA it is dyed with (<see cref="Items.ItemInstance.ColourId"/>), which picks its icon.
     /// </summary>
@@ -369,15 +374,17 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the shops and the wages; then the open trade follows the selection, and the customer's walk
+    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the wages and the shops; then the open trade follows the selection, and the customer's walk
     /// opens the trade in talk range, keeps it within <see cref="TradeSettings.PassRange"/> or closes it.
     /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Tick % Settings.CheckEveryTicks == 0)
         {
-            Stock(world);
+            // The wages first: a new squad's members are paid as they are made (Character::giveBirth), before its shop's first fill sets the
+            // purse (FUN_14095b210), so a trader with a waged guard starts with the fill's purse, not the guard's wages (#659).
             _wages.Pay(world);
+            Stock(world);
         }
 
         if (_open) FollowSelection(world);
@@ -440,9 +447,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
     /// <summary>
     /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from, when within
-    /// <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (one who cannot trade, down or without an
-    /// inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>, docs/game/economy.md
-    /// "Trading range").
+    /// <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (one who cannot trade, not the player's, dead
+    /// or without an inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>,
+    /// docs/game/economy.md "Trading range").
     /// </summary>
     internal bool TradeWith(World world, CharacterId who)
     {
@@ -462,9 +469,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the character can trade: a player character with an inventory, not incapacitated.
+    /// Whether the character can trade: a player character with an inventory, not dead. A knocked-out one trades through its window too: the
+    /// original buys into and sells from a carried, unconscious squad member's window (docs/game/economy.md "Trading range").
     /// </summary>
-    static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Incapacitated: true } };
+    static bool Trades(CharacterCold? c) => c is { IsPlayer: true, Inventory: not null, Medical: not { Dead: true } };
 
     /// <summary>
     /// Rebuilds the published view of the open trade.
@@ -509,6 +517,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     #endregion
 
     #region Shops
+
+    /// <summary>
+    /// Sets the stream that spreads a home's stock over its containers apart from the one that rolled the stock.
+    /// </summary>
+    const ulong SpreadSalt = 0x5EEDB0C5UL;
 
     /// <summary>
     /// The squad templates by id, as shops and homes read them (null: no such template).
@@ -604,8 +617,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// A trade opened with a member of a squad that has no shop yet: a trader squad gets its shop now; any other trades from what the original's
     /// window shows (docs/game/economy.md "Who trades"): a squad with no home building (the Traders Guild's <c>Caravan</c>: <c>vendors</c> but no
-    /// <c>is trader</c>) from an empty stock that is never filled, standing in for its members' bags; a housed one from its home's stock containers,
-    /// lent for the trade (<see cref="Stock"/> hands them back), none without.
+    /// <c>is trader</c>) from a stock that is never filled and takes what its members' worn bags hold (<see cref="TakeBags"/>: the pack animals'
+    /// loads, <see cref="Items.PackLoad"/>); a housed one from its home's stock containers, lent for the trade (<see cref="Stock"/> hands them
+    /// back), none without.
     /// </summary>
     void StockFor(World world, int t)
     {
@@ -620,6 +634,25 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         squad.Shop = UnfilledShop(squad, TemplateRecord(_data, squad.TemplateId));
         if (squad.Shop is { Building: not null } lent) TakeContents(world, lent);
+        else if (squad.Shop is { } carried) TakeBags(world, squad, carried);
+    }
+
+    /// <summary>
+    /// A homeless squad's new unfilled shop takes what its living members' worn bags hold: the original's window shows those bags merged
+    /// (<c>FUN_140953850</c>, docs/game/ui-screens.md section 6). <b>Engine choice</b>: the goods stay in the squad's stock from then on, as a
+    /// trader squad's do; what the stock has no room for stays in its bag.
+    /// </summary>
+    static void TakeBags(World world, Squad squad, Shop shop)
+    {
+        var table = world.Characters;
+
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int slot) || table.Cold(slot) is not { DiedTick: < 0, Inventory.Backpack.Contents: { } bag }) continue;
+
+            foreach (var item in bag.Items.ToList())
+                if (shop.Stock.Add(item)) bag.Items.Remove(item);
+        }
     }
 
     /// <summary>
@@ -726,7 +759,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// A housed squad with <c>vendors</c> that is no trader (a resident's <c>house contents</c>): the building filler fills its home's storage
     /// containers as a trader's (the squad factory <c>FUN_140583a10</c> tests <c>vendors</c>, not <c>is trader</c>, <b>Observed</b>), unlocking them;
-    /// here each unit goes into the first container with room and what fits nowhere is lost. Engine choice: again every <c>vendors refresh time</c>
+    /// the units are spread over them as the filler does (<see cref="HomeStock"/>) and what fits nowhere is lost. Engine choice: again every <c>vendors refresh time</c>
     /// hours, but only while the containers hold nothing but unique items (a loaded save keeps what they hold); the purse is not touched.
     /// </summary>
     void FillHome(World world, Squad squad, SquadTemplate template, Meitou.Data.World.TownBuilding home)
@@ -769,23 +802,60 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     {
         if (home.Turret is not null) return;
 
-        var boxes = new List<Locks.Fixture>();
-        foreach (var f in home.Fixtures)
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Contents: not null } box) boxes.Add(box);
-        if (boxes.Count == 0 || boxes.Any(b => b.Contents!.Items.Any(i => !i.Unique))) return;
+        var boxes = StockBoxes(world, home);
+        if (boxes.Count == 0 || boxes.Any(b => b.Grid.Items.Any(i => !i.Unique))) return;
         if (Shop.ForBuilding(home, terms) is not { } merged) return;
+
+        // The filler unlocks every stock container, then keeps those that can hold what the lists make (FUN_14095b210, FUN_14095a5b0).
+        foreach (var box in boxes)
+            if (box.Fixture.Lock is { } l) l.Locked = false;
+
+        var usable = HomeStock.Usable(boxes, VendorEntries(template, FactionRecord(terms.Faction)));
+        if (usable.Count == 0) return;
 
         merged.Fills = (int)world.Tick;
         ShopFiller.Fill(merged, template, Market(world), _data, world.Seed, key, specials: first);
 
-        foreach (var item in merged.Stock.Items)
+        // Engine: the special items are spread with the vendor items (the original gives each to a container of a shuffle of its own first).
+        var rng = new RandomStream(world.Seed, Rng.Mix(key ^ SpreadSalt ^ ((ulong)merged.Fills << 40)), RngPurpose.Trade);
+        HomeStock.Spread(usable, merged.Stock.Items, Market(world).BaseValue, ref rng);
+
+        foreach (var box in usable)
+            if (box.Fixture.Lock is { } l) l.Locked = box.Grid.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
+    }
+
+    /// <summary>
+    /// The home's stock containers (<see cref="Meitou.Data.World.TownFixture.HoldsShopStock"/>) with their records' storage rules.
+    /// </summary>
+    List<StockBox> StockBoxes(World world, Meitou.Data.World.TownBuilding home)
+    {
+        var boxes = new List<StockBox>();
+
+        foreach (var f in home.Fixtures)
         {
-            foreach (var box in boxes)
-                if (box.Contents!.Add(item)) break;
+            if (!f.HoldsShopStock || world.Fixtures.Find(f.Id) is not { Contents: not null } box) continue;
+
+            var record = _data.Db.Find(box.RecordId);
+            boxes.Add(new StockBox(box, record is null ? null : Data.Gameplay.Construction.MachineData.From(_data.Db, record)));
         }
 
-        foreach (var box in boxes)
-            if (box.Lock is { } l) l.Locked = box.Contents!.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
+        return boxes;
+    }
+
+    /// <summary>
+    /// Every entry of the vendor lists the template stocks from (<see cref="ShopFiller.VendorLinks"/>).
+    /// </summary>
+    List<VendorEntry> VendorEntries(SquadTemplate template, Data.GameRecord? faction)
+    {
+        var entries = new List<VendorEntry>();
+
+        foreach (var link in ShopFiller.VendorLinks(template, faction))
+        {
+            if (_data.Db.Find(link.Id) is { Type: Data.Fcs.FcsRecordType.VendorList } record)
+                entries.AddRange(VendorList.From(_data.Db, record).Entries);
+        }
+
+        return entries;
     }
 
     /// <summary>
@@ -831,8 +901,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer and the trader can trade, whatever the trader stocks: both up, the customer the player's with an inventory, the trader
-    /// not fighting nor an enemy.
+    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not asleep when the trade opens (a sleeper
+    /// answers no Talk, <see cref="Dialogue.DialogueSystem.SleepsThrough"/>), not held in a cage (engine choice, #641), not fighting nor an enemy;
+    /// the customer the player's with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window
+    /// and stays with it, <see cref="Trades"/>).
     /// </summary>
     bool Parties(World world, out int c, out int t)
     {
@@ -842,8 +914,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         var cc = table.Cold(c)!;
         var tc = table.Cold(t)!;
-        if (!cc.IsPlayer || cc.Medical is { Incapacitated: true } || tc.Medical is { Incapacitated: true } || tc.InCombat || cc.Inventory is null)
+        bool customerDown = cc.Medical is { Dead: true } || (!_open && cc.Medical is { Incapacitated: true });
+        if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || tc.IsImprisoned || cc.Inventory is null)
             return false;
+        if (!_open && Carrying.CarrySystem.Asleep(table, t)) return false;
 
         return !AggroSystem.IsEnemy(_data.Relations, cc.Faction, tc.Faction);
     }
@@ -1025,31 +1099,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var bought = item.WithQuantity(units);
         bought.Buyback = receipt;
         long price = Price(m, item, units, false, shop.Terms, squad.Faction);
-        int placed;
-
-        if (item.Contents is not null)
-        {
-            // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
-            placed = TransferContainer(shop.Stock, buy.Item, cold.Inventory!, buy.Section, buy.X, buy.Y, buy.Equip, cold);
-            if (placed > 0) item.Buyback = receipt;
-            if (placed > 0 && InventoryCommands.IsEquipmentSection(item.Section)) _assembly.RefreshEquipment(cold);
-        }
-        else if (buy.Section == "backpack_attach") placed = 0;
-        else if (buy.Section is { } section) placed = PlaceAt(cold.Inventory!, bought, units, section, buy.X, buy.Y);
-        else if (buy.Equip && InventoryCommands.TryEquip(cold.Inventory!, bought.WithQuantity(1), cold))
-        {
-            // One unit is worn; the rest of a stack goes where it fits.
-            _assembly.RefreshEquipment(cold);
-            placed = 1;
-
-            if (units > 1)
-            {
-                var rest = bought.WithQuantity(units - 1);
-                rest.Buyback = bought.Buyback?.Skip(1);
-                placed += Place(cold.Inventory!, rest, units - 1);
-            }
-        }
-        else placed = Place(cold.Inventory!, bought, units);
+        int placed = PutBought(buy, shop.Stock, item, bought, units, receipt, cold);
 
         if (placed == 0)
         {
@@ -1063,6 +1113,38 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         world.Player.Money -= price;
         squad.Money += price;
         world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+    }
+
+    /// <summary>
+    /// Puts the bought units into the receiving character's inventory: at the cell dropped on, worn (a right click), else wherever they fit; the
+    /// units placed. A live animal's shut grid takes nothing (<see cref="InventoryCommands.MainClosed"/>), only its worn bag does: stock
+    /// right-clicked into a bagless dog's window is "No room for that item." in the original.
+    /// </summary>
+    int PutBought(BuyItem buy, Inventory stock, ItemInstance item, ItemInstance bought, int units, TradeReceipt? receipt, CharacterCold cold)
+    {
+        var into = cold.Inventory!;
+        bool shut = InventoryCommands.MainClosed(cold);
+
+        if (item.Contents is not null)
+        {
+            // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
+            int moved = TransferContainer(stock, buy.Item, into, buy.Section, buy.X, buy.Y, buy.Equip, cold);
+            if (moved > 0) item.Buyback = receipt;
+            if (moved > 0 && InventoryCommands.IsEquipmentSection(item.Section)) _assembly.RefreshEquipment(cold);
+            return moved;
+        }
+
+        if (buy.Section == "backpack_attach") return 0;
+        if (buy.Section is { } section) return PlaceAt(into, bought, units, section, buy.X, buy.Y, shut);
+        if (!buy.Equip || !InventoryCommands.TryEquip(into, bought.WithQuantity(1), cold)) return Place(into, bought, units, shut);
+
+        // One unit is worn; the rest of a stack goes where it fits.
+        _assembly.RefreshEquipment(cold);
+        if (units == 1) return 1;
+
+        var rest = bought.WithQuantity(units - 1);
+        rest.Buyback = bought.Buyback?.Skip(1);
+        return 1 + Place(into, rest, units - 1, shut);
     }
 
     /// <summary>
@@ -1246,7 +1328,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory.
+    /// Containers move whole: stack copies intentionally omit Contents. Transfer validates the destination before changing either inventory. A live
+    /// animal's shut grid (<see cref="InventoryCommands.MainClosed"/>) takes none, only its bag slot.
     /// </summary>
     static int TransferContainer(Inventory from, InventoryItemToken token, Inventory into, string? section, int x, int y, bool equip,
         CharacterCold? wearer)
@@ -1255,6 +1338,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (section == "backpack_attach")
             return InventoryCommands.Transfer(from, token, into, section, 0, 0, wearer: wearer) ? 1 : 0;
         if (equip && InventoryCommands.Transfer(from, token, into, "backpack_attach", 0, 0, wearer: wearer)) return 1;
+        if (InventoryCommands.MainClosed(wearer)) return 0;
         if (section == "main" && InventoryCommands.Transfer(from, token, into, section, x, y)) return 1;
 
         var item = Find(from, token);
@@ -1296,11 +1380,13 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// Puts the units at the cell they were dropped on (the trade window's <c>placeItemFromMouse</c>): the cell of <paramref name="section"/> in
     /// <paramref name="root"/> (the backpack's contents for <c>backpack_content</c>) when the footprint is inside the grid, free and the stack within
-    /// the limit; otherwise wherever they fit, as <see cref="Place"/>.
+    /// the limit; otherwise wherever they fit, as <see cref="Place"/>. <paramref name="mainShut"/>: the main grid takes nothing.
     /// </summary>
-    static int PlaceAt(Inventory root, ItemInstance copy, int units, string section, int x, int y)
+    static int PlaceAt(Inventory root, ItemInstance copy, int units, string section, int x, int y, bool mainShut = false)
     {
-        var grid = section == "main" ? root : section == "backpack_content" ? root.Backpack?.Contents : null;
+        var grid = section == "main" && !mainShut ? root
+            : section == "backpack_content" ? root.Backpack?.Contents
+            : null;
 
         if (grid is not null && x >= 0 && y >= 0 && x + copy.Width <= grid.Width && y + copy.Height <= grid.Height && units <= grid.LimitOf(copy)
             && grid.IsFree(section, x, y, copy.Width, copy.Height))
@@ -1312,16 +1398,17 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return units;
         }
 
-        return Place(root, copy, units);
+        return Place(root, copy, units, mainShut);
     }
 
     /// <summary>
-    /// Puts the units wherever they fit in <paramref name="into"/>'s main grid; the units placed.
+    /// Puts the units wherever they fit in <paramref name="into"/> (<see cref="Inventory.Add"/>; <paramref name="mainShut"/>: its backpack only); the
+    /// units placed.
     /// </summary>
-    internal static int Place(Inventory into, ItemInstance copy, int units)
+    internal static int Place(Inventory into, ItemInstance copy, int units, bool mainShut = false)
     {
         copy.Section = "main";
-        return into.Add(copy) ? units : units - copy.Quantity;
+        return into.Add(copy, mainShut) ? units : units - copy.Quantity;
     }
 
     /// <summary>
@@ -1375,6 +1462,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 Container = item.Contents is not null,
                 BagItems = item.Contents?.Items.Count ?? -1,
                 Material = item.MaterialId,
+                Rotated = item.Rotated,
                 Colour = item.ColourId,
                 Charge = item.ChargeFraction,
                 Value = value,

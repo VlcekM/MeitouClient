@@ -10,6 +10,14 @@ namespace Meitou.Game.Rendering.Frame;
 public readonly record struct CharacterPose(string Animation, float Time, float Weight);
 
 /// <summary>
+/// A character's place on another's bone: its node sits at <paramref name="Bone"/> of the character <paramref name="Carrier"/> (a
+/// <see cref="CharacterInstance.Key"/>) as that one is drawn this frame, moved by <paramref name="Offset"/> and turned by <paramref name="Rotation"/>
+/// in the bone's frame (the bone's model-space rotation, then the carrier's placement). The offset scales with the carrier's size; the anchored
+/// character keeps its own.
+/// </summary>
+public readonly record struct CharacterAnchor(long Carrier, string Bone, Vector3 Offset, Quaternion Rotation);
+
+/// <summary>
 /// A character to draw this frame, already interpolated by the host. <see cref="Key"/> is stable while the character exists, so
 /// the renderer can keep its GPU resources and last frame's bones (motion vectors) by it; <see cref="Appearance"/> is compared by
 /// reference to find the meshes and materials.
@@ -51,6 +59,13 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     /// The node's whole rotation, in place of <see cref="Yaw"/> (a carried body's on its carrier's shoulder); null: turned by the yaw only.
     /// </summary>
     public Quaternion? Rotation { get; init; }
+
+    /// <summary>
+    /// Places the node on another character's bone as the renderer poses it this frame (a carried body on its carrier's shoulder), in place of
+    /// <see cref="Position"/> and <see cref="Rotation"/>; those still place it for culling, and draw it while the carrier is not drawn in the world
+    /// or lacks the bone. Null: none. Ignored with <see cref="World"/>.
+    /// </summary>
+    public CharacterAnchor? Anchor { get; init; }
 
     /// <summary>
     /// Uniform size the body is drawn at (an animal's age-dependent size; 1 for people).

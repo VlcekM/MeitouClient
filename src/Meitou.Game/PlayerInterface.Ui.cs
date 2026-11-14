@@ -125,8 +125,8 @@ sealed partial class PlayerInterface
         ("title", "Kenshi_MainMenu", true), ("new-game", "Kenshi_NewGamePanel", true),
         ("save", "Kenshi_SaveGamePanel", true),
         ("load", "Kenshi_LoadGamePanel", true), ("import", "Kenshi_ImportGamePanel", true), ("message", "Kenshi_MessageBox", true),
-        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
-        ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
+        ("bag", "Kenshi_InventoryGenericFixedWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
+        ("loot-bag", "Kenshi_InventoryGenericFixedWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
         ("trader", "Kenshi_InventoryTraderWindow", false),
         ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false),
         ("storage", "Kenshi_InventoryGenericWindow", false),
@@ -345,8 +345,8 @@ sealed partial class PlayerInterface
         b.Actions["BuildButton"] = "meitou:build";
         if (Build.Active) foreach (string name in BuildMode.BuildHiddenHud) b.Hidden.Add(name);
 
-        // A bounty or a status line (Slave, Leader, Committing Crime!...) shows the bounty panel.
-        if (lead is null || lead.Bounties.Count == 0 && lead.Slave is null && lead.Status is null) b.Hidden.Add("BountyPanel");
+        // A bounty, a status line (Slave, Leader, Committing Crime!...) or the kidnap victim flag shows the bounty panel.
+        if (lead is null || !TooltipRuntime.ShowsBountyPanel(lead)) b.Hidden.Add("BountyPanel");
 
         // The information panel starts collapsed (as the original's, docs/game/ui-screens.md section 4): the extending part (name, state lines,
         // extended stats) slid down
@@ -510,7 +510,7 @@ sealed partial class PlayerInterface
             [UiSlots.Selection] = FaithfulSlot("InformationPanel"),
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
-        if (hud) controls.AddRange(_uiHost.Arrange(UiMode, Width, Height, b, slots));
+        controls.AddRange(RecordPortraits.Resolve(hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots) : []));
         PortraitBar.SquadBarRow = 0;
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel)
             PortraitBar.AddSquadPortraits(controls, squadPanel.Bounds);
@@ -734,7 +734,11 @@ sealed partial class PlayerInterface
             else if (action == "inventory" && InventoryWindows.InventoryOwner() is { } lead
                 && InventoryWindows.PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key is { } slot)
                 FaithfulScreens.Open(slot);
-            else FaithfulScreens.Open(action);
+            else
+            {
+                FaithfulScreens.Open(action);
+                if (action == "inventory") InventoryLayout.PlaceCharacterWindow();
+            }
         }
         else if (action == "help") ToggleHelpWindow();
         else if (action == "extendedstats") InfoExpanded = !InfoExpanded;
@@ -1023,6 +1027,7 @@ sealed partial class PlayerInterface
         if (key == Key.Escape && LevelEditorPanel.LevelEscape()) return true;
         if (key == Key.Escape) return EscapeKey();
         if (FaithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
+        if (GameHotkeys.Bound(InputAction.RotateItem, key) && InventoryWindows.RotateAt(Mouse)) return true;
         if (ScreenKey(key, shift) is { } screenTook) return screenTook;
         return WindowHotkey(key);
     }
@@ -1198,6 +1203,7 @@ sealed partial class PlayerInterface
         if (SquadWindows.SquadsWheel(p, steps)) return true;
         if (FactionWindow.FactionWheel(p, steps)) return true;
         if (Production.ResearchWheel(p, steps)) return true;
+        if (Production.CraftWheel(p, steps)) return true;
         return CharacterEditor.EditorWheel(p, steps) || FaithfulScreens.Wheel(p, steps);
     }
 

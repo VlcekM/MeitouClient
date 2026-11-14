@@ -390,6 +390,51 @@ public class TradeTests
         Assert.DoesNotContain(b.View.Stock.Concat(b.View.Goods), v => v.Buyback);
     }
 
+    /// <summary>
+    /// A knocked-out player character trades through its window (docs/game/economy.md "Trading range"): it cannot open a trade itself, but a buy into
+    /// its window passes the open trade to it, pays, and the trade stays with it; a dead one's window takes nothing. Catches the trade refusing
+    /// or closing on an unconscious customer.
+    /// </summary>
+    [Fact]
+    public void A_knocked_out_player_character_buys_into_its_window_during_an_open_trade()
+    {
+        using var b = new Bazaar();
+        var hero = b.Spawn("hero", new Vector2(0, 0), b.Data.PlayerFaction, true);
+        var mate = b.Spawn("mate", new Vector2(2, 0), b.Data.PlayerFaction, true);
+        var fallen = b.Spawn("fallen", new Vector2(-2, 0), b.Data.PlayerFaction, true);
+        var shopkeeper = b.Spawn("shopkeeper", new Vector2(10, 0), b.Data.FactionIndex("f-t"), false, "shop-t");
+        b.World.RunTicks(1);
+        b.World.Characters.Cold(mate.Slot)!.Medical!.KnockOut(600);
+        b.World.Characters.Cold(fallen.Slot)!.Medical!.Kill();
+
+        b.Say(new OpenTrade(mate, shopkeeper) { Tick = 0 });
+        b.World.RunTicks(2);
+        Assert.Null(b.World.Snapshot.Trade);
+
+        b.World.Player.Selection.Add(hero);
+        b.Say(new OpenTrade(hero, shopkeeper) { Tick = 0 });
+        b.World.RunTicks(2);
+        b.Say(new BuyItem(b.View.Stock[0].Token, 1) { Tick = 0, Into = fallen });
+        b.World.RunTicks(1);
+        Assert.Equal(hero, b.View.Customer);
+        Assert.Equal(1000, b.World.Player.Money);
+        Assert.Empty(b.Bag(fallen).All());
+
+        // Its portrait selects it, then the stock is dropped into its window.
+        b.World.Player.Selection.Clear();
+        b.World.Player.Selection.Add(mate);
+        var first = b.View.Stock[0];
+        b.Say(new BuyItem(first.Token, 1) { Tick = 0, Into = mate });
+        b.World.RunTicks(1);
+        Assert.Equal(mate, b.View.Customer);
+        Assert.Equal(1000 - first.UnitPrice, b.World.Player.Money);
+        Assert.Equal(1, b.Bag(mate).All().Sum(i => i.Quantity));
+        Assert.Empty(b.Bag(hero).All());
+
+        b.World.RunTicks(30);
+        Assert.Equal(mate, b.View.Customer);
+    }
+
     [Fact]
     public void Stolen_goods_are_only_safe_with_a_fence()
     {

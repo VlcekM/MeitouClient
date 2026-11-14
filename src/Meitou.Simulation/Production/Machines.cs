@@ -280,6 +280,10 @@ public sealed class Machine
     /// </summary>
     public int Operators { get; set; }
     /// <summary>
+    /// The farm operators' effective Farming levels divided by 100, summed this tick for its panel. Derived; not saved or hashed.
+    /// </summary>
+    public float FarmerSkillTotal { get; set; }
+    /// <summary>
     /// The character that last worked a crafting bench: the exe's operator hand (building <c>+0x4d0</c>, written by each operator's tick in
     /// <c>FUN_1402b5a40</c> and never cleared), which the Craft tab's Current Smith reads. Derived; not saved, not hashed (the original's handle is
     /// not saved either).

@@ -88,6 +88,8 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
 
 Clip filter (`FUN_14051d660`, **Verified** for the strafe list, Inferred for walk and run): a clip with `stealth mode` 1 is kept only while the animal sneaks; animals never sneak (the stealth flag is written only by the Character sneak setter), so such a clip is never picked. Meitou drops it in `AnimationLibrary.BuildAnimals`.
 
+Job clips: an animal standing in a captive job's clip (eating a body: `eat`) plays the ANIMAL_ANIMATION of that record name from its own list; the library's first record of the name is the humanoid ANIMATION `eat` (43889), which an animal skeleton cannot play. Blood Spider, Skin Spider, the dogs and raptors have it; the Skimmer's `eat (attack1)` is taken by its name's start (engine choice); the gorillos' and Land Bat's skeletons lack the clip, so they stand in an idle (**Verified** by headless check of the merged base data, #623). Meitou: `AnimalPlan.Action`.
+
 ## Death items
 
 The meat, skins, teeth (animals) and cores/CPUs (robots, Gurglers) a body yields. Not dropped at death: they are in the inventory
@@ -153,6 +155,11 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- The load (`FUN_14062a130`, `FUN_14074a3d0`, **Verified** by decompile): when the new animal wears a bag, each entry of its squad template's `vendors` list, or with none there of its own
+  `inventory` list (VENDOR_LISTs too; no base animal has one), puts the list's `items count` items (40 when below 1) into the bag: picks as an item slot's
+  ([`FUN_1409540d0`](factions-squads-towns.md#loose-items-in-buildings), for the animal's faction), at most twice as many tries, a pick that does not fit is destroyed. No chance, weight or
+  `is trader` test. So the pack animals of any squad with `vendors` carry goods: all a Traders Guild `Caravan` sells ([who trades](economy.md#who-trades)). Meitou: `PackLoad`, not for a
+  homeless trader squad, whose squad stock stands in for its bags.
 - The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
   shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
   and `athletics mult` are not separately verified, **Unknown**). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.
@@ -162,7 +169,12 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
   (`Fighter.Naked`).
 - The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
   or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
-  **Unknown**. Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it; what is in it can still be taken out.
+  **Unknown**. Nothing given or bought goes in either: food dropped on the player's bonedog with no bag is "No room for that item." and stays with the giver,
+  and stock right-clicked while a trade shows the dog's window is refused the same way and stays in stock, nothing paid (**Observed**, original; whether a
+  worn bag then takes either is **Unknown**). Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it (but for
+  food it fetches to eat: [Eating](character-stats.md#eating)), and gives, trade buys and a held item's return past its old cell put grid items into the
+  worn bag only (`Inventory.Add` with the main grid shut; the return into the bag is **Observed** in the original,
+  [holding an item](ui-screens.md#6-inventory-trade-dialogue-build)); what is in it can still be taken out.
 - The worn bag is drawn on the animal: Garru Backpack's `pack_beast_luggage.mesh` and rebirth.mod's Bull Backpack `bull_bags.mesh` are skinned to skeletons
   whose bone handles and names match `pack_beast.skeleton` and `bull.skeleton` (**Verified**, 44 and 37 bones compared), so they share the body's skeleton
   as a person's clothing does; the material is the CONTAINER's `material` (gar backpack). Meitou: `CharacterAppearance.BuildAnimal` with the bag in

@@ -29,6 +29,17 @@ public sealed partial class NavmeshWalkability
     readonly record struct Wall(Vector2 A, Vector2 B, Vector2 Inward);
 
     /// <summary>
+    /// <see cref="NavLineOfSight"/> over the loaded zones; off them, the stand-in's answer.
+    /// </summary>
+    public bool LineOfSight(Vector3 from, Vector3 to)
+    {
+        var w = _world;
+        if (!w.Contains(WorldLayout.ZoneOf(from.X, from.Z)) || !w.Contains(WorldLayout.ZoneOf(to.X, to.Z))) return _fallback.LineOfSight(from, to);
+
+        return NavLineOfSight.Clear(w, Doors, from, to);
+    }
+
+    /// <summary>
     /// The part of a free move (root motion, combat footwork) that a body of <paramref name="radius"/> at <paramref name="from"/> can make: as the
     /// original's nav agent, a circle swept against the walls of the walkable surface round it (the polygon edges that lead nowhere: a wall, a drop,
     /// a hole furniture cuts, a closed door) stops where it would first touch one, and the rest of the step slides along that wall and is swept once

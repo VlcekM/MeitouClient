@@ -50,6 +50,41 @@ loose uniforms; resolve handles ahead. Native program layouts come from reflecti
 assumed global set scheme. FrameGlobals publishes render-thread getters, Version invalidates
 resolution, ApplyCount permits within-application caching; jobs consume prepared values.
 
+A fragment stage's `discard` is compiled as a demote on Vulkan (`ShaderCompileOptions.DemoteDiscard`, set where the device has
+`shaderDemoteToHelperInvocation`, core in 1.3; `GlslProgramCompiler.OptionLines` adds the extension and `#define discard demote`): the
+fragment is dropped and its invocation runs on as a helper, so derivatives and implicit-LOD lookups after it stay defined in the 2x2 quad.
+Metal keeps `discard`.
+- **Verified** (opcode scan of the shader cache, 2026-11-14): the bundled shaderc (Silk.NET.Shaderc.Native 2.23.0, Vulkan 1.3 target) turns a
+  plain `discard` into `OpTerminateInvocation`, after which derivatives are undefined; with the option a Hub run's 241 new modules hold
+  `OpDemoteToHelperInvocation` (44 of them) and neither `OpTerminateInvocation` nor `OpKill`.
+- **Verified** (validation layer, `--headless --no-gi`): the modules need the device feature (VUID-VkShaderModuleCreateInfo-pCode-08740
+  without it, 0 errors with it). The `StorageImageExtendedFormats` capability needs no enabled feature.
+- **Verified** (`--screenshot --new-game --ticks 60`, RTX 4070): demote against terminate differs in 102 of 1228800 pixels (largest step
+  32/255), at dithered objects' edges; two runs of one build are identical.
+- **Observed** (RX 580, AMD driver 25.8.1, release 0.19.0, two screenshots): with terminate, dark pixels along the triangle edges of
+  characters and cut-out cloth in both shadow modes, and of opaque objects (a barrel, a pole's straps) with the Meitou shadows, whose
+  receiver plane (`cross(dFdx(world), dFdy(world))`) is taken after the `discard`; terrain, whose shaders have no `discard`, is clean.
+  With FSR every edge kept its render-resolution steps; with TAA edges were smooth.
+- **Unknown**: whether that driver renders the demote build correctly (no AMD hardware to test on), and why FSR did not accumulate there.
+
+### Vertex bindings
+
+Each vertex attribute is a binding of its own: binding = location, the attribute at offset 0 of it, the stride the vertex's, and the buffer bound
+at the attribute's offset in the vertex (`Pipelines.FillVertexInputs`, `LegacyProgram.Attribute`). A binding other than the first therefore
+has less than a whole stride left for the buffer's last vertex. Every buffer with the vertex usage is made 256 bytes longer than asked
+(`GpuAllocator.VertexTailBytes`, at least the largest stride, 64), so the last vertex has a whole stride in every binding.
+- **Verified** (Vulkan spec, "Shader Out-of-Bounds Memory Access"): with robust buffer access a vertex input read "may instead be bounds
+  checked against a range rounded down to the nearest multiple of the stride of its binding", and one read outside lets the binding's others
+  behave as outside too. The device does not enable `robustBufferAccess`; what a driver does without it is its own.
+- **Verified** (`--screenshot` of #661's save and camera, RTX 4070, a scratch build zeroing bytes 12-43 of each object mesh's last vertex):
+  the picture has the report's dark, texture-smeared triangles in the same places (the half of each `carpet1.mesh` quad that uses its last
+  vertex). With the tail and without the zeroing the picture is pixel-identical to the one before, and the
+  validation layer reports 0 errors.
+- **Observed** (#661, GPU not reported, `f2601d8aa`): such triangles in almost every building; not reproduced on the RTX 4070 from the
+  report's save, a new game or the low-end, Medium and Faithful settings.
+- **Unknown**: whether the reporter's driver bounds the bindings that way, so whether the tail removes #661; whether the RX 580's dark edge
+  pixels above are the same last-vertex reads (zero normal and colour).
+
 The renderers state their draw state, their formats and their resources in the GL vocabulary, not
 in Vulkan's: DepthFunction, BlendingFactor, FrontFaceDirection, CullMode, PolygonKind,
 BlendOperation, ColorMask, PrimitiveType, PixelViewport, PixelRect, InternalFormat, LoadOp,

@@ -295,6 +295,11 @@ public enum InputAction
     /// </summary>
     TogglePhotoMode,
     /// <summary>
+    /// Meitou's own: turns the held inventory item, or the one under the pointer, a quarter (default the middle button; only with the Item rotation
+    /// setting, docs/game/ui-screens.md "Rotating an item").
+    /// </summary>
+    RotateItem,
+    /// <summary>
     /// Escape's action (default Escape).
     /// </summary>
     Quit,
@@ -492,6 +497,7 @@ public sealed class InputBindings
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
         Set(InputAction.TogglePhotoMode, Key.P);
+        Set(InputAction.RotateItem, MouseButton.Middle);   // over an item only: elsewhere the button is still Orbit's
         Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
         // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
         Set(InputAction.Select, MouseButton.Left);

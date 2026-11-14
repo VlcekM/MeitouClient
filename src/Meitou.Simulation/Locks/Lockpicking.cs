@@ -69,16 +69,15 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
 
     /// <summary>
     /// The skill condition (166/167): the chance without the cage penalty is above <c>minimum lockpick chance</c> (0.05, strict); and the engine's
-    /// conditions for the Unknown cases of locks.md: conscious, not carried or carrying, one arm working, not tied to a pole.
+    /// conditions for the Unknown cases of locks.md: conscious, not carried or carrying, one arm working. A prisoner tied to a pole picks as a
+    /// caged one does: rows 76 and 201 are registered for the chained repertoire and the condition has no restraint test (<b>Verified</b>).
     /// </summary>
-    public bool Allowed(World world, CharacterCold picker, int level)
+    public bool Allowed(CharacterCold picker, int level)
     {
         if (picker.Medical is { Incapacitated: true } || !picker.CarriedBy.IsNone || !picker.Carrying.IsNone)
             return false;
 
         if (picker.Medical?.Aggregates().BothArmsDisabled == true) return false;
-        if (picker.IsImprisoned && picker.InWhat is { } id && world.Fixtures.Find(id) is { Restrains: true })
-            return false;
 
         return Chance(level, Skill(picker)) > constants.MinimumLockpickChance;
     }
@@ -92,7 +91,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     {
         var c = world.Characters.Cold(picker);
         if (target.Lock is not { EffectivelyLocked: true } l) return PickOutcome.Open;
-        if (c is null || !Allowed(world, c, l.Level)) return PickOutcome.NotAllowed;
+        if (c is null || !Allowed(c, l.Level)) return PickOutcome.NotAllowed;
         Crime(world, picker, c, target, crimes);
         var outcome = Roll(world, c, l, Rng.StableHash(target.Id), dt);
         if (outcome == PickOutcome.Success) world.Fixtures.Touch(target);
@@ -138,7 +137,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     {
         var c = world.Characters.Cold(picker);
         if (item.Lock is not { EffectivelyLocked: true } l) return PickOutcome.Open;
-        if (c is null || !Allowed(world, c, l.Level)) return PickOutcome.NotAllowed;
+        if (c is null || !Allowed(c, l.Level)) return PickOutcome.NotAllowed;
         ShackleCrime(world, picker, wearer, crimes);
         return Roll(world, c, l, ShackleKey(wearer, item), dt);
     }

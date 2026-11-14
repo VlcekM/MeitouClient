@@ -338,9 +338,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _metalFxSpatial = MetalFxSpatialUpscaler.TryCreate(_ctx);
         MetalUpscalerMode mode = ChooseUpscalerMode();
 
-        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial);
+        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale);
         _upscaling.ApplyMode(mode);
-        if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: native scene, no jitter");
+        if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: no jitter, no temporal resolve");
         // The seam's post chain for the shared WorldFrame.Draw: the scene effects and the composite are the same calls the local
         // loop used, with the jitter and temporal choice decided live as the settings change them.
         _postChain = new MetalPostChain(_ctx, _composite, _taa, host.WorldOptions.Post,
@@ -356,11 +356,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     MetalUpscalerMode ChooseUpscalerMode()
     {
-        MetalUpscalerMode mode = host.Config.MetalUpscaler;
+        MetalUpscalerMode mode = host.Config.MetalUseUpscaling ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
         float scale = Math.Clamp(host.Config.MetalRenderScale, 0.33f, 1f);
         if (_noTaaRequested)
         {
-            mode = MetalUpscalerMode.Native;
+            mode = MetalUpscalerMode.Disabled;
             scale = 1f;
         }
         else if (Environment.GetEnvironmentVariable("MEITOU_METALFX_SPATIAL") is "1" or "true")
@@ -379,17 +379,17 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
         if (mode == MetalUpscalerMode.Temporal && _metalFx is null)
         {
-            Console.WriteLine("metal     MetalFX temporal unavailable; using Native");
-            mode = MetalUpscalerMode.Native;
+            Console.WriteLine("metal     MetalFX temporal unavailable; using no upscaler");
+            mode = MetalUpscalerMode.Disabled;
             scale = 1f;
         }
         if (mode == MetalUpscalerMode.Spatial && _metalFxSpatial is null)
         {
-            Console.WriteLine("metal     MetalFX spatial unavailable; using " + (_metalFx is null ? "Native" : "MetalFX temporal"));
-            mode = _metalFx is null ? MetalUpscalerMode.Native : MetalUpscalerMode.Temporal;
-            scale = mode == MetalUpscalerMode.Native ? 1f : scale;
+            Console.WriteLine("metal     MetalFX spatial unavailable; using " + (_metalFx is null ? "no upscaler" : "MetalFX temporal"));
+            mode = _metalFx is null ? MetalUpscalerMode.Disabled : MetalUpscalerMode.Temporal;
+            scale = mode == MetalUpscalerMode.Disabled ? 1f : scale;
         }
-        if (mode == MetalUpscalerMode.Native) scale = 1f;
+        if (mode == MetalUpscalerMode.Disabled) scale = 1f;
         // 0.33 is below what MetalFX temporal can run reliably on this device (it crashed before the first frame);
         // the lowest shipped MetalFX tier is 0.40.
         if (mode is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) scale = Math.Clamp(scale, 0.4f, 1f);
@@ -790,6 +790,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             },
             systems: systems, walkability: walkability);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
+        host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
         host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed);
         host.Render.Grid = host.Sandbox.IsSandbox;
         host.Session.Camera.Place(new Vector2((float)(host.WorldOptions.X ?? host.Scene.Focus.X), (float)(host.WorldOptions.Z ?? host.Scene.Focus.Z)),
@@ -855,7 +856,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void CreateCharacters()
     {
         // Characters: WorldFrame.CreateGpu already made the `--crowd` harness; otherwise the live loop supplies the
-        // simulation's snapshot list. The player interface is not booted here, so the source has no editor previews/portraits.
+        // simulation's snapshot list. The player interface is not booted here, so the source has no editor previews.
         _characters = _worldGpu.Characters;
         if (_characters is not null) Console.WriteLine($"metal     crowd ready ({_characters.Assets} appearances)");
         else if (host.Scene.Database is { } characterDb && !host.GameOptions.NoPopulation)
@@ -863,7 +864,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _characters = new CharacterRenderer(_ctx, host.Install, characterDb, host.Assets, host.CharacterRigs)
             {
                 DrawDistance = GameplaySettings.NpcRange(host.Install),
-                Source = host.FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = host.WorldOptions.CharacterLod,
+                Source = host.FillWorldDrawList, SettleFirst = true, GeneratedLod = host.WorldOptions.CharacterLod,
                 SkinShading = host.WorldOptions.SkinShading, SkinRaces = host.Config.SkinRaces, EnhancedIcons = host.WorldOptions.MeitouIcons,
                 PoseClock = () => host.RealTime.Elapsed.TotalSeconds,
             };
@@ -1091,14 +1092,17 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         host.ItemIconFiles.ConnectItemIcons();
         hud.Frontend.ConfigureFrontend(host.Scene.Database,
-            () => SaveCatalog.Scan(QuickSave.DefaultRoot, host.Install.SaveDirectory,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
+            () => SaveCatalog.Scan(QuickSave.DefaultRoot, [host.Install.SaveDirectory, .. host.Install.UserSaveDirectories]),
             host.Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
         // The picks the interface asks the host for: the drawn character meshes, the buildings' floors and their closed shells.
         hud.Picking.MeshHit = (id, origin, direction) => _characters?.RayHit(host.DrawKey(id), origin, direction);
         hud.Floor = (() => host.Interiors.ViewedFloorValue, host.Interiors.StepFloor);
         hud.Picking.BuildingMoveHit = (origin, direction, distance) => _objects?.MoveHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
+        hud.Picking.CutGroundReach = (origin, direction, ground) => _objects?.CutGroundReach(origin, direction, ground);
         hud.Picking.SurfaceMoveHit = host.Interiors.SurfaceMoveHit;
+        hud.Picking.InteriorFaceHit = (origin, direction, distance) => _objects?.FaceHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
+        hud.Picking.HasRooms = key => _objects?.InteriorFor(key) is not null;
+        hud.Picking.SurfaceBelow = host.Interiors.SurfaceBelow;
         hud.Picking.ClosedBuildingHit = (origin, direction, distance) => _objects?.ClosedBuildingHit(origin, direction, distance);
         hud.StealthView.HiddenInWorld = host.Interiors.HiddenIndoors.Contains;
         hud.StealthView.DrawnHead = id => _characters?.BonePosition(host.DrawKey(id), "Bip01 Head");
@@ -1218,10 +1222,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         _settingsValues = CreateMetalSettings();
         _settings = new SettingsMenu(hud, _settingsValues, host.Session.Bindings, SaveSettings,
-            new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+            new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",
                 Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps"), host.Config)
         {
             UpscalerStatus = _upscaling.UpscalerStatusText,
+            DisplayRowShown = DisplayRowShown,
+            RenderResolutionLabels = RenderResolutionLabels,
             GameplayChanged = host.Saves.ApplyGameplay,
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
             AttackSlotsChanged = slots =>
@@ -1242,6 +1248,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on;
             },
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
+            TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TutorialsChanged = on => { if (host.Saves.Tutorials is { } t) t.Enabled = on; },
             ResetTutorials = () => host.Saves.Tutorials?.Reset(),
             OffscreenChanged = () =>
@@ -1271,7 +1278,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // config fields, and a command-line upscaler/scale stays explicit for this run.
         var metalDisplayKeys = new HashSet<string>(StringComparer.Ordinal)
         {
-            "VSync", "Full screen", SettingsMenu.MetalPresetSlider, SettingsMenu.MetalRenderScaleSlider, WorldFrame.UpscalerSliders[1],
+            "VSync", "Full screen", SettingsMenu.MetalUseUpscalingSlider, SettingsMenu.MetalPresetSlider, SettingsMenu.MetalRenderScaleSlider,
+            WorldFrame.UpscalerSliders[1], SettingsMenu.MetalRetinaResolutionSlider, SettingsMenu.MetalRenderResolutionSlider,
+            SettingsMenu.MetalUiResolutionSlider,
         };
         foreach (var slider in settingsValues.Sliders)
             if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
@@ -1332,13 +1341,21 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             Text: v => v >= 0.5f ? "on" : "off (uncapped)"));
         sliders.Add(new Slider("Full screen", 0, 1, () => _display.FullScreen ? 1 : 0, v => _display.SetFullScreen(v >= 0.5f),
             Text: v => v >= 0.5f ? "on" : "window"));
-        sliders.Add(new Slider(SettingsMenu.MetalPresetSlider, 0, 9, () => _upscaling.CurrentPresetIndex(), v =>
+        sliders.Add(new Slider(SettingsMenu.MetalUseUpscalingSlider, 0, 1, () => _upscaling.Enabled ? 1 : 0,
+            v => _upscaling.SetEnabled(v >= 0.5f), "0"));
+        sliders.Add(new Slider(SettingsMenu.MetalPresetSlider, 0, 8, () => _upscaling.CurrentPresetIndex(), v =>
         {
             int index = (int)MathF.Round(v);
-            if (index is >= 0 and <= 8) _upscaling.SetPreset(index);
+            if (index is >= 0 and <= 7) _upscaling.SetPreset(index);
         }, "0"));
         sliders.Add(new Slider(SettingsMenu.MetalRenderScaleSlider, 0.33f, 1, () => _ctx.RenderScale, _upscaling.SetRenderScale, "0.00",
             Text: RenderScaleText, Step: 0.01f));
+        sliders.Add(new Slider(SettingsMenu.MetalRetinaResolutionSlider, 0, 1, () => host.Config.MetalRetinaResolution ? 1 : 0,
+            v => _upscaling.SetRetinaResolution(v >= 0.5f), "0"));
+        sliders.Add(new Slider(SettingsMenu.MetalRenderResolutionSlider, 1, UserConfig.MetalRenderDivisorMax, () => host.Config.MetalRenderDivisor,
+            v => _upscaling.SetDivisor((int)MathF.Round(v)), "0"));
+        sliders.Add(new Slider(SettingsMenu.MetalUiResolutionSlider, 0, 1, () => host.Config.MetalUiAtScreenResolution ? 1 : 0,
+            v => _upscaling.SetUiAtScreen(v >= 0.5f), "0"));
         sliders.Add(new Slider(WorldFrame.FilteringSlider, 0, 4, () => MathF.Log2(_ctx.Samplers.MaxAnisotropy),
             v => _ctx.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
             Text: v => (1 << (int)MathF.Round(v)) + "x"));
@@ -1346,6 +1363,33 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             v => TextureQuality.Level = (int)MathF.Round(v), "0",
                 Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
     }
+
+    /// <summary>
+    /// Whether a Display row of the Metal upscaling is shown: with the switch on the preset and the render scale, off the interface's size and, in a
+    /// window the Retina resolution, in full screen the render resolution.
+    /// </summary>
+    bool DisplayRowShown(string key) => key switch
+    {
+        "metalUpscaler" or SettingsMenu.MetalRenderScaleSlider => _upscaling.Enabled,
+        "metalUiAtScreenResolution" => !_upscaling.Enabled,
+        "metalRetinaResolution" => !_upscaling.Enabled && !_display.FullScreen,
+        "metalRenderDivisor" => !_upscaling.Enabled && _display.FullScreen,
+        _ => true,
+    };
+
+    /// <summary>
+    /// The Render resolution row's choices with their sizes on the screen as it is now.
+    /// </summary>
+    string[] RenderResolutionLabels()
+    {
+        var pixels = _display.Window.FramebufferSize;
+        return MetalUpscaling.ResolutionLabels(pixels.X, pixels.Y);
+    }
+
+    /// <summary>
+    /// The window's pixels per point: 2 on a Retina display, 1 elsewhere.
+    /// </summary>
+    float BackingScale() => _window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1);
 
     /// <summary>
     /// The render scale slider's value with the scene's size it gives, from the window's pixels as they are now (full screen, a resize).
@@ -1571,8 +1615,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Config.VSync = _display.VSync;
         host.Config.FpsLimit = _fpsLimit;
         host.Config.FullScreen = _display.FullScreen;
-        host.Config.MetalUpscaler = _upscaling.Mode;
-        host.Config.MetalRenderScale = _ctx.RenderScale;
+        if (_upscaling.Enabled) host.Config.MetalRenderScale = _ctx.RenderScale;   // without the upscaler it renders by the division
         if (_hud is not null && (!host.GameOptions.LowEnd || _hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
             host.Config.UiMode = _hud.UiMode;   // --low-end's Faithful UI is for the run
         host.Config.Bindings = host.Session.Bindings.ToDictionary();
@@ -1581,8 +1624,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             foreach (var slider in _settingsValues.Sliders)
             {
                 // These have their own config fields; the rest use the same graphics keys as the Vulkan settings.
-                if (GameHost.RunOnlyKeys().Contains(slider.Label) || slider.Label is SettingsMenu.MetalPresetSlider ||
-                    slider.Label is SettingsMenu.MetalRenderScaleSlider || slider.Label == WorldFrame.UpscalerSliders[1]) continue;
+                if (GameHost.RunOnlyKeys().Contains(slider.Label) || slider.Label == WorldFrame.UpscalerSliders[1] ||
+                    slider.Label is SettingsMenu.MetalUseUpscalingSlider or SettingsMenu.MetalPresetSlider or SettingsMenu.MetalRenderScaleSlider
+                        or SettingsMenu.MetalRetinaResolutionSlider or SettingsMenu.MetalRenderResolutionSlider
+                        or SettingsMenu.MetalUiResolutionSlider) continue;
                 host.Config.Graphics[slider.Label] = slider.Get();
             }
             foreach (var toggle in _settingsValues.Toggles)
@@ -1606,6 +1651,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// A Shift key is held.
     /// </summary>
     bool _shiftDown;
+
+    /// <summary>
+    /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu repeats here, to scroll its lists: after 0.5 s,
+    /// then 30 times a second (the Windows defaults). No other key repeats.
+    /// </summary>
+    (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldMenuKey;
 
     /// <summary>
     /// F11: the frame's stats panel.
@@ -1669,9 +1720,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void HookKeyboard(Silk.NET.Input.IKeyboard keyboard)
     {
-        keyboard.KeyDown += (keyboard, key, _) => OnKeyDown(keyboard, key);
+        keyboard.KeyDown += (keyboard, key, _) =>
+        {
+            _heldMenuKey = key is SilkKey.Up or SilkKey.Down && host.DebugMenu.DebugMenuOpen
+                ? (keyboard, key, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
+            OnKeyDown(keyboard, key);
+        };
         keyboard.KeyUp += (_, key, _) =>
         {
+            if (_heldMenuKey?.Key == key) _heldMenuKey = null;
             if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight)
             {
                 _shiftDown = false;
@@ -1691,6 +1748,23 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
             else _hud?.UiText(value);
         };
+    }
+
+    /// <summary>
+    /// Repeats a held Up or Down in the debug menu (<see cref="_heldMenuKey"/>): when its time has come, again 30 times a second; a release or
+    /// the menu closing stops it.
+    /// </summary>
+    void RepeatMenuKey()
+    {
+        if (_heldMenuKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
+        if (!held.Keyboard.IsKeyPressed(held.Key) || !host.DebugMenu.DebugMenuOpen)
+        {
+            _heldMenuKey = null;
+            return;
+        }
+
+        _heldMenuKey = held with { Next = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 30 };
+        OnKeyDown(held.Keyboard, held.Key);
     }
 
     /// <summary>
@@ -1934,7 +2008,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _lastMouse = p;
             return;
         }
-        bool hold = _lastMouse is not null && host.OrbitHeld();
+        bool hold = _lastMouse is not null && host.MouseLook();
         _hud?.MouseMove(Pixels(hold ? _lastMouse!.Value : p));
         // The panels and their drags own the pointer: the camera must not also turn under them.
         if (_hud is { UiCapturesPointer: true })
@@ -1984,10 +2058,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// A window point in framebuffer pixels.
+    /// A window point in the interface's pixels (the framebuffer's, or the render size's while the interface is drawn with a stretched picture).
     /// </summary>
-    Vector2 Pixels(Vector2 p) => p * new Vector2(_window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1),
-        _window.FramebufferSize.Y / (float)Math.Max(_window.Size.Y, 1));
+    Vector2 Pixels(Vector2 p)
+    {
+        var pixels = _window.FramebufferSize;
+        var (width, height) = _upscaling.UiSize(pixels.X, pixels.Y);
+        return p * new Vector2(width / (float)Math.Max(_window.Size.X, 1), height / (float)Math.Max(_window.Size.Y, 1));
+    }
 
     /// <summary>
     /// Either key is held on any keyboard.
@@ -2141,7 +2219,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// <summary>
     /// Saves the panel's picture once it has warmed up (false: the last one is saved).
     /// </summary>
-    bool CaptureStill(GpuTexture backbuffer)
+    bool CaptureStill(GpuTexture picture)
     {
         // A panel's item icons are drawn after the frame that asks for them, and their textures stream in: let a UI still
         // wait for them (up to a bound), while an ordinary world still keeps its 40 frames. The simulation stays frozen.
@@ -2158,7 +2236,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                     Console.WriteLine($"metal     foliage: {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, "
                         + $"{_foliage.DrawCalls} calls");
                 }
-                Capture(_ctx, backbuffer, host.ScreenshotScenes.StillPicturePath(panelName));
+                Capture(_ctx, picture, host.ScreenshotScenes.StillPicturePath(panelName));
                 _stillPanel++;
                 _stillPanelFrames = 0;
                 if (_stillPanel >= _stillPanels.Length) return false;
@@ -2327,10 +2405,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     bool Frame()
     {
+        RepeatMenuKey();
         double now = _clock.Elapsed.TotalSeconds, frameStart = now, dt = now - _last;
         _last = now;
         TraceFrame(now, dt);
-        var size = _window.FramebufferSize;
+        // The interface's size: the screen's, or the render size when the Disabled upscaler draws it with the picture.
+        _upscaling.Update();
+        var screen = _window.FramebufferSize;
+        var (uiWidth, uiHeight) = _upscaling.UiSize(screen.X, screen.Y);
+        var size = new Vector2D<int>(uiWidth, uiHeight);
         var pointerMouse = _input.Mice.FirstOrDefault();
         var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(pointerMouse.Position);
         ShowLoadBar();
@@ -2361,10 +2444,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _bench.FrameBegun();
         SettleBeforeDraw();
         long recordStart = Stopwatch.GetTimestamp();
-        var backbuffer = _ctx.Backbuffer;
+        // The world draws into the picture: the backbuffer, or while it is stretched a target of the render size.
+        var picture = _ctx.Picture;
+        var worldSize = new Vector2D<int>(picture.Desc.Width, picture.Desc.Height);
         // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the
         // original's stage, the character and its platform drawn into the stage texture the interface shows over the world.
-        var editorBarFrame = _hud is { CharacterEditor.EditorOpen: true } ? host.CharacterEditor.Bar.BeginEditorBar(size.X, size.Y) : null;
+        var editorBarFrame = _hud is { CharacterEditor.EditorOpen: true } ? host.CharacterEditor.Bar.BeginEditorBar(worldSize.X, worldSize.Y) : null;
         PrepareDrawInputs(highlighting);
         // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
         // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
@@ -2374,17 +2459,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         var aspect = size.X / (float)Math.Max(size.Y, 1);
         var eye = host.Camera.Eye;
         var view = host.Camera.View;
-        DrawSharedFrame(size, now, titleLook, hour);
-        if (editorBarFrame is { } barFrame) host.CharacterEditor.Bar.EndEditorBar(barFrame, size.X, size.Y);
+        DrawSharedFrame(worldSize, now, titleLook, hour);
+        if (editorBarFrame is { } barFrame) host.CharacterEditor.Bar.EndEditorBar(barFrame, worldSize.X, worldSize.Y);
+        var shown = ShowPicture(picture);
         // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
         bool feedbackShot = host.FeedbackCapture.FeedbackShotRequested && _hud is not null && !_still;
         if (_hud is not null) _hud.FeedbackPanel.ShotWithoutMenus = feedbackShot;
-        if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, backbuffer, feedbackShot, pointerMouse, pointerAt);
+        if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, shown, feedbackShot, pointerMouse, pointerAt);
         PresentFrame(gpuCapture, recordStart);
         _bench.FramePresented(_lastRecord);
         TrimManagedHeap(now);
-        SavePictures(backbuffer, feedbackShot);
-        if (!CaptureStill(backbuffer)) return false;
+        SavePictures(shown, feedbackShot);
+        if (!CaptureStill(shown)) return false;
         UpdateTitle(dt);
         // The Vulkan loop's cap: only without vsync (vsync already paces the present); the same 30 fps cap in
         // both comparison runs isolates tearing from the much higher uncapped frame rate.
@@ -2652,7 +2738,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _characters.PortraitRequests.Clear();
             if (_hud is not null)
                 foreach (var (member, cell) in _hud.PortraitBar.SquadBarMembers().Select((member, cell) => (member, cell)))
-                    _characters.PortraitRequests.Add(new PortraitRequest(host.DrawKey(member.Id), cell, member.PortraitSerial));
+                    _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
         }
         var hoverKeys = new List<(long Key, Vector4 Colour)>();
         bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Visible != true;
@@ -2723,6 +2809,28 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
+    /// The finished world picture on its way to the screen, and the target the interface is drawn into. A picture that is the backbuffer goes as
+    /// it is. A stretched one (the Disabled upscaler below the screen's size in full screen) is copied to the backbuffer with the nearest pixel,
+    /// and the interface is drawn over it at the screen's size; or, with the interface at the render size, the interface is drawn into the
+    /// picture and the present stretches that.
+    /// </summary>
+    GpuTexture ShowPicture(GpuTexture picture)
+    {
+        if (!_ctx.PictureApart) return picture;
+
+        if (_upscaling.UiAtRenderSize)
+        {
+            _ctx.PresentPicture = true;
+            return picture;
+        }
+
+        var cmd = (MetalCommandList)_ctx.BeginNative("post stretch");
+        _composite.Stretch(cmd, picture, _ctx.Backbuffer);
+        _ctx.EndNative(cmd);
+        return _ctx.Backbuffer;
+    }
+
+    /// <summary>
     /// The title's poster: clear morning light, the sun right of the view and the moons full.
     /// </summary>
     void StageTitleLook(float hour)
@@ -2760,18 +2868,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The overlays over the finished picture, then the loading screen.
+    /// The overlays over the finished picture (<paramref name="target"/>, <paramref name="size"/> big), then the loading screen.
     /// </summary>
-    void DrawOverlays(DebugOverlay overlay, Vector2D<int> size, double dt, Vector3 eye, Matrix4x4 view, float aspect, GpuTexture backbuffer,
+    void DrawOverlays(DebugOverlay overlay, Vector2D<int> size, double dt, Vector3 eye, Matrix4x4 view, float aspect, GpuTexture target,
         bool feedbackShot, Silk.NET.Input.IMouse? pointerMouse, Vector2 pointerAt)
     {
-        overlay.Target = backbuffer;
+        overlay.Target = target;
         // One overlay pass: the HUD, the direct HUD lines and the stats/settings text would otherwise each load/store the whole backbuffer.
         DrawOverlayPass(overlay, size, dt, eye, view, aspect, feedbackShot, pointerMouse, pointerAt);
         // The scene changes use the same Kenshi loading screen as Vulkan; it covers the world until the sky arrival is done.
         if (host.Loading is not null && (host.ActiveSceneLoad is not null || host.Loading.Exiting))
         {
-            overlay.Target = backbuffer;
+            overlay.Target = target;
             host.Loading.Draw(size.X, size.Y);
         }
         else host.Loading?.ReleaseWhenGone();
@@ -2817,7 +2925,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_statsVisible && !feedbackShot)
         {
             _statsLines.Clear();
-            _statsLines.Add($"{_fpsText}  {dt * 1000:0.00} ms  {size.X}x{size.Y}");
+            _statsLines.Add($"{_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}");
             var session = host.Session;
             var camera = host.Camera;
             _statsLines.Add($"sim {session.Simulation.TotalTicks} ticks  {session.CurrentSnapshot.Characters.Count} characters  "
@@ -2834,21 +2942,31 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_frameStatsVisible && !feedbackShot)
         {
             overlay.TextScaled("Meitou - Metal", 16 * textScale, 16 * textScale, DebugOverlay.TextColour, textScale);
-            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {size.X}x{size.Y}", 16 * textScale,
+            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}", 16 * textScale,
                 (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
             wrote = true;
         }
         if (host.DebugMenu.DebugMenuOpen && _hud is not null && !feedbackShot)
         {
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10");
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale);
             wrote = true;
         }
+
         if (_settings?.Visible == true && !feedbackShot)
         {
             _settings.Draw(size.X, size.Y, overlayPass);
             wrote = true;
         }
         return wrote;
+    }
+
+    /// <summary>
+    /// The stats lines' sizes: what the scene renders at (an upscaler's input, or the stretched picture's) and the screen's.
+    /// </summary>
+    string ResolutionText()
+    {
+        var screen = _window.FramebufferSize;
+        return $"render {_ctx.SceneWidth}x{_ctx.SceneHeight}  screen {screen.X}x{screen.Y}";
     }
 
     /// <summary>

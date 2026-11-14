@@ -213,6 +213,10 @@ sealed partial class GameHost(
     /// </summary>
     internal AgentPlay AgentPlay = null!;
     /// <summary>
+    /// The agent control channel's town commands.
+    /// </summary>
+    internal AgentTowns AgentTowns = null!;
+    /// <summary>
     /// The agent control channel's world commands.
     /// </summary>
     internal AgentWorld AgentWorld = null!;
@@ -267,6 +271,7 @@ sealed partial class GameHost(
         DevConsoleHost = new(this);
         AgentChannel = new(this);
         AgentPlay = new(this);
+        AgentTowns = new(this);
         AgentWorld = new(this);
         PlayBench = new(this);
         ScreenshotScenes = new(this);
@@ -627,6 +632,7 @@ sealed partial class GameHost(
             clock: clock, simulation: settings, systems: systems, walkability: walkability);
 
         Session.World.BenchFacingFix = Config.FixBenchFacing;
+        Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         if (Gpu.Characters is { } nearChars)
             Session.World.NearRadius = nearChars.NearReach;   // every drawn character steps every tick (docs/simulation.md "Far cadence")
@@ -819,6 +825,8 @@ sealed partial class GameHost(
         Player.FeedbackButtonInPlay = Config.FeedbackButton;
         Player.Frontend.FixLoadButton = Config.FixLoadButton;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings;
+        Player.InventoryWindows.RotateItems = Config.RotateItems;
+        Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags;
 
         // The region (BIOME_GROUP) under a point, for the biome banner.
         Player.BiomeBanner.RegionAt = (x, z) => Gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
@@ -839,7 +847,11 @@ sealed partial class GameHost(
     {
         Player.Picking.MeshHit = (id, origin, direction) => Gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         Player.Picking.BuildingMoveHit = (origin, direction, distance) => Gpu.Objects?.MoveHit(origin, direction, Interiors.ViewedFloorValue, distance);
+        Player.Picking.CutGroundReach = (origin, direction, ground) => Gpu.Objects?.CutGroundReach(origin, direction, ground);
         Player.Picking.SurfaceMoveHit = Interiors.SurfaceMoveHit;
+        Player.Picking.InteriorFaceHit = (origin, direction, distance) => Gpu.Objects?.FaceHit(origin, direction, Interiors.ViewedFloorValue, distance);
+        Player.Picking.HasRooms = key => Gpu.Objects?.InteriorFor(key) is not null;
+        Player.Picking.SurfaceBelow = Interiors.SurfaceBelow;
         Player.Picking.ClosedBuildingHit = (origin, direction, distance) => Gpu.Objects?.ClosedBuildingHit(origin, direction, distance);
         Player.Picking.ShownInteriorHit = (origin, direction, distance) => Gpu.Objects?.ShownInteriorHit(origin, direction, distance);
 
@@ -861,10 +873,9 @@ sealed partial class GameHost(
     {
         if (Sandbox.IsSandbox) Player.ReservedKeys.UnionWith([Key.Z, Key.X, Key.C, Key.Y, Key.P, Key.G]);
 
-        string localSaves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
         string credits = Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "";
         Player.Frontend.ConfigureFrontend(Scene.Database,
-            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, Install.SaveDirectory, localSaves), credits);
+            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, [Install.SaveDirectory, .. Install.UserSaveDirectories]), credits);
 
         // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges
         // (docs/formats/fcs-mod.md): logged, not a problem.
@@ -1137,6 +1148,9 @@ sealed partial class GameHost(
         selection.DowngradeOf = record => PopData is { } d ? Simulation.Construction.BuildingUpgrades.DowngradeOf(d.Db, record) : null;
         selection.BuildingData = BuildingDataOf;
         selection.PowerOutput = record => PopData?.Db.Find(record)?.GetInt("power output");
+        selection.Useable.MachineData = record => PopData is { } d && d.Db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r
+            ? Data.Gameplay.Construction.MachineData.From(d.Db, r)
+            : null;
     }
 
     /// <summary>

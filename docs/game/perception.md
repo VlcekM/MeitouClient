@@ -82,9 +82,13 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
-looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), no line-of-sight ray, f = 0.5,
+looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), f = 0.5,
 dt = the scan interval; a meter decays also when the target is out of range (the original's rule there is **Unknown**). Crime
-witnesses and the stealth knock-out read the same meters. A sneaking player
+witnesses and the stealth knock-out read the same meters. Line of sight (`AggroSystem.ClearSight`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
+looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
+furniture 19..22, unwalkable roofs 27; not doors 5 or passable parts 23..26), with foliage 6 and 14 added (`0x87fde44`) when the looker is inside a building. Meitou tests the terrain and
+the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty (the original erases the entry). **Unknown**: the ray's early
+"not seen" under 40 units when the looker's `+0x260` type is not 0xb, the offset it adds from the looker's movement, and the exception for a hit on the handle at target `+0x300`. The plain (non-sneaking) sight test still has no ray. A sneaking player
 character gets the arrows (`MarkerRenderer`, both passes like the movement marker, lit by the sun; no green) and the original's stealth icon left of its name in the tag
 colours: seen if any watcher detects, almost seen if any notices, else hidden, and the light-level icon from its `SightMap` light.
 The list (`CharacterCold.Watchers`, 4 s, a carried looker left out) is fed by the spot meter (`AggroSystem.Visit`, sight only, as in the original) and by the forced
@@ -220,7 +224,9 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
 - **Slot 125** (`CharacterAnimal::vfunc_125`, shared by all characters): never the same faction. Across platoons the looker's squad's
   TEMP_ENEMY tag (or, for a looker whose faction has +0x250, the target's tag on it) makes an enemy and TEMP_ALLY prevents one. A disguise
   (uniform faction at +0x108 while +0x100 > 0.6 and +0x110 <= 0) stands in for the target's faction. A slave target: not when its owner
-  is the looker's, and only when the looker is hostile to the owner's faction. A slave looker: never its owner's faction. A target of the
+  is the looker's, and only when the looker is hostile to the owner's faction; it then still takes the faction test below on its own faction,
+  so hostility to the slavers alone does not make their slaves enemies (#694: a raid on Slave Traders turned the squad on their Outlaw slaves,
+  default relation 0, which the report's save then held at -100, **Observed**). A slave looker: never its owner's faction. A target of the
   faction the looker's platoon object +0x80 names (**Unknown** role) is an enemy. Otherwise hostile(looker faction → target faction),
   relation <= -30, when `FUN_1408569a0` fails and the looker's +0xea flag is clear (and the target's is clear, or the looker's faction is
   not real or its default relation, relations `+0x60`, is strictly below -30; **Verified** `FUN_14079c950`). +0xea is "freed": set by a release

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Player;
 
@@ -133,6 +134,10 @@ public sealed class CharacterAnimation
     /// The factor the held clip's play speed is scaled by (the lock picker's skill speed); 1 for none.
     /// </summary>
     public float HeldRate = 1;
+    /// <summary>
+    /// <see cref="HeldRate"/> is the held clip's rate itself, whatever its record's play speed (a bed's clip). Derived, not hashed.
+    /// </summary>
+    public bool HeldFlat;
 
     #endregion
 
@@ -389,6 +394,38 @@ public sealed class AnimationSystem(
     #endregion
 
     #region Held clips
+
+    /// <summary>
+    /// The rate an operator plays its machine's clip at, times the record's <c>play speed</c>, at skill 0 of the machine's <c>stat used</c>, and so
+    /// a sitter's on a chair, which has no stat (Verified, Task_OperateMachine's update FUN_14035bc90; docs/animation.md "At a machine or on a
+    /// seat").
+    /// </summary>
+    public const float OperateRateUnskilled = 0.55f;
+
+    /// <summary>
+    /// The operating rate at skill 100, and the most it reaches (same source).
+    /// </summary>
+    const float OperateRateSkilled = 2, OperateRateMax = 1.5f;
+
+    /// <summary>
+    /// The rate of a bed's clip under a sleeper, whatever the record's <c>play speed</c> (Observed, the out-of-combat pick @ 140520500;
+    /// docs/animation.md "In a bed or a cage").
+    /// </summary>
+    const float BedRate = 0.1f;
+
+    /// <summary>
+    /// The rate of the clip of the machine or seat the character uses (<see cref="OperateRateUnskilled"/> and on): by its level in the machine's
+    /// stat, 0 for one without a stat (a chair); 1 for a gunner, whose clip is not the functionality's. A seated NPC's seat counts as one without a
+    /// stat (engine choice: the town seats have none).
+    /// </summary>
+    static float OperateRateOf(CharacterTask task, CharacterCold cold)
+    {
+        if (task == CharacterTask.Operate && cold.OperateFunctionality is null) return 1;
+
+        var stat = (StatsEnumerated)(task == CharacterTask.Operate ? cold.OperateStat : 0);
+        float skill = stat > 0 ? Production.ProductionSystem.Effective(cold, stat) : 0;
+        return MathF.Min(OperateRateUnskilled + (OperateRateSkilled - OperateRateUnskilled) * skill * 0.01f, OperateRateMax);
+    }
 
     /// <summary>
     /// The held clip of a task (-1: none). Building, delivering materials and prospecting play the medic clip (Verified, Task_Build,
@@ -982,10 +1019,11 @@ public sealed class AnimationSystem(
         var lower = lowerScratch ?? [];
         var upper = upperScratch ?? [];
         a.HeldIndex = -1;
+        a.HeldFlat = false;
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal)
-            return UpdateAnimal(a, cold, _animalPlans.Of(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
+            return UpdateAnimal(a, cold, _animalPlans.Of(animal), speed, dt, seed, key, tick, lower, fight, ragdoll, task);
 
         if (a.Rate == 0) a.Rate = cold.Appearance is { } look ? 2 - CharacterShape.MovementScaleOf(look) : 1;
 
@@ -1105,9 +1143,10 @@ public sealed class AnimationSystem(
             a.Idle = -1;
         }
 
-        // In deep water a race that swims plays its swimming clips (category 4), the ordinary ones where none fits.
+        // In deep water a race that swims plays its swimming clips (category 4), the ordinary ones where none fits. One with a leg down swims
+        // too: the category decides before the crawl, and the movement filter reads no posture (FUN_140520500, FUN_14051d660).
         else if (!pose.FullTechnique && technique < 0 && !pose.Carried && cold is { WaterState: 3, Race.Swims: true }
-            && Swim(a, stance, speed, lower))
+            && Swim(a, stance with { Prone = false }, speed, lower))
         {
         }
 
@@ -1132,7 +1171,8 @@ public sealed class AnimationSystem(
         if (inBed && HeldClip(CharacterTask.Sleep, cold, tick) is >= 0 and var lain)
         {
             wanted.Add((lain, 1));
-            if (cold.LeavingBed) (a.HeldIndex, a.HeldRate) = (lain, -1);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
+            (a.HeldIndex, a.HeldRate, a.HeldFlat) = (lain, BedRate, true);
+            if (cold.LeavingBed) (a.HeldRate, a.HeldFlat) = (-1, false);   // Task_GetOutOfBed plays the bed clip backwards (FUN_140348480)
         }
 
         // Out cold in a cage: its `animation KO` (the Cage's foetal; the out-of-combat pick @ 140520500, docs/animation.md "In a bed or a cage").
@@ -1188,7 +1228,11 @@ public sealed class AnimationSystem(
         else if (technique < 0 && HeldClip(task, cold, tick) is >= 0 and var held)
         {
             a.HeldIndex = held;
-            a.HeldRate = HeldRateOf(cold, held, tick);
+            a.HeldRate = HeldRateOf(task, cold, held, tick);
+
+            // In a bed (the only place the sleep task holds a clip): the bed's flat rate.
+            if (task == CharacterTask.Sleep && !cold.LeavingBed) (a.HeldRate, a.HeldFlat) = (BedRate, true);
+
             wanted.Add((held, 1));
             a.Idle = -1;
         }
@@ -1334,14 +1378,16 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The play speed factor of the held clip the character plays: -1 when it stands up from a crouch (the crouch clip backwards), the crouch goal's
-    /// direction on the crouch clip, the lock picker's rate while it picks, else 1.
+    /// direction on the crouch clip, the lock picker's rate while it picks, the operating rate at a machine or on a seat, else 1.
     /// </summary>
-    float HeldRateOf(CharacterCold cold, int held, long tick)
+    float HeldRateOf(CharacterTask task, CharacterCold cold, int held, long tick)
     {
         if (cold.StandingUp && held == SquatClip) return -1;
         if (held == SquatClip && CrouchGoal(cold) != 0) return CrouchGoal(cold);
+        if (cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1) return cold.PickWork.Rate;
 
-        return cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1 ? cold.PickWork.Rate : 1;
+        bool seated = task == CharacterTask.Rest && cold.Ai?.SitClip is not null;
+        return task == CharacterTask.Operate || seated ? OperateRateOf(task, cold) : 1;
     }
 
     /// <summary>
@@ -1626,6 +1672,7 @@ public sealed class AnimationSystem(
             }
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
+            else if (layer.Definition == a.HeldIndex && a.HeldFlat) layer.Time += dt * a.HeldRate;
             else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
 
             // a one-shot clip holds its last frame
@@ -1697,10 +1744,11 @@ public sealed class AnimationSystem(
     /// speed (unsynched: F x <c>play speed</c> x v clip seconds per second, F = 1 / its size: the humanoid F = (2 - H) / g with H = 1 and g the size,
     /// an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down,
     /// its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no
-    /// getting up (none exists: it fades back to standing). Root motion of an attack is scaled by the size.
+    /// getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body), its own clip of that name.
+    /// Root motion of an attack is scaled by the size.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
-        List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll)
+        List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll, CharacterTask task)
     {
         float size = cold.Medical?.ScaleK ?? 1;
         if (!(size > 0.01f)) size = 1;
@@ -1730,6 +1778,11 @@ public sealed class AnimationSystem(
             a.Idle = -1;
         }
         else if (technique >= 0) wanted.Add((technique, 1));
+        else if (!down && JobClip(cold, plan, task) is >= 0 and var job)
+        {
+            wanted.Add((job, 1));
+            a.Idle = -1;
+        }
         else
         {
             // Down without any lying clip (the crab, the robot spiders, gorillos: their skeletons have none) it stays in its idle rather than the
@@ -1748,6 +1801,13 @@ public sealed class AnimationSystem(
         }
         return Settle(a, wanted, 0, -1, 0, technique, fight, v, dt, plan.Lengths, size, seed, key, tick);
     }
+
+    /// <summary>
+    /// The animal's own clip for the job clip it stands in (<see cref="CharacterCold.ActionClip"/>, Task_EatPrisoner's <c>eat</c>): the library's
+    /// clip of that name is a humanoid ANIMATION, which an animal skeleton cannot play. -1: none.
+    /// </summary>
+    static int JobClip(CharacterCold cold, AnimalPlan plan, CharacterTask task) =>
+        task == CharacterTask.Idle && cold.ActionClip is { } act ? plan.Action(act) : -1;
 
     #endregion
 

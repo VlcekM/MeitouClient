@@ -179,6 +179,9 @@ internal static class NavTileBuilder
             return false;
         }
 
+        // A contour takes the corners its neighbours kept on the boundary they share, or the polygons leave a thin hole between them.
+        NavContourJoints.Add(contours);
+
         long t2 = Stopwatch.GetTimestamp();
         mesh = contours.conts.Count == 0 ? null : RcMeshs.BuildPolyMesh(ctx, contours, ZoneNavMesh.MaxVerticesPerPolygon);
         Interlocked.Add(ref ticks.Contours, t2 - t1);

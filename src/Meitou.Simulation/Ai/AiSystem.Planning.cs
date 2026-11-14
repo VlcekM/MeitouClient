@@ -156,6 +156,18 @@ public sealed partial class AiSystem
                 return true;
             }
 
+            // A follow goal aimed at the squad's mission (44 of a bodyguard contract) is its own plan too (engine choice): the row needs a target
+            // and has no finder, its target being the goal's own, the contract's mission target, which is a character and no place to plan a
+            // walk to. The following is the movement system's.
+            if (TaskBehaviours.Of(type) == AiBehaviour.Follow && goal.Task.Target == TaskTargetType.SquadMission)
+            {
+                if (!_world.Characters.IsAlive(_board.MissionTarget)) return false;
+
+                _mind.Plan.Clear();
+                _mind.Plan.Add(new PlanStep(type, default));
+                return true;
+            }
+
             if (TaskDataTable.Of(type) is not { } row)
             {
                 _mind.Plan.Clear();
@@ -301,7 +313,10 @@ public sealed partial class AiSystem
                 || (CharacterTask)Me.Task == CharacterTask.Rest && _mind.Behaviour == AiBehaviour.Sleep,
             StateType.IsWorking or StateType.IsWorkingPretend or StateType.UsingTargetTurret or StateType.UsingAnyTurret => Settled(target),
             // AI::iAmInsideTargetBuilding (FUN_14059a4b0) for a target that is not a building: inside its home building (no home: held true).
-            StateType.AmInsideTargetBuilding => _board.Home is not { } inHome || _world.Sight.BuildingOf(_slot) == inHome.Key,
+            // A player-built home has no indoor volume in the sight map: within the home radius counts (engine choice).
+            StateType.AmInsideTargetBuilding => _board.Home is not { } inHome
+                || (inHome.RuntimeKey is null ? _world.Sight.BuildingOf(_slot) == inHome.Key
+                    : Vector2.DistanceSquared(Flat(Me.Position), Flat(inHome.Position)) <= HomeRadius * HomeRadius),
             StateType.IsAtHome => _board.Home is not { } home || _mind.HomeUnreachable
                 || Vector2.DistanceSquared(Flat(Me.Position), Flat(home.Position)) <= HomeRadius * HomeRadius,
             // Without a town it is never at its home town; its destination town (patrolling in town) is wherever it is.
@@ -319,8 +334,9 @@ public sealed partial class AiSystem
                 || _world.Characters.TryResolveNext(_mind.Squad.Leader, out int lead)
                 && _world.Characters.Cold(lead) is { Medical.Crawling: true },
             // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
-            // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
-            StateType.IsFullyRested => _playerSide && cold.Medical is not { Incapacitated: true },
+            // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated". A
+            // player character of an autonomous squad is read as an NPC (engine choice: with that stand-in its sleep goals would never plan).
+            StateType.IsFullyRested => _playerSide && !_mind.Player && cold.Medical is not { Incapacitated: true },
             StateType.HasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
             // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States
             // 7 and 48 are not wired: no goal reaches those rows.

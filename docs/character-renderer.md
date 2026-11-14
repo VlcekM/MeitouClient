@@ -20,7 +20,9 @@ Each `PartMaterial` keeps its last record and is written again only in a new epo
 or unloaded; LOD bias, stand-in, sampler generation, skin settings) or after its own fields changed (blend, body build). The records live
 in `CharacterMaterialTable`, a persistent storage buffer (binding 7) with a slot per material: a record that came out different goes to a
 new slot (frames in flight still read the old one), uploaded in one copy; a slot comes back FramesInFlight + 1 frames after its material
-changed or went 600 updates undrawn. Texture needs
+changed or went 600 updates undrawn. An update lists the parts it draws (`CollectSlotParts`): those shown in the world and, for a
+character with a portrait request, the stowed weapon its portrait shows while the weapon is in the hands; a part drawn unlisted would read
+a stale record or slot -1. Texture needs
 are offered, and the textures marked used, only on the frame `CharacterTextureBudget` commits (every 500 ms, under the cache's 2 s idle limit).
 CharacterShaders set0 bindings: bones6, materials7 (persistent), morphs8, previous bones9; material20 texture
 slots. CharacterLayoutTests pins CPU/GLSL layouts. Push depthIndex is near-depth bindless index
@@ -153,13 +155,27 @@ for its body mesh, so the first of a body mesh is still built. Never the player'
 no shadow, motion or reflection pass sees it either; the simulation, the host's lists, sight, sounds and selection are untouched (picking reads the live list: a speck is not clickable).
 **Observed**: far giants of a mod-heavy install cost 0.6-1.2 ms a frame in a camera flight before this; **Unknown**: popping under DLSS at 1.5 px (not seen at the far zoom).
 
+### Bone anchors (Meitou engine choice)
+
+`CharacterInstance.Anchor` (`CharacterAnchor`: carrier key, bone name, offset and rotation in the bone's frame) places a character's node on another character's bone as that one is drawn in the same frame: node position = the bone's world position + (carrier rotation x bone model-space rotation) x offset x carrier size, node rotation = carrier rotation x bone rotation x the anchor's rotation. The anchored character keeps its own size, pose, gear and bounds. `PoseLive` poses every character first, then `PlaceAnchored` moves the anchored ones (world matrix, bounding sphere, motion vectors) and places their parts; a carrier whose pose is held by the thinning anchors on its held palette, and an anchored carrier is placed before what it carries (4 deep). While the carrier is not drawn in the world that update (out of reach, hidden, look not built) or lacks the bone, the instance's own `Position` / `Rotation` draw it; they always feed the gather's culling. Used by the shoulder carry ([carry-loot](game/carry-loot.md)); code mods set it through `CharacterCold.DrawAnchor` ([modding](modding.md#registration-surface), issue #602). **Verified** (throwaway check, male skeleton, 40 clips): the anchor's node equals the simulation's `CarryPose` placement within 0.01 units; not seen in game.
+
 ## Animals and portraits
 
 Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not human fallback.
 Portraits use the same content/shading with a dedicated camera/render target; avoid mutating
 world draw state. Asset/appearance failure must not corrupt another instance or portrait.
-Portrait cells redraw only when their character, appearance, size, camera serial or streamed
-texture images/swizzle change, or the look below does; animation and frame counts do not. The original is event-driven too, with no periodic redraw (**Verified**, decompile): `FUN_140787550` sets a 1 s countdown on the character (a new request restarts it), `FUN_140788a00` counts it down by the frame time and draws at most one portrait a frame (`FUN_140414b40`). Requests come from registering a portrait (`FUN_1404139b0`), the whole world's list on a load (`FUN_1405f5d10` -> `FUN_140412870`), an appearance rebuild (`FUN_140539020`), and attaching or removing an item of some kinds only (`FUN_14052e0f0`, `FUN_14052e290`, filter `FUN_14052dff0`), plus `FUN_14052bba0`, `FUN_140538360`, `FUN_1405334d0` (their meaning: **Unknown**). Meitou has neither the delay nor the one-a-frame limit.
+Portrait cells redraw only when their character, appearance, size, camera serial, swizzle or a *sharper* streamed
+texture image (another file, an image where there was none, more pixels) changes, or the look below does; animation and frame counts do not.
+The texture cache swaps a character texture for a smaller image of the same file while the characters are far from the camera and back when they
+are near (`WorldTextureCache` replacing/refining), so a travelling camera swapped the images of all 15-20 squad portraits together: they all redrew in one
+frame, 4-5 ms of GPU each (studio shadow, sky, depth, occlusion, the 1024 px portrait, resolve), a 50-90 ms frame every 0.4-1.5 s (**Observed**, play
+bench `settle,idle,pan,travel`, save 111, Mac mini M6, Medium tier, 1080p native, a Metal System Trace; the log of which `Due` condition fired named the
+swapped textures, 182 smaller and 131 bigger swaps in a run). A cell already showing the larger image is not stale (`CharacterRenderer.Sharper`), and
+refreshes caused by textures alone draw at most one a frame (`PortraitsPerFrame`, not under a loading screen); a new cell, another character,
+appearance or camera still draws at once. **Observed** (same run, before -> after): travel frames over 30 ms of GPU 23 -> 0, over 33 ms of frame time
+31 -> 8, p99 55.7 -> 29.9 ms, 66 -> 72 fps (one pair; the simulation's own spikes differ from run to run).
+**Unknown:** a normal map that goes from none to loaded 53 times in the run (the cache unloading and reloading it for the far squad) still redraws its
+cells, one a frame. The original is event-driven too, with no periodic redraw (**Verified**, decompile): `FUN_140787550` sets a 1 s countdown on the character (a new request restarts it), `FUN_140788a00` counts it down by the frame time and draws at most one portrait a frame (`FUN_140414b40`). Requests come from registering a portrait (`FUN_1404139b0`), the whole world's list on a load (`FUN_1405f5d10` -> `FUN_140412870`), an appearance rebuild (`FUN_140539020`), and attaching or removing an item of some kinds only (`FUN_14052e0f0`, `FUN_14052e290`, filter `FUN_14052dff0`), plus `FUN_14052bba0`, `FUN_140538360`, `FUN_1405334d0` (their meaning: **Unknown**). Meitou has neither the delay nor the one-a-frame limit.
 
 ### Meitou stage and portraits
 
@@ -171,7 +187,7 @@ coverage (anti-aliased edges on the transparent background), grades and dithers 
 picture. Atlas cells are 256 px apart; enhanced portraits fill them (the original's 128 px were stretched to the
 squad bar's 120-230 px from 1080 to 4K lines and looked soft), faithful ones keep 128 px in the corner. Portraits keep the
 fixed plain light: a still drawn under the live sky would depend on the hour it was drawn. Faithful
-keeps the original's direct 8-bit stage and 128 px plain portraits.
+keeps the original's direct 8-bit stage and 128 px plain portraits. Hide hats (Meitou, optional, `HiddenHatLooks`): a look is built again without its hat ARMOUR (`CharacterAppearance.WithoutHat`: hair, beard and the hat's `hide parts` show); On draws it in the world, Portraits only lists it hidden under draw key bit 53 and the portrait requests name that key (both loops).
 Studio (`previewsun`, Meitou, on by default; `CharacterRenderer.Studio`): enhanced previews are lit by a fixed sun instead of the key light, the same
 whatever the hour. Per view: the character's depth from the sun into a 2048 px map (an orthographic box round its sphere, the matrix relative to the
 sphere's centre), its depth from the camera, a horizon-based occlusion from that depth (8 directions of 6 steps out to an eighth of the sphere, a fixed
@@ -193,7 +209,11 @@ The map is drawn with the camera's levels of detail. Its lookup takes clip y -1 
 draws the terms instead (red the sun's share, green the sky's visibility, blue the screen's occlusion). **Observed** (sandbox, `editor` console command, overhead and camera
 suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: bounced light (the sky and the ground's bounce stand in).
 Atlas layout (Meitou): squad members take cells 0-29; the conversation window's speaker and player
-character take the last two (30, 31) while a conversation is open.
+character take the last two (30, 31) while a conversation is open. Cells 32-63 (rows 3 and 4 of the 16 x 4 atlas) show
+CHARACTER records for code mods (`UiNode.Portrait`, [native UI](native-ui.md#layout-input-and-lifetime)): `RecordPortraits` gives each record
+on the interface a cell, kept until another record needs it; `RecordPortraitLooks` rolls the record's look once on a worker (seed and camera
+serial from a hash of its string id, no faction) and lists it as a hidden instance at the eye under key bit 52, drawn as any portrait. A record
+cell asked for another record whose look is not posed yet is cleared, not left showing the last one. **Unknown**: drawn in the game (built only).
 Item icons (`CharacterRenderer.Icons.cs`) are the same: an item's mesh drawn through the item shader into a texture of its own, as a pseudo-instance that the world and shadow views skip;
 the camera, lighting and sizes are in [game/ui-screens.md](game/ui-screens.md) "Item icons".
 Harness `--crowd` exercises instance scaling; compare pose/upload/draw/shadow separately.

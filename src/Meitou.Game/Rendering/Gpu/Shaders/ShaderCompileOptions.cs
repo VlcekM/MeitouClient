@@ -14,6 +14,14 @@ public sealed record ShaderCompileOptions
     public bool DepthReversed { get; init; }
 
     /// <summary>
+    /// Compiles a fragment stage's <c>discard</c> as <c>demote</c> (GL_EXT_demote_to_helper_invocation): the fragment's writes are dropped and the
+    /// invocation runs on as a helper, so the derivatives and implicit-LOD lookups after it stay defined in its 2x2 quad. A plain <c>discard</c>
+    /// terminates the invocation and leaves them undefined (docs/renderer-native.md "Synchronization and shaders"). Set by the Vulkan backend
+    /// where the device has <c>shaderDemoteToHelperInvocation</c>, unset on Metal.
+    /// </summary>
+    public bool DemoteDiscard { get; init; }
+
+    /// <summary>
     /// Directory of the disk cache; null is <c>%LOCALAPPDATA%\Meitou\shader-cache</c>.
     /// </summary>
     public string? CacheDirectory { get; init; }

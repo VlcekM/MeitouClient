@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using Meitou.Data.Textures;
+using Meitou.Data.World;
 
 namespace Meitou.Game.Rendering.Foliage;
 
@@ -160,10 +161,18 @@ public sealed class FoliageCardMask
     // ---- the disk cache and the in-process memo ----
 
     /// <summary>
-    /// Where the masks are kept.
+    /// Where the masks are kept; set by a test, else <see cref="LoadCaches.Root"/>'s <c>cardtrim</c>.
     /// </summary>
-    public static string CacheRoot { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-        "cardtrim");
+    public static string CacheRoot
+    {
+        get => s_cacheRoot ?? LoadCaches.Folder("cardtrim");
+        set => s_cacheRoot = value;
+    }
+
+    /// <summary>
+    /// The folder <see cref="CacheRoot"/> was set to; null for the default.
+    /// </summary>
+    static string? s_cacheRoot;
 
     /// <summary>
     /// The cache file's magic, "MTRM".

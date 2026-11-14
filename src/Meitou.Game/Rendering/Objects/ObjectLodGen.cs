@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using Meitou.Data.Ogre;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 
@@ -60,10 +61,18 @@ public static class ObjectLodGen
     public static float NormalWeight { get; set; } = 0.004f;
 
     /// <summary>
-    /// The disk cache of the levels, <c>%LOCALAPPDATA%\Meitou\objlods</c> (<c>MEITOU_OBJECT_LOD_CACHE</c>).
+    /// The disk cache of the levels: <c>MEITOU_OBJECT_LOD_CACHE</c>, else <see cref="LoadCaches.Root"/>'s <c>objlods</c>.
     /// </summary>
-    public static string Root { get; set; } = Environment.GetEnvironmentVariable("MEITOU_OBJECT_LOD_CACHE")
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "objlods");
+    public static string Root
+    {
+        get => s_root ?? Environment.GetEnvironmentVariable("MEITOU_OBJECT_LOD_CACHE") ?? LoadCaches.Folder("objlods");
+        set => s_root = value;
+    }
+
+    /// <summary>
+    /// The folder <see cref="Root"/> was set to; null for the default.
+    /// </summary>
+    static string? s_root;
 
     /// <summary>
     /// Counters for the load-time report: meshes built, read from the cache, and the milliseconds the builds took (all threads summed).

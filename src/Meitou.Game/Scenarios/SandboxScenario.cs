@@ -31,6 +31,11 @@ sealed class SandboxScenario(GameHost host)
     const float PatrolHalf = 200;
 
     /// <summary>
+    /// The follow camera's offset (<see cref="UserConfig.FollowCameraOffset"/>).
+    /// </summary>
+    readonly Host.Cameras.FollowFocus _followFocus = new();
+
+    /// <summary>
     /// Whether this run is a <c>--sandbox</c>.
     /// </summary>
     internal bool IsSandbox => host.GameOptions.Sandbox > 0;
@@ -329,7 +334,8 @@ sealed class SandboxScenario(GameHost host)
     /// <summary>
     /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), the target at its hips (the game's position
     /// + <see cref="KenshiCamera.TrackHeight"/>); a gone character is let go. A carried character is tracked by its carrier until put down: the body
-    /// sways on the carrier's shoulder with every step, which shook the view.
+    /// sways on the carrier's shoulder with every step, which shook the view. With Meitou's Follow camera offset the target is moved up and sideways
+    /// (<see cref="Host.Cameras.FollowFocus"/>).
     /// </summary>
     internal void FollowCamera()
     {
@@ -343,7 +349,19 @@ sealed class SandboxScenario(GameHost host)
 
         var tracked = host.Tracked(followed);
         host.Session.Camera.MovePivot(new Vector2(tracked.Position.X, tracked.Position.Z));
-        host.Camera.Target = host.DrawnPosition(tracked) + new Vector3(0, KenshiCamera.TrackHeight, 0);
+        var target = host.DrawnPosition(tracked) + new Vector3(0, KenshiCamera.TrackHeight, 0);
+        host.Camera.Target = host.Config.FollowCameraOffset ? Offset(target, tracked.Id) : target;
+    }
+
+    /// <summary>
+    /// The follow camera's <paramref name="target"/> on <paramref name="tracked"/> moved by the Follow camera offset settings.
+    /// </summary>
+    Vector3 Offset(Vector3 target, CharacterId tracked)
+    {
+        var config = host.Config;
+        bool headLock = config.FollowCameraHeadLock;
+        var head = headLock ? host.Player.StealthView.DrawnHead?.Invoke(tracked) : null;
+        return _followFocus.Apply(target, host.Camera.Yaw, tracked, config.FollowCameraRaise, config.FollowCameraSide, headLock, head);
     }
 
     /// <summary>

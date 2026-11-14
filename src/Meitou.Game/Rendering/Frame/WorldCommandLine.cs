@@ -32,6 +32,7 @@ static class WorldCommandLine
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
           --no-load-cache          do not read or write the load caches (foliage layout, character LOD and terrain colour caches)
+          --cache-root <dir>       keep every derived-data cache (LODs, impostors, shaders, terrain, foliage, navmesh...) under <dir> instead of %LOCALAPPDATA%\Meitou
           --range-large <u>        foliage draw range of the large size class (the range switch, F6; default 50000; the medium and small ranges follow at 12000 : 3500 of it; Tab sliders)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)
           --object-distance <u>    draw placed objects at full detail up to this distance (the reach switch, F8: default 20000 in Meitou, 12000 in Faithful); Meitou draws huge placed objects (world radius 2000 and up: the giant wrecks, skeletons, towers) 7.5 times as far
@@ -63,7 +64,7 @@ static class WorldCommandLine
           --no-vsync               start with vsync off (uncapped; Tab slider)
           --grass-density <x>      grass blades x this (0.1-2, default 1; Tab slider)
           --camera-code <hex>      start at a camera code (Ctrl+C in the viewer copies one), the world loaded round it
-          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,footprints,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
+          --faithful <all|ao,dither,haze,aa,shadows,range,impostors,reach,water,particles,lod,gi,tonemap,shafts,heathaze,night,planetshine,stars,nightgrade,clouds,cloudshadows,cloudfog,interiorgi,charlod,skin,interiorlamps,icons,blood,bloodsurfaces,footprints,parallax,displace,weld,tracers,fog,gihybrid,trails,contactfoam,gtao,lampshadows,ssr,lampwarmth>   the game's look instead of Meitou's enhancements (default: all Meitou; --meitou <...> turns them back on; these ids also name the --ab switches)
           --show-keys              start with the key list overlay open (toggle with F10)
           --play-shots             start flying the saved camera keys (the F2 timeline) on a loop
           --log-spikes             print a line for every frame whose GPU time, or render-thread time over 20 ms, is over 1.5 x its median: stage times (GPU, render thread) and what it uploaded or rebuilt
@@ -248,6 +249,7 @@ static class WorldCommandLine
             case "--no-objects": o.NoObjects = true; break;
             case "--no-foliage": o.NoFoliage = true; break;
             case "--no-load-cache": LoadCaches.Disabled = true; break;
+            case "--cache-root": LoadCaches.Root = r.Next(); break;
             case "--range-large": o.LargeRange = r.Float(); break;
             case "--impostor-budget": o.ImpostorBudgetMb = r.Float(); break;
             case "--object-distance": o.ObjectDistance = r.Float(); break;

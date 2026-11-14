@@ -237,7 +237,7 @@ public static class TaskBehaviours
         var a = new AiBehaviour[TypeCount];
         foreach (var (type, e) in Table) a[(int)type] = e.Behaviour;
 
-        // The captive goals: acted out by their jobs, so no display text of their own here.
+        // The captive goals: acted out by their jobs; their display texts are CaptiveTexts.
         foreach (var type in Kidnap.CaptiveSystem.GoalTypes) a[(int)type] = AiBehaviour.Captive;
         return a;
     }
@@ -248,10 +248,43 @@ public static class TaskBehaviours
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>
-    /// The game's display text of a type the engine acts out; the enum name for the rest.
+    /// The game's display text (TaskData) of the captive goals, which their jobs act out (<see cref="Kidnap.CaptiveSystem.GoalTypes"/>).
     /// </summary>
-    public static string Text(TaskType type) =>
-        Table.TryGetValue(type, out var e) ? e.Text : type == TaskType.StumbleTaskForced ? "Stumbling" : type.ToString();
+    static readonly Dictionary<TaskType, string> CaptiveTexts = new()
+    {
+        [TaskType.KillARandomCageOccupant] = "Kill random prisoner",
+        [TaskType.EatARandomCageOccupant] = "Eat random prisoner",
+        [TaskType.EatARandomCageOccupantMeasuredRate] = "Dinner time",
+        [TaskType.EatARandomDeadBody] = "Eat corpse",
+        [TaskType.EatARandomKoBody] = "Eat body",
+        [TaskType.FindCropsToEat] = "Find crops",
+        [TaskType.FogmanWorshipVictim] = "Worshiping",
+        [TaskType.AnimalFetchALimb] = "Fetch",
+        [TaskType.PlayBecauseIHaveALimbInMouth] = "Playing 'Limbs'",
+        [TaskType.ChaseAllyDogsWithMouthLimbs] = "Limb Jealousy",
+        [TaskType.NewSlaveProcessing] = "Watching for new slaves",
+        [TaskType.SlaveWatching] = "Watching slaves",
+        [TaskType.LiberateAllThePrisoners] = "Liberating prisoners",
+        [TaskType.CaptureNewSlaves] = "Capturing slave",
+        [TaskType.CarryWoundedSlaves] = "Carrying slaves",
+        [TaskType.WorkTheSlaves] = "Working the slaves",
+        [TaskType.GatherSlavesFromCages] = "Gathering slaves",
+        [TaskType.GatherSlavesFromCagesIfFemaleOrBeast] = "Gathering unholy slaves",
+        [TaskType.GatherSlavesFromCagesIfItsAnExportTown] = "Gathering slaves for shipping",
+        [TaskType.GoToSomewhereForDeliveringSlaves] = "Delivering slaves",
+        [TaskType.SlaveGetInMyMastersCage] = "Getting in my cage",
+    };
+
+    /// <summary>
+    /// The game's display text of a type the engine acts out or a captive goal; the enum name for the rest.
+    /// </summary>
+    public static string Text(TaskType type)
+    {
+        if (Table.TryGetValue(type, out var e)) return e.Text;
+        if (CaptiveTexts.TryGetValue(type, out string? captive)) return captive;
+
+        return type == TaskType.StumbleTaskForced ? "Stumbling" : type.ToString();
+    }
 
     /// <summary>
     /// Every type the engine acts out.

@@ -160,6 +160,20 @@ sealed class FeatureGrouping(SettingsMenu menu)
     }
 
     /// <summary>
+    /// Opens or closes every feature among <paramref name="rows"/> that has settings to fold (Expand all, Collapse all) and drops the keyboard focus.
+    /// </summary>
+    internal void FoldAll(IEnumerable<SettingsMenu.Entry> rows, bool open)
+    {
+        foreach (var id in rows.Where(r => r.Open is not null).Select(r => r.GroupId).OfType<string>())
+        {
+            if (open) OpenGroups.Add(id);
+            else OpenGroups.Remove(id);
+        }
+
+        menu.Focus = -1;
+    }
+
+    /// <summary>
     /// Opens groups <paramref name="ids"/> (the settings showcase).
     /// </summary>
     internal void ShowcaseOpen(params string[] ids)

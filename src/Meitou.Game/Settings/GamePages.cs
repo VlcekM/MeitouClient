@@ -1,6 +1,7 @@
 using Meitou.Data.Ui;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
+using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Title;
@@ -83,6 +84,11 @@ sealed class GamePages(SettingsMenu menu)
     /// The dropped items kept slider, made on first use.
     /// </summary>
     Slider? _groundItemsSlider;
+
+    /// <summary>
+    /// The follow camera offset's height and side sliders, made on first use.
+    /// </summary>
+    Slider? _followRaiseSlider, _followSideSlider;
 
     #endregion
 
@@ -391,6 +397,10 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Camera smoothing",
             "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once.",
             Toggle: new("Camera smoothing", () => menu.Config.CameraSmoothing, SetCameraSmoothing)));
+        result.Add(new("Loot into backpack",
+            "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag "
+            + "window is open).",
+            Toggle: new("Loot into backpack", () => menu.Config.TakeIntoBackpack, SetTakeIntoBackpack, OnOff: true)));
         foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
     }
@@ -402,6 +412,15 @@ sealed class GamePages(SettingsMenu menu)
     {
         menu.Config.ShiftPanBoost = on;
         menu.CameraChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The Loot into backpack switch, into the config and the running world.
+    /// </summary>
+    void SetTakeIntoBackpack(bool on)
+    {
+        menu.Config.TakeIntoBackpack = on;
+        menu.TakeIntoBackpackChanged?.Invoke(on);
     }
 
     /// <summary>
@@ -538,9 +557,14 @@ sealed class GamePages(SettingsMenu menu)
         if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Interior lamps") is { } lamps)
             result.Add(new("Interior lamps", SettingHints.ToggleHint(lamps.Label), Toggle: lamps));
 
+        // The lamps' colour is kept here with it, out of the look presets: a preference, not a part of a look.
+        if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Lamp warmth") is { } warmth)
+            result.Add(new("Lamp warmth", SettingHints.ToggleHint(warmth.Label), Toggle: warmth));
+
         AddFightRows(result);
         AddOffscreenRows(result);
         AddWorldRows(result);
+        AddOptionalRows(result);
         AddSceneRows(result);
         result.Insert(0, menu.PageSidesEntry(result, "All gameplay changes", "Every change on this page as the game plays, or every Meitou change.",
             "gameplay change"));
@@ -631,6 +655,11 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
             Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
+        result.Add(new("Open bags at once",
+            "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading "
+            + "until OPEN BAG is pressed for it.",
+            Toggle: new("Open bags at once", () => menu.Config.AutoOpenBags,
+                v => menu.Player.InventoryWindows.AutoOpenBags = menu.Config.AutoOpenBags = v, Remaster: true, OnOff: true)));
         result.Add(new("Animals pick up items",
             "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). "
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
@@ -655,6 +684,95 @@ sealed class GamePages(SettingsMenu menu)
             "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. "
             + "Items that were on the ground in the save always stay.",
             Slider: GroundItemsSlider));
+    }
+
+    /// <summary>
+    /// The follow camera offset's height slider, in half steps, marked at the game's 0.
+    /// </summary>
+    Slider FollowRaiseSlider => _followRaiseSlider ??= new("Follow camera height", FollowFocus.MinRaise, FollowFocus.MaxRaise,
+        () => menu.Config.FollowCameraRaise, v => menu.Config.FollowCameraRaise = HalfStep(v, FollowFocus.MinRaise, FollowFocus.MaxRaise), "0.0",
+        Faithful: 0, Step: 0.5f);
+
+    /// <summary>
+    /// The follow camera offset's side slider, in half steps, marked at the game's 0.
+    /// </summary>
+    Slider FollowSideSlider => _followSideSlider ??= new("Follow camera side", -FollowFocus.MaxSide, FollowFocus.MaxSide,
+        () => menu.Config.FollowCameraSide, v => menu.Config.FollowCameraSide = HalfStep(v, -FollowFocus.MaxSide, FollowFocus.MaxSide), "0.0",
+        Faithful: 0, Step: 0.5f);
+
+    /// <summary>
+    /// <paramref name="v"/> rounded to a half and kept within <paramref name="min"/> and <paramref name="max"/>.
+    /// </summary>
+    static float HalfStep(float v, float min, float max) => Math.Clamp(MathF.Round(v * 2) / 2, min, max);
+
+    /// <summary>
+    /// The optional rows, off by default and in neither the all Faithful nor the all Meitou switch: the follow camera offset and item rotation
+    /// (after ErasmianFolly's Camera Tweaks and GetRotatedIdiot mods) and the hidden hats.
+    /// </summary>
+    void AddOptionalRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Follow camera offset",
+            "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view "
+            + "from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks.",
+            Toggle: new("Follow camera offset", () => menu.Config.FollowCameraOffset, v => menu.Config.FollowCameraOffset = v)));
+        if (menu.Config.FollowCameraOffset) AddFollowCameraRows(result);
+
+        result.Add(new("Item rotation",
+            "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the "
+            + "item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items "
+            + "cannot be turned. From ErasmianFolly's GetRotatedIdiot.",
+            Toggle: new("Item rotation", () => menu.Config.RotateItems, SetRotateItems)));
+        AddHideHatsRows(result);
+    }
+
+    /// <summary>
+    /// The Hide hats choice and, while it is on, its row for the other factions' characters.
+    /// </summary>
+    void AddHideHatsRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Hide hats",
+            "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. "
+            + "Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game.",
+            Choice: new(() => ["Off", "Portraits only", "On"], () => (int)menu.Config.HideHats, i => menu.Config.HideHats = (HideHats)i)));
+        if (menu.Config.HideHats != HideHats.On) return;
+
+        result.Add(new("Hide other factions' hats",
+            "The hats of every other character are left out the same way, not only your own characters'.",
+            Toggle: new("Hide other factions' hats", () => menu.Config.HideHatsOfOthers, v => menu.Config.HideHatsOfOthers = v, OnOff: true),
+            Depth: 1));
+    }
+
+    /// <summary>
+    /// The follow camera offset's own rows: the head lock, the height and the side.
+    /// </summary>
+    void AddFollowCameraRows(List<SettingsMenu.Entry> result)
+    {
+        result.Add(new("Follow camera head lock",
+            "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used.",
+            Toggle: new("Follow camera head lock", () => menu.Config.FollowCameraHeadLock, v => menu.Config.FollowCameraHeadLock = v, OnOff: true),
+            Depth: 1));
+        result.Add(new(FollowRaiseSlider.Label, "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head.",
+            Slider: FollowRaiseSlider, Depth: 1));
+        result.Add(new(FollowSideSlider.Label,
+            "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 "
+            + "right of it. It shows less the farther the camera is.",
+            Slider: FollowSideSlider, Depth: 1));
+    }
+
+    /// <summary>
+    /// The Item rotation switch, into the config and the inventory windows.
+    /// </summary>
+    void SetRotateItems(bool on) => menu.Player.InventoryWindows.RotateItems = menu.Config.RotateItems = on;
+
+    /// <summary>
+    /// Restore defaults for the optional rows: all off, the follow camera's values as shipped.
+    /// </summary>
+    internal void ResetOptional()
+    {
+        SetRotateItems(false);
+        (menu.Config.FollowCameraOffset, menu.Config.FollowCameraHeadLock) = (false, false);
+        (menu.Config.FollowCameraRaise, menu.Config.FollowCameraSide) = (FollowFocus.DefaultRaise, 0);
+        (menu.Config.HideHats, menu.Config.HideHatsOfOthers) = (HideHats.Off, false);
     }
 
     /// <summary>

@@ -282,6 +282,30 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
         _version++;
     }
 
+    /// <summary>
+    /// Drops the residency of every entry that holds one of <paramref name="images"/> (native texture pointers about to be released); the entry's
+    /// resource id stays, as the frames already recorded may read it until its index is freed. An owner that releases a texture without freeing
+    /// its index first (or frees it only when it next draws, as the motion meshes' depth is after a resize) would otherwise leave a pointer to
+    /// freed memory in the list every encoder is told to keep resident.
+    /// </summary>
+    public void Forget(HashSet<nint> images)
+    {
+        bool changed = false;
+        for (int k = 0; k < _live.Length; k++)
+        {
+            var live = _live[k];
+            for (int i = 0; i < live.Length; i++)
+            {
+                if (live[i] is not { NativePtr: not 0 } image || !images.Contains(image.NativePtr)) continue;
+
+                live[i] = null;
+                changed = true;
+            }
+        }
+
+        if (changed) _version++;
+    }
+
     /// <inheritdoc/>
     public void Free(BindlessKind kind, uint index) => _pendingFree.Add((_ctx.FrameNumber, kind, index));
 

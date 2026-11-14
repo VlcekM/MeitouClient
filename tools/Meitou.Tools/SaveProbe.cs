@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -9,6 +10,8 @@ using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Navigation;
+using Meitou.Simulation.Perception;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
@@ -65,19 +68,29 @@ static class SaveProbe
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("assault", >= 1): Assault(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
+            case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
+            case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
+            case ("force", >= 2):
+                Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
+                return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
+            case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
+            case ("recruit", >= 1): Recruit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
-            case ("talk", >= 1): Talk(probe, a[0]); return true;
+            case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : DialogueEvents.PlayerTalkToMe); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
+            case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("places", >= 1) when probe.Nav is not null: Places(probe, float.Parse(a[0]), a.Count > 1 ? float.Parse(a[1]) : 4); return true;
             case ("layout", >= 1) when probe.Nav is not null: Layout(probe, a[0]); return true;
             default: return false;
         }
@@ -267,7 +280,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// A character's pending crime, bounties, the flags the police read and how many characters its own squad holds TEMP_ENEMY on.
+    /// A character's pending crime, bounties with the booking faction's relation to its faction, the flags the police read and how many characters
+    /// its own squad holds TEMP_ENEMY on.
     /// </summary>
     static string CrimeLine(ProbeWorld probe, SquadMemory? memory, int slot)
     {
@@ -276,9 +290,11 @@ static class SaveProbe
         string pending = c.Pending is { } p
             ? $"{p.Code} vs {probe.Faction(p.VictimFaction)} victim={p.Victim.Slot} timer={p.Timer:F1} booked={p.Booked} witnessed={p.Witnessed}"
             : "-";
-        var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}") ?? [];
+        var relations = probe.Data.Relations;
+        var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}"
+            + (relations.Contains(e.Faction) && relations.Contains(c.Faction) ? $" relation={relations.Get(e.Faction, c.Faction):F0}" : "")) ?? [];
         return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
-            + $"ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies}";
+            + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies}";
     }
 
     /// <summary>
@@ -335,6 +351,61 @@ static class SaveProbe
             probe.PrintMessages();
             probe.Tick(40);
         }
+    }
+
+    /// <summary>
+    /// The player's squad attacks (Attack Unprovoked) the nearest character named like <paramref name="victim"/> that is up; then every
+    /// <paramref name="interval"/> ticks the characters within 400 of the leader that are up and not the player's: indoors or out, task, goal, fight
+    /// target and how their senses hold the leader (#665: who joins a fight at the gate from inside a shop).
+    /// </summary>
+    static void Assault(ProbeWorld probe, string victim, int rounds, int interval)
+    {
+        var t = probe.Characters;
+        var mine = probe.World.Squads.Find(probe.World.Player.Squad)!;
+        var up = probe.Named(victim)
+            .Where(i => t.Cold(i) is { Medical.Incapacitated: false })
+            .OrderBy(i => Vector3.Distance(t.Next[i].Position, probe.LeaderPosition))
+            .ToList();
+        if (up.Count == 0)
+        {
+            Console.WriteLine($"nobody named like '{victim}' is up");
+            return;
+        }
+
+        Console.WriteLine($"attacking {probe.Who(up[0])}");
+        probe.World.Commands.Enqueue(new AttackOrder([.. mine.Members], t.IdOf(up[0])) { Picked = true, Unprovoked = true, Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(interval);
+            Console.WriteLine($"tick {probe.World.Tick}");
+            for (int i = 0; i < t.HighWater; i++)
+            {
+                if (!t.Next[i].Alive || t.Cold(i) is not { Medical.Incapacitated: false } c || c.SquadId == mine.Id
+                        || Vector3.Distance(t.Next[i].Position, probe.LeaderPosition) > 400)
+                    continue;
+
+                Console.WriteLine($"  {i} '{c.Name}' {probe.Faction(c.Faction)} sq={c.SquadId} {(probe.World.Sight.PlaceOf(i) >= 0 ? "indoors" : "outdoors")} "
+                    + $"task={(CharacterTask)t.Next[i].Task} goal={c.Ai?.Goal?.Task.Type} target={Target(probe, i)} senses={SensesOfLeader(probe, i)}");
+            }
+
+            probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
+    /// How character <paramref name="i"/>'s senses hold the player's leader: seen or heard at the last look and its tags, "-" for no entry.
+    /// </summary>
+    static string SensesOfLeader(ProbeWorld probe, int i)
+    {
+        var t = probe.Characters;
+        var leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader;
+        if (Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, i) is not { } senses) return "-";
+
+        foreach (var e in senses.Entries)
+            if (e.Target == leader.Slot && e.Generation == leader.Generation) return $"{(e.Seen ? "seen" : e.Heard ? "heard" : "stale")}/{e.Tags}";
+
+        return "-";
     }
 
     /// <summary>
@@ -438,6 +509,35 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The leader sneaks and is ordered to knock out the character in <paramref name="slot"/>; every 20 ticks, <paramref name="rounds"/> times, the
+    /// chance shown, whether the target has spotted the leader, the leader's task and the swings rolled.
+    /// </summary>
+    static void Knockout(ProbeWorld probe, int slot, int rounds)
+    {
+        var t = probe.Characters;
+        var leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader;
+        var aggro = probe.World.SystemOf<Meitou.Simulation.Aggro.AggroSystem>();
+        var carry = probe.World.SystemOf<Meitou.Simulation.Carrying.CarrySystem>()!;
+        t.Cold(leader.Slot)!.Orders |= Meitou.Simulation.Player.CharacterOrders.Sneak;
+        Console.WriteLine($"target {probe.Who(slot)} knockable={Meitou.Simulation.Carrying.CarrySystem.CanBeKnockedOut(t.Cold(slot)!)}");
+        probe.World.Commands.Enqueue(new Meitou.Simulation.Carrying.StealthKoOrder([leader], t.IdOf(slot)) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(20);
+            bool spotted = aggro?.Spotted(slot, leader) == true;
+            float chance = Meitou.Simulation.Carrying.CarrySystem.StealthKoChance(t.Cold(leader.Slot)!, t.Cold(slot)!, spotted);
+            float gap = Vector3.Distance(t.Next[leader.Slot].Position, t.Next[slot].Position);
+            var task = (CharacterTask)t.Next[leader.Slot].Task;
+            var targetTask = (CharacterTask)t.Next[slot].Task;
+            Console.WriteLine($"tick {probe.World.Tick} leader task={task} gap={gap:F0} spotted={spotted} unseen={aggro?.Unseen(t, leader)} "
+                + $"chance={chance:F0} target task={targetTask} senses={SensesOfLeader(probe, slot)}");
+            foreach (var k in carry.TakeKnockouts()) Console.WriteLine($"  swing chance={k.Chance:F0} hit={k.Success}");
+            probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
     /// Every character within <paramref name="radius"/> of the leader with its slave state, owner faction, master squad and its squad's town,
     /// platoon and home.
     /// </summary>
@@ -450,6 +550,67 @@ static class SaveProbe
             Console.WriteLine($"{probe.Who(i)} slave={c.SlaveState} owner={probe.Faction(c.SlaveOwner)} master={c.SlaveMaster} in={c.InSomething} "
                 + $"town={squad?.Town} platoon={squad?.PlatoonId} home={squad?.HomeBuilding?.Position} template={squad?.TemplateId}");
         }
+    }
+
+    /// <summary>
+    /// Recruits the first character named like <paramref name="name"/> into the player's squad, then unloads the save's platoon it was made from
+    /// and lists that platoon's members: one not gone would be made again when the platoon comes back (#701).
+    /// </summary>
+    static void Recruit(ProbeWorld probe, string name)
+    {
+        var world = probe.World;
+        if (probe.Named(name) is not [int slot, ..]) { Console.WriteLine($"nobody named {name}"); return; }
+        var cold = probe.Characters.Cold(slot)!;
+        var saved = cold.Save is { } link ? world.Saved?.Platoons.FirstOrDefault(sp => sp.Name == link.PlatoonName) : null;
+        Console.WriteLine($"recruiting {probe.Who(slot)} from {saved?.Name ?? "no saved platoon"}");
+        world.Systems.OfType<DialogueSystem>().First().JoinPlayer(world, slot, cold);
+        if (saved is null) return;
+
+        SavedCharacters.Store(world, saved, saved.Anchor);
+        foreach (var m in saved.Members)
+            Console.WriteLine($"  member {m.Slot} {probe.Db.Find(m.Source.RecordId)?.Name ?? m.Source.RecordId} gone={m.Gone} dead={m.Dead}");
+    }
+
+    /// <summary>
+    /// The unique-character table (entries whose record name contains <paramref name="name"/>, all when null): claimed, state, player flag and
+    /// handle, then every character in the world made from that record with its squad, platoon and template, so a duplicated unique shows twice.
+    /// </summary>
+    static void Uniques(ProbeWorld probe, string? name)
+    {
+        var holders = UniqueHolders(probe);
+        foreach (var (id, e) in probe.World.Uniques.All)
+        {
+            string recordName = probe.Db.Find(id)?.Name ?? id;
+            if (name is not null && !recordName.Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
+            Console.WriteLine($"{recordName} ({id}) claimed={e.Claimed} state={e.State} player={e.Player} handle={e.Handle} saved={e.SavedHandle}");
+            foreach (int i in holders.GetValueOrDefault(id) ?? []) Console.WriteLine("  " + UniqueHolder(probe, i));
+        }
+    }
+
+    /// <summary>
+    /// The slots of the characters in the world by CHARACTER record id.
+    /// </summary>
+    static Dictionary<string, List<int>> UniqueHolders(ProbeWorld probe)
+    {
+        var holders = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        for (int i = 0; i < probe.Characters.HighWater; i++)
+        {
+            if (!probe.Characters.Next[i].Alive || probe.Characters.Cold(i) is not { } c) continue;
+            if (!holders.TryGetValue(c.RecordId, out var list)) holders[c.RecordId] = list = [];
+            list.Add(i);
+        }
+
+        return holders;
+    }
+
+    /// <summary>
+    /// One line for a character holding a unique record: who, its squad's platoon and template, and the character id.
+    /// </summary>
+    static string UniqueHolder(ProbeWorld probe, int i)
+    {
+        var c = probe.Characters.Cold(i)!;
+        var squad = probe.World.Squads.Find(c.SquadId);
+        return $"{probe.Who(i)} id={probe.Characters.IdOf(i)} platoon={squad?.PlatoonId} template={squad?.TemplateId} town={squad?.Town}";
     }
 
     /// <summary>
@@ -468,7 +629,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their occupants.
+    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their occupants; a
+    /// container also with its lock, grid and items.
     /// </summary>
     static void Cages(ProbeWorld probe, string name)
     {
@@ -478,7 +640,76 @@ static class SaveProbe
         Console.WriteLine($"{probe.Who(who)} inWhat={c.InWhat} inSomething={c.InSomething}");
 
         foreach (var f in probe.World.Fixtures.All.Where(f => Vector2.Distance(new(f.Position.X, f.Position.Z), new(at.X, at.Z)) < 300))
-            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)}");
+        {
+            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)} "
+                + $"designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
+            if (f.Kind == FixtureKind.Container) Container(probe, f);
+        }
+    }
+
+    /// <summary>
+    /// The bed the first character named like <paramref name="name"/> lies in: its record, yaw and use node yaws, the lie spot and the sleeper's own
+    /// place and yaw as loaded, in degrees (#718: a sleeper lying across a one-node bed).
+    /// </summary>
+    static void Sleeper(ProbeWorld probe, string name)
+    {
+        int who = probe.Named(name)[0];
+        var c = probe.Characters.Cold(who)!;
+        var me = probe.Characters.Next[who];
+        Console.WriteLine($"{probe.Who(who)} inWhat={c.InWhat} at {me.Position:F1} yaw={Degrees(me.Yaw):F1}");
+
+        // a player-built bed registers on the first tick, which may also see its sleeper's jobs get it up
+        string? what = c.InWhat;
+        if (what is not null && probe.World.Fixtures.Find(what) is null) probe.Tick(1);
+        if (what is null || probe.World.Fixtures.Find(what) is not { Kind: FixtureKind.Bed } bed) return;
+
+        var nodes = string.Join(", ", bed.Bed.Nodes?.Select(n => $"{n.At:F1} yaw {Degrees(n.Yaw):F1}") ?? []);
+        var (spot, yaw) = FixtureRegistry.LieSpot(bed, me.Position, probe.World.GameHours);
+        Console.WriteLine($"bed {bed.Id} '{probe.Db.Find(bed.RecordId)?.Name}' at {bed.Position:F1} marker={bed.Marker:F1} yaw={Degrees(bed.Yaw):F1} "
+            + $"clip={bed.Bed.Clip} nodes=[{nodes}]");
+        Console.WriteLine($"lie spot {spot:F1} yaw={Degrees(yaw):F1}");
+    }
+
+    /// <summary>
+    /// Radians as degrees.
+    /// </summary>
+    static float Degrees(float radians) => radians * 180 / MathF.PI;
+
+    /// <summary>
+    /// A container fixture's record name, owner with its faction's lock level and spread, lock, storage fields and what it holds.
+    /// </summary>
+    static void Container(ProbeWorld probe, Fixture f)
+    {
+        var r = probe.Db.Find(f.RecordId);
+        var owner = f.Owner >= 0 && f.Owner < probe.Data.Factions.Count ? probe.Data.Factions[f.Owner] : null;
+        Console.WriteLine($"  '{r?.Name}' owner={probe.Faction(f.Owner)} ({owner?.DoorsLockLevel} +- {owner?.LockLevelRandom}) lock={f.Lock?.Level} "
+            + $"locked={f.Lock?.Locked} units={f.Contents?.Items.Sum(i => i.Quantity)} "
+            + $"grid={f.Contents?.Width}x{f.Contents?.Height} typeLimit={r?.GetInt("itemtype limit", 4)} "
+            + $"limited={r?.GetReferences("limit inventory").Count}");
+        foreach (var it in f.Contents?.Items ?? [])
+            Console.WriteLine($"    {it.Quantity} x {it.Name} ({it.Record}) at {it.X},{it.Y} size {it.Width}x{it.Height}");
+    }
+
+    /// <summary>
+    /// Orders the first character named like <paramref name="name"/> to cut or break the lock of <paramref name="fixture"/> (by id; none: its own
+    /// cage's, for a prisoner) and follows it for 120 ticks.
+    /// </summary>
+    static void Force(ProbeWorld probe, string name, LockForce force, string? fixture = null)
+    {
+        int who = probe.Named(name)[0];
+        var c = probe.Characters.Cold(who)!;
+        var cage = probe.World.Fixtures.Find(fixture ?? c.InWhat!)!;
+        Console.WriteLine($"{cage.Kind} {cage.Id} owner={cage.Owner} lock={cage.Lock?.Level} locked={cage.Lock?.EffectivelyLocked} "
+            + $"tool={Lockpicking.BestTool(c)?.Name}");
+        probe.World.Commands.Enqueue(new ForceLockOrder([probe.Characters.IdOf(who)], cage.Id, force) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < 6; round++)
+        {
+            probe.Tick(20);
+            Console.WriteLine($"tick {probe.World.Tick} {probe.Who(who)} forcing={c.ForcingLock} locked={cage.Lock?.EffectivelyLocked} "
+                + $"hardness={cage.Lock?.Hardness:F2} in={c.InSomething}");
+            probe.PrintMessages();
+        }
     }
 
     /// <summary>
@@ -507,9 +738,9 @@ static class SaveProbe
 
     /// <summary>
     /// Whether the characters named like <paramref name="name"/> can be talked to (by anyone, and by the nearest player character) and the roots
-    /// of their talk event.
+    /// of their talk event; for another event <paramref name="ev"/>, its roots with every line's conditions and effects.
     /// </summary>
-    static void Talk(ProbeWorld probe, string name)
+    static void Talk(ProbeWorld probe, string name, int ev)
     {
         var t = probe.Characters;
         var dialogue = probe.World.Systems.OfType<DialogueSystem>().First();
@@ -521,7 +752,25 @@ static class SaveProbe
             Console.WriteLine($"{probe.Who(i)} record={t.Cold(i)!.RecordId} canTalk={dialogue.CanTalk(probe.World, i)} "
                 + $"withTalker={dialogue.CanTalk(probe.World, i, t.IdOf(talker))} talker={t.Cold(talker)!.Name}");
             Console.WriteLine("  talk roots: " + string.Join(", ", dialogue.SetOf(probe.World, i).For(1).Select(r => r.ToString())));
+            if (ev == DialogueEvents.PlayerTalkToMe) continue;
+
+            var seen = new HashSet<DialogueNode>();
+            foreach (var root in dialogue.SetOf(probe.World, i).For(ev)) PrintLines(root, 1, seen);
         }
+    }
+
+    /// <summary>
+    /// A dialogue node and the lines under it: id, conditions (condition, compare, who, value), effects (action:value) and the first text.
+    /// </summary>
+    static void PrintLines(DialogueNode node, int depth, HashSet<DialogueNode> seen)
+    {
+        if (!seen.Add(node)) return;
+
+        string conditions = string.Join(" ", node.Conditions.Select(c => $"C{c.Condition}/{c.CompareBy}/{c.Who}/{c.Value}"));
+        string effects = string.Join(" ", node.Effects.Select(e => $"DA{e.Action}:{e.Value}"));
+        string text = node.Texts.Count > 0 ? node.Texts[0] : "";
+        Console.WriteLine($"{new string(' ', depth * 2)}{node.StringId} [{conditions}] [{effects}] {text}");
+        foreach (var child in node.Children) PrintLines(child, depth + 1, seen);
     }
 
     /// <summary>
@@ -555,6 +804,23 @@ static class SaveProbe
         {
             Console.WriteLine($"site {site.Id} '{site.Name}' at {site.Position:F1} floor={site.Floor} parent={site.Parent} complete={site.Complete} "
                 + $"level={site.LevelPlacement is not null} town={site.Town}");
+        }
+    }
+
+    /// <summary>
+    /// The machines of town buildings (<see cref="Meitou.Simulation.Production.ProductionSystem.IsTownWork"/>) within <paramref name="radius"/> of the leader: status, output,
+    /// inputs, a farm's growth, death and harvested plants, and last tick's operators.
+    /// </summary>
+    static void Machines(ProbeWorld probe, float radius)
+    {
+        foreach (var m in probe.World.Machines.All.Where(m => Meitou.Simulation.Production.ProductionSystem.IsTownWork(m.Site)))
+        {
+            if (Vector3.Distance(m.Position, probe.LeaderPosition) > radius) continue;
+
+            var inputs = string.Join(" ", m.Inputs.Select(i => $"{i.Item}:{i.Count}/{i.Level:F2}"));
+            var output = m.Output is { } o ? $"{o.Recipe.Item}:{o.Count} ({o.Progress:F2})" : "none";
+            var farm = m.Farm is { } f ? $" growth={f.Growth:F2} death={f.Death:F2} harvested={f.Harvested}/{f.Plants.Length} farm={f.Status}" : "";
+            Console.WriteLine($"{m.Site} '{m.Data.Id}' at {m.Position:F0} st={m.Status} out={output} in=[{inputs}]{farm} operators={m.LastOperators}");
         }
     }
 
@@ -645,6 +911,60 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The place test (<see cref="SightMap.PlaceAtPoint"/>, what <c>SteersAt</c> compares) over the walkable surface round the leader, every
+    /// <paramref name="step"/> within <paramref name="radius"/>: the points each building's place takes, the outdoor-mesh points it counts as
+    /// indoors and the indoor-mesh points it counts as outdoors, with a sample of each. Needs <c>--nav</c>.
+    /// </summary>
+    static void Places(ProbeWorld probe, float radius, float step)
+    {
+        var world = probe.Nav!.Walkability.World;
+        var centre = probe.LeaderPosition;
+        var heights = new List<float>();
+        var odd = new Dictionary<string, (int Count, Vector3 Sample)>();
+        int outdoor = 0, indoor = 0;
+        for (float x = centre.X - radius; x <= centre.X + radius; x += step)
+        {
+            for (float z = centre.Z - radius; z <= centre.Z + radius; z += step)
+            {
+                heights.Clear();
+                world.HeightsAt(x, z, heights);
+                foreach (float h in heights) NotePlace(probe, world, new Vector3(x, h, z), odd, ref outdoor, ref indoor);
+            }
+        }
+
+        Console.WriteLine($"{outdoor} outdoor-mesh and {indoor} indoor-mesh points within {radius} of {centre:F0}");
+        foreach (var (what, (count, sample)) in odd.OrderByDescending(e => e.Value.Count))
+            Console.WriteLine($"  {count,6} {what}  e.g. {sample:F0}");
+    }
+
+    /// <summary>
+    /// Counts one surface point for <see cref="Places"/>: the building whose place it gets, and a mismatch between the place and whether it lies on an
+    /// interior polygon.
+    /// </summary>
+    static void NotePlace(ProbeWorld probe, NavWorld world, Vector3 at, Dictionary<string, (int Count, Vector3 Sample)> odd, ref int outdoor,
+        ref int indoor)
+    {
+        if (!world.TryFindPolygon(at, 0.5f, out var face, out _)) return;
+
+        bool interior = face.Polygon >= world.Mesh(face.Zone).InteriorStart;
+        int place = probe.World.Sight.PlaceAtPoint(at);
+        if (interior) indoor++;
+        else outdoor++;
+
+        string? key = place >= 0 ? probe.World.Sight.PlaceKey(place) : null;
+        if (key is not null) Tally(odd, $"place {key}", at);
+        if (interior == key is not null) return;
+
+        Tally(odd, key is not null ? $"outdoor mesh, place {key}" : "indoor mesh, outdoors by the place test", at);
+    }
+
+    /// <summary>
+    /// Adds one to <paramref name="what"/>'s count, keeping its first point as the sample.
+    /// </summary>
+    static void Tally(Dictionary<string, (int Count, Vector3 Sample)> odd, string what, Vector3 at) =>
+        odd[what] = odd.TryGetValue(what, out var seen) ? (seen.Count + 1, seen.Sample) : (1, at);
+
+    /// <summary>
     /// A town building's layout names now (a town override or the save may have relaid it) and each object of its interior layout as placed: record,
     /// floor, path mode, world position. Needs <c>--nav</c>, which hands the population its layouts.
     /// </summary>
@@ -659,6 +979,7 @@ static class SaveProbe
 
         string name = b.LayoutName(exterior: false);
         Console.WriteLine($"{key} {b.Name}: interior '{name}', exterior '{b.LayoutName(exterior: true)}'");
+        Console.WriteLine($"  {RuinState(probe, b)}");
         if (layouts.Find(resolved.Record, name, exterior: false) is not { } layout) return;
 
         foreach (var item in layouts.Items(layout, resolved.Placement))
@@ -666,6 +987,20 @@ static class SaveProbe
             var (at, _) = BuildingLayouts.Place(resolved.Position, resolved.Placement.Rotation, item);
             Console.WriteLine($"  {item.InstanceId} '{item.Building.Name}' floor={item.Floor} path={item.Building.GetInt("path mode", 2)} at {at:F0}");
         }
+    }
+
+    /// <summary>
+    /// Whether a town building is a ruin now, with what decides it: the level file's and housing's state, and the save's <c>destroyed</c> and
+    /// <c>residents template</c>.
+    /// </summary>
+    static string RuinState(ProbeWorld probe, TownBuilding b)
+    {
+        var saved = probe.World.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        string savedDestroyed = saved is not null && saved.Bools.TryGetValue("destroyed", out bool d) ? d.ToString() : "none";
+        string savedTemplate = saved?.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) ?? "none";
+
+        return $"destroyed={probe.World.Fixtures.IsDestroyed(b)} level={b.LevelDestroyed} restoredByResidents={b.RestoredByResidents} "
+            + $"residents='{b.ResidentsTemplate}' saved destroyed={savedDestroyed} residents='{savedTemplate}'";
     }
 
     /// <summary>
@@ -683,18 +1018,26 @@ static class SaveProbe
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
+              assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
+              ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
-              cages <name>             fixtures within 300 of a character, with occupants
+              cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
+              sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
+              force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
-              talk <name>              whether a character can be talked to, and its talk roots
+              uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
+              recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
+              places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
+              talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
+              machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
-              layout <building key>    a town building's layout names now and its interior layout's objects (needs --nav)
+              layout <building key>    a town building (zone:instance id): layout names now, ruin state and its interior layout's objects (needs --nav)
             """);
         return 2;
     }

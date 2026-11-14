@@ -782,6 +782,12 @@ public sealed class CharacterCold
     public Carrying.CarryAttach? CarryAttach { get; set; }
 
     /// <summary>
+    /// The bone of another character this one is drawn on (null: none), for code mods (docs/modding.md "Bone anchors"): published as it is, not
+    /// saved, not hashed and read by no system. A carried body is drawn on its carrier's shoulder whatever this says.
+    /// </summary>
+    public DrawAnchor? DrawAnchor { get; set; }
+
+    /// <summary>
     /// Whom the <see cref="CharacterTask.PickUp"/>, <see cref="CharacterTask.Loot"/> or <see cref="CharacterTask.StealthKo"/> task is for; meaningful
     /// only while one of those tasks is set.
     /// </summary>
@@ -1021,9 +1027,16 @@ public sealed class CharacterCold
 
     /// <summary>
     /// Held in a cage by a kidnapper (<see cref="Kidnap.KidnapSystem"/>), not sentenced: no sentence is ever served, no bail is offered, getting out
-    /// is no crime. Saved as <c>meitou kidnapped</c>. Hashed only while set.
+    /// is no crime. Meitou's own state, saved as <c>meitou kidnapped</c>. Hashed only while set.
     /// </summary>
     public bool Kidnapped { get; set; }
+
+    /// <summary>
+    /// The original's kidnap victim flag (status <c>+0xe9</c>, docs/game/carry-loot.md "The kidnap victim flag"): set when a kidnap's roll takes
+    /// this character, cleared in a bed in its own town or when someone it regards as friendly carries it. Saved as <c>kidn</c>. Hashed only
+    /// while set.
+    /// </summary>
+    public bool KidnapVictim { get; set; }
 
     /// <summary>
     /// Let out of a cage by a releaser, a paid bail or a slave bought free (the original's status <c>+0xea</c>, set by <c>Task_ReleasePrisoner</c>,
@@ -1069,7 +1082,8 @@ public sealed class CharacterCold
     /// <summary>
     /// Its head is shaven (<c>CharacterHuman::isHeadShaven</c>, Character vslot 124 <c>0x3e0</c>: the appearance's <c>shaved</c>, <b>Verified</b>;
     /// false in every other class). Processing a slave shaves it and an ex-slave's hair grows back once it is free
-    /// (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>); the watchers leave a shaven slave that looks like one alone.
+    /// (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>) or the in-play editor opens on it
+    /// (<see cref="Editing.InPlayEditorOpened"/>: a plastic surgeon); the watchers leave a shaven slave that looks like one alone.
     /// From the CHARACTER's or the saved GAMESTATE_CHARACTER's <c>shaved</c> (<see cref="Saving.SlaveSave"/>); hashed while set.
     /// </summary>
     public bool Shaved { get; set; }
@@ -1150,6 +1164,12 @@ public sealed class CharacterCold
     /// while set.
     /// </summary>
     public int? PickingUpItem { get; set; }
+
+    /// <summary>
+    /// The pick-up in <see cref="PickingUpItem"/> is food fetched to eat (<see cref="Items.FeedSystem"/>, goal 259): a live animal's shut grid takes
+    /// it. Not saved, as the pick-up is not; hashed only while set.
+    /// </summary>
+    public bool FetchingFood { get; set; }
 
     /// <summary>
     /// The limb an animal holds in its mouth (<see cref="Items.FeedSystem.HoldInMouth"/>; null: none), eaten later by <see cref="Items.FeedSystem"/>.
@@ -1263,6 +1283,12 @@ public sealed class CharacterCold
     /// The machine's <see cref="Meitou.Data.Gameplay.Construction.MachineData.HungerRate"/> while its operate task runs; derived, not hashed.
     /// </summary>
     public float OperateHungerRate { get; set; } = 1;
+
+    /// <summary>
+    /// The machine's <see cref="Meitou.Data.Gameplay.Construction.MachineData.Stat"/> (<c>stat used</c>; 0 for none) while its operate task runs:
+    /// the operator's level in it sets the rate of <see cref="OperateClip"/>; derived, not hashed.
+    /// </summary>
+    public int OperateStat { get; set; }
 
     /// <summary>
     /// The operator did work this tick (it plays <see cref="OperateClip"/>); derived, not hashed.
@@ -1863,6 +1889,7 @@ public sealed class CharacterTable
 
         if (k.Escaped) hasher.Add(0x45736361);
         if (k.Kidnapped) hasher.Add(0x4B64706E);
+        if (k.KidnapVictim) hasher.Add(0x4B696476);
         if (k.Freed) hasher.Add(0x46726564);
         if (k.Ordered) hasher.Add(0x4F72646E);
         if (k.SlaveState != 0)
@@ -1924,6 +1951,8 @@ public sealed class CharacterTable
             hasher.Add(0x54616B65);
             hasher.Add(taking);
         }
+
+        if (k.FetchingFood) hasher.Add(0x46657463);
 
         if (k.Mouth is { } mouth)
         {

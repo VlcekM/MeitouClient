@@ -58,6 +58,10 @@ with the zone's building collision gathered the 13 parts end 0 below the floor (
 still had ground only (the zone is gathered on a worker the first time a ragdoll moves near it, 10 ticks here), 2 parts ended up to 3.7 units under the floor. A whole body now starts only
 when every tile near it has its buildings (`RagdollPhysics.Covered`); the character animates until then.
 
+Interior parts: the building collision (`ZoneGeometryGatherer.RagdollTriangles`, also the bolts' and sight lines' `SolidHits`) takes a standing building's `interior` list too, where some buildings keep their
+upper floors and inner stairs (Watchtower, Snailhouse, Ancient Citadel, Outpost Prison, Outposts s-I to s-V; inner stairs only for the other storm houses). **Observed** (`meitou-tools navmesh --zone 22,19 --ragdoll
+--probe -44955,-55682`, a Watchtower): without the list nothing between the ground floor (1043) and the top (1326), so a body knocked out upstairs fell to the ground floor (#608); with it floors at 1164-1172 and 1225-1228.
+
 Run-time buildings (**Observed**, `--scene` staging on The Hub with a Storm House placed through `NavSystem.AddRuntimeBuilding`, collision triangles in a 80-unit box at the placement): the ragdoll's
 zone gather had no run-time placements (built, bought or ruined houses: the navmesh's `NavRuntimeBuildings` overlay) and kept a zone's result until evicted, so such a building was not there for bodies:
 609 triangles before, after adding and after removing it. Now the gatherer takes the overlay and a change drops the zone's result and bumps `IRagdollEnvironment.Generation`; a tile built at an older generation

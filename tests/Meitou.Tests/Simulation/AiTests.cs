@@ -261,7 +261,7 @@ public class AiTests(ITestOutputHelper output)
     /// The synthetic town with two buildings: a shop (a shopkeeper node, two beds) east of the centre and a house (three beds,
     /// <paramref name="bedGap"/> apart) west of it.
     /// </summary>
-    static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house, float bedGap = 10, bool chair = false)
+    internal static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house, float bedGap = 10, bool chair = false)
     {
         Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
         shop = new TownBuilding("shop", "b-shop", "Shop", At(80, 0), 0, true, false,

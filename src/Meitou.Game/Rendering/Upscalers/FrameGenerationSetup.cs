@@ -117,10 +117,14 @@ static class FrameGenerationSetup
                 return;
             }
 
-            cursor.Type = CursorType.Custom;
+            // Silk.NET's GLFW cursor makes a new cursor on every hot spot or image change of a custom cursor and never destroys the one before
+            // (GlfwCursor.UpdateCustomCursor, 2.23.0); only leaving the Custom type destroys it. Each one holds GDI bitmaps, so pointer changes ran
+            // the process out of GDI handles and cursor creation failed (#652). As a system cursor the changes make none; Custom then makes one.
+            cursor.Type = CursorType.Standard;
             cursor.HotspotX = pointer.HotX;
             cursor.HotspotY = pointer.HotY;
             cursor.Image = new Silk.NET.Core.RawImage(pointer.Image.Width, pointer.Image.Height, pointer.Image.Pixels);
+            cursor.Type = CursorType.Custom;
         }
 
         /// <summary>

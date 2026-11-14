@@ -503,9 +503,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The player's animals keep their race's <c>AI Goals</c> but 230 (<c>Character::setupAI</c>, docs/game/animals.md "AI goals"): the limb fetch
     /// (277, <see cref="Fetch"/>; the limb goes into the mouth and is eaten, <see cref="Items.FeedSystem"/>), the limb play (278) and chase (279) by
     /// their player-side desires, and eating a downed body not of an ally (233). Crop raiding (232) finds nothing for them: its farms are those of a
-    /// town the eater does not get along with, and only the player's farms are machines. A player character's are the decision step's
-    /// (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6); this pass runs them in list order for the other animals of the player's
-    /// faction, idle only (engine). An order that runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
+    /// town the eater does not get along with, and its finder looks only in player towns (<see cref="CropsToEat"/>). A player character's are the
+    /// decision step's (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6); this pass runs them in list order for the other
+    /// animals of the player's faction, idle only (engine). An order that runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
     /// </summary>
     void RunPlayerAnimalGoals(World world, int every)
     {
@@ -1222,9 +1222,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>): the nearest (engine reading of the sensed list: a bare
-    /// sight-range query, no building test) live character in sight in slave state 1 or 2 that is free (not carried, caged or held), no animal, not
-    /// another job's or given up, and <see cref="NeedsProcessing"/>. No distance bound, no cage. -1: none.
+    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>: it walks the watcher's sensed list, masks 0x60 / 0x110):
+    /// the nearest (engine choice; the original takes the first) live character within sight range that the watcher senses
+    /// (<see cref="CharacterFacts.Perceives"/>: one it has not seen or heard, a sneaking one or one in another building, is none, #649), in slave
+    /// state 1 or 2, free (not carried, caged or held), no animal, not another job's or given up, and <see cref="NeedsProcessing"/>. No distance
+    /// bound, no cage. -1: none.
     /// </summary>
     int FreeSlaveToProcess(World world, int slot, CharacterCold me)
     {
@@ -1239,6 +1241,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             var id = table.IdOf(v);
             if (st.System.Busy(id) || st.System.Waiting(st.System._givenUp, id, st.World.GameHours) || !st.System.NeedsProcessing(st.Me, c))
                 return;
+
+            if (!CharacterFacts.Perceives(st.World, st.Self, v)) return;
 
             float d2 = Vector3.DistanceSquared(table.Next[st.Self].Position, table.Next[v].Position);
             if (d2 < st.BestD2 || d2 == st.BestD2 && v < st.Best) (st.Best, st.BestD2) = (v, d2);
@@ -1741,8 +1745,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <summary>
     /// The finder of 232 (<c>FUN_1408cb810</c>, docs/game/ai-tasks.md "Eating crops"): in the town the eater stands in, whose faction it does not get
     /// along with (engine reading of the coexist test: an enemy by the relations), a farm with food
-    /// (<see cref="Production.ProductionSystem.HasFood"/>) drawn uniformly at random. Only the player's farms are machines in Meitou, so only a
-    /// player town has any. Null: none.
+    /// (<see cref="Production.ProductionSystem.HasFood"/>) drawn uniformly at random. Only a player town's are looked at: the towns' farms are
+    /// machines too (<c>ProductionSystem.TownFarms</c>), but their eaters are <b>not modelled</b>. Null: none.
     /// </summary>
     string? CropsToEat(World world, int slot, CharacterCold cold, Blackboard board)
     {

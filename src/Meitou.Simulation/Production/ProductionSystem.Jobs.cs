@@ -33,7 +33,7 @@ public sealed partial class ProductionSystem
     /// </summary>
     void AddJobs(World world, AddJob add)
     {
-        if ((Site(world, add.Site) ?? TownTurret(world, add.Site)) is null) return;
+        if ((Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {

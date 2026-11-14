@@ -18,7 +18,7 @@ public static class ArmourTooltip
     /// <summary>
     /// The quality of each grade 0 to 5 (per cent): where <see cref="GradeOf"/> starts each grade.
     /// </summary>
-    static readonly int[] GradeQualities = [5, 20, 40, 60, 80, 95];
+    public static readonly int[] GradeQualities = [5, 20, 40, 60, 80, 95];
 
     /// <summary>
     /// The order of parts of equal coverage as the original prints them; the list runs from the highest coverage down (<b>Observed</b> on two

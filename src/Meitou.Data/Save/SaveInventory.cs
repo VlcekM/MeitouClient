@@ -139,6 +139,22 @@ public sealed class SaveItem
     public const string StolenFromKey = "meitou stolen from";
 
     /// <summary>
+    /// Meitou's bool <see cref="RotatedKey"/>, written only when set: the item lies turned a quarter in its grid (docs/game/ui-screens.md "Rotating
+    /// an item"), its footprint's sides swapped.
+    /// </summary>
+    public bool Rotated { get; init; }
+
+    /// <summary>
+    /// The Meitou key of <see cref="Rotated"/> (the original ignores it: keys are read by name).
+    /// </summary>
+    public const string RotatedKey = "meitou rotated";
+
+    /// <summary>
+    /// The bool the GetRotatedIdiot code mod wrote for a turned item; read as <see cref="Rotated"/>, so its saves keep their turns.
+    /// </summary>
+    public const string ModRotatedKey = "GETROTATEDIDIOT_ROTATED_V1";
+
+    /// <summary>
     /// The record the item was last written as, so a handle known only once every character has one can be put on it.
     /// </summary>
     public FcsRecord? Written { get; private set; }
@@ -220,6 +236,7 @@ public static class SaveInventory
         Contents = contents,
         Source = r,
         StolenFrom = r.Strings.GetValueOrDefault(SaveItem.StolenFromKey),
+        Rotated = r.Bools.GetValueOrDefault(SaveItem.RotatedKey) || r.Bools.GetValueOrDefault(SaveItem.ModRotatedKey),
     };
 
     /// <summary>
@@ -291,6 +308,9 @@ public static class SaveInventory
         item.OwnedBy?.Write(r, "ownedby");
         if (item.StolenFrom is { } stolenFrom) r.Strings[SaveItem.StolenFromKey] = stolenFrom;
         else r.Strings.Remove(SaveItem.StolenFromKey);
+        r.Bools.Remove(SaveItem.ModRotatedKey);
+        if (item.Rotated) r.Bools[SaveItem.RotatedKey] = true;
+        else r.Bools.Remove(SaveItem.RotatedKey);
         r.Bools["in inventory"] = true;
         item.WrittenAs(r);
         return r;

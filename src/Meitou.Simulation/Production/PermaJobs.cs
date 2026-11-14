@@ -184,6 +184,11 @@ public static class PermaJobs
     public static bool Follows(TaskType type) => type is TaskType.Bodyguard or TaskType.StayCloseToTarget or TaskType.Unnamed289;
 
     /// <summary>
+    /// Whether the type's TaskData row has +8 set (a job per target): the jobs list then names the target after its text.
+    /// </summary>
+    public static bool PerTarget(TaskType type) => Rules.TryGetValue(type, out var rule) && rule.PerTarget;
+
+    /// <summary>
     /// The types that run with the jobs switch off (<b>Verified</b>, <c>FUN_14050c1c0</c>): attacking enemies, staying close, bodyguard, robot
     /// repair, medic, splinting. Not 289, the animals' staying close.
     /// </summary>

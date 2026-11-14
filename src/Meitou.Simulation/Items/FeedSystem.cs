@@ -104,7 +104,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             // Goal 259 Picking up food (every player animal has it, Character::setupAI): hungry with no food on it, it fetches food from the ground.
             // A player character's is the decision step's (PickingUpFood); this pass runs it for the other animals of the player's faction, idle or
             // following.
-            if (animal && playerSide && !cold.IsPlayer && WantsGroundFood(cold, race, med, own)
+            if (animal && playerSide && !cold.IsPlayer && WantsGroundFood(cold, race, med, own, options)
                     && world.Characters.Next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Follow
                 && GroundFood(world, i, cold) is { } ground)
                 FetchFood(world, i, cold, ground);
@@ -135,11 +135,12 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// <summary>
     /// 259 EAT_FOOD_ON_GROUND's desire (<c>FUN_14099a930</c>, docs/game/ai-tasks.md; priority 3, weight 0.5): an animal (no stats object), stomach
     /// empty, hunger at most <see cref="FoodOnGroundBelow"/>, no limb in its mouth and no food it would bite on it, not already picking something up,
-    /// not fighting unless starving (the 0.1 desire), awake and not carried.
+    /// not fighting unless starving (the 0.1 desire), awake and not carried. With Feed Animals off it fetches nothing it would not eat (engine
+    /// reading: the original's eating rule tests that option for animals, its use in 259's desire is <b>Unknown</b>).
     /// </summary>
-    static bool WantsGroundFood(CharacterCold cold, RaceData race, MedicalState med, Inventory own) =>
-        !med.HasStatsObject && med.Fed <= 0 && med.Hunger <= FoodOnGroundBelow && cold.Mouth is null && cold.PickingUpItem is null
-                && Best(own.Items, race, true) is null
+    static bool WantsGroundFood(CharacterCold cold, RaceData race, MedicalState med, Inventory own, SquadAi options) =>
+        !med.HasStatsObject && (options & SquadAi.Feed) != 0 && med.Fed <= 0 && med.Hunger <= FoodOnGroundBelow && cold.Mouth is null
+                && cold.PickingUpItem is null && Best(own.Items, race, true) is null
         && !(cold.InCombat && med.Hunger >= FoodOnGroundInFight) && cold.CarriedBy.IsNone && !med.Incapacitated;
 
     /// <summary>
@@ -154,8 +155,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         float d2Best = FoodOnGroundRange * FoodOnGroundRange;
         foreach (var g in world.GroundItems.All)
         {
-            if (g.Item.ItemFunction is not (FoodFunction or RawFoodFunction) || g.Slot is not null || g.OwnedBy >= 0 && g.OwnedBy != cold.Faction)
-                continue;
+            if (!FreeFood(g, cold)) continue;
             float d2 = Vector3.DistanceSquared(at, g.Position);
             if (d2 < d2Best) (best, d2Best) = (g, d2);
         }
@@ -163,11 +163,22 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     }
 
     /// <summary>
+    /// Food the character may take to eat: a loose food item (function 3 or 15) in no shop slot and of no other faction.
+    /// </summary>
+    internal static bool FreeFood(GroundItem g, CharacterCold cold) =>
+        IsFood(g.Item) && g.Slot is null && (g.OwnedBy < 0 || g.OwnedBy == cold.Faction);
+
+    /// <summary>
+    /// Food or raw food (<c>item function</c> 3 or 15).
+    /// </summary>
+    internal static bool IsFood(ItemInstance item) => item.ItemFunction is FoodFunction or RawFoodFunction;
+
+    /// <summary>
     /// It walks to the food and picks it up; it eats it on a later look.
     /// </summary>
     static void FetchFood(World world, int slot, CharacterCold cold, GroundItem food)
     {
-        cold.PickingUpItem = food.Id;
+        (cold.PickingUpItem, cold.FetchingFood) = (food.Id, true);
         if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PickUps.PickUpReach)
             TaskStart.Walk(world, slot, food.Position, SpeedMode.Run, Data.Gameplay.Ai.TaskType.EatFoodOnGround, TaskSource.Goal);
     }
@@ -210,7 +221,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             if (cold.PickingUpItem is not null)
                 return cold.Running is { Row: Data.Gameplay.Ai.TaskType.EatFoodOnGround } ? DecisionCheck.Runs
                         : DecisionCheck.No("picking up an item");
-            if (!WantsGroundFood(cold, race, med, own))
+            if (!WantsGroundFood(cold, race, med, own, world.Player.SquadAi))
                 return DecisionCheck.No("desire 0 (not hungry, food on it, or fighting)");
             return GroundFood(world, slot, cold) is not null ? DecisionCheck.Run : DecisionCheck.No("no food on the ground");
         }

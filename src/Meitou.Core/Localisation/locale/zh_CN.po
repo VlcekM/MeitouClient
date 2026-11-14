@@ -83,8 +83,8 @@ msgstr "新预设名称"
 msgid "Save as preset"
 msgstr "另存为预设"
 
-msgid "Drag to change the load order"
-msgstr "拖动可调整加载顺序"
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "拖动可调整加载顺序；Ctrl+单击或 Shift+单击可选择多个模组一起移动"
 
 msgid "Versions"
 msgstr "版本"

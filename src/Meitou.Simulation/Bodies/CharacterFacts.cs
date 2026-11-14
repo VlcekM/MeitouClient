@@ -40,6 +40,15 @@ public static class CharacterFacts
         cold.Medical is { Crawling: false, Incapacitated: false } m && (m.StayingLow || m.PlayingDead || cold.InSomething == Locks.HeldState.Bed);
 
     /// <summary>
+    /// <c>Character</c> slot 106 (vfunc <c>0x350</c>, <c>FUN_140791d50</c>, <b>Verified</b>), the "Kidnapped" status and the witnesses' innocent
+    /// victim: the kidnap victim flag (<see cref="CharacterCold.KidnapVictim"/>) while the character is carried, is no slave, has no bounty and is
+    /// not of NPC class 8 (Bandit).
+    /// </summary>
+    public static bool Kidnapped(CharacterCold cold) =>
+        cold.KidnapVictim && !cold.CarriedBy.IsNone && cold.SlaveState == 0 && cold.Bounties is not { Any: true }
+        && cold.NpcClass != FundamentalType.Bandit;
+
+    /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is
     /// unconscious to everyone), ragdolled or carried. A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so
     /// <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.

@@ -157,7 +157,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// <summary>
     /// Its run-time name (<see cref="BuildingKey"/>): what fixtures, doors and the renderer's placements know it by.
     /// </summary>
-    public string Key => BuildingKey.Of(Zone, InstanceId);
+    public string Key => RuntimeKey ?? BuildingKey.Of(Zone, InstanceId);
+    /// <summary>
+    /// The run-time name of a building that is no level placement (a player-built one, known by its instance id alone); null: the zone's key.
+    /// </summary>
+    public string? RuntimeKey { get; init; }
     /// <summary>
     /// The level placement it was resolved from (full rotation, record, state): what its indoor volume and lights are built from.
     /// </summary>
@@ -193,6 +197,14 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// A ruin only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it standing.
     /// </summary>
     public bool RuinedByResidents { get; init; }
+    /// <summary>
+    /// Standing only by its residents (<see cref="ResidentRuins.Apply"/>): its level file has it destroyed.
+    /// </summary>
+    public bool RestoredByResidents { get; init; }
+    /// <summary>
+    /// The <c>destroyed</c> of its level file, before any residents were housed in it.
+    /// </summary>
+    public bool LevelDestroyed => Destroyed ? !RuinedByResidents : RestoredByResidents;
     /// <summary>
     /// The <c>residents template</c> of its level state (a SQUAD_TEMPLATE id; empty when none): once the boot housed the towns
     /// (<see cref="ResidentRuins.Apply"/>), the template of the residents housed in it. Later changes:

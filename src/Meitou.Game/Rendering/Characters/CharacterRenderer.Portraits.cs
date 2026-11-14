@@ -23,7 +23,12 @@ internal sealed unsafe partial class CharacterRenderer
     /// the original's 128 px faithfully, the whole 256 px enhanced (the squad bar shows them 120 to 230 px wide from 1080 to 4K lines, so a 128 px
     /// one is stretched and soft). The pitch stays when the look changes, so the interface keeps the same atlas.
     /// </summary>
-    public const int PortraitCell = 256, FaithfulPortraitSize = 128, PortraitColumns = 16, PortraitRows = 2;
+    public const int PortraitCell = 256, FaithfulPortraitSize = 128, PortraitColumns = 16, PortraitRows = 4;
+    /// <summary>
+    /// The cells of the world's characters (the squads', the trade rows' and the conversation's): the first two rows. The cells after them show
+    /// CHARACTER records for code mods (docs/character-renderer.md "Portraits"), from hidden instances the host lists.
+    /// </summary>
+    public const int LivePortraitCells = PortraitColumns * 2;
     /// <summary>
     /// How much of its cell a portrait fills under <paramref name="look"/> (<see cref="PortraitCell"/>).
     /// </summary>
@@ -37,6 +42,13 @@ internal sealed unsafe partial class CharacterRenderer
     /// The vertical field of view of the portrait camera.
     /// </summary>
     const float PortraitFieldOfView = 25 * MathF.PI / 180;
+    /// <summary>
+    /// The portraits drawn in one frame for sharper streamed textures only (the original draws at most one a frame, docs/character-renderer.md
+    /// "Animals and portraits"): the other cells due wait their turn, showing what they last showed, instead of all being drawn in one frame (an
+    /// enhanced portrait costs about 4 ms of GPU). A cell that is new, another character, another appearance or camera is drawn at once, and
+    /// nothing is limited under a loading screen (<see cref="Covered"/>).
+    /// </summary>
+    const int PortraitsPerFrame = 1;
 
     /// <summary>
     /// The portraits to draw this frame (the host fills it before <see cref="Update"/>, which also poses these characters when they are out of
@@ -101,6 +113,10 @@ internal sealed unsafe partial class CharacterRenderer
     /// Whether the atlas has been cleared since it was made.
     /// </summary>
     bool _cleared;
+    /// <summary>
+    /// The portraits this frame may still draw (<see cref="PortraitsPerFrame"/>).
+    /// </summary>
+    int _portraitBudget;
 
     /// <summary>
     /// The keys <see cref="Update"/> poses even out of range.
@@ -141,39 +157,71 @@ internal sealed unsafe partial class CharacterRenderer
     {
         if (PortraitRequests.Count == 0) return;
         var atlas = PortraitAtlas.Texture;   // made on first use, with the depth
+        _portraitBudget = Covered ? int.MaxValue : PortraitsPerFrame;
         _liveByKey.Clear();
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
-        bool any = !_cleared;
-        foreach (var request in PortraitRequests)
-        {
-            if (Due(request, out _))
-            {
-                any = true;
-                break;
-            }
-        }
 
-        if (!any) return;
+        if (!_cleared) ClearPortraitRects(atlas, [new PixelRect(0, 0, (uint)atlas.Desc.Width, (uint)atlas.Desc.Height)]);
+        _cleared = true;
+        ClearReplacedRecordCells(atlas);
+        if (!AnyPortraitDue()) return;
 
-        if (!_cleared) ClearPortraitAtlas(atlas);
         if (_look.Enhanced) DrawEnhancedPortraits(atlas);
         else DrawFaithfulPortraits(atlas);
     }
 
     /// <summary>
-    /// The atlas starts transparent, once; each cell drawn clears its own square.
+    /// Whether any requested cell needs drawing this frame (<see cref="Due"/>; a texture refresh only while <see cref="_portraitBudget"/> lasts).
     /// </summary>
-    void ClearPortraitAtlas(GpuTexture atlas)
+    bool AnyPortraitDue()
+    {
+        foreach (var request in PortraitRequests)
+        {
+            if (Due(request, out _, out bool refresh) && (!refresh || _portraitBudget > 0)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Scratch: the rectangles <see cref="ClearReplacedRecordCells"/> clears.
+    /// </summary>
+    readonly List<PixelRect> _replacedCells = [];
+
+    /// <summary>
+    /// A record cell (<see cref="LivePortraitCells"/> and up) asked to show another record than it does, whose instance is not posed yet (its
+    /// look is still loading), goes transparent: the interface shows the cell at once, and must not show the record it held. A squad cell keeps
+    /// its last picture instead (<see cref="DrawPortraits"/>).
+    /// </summary>
+    void ClearReplacedRecordCells(GpuTexture atlas)
+    {
+        _replacedCells.Clear();
+        foreach (var request in PortraitRequests)
+        {
+            if (request.Cell < LivePortraitCells || _liveByKey.ContainsKey(request.Key)) continue;
+            if (!_portraitShown.TryGetValue(request.Cell, out var shown) || shown.Key == request.Key) continue;
+
+            _portraitShown.Remove(request.Cell);
+            int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
+            _replacedCells.Add(new PixelRect(x, y, PortraitCell, PortraitCell));
+        }
+
+        if (_replacedCells.Count > 0) ClearPortraitRects(atlas, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_replacedCells));
+    }
+
+    /// <summary>
+    /// Makes <paramref name="rects"/> of the atlas transparent: the whole of it once, when it is made (each cell drawn clears its own square).
+    /// </summary>
+    void ClearPortraitRects(GpuTexture atlas, ReadOnlySpan<PixelRect> rects)
     {
         var clear = Gpu.BeginNative("portraits clear");
         var whole = PassTargets.Of(atlas, _portraitDepth);
         clear.BeginRendering(new RenderingDesc(whole.Colour, whole.Depth, whole.Width, whole.Height));
         Gpu.BeginHostPass(clear, whole, DrawState.Scene(whole.Formats));
-        clear.Clear(true, default, false, 1, new PixelRect(0, 0, (uint)whole.Width, (uint)whole.Height));
+        foreach (var rect in rects) clear.Clear(true, default, false, 1, rect);
         Gpu.EndHostPass(clear);
         clear.EndRendering();
         Gpu.EndNative(clear);
-        _cleared = true;
     }
 
     /// <summary>
@@ -193,7 +241,7 @@ internal sealed unsafe partial class CharacterRenderer
 
         foreach (var request in PortraitRequests)
         {
-            if (!Due(request, out int index)) continue;
+            if (!DueNow(request, out int index)) continue;
             var pose = BeginPortraitPose(request, index);
             try
             {
@@ -255,7 +303,7 @@ internal sealed unsafe partial class CharacterRenderer
         Gpu.BeginHostPass(pass, cells, DrawState.Scene(cells.Formats));
         foreach (var request in PortraitRequests)
         {
-            if (!Due(request, out int index)) continue;
+            if (!DueNow(request, out int index)) continue;
             int x = request.Cell % PortraitColumns * PortraitCell, y = request.Cell / PortraitColumns * PortraitCell;
             var viewport = new PixelViewport(x, y, FaithfulPortraitSize, FaithfulPortraitSize, 0, 1);
             DrawPortraitCell(pass, request, index, viewport, new PixelRect(x, y, PortraitCell, PortraitCell));
@@ -315,6 +363,8 @@ internal sealed unsafe partial class CharacterRenderer
         if (_attach.Length < _attachCount + l.Asset.AttachCount)
             Array.Resize(ref _attach, _attachCount + l.Asset.AttachCount);
         _portraitAttach.AsSpan(0, l.Asset.AttachCount).CopyTo(_attach.AsSpan(_attachCount));
+
+        // Stowed: the parts ShowsInPortrait names, whose records the update kept.
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (0, _attachCount, false, false);
 
         return pose;
@@ -329,6 +379,12 @@ internal sealed unsafe partial class CharacterRenderer
         (_bones, _previousBones) = (pose.Bones, pose.PreviousBones);
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (pose.BoneBase, pose.AttachBase, pose.Weapon, pose.Ranged);
     }
+
+    /// <summary>
+    /// Whether <paramref name="part"/> shows in <paramref name="l"/>'s portrait: as with the weapon stowed (<see cref="BeginPortraitPose"/>), so
+    /// <see cref="CollectSlotParts"/> keeps its material's record while the weapon is in the hands.
+    /// </summary>
+    static bool ShowsInPortrait(AssetPart part, in Live l) => part.ShowsWith(false, false, l.Shots, l.BackDrawn);
 
     /// <summary>
     /// The posed portrait character (<see cref="_portraitLive"/>) into <paramref name="rect"/> (cleared first) of the open pass, with
@@ -363,29 +419,59 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// Whether <paramref name="request"/>'s cell needs drawing this frame: its character is in the list and the cell shows someone else or another
-    /// appearance, size, camera serial or streamed texture images.
+    /// Whether <paramref name="request"/>'s cell is to be drawn now: <see cref="Due"/>, and for a texture refresh only while the frame's
+    /// <see cref="PortraitsPerFrame"/> is not used up.
     /// </summary>
-    bool Due(PortraitRequest request, out int index)
+    bool DueNow(PortraitRequest request, out int index)
+    {
+        if (!Due(request, out index, out bool refresh)) return false;
+        return !refresh || _portraitBudget-- > 0;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="request"/>'s cell needs drawing: its character is in the list and the cell shows someone else or another
+    /// appearance, size, camera serial or sharper streamed texture images (<see cref="Sharper"/>); <paramref name="refresh"/> is true when only
+    /// the texture images are the reason.
+    /// </summary>
+    bool Due(PortraitRequest request, out int index, out bool refresh)
     {
         index = -1;
+        refresh = false;
         if (request.Cell < 0 || request.Cell >= PortraitColumns * PortraitRows || !_liveByKey.TryGetValue(request.Key, out index))
             return false;
         ref var l = ref _live[index];
         if (!_portraitShown.TryGetValue(request.Cell, out var shown) || shown.Key != request.Key ||
             shown.Serial != request.Serial || shown.Asset != l.Asset || shown.Radius != l.Radius) return true;
+        refresh = true;
         int texture = 0;
         foreach (var part in l.Asset.Parts)
         {
             foreach (var t in part.Material.Tex)
             {
-                if (texture >= shown.Textures.Length || shown.Textures[texture] != (t?.Native, t?.Swizzled ?? false))
+                if (texture >= shown.Textures.Length || Sharper(shown.Textures[texture], (t?.Native, t?.Swizzled ?? false)))
                     return true;
                 texture++;
             }
         }
 
+        refresh = false;
         return texture != shown.Textures.Length;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="now"/> would make a cell that shows <paramref name="was"/> look different for the better: another file, another
+    /// swizzle, an image where there was none, or more pixels. The texture cache swaps a character texture for a smaller image of the same file
+    /// when the characters are far from the camera and back when they are near (the portraits' squad is far while the camera travels): a cell
+    /// already showing the larger image is not stale then, and drawing it again from the smaller one would only make it softer.
+    /// </summary>
+    static bool Sharper((GpuTexture? Image, bool Swizzled) was, (GpuTexture? Image, bool Swizzled) now)
+    {
+        if (was.Swizzled != now.Swizzled) return true;
+        if (ReferenceEquals(was.Image, now.Image) || now.Image is null) return false;
+        if (was.Image is null) return true;
+
+        var (before, after) = (was.Image.Desc, now.Image.Desc);
+        return before.Name != after.Name || (long)after.Width * after.Height > (long)before.Width * before.Height;
     }
 
     /// <summary>

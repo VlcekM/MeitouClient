@@ -489,9 +489,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// <summary>
     /// <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>): in his own town the speaker captures the target and cages it (the original's tasks 240 and
     /// 112: an arrest with no fine); elsewhere he and his squad attack it (task 4). <paramref name="capture"/> is <see cref="CapturesInTown"/>, asked
-    /// once by the caller, which tags the memory by the same answer. False: the speaker is busy, or either is gone or down.
+    /// once by the caller, which tags the memory by the same answer; <paramref name="leashed"/>: the capture keeps to the towns
+    /// (<see cref="Arrest.Leashed"/>). False: the speaker is busy, or either is gone or down.
     /// </summary>
-    public bool ArrestFromDialogue(World world, CharacterId guard, CharacterId target, bool capture)
+    public bool ArrestFromDialogue(World world, CharacterId guard, CharacterId target, bool capture, bool leashed = true)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(guard, out int g)
@@ -502,7 +503,7 @@ public sealed partial class ArrestSystem : IOrderOwner
 
         // a carried target is snatched by the capture (task 240)
         if (!table.TryResolveNext(target, out int t) || !table.Next[t].Alive || table.Cold(t) is not { IsImprisoned: false }) return false;
-        Start(world, g, t, force: true, capture);
+        Start(world, g, t, force: true, capture, leashed);
         return true;
     }
 

@@ -28,6 +28,11 @@ sealed class BuildingSelection(PlayerInterface player)
     internal SelectedBuilding? Selected;
 
     /// <summary>
+    /// The UseableStuff and StorageBuilding lines of a building with no machine of the player's.
+    /// </summary>
+    internal UseableLines Useable { get; } = new(player);
+
+    /// <summary>
     /// A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.
     /// </summary>
     public bool DeselectBuildings { get; set; } = true;
@@ -57,11 +62,13 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The selected building while it still exists (a site that was cancelled or dismantled drops the selection).
+    /// The selected building while it still exists (a site that was cancelled or dismantled drops the selection; a rock's or a town building's
+    /// machine has no site).
     /// </summary>
     internal SelectedBuilding? BuildingFocus()
     {
         if (Selected is { SiteId: { } id } && !Simulation.Production.ProductionSystem.IsNatural(id)
+            && !Simulation.Production.ProductionSystem.IsTownWork(id)
             && !player.Session.CurrentSnapshot.Buildings.Any(s => s.Id == id))
             SetBuilding(null);
 
@@ -434,6 +441,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
+        Useable.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
@@ -496,7 +504,8 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
             ? r : (Simulation.Production.RichnessView?)null;
-        if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
+        if (rich is { } richness && player.Production.Machine(focus.SiteId)?.Farm is null)
+            ProductionWindows.AddRichnessLine(richness, stats);
 
         if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
         {
@@ -511,10 +520,15 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
             ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
         }
+        else
+        {
+            // Furniture with no machine of the player's (a town's) shows the UseableStuff lines all the same.
+            Useable.AddStatsLines(focus, stats);
+        }
     }
 
     /// <summary>
-    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one) and the
+    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one or house) and the
     /// For sale button.
     /// </summary>
     void AddPublicLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail, bool mine,
@@ -531,9 +545,11 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour, Action: "meitou:building-public", ButtonWidth: 0.3f));
         }
-        else if (!mine && (PublicDayOf(focus, detail) || focus.PublicNight))
+        else if (!mine && (PublicDayOf(focus, detail) || HasInterior(focus)))
         {
-            bool open = player.Session.Clock.IsDaytime ? PublicDayOf(focus, detail) : focus.PublicNight;
+            // Another faction's building reads slot 82 at any hour (FUN_140301840; `public night` is never read): a private home says Private.
+            // Meitou keeps the line off a private building without an interior (a bed, a rock, a wall).
+            bool open = PublicDayOf(focus, detail);
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour,
                 open ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
         }
@@ -722,7 +738,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The medical panel's rows of a selected building (its section 4, docs/game/ui-screens.md "Selected building"): the first door's <c>Door
     /// Condition</c>, then <c>Building Condition</c> (<c>Condition</c> without doors), each the construction progress as the number and its fraction
     /// of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no building damage, so a finished
-    /// building's progress is its target (the original's damaged state lowers it).
+    /// building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars after Condition.
     /// </summary>
     internal List<PlayerInterface.MedicalRow> BuildingRows(SelectedBuilding focus)
     {
@@ -745,6 +761,8 @@ sealed class BuildingSelection(PlayerInterface player)
             : fraction >= 1 ? Loc.Tr("The building is in good condition.") : Loc.Tr("The building is damaged.");
         var progressValue = ((int)progress).ToString(CultureInfo.InvariantCulture);
         rows.Add(Bar(Loc.Tr(door is null ? "Condition" : "Building Condition"), fraction, progressValue, tip));
+
+        if (complete && player.Production.Machine(focus.SiteId)?.Farm is { } farm) FarmPanel.AddRows(farm, rows);
 
         // A wind generator's rows (WindGeneratorBuilding::getGUIPower section 4): Wind, its share as a whole percent and the bar; Power Output,
         // the output as an int over the rated.
@@ -804,6 +822,11 @@ sealed class BuildingSelection(PlayerInterface player)
     /// <c>public day</c> over the building's flag when the squad is housed, which is what the residents' AI reads), else as its level state reads.
     /// </summary>
     static bool PublicDayOf(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail) => detail?.ResidentsPublic ?? focus.PublicDay;
+
+    /// <summary>
+    /// Whether the selected building's record has an interior (a house, not a piece of furniture, a rock or a wall).
+    /// </summary>
+    bool HasInterior(SelectedBuilding focus) => focus.Record is { } record && DataOf(record) is { HasInterior: true };
 
     /// <summary>
     /// The panel's own buttons on a selected building of the player's: Dismantle (after the original's "Are you sure?"), pause, upgrade, downgrade,

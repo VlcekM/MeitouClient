@@ -222,6 +222,18 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     }
 
     /// <summary>
+    /// Turns a grid item of any character a quarter in place (<see cref="Items.RotateItem"/>), as the GetRotatedIdiot mod does: no check of whose
+    /// inventory it is.
+    /// </summary>
+    static void RotateItem(World world, Items.RotateItem rotate)
+    {
+        if (!world.Characters.TryResolveNext(rotate.Character, out int slot)) return;
+        if (world.Characters.Cold(slot) is not { Inventory: { } inventory }) return;
+
+        Items.InventoryCommands.Rotate(inventory, rotate.Item);
+    }
+
+    /// <summary>
     /// Applies an order, item, faction, squad, editing or debug command.
     /// </summary>
     void ApplyActionCommand(World world, SimCommand command)
@@ -241,6 +253,9 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 break;
             case Items.QuickMoveItem quick:
                 _quickMoves.QuickMove(world, quick);
+                break;
+            case Items.RotateItem rotate:
+                RotateItem(world, rotate);
                 break;
             case RenameFactionCommand rename:
                 RenameFaction(world, rename.Name);
@@ -263,6 +278,9 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
             case Editing.FinishCreation:
                 if (player.InCreation) Editing.CharacterEditing.EndCreation(world, _assembly);
                 player.InCreation = false;
+                break;
+            case Editing.InPlayEditorOpened opened:
+                Editing.CharacterEditing.GrowHair(world, _assembly, opened);
                 break;
             case Items.PickUpItemOrder pick:
                 _pickUps.PickUpInput(world, pick);

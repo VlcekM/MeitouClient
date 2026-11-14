@@ -159,6 +159,12 @@ public sealed partial class LockSystem
         var face = new Vector2(spot.Centre.X, spot.Centre.Z) - Flat(next[s].Position);
         if (face.LengthSquared() > 1e-4f) next[s].Yaw = MathF.Atan2(face.X, face.Y);
 
+        if (UnlocksOwn(door, c, TargetOf(world, s)))
+        {
+            UnlockOwn(world, s, c, door);
+            return;
+        }
+
         // Someone in the way: the task is impossible (the plan fails; an NPC looks again at the next check).
         if (InTheWay(world, s, face))
         {
@@ -182,6 +188,45 @@ public sealed partial class LockSystem
             world.Fixtures.Touch(door);
             StopBashing(table, s, c);
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="c"/> unlocks <paramref name="door"/> instead of bashing it: a whole door of its own faction that is effectively
+    /// locked. The planner's way through a locked door for its owner is row 78 Unlocking door (effect !54, list B 70 <c>isObjectMine</c> and 57 at
+    /// the door), then 72 / 122 open it (docs/game/locks.md "Doors"); a locked door is shut for the owner's paths too until then. Not to reach an
+    /// animal (<paramref name="target"/>): a locked gate that pens a beast in (Mourn's Great White Gorillo behind the Tech Hunters' Ancient Lab gate,
+    /// #645) is not opened to fight it (engine choice; the original's planner is not known to make this exception, <b>Unknown</b>).
+    /// </summary>
+    static bool UnlocksOwn(Fixture door, CharacterCold c, CharacterCold? target) =>
+        !c.BashOrdered && !door.DoorBroken && door.Owner >= 0 && door.Owner == c.Faction && door.Lock is { EffectivelyLocked: true }
+        && target?.Fighter?.IsAnimal != true;
+
+    /// <summary>
+    /// The character the basher in <paramref name="s"/> fights, null for none.
+    /// </summary>
+    CharacterCold? TargetOf(World world, int s)
+    {
+        var table = world.Characters;
+        if (Combat?.StateOf(table.IdOf(s)) is not { TargetSlot: >= 0 and var t } || t >= table.HighWater) return null;
+
+        return table.Cold(t);
+    }
+
+    /// <summary>
+    /// One tick of an owner at its locked door: the lock is worked for <see cref="LockWorkSeconds"/> (Task_UnlockDoor, 0.3 per game second), then
+    /// cleared with the unlock sound and the door starts opening (row 122 / 72), and the pursuit carries on. Others standing at the leaf do not
+    /// stop the work (the bash's ray test is Task_BashDoor's own).
+    /// </summary>
+    void UnlockOwn(World world, int s, CharacterCold c, Fixture door)
+    {
+        if (c.BashTime < 0) c.BashTime = 0;
+        c.BashTime += world.TickSeconds;
+        if (c.BashTime < LockWorkSeconds) return;
+
+        world.Fixtures.SetLocked(door, false);
+        FixtureRegistry.OpenDoor(door);
+        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        StopBashing(world.Characters, s, c);
     }
 
     /// <summary>

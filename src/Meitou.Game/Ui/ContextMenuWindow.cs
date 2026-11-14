@@ -31,6 +31,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
     public const double PortraitHoldSeconds = 0.25;
 
     /// <summary>
+    /// The text colour of the verb under the mouse (the original shows it orange-yellow; observed in screenshots of the original, not a data value).
+    /// </summary>
+    internal static readonly Vector4 VerbHover = new(0.86f, 0.62f, 0.2f, 1);
+
+    /// <summary>
     /// A context menu: its title, where it opens and its verbs (caption and what it gives).
     /// </summary>
     internal sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
@@ -198,20 +203,13 @@ sealed class ContextMenuWindow(PlayerInterface player)
         bool down = target.Down;   // vfunc 0x30, FUN_1405c9e10, from the snapshot
         var carriers = player.Selected().Where(c => c.Carrying == id).Select(c => c.Id).ToArray();
 
-        // A carried body: carried by a selected character, its inventory (26, the branch's own verb) and Put Down (and Meitou's cage stand-ins);
-        // carried by someone not of the player's, nothing (FUN_1407a6bc0 empties the list). No pick-up verb for a carried body: the non-hostile
-        // branches test +0x3d4, and a hostile one's Kidnap (246) cannot snatch.
-        if (carriers.Length > 0)
+        // A body the first selected carries: Put Down and nothing else (docs/game/ui-input.md "Context menu verbs"). With another selected first
+        // the body gets its branch's verbs and Put Down below. Carried by someone not of the player's, nothing (FUN_1407a6bc0 empties the list). No
+        // pick-up verb for a carried body: the non-hostile branches test +0x3d4, and a hostile one's Kidnap (246) cannot snatch. A bed and a cage
+        // take the carried body through their own menus (FurnitureUse).
+        if (player.Selected().FirstOrDefault(c => c.FirstSelected) is { } first && first.Carrying == id)
         {
-            if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
-
-            verbs.Add(("Put Down", () => player.Say(new PutDownOrder(carriers) { Tick = player.Session.World.Tick })));
-
-            // Meitou stand-in for the original's cage use (docs/simulation.md "Arrest and jail"): carry the body to the nearest free cage.
-            verbs.Add(("Put in Cage", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Tick = player.Session.World.Tick })));
-
-            // Meitou stand-in for the bed's own "Put in Bed" (FurnitureUse): carry the body to the bed the bed search finds.
-            verbs.Add(("Put in Bed", () => player.Say(new PutInBedOrder(carriers) { Tick = player.Session.World.Tick })));
+            verbs.Add(PutDownVerb(carriers));
             return verbs;
         }
 
@@ -224,6 +222,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
         if (target.Prison is { } prison) PrisonerVerbs(verbs, target, prison, selection, down);
         else if (target.IsPlayer) OwnCharacterVerbs(verbs, target, selection, down);
         else OtherCharacterVerbs(verbs, target, selection, down);
+
+        if (carriers.Length > 0) verbs.Add(PutDownVerb(carriers));
 
         // The medic verbs, unless it is dead or a hostile one standing (the original: the lead's enemy test, vtable +0x3e8).
         if (target.Body is { Dead: false } && (down || target.IsPlayer || !player.PointerPanel.Hostile(target)))
@@ -271,8 +271,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// <summary>
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu,
     /// so the cage's own verbs come here (engine stand-ins for the original's cage menu beside the occupant's): Unlock or Lock the player's own cage
-    /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, from
-    /// outside), and once it is open Escape (207, the selected prisoner), Set Free (110), or Pick Up (225, a mate lifts it out; out of another
+    /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, the
+    /// same), and once it is open Escape (207, the selected prisoner), Set Free (110), or Pick Up (225, a mate lifts it out; out of another
     /// faction's cage a crime, locks.md "Cages and beds").
     /// </summary>
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
@@ -302,7 +302,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
             }
 
             // Another faction's locked cage also has Use Tools and Use Strength (285, 286; FUN_1407a6bc0 tests the lock and owner, not the occupant),
-            // worked from outside.
+            // worked from outside or by the prisoner on its own.
             if (prison.CageId is { } cage && !ownCage)
             {
                 verbs.Add(("Use Tools", () => player.Say(new ForceLockOrder([], cage, LockForce.Tools) { Tick = player.Session.World.Tick })));
@@ -330,9 +330,10 @@ sealed class ContextMenuWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// One of the player's own characters: another one than the selection is followed (31) or guarded (45, <see cref="FollowOrder.Guard"/>), its
-    /// inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225), standing too when it carries no one
-    /// (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the selection's order).
+    /// One of the player's own characters: another one than the selection is followed (31) or, unless down, guarded (45,
+    /// <see cref="FollowOrder.Guard"/>), its inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225),
+    /// standing too when it carries no one (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the
+    /// selection's order).
     /// </summary>
     void OwnCharacterVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection, bool down)
     {
@@ -346,13 +347,22 @@ sealed class ContextMenuWindow(PlayerInterface player)
             return;
         }
 
-        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel).
-        verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
+        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel). Not for a down one, carried or not
+        // (docs/game/ui-input.md "Context menu verbs").
+        if (!down)
+            verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
+
         verbs.Add(("Follow", () => player.Say(new FollowOrder(selection, id) { Tick = player.Session.World.Tick })));
         if (target.CarriedBy.IsNone && (down || target.Carrying.IsNone))
             verbs.Add(("Pick Up", () => player.Say(new PickUpOrder([], id) { Tick = player.Session.World.Tick })));
         if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
     }
+
+    /// <summary>
+    /// Put Down (69): the selected characters carrying the target set it down.
+    /// </summary>
+    (string, Action) PutDownVerb(CharacterId[] carriers) =>
+        ("Put Down", () => player.Say(new PutDownOrder(carriers) { Tick = player.Session.World.Tick }));
 
     /// <summary>
     /// Loot (26), or Trade for the player's own character: opens the target's inventory beside the selection's. Offered when
@@ -789,7 +799,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         controls.Add(new("context-menu", "Widget", new(x, y, w, h), "", "", "Kenshi_FloatingPanelSkin", true, new Dictionary<string, string>(),
             new(0.1f, 0.09f, 0.08f, 0.94f), ink, Pickable: true));
         controls.Add(new("context-title", "TextBox", new(x + 6, y + 2, w - 12, titleH), menu.Title, "", "", true,
-            new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" }, default, ink));
+            new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Center" }, default, ink));
 
         for (int i = 0; i < menu.Verbs.Count; i++)
         {
@@ -798,7 +808,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
             controls.Add(new($"context-verb-{i}", "Button", new(x + w * 0.0208333f, rowY, buttonW, rowH), Loc.Tr(caption),
                 "meitou:context", "Kenshi_Button1Skin", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" },
-                default, ink, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
+                default, ink, HoverColour: VerbHover, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
             if (chance is not { } c) continue;
 
             float p = Math.Clamp(c * 0.01f, 0, 1);

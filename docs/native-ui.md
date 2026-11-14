@@ -16,11 +16,18 @@ restart. Display and Graphics rows come from the launcher's catalogue (`Launcher
 value text, choices, impact, order), so the game and the [launcher](launcher.md#graphics) show them alike; the Tab panel slider
 only reads and writes the value.
 
+Search (`SettingsSearch`, the header box; a click or Ctrl+F focuses it): every row of every page but Mods whose name or hint holds each
+typed word (as written or translated) is listed, unfolded, under its page's name (Graphics > tab), with its live control and a mode's
+custom value. A row its effect hides is not found. The box (`TextField`) selects with Shift and the arrows / Home /
+End and Ctrl+A, and cuts, copies and pastes with Ctrl+X / C / V; focusing it selects its text. Esc in the box empties it, then leaves it; outside it, Esc ends the search before
+closing; a page button ends it too.
+
 Mods (`ModsPage`): the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy
 button for the selected mod and one for all problems; a summary line under the version text opens it. Separator files (`[1]---[...]---.mod`) are listed without detail.
 Under a mod's row, a Settings group holds the settings its code registered (`ModSettingsRows`, [modding](modding.md), "Settings"),
 open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A group whose mod
-mods.cfg does not list comes after the list under the mod's name.
+mods.cfg does not list comes after the list under the mod's name. While a mod has settings, Collapse all and Expand all (arrows to and from a
+line) sit at the title's right end; Display and each Graphics tab with features to fold have them too.
 
 Graphics techniques that exclude each other are one list each on the Lighting tab (`WorldFrame.AddChoiceSliders`), heading their feature group:
 Sun shadows (Off / Faithful cascades / Meitou cascades / Traced: Off is the shadow distance at its left end, Traced turns the global illumination on,
@@ -87,9 +94,9 @@ drop-downs and hides by `ShownWhen`. A look row that differs from the preset has
 inside); a moved quality row shows as Custom. Named values are drop-downs, amounts sliders with right = more (terrain error
 mirrored, `Slider.Reversed`).
 The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
-Advanced (stealth counts its light). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
+Advanced (stealth counts its light), and so is Lamp warmth (no look preset sets either). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
 `ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start
-with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode left out).
+with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode, Follow camera offset, Item rotation and Hide hats left out: optional, off by default).
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows
 focus/adjust, Enter activates. Binding capture rejects conflicting/reserved controls; Esc cancels,
 Delete unbinds. Defaults and cache deletion ask first. The viewer retains its debug panel.
@@ -134,9 +141,15 @@ insert into builtin layout. Override factory or choose explicit child placement.
 
 ## Layout, input and lifetime
 
-Panels/labels/buttons/compound children: pixel/percentage/offset/right-bottom placement,
+Panels/labels/buttons/images/compound children: pixel/percentage/offset/right-bottom placement,
 absolute/row/column flow, padding/gaps. Parent disabled propagates; clip drawing/hits to parent/
-slot. Labels pass input through; panels block world in region. F7 suppresses all UI mouse regions.
+slot. Labels and images pass input through; panels block world in region. An image node
+(`UiNodeKind.Image`) shows the file at `UiNode.Image` (full path; PNG, TGA, JPEG, BMP, DDS) stretched
+over its placement, cut off by the parent's clip; the painter reads it on a worker at the first
+draw (`UiPainter.IconReady`) and shows nothing until then, or for a file it cannot read. With
+`UiNode.Portrait` (a CHARACTER or ANIMAL_CHARACTER string id) it shows that record's portrait instead
+([atlas cells](character-renderer.md)): square, transparent round the character, in the record's gear,
+the same face every time; at most 32 records at once, the ones past that show nothing. F7 suppresses all UI mouse regions.
 Registration/build/action on UI thread; fresh tree each UiFrameContext, no blocking callbacks.
 Painter only receives UiControls, never calls module code. Contribution/action exceptions raise
 UiHost.Diagnostic; failed contribution omitted atomically, others continue. Modules own resources

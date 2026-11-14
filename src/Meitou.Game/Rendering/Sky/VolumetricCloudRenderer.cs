@@ -148,9 +148,12 @@ public sealed class VolumetricCloudRenderer : IDisposable
         _shadowTimer = new(gpu);
         _noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false,
             "cloud noise atlas");
-        _march = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.March, "cloud march");
-        _resolve = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve, "cloud history");
-        _shadow = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");
+
+        // The images are looked up by clip position (the sky, the history) and by world position (the shadow map): their rows run with vUv, as Vulkan's do.
+        string vertex = gpu.RenderTargetsBottomUp ? PostProcessShaders.Vertex : PostProcessShaders.VertexRowsDown;
+        _march = LegacyProgram.Create(gpu, vertex, VolumetricCloudShaders.March, "cloud march");
+        _resolve = LegacyProgram.Create(gpu, vertex, VolumetricCloudShaders.Resolve, "cloud history");
+        _shadow = LegacyProgram.Create(gpu, vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");
         _marchSegment = new(gpu, _march, PrimitiveType.Triangles, "cloud march");
         _resolveSegment = new(gpu, _resolve, PrimitiveType.Triangles, "cloud history");
         _shadowSegment = new(gpu, _shadow, PrimitiveType.Triangles, "cloud shadow map");

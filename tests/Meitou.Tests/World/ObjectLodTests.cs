@@ -11,6 +11,33 @@ public class ObjectLodTests
 {
     static readonly float[] Distances = [0, 400, 4000, 8000];
 
+    /// <summary>
+    /// Wall parts keep their reach on either side of the large-mesh threshold, including a short wall's roughly 93-unit radius (#667).
+    /// </summary>
+    [Theory]
+    [InlineData(1f)]
+    [InlineData(93.17f)]
+    [InlineData(100f)]
+    [InlineData(182.78f)]
+    public void Wall_parts_have_no_part_distance_regardless_of_mesh_size(float radius)
+    {
+        Assert.Equal(float.MaxValue, ObjectRanges.PartRenderingDistance(radius, 0, 1500, isWall: true));
+        Assert.Equal(float.MaxValue, ObjectRanges.PartRenderingDistance(radius, 0, 8000, isWall: true));
+    }
+
+    /// <summary>
+    /// Ordinary small parts retain their cutoff; large meshes, generators and turrets retain their existing rules.
+    /// </summary>
+    [Fact]
+    public void Non_wall_parts_keep_their_function_and_size_distances()
+    {
+        Assert.Equal(3000, ObjectRanges.PartRenderingDistance(93.17f, 0));
+        Assert.Equal(3000, ObjectRanges.PartRenderingDistance(100, 0));
+        Assert.Equal(float.MaxValue, ObjectRanges.PartRenderingDistance(182.78f, 0));
+        Assert.Equal(float.MaxValue, ObjectRanges.PartRenderingDistance(1, ObjectRanges.GeneratorFunction));
+        Assert.Equal(1500, ObjectRanges.PartRenderingDistance(182.78f, ObjectRanges.TurretFunction));
+    }
+
     [Fact]
     public void Blend_is_the_games_choice_away_from_the_bands_and_continuous_across_them()
     {

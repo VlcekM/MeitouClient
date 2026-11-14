@@ -44,6 +44,38 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
+    /// The distance at which the ray first meets the collision of the floors up to the viewed one, when that is a face nobody stands on: too steep
+    /// to walk and with no floor beneath it (a foundation's side, the side of steps), which <see cref="MoveHit"/> passes through. Null when the
+    /// first thing met is a floor, or a wall over one, or nothing within <paramref name="maxDistance"/>.
+    /// </summary>
+    public float? FaceHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
+    {
+        float nearest = maxDistance;
+        bool face = false;
+
+        foreach (var s in _surfaces)
+        {
+            if (s.Floor > floor || !RayBox(origin, direction, new(s.Min.X, s.YMin, s.Min.Y), new(s.Max.X, s.YMax, s.Max.Y), nearest))
+                continue;
+
+            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            {
+                var a = s.Corners[i];
+                var b = s.Corners[i + 1];
+                var c = s.Corners[i + 2];
+                if (RayTriangle(origin, direction, a, b, c) is not { } t || t >= nearest) continue;
+
+                // The same point just inside the wall as MoveHit drops to a floor.
+                var inside = origin + direction * t + new Vector3(direction.X, 0, direction.Z) * 0.1f;
+                nearest = t;
+                face = !Walkable(a, b, c) && FloorBelow(inside, floor) is null;
+            }
+        }
+
+        return face ? nearest : null;
+    }
+
+    /// <summary>
     /// The upward unit normal of the floor surface a ray straight down from <paramref name="point"/> (raised by <paramref name="reach"/>) meets
     /// first, on floors up to the viewed one; null when it meets none. The indoor ghost's single slope ray (<c>FUN_1404daa20</c>, <b>Verified</b>:
     /// one ray at its origin when it has a parent building).

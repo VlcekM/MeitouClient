@@ -37,7 +37,11 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   x and y kept as stored with z rebuilt gave a mean tilt of 61 degrees where the game has 38 on `CinderSurface01_NML`, 90 where it has about 47 at the 90th percentile of 18 maps; the material cache's bake normalises its blended normal for the same reason),
   smoothed by a separable Gaussian (sigma 1.5 texels, wrapping), their mips made from that and stored as BC5 (x and y; the shader rebuilds z): no block grid is left (**Verified**, same
   views before and after). Near arrays are 32 bytes a block pair (BC3 + BC5) instead of 24: +33 % (1024 MB at 96 slots became about 1365 MB, **Observed** from the formula). The far arrays stay
-  BC1 as stored (their texels are minified there). Detail finer than a block is not in the file; it is smoothed away, not recovered.
+  BC1 as stored (their texels are minified there), but the shader normalises what it reads from them (`layerNormal`): unnormalised, a far read tilted much more than a near one, and the
+  tier's edge (the `ceil`-stepped level, 2 x 2 quads) showed on the ground as jagged bands of different bump strength, moving with the camera (**Observed**, Metal: the bands were gone with
+  the near normals read everywhere, and with the normalisation). **Observed** (owner, same Mac, MoltenVK, windowed): no glitch on Vulkan, with or without the normalisation, though the shader and the far
+    arrays are shared; so the seam is not the shader alone, and what makes it show on Metal is **Unknown** (not recorded whether that run matched the Metal one's pose, render scale and settings; the Metal bindless table has no LOD bias, Vulkan's sampler has).
+    **Unknown** on NVIDIA and AMD, not run there. Detail finer than a block is not in the file; it is smoothed away, not recovered.
   **Disk cache** (`NormalCachePath`): each deblocked layer is kept in `%LOCALAPPDATA%\Meitou\terrain\normals\<hash>.bc5` (magic `MNB5`, level count, each level's length and blocks; 5.6 MB a 2048² layer),
   hash of a version tag (`NormalCacheVersion`, bump it when `Deblock` or the encoding changes), the size and the source file's path, length and write time, so a mod's replacement gets its own
   file; a missing or misfitting file is rebuilt and written. **Observed** (siwa-test6 start, same machine): a hit takes 3-79 ms of worker time, a miss 100-430 ms.
@@ -223,7 +227,11 @@ material is baked into world-space levels round the eye, and a patch pixel withi
 to 14 layer samples each.
 - **Levels**: 4 of 2048² texels, level k's texel 0.25 × 2^k units (51, 102, 205, 410 m squares), RGBA8 albedo + gloss and RGBA8 tangent-space
   normal x, y (z follows), rain absorbance, relief height: 128 MB, not made when `VramGuard` refuses it. Each is addressed toroidally (repeat
-  sampler, texel = world mod side), its origin snapped to 64 texels round the eye; as the eye moves a level bakes only the strips it gains, and is
+  sampler, texel = world mod side), its origin snapped to 64 texels round the eye moved towards the camera's focus (`Camera.Target`) by at most a quarter of the level's side (`MaterialCache.Centre`: the
+  game's camera orbits a point some way off, so most of the picture lies beyond it; centred on the eye, the focus sat at the finest square's edge and the pixels beyond fell to the next level in a hard step: **Observed**, Metal);
+  `bakeEdge` blends a level towards the next coarser over its last 512 texels (a quarter of the side), so the step at its edge is not a line; the layers are mixed in over the half level past one level
+  coarser than the footprint, over the last fifth of the reach and over the coarsest level's edge, so the cache never ends in a line (**Observed**, Metal: with these the ground's patches and the
+  cache's edges were gone; MoltenVK (owner, same Mac): no difference seen with or without them, not on NVIDIA or AMD; **Unknown**: the cost of the strips baked while orbiting); as the eye moves a level bakes only the strips it gains, and is
   built again only after moving a whole side. A first bake takes 256 rows a frame (its pixels shade the layers until it is whole).
 - **Bake** (`TerrainShaders.MaterialBakeFragmentNative`): the colour shader run per texel at its world point (terrain height and normal, the texel as
   the sampling footprint, distance 0, no march), both targets in one pass, written before the blood, wetness and lighting. Its relief height is one
@@ -231,7 +239,7 @@ to 14 layer samples each.
   share with the cliff's (its projections' heights along the normal, ÷ n.y, held at n.y 0.3).
 - **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
-- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
+- **Draw**: the level whose texel is the pixel's footprint (short axis, the long one at most 8 times it: `max(short, long / 8)`, continuous; the hardware-style `long / min(ceil(long / short), 8)` jumped up to 0.58 of a level where the stretch crossed a whole number, and the layer chosen with it changed sharpness in jagged patches: **Observed**, Metal; the continuous level reads up to a level blurrier than the hardware-style one; MoltenVK showed no difference with or without it, **Unknown** on NVIDIA and AMD, where the hardware-style formula is the sampler's own), blended with the next coarser;
   a footprint finer than level 0's texel (within ~23 m of a 1080p camera), beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
   **Observed** (title screen, DLSS 0.67, `LodBias` -1.58): the layers' sampler takes the upscaler's bias, so the live layers are sharper than a cache level at the pixel's footprint; the level is chosen with the bias (`uBakeBias`), and a level more than one level coarser than that (a close ground beyond the fine levels' square, from a raised eye: the title's nearest band read level 3 for a pixel wanting level 0.6) is not read, the layers are shaded. Edge measure of that band 4.3 (cache) to 5.9 (layers, equal to the cache off).
   (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded (the

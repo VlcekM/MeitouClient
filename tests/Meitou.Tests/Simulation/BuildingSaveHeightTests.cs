@@ -96,4 +96,25 @@ public class BuildingSaveHeightTests
             Assert.Equal(Hand.Read(Saved(save, parent.Id).State, "handle"), Hand.Read(written.State, "isInsideBuilding"));
         }
     }
+
+    [Fact]
+    public void A_dismantled_building_whose_instance_lists_an_inventory_state_first_is_removed_from_the_save()
+    {
+        using var world = new SimWorld(new WorldSettings(), new Surfaces());
+        var site = Site(world.Buildings.NewId(WorldLayout.ZoneOf(100, 100)), 120);
+        world.Buildings.Add(site);
+        var save = new SaveBuilder(1).Game;
+        BuildingSave.Write(save, world, Player);
+        var zone = Assert.Single(save.Zones).Value;
+        var inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = 900, Name = "0", StringId = site.Id + "-inv" };
+        zone.File.Records.Add(inventory);
+        Assert.Single(zone.BuildingList!.Instances, i => i.Id == site.Id).States.Insert(0, inventory.StringId);
+
+        world.Buildings.Remove(site);
+        BuildingSave.Write(save, world, Player);
+
+        Assert.DoesNotContain(zone.BuildingList!.Instances, i => i.Id == site.Id);
+        Assert.DoesNotContain(zone.File.Records, r => r.RecordType == FcsRecordType.GamestateBuilding && r.StringId.StartsWith(site.Id));
+        Assert.DoesNotContain(zone.File.Records, r => r.StringId == inventory.StringId);
+    }
 }

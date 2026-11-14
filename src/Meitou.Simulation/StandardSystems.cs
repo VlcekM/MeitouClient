@@ -789,7 +789,8 @@ public static class StandardSystems
 
             if (_talk is not null) (_talk.Arrests, _talk.Extensions) = (_arrest, _o.Extensions);
             if (_weather is not null) _weather.Talk = _talk;
-            if (_talk is not null && _aggro is not null) (_aggro.Memory, _talk.Aggro) = (_talk.Memory, _aggro);
+            if (_talk is not null && _aggro is not null)
+                (_aggro.Memory, _aggro.SightLines, _talk.Aggro) = (_talk.Memory, _talk.HasSightLines, _aggro);
             if (_talk is not null && _ai is not null) _ai.Memory = _talk.Memory;
             if (_talk is not null && _combat is not null) _combat.Memory = _talk.Memory;
             if (_talk is not null && _population is not null) _population.Memory = _talk.Memory;

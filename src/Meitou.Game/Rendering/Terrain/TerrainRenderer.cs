@@ -1401,10 +1401,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
     readonly MaterialCache _materialCache;
 
     /// <summary>
-    /// Bakes what the material cache's levels need this frame round <paramref name="eye"/> (before the scene, outside a pass;
-    /// <see cref="MaterialCache.Record"/>).
+    /// Bakes what the material cache's levels need this frame round <paramref name="eye"/>, moved towards <paramref name="focus"/> (before the scene,
+    /// outside a pass; <see cref="MaterialCache.Record"/>).
     /// </summary>
-    public void RecordMaterialCache(Vector3 eye) => _materialCache.Record(eye);
+    public void RecordMaterialCache(Vector3 eye, Vector3 focus) => _materialCache.Record(eye, focus);
 
     /// <summary>
     /// The terrain set of the constants chunk <paramref name="buffer"/>, made the first time (the bakes' own constants).

@@ -287,7 +287,36 @@ sealed partial class GameHost
     /// at the tick rate.
     /// </summary>
     static Simulation.Carrying.CarryAttach MixCarry(Simulation.Carrying.CarryAttach? before, Simulation.Carrying.CarryAttach now, float alpha) =>
-        before is { } b ? new(Vector3.Lerp(b.Offset, now.Offset, alpha), Quaternion.Slerp(b.Rotation, now.Rotation, alpha)) : now;
+        before is { } b
+            ? new(Vector3.Lerp(b.Offset, now.Offset, alpha), Quaternion.Slerp(b.Rotation, now.Rotation, alpha)) { OnBone = MixOnBone(b, now, alpha) }
+            : now;
+
+    /// <summary>
+    /// The same for the attach in the bone's frame; the newer one where the older has none.
+    /// </summary>
+    static Simulation.Carrying.CarryOnBone? MixOnBone(Simulation.Carrying.CarryAttach before, Simulation.Carrying.CarryAttach now, float alpha) =>
+        before.OnBone is { } b && now.OnBone is { } n
+            ? new(Vector3.Lerp(b.Offset, n.Offset, alpha), Quaternion.Slerp(b.Rotation, n.Rotation, alpha))
+            : now.OnBone;
+
+    /// <summary>
+    /// The bone <paramref name="c"/> is drawn on (<see cref="CharacterInstance.Anchor"/>): a carried body's carrier's attach bone as the renderer
+    /// poses it, so the body follows the drawn shoulder between the ticks (none when the simulation had no skeleton for the carrier); else the one a
+    /// code mod gave it (<see cref="CharacterSnapshot.Anchor"/>). Null: none.
+    /// </summary>
+    CharacterAnchor? AnchorOf(CharacterSnapshot? before, CharacterSnapshot c, float alpha)
+    {
+        if (c.Carry is { } carry)
+        {
+            return MixCarry(before?.Carry, carry, alpha).OnBone is { } on
+                ? new CharacterAnchor(DrawKey(c.CarriedBy), Simulation.Carrying.CarrySystem.AttachBone, on.Offset, on.Rotation)
+                : null;
+        }
+
+        if (c.Anchor is not { } anchor || anchor.Carrier == c.Id || anchor.Carrier.IsNone) return null;
+
+        return new CharacterAnchor(DrawKey(anchor.Carrier), anchor.Bone, anchor.Offset, anchor.Rotation);
+    }
 
     /// <summary>
     /// A carried body has its carrier's position; it is drawn at <see cref="CharacterSnapshot.Carry"/> from it, where its ragdoll is posed too.
@@ -339,6 +368,21 @@ sealed partial class GameHost
     internal HeldToolLooks HeldLooks => field ??= new(this);
 
     /// <summary>
+    /// The looks without hats of the Hide hats setting.
+    /// </summary>
+    internal HiddenHatLooks HatLooks => field ??= new(this);
+
+    /// <summary>
+    /// The looks of the CHARACTER records whose portraits code mods show.
+    /// </summary>
+    RecordPortraitLooks RecordLooks => field ??= new(this);
+
+    /// <summary>
+    /// Whether this frame's portrait requests name the character, so it is posed however far.
+    /// </summary>
+    internal bool PortraitWanted(CharacterId id) => _portraitKeys.Contains(DrawKey(id));
+
+    /// <summary>
     /// Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.
     /// </summary>
     internal void FillDrawList(CharacterDrawList list)
@@ -359,13 +403,15 @@ sealed partial class GameHost
 
     /// <summary>
     /// The world's characters for a host without the player interface (the Metal loop): the same interpolation and ragdoll
-    /// blending as <see cref="FillDrawListCore"/>, without the editor previews and the portraits.
+    /// blending as <see cref="FillDrawListCore"/>, without the editor previews; the loop fills the portrait requests itself.
     /// </summary>
     internal void FillWorldDrawList(CharacterDrawList list)
     {
         var current = Session.CurrentSnapshot;
         IndexPrevious();
         float alpha = Session.SimulationAlpha;
+        GatherPortraitKeys(Gpu.Characters);
+        HatLooks.Begin();
         foreach (var c in current.Characters)
         {
             if (c.Appearance is null) continue;
@@ -387,11 +433,19 @@ sealed partial class GameHost
                 yaw = CarrierYaw(current, c, yaw, alpha);
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
+            else
+            {
+                rotation = Leaning(c, yaw);
+            }
             var poses = new CharacterPose[DrawnLayerCount(before, c)];
             BlendLayers(before, c, alpha, poses);
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
                 ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
-            list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer));
+            var look = HatLooks.WorldLook(c, out var hatless);
+            var instance = Drawn(c, look, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer)
+                with { Anchor = AnchorOf(before, c, alpha) };
+            list.Add(instance);
+            if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);
         }
     }
 
@@ -440,31 +494,38 @@ sealed partial class GameHost
         {
             var members = Player.PortraitBar.PortraitMembers();
             for (int i = 0; i < members.Count; i++)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(members[i].Id), i, members[i].PortraitSerial));
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(members[i].Id), i, members[i].PortraitSerial));
             foreach (var (id, cell) in Player.TradeWindows.CharacterTradePortraits())
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
+            RecordLooks.AddRequests(characters);
         }
         if (Player.PortraitBar.DialoguePortraitCharacters() is var (npc, talker))
         {
             if (!npc.IsNone)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PortraitBar.DialogueNpcCell,
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(npc), PortraitBar.DialogueNpcCell,
                     Player.PortraitBar.PortraitSerial(npc)));
             if (!talker.IsNone)
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PortraitBar.DialoguePlayerCell,
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(talker), PortraitBar.DialoguePlayerCell,
                     Player.PortraitBar.PortraitSerial(talker)));
         }
     }
+
+    /// <summary>
+    /// The draw key a character's portrait is drawn from: its own, or its hatless instance's (Hide hats, portraits only).
+    /// </summary>
+    internal long PortraitKey(CharacterId id) => HatLooks.PortraitKey(DrawKey(id));
 
     /// <summary>
     /// A character beyond reach into the distant list: its look (with its tool), its snapshot place, and what loading and the kept textures read.
     /// </summary>
     void AddDistant(CharacterDrawList list, CharacterSnapshot c)
     {
-        var look = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        var look = HeldLooks.HeldLook(HatLooks.WorldLook(c, out var hatless), c.HeldTool, out var heldPending);
         Decapitation.CutHead(c, look);
         bool hidden = Interiors.HiddenIndoors.Contains(c.Id);
-        list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale,
-            Hidden = hidden, Build = c.Build });
+        var instance = new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden, Build = c.Build };
+        list.Distant.Add(instance);
+        if (hatless is not null) HatLooks.ListHidden(list.Distant, in instance, hatless);
         if (heldPending is not null)
             list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
     }
@@ -495,12 +556,13 @@ sealed partial class GameHost
         var reachOf = editing is null && !Player.CharacterEditor.EditorOpen ? Gpu.Characters : null;
         var eye = Camera.Eye;
         bool distant = BeginDistant(list, current, reachOf);
+        HatLooks.Begin();
         foreach (var c in current.Characters)
         {
             var inBar = editing is { } shown ? CharacterEditor.Bar.EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
-            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !_portraitKeys.Contains(DrawKey(c.Id))
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !PortraitWanted(c.Id)
                     && c.Id != Sandbox.SandboxHero)
             {
                 if (distant) AddDistant(list, c);
@@ -508,8 +570,15 @@ sealed partial class GameHost
             }
             AddCharacter(list, current, c, editing, reachOf, inBar, alpha);
         }
-        if (editing is null) Decapitation.AddHeads(list);
-        else CharacterEditor.Bar.AddEditorCrowd(list);
+        if (editing is null)
+        {
+            Decapitation.AddHeads(list);
+            if (Player.UiVisible && !Player.TitleOpen) RecordLooks.AddInstances(list, eye);
+        }
+        else
+        {
+            CharacterEditor.Bar.AddEditorCrowd(list);
+        }
     }
 
     /// <summary>
@@ -518,13 +587,24 @@ sealed partial class GameHost
     /// </summary>
     bool BeginDistant(CharacterDrawList list, WorldSnapshot current, CharacterRenderer? reachOf)
     {
-        _portraitKeys.Clear();
-        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key);
+        GatherPortraitKeys(reachOf);
         var distantKey = (current, current.Tick, worldEpoch: Saves.WorldEpoch);
         bool distant = reachOf is not null && distantKey != DistantFor;
         if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
         DistantFor = reachOf is null ? default : distantKey;
         return distant;
+    }
+
+    /// <summary>
+    /// The keys of the characters <paramref name="characters"/>' portrait requests name (none without it); a portrait drawn from the character's
+    /// hatless instance (<see cref="HiddenHatLooks"/>) counts as the character's.
+    /// </summary>
+    void GatherPortraitKeys(CharacterRenderer? characters)
+    {
+        _portraitKeys.Clear();
+        if (characters is null) return;
+
+        foreach (var r in characters.PortraitRequests) _portraitKeys.Add(r.Key & ~HiddenHatLooks.KeyBit);
     }
 
     /// <summary>
@@ -537,7 +617,7 @@ sealed partial class GameHost
         var (position, yaw, rotation, before) = DrawnPlace(current, c, alpha);
         // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
         // either.
-        bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
+        bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || PortraitWanted(c.Id);
         var poses = LayerPoses(c, before, alpha, posed);
         if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
         // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
@@ -552,7 +632,10 @@ sealed partial class GameHost
         }
         if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
             poses = forced;   // the sandbox drop-down loops a picked clip on the hero
-        var held = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        // The editor shows the character as it is dressed; elsewhere the Hide hats setting may leave its hat out.
+        Data.Characters.CharacterAppearance? hatless = null;
+        var worn = editing is null ? HatLooks.WorldLook(c, out hatless) : c.Appearance!;
+        var held = HeldLooks.HeldLook(worn, c.HeldTool, out var heldPending);
         var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
         if (editing is null) Decapitation.CutHead(c, look);
         var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
@@ -562,9 +645,10 @@ sealed partial class GameHost
         bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
         bool fullRated = editing is not null || _fullRate.Contains(c.Id)
             || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
-        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
+        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated) with { Anchor = AnchorOf(before, c, alpha) };
         if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
         list.Add(instance);
+        if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);
         // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
         if (Player.CharacterEditor.Previews.EditorPending(c.Id) is { } pending)
             list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });
@@ -597,8 +681,19 @@ sealed partial class GameHost
             yaw = CarrierYaw(current, c, yaw, alpha);
             (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
         }
+        else
+        {
+            rotation = Leaning(c, yaw);
+        }
         return (position, yaw, rotation, before);
     }
+
+    /// <summary>
+    /// The whole rotation of a sleeper whose bed leans (<see cref="CharacterSnapshot.Lean"/>): its drawn yaw, then the bed's lean. Null: it is
+    /// turned by the yaw only.
+    /// </summary>
+    static Quaternion? Leaning(CharacterSnapshot c, float yaw) =>
+        c.Lean is { } lean ? lean * Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw) : null;
 
     /// <summary>
     /// The poses of <paramref name="c"/>'s animation layers between the ticks (none when it is not <paramref name="posed"/>), in its kept

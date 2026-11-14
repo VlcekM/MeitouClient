@@ -401,7 +401,7 @@ public static class Orders
                         low.StayingLow = false;
                         continue;
                     }
-                    cold.RunSpeed = (byte)mode.Value;
+                    SetRunSpeed(table, slot, cold, (byte)mode.Value);
                     // Group speed gives the characters set together one speed group (PlayerInterface::assignSpeedGroup), keyed by the first one.
                     group = mode == SpeedMode.Group ? group < 0 ? slot : group : -1;
                     cold.SpeedGroup = group;
@@ -423,5 +423,18 @@ public static class Orders
                         staying.StandingUp = true;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Sets the character's speed mode. A walk under way in that mode takes the new one at once (#691): the original's speed orders write the
+    /// mover's own mode and Task_Move's update applies it every frame (docs/game/pathfinding.md "Speed and orders"). A walk a task started in
+    /// another mode keeps it.
+    /// </summary>
+    static void SetRunSpeed(CharacterTable table, int slot, CharacterCold cold, byte mode)
+    {
+        ref var moving = ref table.Next[slot];
+        if (moving.Mode == cold.RunSpeed) moving.Mode = mode;
+
+        cold.RunSpeed = mode;
     }
 }

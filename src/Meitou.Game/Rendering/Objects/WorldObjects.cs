@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Content;
@@ -310,6 +311,12 @@ sealed class WorldObjects : IDisposable
     BuildingFloors? _floors;
 
     /// <summary>
+    /// How far each building record's floor collision reaches from its origin, unscaled, by record and whether it is the ruin
+    /// (<see cref="FloorSurfaces.Reach"/>): found once per record, on the worker that first lists one.
+    /// </summary>
+    readonly ConcurrentDictionary<(GameRecord Record, bool Destroyed), float> _floorReach = new();
+
+    /// <summary>
     /// Changes whenever a runtime placement other than a ground item is added or removed: what <see cref="Floors"/> listed before is stale.
     /// </summary>
     internal int PlacementVersion => _placementVersion;
@@ -342,6 +349,7 @@ sealed class WorldObjects : IDisposable
                 Key = b.Key,
                 Placement = b,
                 Position = position,
+                Reach = FloorReach(record, resolved.Destroyed, collisions) * (scale > 0 ? scale : 1) + BuildingFloors.ReachSlack,
                 Interior = record.GetInt("interior material", 3),
                 Exterior = record.GetInt("exterior material", 2),
                 Make = () => FloorSurfaces.For(Database, record, b.Key, position, b.Rotation, node, collisions, resolved.Destroyed),
@@ -349,6 +357,12 @@ sealed class WorldObjects : IDisposable
         }
         return [.. result];
     }
+
+    /// <summary>
+    /// The unscaled reach of <paramref name="record"/>'s floor collision (<see cref="_floorReach"/>).
+    /// </summary>
+    float FloorReach(GameRecord record, bool destroyed, InteriorCollisions collisions) =>
+        _floorReach.GetOrAdd((record, destroyed), key => FloorSurfaces.Reach(Database, key.Record, collisions, key.Destroyed));
 
     /// <summary>
     /// The sound emitters of the level's buildings (docs/audio.md "Point emitters"): those whose record has <c>sounds</c>, that are not destroyed and

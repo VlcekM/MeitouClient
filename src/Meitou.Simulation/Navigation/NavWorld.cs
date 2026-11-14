@@ -178,12 +178,42 @@ public sealed class NavWorld
         {
             foreach (var eb in edgesB)
             {
-                if (!NavGeometry.SpansMeet(Span(ma, ea, alongX), Span(mb, eb, alongX), maxStep)) continue;
+                var sa = Span(ma, ea, alongX);
+                var sb = Span(mb, eb, alongX);
+                if (!NavGeometry.SpansMeet(sa, sb, maxStep) && !SurfacesMeet(ma, ea, mb, eb, sa, sb, alongX, maxStep)) continue;
 
                 Add(new NavRef(a, ea.Polygon), new NavLink(ea.Edge, new NavRef(b, eb.Polygon)));
                 Add(new NavRef(b, eb.Polygon), new NavLink(eb.Edge, new NavRef(a, ea.Polygon)));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the surfaces of the two polygons behind border edges <paramref name="ea"/> and <paramref name="eb"/> (<see cref="ZoneNavMesh.HeightAt"/>)
+    /// differ by no more than <paramref name="maxStep"/> all along the edges' overlap. A long simplified edge runs straight in height from a
+    /// stair's top to the floor far past its foot, so its own height is well off the floor beside it though both zones have the same stair and
+    /// floor there (Flats Lagoon's deck stair on the border of 35.42 and 36.42, #408; docs/game/pathfinding.md "Zone borders").
+    /// </summary>
+    static bool SurfacesMeet(ZoneNavMesh ma, (int Polygon, int Edge) ea, ZoneNavMesh mb, (int Polygon, int Edge) eb,
+        (float From, float To, float YFrom, float YTo) sa, (float From, float To, float YFrom, float YTo) sb, bool alongX, float maxStep)
+    {
+        float lo = Math.Max(sa.From, sb.From);
+        float hi = Math.Min(sa.To, sb.To);
+        if (hi - lo < 0.01f) return false;
+
+        // Compared every navmesh cell (2 units) along the overlap.
+        const float sampleStep = 2;
+        var corner = ma.Vertices[ma.Polygons[ea.Polygon][ea.Edge]];
+        int steps = Math.Max(1, (int)MathF.Ceiling((hi - lo) / sampleStep));
+        for (int k = 0; k <= steps; k++)
+        {
+            float t = float.Lerp(lo, hi, k / (float)steps);
+            float x = alongX ? t : corner.X;
+            float z = alongX ? corner.Z : t;
+            if (MathF.Abs(ma.HeightAt(ea.Polygon, x, z) - mb.HeightAt(eb.Polygon, x, z)) > maxStep) return false;
+        }
+
+        return true;
     }
 
     /// <summary>

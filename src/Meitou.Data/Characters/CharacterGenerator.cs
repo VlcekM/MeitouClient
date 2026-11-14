@@ -382,12 +382,14 @@ public static class CharacterGenerator
         ItemColours.Of(db, item) ?? ItemColours.Scheme(db, character, loadout.Faction);
 
     /// <summary>
-    /// The backpack: entries with val0 &gt; 0; val1 is an absolute chance (out of 100).
+    /// The backpack: entries with val0 &gt; 0; val1 is an absolute chance (out of 100), 0 counting as 100 (<c>FUN_14062c4e0</c> at
+    /// <c>14062d12b</c>, <b>Verified</b>: half the base data's entries are (1, 0), the Caravan trader boss's wooden backpack among them, #657).
     /// </summary>
     static void RollBackpack(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout)
     {
         var pack = PickAbsolute(rng, character.GetReferences("backpack").Where(r => r.Values.Value0 > 0)
-            .Select(r => (db.Find(r.TargetStringId), (float)r.Values.Value1)).Where(p => p.Item1 is not null && RaceLimiter.Allows(p.Item1, race)));
+            .Select(r => (db.Find(r.TargetStringId), r.Values.Value1 == 0 ? 100f : r.Values.Value1))
+            .Where(p => p.Item1 is not null && RaceLimiter.Allows(p.Item1, race)));
         if (pack is not null) loadout.Backpack = new LoadoutItem(pack) { Colour = ColourOf(db, character, loadout, pack) };
     }
 

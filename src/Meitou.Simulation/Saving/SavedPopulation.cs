@@ -227,6 +227,26 @@ public sealed class SavedPopulation
     /// </summary>
     public List<SavedPlatoon> Platoons { get; } = [];
     /// <summary>
+    /// The member of a save's NPC platoon a character was made from; null for a character of the player's platoons.
+    /// </summary>
+    public SavedMember? MemberOf(SavedCharacterLink link) =>
+        Platoons.FirstOrDefault(sp => sp.Name == link.PlatoonName)?.Members.FirstOrDefault(m => m.Slot == link.Slot);
+
+    /// <summary>
+    /// A character made from one of the save's platoons leaves it for another squad (a captive split off, a recruit, a bought slave): it leaves the
+    /// platoon's record, as the original's split moves the character into the new platoon (<c>FUN_14079c1c0</c>), and a save writes it with its new
+    /// squad. Kept in the old record it came back only with its home squad, so a kidnapped town character was gone after a load (#622); a recruit
+    /// was kept by the record's unload and made again with it, a second copy of a unique recruit (#701).
+    /// </summary>
+    public void Leave(CharacterCold cold)
+    {
+        if (cold.Save is not { } link || MemberOf(link) is not { } member) return;
+
+        member.Gone = true;
+        member.Live = CharacterId.None;
+    }
+
+    /// <summary>
     /// The save's nests in list order: the wild layout takes them before rolling more (empty: none, e.g. a Meitou save from before nests were
     /// written).
     /// </summary>
@@ -459,7 +479,7 @@ internal static class SavedCharacters
         if (race is not null && stats is not null && medical is not null)
         {
             assembly.AttachSaved(cold, race, stats, medical, p.Record,
-                p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record) : null),
+                p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record, race.StringId) : null),
                 sc.GameState is { } aged && aged.Floats.TryGetValue("age", out float age) ? age : 1);
         }
         else if (race is not null)

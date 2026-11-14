@@ -295,17 +295,16 @@ public sealed unsafe class VulkanDisplay : IDisposable
     }
 
     /// <summary>
-    /// <c>%LOCALAPPDATA%\Meitou\pipeline-cache.bin</c> (the driver checks the header and ignores a cache from another device or driver);
+    /// <see cref="Data.World.LoadCaches.Root"/>'s <c>pipeline-cache.bin</c> (the driver checks the header and ignores a cache from another device or driver);
     /// <c>--no-load-cache</c> turns it off. Null when there is no place for it.
     /// </summary>
     static string? PipelineCacheFile()
     {
         if (Data.World.LoadCaches.Disabled) return null;
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrEmpty(root)) return null;
+        var dir = Data.World.LoadCaches.Root;
+        if (!Path.IsPathRooted(dir)) return null;
         try
         {
-            var dir = Path.Combine(root, "Meitou");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "pipeline-cache.bin");
         }

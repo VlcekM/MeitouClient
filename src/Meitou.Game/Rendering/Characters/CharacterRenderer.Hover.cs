@@ -84,7 +84,7 @@ internal sealed unsafe partial class CharacterRenderer
 
             if (index < 0 || _live[index].PortraitOnly) continue;
             ref var l = ref _live[index];
-            if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0) is null) continue;
+            if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0, Gpu.RenderTargetsBottomUp) is null) continue;
 
             int g = groups.FindIndex(x => x.Colour == colour);
             if (g < 0)

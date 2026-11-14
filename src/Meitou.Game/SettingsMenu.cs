@@ -41,8 +41,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// The pages, in their buttons' order (the indices of <see cref="Page"/>).
     /// </summary>
-    static readonly string[] Pages =
+    internal static readonly string[] Pages =
         ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
+    /// <summary>
+    /// The Graphics page, the one with tabs (<see cref="GraphicsPages"/>).
+    /// </summary>
+    internal const int GraphicsPageIndex = 1;
     /// <summary>
     /// The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.
     /// </summary>
@@ -53,13 +57,34 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static readonly string[] GraphicsPages =
         ["Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
     /// <summary>
-    /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
+    /// The Metal-only switch between the two trees of Metal display settings: with it on the upscaler (<see cref="MetalPresetSlider"/>,
+    /// <see cref="MetalRenderScaleSlider"/>), off the render resolution (<see cref="MetalRenderResolutionSlider"/>,
+    /// <see cref="MetalUiResolutionSlider"/>); catalogue key <c>metalUseUpscaling</c>.
     /// </summary>
-    internal const string MetalPresetSlider = "Metal upscaling";
+    internal const string MetalUseUpscalingSlider = "Use Metal upscaling";
     /// <summary>
-    /// The Metal-only free render scale under the preset's upscaler, shown with the scene's size in pixels.
+    /// The Metal-only preset row (MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel; shown while the upscaling is on.
+    /// </summary>
+    internal const string MetalPresetSlider = "Metal upscaling preset";
+    /// <summary>
+    /// The Metal-only free render scale under the preset's upscaler, shown with the scene's size in pixels; shown while the upscaling is on.
     /// </summary>
     internal const string MetalRenderScaleSlider = "Metal render scale";
+    /// <summary>
+    /// The Metal-only switch for rendering a window without the upscaler at its real pixels or its virtual Retina pixels (one per point); catalogue
+    /// key <c>metalRetinaResolution</c>.
+    /// </summary>
+    internal const string MetalRetinaResolutionSlider = "Full Retina resolution";
+    /// <summary>
+    /// The Metal-only render resolution without the upscaler in full screen (the screen's size divided by 1 to 4), catalogue key
+    /// <c>metalRenderDivisor</c>.
+    /// </summary>
+    internal const string MetalRenderResolutionSlider = "Render resolution";
+    /// <summary>
+    /// The Metal-only switch for drawing the interface at the screen's size over the stretched picture, catalogue key
+    /// <c>metalUiAtScreenResolution</c>.
+    /// </summary>
+    internal const string MetalUiResolutionSlider = "Render UI in screen resolution";
     /// <summary>
     /// The sliders' values when the menu was made: what Restore defaults puts back.
     /// </summary>
@@ -133,13 +158,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal Slider? EditingNumber;
     /// <summary>
-    /// The typed value's text.
+    /// The typed value's text, caret and selection (at most 24 characters).
     /// </summary>
-    internal string NumberText = "";
-    /// <summary>
-    /// The typed value's caret and the other end of its selection.
-    /// </summary>
-    internal int NumberCaret, NumberAnchor;
+    internal readonly TextField Number = new(24);
     /// <summary>
     /// Where the typed value's box is.
     /// </summary>
@@ -185,6 +206,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// Draws the menu's controls.
     /// </summary>
     internal SettingsCanvas Canvas => field ??= new(this);
+    /// <summary>
+    /// The header's search box and its results.
+    /// </summary>
+    internal SettingsSearch Search => field ??= new(this);
 
     /// <summary>
     /// A drop-down: its options, the chosen one, and what choosing does.
@@ -276,6 +301,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             ActiveChoice = null;
             ResetPending = false;
             PresetNaming.Open = false;
+            Search.Clear();
             Focus = -1;
             Notice = "";
             EditingNumber = null;
@@ -305,6 +331,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         GraphicsPage = tab;
         ActiveChoice = null;
         PresetNaming.Open = false;
+        Search.Clear();
         ScrollOffset = ScrollTarget = 0;
     }
 
@@ -332,6 +359,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         ActiveChoice = null;
         Rebinding = null;
         Notice = "";
+        Search.Clear();
     }
 
     /// <summary>
@@ -358,6 +386,17 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// What the upscaler rows report as their state; null on a host without them.
     /// </summary>
     public Func<string>? UpscalerStatus { get; init; }
+
+    /// <summary>
+    /// Whether a Display row, by its row's key (a Tab panel label or the catalogue key), is shown now; null on a host without conditional rows
+    /// (the Metal host hides the render scale or the render resolution by the upscaler and full screen).
+    /// </summary>
+    public Func<string, bool>? DisplayRowShown { get; init; }
+
+    /// <summary>
+    /// The Render resolution row's choices with their pixel sizes on the screen as it is now; null: the catalogue's names.
+    /// </summary>
+    public Func<string[]>? RenderResolutionLabels { get; init; }
 
     /// <summary>
     /// What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.
@@ -413,6 +452,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The animals' pick-up switch changed (<see cref="UserConfig.AnimalsPickUp"/>).
     /// </summary>
     public Action<bool>? AnimalsPickUpChanged { get; init; }
+
+    /// <summary>
+    /// The loot-into-backpack switch changed (<see cref="UserConfig.TakeIntoBackpack"/>).
+    /// </summary>
+    public Action<bool>? TakeIntoBackpackChanged { get; init; }
 
     /// <summary>
     /// The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).
@@ -540,7 +584,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static string Section(string label)
     {
         if (label is "Time of day" or "Time speed") return "Advanced";
-        if (label is "VSync" or "Full screen" or MetalPresetSlider or MetalRenderScaleSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
+        if (label is "VSync" or "Full screen" or MetalUseUpscalingSlider or MetalPresetSlider or MetalRenderScaleSlider or MetalRenderResolutionSlider
+                or MetalRetinaResolutionSlider or MetalUiResolutionSlider
+            || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
             || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
 
         return GraphicsSection(label, false);
@@ -565,7 +611,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         return label switch
         {
-            "Interior lamps" => "Advanced",
+            "Interior lamps" or "Lamp warmth" => "Advanced",
             "Anti-aliasing" or "Weather particles" => "Hidden",
             "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
                 or WorldFrame.TracedGrassSwitch => "Lighting",
@@ -659,7 +705,23 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.
     /// </summary>
-    static string CatalogueKey(string label) => label switch { "Full screen" => "fullScreen", "VSync" => "vSync", _ => label };
+    static string CatalogueKey(string label) => label switch
+    {
+        "Full screen" => "fullScreen",
+        "VSync" => "vSync",
+        MetalUseUpscalingSlider => "metalUseUpscaling",
+        MetalPresetSlider => "metalUpscaler",
+        MetalRenderResolutionSlider => "metalRenderDivisor",
+        MetalRetinaResolutionSlider => "metalRetinaResolution",
+        MetalUiResolutionSlider => "metalUiAtScreenResolution",
+        _ => label,
+    };
+
+    /// <summary>
+    /// Where a Display row comes on its page: its place in the catalogue. The Metal render scale row is the game's own (its choices are the
+    /// preset row's), ordered as the launcher's <c>metalRenderScale</c>.
+    /// </summary>
+    static int RowOrder(string key) => LauncherSchema.Order(key == MetalRenderScaleSlider ? "metalRenderScale" : key);
 
     /// <summary>
     /// A Tab panel slider's row, as the launcher shows it: name, range, scale direction, value text and choices come from the catalogue
@@ -684,9 +746,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         string[]? options = key == MetalPresetSlider
-            ? ["Native 1.00", "MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50",
+            ? ["MetalFX Super Quality 0.77", "MetalFX Quality 0.67", "MetalFX Balanced 0.59", "MetalFX Performance 0.50",
                 "MetalFX Temporal 0.40", "MetalFX Spatial 0.50 (alternative)", "MetalFX Spatial 0.40 (alternative)", "TAA 0.50 (experimental)",
                 "Custom"]
+            : key == MetalRenderResolutionSlider && RenderResolutionLabels?.Invoke() is { } sizes ? sizes
             : d?.Labels;
         string label = d?.Name ?? Label(key);
         string hint = key == MetalPresetSlider
@@ -696,11 +759,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 ? Loc.Tr("Smooths edges and upscales the render. Active: {1}", Loc.Tr(UpscalerStatus?.Invoke() ?? "unavailable"))
             : SettingHints.SliderHint(slider);
 
-        // The options are the slider's whole values from its left end.
-        float first = d?.Min ?? slider.Min;
+        // The options are the slider's whole values from its left end (the preset row's are its own, from the panel's slider: the catalogue's
+        // upscaler choice has no Disabled).
+        float first = key == MetalPresetSlider ? slider.Min : d?.Min ?? slider.Min;
+        string raw = CatalogueKey(key);
         return options is { } items
-            ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: key)
-            : new(label, hint, Slider: slider, Raw: key);
+            ? new(label, hint, Choice: new(() => items, () => (int)MathF.Round(slider.Get() - first), i => slider.Set(i + first)), Raw: raw)
+            : new(label, hint, Slider: slider, Raw: raw);
     }
 
     /// <summary>
@@ -827,20 +892,33 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The rows of the page shown.
+    /// The rows shown: the search's results while it has a query, else the page's, the Display and Graphics ones folded into features
+    /// (on Display, the upscaler's and the HDR output's settings under their rows).
     /// </summary>
     internal List<Entry> Entries()
     {
-        if (Page == 1) return GraphicsRows(GraphicsPages[GraphicsPage]);
+        if (Search.Active) return Search.Results();
+
+        var rows = PageRows(Page, GraphicsPage);
+
+        return Page is 0 or GraphicsPageIndex ? Grouping.Grouped(rows) : rows;
+    }
+
+    /// <summary>
+    /// The rows of page <paramref name="page"/> (of its tab <paramref name="tab"/> on Graphics) in their order, unfolded.
+    /// </summary>
+    internal List<Entry> PageRows(int page, int tab)
+    {
+        if (page == GraphicsPageIndex) return GraphicsRows(GraphicsPages[tab]);
 
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = Values.Sliders
-            .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[Page] && ReliefSliderShown(s.Label))
-            .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label)))
+            .Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[page] && ReliefSliderShown(s.Label))
+            .OrderBy(s => RowOrder(CatalogueKey(s.Label)))
             .Select(SliderEntry)
             .ToList();
 
-        switch (Page)
+        switch (page)
         {
             case 0:
                 return DisplayRows(result);
@@ -868,7 +946,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A Graphics tab's rows: its switches, then its sliders (look rows marked against the look), grouped by feature.
+    /// A Graphics tab's rows: its switches, then its sliders (look rows marked against the look), in their features' order.
     /// </summary>
     List<Entry> GraphicsRows(string section)
     {
@@ -908,7 +986,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             .OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)
             .Select(Restarting);
 
-        return Grouping.Grouped([.. grouped]);
+        return [.. grouped];
     }
 
     /// <summary>
@@ -941,7 +1019,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their
-    /// sliders, and the upscaler's and the HDR output's settings fold under their rows.
+    /// sliders.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
@@ -962,11 +1040,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         result.RemoveAll(e => !ShownNow(e));
-        result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
-        result = [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
+        result = [.. result.OrderBy(e => RowOrder(e.Raw ?? ""))];
 
-        // As the Graphics tabs: a feature's settings fold under its row (HDR output, the upscaler).
-        return Grouping.Grouped(result);
+        return [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
     }
 
     /// <summary>
@@ -997,8 +1073,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// False for a row the catalogue shows only while another setting is at a value (<c>ShownWhen</c>: the DLSS preset) and that one is not.
     /// </summary>
-    bool ShownNow(Entry entry) => entry.Raw is not { } key || LauncherSchema.Find(key)?.ShownWhen is not { } when
-        || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get());
+    bool ShownNow(Entry entry) => entry.Raw is not { } key || (DisplayRowShown?.Invoke(key) ?? true)
+        && (LauncherSchema.Find(key)?.ShownWhen is not { } when
+            || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get()));
 
     /// <summary>
     /// An action's name for its row: its words spaced.
@@ -1077,6 +1154,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         if (button != MouseButton.Left) return true;
+
+        // A press anywhere leaves the search box; one on it focuses it again.
+        Search.Focused = false;
 
         if (EditingNumber is not null)
         {
@@ -1171,7 +1251,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return true;
         if (ActiveChoice is { } choice)
             ChoiceScroll = Math.Clamp(ChoiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
-        else if (Page == ModsPageIndex && ModsPage.ModsDetail.Contains(Pointer.X, Pointer.Y))
+        else if (Page == ModsPageIndex && !Search.Active && ModsPage.ModsDetail.Contains(Pointer.X, Pointer.Y))
             ModsPage.ModsDetailScroll -= steps * 40;
         else ScrollTarget = Math.Clamp(ScrollTarget - steps * 60 * Scale, 0, MaxScroll);
 
@@ -1208,6 +1288,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 ResetPending = false;
             }
             else if (ActiveChoice is not null) ActiveChoice = null;
+            else if (Search.Active) Search.Clear();
             else Visible = false;
 
             return true;
@@ -1247,11 +1328,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A key: the preset name dialog, else the typed value's keys (Esc, Enter, Tab, the caret and selection), else as without Ctrl.
+    /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, then the
+    /// editing keys of <see cref="TextField"/>), else as without Ctrl.
     /// </summary>
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
+        if (Search.Focused && Visible) return Search.OnKey(key, shift, ctrl);
+        if (key == Key.F && ctrl && Visible && EditingNumber is null && Rebinding is null) return Search.Begin();
         if (EditingNumber is null) return KeyDown(key, shift);
 
         switch (key)
@@ -1266,37 +1350,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             case Key.Tab:
                 if (CommitNumber()) KeyDown(key, shift);
                 break;
-            case Key.A when ctrl:
-                NumberAnchor = 0;
-                NumberCaret = NumberText.Length;
-                break;
-            case Key.Home:
-                NumberCaret = 0;
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.End:
-                NumberCaret = NumberText.Length;
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Left:
-                NumberCaret = !shift && NumberCaret != NumberAnchor ? Math.Min(NumberCaret, NumberAnchor) : Math.Max(0, NumberCaret - 1);
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Right:
-                NumberCaret = !shift && NumberCaret != NumberAnchor
-                    ? Math.Max(NumberCaret, NumberAnchor)
-                    : Math.Min(NumberText.Length, NumberCaret + 1);
-                if (!shift) NumberAnchor = NumberCaret;
-                break;
-            case Key.Backspace:
-            case Key.Delete:
-                if (NumberCaret == NumberAnchor)
-                {
-                    if (key == Key.Backspace && NumberCaret > 0) NumberAnchor--;
-                    if (key == Key.Delete && NumberCaret < NumberText.Length) NumberAnchor++;
-                }
-
-                ReplaceNumberSelection("");
+            default:
+                string before = Number.Text;
+                Number.OnKey(key, shift, ctrl, ClipboardNumber, Player.ClipboardWrite);
+                if (Number.Text != before) Notice = "";
                 break;
         }
 
@@ -1304,7 +1361,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// A typed character: to the preset name dialog, else to a typed value (digits and the number's signs).
+    /// A typed character: to the preset name dialog, else to the search box, else to a typed value (digits and the number's signs).
     /// </summary>
     public void TextInput(char value)
     {
@@ -1314,10 +1371,26 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return;
         }
 
+        if (Search.Focused && Visible)
+        {
+            Search.OnText(value);
+            return;
+        }
+
         if (EditingNumber is null || !Visible) return;
-        if (value is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E')
-            ReplaceNumberSelection(value == ',' ? "." : value.ToString());
+        if (NumberChars(value.ToString()) is { Length: > 0 } typed && Number.Insert(typed)) Notice = "";
     }
+
+    /// <summary>
+    /// The clipboard's text as a typed value takes it (<see cref="NumberChars"/>); null when there is none.
+    /// </summary>
+    string? ClipboardNumber() => Player.ClipboardRead?.Invoke() is { } text ? NumberChars(text) : null;
+
+    /// <summary>
+    /// The characters of <paramref name="text"/> a typed value takes: digits and the number's signs, a comma read as the decimal point.
+    /// </summary>
+    static string NumberChars(string text) =>
+        new([.. text.Where(c => c is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E').Select(c => c == ',' ? '.' : c)]);
 
     /// <summary>
     /// Starts typing a slider's value in the box at <paramref name="at"/>, all of it selected.
@@ -1325,26 +1398,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal void BeginNumber(Slider slider, UiRect at)
     {
         EditingNumber = slider;
-        NumberText = MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture);
-        NumberAnchor = 0;
-        NumberCaret = NumberText.Length;
+        Number.Set(MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture));
+        Number.SelectAll();
         NumberBounds = at;
         ScrollTarget = ScrollOffset;
         _dragging = null;
         _thumbGrab = null;
-        Notice = "";
-    }
-
-    /// <summary>
-    /// Replaces the typed value's selection (at most 24 characters).
-    /// </summary>
-    void ReplaceNumberSelection(string replacement)
-    {
-        int start = Math.Min(NumberCaret, NumberAnchor), end = Math.Max(NumberCaret, NumberAnchor);
-        if (NumberText.Length - (end - start) + replacement.Length > 24) return;
-
-        NumberText = NumberText[..start] + replacement + NumberText[end..];
-        NumberCaret = NumberAnchor = start + replacement.Length;
         Notice = "";
     }
 
@@ -1355,7 +1414,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         if (EditingNumber is not { } slider) return true;
 
-        if (!float.TryParse(NumberText, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
+        if (!float.TryParse(Number.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
         {
             Notice = "Enter a valid number, or press Esc to cancel.";
             return false;
@@ -1381,7 +1440,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return;
         }
 
-        var conflicts = Enum.GetValues<InputAction>().Where(a => a != action && Bindings.Get(a).Contains(binding)).ToArray();
+        // Rotate item acts only over an inventory item, so it shares its control with whatever acts elsewhere (the camera's orbit by default).
+        bool shared = action == InputAction.RotateItem;
+        var conflicts = Enum.GetValues<InputAction>()
+            .Where(a => a != action && a != InputAction.RotateItem && !shared && Bindings.Get(a).Contains(binding))
+            .ToArray();
 
         // A mouse button taken from another action is swapped: that action gets this one's old button, so the three buttons can be shuffled (the
         // buttons form a cycle otherwise).
@@ -1437,6 +1500,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
         Config.PauseOnLoad = true;
+        Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;
@@ -1457,6 +1521,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.EdgeScroll = true;
         Config.CameraSmoothing = true;
         Config.ShiftPanBoost = true;
+        Config.TakeIntoBackpack = false;
+        TakeIntoBackpackChanged?.Invoke(false);
         Config.ShiftPanMultiplier = UserConfig.DefaultShiftPanMultiplier;
         Config.InvertX = false;
         Config.InvertY = true;
@@ -1471,6 +1537,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.BuildingOutline = true;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
         Config.LuckyrenMode = false;
+        GamePages.ResetOptional();
         Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
         (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
         TimeSpeedsChanged?.Invoke();
@@ -1554,13 +1621,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Controls.Add(new("settings-close", "Button", close, "", "settings:close", "Kenshi_CloseButtonSkin", true,
             new Dictionary<string, string>(), Vector4.Zero));
         Hits.Add(new(close, () => Visible = false, Label: "Close"));
+        Search.DrawBox();
         Canvas.Rect(Canvas.R(20, 44, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
         Canvas.Rect(Canvas.R(192, 56, 1, 610), SettingsCanvas.MainInk with { W = 0.12f });
 
         for (int i = 0; i < Pages.Length; i++)
         {
             int index = i;
-            Canvas.Button(Pages[i], Canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), Page == i);
+            Canvas.Button(Pages[i], Canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), Page == i && !Search.Active);
         }
 
         Canvas.Text(Canvas.Meitou ? "MEITOU" : "FAITHFUL", Canvas.R(28, 592, 148, 18), 11, SettingsCanvas.MutedInk);
@@ -1570,15 +1638,16 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The page's title, the Graphics page's look bar and tabs, its entries (or the mods) and the scroll bar.
+    /// The page's title, the Graphics page's look bar and tabs, its entries (or the mods, or the search's results) and the scroll bar.
     /// </summary>
     void DrawPage()
     {
         Canvas.Surface(Canvas.R(212, 56, 888, 34), "paper");
-        Canvas.Text(Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        Canvas.Text(Search.Active ? "Search results" : Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        DrawFoldButtons();
         float top = 98;
 
-        if (Page == 1)
+        if (Page == GraphicsPageIndex && !Search.Active)
         {
             // The Look and Quality rows (LookBar), then the tabs, one per subject, on two rows across the page.
             LookBar.DrawLookBar();
@@ -1603,7 +1672,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
 
         Viewport = Canvas.R(212, top, 888, 666 - top);
-        if (Page == ModsPageIndex) ModsPage.DrawMods();
+        if (Page == ModsPageIndex && !Search.Active) ModsPage.DrawMods();
         else Canvas.DrawEntries(top);
 
         Motion.AnimationScope = "chrome";
@@ -1613,6 +1682,23 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             Canvas.Rect(ScrollTrack(), SettingsCanvas.MainInk with { W = 0.1f });
             Canvas.Rect(ScrollThumb(), SettingsCanvas.Brass with { W = 0.75f });
         }
+    }
+
+    /// <summary>
+    /// Collapse all and Expand all on the Display page and a Graphics tab while it has features to fold (the Mods page draws its own).
+    /// </summary>
+    void DrawFoldButtons()
+    {
+        if (Search.Active || Page is not (0 or GraphicsPageIndex)) return;
+
+        var rows = Grouping.Grouped(PageRows(Page, GraphicsPage));
+        if (!rows.Any(r => r.Open is not null)) return;
+
+        Canvas.FoldButtons(() =>
+        {
+            Grouping.FoldAll(rows, false);
+            ScrollOffset = ScrollTarget = 0;
+        }, () => Grouping.FoldAll(rows, true));
     }
 
     /// <summary>

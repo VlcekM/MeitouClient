@@ -32,6 +32,21 @@ sealed class ProductionWindows(PlayerInterface player)
     internal string? ShownMachine, ClosedMachine;
 
     /// <summary>
+    /// Whether the shown building window is currently placed beside its looter's inventory.
+    /// </summary>
+    bool _machineLinked;
+
+    /// <summary>
+    /// The last positioned machine and its standalone offset before it was linked to a character inventory.
+    /// </summary>
+    string? _placedMachine;
+
+    /// <summary>
+    /// A standalone position to restore after the character inventory closes, including a position dragged by the player.
+    /// </summary>
+    Vector2? _standaloneMachineOffset;
+
+    /// <summary>
     /// The research tab's selected category, and the blueprint whose description shows.
     /// </summary>
     internal string? ResearchCategory, ResearchFocus;
@@ -43,18 +58,12 @@ sealed class ProductionWindows(PlayerInterface player)
         site is null ? null : player.Session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
 
     /// <summary>
-    /// The storage window's layout pixels above its grid (caption and item heading) and in all around it, with the two-line Max Capacity text below
-    /// (measured on the original's window).
-    /// </summary>
-    const float StorageAbove = 86, StorageChrome = 150;
-
-    /// <summary>
     /// The window a machine opens: the building window (inputs, an output or no storage), the storage window (a plain storage), else the bench
     /// window.
     /// </summary>
     internal static string MachineScreen(MachineSnapshot m) =>
         m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building"
-        : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage"
+        : m.TechLevel == 0 ? "storage"
         : "bench";
 
     /// <summary>
@@ -93,7 +102,15 @@ sealed class ProductionWindows(PlayerInterface player)
             return;
         }
 
-        if (m is null || ShownMachine == m.Site || ClosedMachine == m.Site) return;
+        if (m is null || ClosedMachine == m.Site) return;
+
+        bool alone = !m.IsContainer && player.Build.StorageWithInventory != m.Site;
+        bool linked = !alone && player.FaithfulScreens.IsOpen("inventory");
+        if (ShownMachine == m.Site)
+        {
+            if (_machineLinked != linked) PositionMachine(MachineScreen(m), m.Site, linked);
+            return;
+        }
 
         ShownMachine = m.Site;
         string screen = MachineScreen(m);
@@ -102,22 +119,40 @@ sealed class ProductionWindows(PlayerInterface player)
         // The character's inventory opens with an order-driven container window (the original's order 26 opens the looter's own window and the
         // target's together) and with a machine's; selecting a selected machine, storage, bench or mined rock shows its window alone (the original's
         // windows of a selected ore storage and electrical workbench have no inventory beside them).
-        bool alone = !m.IsContainer && player.Build.StorageWithInventory != m.Site;
         if (!alone && player.Selected().Count > 0 && !player.FaithfulScreens.IsOpen("inventory"))
             player.FaithfulScreens.Open("inventory");
 
         player.FaithfulScreens.Open(screen);
-        player.InventoryLayout.PlaceMachineWindow(screen);
+        PositionMachine(screen, m.Site, !alone && player.FaithfulScreens.IsOpen("inventory"));
     }
 
     /// <summary>
-    /// The machine of a focused site: a natural site's (a rock's, once mined, is no registry building) or a complete building's; null for any other.
+    /// Links a building beside the looter or restores its prior standalone position when the character inventory closes.
+    /// </summary>
+    void PositionMachine(string screen, string site, bool linked)
+    {
+        if (_placedMachine != site) _standaloneMachineOffset = null;
+        else if (linked && !_machineLinked) _standaloneMachineOffset = player.FaithfulScreens.GetOffset(screen);
+
+        if (!linked && _machineLinked && _standaloneMachineOffset is { } offset)
+            player.FaithfulScreens.SetOffset(screen, offset);
+        else
+            player.InventoryLayout.PlaceMachineWindow(screen, linked);
+
+        _placedMachine = site;
+        _machineLinked = linked;
+    }
+
+    /// <summary>
+    /// The machine of a focused site: a natural site's (a rock's, once mined, is no registry building), a town building's or a complete building's;
+    /// null for any other.
     /// </summary>
     MachineSnapshot? SiteMachine(string? site)
     {
         if (site is not { } id) return null;
 
-        bool built = ProductionSystem.IsNatural(id) || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true };
+        bool built = ProductionSystem.IsNatural(id) || ProductionSystem.IsTownWork(id)
+            || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true };
         return built ? Machine(id) : null;
     }
 
@@ -156,6 +191,7 @@ sealed class ProductionWindows(PlayerInterface player)
         BindInputs(m, b);
         BindOutput(m, b);
         BindColumnTitles(m, b);
+        BindBuildingGeometry(m, b);
     }
 
     /// <summary>
@@ -181,19 +217,24 @@ sealed class ProductionWindows(PlayerInterface player)
         else b.Hidden.Add("CapacityText");
 
         b.Disabled.Remove("ArrangeButton");
-        b.Hidden.Add("ArrangeButton");
+        if (m is { StorageCapacity: > 0 }) b.Hidden.Add("ArrangeButton");
+        else
+        {
+            b.Actions["ArrangeButton"] = "ArrangeButton";
+            b.Hidden.Add("TypeText");
+        }
 
         if (m?.Storage is { } sg)
         {
-            b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.UiScale,
-                Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.UiScale));
+            player.InventoryLayout.BindContainerGeometry("storage", b, sg.Width, sg.Height);
         }
 
         b.TemplateScale = player.UiScale;
     }
 
     /// <summary>
-    /// A research bench's window: the RESEARCH button (hidden below tech level 1) and the window sized around its storage grid.
+    /// A research bench's window: the RESEARCH button (hidden below tech level 1), the layout's ARRANGE under the grid and the window sized
+    /// around its storage grid.
     /// </summary>
     void BindBenchScreen(MachineSnapshot? m, UiBindings b)
     {
@@ -202,12 +243,12 @@ sealed class ProductionWindows(PlayerInterface player)
         if (m is not { TechLevel: > 0 }) b.Hidden.Add("ResearchButton");
 
         b.Disabled.Remove("ArrangeButton");
-        b.Hidden.Add("ArrangeButton");
+        b.Actions["ArrangeButton"] = "ArrangeButton";
+        if (m?.Storage is null) b.Hidden.Add("ArrangeButton");
 
         if (m?.Storage is { } grid)
         {
-            b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.UiScale,
-                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.UiScale));
+            player.InventoryLayout.BindContainerGeometry("bench", b, grid.Width, grid.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -237,9 +278,9 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             string n = (k + 1).ToString(CultureInfo.InvariantCulture);
 
-            if (k == 0 && FurnaceGrid(m) is { } fg)
+            if (k == 0 && FurnaceGrid(m) is not null)
             {
-                BindFurnaceInput(fg, b);
+                BindFurnaceInput(b);
                 continue;
             }
 
@@ -273,21 +314,11 @@ sealed class ProductionWindows(PlayerInterface player)
     /// A furnace's one input is its 12 x 7 grid (FurnaceBuilding::setupFromData), drawn in in1 by AddMachineContent; its label, status and bar are
     /// an engine choice (left empty).
     /// </summary>
-    void BindFurnaceInput(InventoryView fg, UiBindings b)
+    static void BindFurnaceInput(UiBindings b)
     {
         b.Text["Input1Text"] = "";
         b.Text["Input1StatusText"] = "";
         b.Hidden.Add("Input1ProgressBar");
-
-        // Widen and deepen the window to hold the grid, measured off the last frame's slot (the original's sizing is Unknown).
-        if (player.FaithfulScreens.LastFrame.FirstOrDefault(f => f.Id == "building")?.Controls is { } last
-            && last.FirstOrDefault(c => c.Type == "Window") is { } win
-            && last.FirstOrDefault(c => c.Name == "in1") is { } in1)
-        {
-            b.Positions["Root"] = new(0, 0, Math.Max(win.Bounds.Width,
-                in1.Bounds.X - win.Bounds.X + fg.Width * player.InventoryCell + 20 * player.UiScale),
-                Math.Max(win.Bounds.Height, in1.Bounds.Y - win.Bounds.Y + fg.Height * player.InventoryCell + 60 * player.UiScale));
-        }
     }
 
     /// <summary>
@@ -323,28 +354,25 @@ sealed class ProductionWindows(PlayerInterface player)
 
         b.Text["OutputTitleText"] = Loc.Tr("Output");
         if (m.Inputs.Count == 0 && FurnaceGrid(m) is null) b.Hidden.Add("InputTitleText");
-        if (m is { Inputs.Count: 0, Craft: null, Output: not null } && FurnaceGrid(m) is null) OutputOnlyGeometry(b);
+        if (m.Inputs.Count == 0 && FurnaceGrid(m) is null) b.Hidden.Add("InputColumn");
     }
 
     /// <summary>
-    /// Engine choice for a machine with only an output (a mined rock): the layout's empty input column and crafting row are dropped, the output
-    /// column takes the window's width and the window shrinks around it, its output panel kept near the layout's size (the original's window is the
-    /// full layout, mostly empty).
+    /// Fits all building panels and their frame in the same binding pass, from the layout and section dimensions rather than a previous frame.
     /// </summary>
-    void OutputOnlyGeometry(UiBindings b)
+    void BindBuildingGeometry(MachineSnapshot machine, UiBindings bindings)
     {
-        const float widthPart = 0.52f, heightPart = 0.6f;
-        var layout = player.FaithfulScreens.Layout("building");
-        b.Hidden.Add("CraftingPanel");
-        b.Hidden.Add("InputColumn");
-        float scale = player.InterfaceScale;
-        b.Positions["Root"] = new(0, 0, 0.208854f * player.Width * widthPart * scale, 0.398148f * player.Height * heightPart * scale);
-        float x = 0.0126582f / widthPart, w = 1 - 2 * x, titles = 0.0909091f / heightPart;
-        if (layout.Find("TitlesPanel") is { } t) b.RelativePositions[t] = new(x, 0, w, titles);
-        if (layout.Find("OutputTitleText") is { } ot) b.RelativePositions[ot] = new(0, 0, 1, 1);
-        if (layout.Find("InputOutputPanel") is { } io) b.RelativePositions[io] = new(x, titles, w, 1 - titles - 0.03f);
-        if (layout.Find("OutputColumn") is { } oc) b.RelativePositions[oc] = new(0, 0, 1, 1);
-        if (layout.Find("OutputPanel") is { } op) b.RelativePositions[op] = new(0, 0, 1, 1);
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout("building"), player.Width, player.Height,
+            player.InterfaceScale, player.UiScale);
+        var cell = player.InventoryCellSize;
+        var furnace = FurnaceGrid(machine);
+        Vector2[] inputs = furnace is { } grid
+            ? [new Vector2(grid.Width, grid.Height) * cell]
+            : machine.Inputs.Take(2).Select(s => new Vector2(s.Width, s.Height) * cell).ToArray();
+        Vector2? output = machine.Output is { } slot ? new Vector2(slot.Width, slot.Height) * cell
+            : machine.Craft is { } craft ? new Vector2(craft.OutputWidth, craft.OutputHeight) * cell : null;
+        geometry.FitBuilding(inputs, output, machine.Craft is not null, furnace is not null);
+        geometry.Bind(bindings);
     }
 
     /// <summary>
@@ -396,7 +424,7 @@ sealed class ProductionWindows(PlayerInterface player)
             return;
         }
 
-        for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) AddSlot(controls, m, $"in{k + 1}", $"Input{k + 1}ProgressBar", m.Inputs[k], 10 + k);
+        for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) AddSlot(controls, m, $"in{k + 1}", m.Inputs[k], 10 + k);
 
         if (FurnaceGrid(m) is { } fg && m.Furnace is { } burn) AddFurnaceGrid(controls, m, fg, burn);
 
@@ -410,8 +438,7 @@ sealed class ProductionWindows(PlayerInterface player)
     {
         if (m.Storage is not { } grid) return;
 
-        player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-        if (id == "bench") PlaceResearchButton(controls);
+        player.InventoryLayout.ArrangeContainerGrid(id, controls);
         if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
 
         var area = slot.Bounds;
@@ -424,71 +451,16 @@ sealed class ProductionWindows(PlayerInterface player)
                 new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width,
                     item.Height * area.Height / grid.Height),
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
+                slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
-    }
-
-    /// <summary>
-    /// The research button keeps its height under HCenter Top alignment when the bench grows to fit its grid (#434).
-    /// </summary>
-    void PlaceResearchButton(List<UiControl> controls)
-    {
-        int index = controls.FindIndex(c => c.Name == "ResearchButton");
-        var root = controls.FirstOrDefault(c => c.Type == "Window");
-        if (index < 0 || root is null) return;
-
-        float scale = player.UiScale;
-        var bounds = root.Bounds;
-        controls[index] = controls[index] with
-        {
-            Bounds = new(bounds.X + 18 * scale, bounds.Y + 50 * scale, Math.Max(0, bounds.Width - 40 * scale), 32 * scale),
-        };
     }
 
     /// <summary>
     /// One input or output section, sized to its item's footprint, with its item (or a bench's faded ghost of the expected item).
     /// </summary>
-    void AddSlot(List<UiControl> controls, MachineSnapshot m, string name, string bar, MachineSlotView view, int code)
+    void AddSlot(List<UiControl> controls, MachineSnapshot m, string name, MachineSlotView view, int code)
     {
-        int index = controls.FindIndex(c => c.Name == name);
-        if (index < 0) return;
-
-        // The original makes the section the recipe item's footprint (a box of building material is 6 x 3 cells); the grid keeps the layout's top
-        // and takes the progress bar's horizontal centre (the layout slot is not centred in its column), so it stays under its label and bar. A
-        // grid wider than the bar keeps the slot's left edge, so it overflows only to the right as before rather than into the column on its
-        // left.
-        var slot = controls[index];
-        var barRoot = controls.FirstOrDefault(c => c.Name == bar);
-        float width = view.Width * player.InventoryCell;
-        var column = barRoot?.Bounds ?? slot.Bounds;
-        float x = width <= column.Width ? column.X + (column.Width - width) / 2 : slot.Bounds.X;
-        var b = slot.Bounds with { X = x, Width = width, Height = view.Height * player.InventoryCell };
-
-        // The grid and a moved bar may leave their content panel, so they clip to the window instead.
-        var clip = controls.FirstOrDefault(c => c.Type == "Window")?.Bounds ?? slot.Clip;
-        controls[index] = slot with
-        {
-            Bounds = b,
-            Clip = clip,
-            Properties = new Dictionary<string, string>(slot.Properties)
-            {
-                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
-                ["State"] = "normal",
-            },
-        };
-
-        // Engine choice: a grid taller than the room above the progress bar pushes the bar down under it.
-        if (barRoot is { } root && b.Y + b.Height + 4 * player.UiScale - root.Bounds.Y is var dy and > 0)
-        {
-            for (int i = 0; i < controls.Count; i++)
-            {
-                if (controls[i].Name == bar || controls[i].Name == bar + "@track"
-                    || controls[i].Properties.GetValueOrDefault("TemplateOwner") == bar)
-                {
-                    controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Y = controls[i].Bounds.Y + dy }, Clip = clip };
-                }
-            }
-        }
+        if (SizeSection(controls, name) is not var (b, clip)) return;
 
         if (view.Count <= 0 && m.Craft is not null)
             AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
@@ -498,13 +470,36 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
+    /// Applies the cell tile to a section already fitted by the geometry binding; returns its bounds and inherited clip.
+    /// </summary>
+    (UiRect Bounds, UiRect? Clip)? SizeSection(List<UiControl> controls, string name)
+    {
+        int index = controls.FindIndex(c => c.Name == name);
+        if (index < 0) return null;
+
+        var slot = controls[index];
+        var b = slot.Bounds;
+        var clip = slot.Clip;
+        controls[index] = slot with
+        {
+            Properties = new Dictionary<string, string>(slot.Properties)
+            {
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
+                ["State"] = "normal",
+            },
+        };
+
+        return (b, clip);
+    }
+
+    /// <summary>
     /// A furnace's input grid and its items.
     /// </summary>
     void AddFurnaceGrid(List<UiControl> controls, MachineSnapshot m, InventoryView fg, FurnaceView burn)
     {
         // The furnace's grid in in1, its items the storage's (picked up as storage items); disabled while it burns
         // (InventorySection::setEnabled(!active)).
-        AddSlot(controls, m, "in1", "Input1ProgressBar", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
+        AddSlot(controls, m, "in1", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
         int gi = controls.FindIndex(c => c.Name == "in1");
 
         if (gi >= 0)
@@ -518,10 +513,10 @@ sealed class ProductionWindows(PlayerInterface player)
                 if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
 
                 player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
-                    new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell,
-                        item.Height * player.InventoryCell),
+                    new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCellHeight, item.Width * player.InventoryCell,
+                        item.Height * player.InventoryCellHeight),
                     item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                    g.Clip, charge: item.Charge, colour: item.Colour);
+                    g.Clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
             }
         }
     }
@@ -531,27 +526,41 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     void AddOutputSlot(List<UiControl> controls, MachineSnapshot m)
     {
-        if (m.Output is { } output) AddSlot(controls, m, "out", "OutputProgressBar", output, 8);
-        else if (m.Craft is { Done: [var made, ..] } && controls.FirstOrDefault(c => c.Name == "out") is { } outSlot
-            && !player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8))
-        {
-            var ob = outSlot.Bounds;
-            float side = MathF.Min(ob.Width, ob.Height);
-            player.ItemCells.AddItemCell(controls, "machine-out", new(ob.X, ob.Y, side, side), made.Record, made.Material, made.Name, made.Quantity,
-                null, "MachineItem", 8, outSlot.Clip, colour: made.Colour);
-        }
-        else if (m.Craft is { Done: [] } craft && CraftCurrent(craft) is { } current && controls.FirstOrDefault(c => c.Name == "out") is { } emptyOut)
-        {
-            // The empty output shows the current craft's item, faded.
-            var ob = emptyOut.Bounds;
-            float side = MathF.Min(ob.Width, ob.Height);
-            string[] key = current.Key.Split('|');
-            AddItemGhost(controls, "machine-out", new(ob.X, ob.Y, side, side), key[0], key.Length > 1 ? key[1] : "", emptyOut.Clip);
-        }
+        if (m.Output is { } output) AddSlot(controls, m, "out", output, 8);
+        else if (m.Craft is { } craft) AddCraftOutput(controls, m, craft);
     }
 
     /// <summary>
-    /// A machine window event: the bench's RESEARCH opens the overview's research tab, the building's QUEUE its Craft tab.
+    /// A bench's output: the section as large as the largest thing the bench makes (docs/game/buildings-production.md "Crafting"), with the first
+    /// finished item at its top left, or the current craft's item faded in the empty section; both at the item's footprint.
+    /// </summary>
+    void AddCraftOutput(List<UiControl> controls, MachineSnapshot m, CraftView craft)
+    {
+        if (SizeSection(controls, "out") is not var (ob, clip)) return;
+
+        float cell = player.InventoryCell;
+
+        if (craft.Done is [var made, ..])
+        {
+            if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8)) return;
+
+            var area = new UiRect(ob.X, ob.Y, made.Width * cell, made.Height * player.InventoryCellHeight);
+            player.ItemCells.AddItemCell(controls, "machine-out", area, made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8,
+                clip, colour: made.Colour);
+            return;
+        }
+
+        if (CraftCurrent(craft) is not { } current) return;
+
+        // The empty output shows the current craft's item, faded.
+        string[] key = current.Key.Split('|');
+        var ghost = new UiRect(ob.X, ob.Y, craft.FrontWidth * cell, craft.FrontHeight * player.InventoryCellHeight);
+        AddItemGhost(controls, "machine-out", ghost, key[0], key.Length > 1 ? key[1] : "", clip);
+    }
+
+    /// <summary>
+    /// A machine window event: the bench's RESEARCH opens the overview's research tab, its ARRANGE arranges its grid, the building's QUEUE opens
+    /// its Craft tab.
     /// </summary>
     internal void MachineAction(MyGuiEvent e)
     {
@@ -560,6 +569,8 @@ sealed class ProductionWindows(PlayerInterface player)
             player.FaithfulScreens.Open("overview");
             player.FaithfulScreens.SetTab("overview", "TabsMain", TutorialPanel.ResearchTab);
         }
+        else if (e.Screen is "bench" or "storage" && e.Widget == "ArrangeButton" && ShownMachine is not null)
+            player.Say(new ArrangeMachine(ShownMachine) { Tick = player.Session.World.Tick });
         else if (e.Screen == "building" && e.Widget == "QueueButton" && ShownMachine is not null)
             OpenCraftTab(ShownMachine);
     }
@@ -809,8 +820,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 break;
             case MachinePanel.Training:
                 stats.Add(WorkersLine(e.Operators, e.MaxOperators));
-                stats.Add(new("Max Skill Level:", ((int)m.OutputValue - 1).ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour,
-                    Tooltip: "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time."));
+                stats.Add(MaxSkillLine(m.OutputValue));
                 break;
             case MachinePanel.Turret:
                 // TurretBuilding slot 40 (FUN_14030c2a0): section 6 the gun's lines and Efficiency, section 7 Workers and Efficiency.
@@ -824,7 +834,14 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The stats lines of a selected machine: the farm's crop and growth, the output's progress, then (section 6: slots 155, 154, 153) Workers and
+    /// A training dummy's <c>Max Skill Level:</c> line (UseableStuff slot 40 for BF_TRAINING): int(<paramref name="outputValue"/>) − 1.
+    /// </summary>
+    internal static PlayerInterface.HudLine MaxSkillLine(float outputValue) =>
+        new("Max Skill Level:", ((int)outputValue - 1).ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour,
+            Tooltip: "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time.");
+
+    /// <summary>
+    /// The stats lines of a selected machine: the farm's yield and growth rate, the output's progress, then (section 6: slots 155, 154, 153) Workers and
     /// Efficiency per <see cref="AddEfficiencyLines"/>, the power lines, and the bench's tech level.
     /// </summary>
     internal void AddMachineLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, List<PlayerInterface.HudLine> extended, ref string status,
@@ -860,7 +877,7 @@ sealed class ProductionWindows(PlayerInterface player)
     static string Percent(float v) => ((int)(Math.Clamp(v, 0, 1) * 100)).ToString(CultureInfo.InvariantCulture) + "%";
 
     /// <summary>
-    /// The status word and the lines of a machine's product: a mine's or rock's status, a farm's growth, or the output's stock.
+    /// The status word and the lines of a machine's product: a mine's or rock's status, a farm's yield and growth rate, or the output's stock.
     /// </summary>
     static void AddOutputLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, ref string status, ref bool bad, RichnessView? rich)
     {
@@ -877,16 +894,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 _ => "Growing",
             };
             bad = f.Status is FarmStatus.NoWater or FarmStatus.OutputFull;
-            stats.Add(new("Growth:", Percent(MathF.Min(f.Growth, 1)), PlayerInterface.MainColour));
-
-            if (f.Growth >= 1)
-            {
-                stats.Add(new("Ripeness:", Percent(f.Ripeness), PlayerInterface.MainColour,
-                    f.Growth >= 2 ? PlayerInterface.BadColour : PlayerInterface.GoodColour));
-            }
-
-            if (f.Death > 0)
-                stats.Add(new("Dying:", Percent(f.Death), PlayerInterface.MainColour, PlayerInterface.BadColour));
+            FarmPanel.AddStats(m, stats);
         }
         else if (m.Output is { } o)
         {
@@ -1264,6 +1272,31 @@ sealed class ProductionWindows(PlayerInterface player)
     string? _craftStation, _craftFocus;
 
     /// <summary>
+    /// How far the item rows are scrolled and their pitch (0 until they are laid out).
+    /// </summary>
+    float _craftScroll, _craftStep;
+
+    /// <summary>
+    /// The panel the item rows scroll in.
+    /// </summary>
+    UiRect _craftArea;
+
+    /// <summary>
+    /// The wheel over the item rows scrolls them a row per notch; clamped when the rows are laid out.
+    /// </summary>
+    internal bool CraftWheel(Vector2 p, float steps)
+    {
+        if (!player.FaithfulScreens.IsOpen("overview") || player.FaithfulScreens.GetTab("overview", "TabsMain") != CraftTab
+            || _craftStep <= 0 || !_craftArea.Contains(p.X, p.Y))
+        {
+            return false;
+        }
+
+        _craftScroll -= MathF.Sign(steps) * _craftStep;
+        return true;
+    }
+
+    /// <summary>
     /// The player's crafting benches.
     /// </summary>
     List<MachineSnapshot> CraftStations() => [.. player.Session.CurrentSnapshot.Machines.Where(m => m.Craft is not null)];
@@ -1316,6 +1349,7 @@ sealed class ProductionWindows(PlayerInterface player)
             _craftStation = stations.FirstOrDefault(s => s.Site == e.Text)?.Site
                 ?? stations.FirstOrDefault(s => StationName(s) == e.Text)?.Site
                 ?? _craftStation;
+            _craftScroll = 0;
         }
         else if (e.Widget == "QueueRepeat" && _craftStation is not null && Machine(_craftStation)?.Craft is { } craft)
             player.Say(new RepeatCrafts(_craftStation, !craft.Repeat) { Tick = player.Session.World.Tick });
@@ -1351,14 +1385,22 @@ sealed class ProductionWindows(PlayerInterface player)
         if (controls.FirstOrDefault(c => c.Name == "QueueItemsPanel") is { } panel)
         {
             var rows = options.OrderBy(o => o.Kind).ThenBy(o => o.Level).ThenBy(o => o.Name, StringComparer.Ordinal).ToList();
+            var area = panel.Bounds;
+            _craftArea = area;
+            _craftStep = line;
+            _craftScroll = Math.Clamp(_craftScroll, 0, Math.Max(0, rows.Count * line - area.Height));
 
             for (int i = 0; i < rows.Count; i++)
             {
+                // A row outside the panel is left out: the clip only cuts its drawing, and it would take clicks over the description below.
+                float top = area.Y + i * line - _craftScroll, middle = top + line / 2;
+                if (middle < area.Y || middle > area.Y + area.Height) continue;
+
                 var o = rows[i];
-                controls.Add(new($"craft-row-{i}", "Button", new(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line),
+                controls.Add(new($"craft-row-{i}", "Button", new(area.X + 6, top, area.Width - 12, line),
                     o.Name, o.Unlocked ? "craft-queue:" + o.Key : "craft-focus:" + o.Key, "", true, face, Vector4.Zero,
                     TextColour: o.Unlocked ? ink : new Vector4(0.75f, 0.35f, 0.3f, 1), HoverColour: new(0, 1, 0, 1), Pickable: true,
-                    Clip: panel.Bounds));
+                    Clip: area));
             }
         }
 

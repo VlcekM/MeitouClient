@@ -280,6 +280,11 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public string Material { get; init; } = "";
     /// <summary>
+    /// The item lies turned a quarter (<see cref="Items.ItemInstance.Rotated"/>): <see cref="Width"/> and <see cref="Height"/> are the turned
+    /// footprint's, and the icon is drawn turned.
+    /// </summary>
+    public bool Rotated { get; init; }
+    /// <summary>
     /// The COLOR_DATA it is dyed with (<see cref="Items.ItemInstance.ColourId"/>; "" none), which also picks its icon.
     /// </summary>
     public string Colour { get; init; } = "";
@@ -319,6 +324,11 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// How many items a bag holds (-1: not a bag); an empty one's tooltip name ends in " (empty)".
     /// </summary>
     public int BagItems { get; init; } = -1;
+    /// <summary>
+    /// The chance a take of it goes unseen, for an item of the open loot or container that its opener would steal
+    /// (<see cref="Crime.CrimeSystem.StealChanceOf(World, int, int, Items.ItemInstance)"/>): the tooltip's stealing chance. Null otherwise.
+    /// </summary>
+    public float? StealChance { get; init; }
 }
 
 /// <summary>
@@ -445,6 +455,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool Selected { get; internal set; }
     /// <summary>
+    /// Whether it was selected before the rest of the selection (<see cref="PlayerState.Selection"/>'s first): the lead the kidnap chances
+    /// are against, and whose carrying a carried body's menu tests.
+    /// </summary>
+    public bool FirstSelected { get; internal set; }
+    /// <summary>
     /// Another faction's character the HUD shows (<see cref="InspectCommand"/>): it carries the same HUD details as a selected one but is not
     /// selected.
     /// </summary>
@@ -500,6 +515,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public StatusView? Status { get; internal set; }
     /// <summary>
+    /// The kidnap victim flag (<see cref="CharacterCold.KidnapVictim"/>), which shows the bounty panel by itself (<c>MainBarGUI</c>
+    /// <c>FUN_1407211b0</c>); false for a character published without detail.
+    /// </summary>
+    public bool KidnapVictim { get; internal set; }
+    /// <summary>
     /// A selected character's trained stats (the host formats them); null for the others and for a character without stats.
     /// </summary>
     public SkillSummary? Skills { get; internal set; }
@@ -551,6 +571,14 @@ public sealed class CharacterSnapshot
     /// Where a carried body hangs, in its carrier's frame (on the carrier's <c>Bip01 L UpperArm</c>); null when not carried.
     /// </summary>
     public Carrying.CarryAttach? Carry { get; internal set; }
+    /// <summary>
+    /// The lean of the bed it lies in, applied after its yaw (<see cref="Locks.FixtureRegistry.LeanOf"/>: a bed on a slope); null: none.
+    /// </summary>
+    public Quaternion? Lean { get; internal set; }
+    /// <summary>
+    /// The bone of another character this one is drawn on (<see cref="CharacterCold.DrawAnchor"/>); null: none.
+    /// </summary>
+    public DrawAnchor? Anchor { get; internal set; }
     /// <summary>
     /// The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c>
     /// (docs/game/buildings-production.md "Production"); null for none.
@@ -962,6 +990,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").
     /// </summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];
+    /// <summary>
+    /// The other factions' squads the world map shows (<see cref="Population.MapSquads"/>): campaign platoons and squads hired by the player.
+    /// </summary>
+    public IReadOnlyList<Population.MapSquadSnapshot> MapSquads { get; init; } = [];
     /// <summary>
     /// Loose items lying in the world (<see cref="Items.GroundItems"/>), oldest first.
     /// </summary>

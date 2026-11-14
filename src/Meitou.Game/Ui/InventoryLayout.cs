@@ -14,19 +14,34 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Window placement
 
     /// <summary>
+    /// The main inventory has an opening position to retain when closed and reopened.
+    /// </summary>
+    bool _inventoryPlaced;
+
+    /// <summary>
     /// A window's geometry at the inventory scale: a bag window sized to its bag, the trader's own.
     /// </summary>
     internal void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = player.UiScale;
+        b.WindowPosition = new Vector2(InventoryPlacement.Margin(player.Width, player.Height));
         if (InventoryWindows.ScreenKind(id) is "bag" or "loot-bag")
         {
             var owner = player.InventoryWindows.WindowCharacter(id);
             if (owner?.ItemGrid is { } bag)
             {
-                b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.UiScale,
-                    Math.Min(player.Height * 0.8f, bag.BagHeight * player.InventoryCell + 108 * player.UiScale));
+                BindContainerGeometry(id, b, bag.BagWidth, bag.BagHeight, fixedTop: true);
             }
+        }
+
+        if (InventoryWindows.ScreenKind(id) is "inventory" or "loot"
+            && player.InventoryWindows.WindowCharacter(id)?.ItemGrid is { } grid)
+        {
+            var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
+                player.InterfaceScale, player.UiScale);
+            if (!TradeWindows.IsAnimal(player.InventoryWindows.WindowCharacter(id)!))
+                geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCellHeight));
+            geometry.Bind(b);
         }
 
         if (id == "trader") player.TradeWindows.BindTraderGeometry(b);
@@ -60,34 +75,45 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// Lays the open character, loot and bag windows out in one row, left to right: the limbs window, the character's bag, the character, the looted
-    /// or traded character, its bag. The row is centred with the character's top (the limbs window keeps its margin top), so no window slides over
-    /// another when the row is wider than the pair that placed them. A row wider than the screen spans it, its windows overlapping evenly rather than
-    /// the host stacking the last ones on the right edge.
+    /// Places a newly opened independent character inventory after the other inventory windows, using another row when necessary.
+    /// </summary>
+    internal void PlaceCharacterWindow(bool newCharacter = false)
+    {
+        if (_inventoryPlaced && !newCharacter) return;
+
+        var roots = WindowRoots();
+        if (!roots.TryGetValue("inventory", out var own)) return;
+
+        _inventoryPlaced = true;
+
+        var occupied = roots.Where(p => p.Key != "inventory" && InventoryWindows.ScreenKind(p.Key) is "inventory" or "bag")
+            .Select(p => p.Value).ToArray();
+        var position = InventoryPlacement.FindSpace(player.Width, player.Height, own.Width, occupied);
+        foreach (string machine in new[] { "building", "bench", "storage" })
+        {
+            if (roots.TryGetValue(machine, out var r)) position.X = Math.Max(position.X, r.X + r.Width);
+        }
+
+        player.FaithfulScreens.SetOffset("inventory", player.FaithfulScreens.GetOffset("inventory") + position - new Vector2(own.X, own.Y));
+    }
+
+    /// <summary>
+    /// Places linked loot windows edge to edge at the opening margin: limbs, own bag, own inventory, looted bag, looted character.
     /// </summary>
     internal void PlaceWindowRow()
     {
         var roots = WindowRoots();
-        var row = new[] { "limbs", "bag", "inventory", "loot", "loot-bag" }.Where(roots.ContainsKey).ToArray();
-        if (row.Length < 2) return;
-
-        float gap = 6 * player.UiScale;
-        float total = row.Sum(s => roots[s].Width) + gap * (row.Length - 1);
-        if (total > player.Width)
-        {
-            gap -= (total - player.Width) / (row.Length - 1);
-            total = player.Width;
-        }
-
-        float x = (player.Width - total) / 2;
-        float y = (roots.TryGetValue("inventory", out var lead) ? lead : roots[row[0]]).Y;
-        float margin = 0.05f * Math.Min(player.Width, player.Height);
+        var row = new[] { "limbs", "bag", "inventory", "loot-bag", "loot" }.Where(roots.ContainsKey).ToArray();
+        float margin = InventoryPlacement.Margin(player.Width, player.Height);
+        float before = row.TakeWhile(s => s != "inventory").Sum(s => roots[s].Width);
+        var own = roots.GetValueOrDefault("inventory", new(margin, margin, 0, 0));
+        float x = Math.Max(margin, own.X - before), y = own.Y;
         foreach (string screen in row)
         {
             var r = roots[screen];
             var move = new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y);
             player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + move);
-            x += r.Width + gap;
+            x += r.Width;
         }
     }
 
@@ -128,15 +154,21 @@ sealed class InventoryLayout(PlayerInterface player)
     /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left
     /// edge, vertically centred; an open inventory (with its bag) under it moves right of it.
     /// </summary>
-    internal void PlaceMachineWindow(string id)
+    internal void PlaceMachineWindow(string id, bool linked = false)
     {
+        if (linked)
+        {
+            PlaceInventoryBeside(id, left: false);
+            return;
+        }
+
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
 
         var move = new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y);
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
         float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
-        float push = window.Width + 6 * player.UiScale - left;
+        float push = window.Width - left;
         if (push <= 0) return;
 
         foreach (string screen in new[] { "inventory", "bag" })
@@ -153,17 +185,28 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
 
-        float gap = 6 * player.UiScale;
-        float x = left ? own.X - other.Width - gap : own.X + own.Width + gap;
+        float x = left ? own.X - other.Width : own.X + own.Width;
 
-        // Make room for the pair before the screen host clamps either window to the viewport.
-        if (x < 0 || x + other.Width > player.Width)
+        // A bag placed on the left must stay at the opening margin and right of an open machine or container window (the original opens the
+        // bag, then the character, from there); a linked window on the right only has to stay on the screen.
+        float floor = 0;
+        if (left)
+        {
+            floor = InventoryPlacement.Margin(player.Width, player.Height);
+            foreach (string machine in new[] { "building", "bench", "storage" })
+            {
+                if (roots.TryGetValue(machine, out var r) && machine != id) floor = Math.Max(floor, r.X + r.Width);
+            }
+        }
+
+        // Make room for the pair without changing either frame's size.
+        if (x < floor || x + other.Width > player.Width)
         {
             float ownX = left
-                ? Math.Min(player.Width - own.Width, other.Width + gap)
-                : Math.Max(0, player.Width - other.Width - gap - own.Width);
+                ? Math.Min(player.Width - own.Width, floor + other.Width)
+                : Math.Max(0, player.Width - other.Width - own.Width);
             player.FaithfulScreens.SetOffset(anchor, player.FaithfulScreens.GetOffset(anchor) + new Vector2(ownX - own.X, 0));
-            x = left ? ownX - other.Width - gap : ownX + own.Width + gap;
+            x = left ? ownX - other.Width : ownX + own.Width;
         }
 
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + new Vector2(x - other.X, own.Y - other.Y));
@@ -190,10 +233,10 @@ sealed class InventoryLayout(PlayerInterface player)
             bool open = state is (int)Simulation.Bodies.LimbState.Stump or (int)Simulation.Bodies.LimbState.Replaced;
             controls[index] = slot with
             {
-                Bounds = slot.Bounds with { Width = 2 * player.InventoryCell, Height = (k < 2 ? 6 : 7) * player.InventoryCell },
+                Bounds = slot.Bounds with { Width = 2 * player.InventoryCell, Height = (k < 2 ? 6 : 7) * player.InventoryCellHeight },
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
                     ["State"] = open ? "normal" : "disabled",
                 },
             };
@@ -230,13 +273,13 @@ sealed class InventoryLayout(PlayerInterface player)
             var size = InventoryCommands.SectionSize(section);
             int columns = section == "main" ? grid.Width : size.Width;
             int rows = section == "main" ? grid.Height : size.Height;
-            var bounds = slot.Bounds with { Width = columns * player.InventoryCell, Height = rows * player.InventoryCell };
+            var bounds = slot.Bounds with { Width = columns * player.InventoryCell, Height = rows * player.InventoryCellHeight };
             controls[index] = slot with
             {
                 Bounds = bounds,
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
                     ["State"] = "normal",
                 },
             };
@@ -256,14 +299,14 @@ sealed class InventoryLayout(PlayerInterface player)
 
         var template = controls[belt];
         float cell = player.InventoryCell;
-        string tile = FormattableString.Invariant($"{cell} {cell}");
+        string tile = FormattableString.Invariant($"{cell} {player.InventoryCellHeight}");
 
         // The belt's clip is its own panel's; a mod slot may lie anywhere in the window.
         var clip = window.Clip is { } c ? window.Bounds.Intersect(c) : window.Bounds;
         foreach (var slot in ModSlots.All)
         {
             var bounds = new UiRect(window.Bounds.X + slot.X * player.UiScale, window.Bounds.Y + slot.Y * player.UiScale, slot.Width * cell,
-                slot.Height * cell);
+                slot.Height * player.InventoryCellHeight);
             var properties = new Dictionary<string, string>(template.Properties) { ["TileSize"] = tile, ["State"] = "normal" };
             controls.Insert(++belt, template with { Name = slot.Section, Bounds = bounds, Clip = clip, Properties = properties });
         }
@@ -297,48 +340,35 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Grids
 
     /// <summary>
-    /// The grid is laid in the window with <paramref name="above"/> (default 50) layout pixels over it and <paramref name="below"/> (default 58)
-    /// under it.
+    /// Sizes a storage, research or backpack window from its original layout and the inventory's dimensions.
     /// </summary>
-    internal void ArrangeContainerGrid(string id, List<UiControl> controls, int columns, int rows, float above = 50, float below = 58)
+    internal void BindContainerGeometry(string id, UiBindings bindings, int columns, int rows, bool fixedTop = false)
     {
-        int index = controls.FindIndex(c => c.Name == "backpack_content");
-        var root = controls.FirstOrDefault(c => c.Type == "Window");
-        if (index < 0 || root is null) return;
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
+            player.InterfaceScale, player.UiScale);
+        geometry.FitContainer(new(columns * player.InventoryCell, rows * player.InventoryCellHeight), fixedTop);
+        geometry.Bind(bindings);
+    }
 
-        float scale = player.UiScale;
-        float cell = player.InventoryCell;
-        var r = root.Bounds;
-        float top = above * scale;
-        var view = new UiRect(r.X + 18 * scale, r.Y + top, Math.Max(0, r.Width - 40 * scale), Math.Max(0, r.Height - top - below * scale));
-        float maximum = Math.Max(0, rows * cell - view.Height);
-        if (maximum < 0.01f) maximum = 0;
-        float scroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault(id), 0, maximum);
-        player.ScrollBars.InventoryScroll[id] = scroll;
-        player.ScrollBars.InventoryViews[id] = (view, maximum);
+    /// <summary>
+    /// Applies the inventory cell tile to the grid already positioned inside its frame. Generic inventories have no artificial height cap or scroll.
+    /// </summary>
+    internal void ArrangeContainerGrid(string id, List<UiControl> controls)
+    {
+        player.ScrollBars.InventoryScroll.Remove(id);
+        player.ScrollBars.InventoryViews.Remove(id);
+        player.ScrollBars.InventoryTracks.Remove(id);
+        int index = controls.FindIndex(c => c.Name == "backpack_content");
+        if (index < 0) return;
 
         var slot = controls[index];
         controls[index] = slot with
         {
-            Bounds = new(view.X, view.Y - scroll, columns * cell, rows * cell),
-            Clip = view.Intersect(slot.Clip ?? view),
-            Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {cell}") },
+            Properties = new Dictionary<string, string>(slot.Properties)
+            {
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
+            },
         };
-        int arrange = controls.FindIndex(c => c.Name == "ArrangeButton");
-        if (arrange >= 0)
-        {
-            var button = new UiRect(r.X + (r.Width - 110 * scale) / 2, r.Y + r.Height - 44 * scale, 110 * scale, 32 * scale);
-            controls[arrange] = controls[arrange] with { Bounds = button };
-        }
-
-        if (maximum <= 0)
-        {
-            player.ScrollBars.InventoryTracks.Remove(id);
-            return;
-        }
-
-        var track = new UiRect(r.X + r.Width - 22 * scale, view.Y, 17 * scale, view.Height);
-        player.ScrollBars.AddScrollBar(id, controls, track, view.Height, rows * cell, scroll, maximum, root.Clip);
     }
 
     #endregion

@@ -51,9 +51,9 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// The ruins of a replaced town's residents (the original reads the town's zone back from the level file and houses the replacement's residents,
-    /// whose ruined templates ruin their homes, <c>FUN_14057f1f0</c>), for its buildings that are not the player's: in its own zone each is a ruin as
-    /// a home of a ruined template, else as its level file has it; in other zones (which keep their state) such a home becomes a ruin. A loaded save
-    /// applies them again from its replacements.
+    /// whose ruined templates ruin their homes and whose others stand theirs up, <c>FUN_14057f1f0</c>), for its buildings that are not the player's:
+    /// in its own zone a home is a ruin as its template says, any other building as its level file has it; in other zones (which keep their state)
+    /// a home of a ruined template becomes a ruin. A loaded save applies them again from its replacements.
     /// </summary>
     public void ApplyTownRuins(World world, PopulationData data, int site)
     {
@@ -75,12 +75,14 @@ public sealed partial class FixtureRegistry
         var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
         string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        var ruined = ResidentRuins.RuinedHomes(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
+        var homes = ResidentRuins.HomeTemplates(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
         foreach (var b in town.Buildings)
         {
+            bool home = homes.TryGetValue(b.Key, out var template);
+            bool ruined = home && ResidentRuins.Ruins(data.Db, template!, b);
             if (reset.Contains(b.Key))
-                SetRuin(world, data, site, b, ruined.Contains(b.Key) || b.Destroyed && !b.RuinedByResidents);
-            else if (ruined.Contains(b.Key) && !IsPlayers(data, site, b, player))
+                SetRuin(world, data, site, b, home ? ruined : b.LevelDestroyed);
+            else if (ruined && !IsPlayers(data, site, b, player))
             {
                 SetRuin(world, data, site, b, true);
                 RemoveShell(b.Key);
@@ -90,7 +92,8 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// A loaded save's ruins of standing level buildings that are not the player's (an override's homes outside its zone, kept by later overrides
-    /// too): their saved <c>destroyed</c>. Before <see cref="ApplyTownRuins(World, PopulationData, int)"/> sets the replaced towns' own zones.
+    /// too): their saved <c>destroyed</c>; and its standing homes that housing would ruin now (<see cref="SavedStanding"/>). Before
+    /// <see cref="ApplyTownRuins(World, PopulationData, int)"/> sets the replaced towns' own zones.
     /// </summary>
     public void RuinsFromSave(World world, PopulationData data)
     {
@@ -100,12 +103,25 @@ public sealed partial class FixtureRegistry
         {
             foreach (var b in site.Buildings)
             {
-                if (!b.Destroyed && Saved.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed") == true
-                        && !IsPlayers(data, site.Index, b, player))
+                if (Saved.GetValueOrDefault(b.Key) is not { } saved || IsPlayers(data, site.Index, b, player)) continue;
+
+                if (!b.Destroyed && saved.Bools.GetValueOrDefault("destroyed") && !SavedLevelRuin(b, saved))
                     SetRuin(world, data, site.Index, b, true);
+                else if (SavedStanding(data.Db, b, saved))
+                    SetRuin(world, data, site.Index, b, false);
             }
         }
     }
+
+    /// <summary>
+    /// Whether a home that housing ruins now stands in the save: the save has it intact as the home of another template, one that ruins no
+    /// building (the housing differs from the one the save was made under, e.g. a mod added residents to the town: The Hub's bar, issue #673).
+    /// The save's residents live there, so its state holds.
+    /// </summary>
+    static bool SavedStanding(Data.GameDatabase db, TownBuilding b, Data.Fcs.FcsRecord saved) =>
+        b.RuinedByResidents && !saved.Bools.GetValueOrDefault("destroyed", true)
+        && saved.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) is { Length: > 0 } template && template != b.ResidentsTemplate
+        && db.Find(template) is { } record && !record.GetBool("building ruined");
 
     /// <summary>
     /// A registered building that became a ruin outside a reset zone loses its doors and its own lock (a ruin has none, docs/game/locks.md "Doors");

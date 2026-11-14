@@ -195,6 +195,12 @@ public static class SaveLoader
     }
 
     /// <summary>
+    /// An imported zone resets NPC building state even when a player building keeps the zone file (FUN_1409ffad0: "imported" key presence).
+    /// </summary>
+    static bool HasSavedBuildingState(KeyValuePair<Meitou.Data.World.ZoneCoordinate, SaveZone> entry) =>
+        entry.Value.BuildingList?.Bools.ContainsKey("imported") != true;
+
+    /// <summary>
     /// The research, the player's buildings and machines, the NPC town and rock machines and the zones' loose items.
     /// </summary>
     static void LoadWorks(World world, SaveGame save, PopulationData data, int playerIndex, LoadedSave loaded)
@@ -204,7 +210,7 @@ public static class SaveLoader
 
         // The research the player has finished, and the buildings the player made (docs/simulation.md "Buildings").
         ResearchSave.Load(save.Research, world.Research, data.Db);
-        if (playerFaction is not null) BuildingSave.Read(save, world, data.Db, playerFaction.Id, playerIndex);
+        if (playerFaction is not null) BuildingSave.Read(save, world, data.Db, playerFaction.Id, playerIndex, data);
 
         // The machines of the player's complete buildings: recipe slots, storage, farms (docs/simulation.md "Production").
         if (playerFaction is not null && world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
@@ -217,9 +223,8 @@ public static class SaveLoader
             RockMachineSave.Read(camera.Record, world, townProduction);
         }
 
-        // The loose items of the zone files (docs/simulation.md "Ground items"); a zone with a file is not loaded fresh (no nest items are laid
-        // there).
-        world.SavedZones.UnionWith(save.Zones.Keys);
+        // The loose items of the zone files (docs/simulation.md "Ground items"); a non-imported saved zone is not loaded fresh (no nest items).
+        world.SavedZones.UnionWith(save.Zones.Where(HasSavedBuildingState).Select(entry => entry.Key));
         if (GroundItemSave.Load(save, world, data.Items,
             id => data.FactionIndex(id) is var f and >= 0 && !data.Factions[f].NotReal ? f : -1) is > 0 and var lost)
             loaded.Notes.Add($"{lost} loose items name records this game does not have; they stay in the zone files.");
@@ -495,6 +500,7 @@ public static class SaveLoader
             HomeCentre = new Vector2(platoon.Position.X, platoon.Position.Z),
             HomeRadius = 100,
         };
+        AutonomySave.Read(platoon.Record, squad);
 
         foreach (var sc in platoon.Characters)
         {
@@ -606,13 +612,19 @@ public static class SaveLoader
     {
         int origin = -1;
 
+        // Several placed towns can be one TOWN (the four Waystations of 44854-rebirth.mod): the platoon's `hometown` handle names its own.
+        var named = Hand.Read(platoon.Record, "hometown");
+        if (named.Type == (int)FcsRecordType.Town && context.TownSites.TryGetValue((named.C, named.Cs), out int namedSite)
+                && IsBaseTown(data.Sites[namedSite], baseTown))
+            return namedSite;
+
         for (int i = 0; i < data.Sites.Count && baseTown.Length > 0; i++)
         {
-            if (data.Sites[i].Record.Id == baseTown || data.Sites[i].Replacement?.Id == baseTown)
+            if (IsBaseTown(data.Sites[i], baseTown))
             {
                 origin = i;
                 break;
-            }   // the town's own TOWN, or the override that took its place (platoons made since)
+            }
         }
 
         if (origin < 0 && campaignHome is { IsNull: false } home && context.TownSites.TryGetValue((home.C, home.Cs), out int homeSite))
@@ -620,6 +632,11 @@ public static class SaveLoader
 
         return origin;
     }
+
+    /// <summary>
+    /// Whether <paramref name="baseTown"/> is the site's own TOWN, or the override that took its place (platoons made since).
+    /// </summary>
+    static bool IsBaseTown(TownSite site, string baseTown) => site.Record.Id == baseTown || site.Replacement?.Id == baseTown;
 
     /// <summary>
     /// The saved characters a platoon carries: none for a town's platoon never made (made from its template), else its saved ones.

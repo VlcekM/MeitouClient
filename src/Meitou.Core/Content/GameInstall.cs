@@ -44,6 +44,23 @@ public sealed class GameInstall
     /// The install's <c>save</c> folder, one subfolder per save.
     /// </summary>
     public string SaveDirectory => Path.Combine(Root, "save");
+    /// <summary>
+    /// The original's per-user save folders (docs/formats/save.md "Where saves live"): <c>%LOCALAPPDATA%/kenshi/save</c>, then, for a Steam
+    /// install, the one inside the Proton prefix (<c>steamapps/compatdata/233860/pfx/.../AppData/Local/kenshi/save</c>), where the game run
+    /// through Proton on Linux saves. Either may be missing.
+    /// </summary>
+    public IReadOnlyList<string> UserSaveDirectories
+    {
+        get
+        {
+            string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
+            if (SteamAppsDirectory is not { } steamapps) return [local];
+
+            string proton = Path.Combine(steamapps, "compatdata", "233860", "pfx", "drive_c", "users", "steamuser", "AppData", "Local",
+                "kenshi", "save");
+            return [local, proton];
+        }
+    }
 
     /// <summary>
     /// The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).
@@ -53,9 +70,25 @@ public sealed class GameInstall
 
     /// <summary>
     /// Steam workshop items of Kenshi (app 233860) in the same Steam library, if the install is a Steam one:
-    /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>.
+    /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>. An install outside a Steam library on macOS (Kenshi
+    /// has no Mac build, so it is a copy) uses the macOS Steam client's own folder, where the client downloads the account's items
+    /// (<see cref="Steam.MacSteam.WorkshopContentDirectory"/>). Null when the folder does not exist.
     /// </summary>
     public string? WorkshopDirectory
+    {
+        get
+        {
+            var dir = SteamAppsDirectory is { } steamapps
+                ? Path.Combine(steamapps, "workshop", "content", "233860")
+                : Steam.MacSteam.WorkshopContentDirectory;
+            return dir is not null && Directory.Exists(dir) ? dir : null;
+        }
+    }
+
+    /// <summary>
+    /// The Steam library's <c>steamapps</c> folder when the install sits in its <c>common</c> folder, else null.
+    /// </summary>
+    string? SteamAppsDirectory
     {
         get
         {
@@ -63,8 +96,7 @@ public sealed class GameInstall
             var steamapps = common is null ? null : Path.GetDirectoryName(common);
             if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase))
                 return null;
-            var dir = Path.Combine(steamapps, "workshop", "content", "233860");
-            return Directory.Exists(dir) ? dir : null;
+            return steamapps;
         }
     }
 

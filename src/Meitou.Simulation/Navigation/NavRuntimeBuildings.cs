@@ -30,6 +30,21 @@ public sealed class NavRuntimeBuildings
     volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> _byZone = [];
 
     /// <summary>
+    /// The player's towns as the foliage placer sees them: a snapshot replaced whole (<see cref="SetFoliageTowns"/>).
+    /// </summary>
+    volatile PlayerFoliageTowns _foliageTowns = PlayerFoliageTowns.None;
+
+    /// <summary>
+    /// The player's towns, which keep <c>avoid towns</c> foliage away like the level's (<see cref="PlayerFoliageTowns"/>); none by default.
+    /// </summary>
+    public PlayerFoliageTowns FoliageTowns => _foliageTowns;
+
+    /// <summary>
+    /// Replaces the player's towns. The caller builds the zones they reach again (<see cref="NavSystem.SetPlayerTowns"/>).
+    /// </summary>
+    public void SetFoliageTowns(PlayerFoliageTowns towns) => _foliageTowns = towns;
+
+    /// <summary>
     /// Whether no placement is in the overlay.
     /// </summary>
     public bool IsEmpty => _byZone.Count == 0;

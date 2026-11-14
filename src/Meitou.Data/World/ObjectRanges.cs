@@ -43,11 +43,14 @@ public static class ObjectRanges
 
     /// <summary>
     /// The distance beyond which a building part is not drawn: the objects view range (half of it for turrets), unlimited
-    /// for a part with a big mesh or for generators. The distance is <see cref="Ogre.MeshLod.Value"/>-like: camera to bounds
+    /// for walls, a part with a big mesh or generators. Walls bypass the part range regardless of mesh size
+    /// (Verified: FUN_14055f6e0, WallBuilding virtual +0x2c8). The distance is <see cref="Ogre.MeshLod.Value"/>-like: camera to bounds
     /// centre minus the bounds' radius (Observed; Ogre's rule in the game's version is not decompiled).
     /// </summary>
-    public static float PartRenderingDistance(float localRadius, int buildingFunction, float objectsViewRange = ObjectsViewRange)
+    public static float PartRenderingDistance(float localRadius, int buildingFunction, float objectsViewRange = ObjectsViewRange,
+        bool isWall = false)
     {
+        if (isWall) return float.MaxValue;
         if (buildingFunction == GeneratorFunction) return float.MaxValue;
         if (buildingFunction == TurretFunction) return objectsViewRange * 0.5f;
         return localRadius > BigObjectRadius ? float.MaxValue : objectsViewRange;

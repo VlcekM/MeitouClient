@@ -375,7 +375,7 @@ public sealed class SightMap
             {
                 // A building that enforces its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
                 _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : -1;
-                _onTop[s] = !(_rooms[r].EnforcesCeiling && _floorOf[s] != 0) && !_rooms[r].Volume.Covered(at);
+                _onTop[s] = OnTop(_rooms[r], at, _floorOf[s]);
                 _probed[s] = key;
             }
         }
@@ -473,6 +473,25 @@ public sealed class SightMap
     /// character's.
     /// </summary>
     public int PlaceAt(Vector3 at) => RoomAt(at);
+
+    /// <summary>
+    /// The place (<see cref="PlaceOf"/>) a character standing at <paramref name="at"/> gets, worked out afresh: the room holding it unless it is on
+    /// top, else -1.
+    /// </summary>
+    public int PlaceAtPoint(Vector3 at)
+    {
+        int r = RoomAt(at);
+        if (r < 0) return -1;
+
+        var room = _rooms[r];
+        return OnTop(room, at, room.EnforcesCeiling ? room.Volume.FloorAt(at) : -1) ? -1 : r;
+    }
+
+    /// <summary>
+    /// Whether a character at <paramref name="at"/> in <paramref name="room"/> on <paramref name="floor"/> stands on top: a building that enforces
+    /// its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
+    /// </summary>
+    static bool OnTop(Room room, Vector3 at, int floor) => !(room.EnforcesCeiling && floor != 0) && !room.Volume.Covered(at);
 
     /// <summary>
     /// The room holding <paramref name="at"/>, -1 outdoors.

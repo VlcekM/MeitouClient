@@ -79,6 +79,7 @@ sealed class BuildingSync(GameHost host)
         var snapshot = host.Session.CurrentSnapshot;
         host.TownChanges.UpdateRuins(snapshot);
         host.TownChanges.UpdateEmptiedHouses(snapshot);
+        UpdateFoliageTowns(snapshot);
         if (snapshot.BuildingsRevision != _buildingsRevision || snapshot.NestBuildingsRevision != _nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
@@ -103,6 +104,30 @@ sealed class BuildingSync(GameHost host)
         foreach (var site in snapshot.Buildings)
             if (!site.Complete && !site.Destroyed) _constructionLook[site.Id] = ConstructionLook(site);
         objects.Construction = _constructionLook.Count == 0 ? null : _constructionLook;
+    }
+
+    /// <summary>
+    /// The outposts the foliage placer was last given.
+    /// </summary>
+    IReadOnlyList<Simulation.Production.OutpostSnapshot>? _foliageOutposts;
+
+    /// <summary>
+    /// Gives the navmesh the player's outposts (centre, the template's <c>no-foliage range</c>, owned by the player's faction or not) as towns that
+    /// keep <c>avoid towns</c> foliage away, and the foliage renderer the same list. Before the sites are diffed, so a building added in the same
+    /// snapshot is built with them.
+    /// </summary>
+    void UpdateFoliageTowns(WorldSnapshot snapshot)
+    {
+        if (host.Nav is null || host.Scene.Database is not { } db) return;
+
+        host.ActiveFoliage?.SetPlayerTowns(host.Nav.Runtime.FoliageTowns);
+        if (ReferenceEquals(snapshot.Outposts, _foliageOutposts)) return;
+
+        _foliageOutposts = snapshot.Outposts;
+        float range = FoliageWorld.OutpostRange(db);
+        int player = host.Session.World.Player.Faction;
+        host.Nav.SetPlayerTowns([.. snapshot.Outposts.Select(o => new FoliageTown(new Vector2(o.Position.X, o.Position.Z), range, o.Owner == player))]);
+        host.ActiveFoliage?.SetPlayerTowns(host.Nav.Runtime.FoliageTowns);
     }
 
     /// <summary>
@@ -396,6 +421,7 @@ sealed class BuildingSync(GameHost host)
             Ceiling = hit.Room.CeilingAbove(hit.Position),
             Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart),
             Structure = hit.Room.StructureCuts,
+            Roof = hit.Room.RoofCuts,
         };
         return (hit.Position, floor);
     }
@@ -409,6 +435,7 @@ sealed class BuildingSync(GameHost host)
         Dictionary<(ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
         // The towns' building lists change when the level editor places or clears a building (PopulationData.BuildingsRevision).
         int townOfRevision = -1;
+        var machines = new Dictionary<string, bool>(StringComparer.Ordinal);
         return placement =>
         {
             var (zone, instance) = (placement.Zone, placement.InstanceId);
@@ -432,9 +459,24 @@ sealed class BuildingSync(GameHost host)
             bool destroyed = host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
                 : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
             var pieces = destroyed || host.TownChanges.IsEmptied(placement.Key) ? null : own?.Pieces;
+            bool machine = own is not null && TownMachine(db, machines, own.BuildingId);
             return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                destroyed, own?.Turret is not null, pieces);
+                destroyed, own?.Turret is not null, pieces, machine);
         };
+    }
+
+    /// <summary>
+    /// Whether a town building of record <paramref name="record"/> is a machine its workers operate (<c>ProductionSystem.TownOperate</c>: a farm or
+    /// a producer, with an output and operators), cached in <paramref name="known"/>.
+    /// </summary>
+    static bool TownMachine(Data.GameDatabase db, Dictionary<string, bool> known, string record)
+    {
+        if (known.TryGetValue(record, out bool machine)) return machine;
+
+        machine = db.Find(record) is { } r && MachineData.From(db, r) is { Output: not null, Unattended: false } data
+            && (data.IsProducer || data.Farm is not null);
+        known[record] = machine;
+        return machine;
     }
 
     /// <summary>

@@ -55,6 +55,11 @@ public sealed record EditCharacter(CharacterId Character, FcsRecord? Appearance,
 public sealed record FinishCreation : SimCommand;
 
 /// <summary>
+/// The in-play editor (a surgeon, a recruit's edit, bought animals: the original's mode 1) opened on these characters: their hair grows back.
+/// </summary>
+public sealed record InPlayEditorOpened(IReadOnlyList<CharacterId> Characters) : SimCommand;
+
+/// <summary>
 /// Applies <see cref="EditCharacter"/> (the player system's inputs).
 /// </summary>
 public static class CharacterEditing
@@ -268,6 +273,23 @@ public static class CharacterEditing
         if (name.Length > 0)
         {
             cold.Name = name;
+        }
+    }
+
+    /// <summary>
+    /// The in-play editor opened (<see cref="InPlayEditorOpened"/>; the original's editor constructor in mode 1, <c>FUN_1405f4dd0</c>, reached
+    /// from a surgeon's DA_CHARACTER_EDITOR, DA 3 recruiting and animal buying): every listed human's shaven head grows back at once, before any
+    /// edit and also when the editor is then closed unconfirmed. Only the hair: the slave state stays.
+    /// </summary>
+    internal static void GrowHair(World world, CharacterAssembly? assembly, InPlayEditorOpened opened)
+    {
+        foreach (var id in opened.Characters)
+        {
+            if (!world.Characters.TryResolveNext(id, out int slot)) continue;
+            if (world.Characters.Cold(slot) is not { IsPlayer: true, Shaved: true } cold || SquadRegistry.IsAnimal(cold)) continue;
+
+            cold.Shaved = false;   // CharacterHuman::shaveHead(false)
+            assembly?.MatchShave(cold);
         }
     }
 

@@ -601,6 +601,13 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
+    /// Whether the bounty panel shows for the one selected character (<c>MainBarGUI</c> <c>FUN_1407211b0</c>, <b>Verified</b>): a bounty, a slave
+    /// state, a status line (campaign leader, Diplomatic Status, a pending crime, the escaped flag) or the kidnap victim flag, carried or not.
+    /// </summary>
+    internal static bool ShowsBountyPanel(CharacterSnapshot lead) =>
+        lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null || lead.KidnapVictim;
+
+    /// <summary>
     /// The bounty panel's own text (the other output of <c>FUN_1405d2da0</c>): wanted by the local faction, Title <c>Bounty:</c> and its amount in
     /// Main; else both Greyed with the largest bounty (<c>FUN_140853740</c>).
     /// </summary>
@@ -719,7 +726,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
         foreach (var (widget, text) in HudTips) Add(widget, text);
 
-        if (player.Lead() is { } wanted && (wanted.Bounties.Count > 0 || wanted.Slave is not null || wanted.Status is not null))
+        if (player.Lead() is { } wanted && ShowsBountyPanel(wanted))
         {
             var rows = wanted.Status is { } status ? StatusRows(status) : wanted.Slave is { } slave ? SlaveRows(slave, wanted.IsPlayer) : [];
             if (wanted.Bounties.Count > 0 && wanted.Status is not { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped })
@@ -780,6 +787,12 @@ sealed class TooltipRuntime(PlayerInterface player)
         public int BagItems { get; init; } = -1;
 
         /// <summary>
+        /// The chance a take of the item goes unseen, for another faction's item its window's opener would steal
+        /// (<see cref="InventoryItemView.StealChance"/>); null otherwise.
+        /// </summary>
+        public float? StealChance { get; init; }
+
+        /// <summary>
         /// A tooltip of the name only (<see cref="Brief"/>).
         /// </summary>
         public static ItemTip NameOnly(string record, string material, string name, int quantity) =>
@@ -796,6 +809,7 @@ sealed class TooltipRuntime(PlayerInterface player)
                 Crafter = v.Crafter,
                 Unique = v.Unique,
                 BagItems = v.BagItems,
+                StealChance = v.StealChance,
             };
 
         /// <summary>
@@ -1083,10 +1097,14 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
-    /// A stolen good's fencing chance and its owner.
+    /// The stealing chance of an item of another faction's open window, a stolen good's fencing chance and its owner.
     /// </summary>
     void AddStolenRows(List<TooltipLine> lines, ItemTip t)
     {
+        // An item its window's opener would steal: the roll's chance (FUN_140712920 "Stealing chance:", Observed), shown as the fencing row.
+        if (t.StealChance is { } steal)
+            lines.Add(new("STEALING CHANCE:", $"{(int)(Math.Min(steal, 1) * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
+
         // A stolen good the open shop would roll on: its fencing chance above the owner, as the sale prompt shows it (Observed, the original's trade
         // tooltip; #330).
         if (t.Goods && t.Trade is { FenceChance: { } fence })

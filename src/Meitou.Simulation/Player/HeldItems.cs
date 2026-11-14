@@ -53,6 +53,8 @@ sealed class HeldItems(PopulationData? data)
             break;
             case ReturnHeld: ReturnHeldItem(world);
             break;
+            case RotateHeld: Rotate(world);
+            break;
         }
     }
 
@@ -96,7 +98,6 @@ sealed class HeldItems(PopulationData? data)
         if (units >= item.Quantity) return item;
         var part = item.WithQuantity(units);   // the first units, with their receipt's first coins
         item.Quantity -= units;
-        if (part.MaxCharges > 0) part.Charges = part.MaxCharges;
         return part;
     }
 
@@ -127,7 +128,27 @@ sealed class HeldItems(PopulationData? data)
     /// Puts <paramref name="unit"/> on the mouse, remembering where it came from.
     /// </summary>
     static void Hold(World world, LiftItem lift, ItemInstance unit, Inventory? grid, string section, int x, int y) =>
-        world.Player.Held = new HeldItem { Item = unit, From = lift.From, Grid = grid, Section = section, X = x, Y = y, Actor = lift.Actor };
+        world.Player.Held = new HeldItem
+        {
+            Item = unit,
+            From = lift.From,
+            Grid = grid,
+            Section = section,
+            X = x,
+            Y = y,
+            Rotated = unit.Rotated,
+            Actor = lift.Actor,
+        };
+
+    /// <summary>
+    /// Turns the held item a quarter (<see cref="RotateHeld"/>); nothing for a square one.
+    /// </summary>
+    static void Rotate(World world)
+    {
+        if (world.Player.Held is not { Item: var item } || item.Width == item.Height) return;
+
+        item.Rotated = !item.Rotated;
+    }
 
     /// <summary>
     /// Lifts an item out of a character window, the trader's stock or a site; nothing while one is held.
@@ -304,6 +325,9 @@ sealed class HeldItems(PopulationData? data)
             ReturnHeldItem(world);
             return;
         }
+
+        // Outside the grids an item lies as its record has it; a refusal below puts it back as it lay (ReturnHeldItem).
+        if (!InventoryCommands.IsGridSection(target.Section)) item.Rotated = false;
 
         // Money moved out of another's window into the player's own becomes cats.
         if (item.ItemFunction == PlayerSystem.MoneyFunction && target.Owner is { IsPlayer: true } && !HeldItemTheft.FromPlayerWindow(world, held)
@@ -577,8 +601,17 @@ sealed class HeldItems(PopulationData? data)
         if (InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var fitted)
             target.Owner?.Medical?.RemoveReplacement(fitted);
         Put(target, item, p.X, p.Y);
-        world.Player.Held = new HeldItem { Item = other, From = p.Into, Grid = target.Root, Section = other.Section, X = other.X, Y = other.Y,
-                Actor = held.Actor };
+        world.Player.Held = new HeldItem
+        {
+            Item = other,
+            From = p.Into,
+            Grid = target.Root,
+            Section = other.Section,
+            X = other.X,
+            Y = other.Y,
+            Rotated = other.Rotated,
+            Actor = held.Actor,
+        };
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
         Touched(world, held, target);
     }
@@ -675,8 +708,8 @@ sealed class HeldItems(PopulationData? data)
     /// <summary>
     /// Gives the held item to a character in the world (<c>FUN_1407136a0</c>): someone other than its window's owner, within <see cref="GiveRange"/>
     /// (<see cref="StealRange"/> for a non-player window's item; "Out of trading range."), added where it fits in its inventory
-    /// (<see cref="Inventory.Add"/>). Nothing fits: "No room for that item." and it goes back; what does not fit stays on the mouse. Stock is not
-    /// given away.
+    /// (<see cref="Inventory.Add"/>; a live animal's worn bag only, <see cref="InventoryCommands.MainClosed"/>), else in a free slot that takes it.
+    /// Nothing fits: "No room for that item." and it goes back; what does not fit stays on the mouse. Stock is not given away.
     /// </summary>
     void Give(World world, GiveHeld give)
     {
@@ -707,8 +740,15 @@ sealed class HeldItems(PopulationData? data)
         var mark = item.Mark;
         int before = item.Quantity;
         (item.Death, item.Mark) = (false, HeldItemTheft.MarkFor(world, held, taker, overwrite: true));
-        // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting.
-        bool all = into.Add(item);
+        // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting. A live
+        // animal's shut grid takes nothing (InventoryCommands.MainClosed), only its worn bag does: food given to a bagless dog is "No room for that
+        // item." in the original.
+        bool all = into.Add(item, mainShut: InventoryCommands.MainClosed(taker));
+
+        // Engine choice, as a pick-up: what no grid takes goes into a free slot that takes it (a polearm fits no grid, only the back slot).
+        bool worn = !all && item.Quantity == before
+                && (InventoryCommands.TryEquip(into, item, taker) || InventoryCommands.TryWearBag(into, item, taker));
+        all |= worn;
         if (!all && item.Quantity == before)
         {
             (item.Death, item.Mark) = (death, mark);
@@ -719,6 +759,7 @@ sealed class HeldItems(PopulationData? data)
         if (all) player.Held = null;
         else
             (item.Death, item.Mark) = (death, mark);
+        if (worn) _assembly?.RefreshEquipment(taker);
         HeldItemTheft.LeftLoot(world, held, death);
         if (held.From.Holder == ItemHolder.Site) world.Machines.Touch();
     }
@@ -800,8 +841,8 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// Puts the held item back (<c>FUN_14070d860</c>, <b>Observed</b>): into its old place when that is still free (a prosthetic refitted on its
-    /// stump), else wherever its window's inventory takes it (<see cref="Inventory.Add"/>), else after arranging that inventory
-    /// (<see cref="InventoryCommands.Arrange"/>), else onto the ground. A machine slot's units go back into the slot.
+    /// stump), else wherever its window's inventory takes it (<see cref="Inventory.Add"/>; a live animal's worn bag only), else after arranging that
+    /// inventory (<see cref="InventoryCommands.Arrange"/>), else onto the ground. A machine slot's units go back into the slot.
     /// </summary>
     internal void ReturnHeldItem(World world)
     {
@@ -809,6 +850,7 @@ sealed class HeldItems(PopulationData? data)
         if (player.Held is not { } held) return;
         player.Held = null;
         var item = held.Item;
+        item.Rotated = held.Rotated;   // as it lay, so its old cell takes it
         if (held.Grid is not { } root)
         {
             ReturnToMachine(world, held, item);
@@ -824,7 +866,13 @@ sealed class HeldItems(PopulationData? data)
                 _assembly?.RefreshEquipment(owner);
             return;
         }
-        if (root.Add(item) || InventoryCommands.Arrange(root) && root.Add(item)) return;
+
+        // A live animal's shut grid takes nothing back (InventoryCommands.MainClosed): an item swapped out of its bag goes back into the bag, and
+        // only the bag is arranged for room. A bag that is not empty never goes inside it (engine choice, the bag-in-bag rule): it drops.
+        bool shut = InventoryCommands.MainClosed(owner);
+        bool canAdd = !shut || item.Contents is not { Items.Count: > 0 };
+        if (canAdd && root.Add(item, shut)) return;
+        if (canAdd && (shut ? InventoryCommands.Arrange(root, bag: true) : InventoryCommands.Arrange(root)) && root.Add(item, shut)) return;
         if (DropSpot(world, held) is var (at, from)) Ground(world, item, at, from);
     }
 
@@ -882,15 +930,17 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// Each tick: the held item goes back when its window is gone (the loot, trade or container closed, its character gone) or its holder is gone, or
-    /// down while working another's window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329).
+    /// down while working another's window. A downed player character's own items still move (<b>Observed</b> in the original by a player, #329),
+    /// and so does stock lifted by a knocked-out (not dead) customer while the trade stays open with them (<c>TradeSystem.OpenStock</c>).
     /// </summary>
     internal void KeepHeld(World world)
     {
         if (world.Player.Held is not { } held) return;
         var table = world.Characters;
         bool own = held.From == ItemOwner.Of(held.Actor);
+        bool stock = held.From.Holder == ItemHolder.Stock;
         bool keep = table.TryResolveNext(held.Actor, out int a) && table.Cold(a) is { } actor && (own
-                || actor.Medical is not { Incapacitated: true }) && held.From.Holder switch
+                || actor.Medical is not { Incapacitated: true } || (stock && actor.Medical is not { Dead: true })) && held.From.Holder switch
         {
             ItemHolder.Character => CharacterWindow(world, held.From.Character, held.Actor, out _) is not null,
             ItemHolder.Stock => world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out _) is not null,

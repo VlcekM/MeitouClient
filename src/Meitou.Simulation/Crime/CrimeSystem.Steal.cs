@@ -60,7 +60,7 @@ public sealed partial class CrimeSystem
     /// resident squad of the building the container is furniture of (<c>Building::residentSquad</c>, its active platoon), not down, those on the
     /// thief's floor first; none without a resident squad. -1: none. Engine: every squad living there counts (Meitou may house more than one).
     /// </summary>
-    static int Watcher(World world, int thief, Locks.Fixture container)
+    static int Watcher(World world, int thief, StealSource container)
     {
         var table = world.Characters;
         int floor = world.Sight.FloorOf(thief, table.Next[thief].Position);
@@ -114,22 +114,52 @@ public sealed partial class CrimeSystem
     /// is imprisoned or its pending crime's timer (+0x180) is 10 or more after the roll, so a caught thief, whose Theft has 30, gets none. Floors are
     /// the sight map's (<c>getFloor</c>).
     /// </summary>
-    public bool Steal(World world, int thief, Locks.Fixture container, CrimeCode code)
+    public bool Steal(World world, int thief, Locks.Fixture container, CrimeCode code) => Steal(world, thief, StealSource.Of(container), code);
+
+    /// <summary>
+    /// <see cref="Steal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods: a container or a town building's
+    /// machine.
+    /// </summary>
+    public bool Steal(World world, int thief, StealSource container, CrimeCode code)
+    {
+        if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container))
+            return false;
+
+        SetPending(world, thief, code, container.Owner, CharacterId.None, MinTimer);
+        float p = ContainerChance(world, thief, c, container, out int w);
+        return Roll(world, thief, w, p, container.Owner, CharacterId.None, Rng.StableHash(container.Id));
+    }
+
+    /// <summary>
+    /// The chance the inventory window prints for a take out of another faction's container (<c>FUN_140712920</c> "Stealing chance:", the roll's
+    /// own p): null when the take is not a steal (<see cref="Steal(World, int, StealSource, CrimeCode)"/>'s gates).
+    /// </summary>
+    public static float? StealChanceOf(World world, int thief, StealSource container)
+    {
+        if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction
+            || container.Owner == world.Player.Faction || !IsStealing(world, container))
+        {
+            return null;
+        }
+
+        return ContainerChance(world, thief, c, container, out _);
+    }
+
+    /// <summary>
+    /// The steal roll's p out of a container (<see cref="StealChance"/>) and its watcher <paramref name="w"/> (-1: none, p 1).
+    /// </summary>
+    static float ContainerChance(World world, int thief, CharacterCold c, StealSource container, out int w)
     {
         var table = world.Characters;
-        if (table.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container)) return false;
-        SetPending(world, thief, code, container.Owner, CharacterId.None, MinTimer);
-        float p = 1;
-        int w = Watcher(world, thief, container);
-        if (w >= 0)
-        {
-            var wat = table.Next[w].Position;
-            bool otherBuilding = world.Sight.BuildingOf(w) != container.Building;
-            if (!(otherBuilding && !world.Fixtures.HasOpenDoor(container.Building)))
-                p = StealChance(Thievery(c), Vector3.Distance(wat, container.Position), otherBuilding,
-                    world.Sight.FloorOf(w, wat) != world.Sight.FloorAt(container.Building, container.Position));
-        }
-        return Roll(world, thief, w, p, container.Owner, CharacterId.None, Rng.StableHash(container.Id));
+        w = Watcher(world, thief, container);
+        if (w < 0) return 1;
+
+        var wat = table.Next[w].Position;
+        bool otherBuilding = world.Sight.BuildingOf(w) != container.Building;
+        if (otherBuilding && !world.Fixtures.HasOpenDoor(container.Building)) return 1;
+
+        bool otherFloor = world.Sight.FloorOf(w, wat) != world.Sight.FloorAt(container.Building, container.Position);
+        return StealChance(Thievery(c), Vector3.Distance(wat, container.Position), otherBuilding, otherFloor);
     }
 
     /// <summary>
@@ -163,7 +193,12 @@ public sealed partial class CrimeSystem
     /// <c>InventoryGUI::isStealing</c> for a take out of a container: not one of a <c>not real</c> faction, nor a building of <c>building
     /// category</c> CAMPING.
     /// </summary>
-    public static bool IsStealing(World world, Locks.Fixture container) =>
+    public static bool IsStealing(World world, Locks.Fixture container) => IsStealing(world, StealSource.Of(container));
+
+    /// <summary>
+    /// <see cref="IsStealing(World, Locks.Fixture)"/> for any holder of goods (a container or a town building's machine).
+    /// </summary>
+    public static bool IsStealing(World world, StealSource container) =>
         !NotReal(world, container.Owner) && world.SystemOf<Construction.ConstructionSystem>()?.Data(container.RecordId)?.Category != "CAMPING";
 
     /// <summary>
@@ -202,17 +237,40 @@ public sealed partial class CrimeSystem
         var ownerId = table.IdOf(owner);
         if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, ownerId, MinTimer);
         if (kind == TakeKind.Drag) item = null;
-        float p = 1;
+        float? p = PickpocketChance(c, o, item);
+        return Roll(world, thief, p is null ? -1 : owner, p ?? 1, o.Faction, ownerId, Rng.Key(ownerId));
+    }
+
+    /// <summary>
+    /// The chance the inventory window prints for a take of <paramref name="item"/> out of another faction's character (<c>FUN_140712920</c>
+    /// "Stealing chance:", <b>Observed</b>): the roll's p with the item passed, so an equipped item shows the x0.75 even though the drag rolls without
+    /// it. Null when the take is not a steal (<see cref="Pickpocket"/>'s gates) or the owner does not watch (engine choice: the original's gate for a
+    /// down owner is <b>Unknown</b>).
+    /// </summary>
+    public static float? StealChanceOf(World world, int thief, int owner, Items.ItemInstance item)
+    {
+        var table = world.Characters;
+        if (table.Cold(thief) is not { } c || table.Cold(owner) is not { IsPlayer: false } o || o.Faction == c.Faction || !IsStealing(world, o))
+            return null;
+
+        return PickpocketChance(c, o, item);
+    }
+
+    /// <summary>
+    /// The pickpocket roll's p (<see cref="Pickpocket"/>): 1.1 x thievery / 100, x0.75 for an equipped <paramref name="item"/>, x0.75 again for
+    /// equipped armour; null when the owner does not watch.
+    /// </summary>
+    static float? PickpocketChance(CharacterCold c, CharacterCold o, Items.ItemInstance? item)
+    {
         bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false })
             && o.CarriedBy.IsNone && !o.IsImprisoned
             && c.Medical is not { Incapacitated: true };
-        if (watches)
-        {
-            p = 1.1f * Thievery(c) * 0.01f;
-            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section))
-                p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
-        }
-        return Roll(world, thief, watches ? owner : -1, p, o.Faction, ownerId, Rng.Key(ownerId));
+        if (!watches) return null;
+
+        float p = 1.1f * Thievery(c) * 0.01f;
+        if (item is null || !Items.InventoryCommands.IsEquipmentSection(item.Section)) return p;
+
+        return p * (item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f);
     }
 
     /// <summary>
@@ -261,4 +319,18 @@ public sealed partial class CrimeSystem
         SetPending(world, thief, CrimeCode.Theft, owner, CharacterId.None, MinTimer);
         if (c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp);
     }
+}
+
+/// <summary>
+/// What goods are stolen out of: a container (<see cref="Locks.Fixture"/>) or a town building's machine, the building itself (the original's
+/// inventory GUI asks the same of either): its id (the roll's seed), owner faction, the run-time key of the building it belongs to (whose residents
+/// watch it), where it stands and its BUILDING record.
+/// </summary>
+public readonly record struct StealSource(string Id, int Owner, string Building, Vector3 Position, string RecordId)
+{
+    /// <summary>
+    /// A container's.
+    /// </summary>
+    public static StealSource Of(Locks.Fixture container) =>
+        new(container.Id, container.Owner, container.Building, container.Position, container.RecordId);
 }

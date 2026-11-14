@@ -149,6 +149,16 @@ public sealed class Squad
     /// </summary>
     public Saving.AiSave? SavedAi { get; set; }
     /// <summary>
+    /// A player's squad the AI may run (<see cref="Ai.SetSquadAutonomy"/>, docs/simulation.md "Autonomous player squads"): it takes AI packages
+    /// as an NPC squad does, and its members act them out while no order or job holds them. Meitou only; saved, hashed while set.
+    /// </summary>
+    public bool Autonomous { get; set; }
+    /// <summary>
+    /// The home an autonomous squad was given (<see cref="Ai.SetSquadHome"/>): a town building's <see cref="Meitou.Data.World.TownBuilding.Key"/>
+    /// or a player-built building's id; null: none. The AI resolves it (<see cref="Ai.SquadAutonomy"/>). Saved, hashed while set.
+    /// </summary>
+    public string? AssignedHome { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -319,6 +329,8 @@ public sealed class SquadRegistry
             if (s.Index != 0) hasher.Add(0x51647800 + s.Index);   // nothing for a squad in the first place, so the pinned hashes stay
             if (s.Resume) hasher.Add(0x52657375);
             if (s.Dead) hasher.Add(0x44656164);
+            if (s.Autonomous) hasher.Add(0x4175746F);
+            if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

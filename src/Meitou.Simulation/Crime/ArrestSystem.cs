@@ -59,7 +59,7 @@ public sealed record ArrestSettings
     /// </summary>
     public float BailRange { get; init; } = 500;
     /// <summary>
-    /// The player's "Put in Cage" takes the best free cage within this distance of the carrier.
+    /// A Put in Cage order naming no cage takes the best free cage within this distance of the carrier.
     /// </summary>
     public float CageSearchRange { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>
@@ -162,6 +162,11 @@ public sealed class Arrest
     /// Row 181 ran: once per arrest (a locked weapon item stays on the target, which the strip does not move).
     /// </summary>
     public bool Stripped { get; set; }
+    /// <summary>
+    /// The dialogue's capture order (task 240, DA 29): it runs only while the guard stands in a home town and the target in a town
+    /// (<see cref="ArrestSystem.OffLeash"/>). A goal-204 arrest (its lift is row 68), a hand-over and slave catching are not leashed.
+    /// </summary>
+    public bool Leashed { get; init; }
 
     /// <summary>
     /// Adds the arrest's state (the cage as a stable hash of its id, the flags as tags) to the world hash.
@@ -180,6 +185,7 @@ public sealed class Arrest
         if (Enslave) h.Add(0x536C6176);
         if (Takeover) h.Add(0x54616B65);
         if (Stripped) h.Add(0x53747270);
+        if (Leashed) h.Add(0x4C656173);
     }
 }
 
@@ -413,7 +419,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Disguise(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             UpdateStatusTowns(world);
-            DropFreedOutsideTowns(world);
+            DropTownStatusOutsideTowns(world);
+            UpdateKidnapVictims(world);
             EscapeFarFromOwner(world);
         }
         BountyDuty(world);
@@ -449,16 +456,48 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// A freed character stops being freed once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status <c>+0xea</c> on each
-    /// update while the status object's current town (<c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>) is null (<b>Verified</b>). Without town
-    /// data the flag stays.
+    /// An escaped prisoner or a freed character stops being one once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status
+    /// <c>+0xe8</c> and <c>+0xea</c> on each update while the status object's current town (<c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>)
+    /// is null (<b>Verified</b>). Without town data the flags stay.
     /// </summary>
-    void DropFreedOutsideTowns(World world)
+    void DropTownStatusOutsideTowns(World world)
     {
         if (Towns is null) return;
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && c.StatusTown.IsNone) c.Freed = false;
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { } c || !c.StatusTown.IsNone) continue;
+
+            c.Escaped = false;
+            c.Freed = false;
+        }
+    }
+
+    /// <summary>
+    /// The kidnap victim flag's upkeep (<see cref="CharacterCold.KidnapVictim"/>; the per-update <c>FUN_140852a30</c>, <b>Verified</b>): a victim
+    /// nobody carries loses the flag in a bed in its own town (engine reading: <see cref="InOwnTown"/>); a carried one loses it when it regards
+    /// its carrier as friendly, else its squad tags the carrier TEMP_ENEMY each pass. A carried victim keeps the flag without a dialogue system.
+    /// </summary>
+    void UpdateKidnapVictims(World world)
+    {
+        var table = world.Characters;
+        var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { KidnapVictim: true } c) continue;
+
+            if (c.CarriedBy.IsNone)
+            {
+                if (c.InSomething == HeldState.Bed && InOwnTown(world, s)) c.KidnapVictim = false;
+
+                continue;
+            }
+
+            if (talk is null || !table.TryResolveNext(c.CarriedBy, out int carrier)) continue;
+
+            if (CharacterFacts.RegardsFriendly(talk, world, s, carrier)) c.KidnapVictim = false;
+            else talk.TagEnemy(world, s, carrier);
+        }
     }
 
     /// <summary>
@@ -471,7 +510,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// slave (state 1) while the status object's current town (<c>+0x88</c>) is null and its squared distance to the owner is above
     /// <see cref="EscapeDistanceSquared"/> (<b>Verified</b>; the town is <see cref="CharacterCold.StatusTown"/>). The owner is the master squad's
     /// leader (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle). With no owner handle the slave escapes in town
-    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept.
+    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept, and so is a slave held in
+    /// an owned cage (<see cref="CagedByOwner"/>).
     /// </summary>
     void EscapeFarFromOwner(World world)
     {
@@ -482,7 +522,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c) continue;
             if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner)
             {
-                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false }) FixtureRegistry.TagEscaped(world, c);
+                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false } && !CagedByOwner(world, c)) FixtureRegistry.TagEscaped(world, c);
 
                 continue;
             }
@@ -493,6 +533,14 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (Vector3.DistanceSquared(at, table.Next[owner.Slot].Position) > EscapeDistanceSquared) FixtureRegistry.TagEscaped(world, c);
         }
     }
+
+    /// <summary>
+    /// Whether a slave is held in a cage that has an owner. Entering a cage gives the slave the cage's owner handle (<c>FUN_140330600</c>), a
+    /// registered object, so the original's ownerless escape never applies there; Meitou's stand-in for that handle, the resident squad of the
+    /// cage's building, is missing for a cage without one (a Prisoner Pole), which made a start prisoner an escaped slave in its cage (#647).
+    /// </summary>
+    static bool CagedByOwner(World world, CharacterCold c) =>
+        c is { IsImprisoned: true, InWhat: { } id } && world.Fixtures.Find(id) is { Kind: FixtureKind.Cage, Owner: >= 0 };
 
     /// <summary>
     /// Whether the character is a guard or target of an arrest, or the hunter of a hunt that is not resting.
@@ -545,6 +593,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     #region Spotting
 
     /// <summary>
+    /// Whether lookers can tell an escaped prisoner: event 45's test in <c>FUN_140859680</c> (<b>Verified</b>) wants the escaped flag and either
+    /// no disguise level at all (status <c>+0x100</c> at 0: any uniform piece hides it, not only a working disguise) or a running blown cooldown
+    /// (<c>+0x110</c>).
+    /// </summary>
+    static bool EscapeShows(CharacterCold c) => c.Escaped && (c.RecentlyWanted > 0 || c.DisguiseLevel <= 0);
+
+    /// <summary>
     /// The spotting pass over the suspects in slot order: slave catching, the recognition meter from the lookers that see the target, then event
     /// 44/45 or the engine's arrest, and a hunt for a seen bounty.
     /// </summary>
@@ -565,8 +620,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 continue;
             }
             var at = next[s].Position;
-            bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-            float stealth = sneaking ? Orders.Stealth(c) : 0;
             bool seen = false;
             int best = -1, escapeGuard = -1, hunter = -1;
             float bestD2 = float.MaxValue, escapeD2 = float.MaxValue, hunterD2 = float.MaxValue;
@@ -586,11 +639,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 // A working disguise hides the bounty: only a looker that sees through it recognises it (Disguise; disguiseMods' bounty branch needs
                 // no disguise level).
                 bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
-                bool escapee = c.Escaped && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
+                bool escapee = EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = HuntsFor(wc, c);
                 if (!spots && !escapee && !hunts) continue;
-                float v = world.Sight.Sees(w, s, next[w].Position, at, Settings.SpotRange, sneaking ? stealth : -1);
-                if (v <= 0) continue;
+                if (!SeesSuspect(world, w, s, c, Settings.SpotRange)) continue;
+
                 if (escapee && FreeGuard(world, w) && d2 < escapeD2) (escapeGuard, escapeD2) = (w, d2);
                 if (hunts)
                 {
@@ -620,6 +673,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
+    /// Whether the looker in slot <paramref name="w"/> sees the suspect <paramref name="c"/> in slot <paramref name="s"/> now: the shared sight
+    /// test within <paramref name="range"/>, and for a sneaking suspect only once the looker has spotted it (its spot meter is full,
+    /// <see cref="CrimeSystem.Spotted"/>; docs/game/perception.md "Spotting a sneaker"), not at first sight (#649).
+    /// </summary>
+    bool SeesSuspect(World world, int w, int s, CharacterCold c, float range)
+    {
+        var next = world.Characters.Next;
+        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
+        float v = world.Sight.Sees(w, s, next[w].Position, next[s].Position, range, sneaking ? Orders.Stealth(c) : -1);
+
+        return v > 0 && (!sneaking || Crimes.Spotted(world, w, world.Characters.IdOf(s)));
+    }
+
+    /// <summary>
     /// EV_BOUNTY_SPOTTED, EV_ESCAPED_PRISONER_SPOTTED, EV_ESCAPING_SLAVE_SPOTTED.
     /// </summary>
     public const int BountySpotted = 44, EscapedPrisonerSpotted = 45, EscapingSlaveSpotted = 36;
@@ -637,8 +704,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         var next = table.Next;
         var at = next[s].Position;
-        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-        float stealth = sneaking ? Orders.Stealth(c) : 0;
         int catcher = -1;
         float catcherD2 = float.MaxValue;
         for (int w = 0; w < table.HighWater; w++)
@@ -651,8 +716,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             }
             float d2 = Vector3.DistanceSquared(next[w].Position, at), range = AggroSystem.RangeOf(wc, AggroSystem.OutdoorSight);
             if (d2 > range * range || !InTownOf(world, w, next[w].Position)) continue;
-            float v = world.Sight.Sees(w, s, next[w].Position, at, range, sneaking ? stealth : -1);
-            if (v <= 0) continue;
+            if (!SeesSuspect(world, w, s, c, range)) continue;
+
             if (c.SlaveState == 1 && (LockSystem.WornShackles(c) is null || !InTownOf(world, w, at))) FixtureRegistry.TagEscaped(world, c);
             if (c.SlaveState == 2 && d2 < catcherD2
                 && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && FreeGuard(world, w))
@@ -764,8 +829,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// <paramref name="capture"/> false: the guard attacks instead of arresting, in his own town too (a dialogue's animal target).
+    /// <paramref name="leashed"/>: the arrest is the dialogue's capture order (<see cref="Arrest.Leashed"/>), which has no plan while the target
+    /// stands in no town, so nothing starts then.
     /// </summary>
-    void Start(World world, int g, int t, bool force, bool capture = true)
+    void Start(World world, int g, int t, bool force, bool capture = true, bool leashed = true)
     {
         var table = world.Characters;
         var gc = table.Cold(g)!;
@@ -779,7 +846,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             Note(world, ArrestEventKind.Attack, guard, target, gc.Faction, bounty);
             return;
         }
-        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction };
+
+        if (leashed && Towns is { } towns && StatusTownNow(towns, world, t).IsNone) return;
+
+        var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Leashed = leashed };
         _arrests.Add(arrest);
         gc.Engaged = true;   // the AI leaves him alone until the arrest ends
         if (!force && bounty is > 0 and < FineLimit)
@@ -859,6 +929,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return End(world, a, ArrestEventKind.GaveUp);
         if (tc.IsImprisoned && a.Phase != ArrestPhase.Walk) return End(world, a, ArrestEventKind.GaveUp);
 
+        if (OffLeash(world, a, g, t, gc)) return Recall(world, a, g, t, gc);
+
         a.Time += dt;
         ref var gn = ref table.Next[g];
         float gap = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z));
@@ -872,6 +944,87 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         }
         return true;
     }
+
+    /// <summary>
+    /// The town needs of the capture order (docs/game/ai-tasks.md "Arrest chain": row 240's list B starts with 95 isAtHomeTown and 113
+    /// targetAtATown, and the order is planned again on every AI update) until the guard carries the target: true when the guard stands in no home
+    /// town or the target in no town. Without town data there is no leash.
+    /// </summary>
+    bool OffLeash(World world, Arrest a, int g, int t, CharacterCold gc)
+    {
+        if (!a.Leashed || Towns is not { } towns || a.Phase is ArrestPhase.Fine or ArrestPhase.Walk || gc.Carrying == a.Target) return false;
+
+        return !AtHomeTown(towns, world, g, gc) || StatusTownNow(towns, world, t).IsNone;
+    }
+
+    /// <summary>
+    /// The character's status town as its next update would write it (<see cref="AiSystem.StatusTownAt"/>): the kept one is a spotting pass old.
+    /// </summary>
+    static CampaignTown StatusTownNow(PopulationData towns, World world, int slot) =>
+        AiSystem.StatusTownAt(towns, world, world.Characters.Next[slot].Position, world.Characters.Cold(slot)!.StatusTown);
+
+    /// <summary>
+    /// State 95 isAtHomeTown (<c>FUN_140997fe0</c>, <b>Verified</b>): the character's status town is set and is its faction's or houses a squad of
+    /// its faction (Town vfunc <c>0x2c0</c> <c>FUN_140952060</c>: the town's own faction, else its set of factions <c>+0xe8</c>, which the housing
+    /// <c>FUN_14057f820</c> fills with each housed squad's faction). A player town is nobody else's home.
+    /// </summary>
+    static bool AtHomeTown(PopulationData towns, World world, int slot, CharacterCold c)
+    {
+        int site = StatusTownNow(towns, world, slot).Site;
+        if (site < 0) return false;
+        if (site < towns.SiteFactions.Count && towns.SiteFactions[site] == c.Faction) return true;
+
+        foreach (var squad in world.Squads.All)
+            if (squad.Faction == c.Faction && squad.Town == site && squad.TownOwn) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// The capture order off its leash: a guard out of his home town plans 127 Retreating fast (the only provider of 95) and one whose target left
+    /// every town plans nothing (113 has no provider). <b>Engine choice</b>: the arrest ends either way (the original keeps the order queued and
+    /// plans it again each update; when it drops it is <b>Unknown</b>; here the next spotting or crime starts a new one), the fight is called off
+    /// (<see cref="CallOff"/>) and a guard out of town runs back to it. Always false: the arrest is over.
+    /// </summary>
+    bool Recall(World world, Arrest a, int g, int t, CharacterCold gc)
+    {
+        bool free = CallOff(world, g, t);
+        End(world, a, ArrestEventKind.GaveUp);
+
+        if (free && Towns is { } towns && !AtHomeTown(towns, world, g, gc) && world.Squads.Find(gc.SquadId) is { } squad)
+            TaskStart.Walk(world, g, squad.HomeCentre, SpeedMode.Run, TaskType.RunAwayHometown, TaskSource.Npc);
+
+        return false;
+    }
+
+    /// <summary>
+    /// The guard and the squad mates fighting the target with him leave that fight, but those the target itself fights: theirs is a fight of its
+    /// own, which has no leash (docs/game/combat.md "Fight lifecycle and orders"). True when the guard is out of it.
+    /// </summary>
+    bool CallOff(World world, int g, int t)
+    {
+        if (world.SystemOf<CombatSystem>() is not { } combat) return true;
+
+        var table = world.Characters;
+        var guard = table.IdOf(g);
+        var target = table.IdOf(t);
+        bool free = true;
+        foreach (var m in world.Squads.Find(table.Cold(g)!.SquadId)?.Members ?? [guard])
+        {
+            if (!Fights(combat, m, target)) continue;
+
+            if (Fights(combat, target, m)) free &= m != guard;
+            else combat.Disengage(table, m);
+        }
+
+        return free;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="who"/>'s combat target is <paramref name="whom"/>.
+    /// </summary>
+    static bool Fights(CombatSystem combat, CharacterId who, CharacterId whom) =>
+        combat.TargetOf(who.Slot, who.Generation) == (whom.Slot, whom.Generation);
 
     /// <summary>
     /// The fine: the guard walks after the target and, in talking range, takes the fine or, unpaid, fights; a fight, the leash or the time also
@@ -1091,6 +1244,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var tc = table.Cold(t)!;
         if (tc.Medical is not { Incapacitated: true } || !tc.CarriedBy.IsNone || Captives is null)
         {
+            DropStripClip(gc);
             a.Phase = ArrestPhase.Fight;
             a.Time = 0;
             return true;
@@ -1193,10 +1347,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (table.TryResolveNext(a.Guard, out int g) && table.Cold(g) is { } gc)
         {
             gc.Engaged = false;
+            DropStripClip(gc);
             if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
         }
         Note(world, kind, a.Guard, a.Target, a.Faction, 0);
         return false;
+    }
+
+    /// <summary>
+    /// Takes the strip's kneel off a guard leaving it unfinished (the target died, got up or was taken, the guard was recalled): an idle character
+    /// plays its action clip, so a kept one had him kneel on by the body under his own goal's text (#698).
+    /// </summary>
+    static void DropStripClip(CharacterCold gc)
+    {
+        if (gc.ActionClip == Kidnap.CaptiveSystem.ProcessClip) gc.ActionClip = null;
     }
 
     /// <summary>

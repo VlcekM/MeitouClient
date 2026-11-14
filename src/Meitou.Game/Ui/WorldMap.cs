@@ -420,8 +420,12 @@ sealed class WorldMap(PlayerInterface player)
         var frame = new MapFrame { Controls = controls, At = imageIndex, Bounds = bounds, Ui = ui, Level = level, Players = players };
         AddPlaces(ref frame, snapshot);
 
-        // The player's characters, hidden at the least zoom level.
-        if (level > 0) AddCharacterMarkers(ref frame);
+        // The tracked squads and, over them, the player's characters; all hidden at the least zoom level.
+        if (level > 0)
+        {
+            AddSquadMarkers(ref frame, snapshot.MapSquads);
+            AddCharacterMarkers(ref frame);
+        }
 
         // The movement marker stands on the ordered point (its bottom centre) for 3 s.
         if (Stopwatch.GetTimestamp() < _movementMarkerUntil)
@@ -604,6 +608,26 @@ sealed class WorldMap(PlayerInterface player)
             var at = MapScreen(ref frame, player.Where(character));
             AddMarker(ref frame, "map-character-" + character.Id, "Character", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y),
                 character.Selected ? SelectedColour : PlayerColour);
+        }
+    }
+
+    /// <summary>
+    /// The other factions' squads the map tracks (campaign platoons, squads hired by the player), one marker each at its leader, coloured by
+    /// its standing: a hired one an ally, else its faction's.
+    /// </summary>
+    void AddSquadMarkers(ref MapFrame frame, IReadOnlyList<MapSquadSnapshot> squads)
+    {
+        var size = GroupSize("Character") * frame.Ui;
+
+        foreach (var squad in squads)
+        {
+            var standing = MapFactionOf?.Invoke(MapFactionId?.Invoke(squad.Faction))?.Standing ?? MapStanding.Neutral;
+            var colour = standing == MapStanding.Player ? PlayerColour
+                : squad.Ally || standing == MapStanding.Ally ? AllyColour
+                : standing == MapStanding.Enemy ? EnemyColour
+                : NeutralColour;
+            var at = MapScreen(ref frame, new(squad.Position.X, 0, squad.Position.Y));
+            AddMarker(ref frame, "map-squad-" + squad.Key, "Character", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y), colour);
         }
     }
 

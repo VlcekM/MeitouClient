@@ -256,6 +256,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.True(ui.ContextMenuWindow.ContextMenuOpen);
             Assert.Contains(ui.UiFrame, c => c.Name == "context-title" && c.Caption == "Stranger");
             Assert.Equal(0, session.World.Commands.Count);   // the hold gave no quick order
+            // The title keeps its case (a mixed-case font) and a verb turns orange-yellow under the mouse, as in the original.
+            Assert.Equal("Kenshi_StandardFont_Medium", ui.UiFrame.Last(c => c.Name == "context-title").Properties["FontName"]);
+            Assert.Equal(ContextMenuWindow.VerbHover, ui.UiFrame.Last(c => c.Name == "context-verb-0").HoverColour);
             // The rows act on the release (the original's eventMouseButtonReleased): the held button let go over the first verb gives it and closes
             // the menu.
             var verb = Centre(ui.UiFrame.Last(c => c.Name == "context-verb-0"));

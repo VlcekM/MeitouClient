@@ -210,23 +210,22 @@ public class ArrestTests
         // full skill.
         Assert.Equal(0.05f, BaseGame.MinimumLockpickChance, 5);
 
-        using var world = new SimWorld(new WorldSettings(), new OpenGroundWalkability((_, _) => 0));
         var picks = new Lockpicking(BaseGame, BodyOptions.Default);
         var picker = new Combatant().MakeCold();
         picker.Stats![StatsEnumerated.Lockpicking] = 20;
 
-        Assert.True(picks.Allowed(world, picker, 61));
-        Assert.False(picks.Allowed(world, picker, 62));
+        Assert.True(picks.Allowed(picker, 61));
+        Assert.False(picks.Allowed(picker, 62));
 
         picker.InSomething = HeldState.Imprisoned;
 
-        Assert.True(picks.Allowed(world, picker, 61));
+        Assert.True(picks.Allowed(picker, 61));
         Assert.Equal(Lockpicking.Chance(61, 10), Lockpicking.RollChance(picker, 61));
 
         picker.InSomething = HeldState.None;
         picker.Medical!.KnockOut(1000);
 
-        Assert.False(picks.Allowed(world, picker, 20));
+        Assert.False(picks.Allowed(picker, 20));
     }
 
     [Fact]

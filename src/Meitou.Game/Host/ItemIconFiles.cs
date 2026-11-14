@@ -1,4 +1,5 @@
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Ui;
 
@@ -11,11 +12,10 @@ namespace Meitou.Game.Host;
 sealed class ItemIconFiles(GameHost host)
 {
     /// <summary>
-    /// Where Meitou saves the item icons it draws (<c>%LOCALAPPDATA%\Meitou\icons</c>), named as the game's saved pictures; the supersampled ones
+    /// Where Meitou saves the item icons it draws (<see cref="LoadCaches.Root"/>'s <c>icons</c>), named as the game's saved pictures; the supersampled ones
     /// (the <c>icons</c> switch's Meitou side) in its <c>supersampled</c> folder.
     /// </summary>
-    static string IconSaveDirectory(bool enhanced) =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "icons", enhanced ? "supersampled" : "");
+    static string IconSaveDirectory(bool enhanced) => LoadCaches.Folder("icons", enhanced ? "supersampled" : "");
 
     /// <summary>
     /// The look the item icons were last connected with (<see cref="SyncIconLook"/>).

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Frame;
 
@@ -350,10 +351,18 @@ public static class FoliageLodCache
     const uint Magic = 0x444F4C4D;
 
     /// <summary>
-    /// The cache's folder.
+    /// The cache's folder; set by a test, else <see cref="LoadCaches.Root"/>'s <c>lods</c>.
     /// </summary>
-    public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-        "lods");
+    public static string Root
+    {
+        get => s_root ?? LoadCaches.Folder("lods");
+        set => s_root = value;
+    }
+
+    /// <summary>
+    /// The folder <see cref="Root"/> was set to; null for the default.
+    /// </summary>
+    static string? s_root;
 
     /// <summary>
     /// The cache file of a mesh: its name made safe and cut to 40 characters, a hash of its bytes, the variant and the version.

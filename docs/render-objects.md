@@ -32,6 +32,22 @@ and generated levels use projected demand with stable transitions. Do not treat 
 range as an accidental renderer limit: it can be original fidelity. Visibility/depth/shadow/
 reflection and streaming residency need consistent bounds.
 
+Part distance, **Verified** (decompile `FUN_140558b40`, constants read from the exe): a part still at the `objects view range` whose
+entity's local box radius (`MovableObject::getLocalAabb().getRadius()`, half the mesh box's diagonal, unscaled) is above 100 gets the
+largest float as rendering distance; `ObjectRanges.PartRenderingDistance` with `ObjectMeshCache`'s radius is the same measure.
+
+**Wall part reach** (**Verified**, original decompile): `FUN_14057cc70` creates a `WallBuilding` for `links together` after checking
+`is wall gate`. Its virtual +0x2c8 returns itself (`FUN_140592760`), so `FUN_14055f6e0` skips the ordinary part-distance assignment.
+All wall parts therefore bypass the small-part cutoff, independently of `link type`, mesh size or LOD. **Observed**, clean GOG meshes:
+`Wall3.mesh` has a local AABB radius of 182.78, `Wall3_Section01.mesh` 93.17. Applying only the size exemption incorrectly clipped short
+walls while retaining full sections (#667). Meitou uses the owner's wall flags for this exemption; the whole-object reach still applies.
+
+Stand-in colour, **Verified** (mesh probe): a building's `distant mesh` carries its look in vertex colours alone, which need not match the
+building (`hivehut-distant.mesh`: 13 triangles, mean colour 0.58 0.56 0.37, khaki, for the purple-brown Hive Commune Hut). The water
+reflection draws real parts to its own shorter reach (`ReflectionPass.ObjectDistance`, 2000) but starts stand-ins and distant towns where
+the scene does (`WorldObjectRenderer.StandInDistance`), so a hut the scene still shows as built never mirrors as its stand-in (#668);
+between the two reaches a building mirrors nothing.
+
 Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
 of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
 compared the jump with the part's mean UV density let tiled decks (Shield Bridge, tread squares) pick another UV island, showing

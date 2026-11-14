@@ -848,6 +848,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         int started = 0, ranSteps = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
+        using var scope = _gpu.Uploads.Scope();   // the steps' slabs share one command buffer (one per slab filled the queue's 64)
         if (!wait) _governor.Requalify();
         while (true)
         {

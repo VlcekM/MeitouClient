@@ -49,7 +49,7 @@ F10 → Tools → "Level editor..." (`LevelEditorHost`, `LevelEditorPanel`, `Bui
   its Commands box lists only "Cancel All: Esc"): a right click on nothing (no queued ghost, building or item under the cursor) drops the
   chosen row: no ghost follows the cursor and the list shows no choice; queued ghosts stay. Meitou also drops it with Esc (a further Esc
   closes the window as above, then the bar) and with a click on the chosen row; any row or category click chooses again.
-  The player's build mode (Build button, same list and ghost) drops it with a right click on empty ground and with a click on the chosen row
+  The player's build mode (Build button, same list and ghost) drops it with a right click on empty ground only; a click on the chosen row keeps it (as the original, a player report, #663; not read from the exe)
   (queued ghosts stay; a laid wall line is dropped first); its Esc is unchanged (the original's Esc cancels all and leaves build mode, [buildings-production](buildings-production.md)).
 - **Edits are level data at once**: each placement and each clearing is merged into the running world's level data as a layer
   (`WorldLevelData.ApplyEdit`, the same records the saved mod holds; `EditRevision` counts them). Every consumer that keeps an index of
