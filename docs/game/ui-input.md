@@ -531,7 +531,7 @@ fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`
 operate (a farm or another producer with an output, `WorldBuildingInfo.Machine`; [NPC town machines](buildings-production.md#npc-town-machines)) is picked like a level building (a farm, which has no
 collision, by its plot) with the class's pointer (`mine` for function 1 or 27, else `use`): a quick right click is Use (87, `OperateOrder` on its `townwork:` site; with Shift the Operating machine
 job), held the menu offers Use and, once its machine exists, Loot (26): the selection walks to it and its building window opens beside the character's inventory; a take out of it is a theft from the
-town's faction (`CrimeSystem.Steal` with the building as the container, the stolen mark of its owner), as out of a town container (`TownMachineUse`). Not built: the machines of a town
+town's faction (`CrimeSystem.Steal` with the building as the container, the stolen mark of its owner), as out of a town container (`TownMachineUse`). A town building the level data gives to the player's faction (`PopulationData.LevelOwnerOf`; a mod's public well, #638) has a machine of the player's, so a take out of it is none. Not built: the machines of a town
 building's furniture (crafting and research benches, generators, the furniture of a bought house) and a town's storages as buildings (their containers are picked): machines exist for the sites of
 `World.Buildings` (player-built ones and town ruins taken over) and for the town buildings above. A door (picked by its collision with the leaf
 where it has slid to, `DoorSpot.Slide` × open amount, `FurnitureUse`) shows `door` / `lock` / `lockpick` as in the table and a quick right click gives `DoorOrder` (the nearest selected

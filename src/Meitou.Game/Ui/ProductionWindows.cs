@@ -331,7 +331,8 @@ sealed class ProductionWindows(PlayerInterface player)
     /// <summary>
     /// Engine choice for a machine with only an output (a mined rock): the layout's empty input column and crafting row are dropped, the output
     /// column takes the window's width and the window shrinks around it, its output panel kept near the layout's size (the original's window is the
-    /// full layout, mostly empty).
+    /// full layout, mostly empty). A tall output grid (a well's water) pushes its progress bar down (<see cref="SizeSection"/>), so the window is
+    /// as tall as keeps the bar inside (<see cref="OutputBarBottom"/>), at most the layout's height.
     /// </summary>
     void OutputOnlyGeometry(UiBindings b)
     {
@@ -340,13 +341,28 @@ sealed class ProductionWindows(PlayerInterface player)
         b.Hidden.Add("CraftingPanel");
         b.Hidden.Add("InputColumn");
         float scale = player.InterfaceScale;
-        b.Positions["Root"] = new(0, 0, 0.208854f * player.Width * widthPart * scale, 0.398148f * player.Height * heightPart * scale);
+        float full = 0.398148f * player.Height * scale;
+        float height = Math.Clamp(OutputBarBottom() + 16 * player.UiScale, full * heightPart, full);
+        b.Positions["Root"] = new(0, 0, 0.208854f * player.Width * widthPart * scale, height);
         float x = 0.0126582f / widthPart, w = 1 - 2 * x, titles = 0.0909091f / heightPart;
         if (layout.Find("TitlesPanel") is { } t) b.RelativePositions[t] = new(x, 0, w, titles);
         if (layout.Find("OutputTitleText") is { } ot) b.RelativePositions[ot] = new(0, 0, 1, 1);
         if (layout.Find("InputOutputPanel") is { } io) b.RelativePositions[io] = new(x, titles, w, 1 - titles - 0.03f);
         if (layout.Find("OutputColumn") is { } oc) b.RelativePositions[oc] = new(0, 0, 1, 1);
         if (layout.Find("OutputPanel") is { } op) b.RelativePositions[op] = new(0, 0, 1, 1);
+    }
+
+    /// <summary>
+    /// How far under the building window's top its output progress bar ended in the last frame, where <see cref="SizeSection"/> left it (the
+    /// window settles over a few frames, as the furnace's does); 0 before the window was drawn.
+    /// </summary>
+    float OutputBarBottom()
+    {
+        if (player.FaithfulScreens.LastFrame.FirstOrDefault(f => f.Id == "building")?.Controls is not { } last) return 0;
+        if (last.FirstOrDefault(c => c.Type == "Window") is not { } win) return 0;
+        if (last.FirstOrDefault(c => c.Name == "OutputProgressBar") is not { } bar) return 0;
+
+        return bar.Bounds.Y + bar.Bounds.Height - win.Bounds.Y;
     }
 
     /// <summary>

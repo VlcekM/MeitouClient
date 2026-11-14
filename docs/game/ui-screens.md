@@ -837,7 +837,7 @@ sections are the recipe item's `inventory footprint width` × `inventory footpri
 ([Crafting](buildings-production.md#crafting)). The grid
 sits centred under its label and progress bar (**Observed**, owner's screenshot of an electrical workbench, 2026-10-24); the rule behind it and whether the bar
 moves for a tall grid are **Unknown**. Meitou keeps the layout's top, centres the grid on the bar (a grid wider than the bar keeps the slot's left edge)
-and pushes the bar under an overlapping grid. For a machine with only an output (a mined rock) the original's window size is **Unknown**; Meitou drops the input column and crafting row and shrinks the window around the output panel.
+and pushes the bar under an overlapping grid. For a machine with only an output (a mined rock) the original's window size is **Unknown**; Meitou drops the input column and crafting row and shrinks the window around the output panel. The layout's bar sits under the `out` slot (`OutputContent`: slot `0 0 0.88 0.29`, bar `0 0.53 1 0.29`, Left Bottom; **Verified**, layout read), so an output taller than the slot (a well's water, #638) pushed the bar out of the shrunk window; the window now grows to keep it, up to the layout's height.
 
 Crafting window contents (**Verified**, `CraftingBuilding::updateInventoryWindow` `FUN_1402b6110` and the `BuildInventoryLayout` setters `FUN_14014db60` ... `FUN_14014e330`; field
 names KenshiLib 1ce4a16, **Observed**). Each `inN` and the `out` section get a plain `ImageBox` child made by the layout constructor (`FUN_140155f90`): top-left aligned, no mouse

@@ -108,8 +108,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>), null for a building that
-    /// neither works nor stores. Serial phases only.
+    /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>, or by the player's when
+    /// the level data gives the building to it, <see cref="PopulationData.LevelOwnerOf"/>: a take out of that one is no theft), null for a building
+    /// that neither works nor stores. Serial phases only.
     /// </summary>
     public Machine? TownWork(World world, TownBuilding building, int owner)
     {
@@ -123,7 +124,7 @@ public sealed partial class ProductionSystem
                 Record = building.BuildingId,
                 Name = building.Name,
                 Position = building.Position,
-                Owner = owner,
+                Owner = _towns?.LevelOwnerOf(building, owner) ?? owner,
                 Materials = [],
                 Complete = true,
                 Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, building.Yaw),
