@@ -1378,6 +1378,30 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// The nearest distance within <paramref name="maxDistance"/> at which the ray first meets a loaded building's collision on a face nobody
+    /// stands on (<see cref="InteriorVolume.FaceHit"/>, floors up to <paramref name="floor"/>); null for none.
+    /// </summary>
+    public float? FaceHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
+    {
+        float? best = null;
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+                if (room.FaceHit(origin, direction, floor, best ?? maxDistance) is { } t) best = t;
+        return best;
+    }
+
+    /// <summary>
+    /// Whether a loaded building with rooms stands over (x, z) (<see cref="InteriorVolume.Over"/>): its own collision answers a pick there.
+    /// </summary>
+    public bool HasInteriorOver(float x, float z)
+    {
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+                if (room.Over(x, z)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// The nearest distance along the ray at which it enters a loaded building seen from outside (not in <see cref="InteriorView"/>), within
     /// <paramref name="maxDistance"/>: characters and items beyond it are hidden from the pointer. Null when none is in the way.
     /// </summary>

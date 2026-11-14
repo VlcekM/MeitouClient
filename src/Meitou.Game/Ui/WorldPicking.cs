@@ -22,6 +22,22 @@ sealed class WorldPicking(PlayerInterface player)
     public Func<Vector3, Vector3, float, Vector3?>? SurfaceMoveHit { get; set; }
 
     /// <summary>
+    /// The host's test for where a ray first meets the collision of a building with rooms on a face nobody stands on (a foundation's side), within
+    /// a distance; null when none.
+    /// </summary>
+    public Func<Vector3, Vector3, float, float?>? InteriorFaceHit { get; set; }
+
+    /// <summary>
+    /// The host's test for a building with rooms standing over (x, z): its collision is <see cref="InteriorFaceHit"/>'s to answer.
+    /// </summary>
+    public Func<float, float, bool>? InteriorOver { get; set; }
+
+    /// <summary>
+    /// The host's height of the highest walkable surface at a point's (x, z) that is not above it; null when there is none.
+    /// </summary>
+    public Func<Vector3, float?>? SurfaceBelow { get; set; }
+
+    /// <summary>
     /// Debug: called with the ground point under the cursor (null when none) on a left press that no widget took; true consumes the press (the host's
     /// "Explode on click").
     /// </summary>
@@ -49,7 +65,9 @@ sealed class WorldPicking(PlayerInterface player)
     #region Ray and ground
 
     /// <summary>
-    /// The movement destination on a raised walkable surface or a building floor, or the terrain when neither is in front of it.
+    /// The movement destination on a raised walkable surface or a building floor, or the terrain when neither is in front of it. A steep face of
+    /// a building met before it (a foundation's side, a wall) ends the ray: the destination is the foot of that face on the camera's side
+    /// (docs/game/ui-input.md "Movement marker").
     /// </summary>
     public Vector3? MoveHit(Vector3 origin, Vector3 direction)
     {
@@ -58,8 +76,101 @@ sealed class WorldPicking(PlayerInterface player)
         var room = BuildingMoveHit?.Invoke(origin, direction, distance);
         if (room is { } floor) distance = Vector3.Distance(origin, floor);
 
-        return SurfaceMoveHit?.Invoke(origin, direction, distance) ?? room ?? terrain;
+        var surface = SurfaceMoveHit?.Invoke(origin, direction, distance);
+        var pick = surface ?? room ?? terrain;
+        if (surface is { } raised) distance = Vector3.Distance(origin, raised);
+        if (FaceHit(origin, direction, distance - FaceMargin) is not { } face) return pick;
+
+        var at = origin + direction * face;
+        var foot = FootOf(at, direction);
+        return surface is { } top && TopOf(top, at, foot) ? pick : foot;
     }
+
+    /// <summary>
+    /// How much nearer than the destination a steep face has to be met to end the ray, world units (engine choice).
+    /// </summary>
+    const float FaceMargin = 1;
+
+    /// <summary>
+    /// The slope past which a collision face is no ground: the navigation slope limit, as the floor pick's.
+    /// </summary>
+    static readonly float SteepCos = MathF.Cos(40 * MathF.PI / 180);
+
+    /// <summary>
+    /// The distance within <paramref name="limit"/> at which the ray first meets a steep building face: of a building with rooms
+    /// (<see cref="InteriorFaceHit"/>) or of one without (<see cref="StaticFaceHit"/>).
+    /// </summary>
+    float? FaceHit(Vector3 origin, Vector3 direction, float limit)
+    {
+        if (limit <= 0) return null;
+
+        var rooms = InteriorFaceHit?.Invoke(origin, direction, limit);
+        return StaticFaceHit(origin, direction, rooms ?? limit) ?? rooms;
+    }
+
+    /// <summary>
+    /// The distance within <paramref name="limit"/> at which the ray first meets the collision of a level building without rooms (a wall, a
+    /// prop), when the triangle met is steep; null when the first one met can be stood on, or none is met.
+    /// </summary>
+    float? StaticFaceHit(Vector3 origin, Vector3 direction, float limit)
+    {
+        if (player.Build.Services is not { } host) return null;
+
+        float nearest = limit;
+        bool steep = false;
+        foreach (var candidate in host.Placement.StaticAlong(origin, direction, limit))
+        {
+            var b = candidate.Placement;
+            if (candidate.Plot || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
+
+            var mesh = CollisionMeshOf(b.BuildingId);
+            float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
+            var hull = candidate.Footprint.Place(b.Position, b.Rotation);
+            if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax) is null)
+                continue;
+
+            if (RayMeshHit((origin, direction), mesh, new Vector3(b.Position.X, y, b.Position.Z), b.Rotation) is not { } hit || hit.T >= nearest)
+                continue;
+
+            // A building with rooms answers for its own collision: its hidden floors do not count and its walls drop to the floor inside.
+            var p = origin + direction * hit.T;
+            if (InteriorOver?.Invoke(p.X, p.Z) == true) continue;
+
+            nearest = hit.T;
+            steep = MathF.Abs(hit.Normal.Y) < SteepCos;
+        }
+
+        return steep ? nearest : null;
+    }
+
+    /// <summary>
+    /// Where a character stands at the foot of a face met at <paramref name="at"/>: a little back towards the camera, on the highest walkable
+    /// surface not above the hit, else on the terrain. The steps back are engine choices: the navmesh keeps clear of a wall.
+    /// </summary>
+    Vector3 FootOf(Vector3 at, Vector3 direction)
+    {
+        var flat = new Vector3(direction.X, 0, direction.Z);
+        var back = flat.LengthSquared() < 1e-9f ? Vector3.Zero : -Vector3.Normalize(flat);
+
+        foreach (float step in (ReadOnlySpan<float>)[1, 3, 6])
+        {
+            var p = at + back * step;
+            if (SurfaceBelow?.Invoke(p) is { } y) return new Vector3(p.X, y, p.Z);
+        }
+
+        var near = at + back;
+        return new Vector3(near.X, player.Ground(near.X, near.Z), near.Z);
+    }
+
+    /// <summary>
+    /// Whether the raised surface picked at <paramref name="top"/> is the top of the face met at <paramref name="at"/> (a wall walk behind its
+    /// parapet): beside the hit, not above it, and more than a step (5) over the <paramref name="foot"/>. A surface level with the foot is the
+    /// ground beyond a wall, which the face hides.
+    /// </summary>
+    static bool TopOf(Vector3 top, Vector3 at, Vector3 foot) =>
+        Vector2.Distance(new(top.X, top.Z), new(at.X, at.Z)) <= Data.World.InteriorVolume.CollisionReach
+        && top.Y <= at.Y + 0.5f
+        && top.Y > foot.Y + 5;
 
     /// <summary>
     /// Where the ray meets the ground: marched in growing steps, then bisected. Null when it leaves the world first.
@@ -461,13 +572,20 @@ sealed class WorldPicking(PlayerInterface player)
     /// null for none.
     /// </summary>
     internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at,
-        Quaternion rotation)
+        Quaternion rotation) => RayMeshHit(ray, mesh, at, rotation)?.T;
+
+    /// <summary>
+    /// <see cref="RayMesh"/> with the unit normal of the triangle met, in world space (either way round: the winding is not known).
+    /// </summary>
+    internal static (float T, Vector3 Normal)? RayMeshHit((Vector3 Origin, Vector3 Direction) ray,
+        IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var inverse = Quaternion.Conjugate(q);
         var origin = Vector3.Transform(ray.Origin - at, inverse);
         var direction = Vector3.Transform(ray.Direction, inverse);
         float? best = null;
+        var normal = Vector3.UnitY;
         foreach (var (vertices, indices) in mesh)
         {
             for (int t = 0; t + 2 < indices.Length; t += 3)
@@ -489,11 +607,16 @@ sealed class WorldPicking(PlayerInterface player)
                 if (v < 0 || u + v > 1) continue;
 
                 float distance = Vector3.Dot(e2, r) * inv;
-                if (distance > 0 && (best is null || distance < best)) best = distance;
+                if (distance <= 0 || best is { } nearer && distance >= nearer) continue;
+
+                best = distance;
+                normal = Vector3.Cross(e1, e2);
             }
         }
 
-        return best;
+        if (best is not { } met) return null;
+
+        return (met, Vector3.Transform(normal.LengthSquared() < 1e-12f ? Vector3.UnitY : Vector3.Normalize(normal), q));
     }
 
     #endregion

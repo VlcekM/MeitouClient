@@ -250,4 +250,23 @@ sealed class InteriorView(GameHost host)
         }
         return null;
     }
+
+    /// <summary>
+    /// The height of the highest walkable navmesh surface at <paramref name="p"/>'s (x, z) that is at most half a unit over it: what stands at the
+    /// foot of a face a click met there. Null when the mesh has none there.
+    /// </summary>
+    internal float? SurfaceBelow(System.Numerics.Vector3 p)
+    {
+        if (host.Nav is null) return null;
+
+        var heights = new List<float>();
+        host.Nav.Walkability.World.HeightsAt(p.X, p.Z, heights);
+        float? best = null;
+        foreach (float h in heights)
+        {
+            if (h <= p.Y + 0.5f && (best is null || h > best)) best = h;
+        }
+
+        return best;
+    }
 }

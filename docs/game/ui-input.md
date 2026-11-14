@@ -191,6 +191,14 @@ over the terrain, and its height is the goal's floor (engine choice). "Outside t
 **Observed** (user, screenshots of the original): a click on the Longhouse's roof end at viewed floor 0 or 3, the character outside, walks onto it (floor 1). **Observed** (JC2, zone 20.29, scratch probe): a ray onto Defensive
 Wall II `16-Newwworld-INGAME` gave Y 1218 (terrain 1103); before, the goal resolved to the blocked ground under the wall.
 
+A steep building face met more than 1 unit before that destination ends the ray (engine choice; **Observed**, owner's report near Flats Lagoon: a click on
+a foundation's side, or on a wall, went to the deck behind it, the raised-surface march having passed through). Steep is over the 40° slope limit. For a building
+with rooms it is the first collision triangle on the shown floors, when no floor lies beneath it (`FloorSurfaces.FaceHit`); for a level building without rooms
+(a wall, a prop) the first collision triangle, unless a building with rooms stands over the hit (footprint + 4). The destination is the foot of the face: 1, 3
+or 6 units back towards the camera, on the highest navmesh surface not above the hit, else the terrain. A raised surface within 4 units of the hit, not above
+it and more than 5 over the foot stays (a wall walk behind its parapet). **Unknown**: the original's own rule (its target is the hit's x, z at the terrain
+height, [building picking](#building-picking-and-selection)). The player's own sites are not tested here (`BuildMode.SiteRelease` has its rule).
+
 **Spread** (**Verified**, order 0x1d in `FUN_1407f9e20`): `srand(selection count)`; the selection's lead goes to the point, every other character to point + (sin a, 0, cos a) x r with r = u x √(60 x count) + 5 (`DAT_141685340`), then a = u x 2π, each u = rand() / 32768 (`FUN_1409b1c10`, `DAT_141742b48`). Meitou: `Formation.Scatter` (the MSVC generator replayed, lead = first in the order's list).
 
 **Observed** (decompile): a ground move order shows an entity of `position.mesh` (a downward cone over a flat ring, 0.29 × 1.56 units)

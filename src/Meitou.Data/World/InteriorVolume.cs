@@ -278,6 +278,32 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
+    /// How far round the footprint this building's collision is taken to reach (a wall's thickness, a foundation's skirt): the movement pick's
+    /// wall reach (<see cref="FloorSurfaces"/>).
+    /// </summary>
+    public const float CollisionReach = 4;
+
+    /// <summary>
+    /// Whether (x, z) lies in the footprint widened by <see cref="CollisionReach"/>, whatever the height: a collision hit there is this building's.
+    /// </summary>
+    public bool Over(float x, float z) => Footprint.Length >= 3 && _edges.Holds(new Vector2(x, z), CollisionReach);
+
+    /// <summary>
+    /// Where the ray first meets this building's collision at or below the viewed floor, when that is a face nobody stands on
+    /// (<see cref="FloorSurfaces.FaceHit"/>). The footprint is not limited in height: a foundation reaches below the rooms.
+    /// </summary>
+    public float? FaceHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
+    {
+        if (Footprint.Length < 3 || _floors is null) return null;
+
+        var e = _edges;
+        var min = new Vector3(e.Min.X - CollisionReach, float.MinValue, e.Min.Y - CollisionReach);
+        var max = new Vector3(e.Max.X + CollisionReach, float.MaxValue, e.Max.Y + CollisionReach);
+        return FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)
+            ? _floors.Value.FaceHit(origin, direction, floor, maxDistance) : null;
+    }
+
+    /// <summary>
     /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part
     /// with a readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but
     /// its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
