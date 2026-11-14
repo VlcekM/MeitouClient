@@ -53,7 +53,7 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     bool _buildPausedGame;
     /// <summary>
-    /// The building category chosen in the menu; null for the first that shows.
+    /// The building category chosen in the menu; null until one is chosen after opening the window.
     /// </summary>
     string? _buildCategory;
     /// <summary>
@@ -186,6 +186,8 @@ sealed class BuildMode(PlayerInterface player)
             BuildDiscarded = false;
             player.InventoryWindows.CloseInventoryWindows();
             player.FaithfulScreens.Open("build");
+
+            // The original recreates the window on entry (FUN_1404e65e0); retained list selections must not override the fresh menu bindings.
             FollowChoiceInLists(category: true);
             player.ContextMenuWindow.CloseContextMenu();
             // a player pause: the speed buttons and the pause key resume it
@@ -232,13 +234,12 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The chosen category: the first that shows until one is chosen, none when nothing is unlocked.
+    /// The chosen category, or none until one is chosen or when it is no longer unlocked.
     /// </summary>
     string? CurrentCategory()
     {
         var categories = BuildCategories();
-        if (categories.Count == 0) return null;
-        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : categories[0];
+        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : null;
     }
 
     /// <summary>
@@ -868,7 +869,7 @@ sealed class BuildMode(PlayerInterface player)
         b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, c))];
         b.SelectedItems["CategoriesList"] = category is null ? -1 : categories.ToList().IndexOf(category);
         b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, g.Name))];
-        b.SelectedItems["BuildingsList"] = group is null ? -1 : groups.ToList().IndexOf(group);
+        b.SelectedItems["BuildingsList"] = group is null ? -1 : Math.Clamp(_buildGroup, 0, groups.Count - 1);
         b.Text["BuildingName"] = building?.Name ?? "";
         b.Text["DescriptionText"] = building is null || Services is null ? "" : Services.Description(building.Id);
         b.Properties["DescriptionText"] = new Dictionary<string, string>
