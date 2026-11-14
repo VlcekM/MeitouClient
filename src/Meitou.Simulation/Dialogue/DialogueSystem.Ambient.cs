@@ -129,7 +129,7 @@ public sealed partial class DialogueSystem
     bool Fire(World world, CharacterId npc, CharacterId whom, int ev)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(npc, out int n) || !Awake(table, n) || BubbleOf(npc)) return false;
+        if (!table.TryResolveNext(npc, out int n) || !Awake(table, n) || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
         var c = new Conversation { Npc = npc, Player = whom, Event = ev };
         if (Pick(world, c, SetOf(world, n).For(ev)) is not { } picked || picked.Speaker.IsNone || picked.Speaker == whom || Busy(picked.Speaker, c))
             return false;

@@ -836,10 +836,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not held in a cage (engine choice, #641), not
-    /// fighting nor an enemy; the customer the player's
-    /// with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window and stays with it,
-    /// <see cref="Trades"/>).
+    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not asleep when the trade opens (a sleeper
+    /// answers no Talk, <see cref="Dialogue.DialogueSystem.SleepsThrough"/>), not held in a cage (engine choice, #641), not fighting nor an enemy;
+    /// the customer the player's with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window
+    /// and stays with it, <see cref="Trades"/>).
     /// </summary>
     bool Parties(World world, out int c, out int t)
     {
@@ -852,6 +852,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         bool customerDown = cc.Medical is { Dead: true } || (!_open && cc.Medical is { Incapacitated: true });
         if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || tc.IsImprisoned || cc.Inventory is null)
             return false;
+        if (!_open && Carrying.CarrySystem.Asleep(table, t)) return false;
 
         return !AggroSystem.IsEnemy(_data.Relations, cc.Faction, tc.Faction);
     }

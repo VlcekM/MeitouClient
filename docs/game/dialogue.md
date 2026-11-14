@@ -146,6 +146,9 @@ package set.
 event is in the mask `DAT_141eeaecc` = 0x03800800, events 11, 23, 24, 25; **Verified**, the exe's data), the owner is talking already (unless the event is one of 2, 6, 11, 13,
 17, 26, 30, 31, 34, 36, 40, 45, 46, 48, 51, 54, 74: the **interrupting set**, `FUN_1406712f0`), or an owner-state test fails (skipped for 6, 11, 39). After a successful 3, 4,
 27, 66 or 67 that event has a 1.0 cooldown (frame dt).
+The asleep test shifts the mask by the event's low five bits, so 43, 55, 56 and 57 pass too (**Verified**, same function). Meitou
+(`DialogueSystem.SleepsThrough`, asleep as `CarrySystem.Asleep`): a sleeper fires no other event, is offered no Talk and opens no trade, so a
+shopkeeper in bed neither greets a customer nor trades (#582).
 
 Event 1 starts a [player conversation](#player-conversation), using a stored `interrupt` DIALOGUE instead of the event-1 list when one
 is pending. Every other event starts an [ambient conversation](#ambient-conversations).

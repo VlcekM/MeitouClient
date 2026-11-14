@@ -438,7 +438,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             world.Post(Loc.Tr("{1} can't talk to people", pc.Name));
             return;
         }
-        if (!Awake(table, n)) return;
+        if (!Awake(table, n) || SleepsThrough(table, n, DialogueEvents.PlayerTalkToMe)) return;
         // A campaign member with a pending interrupt (its negotiation) talks even when its faction is hostile (docs/game/factions-squads-towns.md
         // "Campaigns", announcement).
         if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target))
@@ -490,6 +490,20 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
+    /// The events an asleep owner still fires, by bit (the mask <c>DAT_141eeaecc</c> of <c>FUN_140684990</c>, which shifts by the event's low five
+    /// bits): 11, 23, 24, 25 and those 32 above them.
+    /// </summary>
+    const uint AsleepEvents = 0x03800800;
+
+    /// <summary>
+    /// Whether <paramref name="ev"/> is refused because its owner sleeps (<see cref="Carrying.CarrySystem.Asleep"/>): the original fires nothing
+    /// at a sleeper but <see cref="AsleepEvents"/>, so a shopkeeper in bed neither greets nor answers a Talk (docs/game/dialogue.md "Firing an
+    /// event").
+    /// </summary>
+    internal static bool SleepsThrough(CharacterTable table, int slot, int ev) =>
+        (AsleepEvents >> (ev & 31) & 1) == 0 && Carrying.CarrySystem.Asleep(table, slot);
+
+    /// <summary>
     /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
     /// </summary>
     static void Hold(World world, int slot)
@@ -537,6 +551,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
         if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
+        if (SleepsThrough(table, n, ev)) return;
+
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
         IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
             ? [interrupt] : SetOf(world, n).For(ev);
@@ -582,6 +598,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public bool CanTalk(World world, int slot, CharacterId? talker = null)
     {
         if (world.Characters.Cold(slot) is not { IsPlayer: false }) return false;
+        if (SleepsThrough(world.Characters, slot, DialogueEvents.PlayerTalkToMe)) return false;
+
         var npc = world.Characters.IdOf(slot);
         if (_interrupts.ContainsKey(npc)) return true;
         var roots = SetOf(world, slot).For(DialogueEvents.PlayerTalkToMe);
