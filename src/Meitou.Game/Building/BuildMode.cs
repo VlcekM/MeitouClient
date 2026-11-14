@@ -186,6 +186,7 @@ sealed class BuildMode(PlayerInterface player)
             BuildDiscarded = false;
             player.InventoryWindows.CloseInventoryWindows();
             player.FaithfulScreens.Open("build");
+            FollowChoiceInLists(category: true);
             player.ContextMenuWindow.CloseContextMenu();
             // a player pause: the speed buttons and the pause key resume it
             if (player.Session.Simulation.Speed != 0)
@@ -209,6 +210,16 @@ sealed class BuildMode(PlayerInterface player)
     #endregion
 
     #region Menu
+
+    /// <summary>
+    /// Drops the row the screen keeps highlighted in the buildings list (and the categories list with <paramref name="category"/>) after the code
+    /// changed the choice, so the highlight follows the chosen category and group again; a kept row outlives the window (#670).
+    /// </summary>
+    void FollowChoiceInLists(bool category)
+    {
+        if (category) player.FaithfulScreens.ClearSelection("build", "CategoriesList");
+        player.FaithfulScreens.ClearSelection("build", "BuildingsList");
+    }
 
     /// <summary>
     /// The menu's categories with something unlocked (sorted by name while the level editor builds).
@@ -691,6 +702,7 @@ sealed class BuildMode(PlayerInterface player)
         _buildCategory = ghost.Building.Category;
         BuildDiscarded = false;
         _buildGroup = Math.Max(0, BuildGroups().ToList().FindIndex(g => g.Members.Contains(ghost.Building)));
+        FollowChoiceInLists(category: true);
         BuildMember = ghost.Building;
         _ghostYaw = PlacementCheck.YawOf(ghost.Rotation);
         _ghostLift = 0;
@@ -982,6 +994,7 @@ sealed class BuildMode(PlayerInterface player)
                 BuildDiscarded = false;
                 _buildGroup = 0;
                 BuildMember = null;
+                FollowChoiceInLists(category: false);
                 break;
             case ("BuildingsList", "select"):
                 // The level editor's tool drops its choice on a click on the chosen row; the player's build mode keeps it, as the original's list.
