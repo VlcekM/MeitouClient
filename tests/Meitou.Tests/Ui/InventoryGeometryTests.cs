@@ -65,7 +65,7 @@ public class InventoryGeometryTests
         var layout = MyGuiTemplates.Expand(MyGuiReader.ReadLayout(files.Find("Kenshi_GenericBuildingWindow.layout")!), resources);
         float uiScale = height / 1080f * scale;
         var geometry = new InventoryGeometry(layout, width, height, scale, uiScale);
-        geometry.FitBuilding([], new(4 * 25 * uiScale, 5 * 25 * uiScale), false, false);
+        geometry.FitBuilding([], new(5 * 25 * uiScale, 5 * 25 * uiScale), false, false);
         var bindings = new UiBindings { TemplateScale = uiScale };
         bindings.Hidden.UnionWith(["CraftingPanel", "InputColumn", "InputTitleText"]);
         geometry.Bind(bindings);
@@ -189,7 +189,7 @@ public class InventoryGeometryTests
     /// Output-only, two-input production and wide/tall mod-sized crafting sections all fit on the first arrange.
     /// </summary>
     [Theory]
-    [InlineData(0, 4, 5, false)]
+    [InlineData(0, 5, 5, false)]
     [InlineData(2, 6, 3, false)]
     [InlineData(2, 16, 12, true)]
     public void BuildingSectionsFitTheFirstFrame(int inputCount, int columns, int rows, bool crafting)

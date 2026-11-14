@@ -80,10 +80,11 @@ sealed class InventoryLayout(PlayerInterface player)
     internal void PlaceCharacterWindow(bool newCharacter = false)
     {
         if (_inventoryPlaced && !newCharacter) return;
-        _inventoryPlaced = true;
 
         var roots = WindowRoots();
         if (!roots.TryGetValue("inventory", out var own)) return;
+
+        _inventoryPlaced = true;
 
         var occupied = roots.Where(p => p.Key != "inventory" && InventoryWindows.ScreenKind(p.Key) is "inventory" or "bag")
             .Select(p => p.Value).ToArray();
@@ -184,17 +185,16 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
 
-        const float gap = 0;
-        float x = left ? own.X - other.Width - gap : own.X + own.Width + gap;
+        float x = left ? own.X - other.Width : own.X + own.Width;
 
-        // Make room for the pair before the screen host clamps either window to the viewport.
+        // Make room for the pair without changing either frame's size.
         if (x < 0 || x + other.Width > player.Width)
         {
             float ownX = left
-                ? Math.Min(player.Width - own.Width, other.Width + gap)
-                : Math.Max(0, player.Width - other.Width - gap - own.Width);
+                ? Math.Min(player.Width - own.Width, other.Width)
+                : Math.Max(0, player.Width - other.Width - own.Width);
             player.FaithfulScreens.SetOffset(anchor, player.FaithfulScreens.GetOffset(anchor) + new Vector2(ownX - own.X, 0));
-            x = left ? ownX - other.Width - gap : ownX + own.Width + gap;
+            x = left ? ownX - other.Width : ownX + own.Width;
         }
 
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + new Vector2(x - other.X, own.Y - other.Y));

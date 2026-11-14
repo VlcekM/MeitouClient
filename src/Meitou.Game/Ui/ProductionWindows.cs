@@ -253,7 +253,7 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             string n = (k + 1).ToString(CultureInfo.InvariantCulture);
 
-            if (k == 0 && FurnaceGrid(m) is { } fg)
+            if (k == 0 && FurnaceGrid(m) is not null)
             {
                 BindFurnaceInput(b);
                 continue;
