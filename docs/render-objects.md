@@ -32,6 +32,17 @@ and generated levels use projected demand with stable transitions. Do not treat 
 range as an accidental renderer limit: it can be original fidelity. Visibility/depth/shadow/
 reflection and streaming residency need consistent bounds.
 
+Part distance, **Verified** (decompile `FUN_140558b40`, constants read from the exe): a part still at the `objects view range` whose
+entity's local box radius (`MovableObject::getLocalAabb().getRadius()`, half the mesh box's diagonal, unscaled) is above 100 gets the
+largest float as rendering distance; `ObjectRanges.PartRenderingDistance` with `ObjectMeshCache`'s radius is the same measure. So one
+wall line is cut unevenly (#667, Port North): `Wall3_Section01.mesh` (Defensive Wall III Short) measures 93.2 and ends at the view range,
+`Wall3.mesh` (Defensive Wall III) 314 and never does.
+
+Stand-in colour, **Verified** (mesh probe): a building's `distant mesh` carries its look in vertex colours alone, which need not match the
+building (`hivehut-distant.mesh`: 13 triangles, mean colour 0.58 0.56 0.37, khaki, for the purple-brown Hive Commune Hut). The water
+reflection draws real parts to its own shorter reach (`ReflectionPass.ObjectDistance`, 2000) and stand-ins beyond it, so a hut the scene
+still shows as built mirrors as its stand-in (#668).
+
 Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
 of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
 compared the jump with the part's mean UV density let tiled decks (Shield Bridge, tread squares) pick another UV island, showing
