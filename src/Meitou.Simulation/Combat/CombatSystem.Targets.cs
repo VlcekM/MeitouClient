@@ -414,7 +414,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>) or either side of an open doorway
-    /// (<see cref="AcrossOpenDoor"/>), within <see cref="SameFloorHeight"/> in height, and
+    /// (<see cref="AcrossOpenDoor"/>), not on another floor (<see cref="OtherFloor"/>: outdoors a slope's height is no floor's, #705), and
     /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
     /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
     /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
@@ -427,7 +427,7 @@ public sealed partial class CombatSystem
         var prev = world.Characters.Previous;
         Vector3 from = prev[a].Position;
         Vector3 to = prev[t].Position;
-        if (MathF.Abs(to.Y - from.Y) > SameFloorHeight) return false;
+        if (OtherFloor(world, a, from, t, to)) return false;
 
         var leg = new Vector2(to.X - from.X, to.Z - from.Z);
         float length = leg.Length(), y = from.Y;
