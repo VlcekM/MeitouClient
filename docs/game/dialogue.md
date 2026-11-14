@@ -331,6 +331,13 @@ bubble whose speaker is not awake). No test of whether the speaker is drawn: a b
 **End** (`FUN_140674830`): bubble and window closed, the per-event counter +1 with its time (read by DC 13), the event's last target
 stored, the squad blackboard notified for player conversations.
 
+**Chain and conversation**: a bubble chain the NPC was saying does not go on after a player conversation with it (**Observed**, 1.0.68
+with Universal Wasteland Expansion: a Shek gate guard's `Bag check (Shek)` chain, whose first line stores the `Bag search (Shek)`
+interrupt, says nothing more once that search ends; inferred: both run on the NPC's one dialogue state, and the end step closes bubble and
+window together). Meitou drops the chain and its shown bubble when the conversation opens, without the end step. Left running, the chain
+went on after the window closed: its later lines walked the guard back to the player (DA 2), each walk ending in an empty event 1, until
+its last line started an attack (#707).
+
 **AI tasks 102/159/161** (`Task_TalktoPlayer`, **Verified** decompile): fire `AITaskSytem+0x264` at the target (0 means 1), which the planner sets from the TaskData event of any
 row on the chosen plan (188: 38, 194 / 218: 39, 158 / 283: 9); event 9 repeats every update (17 at an enemy, or with blackboard `+0xe8` at a non-ally); walks at the target;
 after 25 game minutes, once the target is getting away (`FUN_140331ee0`: its task is 35 or 127, or a move order (29) to a non-zero spot farther
