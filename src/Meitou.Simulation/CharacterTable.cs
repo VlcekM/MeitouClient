@@ -1165,6 +1165,12 @@ public sealed class CharacterCold
     public int? PickingUpItem { get; set; }
 
     /// <summary>
+    /// The pick-up in <see cref="PickingUpItem"/> is food fetched to eat (<see cref="Items.FeedSystem"/>, goal 259): a live animal's shut grid takes
+    /// it. Not saved, as the pick-up is not; hashed only while set.
+    /// </summary>
+    public bool FetchingFood { get; set; }
+
+    /// <summary>
     /// The limb an animal holds in its mouth (<see cref="Items.FeedSystem.HoldInMouth"/>; null: none), eaten later by <see cref="Items.FeedSystem"/>.
     /// Hashed only while set; not saved.
     /// </summary>
@@ -1944,6 +1950,8 @@ public sealed class CharacterTable
             hasher.Add(0x54616B65);
             hasher.Add(taking);
         }
+
+        if (k.FetchingFood) hasher.Add(0x46657463);
 
         if (k.Mouth is { } mouth)
         {
