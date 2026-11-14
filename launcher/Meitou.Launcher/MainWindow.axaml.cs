@@ -11,6 +11,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Meitou.Content;
 using Meitou.Localisation;
+using Meitou.Steam;
 
 namespace Meitou.Launcher;
 
@@ -219,7 +220,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     void WireWindowEvents()
     {
-        Closing += (_, _) => { if (_graphicsSave?.IsEnabled == true) SaveGame(); };
+        Closing += (_, _) =>
+        {
+            _workshopSync.Stop();
+            if (_graphicsSave?.IsEnabled == true) SaveGame();
+        };
 
         // A save made in the game since: Continue names it.
         Activated += (_, _) => _ = RefreshContinueAsync();
@@ -847,6 +852,11 @@ public sealed partial class MainWindow : Window
     bool _checksSuspended;
 
     /// <summary>
+    /// The Steam Workshop sync of the mods page (macOS): at most one at a time.
+    /// </summary>
+    readonly WorkshopSyncRunner _workshopSync = new();
+
+    /// <summary>
     /// Off the UI thread, so a large workshop folder does not hold up the window: listing the folders and reading every header (for the
     /// dependency order and the authors) is file work per mod. Until it is done the list is not saved (Play, presets), so a click
     /// meanwhile cannot write an empty mods.cfg. A later load (another Kenshi folder, Refresh) supersedes an unfinished one.
@@ -857,6 +867,7 @@ public sealed partial class MainWindow : Window
         _modsReady = false;
         _mods.Clear();
         ModsEmpty.IsVisible = false;
+        SyncWorkshopButton.IsVisible = MacSteam.CanSync;
         var gameInstall = _install;
         List<(ModEntry Entry, CodeModEntry Code)> entries;
         try
@@ -1017,6 +1028,49 @@ public sealed partial class MainWindow : Window
     /// Reads the mod list again.
     /// </summary>
     void RefreshMods_Click(object? sender, RoutedEventArgs e) => LoadMods();
+
+    /// <summary>
+    /// Has the running Steam client download or update the subscribed Kenshi workshop mods (the button reads Stop meanwhile), then lists the mods
+    /// again. Steam is not started: without it the status says so.
+    /// </summary>
+    async void SyncWorkshop_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_workshopSync.Running)
+        {
+            _workshopSync.Stop();
+            return;
+        }
+
+        SetText(SyncWorkshopText, "Stop syncing");
+        Status(Tr("Asking Steam for your workshop mods..."));
+        var result = await _workshopSync.RunAsync((installed, total) => Dispatcher.UIThread.Post(() => ShowSyncProgress(installed, total)));
+
+        SetText(SyncWorkshopText, "Sync workshop");
+        Status(SyncSummary(result));
+        LoadMods();
+    }
+
+    /// <summary>
+    /// The status line while Steam downloads.
+    /// </summary>
+    void ShowSyncProgress(int installed, int total)
+    {
+        if (_workshopSync.Running) Status(Tr("Steam is downloading your workshop mods: {1} of {2} installed.", installed, total));
+    }
+
+    /// <summary>
+    /// What a finished, stopped or failed sync says.
+    /// </summary>
+    string SyncSummary(WorkshopSyncResult result)
+    {
+        if (result.Problem is { } problem) return Tr(problem);
+        if (result.Total == 0) return Tr("You have no subscribed Kenshi workshop mods.");
+        if (result.Stopped)
+            return Tr("Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background.", result.Installed, result.Total);
+
+        string done = Tr("Workshop synchronised: {1} of {2} mods installed.", result.Installed, result.Total);
+        return result.Refused == 0 ? done : done + Tr(" Steam would not download {1}.", result.Refused);
+    }
 
     /// <summary>
     /// Ticks every mod.

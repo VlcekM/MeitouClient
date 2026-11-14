@@ -287,6 +287,40 @@ interpolated string, which no translation could match.
   order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a
   contradiction moves nothing and is shown ([dependencies](modding-dependencies.md#launcher)).
 
+## Workshop sync (macOS)
+
+Kenshi has no Mac build, so the macOS Steam client never installs it, but it still downloads the Kenshi Workshop items of an account that owns
+the game. The mods page's **Sync workshop** button (`WorkshopSync`, `SteamUgc`, `MacSteam` in `Meitou.Core/Steam`) asks that client to download
+or update the subscribed items and waits until they are installed; subscribing and unsubscribing stay in Steam (client or web).
+
+- The button is shown only on macOS and only when the client's own `libsteam_api.dylib` exists
+  (`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/Frameworks/Steam Helper.app/Contents/MacOS/`, hardcoded). Without it
+  nothing is done. Meitou ships no Steam binary.
+- Steam is not started: when its process (`steam_osx`) is absent, the status asks the user to start it and sign in first.
+- The sync runs in a **child process**: the launcher's own executable started with `--macos-workshop-sync` (`WorkshopSyncChild`, no window), which
+  prints `meitou-sync:`-prefixed `progress`, `result` or `problem` lines that `WorkshopSyncRunner` reads. Steam counts the account as playing Kenshi
+  until the process that initialised Steamworks exits, not until `SteamAPI_Shutdown`; in the launcher's own process the client then waited on
+  "Kenshi" when quitting (**Observed**: `gameprocess_log.txt` tracked the launcher's PID from the sync until Steam itself quit, while the spike's
+  short-lived processes were untracked at exit).
+- The child sets `SteamAppId`/`SteamGameId` (233860) in the real process environment (`setenv`; .NET's own copy is not seen by native code),
+  calls `SteamAPI_InitFlat`, lists `GetSubscribedItems`, calls `DownloadItem` for each item not installed and current, polls `GetItemState`
+  (current = Installed without NeedsUpdate, Downloading or DownloadPending) every 0.5 s and prints `installed of total`; then `SteamAPI_Shutdown`
+  and it exits. The mod list is read again at the end.
+- While it runs, Steam shows the account as playing Kenshi. The button reads **Stop syncing** meanwhile; stopping (or closing the launcher) kills
+  the child, Steam keeps downloading by itself.
+- Items land in the client's `steamapps/workshop/content/233860/<id>/` (one `.mod` each). `GameInstall.WorkshopDirectory` falls back to that
+  folder on macOS when the install is not inside a Steam library, so the launcher and the game find them whether or not Steam is running.
+
+**Verified** (macOS Steam client, the owner's account, 19 subscribed items, 7.3 GB, Kenshi not installed): `SteamAPI_InitFlat` succeeds as app
+233860 with the bundled dylib; `GetSubscribedItems` lists all 19; after `DownloadItem` all read state 5 (Subscribed|Installed, before: 9) with their
+folders; `SubscribeItem` alone downloads an item within a second (11 KB), `UnsubscribeItem` drops the count and Steam deletes the folder within about
+20 s; with Steam closed `SteamAPI_InitFlat` fails ("Could not determine Steam client install directory") and does not start it.
+**Observed**: Steam's `content_log.txt` shows the subscriptions' download starting when the first process that queried them ran as app 233860, and
+`DownloadItem` only raising its priority ("Priority First"); `GetItemDownloadInfo` reported 0 bytes throughout, so progress is the installed count.
+**Unknown**: whether the dylib path survives Steam updates; whether pre-UGC (legacy `ISteamRemoteStorage`) items download this way (Valve's
+[Workshop guide](https://partner.steamgames.com/doc/features/workshop/implementation) says `DownloadItem` covers ISteamUGC items only); how a sync
+behaves offline or without a Kenshi licence beyond Steam's init message.
+
 ## Continue
 
 **Continue** is the middle part of the Play button, in its larger type,, shown while a save exists, with the newest save's name under it (rescanned

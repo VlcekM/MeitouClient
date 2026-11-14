@@ -70,16 +70,18 @@ public sealed class GameInstall
 
     /// <summary>
     /// Steam workshop items of Kenshi (app 233860) in the same Steam library, if the install is a Steam one:
-    /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>.
+    /// <c>steamapps/workshop/content/233860</c> next to <c>steamapps/common/&lt;install&gt;</c>. An install outside a Steam library on macOS (Kenshi
+    /// has no Mac build, so it is a copy) uses the macOS Steam client's own folder, where the client downloads the account's items
+    /// (<see cref="Steam.MacSteam.WorkshopContentDirectory"/>). Null when the folder does not exist.
     /// </summary>
     public string? WorkshopDirectory
     {
         get
         {
-            if (SteamAppsDirectory is not { } steamapps) return null;
-
-            var dir = Path.Combine(steamapps, "workshop", "content", "233860");
-            return Directory.Exists(dir) ? dir : null;
+            var dir = SteamAppsDirectory is { } steamapps
+                ? Path.Combine(steamapps, "workshop", "content", "233860")
+                : Steam.MacSteam.WorkshopContentDirectory;
+            return dir is not null && Directory.Exists(dir) ? dir : null;
         }
     }
 

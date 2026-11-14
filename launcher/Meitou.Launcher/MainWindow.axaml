@@ -190,8 +190,14 @@
         <DockPanel x:Name="ModsPage" IsVisible="False">
           <Border DockPanel.Dock="Top" Classes="header" Margin="0,0,0,10">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="aside" Content="Refresh" Click="RefreshMods_Click"
-                      ToolTip.Tip="List the mods folder and the Steam workshop items again" />
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                <Button x:Name="SyncWorkshopButton" Classes="aside" IsVisible="False" Click="SyncWorkshop_Click"
+                        ToolTip.Tip="Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam">
+                  <TextBlock x:Name="SyncWorkshopText" Text="Sync workshop" />
+                </Button>
+                <Button Classes="aside" Content="Refresh" Click="RefreshMods_Click"
+                        ToolTip.Tip="List the mods folder and the Steam workshop items again" />
+              </StackPanel>
               <TextBlock Text="Mods" />
             </DockPanel>
           </Border>
