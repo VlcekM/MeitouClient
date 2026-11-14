@@ -68,6 +68,24 @@ sealed partial class BloodDecals(GameHost host)
     const uint DefaultBloodColour = 0x800000;
 
     /// <summary>
+    /// Whether the blood prints want footfalls this frame: the switch is on and there is blood on the terrain to step in.
+    /// </summary>
+    internal bool WantsFootfalls => _footprints.Wanted(DecalStore);
+
+    /// <summary>
+    /// Whether the blood prints want the character <paramref name="c"/>'s footfalls: it stands by blood or still has some on a sole.
+    /// </summary>
+    internal bool WantsFootfallsOf(CharacterSnapshot c) => DecalStore is { } store && _footprints.Wants(store, c);
+
+    /// <summary>
+    /// A human footfall found from the posed body by the ground trails: the blood prints wet that foot or leave a print there.
+    /// </summary>
+    internal void Footfall(in Footfall step)
+    {
+        if (DecalStore is { } store) _footprints.Footfall(store, step);
+    }
+
+    /// <summary>
     /// Makes the store and the renderer when the install's <c>Blood</c> setting is on (missing: on).
     /// </summary>
     internal void SetUpBlood(IGpuContext context)

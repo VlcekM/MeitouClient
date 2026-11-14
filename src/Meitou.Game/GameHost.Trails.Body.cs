@@ -1,4 +1,5 @@
 using Meitou.Game.Audio;
+using Meitou.Game.Effects;
 using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Characters;
@@ -188,6 +189,11 @@ sealed partial class GameHost
         /// The contact's lowest point, where the mark is pressed.
         /// </summary>
         public Vector3 At;
+
+        /// <summary>
+        /// The direction that contact's bone points in (heel to toe for a foot); zero for none.
+        /// </summary>
+        public Vector3 Forward;
     }
 
     /// <summary>
@@ -196,7 +202,7 @@ sealed partial class GameHost
     /// foot or paw plants and never plough.
     /// </summary>
     bool BodyContact(
-        TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, Vector3 root, Vector2 heading, bool animal, bool upright, float speed,
+        TerrainTrailRenderer? trails, GroundSurfaces ground, long key, ref Walker w, Vector3 root, Vector2 heading, bool animal, bool upright, float speed,
         bool continues)
     {
         _contactBodies.Clear();
@@ -273,7 +279,7 @@ sealed partial class GameHost
     /// slid), a lying body's part sliding ploughs.
     /// </summary>
     void Touch(
-        TerrainTrailRenderer trails, GroundSurfaces ground, long key, in BodyCapsule cap, in ContactPatch patch, ref Walker w, int index, bool animal,
+        TerrainTrailRenderer? trails, GroundSurfaces ground, long key, in BodyCapsule cap, in ContactPatch patch, ref Walker w, int index, bool animal,
         bool upright, float bodySpeed, bool known)
     {
         ref var st = ref w.Contacts![index];
@@ -316,7 +322,7 @@ sealed partial class GameHost
             // The limb's longest contact stands for it (a foot's sole, not a toe).
             ref var limb = ref w.Limbs![cap.Limb];
             if (!limb.Down || patch.Length > limb.Patch.Length)
-                (limb.Patch, limb.Depth, limb.At) = (patch, depth, at);
+                (limb.Patch, limb.Depth, limb.At, limb.Forward) = (patch, depth, at, cap.Forward);
             limb.Down = true;
             return;
         }
@@ -330,34 +336,53 @@ sealed partial class GameHost
     /// The frame's limbs of an upright body: a limb that has landed prints once, when it has settled (or lies whole on the ground), or as it leaves if it
     /// never did; it may print again once it has been off the ground for <see cref="LiftTime"/> of game time.
     /// </summary>
-    void Footfalls(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, bool animal)
+    void Footfalls(TerrainTrailRenderer? trails, GroundSurfaces ground, long key, ref Walker w, bool animal)
     {
         float dt = _trailDt * (float)Session.Simulation.Speed;
-        foreach (ref var l in w.Limbs!.AsSpan())
+        var limbs = w.Limbs!.AsSpan();
+        for (int bone = 0; bone < limbs.Length; bone++)
         {
+            ref var l = ref limbs[bone];
             if (l.Down)
             {
                 l.Air = 0;
                 if (l.Printed) continue;
                 l.Planted += dt;
-                if (l.Planted >= SettleTime || l.Patch.Whole) Print(trails, ground, key, ref w, ref l, animal);
+                if (l.Planted >= SettleTime || l.Patch.Whole) Print(trails, ground, key, ref w, ref l, bone, animal);
                 continue;
             }
 
-            if (l.Planted > 0 && !l.Printed) Print(trails, ground, key, ref w, ref l, animal);
+            if (l.Planted > 0 && !l.Printed) Print(trails, ground, key, ref w, ref l, bone, animal);
             l.Air += dt;
             if (l.Air >= LiftTime) (l.Printed, l.Planted) = (false, 0);
         }
     }
 
     /// <summary>
-    /// Prints a limb's footfall: marks it printed and presses the mesh-shaped print unless one of the body's last prints already covers it.
+    /// Prints a limb's footfall: marks it printed and, unless one of the body's last prints already covers it, presses the mesh-shaped print and
+    /// raises the footfall for the blood prints (<see cref="Footfall"/>).
     /// </summary>
-    void Print(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, ref Limb limb, bool animal)
+    void Print(TerrainTrailRenderer? trails, GroundSurfaces ground, long key, ref Walker w, ref Limb limb, int bone, bool animal)
     {
         limb.Printed = true;
         var print = PrintOf(limb.Patch, limb.Depth, key);
-        if (Remember(ref w, print, !animal)) Press(trails, ground, limb.At, print);
+        if (!Remember(ref w, print, !animal)) return;
+
+        Press(trails, ground, limb.At, print);
+        if (!animal && _trailCharacter is { } c) RaiseFootfall(c, key, limb, bone);
+    }
+
+    /// <summary>
+    /// Hands a human footfall to the blood prints: which foot (from the limb's bone), where its sole lies and which way its toes point.
+    /// </summary>
+    void RaiseFootfall(CharacterSnapshot c, long key, in Limb limb, int bone)
+    {
+        if (Gpu.Characters?.LimbSide(key, bone) is not { } right) return;
+
+        var along = new Vector2(limb.Forward.X, limb.Forward.Z);
+        along = along.LengthSquared() > 1e-4f ? Vector2.Normalize(along) : limb.Patch.Along;
+        var at = new Vector3(limb.Patch.At.X, limb.At.Y, limb.Patch.At.Y);
+        BloodDecals.Footfall(new Footfall(c, right, at, along));
     }
 
     /// <summary>

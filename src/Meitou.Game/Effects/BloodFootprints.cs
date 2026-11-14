@@ -8,12 +8,19 @@ using Meitou.Simulation.Bodies;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// Visual-only transfer from wet terrain blood to moving characters' feet. Sampled from the shown world on both renderers.
+/// A human foot settling on the ground, found from the posed body by the ground trails (docs/render-terrain.md "Ground trails"): the character, which
+/// foot, the sole's centre on the ground and the way its toes point.
+/// </summary>
+readonly record struct Footfall(CharacterSnapshot Actor, bool Right, Vector3 At, Vector2 Along);
+
+/// <summary>
+/// Visual-only transfer from wet terrain blood to moving characters' feet (docs/game/blood-decals.md "Bloody footprints"). A drawn character's steps
+/// are the ground trails' footfalls (<see cref="Footfall"/>); one with no pose falls back to a stride counted along its path.
 /// </summary>
 sealed class BloodFootprints(GameHost host)
 {
     /// <summary>
-    /// Distance between walking contacts, across the ground.
+    /// Distance between walking contacts, across the ground, for a body with no pose.
     /// </summary>
     const float StepLength = 4.2f;
 
@@ -48,11 +55,11 @@ sealed class BloodFootprints(GameHost host)
         /// </summary>
         public Vector3 Position = position;
         /// <summary>
-        /// Ground distance travelled since the last footfall.
+        /// Ground distance travelled since the last stride footfall.
         /// </summary>
         public float Distance = StepLength / 2;
         /// <summary>
-        /// Which foot takes the next step.
+        /// Which foot takes the next stride step.
         /// </summary>
         public bool Right;
         /// <summary>
@@ -85,12 +92,33 @@ sealed class BloodFootprints(GameHost host)
     long _tick = -1;
 
     /// <summary>
+    /// The game time of the last snapshot examined, for the footfalls raised between snapshots.
+    /// </summary>
+    double _now;
+
+    /// <summary>
     /// Clears the feet's residual blood when the game loads another world.
     /// </summary>
     public void Clear()
     {
         _trails.Clear();
         _tick = -1;
+    }
+
+    /// <summary>
+    /// Whether footfalls are wanted at all: the switch is on and there is blood on the terrain.
+    /// </summary>
+    public bool Wanted(TerrainDecalStore? store) => host.WorldOptions.MeitouFootprints && store is { Count: > 0 };
+
+    /// <summary>
+    /// Whether a character's footfalls are wanted: a walking human by blood, or one with blood left on a sole.
+    /// </summary>
+    public bool Wants(TerrainDecalStore store, CharacterSnapshot actor)
+    {
+        if (!Walks(actor, out _)) return false;
+        if (_trails.TryGetValue(actor.Id, out var trail) && (Wet(trail.Left, _now) || Wet(trail.RightSole, _now))) return true;
+
+        return HasNearbyDecals(store, Xz(actor.Position));
     }
 
     /// <summary>
@@ -113,10 +141,10 @@ sealed class BloodFootprints(GameHost host)
         _tick = snapshot.Tick;
 
         var focus = Xz(host.Camera.Target);
-        double now = _tick * (double)host.Session.World.TickSeconds;
+        double now = _now = _tick * (double)host.Session.World.TickSeconds;
         foreach (var actor in snapshot.Characters)
         {
-            if (actor.Down || actor.Body is { Crawling: true } || actor.Appearance is not { Animal: null } look) continue;
+            if (!Walks(actor, out var look)) continue;
             var here = Xz(actor.Position);
             if (Vector2.DistanceSquared(focus, here) > Range * Range) continue;
 
@@ -139,6 +167,38 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
+    /// A footfall from the posed body: wets that foot in a source, or leaves a print where it settled while the sole is still wet.
+    /// </summary>
+    public void Footfall(TerrainDecalStore store, in Footfall step)
+    {
+        if (!Wanted(store) || !Walks(step.Actor, out var look) || !HasFoot(step.Actor, step.Right)) return;
+
+        if (!_trails.TryGetValue(step.Actor.Id, out var trail))
+        {
+            if (!HasNearbyDecals(store, Xz(step.At))) return;
+            _trails.Add(step.Actor.Id, trail = new Trail(step.Actor.Position) { Seen = _tick });
+        }
+
+        var across = new Vector2(step.Along.Y, -step.Along.X);
+        Deposit(store, trail, step.Right, step.At, across, Boot(look), _now);
+    }
+
+    /// <summary>
+    /// A human on its feet, the only kind that leaves these prints.
+    /// </summary>
+    static bool Walks(CharacterSnapshot actor, out CharacterAppearance look)
+    {
+        look = actor.Appearance!;
+        return !actor.Down && actor.Body is not { Crawling: true } && actor.Appearance is { Animal: null };
+    }
+
+    /// <summary>
+    /// The boots worn, whose sole the print takes; null barefoot.
+    /// </summary>
+    static CharacterPart? Boot(CharacterAppearance look) =>
+        look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
+
+    /// <summary>
     /// The body or either foot can touch a cell's decals when it straddles the edge.
     /// </summary>
     static bool HasNearbyDecals(TerrainDecalStore store, Vector2 body)
@@ -157,7 +217,7 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Wets both feet where a walker begins moving out of a pool.
+    /// Wets both feet where a walker with no pose begins moving out of a pool.
     /// </summary>
     void WetFeet(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, Vector3 at, Vector2 across, double now)
     {
@@ -169,7 +229,8 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Uses distance along the motion segment to keep steps spaced consistently at different frame rates.
+    /// Follows the walker's position. A drawn body's steps come from its feet (<see cref="Footfall"/>); for one with no pose, the distance along the
+    /// motion segment keeps stride steps spaced consistently at different frame rates.
     /// </summary>
     void Advance(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, CharacterAppearance look, double now)
     {
@@ -190,11 +251,26 @@ sealed class BloodFootprints(GameHost host)
             return;
         }
 
+        if (host.FootfallsPosed(host.DrawKey(actor.Id)))
+        {
+            trail.Moving = true;
+            trail.Distance = StepLength / 2;
+            return;
+        }
+
         var forward = movement / length;
         var across = new Vector2(forward.Y, -forward.X);
         if (!trail.Moving) WetFeet(store, trail, actor, from, across, now);
         trail.Moving = true;
+        Strides(store, trail, actor, look, from, length, across, now);
+    }
 
+    /// <summary>
+    /// The stride footfalls along this snapshot's movement, every <see cref="StepLength"/>, alternating feet.
+    /// </summary>
+    void Strides(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, CharacterAppearance look, Vector3 from, float length, Vector2 across,
+        double now)
+    {
         float travel = StepLength - trail.Distance;
         if (travel > length)
         {
@@ -202,27 +278,36 @@ sealed class BloodFootprints(GameHost host)
             return;
         }
 
-        var boot = look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
+        var boot = Boot(look);
         for (; travel <= length; travel += StepLength)
         {
             var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Footfall(store, trail, actor.Id, at, across, boot, now);
+            if (HasFoot(actor, trail.Right)) Stride(store, trail, actor.Id, at, across, boot, now);
             trail.Right = !trail.Right;
         }
         trail.Distance = length - travel + StepLength;
     }
 
     /// <summary>
-    /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
+    /// A stride's footfall for a body with no pose: beside the path, or on the posed foot when it is down.
     /// </summary>
-    void Footfall(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, double now)
+    void Stride(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, double now)
     {
         bool right = trail.Right;
-        ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
         var point = Xz(at) + across * (right ? -1 : 1);
         (point, across) = FootPlacement(actor, right, point, across);
         at.X = point.X;
         at.Z = point.Y;
+        Deposit(store, trail, right, at, across, boot, now);
+    }
+
+    /// <summary>
+    /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
+    /// </summary>
+    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, double now)
+    {
+        ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
+        var point = Xz(at);
         if (!OnTerrain(at))
         {
             if (at.Y < WorldWater.Height + .5f) sole = default;

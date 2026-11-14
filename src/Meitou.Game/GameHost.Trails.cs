@@ -115,37 +115,57 @@ sealed partial class GameHost
         /// The count of prints noted, whose remainder is the next slot of <see cref="Recent"/>.
         /// </summary>
         public int RecentNext;
+
+        /// <summary>
+        /// Whether its posed body was read this frame (<see cref="FootfallsPosed"/>).
+        /// </summary>
+        public bool Posed;
     }
 
     /// <summary>
-    /// Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is
-    /// centred there).
+    /// The character <see cref="WalkTrail"/> is reading, for the footfalls it raises.
     /// </summary>
-    void UpdateTrails()
+    CharacterSnapshot? _trailCharacter;
+
+    /// <summary>
+    /// Once a frame, before the world is drawn: the footfalls and the marks of the characters near what the camera looks at (the renderer's window
+    /// is centred there). The footfalls are found with the <c>trails</c> switch on or while the blood prints want them (<see cref="Footfall"/>);
+    /// the marks are pressed only with the switch on. Also called by the Metal loop, which has no trail renderer.
+    /// </summary>
+    internal void UpdateTrails()
     {
-        if (!TerrainTrails.Enabled || _trailContext is null || Scene.Database is not { } db)
+        bool marks = TerrainTrails.Enabled && _trailContext is not null;
+        bool prints = BloodDecals.WantsFootfalls;
+        if ((!marks && !prints) || Scene.Database is not { } db)
         {
             _walkers.Clear();
             return;
         }
 
-        var trails = Gpu.Trails ??= new TerrainTrailRenderer(_trailContext);
+        var trails = marks ? Gpu.Trails ??= new TerrainTrailRenderer(_trailContext!) : null;
         var ground = Sound.GroundSurfacesOf(db);
         if (!ReferenceEquals(_trailsFor, Session.World))
         {
             _trailsFor = Session.World;
-            trails.Clear();
+            trails?.Clear();
             _walkers.Clear();
         }
 
         AdvanceTrailClock();
         IndexPrevious();
-        MarkNearCharacters(trails, ground);
+        MarkNearCharacters(trails, ground, marks);
 
         if (_trailFrame % 256 == 0)
             foreach (var (key, w) in _walkers)
                 if (w.Frame != _trailFrame) _walkers.Remove(key);
     }
+
+    /// <summary>
+    /// Whether the character <paramref name="key"/>'s footfalls were found from its posed body in the last trail frame: then its blood prints come from
+    /// <see cref="Footfall"/>, not from its stride.
+    /// </summary>
+    internal bool FootfallsPosed(long key) =>
+        _walkers.TryGetValue(key, out var w) && w.Posed && w.Frame == _trailFrame;
 
     /// <summary>
     /// Counts the trail frame and measures <see cref="_trailDt"/>, clamped to 0.5 ms to 0.1 s.
@@ -162,7 +182,7 @@ sealed partial class GameHost
     /// Marks the ground under each shown character within the trail renderer's reach of the camera's target, at its interpolated position; carried,
     /// bedded and imprisoned characters leave none.
     /// </summary>
-    void MarkNearCharacters(TerrainTrailRenderer trails, GroundSurfaces ground)
+    void MarkNearCharacters(TerrainTrailRenderer? trails, GroundSurfaces ground, bool marks)
     {
         var focus = Camera.Target;
         float alpha = Session.SimulationAlpha;
@@ -171,6 +191,7 @@ sealed partial class GameHost
             var flat = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z);
             if (flat.LengthSquared() > TerrainTrailRenderer.Reach * TerrainTrailRenderer.Reach || c.Appearance is null) continue;
             if (!c.CarriedBy.IsNone || c.InBed || c.Imprisoned) continue;
+            if (!marks && !BloodDecals.WantsFootfallsOf(c)) continue;
 
             var shown = PreviousById.TryGetValue(c.Id, out var before)
                 ? Meitou.Simulation.Session.Interp.Lerp(before.Position, c.Position, alpha)
@@ -182,10 +203,11 @@ sealed partial class GameHost
     /// <summary>
     /// One character's frame: its posed body against the ground, or, with no pose, a crawler's furrow (a foot's print needs the body that makes it).
     /// </summary>
-    void WalkTrail(TerrainTrailRenderer trails, GroundSurfaces ground, CharacterSnapshot c, Vector3 body)
+    void WalkTrail(TerrainTrailRenderer? trails, GroundSurfaces ground, CharacterSnapshot c, Vector3 body)
     {
         long key = DrawKey(c.Id);
         ref var w = ref CollectionsMarshal.GetValueRefOrAddDefault(_walkers, key, out bool known);
+        _trailCharacter = c;
         bool continues = known && w.Frame == _trailFrame - 1;
         var moved = new Vector2(body.X - w.Body.X, body.Z - w.Body.Z);
         (w.Body, w.Frame) = (body, _trailFrame);
@@ -195,7 +217,8 @@ sealed partial class GameHost
 
         var heading = stepped > 1e-4f && continues ? moved / stepped : Vector2.Zero;
         float speed = continues && _trailDt > 0 ? stepped / _trailDt : 0;
-        if (BodyContact(trails, ground, key, ref w, body, heading, animal, !lying, speed, continues)) return;
+        w.Posed = BodyContact(trails, ground, key, ref w, body, heading, animal, !lying, speed, continues);
+        if (w.Posed) return;
         if (!continues || stepped < 1e-4f) return;
 
         var along = moved / stepped;
@@ -205,7 +228,7 @@ sealed partial class GameHost
     /// <summary>
     /// A crawling or sliding body with no pose: a furrow every <see cref="DragStep"/> of the way it moved.
     /// </summary>
-    void Drag(TerrainTrailRenderer trails, GroundSurfaces ground, ref Walker w, Vector3 body, Vector2 along, float stepped)
+    void Drag(TerrainTrailRenderer? trails, GroundSurfaces ground, ref Walker w, Vector3 body, Vector2 along, float stepped)
     {
         w.Walked += stepped;
         if (w.Walked < DragStep) return;
@@ -217,8 +240,10 @@ sealed partial class GameHost
     /// <summary>
     /// Queues a mark where the ground takes one: soft, above the water, and right under what pressed it (not from a floor or a roof).
     /// </summary>
-    void Press(TerrainTrailRenderer trails, GroundSurfaces ground, Vector3 at, in TrailStamp stamp)
+    void Press(TerrainTrailRenderer? trails, GroundSurfaces ground, Vector3 at, in TrailStamp stamp)
     {
+        if (trails is null) return;
+
         float height = Gpu.Terrain.HeightAt(stamp.Centre.X, stamp.Centre.Y);
         if (at.Y - height > MarkAboveGround || height < WorldWater.Height) return;
 

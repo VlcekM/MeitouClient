@@ -92,6 +92,25 @@ internal sealed partial class CharacterRenderer
     }
 
     /// <summary>
+    /// Which side a limb's bone (<see cref="BodyCapsule.Limb"/>) is on, from the first of it and its ancestors named for a side (<c>Bip01 R Foot</c>):
+    /// true right, false left; null for a bone on neither or a character not drawn in the world in the last update.
+    /// </summary>
+    public bool? LimbSide(long key, int bone)
+    {
+        if (!_states.TryGetValue(key, out var s) || s.Asset is not { IsIcon: false } asset) return null;
+
+        var rig = asset.Rig;
+        for (int b = bone; b >= 0 && b < rig.BoneCount; b = rig.Parent[b])
+        {
+            string name = rig.ByHandle[b]?.Name ?? "";
+            if (name.Contains(" R ", StringComparison.Ordinal)) return true;
+            if (name.Contains(" L ", StringComparison.Ordinal)) return false;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Each bone's capsule: along its box's longest side, as thick as the mean of the other two.
     /// </summary>
     static BoneCapsule[] CapsulesOf(CharacterAsset asset)
