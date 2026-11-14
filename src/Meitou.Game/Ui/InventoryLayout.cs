@@ -187,11 +187,23 @@ sealed class InventoryLayout(PlayerInterface player)
 
         float x = left ? own.X - other.Width : own.X + own.Width;
 
+        // A bag placed on the left must stay at the opening margin and right of an open machine or container window (the original opens the
+        // bag, then the character, from there); a linked window on the right only has to stay on the screen.
+        float floor = 0;
+        if (left)
+        {
+            floor = InventoryPlacement.Margin(player.Width, player.Height);
+            foreach (string machine in new[] { "building", "bench", "storage" })
+            {
+                if (roots.TryGetValue(machine, out var r) && machine != id) floor = Math.Max(floor, r.X + r.Width);
+            }
+        }
+
         // Make room for the pair without changing either frame's size.
-        if (x < 0 || x + other.Width > player.Width)
+        if (x < floor || x + other.Width > player.Width)
         {
             float ownX = left
-                ? Math.Min(player.Width - own.Width, other.Width)
+                ? Math.Min(player.Width - own.Width, floor + other.Width)
                 : Math.Max(0, player.Width - other.Width - own.Width);
             player.FaithfulScreens.SetOffset(anchor, player.FaithfulScreens.GetOffset(anchor) + new Vector2(ownX - own.X, 0));
             x = left ? ownX - other.Width : ownX + own.Width;
