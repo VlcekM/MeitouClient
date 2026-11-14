@@ -185,6 +185,12 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
 - The bar at the top right is the background loading bar below, not part of this window.
 - Meitou (`LoadingScreen`, Faithful mode): as above. `tips.txt` is read as UTF-8, else Windows-1252, since the French, German and Spanish files are
   Windows-1252 (engine choice: how the original shows those bytes is **Unknown**). The Meitou mode keeps its own panel, spinner, bar and slide-out.
+- Tip box: `MessageText`'s text is inset by its skin's text part (`Kenshi_GenericTextBoxSkin`: `18 14 149 74` of `186 102`), so at 1920 x 1080
+  the original's box is 553 x 172 px (**Verified** against `Kenshi_LoadingScreen.layout` and `kenshi_skins.xml`). At 1680 x 1050 it shows the
+  longest tip (`tips.txt`, 221 characters) whole, in four centered lines (**Observed** 2026-11-14, 1.0.68 full screen, a mod whose `tips.txt`
+  holds only that tip); at smaller resolutions **Unknown**. Meitou mode (engine choice): the tip panel is 480 x 120 at 1080 rows with 16 px
+  text, a box of 427 x 76 px that holds three lines; a tip that wraps to more grows the panel upwards, never past the top of the screen
+  (**Observed** 2026-11-14: at 1080 rows a 172-character tip takes four lines, at 1440 rows the longest takes five, all shown).
 
 ### Background loading bar
 
@@ -711,13 +717,20 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   owner faction, `Town:` The Hub, `Workers:` 0/1, `Efficiency:` 0%, `Max efficiency:` 100%, Condition. Meitou (`BuildingSelection.PickFurnitureAt`):
   beds, containers and cages by their fixtures, seats by their seat spots, everything else of a town building's interior layout but nodes
   (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
-  house it stands in and Condition, without the lock and Empty rows; a training dummy adds `Training:`. In a town, the original's UseableStuff and
-  StorageBuilding (and town level buildings of those classes) add Workers (the seat's or dummy's machine, 0/max before anyone used it) and Efficiency /
-  Max efficiency (condition, power and yield 1, `output rate`) or a dummy's `Max Skill Level:` (`UseableLines`); not covered: beds' Workers rows
-  (function 25), lights and power consumers (daytime and a town's power are not in the snapshot). Which class a BUILDING gets (**Verified**, factory
-  `FUN_14057cc70`, after the wall-gate, links-together and farm tests): with a functionality, 0 and 0x12 a plain building, 1/4 Production, 2 Storage, 3 Research,
-  5/0x17 Generator (WindGenerator without inputs), 8 Torture or UseableStuff (by a test not read), 10 Crafting, 0xc Turret, 0xe Furnace, 0xf Light,
-  0x1a RainCollector, any other UseableStuff (`FUN_1402a0900`): beds, dummies, chairs (17), thrones (24), general storage (13), tables. A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
+  house it stands in and Condition, without the lock and Empty rows; a training dummy adds `Training:`. In a town, furniture and level buildings of
+  the original's UseableStuff, StorageBuilding and LightBuilding add section 6 as above (`UseableLines`): Workers, Efficiency / Max efficiency or a
+  dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw. Inputs without a machine of the player's: condition 1 (0 destroyed, as the
+  Condition row), yield 1, `output rate`, a light's slot 164 (interior furniture of a house, else not daytime), and for a level building that
+  draws power its town frame's grant (`ProductionSystem.LevelPowerOf`: the level generators' output shared out over the town's draws and the
+  player's machines of that frame, ascending). Not covered: Workers counts only the player's characters (whether an NPC sitting or
+  pretend-operating there joins the building's operator list, `+0x3d8`/`+0x3e0` read by slot 155 `FUN_1403075b0`, is **Unknown**), and a
+  consumer inside a house (skeleton repair bed, ceiling fan lamp, barrel table) shows no section 6: its power town is its house's (**Observed**,
+  `FUN_140296940` walks the parent chain to the root building), but whether layout furniture is registered with the frame (slot 99
+  `FUN_1402973f0`, called from the state load slot 18 `FUN_1402a1750` with `power on`) is **Unknown**. Which class a BUILDING gets (**Verified**,
+  factory `FUN_14057cc70`, after the wall-gate, links-together and farm tests): with a functionality, 0 and 0x12 a plain building, 1/4 Production,
+  2 Storage, 3 Research, 5/0x17 Generator (WindGenerator without inputs), 8 Torture or UseableStuff (by a test not read), 10 Crafting, 0xc Turret,
+  0xe Furnace, 0xf Light, 0x1a RainCollector, any other UseableStuff (`FUN_1402a0900`): beds, dummies, chairs (17), thrones (24), general
+  storage (13), tables. A camp's Campfire and Camp Bed select too (**Observed**, a Dust Bandit
   camp near The Hub), the Campfire though its part has no `xml collision` (base data); its panel says it is out of fuel while it burns. Meitou: a
   camp bed by its bed, any other camp building (`WorldSnapshot.NestBuildings`) among the buildings by distance, by its collision, else the hull of
   its parts' bounds as a site without collision (`BuildingSelection.PickCampBuildingAt`); its panel has its name, owner and Condition.
@@ -750,10 +763,10 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     163 `FUN_140299630` asking slot 164 first). The Damage and Power rows read their own values, not slot 109.
   - Who shows it (**Verified**, each class's slot 40): ProductionBuilding's `FUN_1402ffeb0` (also Generator, WindGenerator, RainCollector, Torture), Research
     `FUN_140309680` and Crafting `FUN_1402ff070` in section 6 as 155, 154, 153; Useable / Storage / Light `FUN_140304e90` (only with a town, `FUN_1400f6c20`) in
-    section 6 as 155 then 154, except for function 6 (BF_BED; slot 94 `FUN_1400f6b30` is the function +0x158, 27 for a mine whose `FUN_1405946f0` fails)
-    `Healing bonus:` `x{1,num}` of the float +0x1a4 instead of both, and for function 7 (BF_TRAINING, +0x158) `Max Skill Level:` int(+0x1a4) − 1 with the
+    section 6 as 155, 154, 153 (power), except for function 6 (BF_BED; slot 94 `FUN_1400f6b30` is the function +0x158, 27 for a mine whose `FUN_1405946f0` fails)
+    `Healing bonus:` `x{1,num}` of the float +0x1a4 instead of all three, and for function 7 (BF_TRAINING, +0x158) `Max Skill Level:` int(+0x1a4) − 1 with the
     tooltip "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time." instead of 154; BF_SKELETON_BED
-    (25) gets both. +0x1a4 = `output rate` × `production mult` ÷ raw `max operators` when above 1 (`FUN_14029e460`; Bed 8, Camp Bed 4, dummies MkI–III 6/11/16
+    (25) gets 155, 154 and 153 and no Healing bonus (**Verified**, the section 6 branch of `FUN_140304e90`). +0x1a4 = `output rate` × `production mult` ÷ raw `max operators` when above 1 (`FUN_14029e460`; Bed 8, Camp Bed 4, dummies MkI–III 6/11/16
     by the probe of the merged data). Turret `FUN_14030c2a0`: section 6 the gun's slot 14 lines then 154, section 7 (`ExtendedStatsText`) 155 then 154; Furnace
     `FUN_14030b750` draws its own section 0xf (`Total Metals:`, the `Active:` toggle) and hands every other section to `FUN_1402ffeb0`, so 155, 154, 153 as a
     production building.
@@ -1298,7 +1311,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     - *Own windows only* (owner of the player's faction): a blueprint (RESEARCH-type item) is learned and used up ("Research already known" / "Failed to learn from blueprint: Technology
       requirements not met"); a MAP_ITEM reveals its places ("{1,num} location(s) added to the map." and used up, else "You already know all these locations, no new information can be
       learned."); money (item function 14) gives "{1,num} cats added." and is removed (money moved across a player / non-player window boundary converts the same way). Otherwise inside its own
-      inventory: a grid item goes to its matching slot (equipped), a worn one to the grid; failing that the own limbs window, then the own bag window. An item in the open bag goes to its matching slot, else to the main grid (**Observed**, `FUN_140714a20` calls the move `FUN_140713d20` with the character itself as target before trying the bag; Meitou `QuickMove`, issue 315).
+      inventory: a grid item goes to its matching slot (equipped), a worn one to the grid; failing that the own limbs window, then the own bag window. An item in the open bag goes to its matching slot, else to the main grid (**Observed**, `FUN_140714a20` calls the move `FUN_140713d20` with the character itself as target before trying the bag; Meitou `QuickMove`, issue 315). The worn bag never goes into its own open window: with no room for it in the grid it stays on, with no message, and with room it goes to the grid; a spare bag in the grid gives "Can't wear that item." and goes into the open worn bag (**Observed**, 1.0.68 plain game, the worn bag holding goods, the spare empty; issue 703).
     - Meitou: `PlayerInterface.InventoryRightClick` buys or sells one unit (Shift all); a bought weapon goes into a free `back` then `hip` cell and armour into its empty slot
       (`InventoryCommands.TryEquip`), the rest of the stack and everything else into the first free cell; a stolen item a non-fence shop may catch asks the prompt above (`TradeItemView.FenceOdds`).
       Window to window (loot, container, storage) the units go by `InventoryCommands.MoveInto` (the open bag window first, then slots, then the main grid). Own windows only: `ReadMapItem`, else

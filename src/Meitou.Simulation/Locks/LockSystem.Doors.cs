@@ -470,7 +470,7 @@ public sealed partial class LockSystem
                     if (away > LockedReach || !Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 1)) return;
                     TaskStart.Stand(table, slot);
                     c.WalkEnd = WalkEnd.Failed;
-                    if (c.IsPlayer) Say(s.World, c, "It's locked.");
+                    if (c.IsPlayer) SayLocked(s.World, c, s.Door, n.Position);
                     return;
                 }
 
@@ -491,6 +491,18 @@ public sealed partial class LockSystem
                     && (world.Tick - f.LastPass) * world.TickSeconds >= AutoCloseSeconds)
                 FixtureRegistry.CloseDoor(f);
         }
+    }
+
+    /// <summary>
+    /// Says "It's locked." for a walker stopped at <paramref name="door"/>, unless it last said so at that door from within <see cref="OpenReach"/>
+    /// of here: a character stuck behind a locked gate whose job or goal keeps repathing through it would say it at every stop (Meitou).
+    /// </summary>
+    static void SayLocked(World world, CharacterCold c, Fixture door, Vector3 here)
+    {
+        if (c.SaidLocked is { } said && said.Door == door && Vector3.Distance(said.Where, here) <= OpenReach) return;
+
+        c.SaidLocked = (door, here);
+        Say(world, c, "It's locked.");
     }
 
     /// <summary>

@@ -621,6 +621,12 @@ public sealed class CharacterCold
     public WalkEnd WalkEnd { get; set; }
 
     /// <summary>
+    /// The locked door it last said "It's locked." at, and where it stood: a walk that keeps being asked through the same door from the same
+    /// place (a job or goal repathing) says it once, not at every stop. Not saved or hashed.
+    /// </summary>
+    public (Locks.Fixture Door, Vector3 Where)? SaidLocked { get; set; }
+
+    /// <summary>
     /// The target's place (height included) when the <see cref="PursuitSystem"/> last asked a path to <see cref="CharacterHot.Goal"/>: the path's end
     /// is measured against it, as the target may have moved since. Not saved.
     /// </summary>

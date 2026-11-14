@@ -7,22 +7,28 @@ using Meitou.Simulation.Production;
 namespace Meitou.Game.Building;
 
 /// <summary>
-/// The lines of the original's UseableStuff / StorageBuilding panel (slot 40 <c>FUN_140304e90</c>, docs/game/ui-screens.md "Selected building") for a
+/// The lines of the original's UseableStuff / StorageBuilding / LightBuilding panel (slot 40 <c>FUN_140304e90</c>, docs/game/ui-screens.md "Selected building") for a
 /// selected building with no machine of the player's (a town's furniture or level building): <c>Training:</c> among the state lines of a training
 /// dummy, and in a town Workers then Efficiency and Max efficiency, or a dummy's Max Skill Level.
 /// </summary>
 sealed class UseableLines(PlayerInterface player)
 {
     /// <summary>
-    /// The functions the original's building factory (<c>FUN_14057cc70</c>) gives a class of its own other than UseableStuff and StorageBuilding,
-    /// or no panel lines (0, 0x12), with 8 (a torture building or UseableStuff by a test not read here) and 27 (rocks, which have their own lines).
+    /// The functions the original's building factory (<c>FUN_14057cc70</c>) gives a class whose slot 40 is not <c>FUN_140304e90</c>, or no panel
+    /// lines (0, 0x12), with 8 (a torture building or UseableStuff by a test not read here) and 27 (rocks, which have their own lines). The rest are
+    /// UseableStuff, StorageBuilding (2) and LightBuilding (15).
     /// </summary>
-    static readonly HashSet<int> OtherClasses = [-1, 0, 1, 3, 4, 5, 8, 10, 12, 14, 15, 18, 23, 26, 27];
+    static readonly HashSet<int> OtherClasses = [-1, 0, 1, 3, 4, 5, 8, 10, 12, 14, 18, 23, 26, 27];
 
     /// <summary>
-    /// The functions that show something else than Workers and Efficiency: a bed's Healing bonus (6, 25), which the bed's own lines give.
+    /// BF_BED: section 6 is its Healing bonus alone, which the bed's own lines give.
     /// </summary>
-    static readonly HashSet<int> Beds = [6, 25];
+    const int BedFunction = 6;
+
+    /// <summary>
+    /// BF_SKELETON_BED: section 6 is Workers, Efficiency and power like any UseableStuff, with no Healing bonus.
+    /// </summary>
+    const int SkeletonBedFunction = 25;
 
     /// <summary>
     /// Each BUILDING record's machine data by record id (<see cref="MachineData"/>, asked once per record).
@@ -47,34 +53,59 @@ sealed class UseableLines(PlayerInterface player)
     }
 
     /// <summary>
-    /// Adds the section 6 lines of a UseableStuff or StorageBuilding standing in a town: Workers (slot 155), then Max Skill Level for a training
-    /// dummy, else Efficiency and Max efficiency (slot 154). Beds, power consumers and lights are left out.
+    /// Whether <paramref name="record"/> is a skeleton bed, whose panel has the machine lines and no Healing bonus.
+    /// </summary>
+    internal bool IsSkeletonBed(string? record) => DataOf(record) is { Function: SkeletonBedFunction };
+
+    /// <summary>
+    /// Adds the section 6 lines of a UseableStuff, StorageBuilding or LightBuilding standing in a town: Workers (slot 155), then Max Skill Level for
+    /// a training dummy, else Efficiency and Max efficiency (slot 154), then a consumer's Power (slot 153). Left out: a bed's, and a consumer's that
+    /// stands inside a building, whose registration with the town's frame is Unknown.
     /// </summary>
     internal void AddStatsLines(BuildingSelection.SelectedBuilding focus, List<PlayerInterface.HudLine> stats)
     {
         if (focus.Town is not { Length: > 0 } || DataOf(focus.Record) is not { } data || !Useable(data)) return;
 
         var machine = MachineOf(focus);
+        var power = player.Session.CurrentSnapshot.InspectedLevelPower is { } p && p.Instance == focus.Instance ? p : (LevelPowerView?)null;
+        if (data.IsConsumer && machine is null && power is null) return;
+
         int operators = machine?.Operators ?? 0;
         stats.Add(ProductionWindows.WorkersLine(operators, data.PowerOperators));
-
         if (data.Function == Data.Gameplay.Construction.MachineData.TrainingFunction)
         {
             stats.Add(ProductionWindows.MaxSkillLine(data.OutputValue));
-            return;
+        }
+        else
+        {
+            var efficiency = machine?.Efficiency ?? EfficiencyOf(focus, data, operators, power);
+            ProductionWindows.AddEfficiencyLines(efficiency, 0, stats, efficiency.Active);
         }
 
-        var efficiency = machine?.Efficiency ?? new EfficiencyView(operators, data.PowerOperators, 1, 1, false, data.OutputRate, 1);
-        ProductionWindows.AddEfficiencyLines(efficiency, 0, stats);
+        if (machine is null && power is { Demand: > 0 } drawn) stats.Add(ProductionWindows.ConsumerPowerLine(drawn.Granted, drawn.Demand));
     }
 
     /// <summary>
-    /// Whether the original makes <paramref name="data"/>'s building a UseableStuff or StorageBuilding whose lines are Workers and Efficiency (or
-    /// Max Skill Level): it has a functionality and no farm, is no bed, and draws no power (a town's power supply is not modelled).
+    /// Slot 154's inputs for furniture with no machine: no damage but a destroyed building's, the town frame's share of a consumer's draw (1 for
+    /// none), the BUILDING's <c>output rate</c>, yield 1, and a light's slot 164 (indoors, else not daytime).
+    /// </summary>
+    EfficiencyView EfficiencyOf(BuildingSelection.SelectedBuilding focus, MachineData data, int operators, LevelPowerView? power)
+    {
+        float share = power is { Demand: > 0 } p ? p.Granted / p.Demand : 1;
+        bool indoors = data.InteriorFurniture && BuildingSelection.HouseKeyOf(focus.Instance) != focus.Instance;
+        bool active = !data.IsLight || indoors || !player.Session.Clock.IsDaytime;
+        return new EfficiencyView(operators, data.PowerOperators, focus.Destroyed ? 0 : 1, share, data.IsConsumer, data.OutputRate, 1)
+        {
+            Active = active,
+        };
+    }
+
+    /// <summary>
+    /// Whether the original makes <paramref name="data"/>'s building a UseableStuff, StorageBuilding or LightBuilding whose section 6 is not a bed's
+    /// Healing bonus: it has a functionality and no farm.
     /// </summary>
     static bool Useable(MachineData data) =>
-        data.Functionality is not null && data.Farm is null && !OtherClasses.Contains(data.Function) && !Beds.Contains(data.Function)
-        && !data.IsConsumer;
+        data.Functionality is not null && data.Farm is null && !OtherClasses.Contains(data.Function) && data.Function != BedFunction;
 
     /// <summary>
     /// The machine of the selected furniture, made once a character used it: a seat's by its fixture id, a training dummy's by its spot.

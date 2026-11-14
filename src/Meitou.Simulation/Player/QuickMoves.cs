@@ -109,15 +109,19 @@ sealed class QuickMoves(PopulationData? data)
     }
 
     /// <summary>
-    /// One unit's move out of <paramref name="from"/>: a worn one to the main grid (else the open bag); a grid one to the slot that takes it, a bag
-    /// onto the back, a prosthetic onto its stump, a bag item to the main grid, a main grid item into the open bag; a live animal's shut grid takes
-    /// nothing. False when nothing took it.
+    /// One unit's move out of <paramref name="from"/>: a worn one to the main grid (else the open bag, unless it is that bag); a grid one to the
+    /// slot that takes it, a bag onto the back, a prosthetic onto its stump, a bag item to the main grid, a main grid item into the open bag; a live
+    /// animal's shut grid takes nothing. False when nothing took it.
     /// </summary>
     bool Step(ItemInstance unit, bool worn, CharacterCold cold, Inventory root, Inventory? bag, string from)
     {
         // A live animal's shut grid takes nothing (InventoryCommands.MainClosed): its window does not show it.
         bool shut = InventoryCommands.MainClosed(cold);
-        if (worn) return !shut && root.AddTo("main", unit) || (bag?.AddTo("backpack_content", unit) ?? false);
+
+        // The worn bag never goes into its own open window (it would hold itself and be lost with its contents, #703): with no room in the
+        // grid it stays on, as in the original.
+        if (worn)
+            return !shut && root.AddTo("main", unit) || unit.Contents != bag && (bag?.AddTo("backpack_content", unit) ?? false);
         if (InventoryCommands.TryEquip(root, unit, cold)) return true;
         if (unit.Type == FcsRecordType.Container && unit.Contents is not null && from == "main"
                 && !root.Items.Exists(i => i.Section == "backpack_attach"))
