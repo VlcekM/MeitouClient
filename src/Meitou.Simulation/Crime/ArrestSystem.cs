@@ -605,8 +605,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 continue;
             }
             var at = next[s].Position;
-            bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-            float stealth = sneaking ? Orders.Stealth(c) : 0;
             bool seen = false;
             int best = -1, escapeGuard = -1, hunter = -1;
             float bestD2 = float.MaxValue, escapeD2 = float.MaxValue, hunterD2 = float.MaxValue;
@@ -629,8 +627,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 bool escapee = EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = HuntsFor(wc, c);
                 if (!spots && !escapee && !hunts) continue;
-                float v = world.Sight.Sees(w, s, next[w].Position, at, Settings.SpotRange, sneaking ? stealth : -1);
-                if (v <= 0) continue;
+                if (!SeesSuspect(world, w, s, c, Settings.SpotRange)) continue;
+
                 if (escapee && FreeGuard(world, w) && d2 < escapeD2) (escapeGuard, escapeD2) = (w, d2);
                 if (hunts)
                 {
@@ -660,6 +658,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
+    /// Whether the looker in slot <paramref name="w"/> sees the suspect <paramref name="c"/> in slot <paramref name="s"/> now: the shared sight
+    /// test within <paramref name="range"/>, and for a sneaking suspect only once the looker has spotted it (its spot meter is full,
+    /// <see cref="CrimeSystem.Spotted"/>; docs/game/perception.md "Spotting a sneaker"), not at first sight (#649).
+    /// </summary>
+    bool SeesSuspect(World world, int w, int s, CharacterCold c, float range)
+    {
+        var next = world.Characters.Next;
+        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
+        float v = world.Sight.Sees(w, s, next[w].Position, next[s].Position, range, sneaking ? Orders.Stealth(c) : -1);
+
+        return v > 0 && (!sneaking || Crimes.Spotted(world, w, world.Characters.IdOf(s)));
+    }
+
+    /// <summary>
     /// EV_BOUNTY_SPOTTED, EV_ESCAPED_PRISONER_SPOTTED, EV_ESCAPING_SLAVE_SPOTTED.
     /// </summary>
     public const int BountySpotted = 44, EscapedPrisonerSpotted = 45, EscapingSlaveSpotted = 36;
@@ -677,8 +689,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         var next = table.Next;
         var at = next[s].Position;
-        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-        float stealth = sneaking ? Orders.Stealth(c) : 0;
         int catcher = -1;
         float catcherD2 = float.MaxValue;
         for (int w = 0; w < table.HighWater; w++)
@@ -691,8 +701,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             }
             float d2 = Vector3.DistanceSquared(next[w].Position, at), range = AggroSystem.RangeOf(wc, AggroSystem.OutdoorSight);
             if (d2 > range * range || !InTownOf(world, w, next[w].Position)) continue;
-            float v = world.Sight.Sees(w, s, next[w].Position, at, range, sneaking ? stealth : -1);
-            if (v <= 0) continue;
+            if (!SeesSuspect(world, w, s, c, range)) continue;
+
             if (c.SlaveState == 1 && (LockSystem.WornShackles(c) is null || !InTownOf(world, w, at))) FixtureRegistry.TagEscaped(world, c);
             if (c.SlaveState == 2 && d2 < catcherD2
                 && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && FreeGuard(world, w))

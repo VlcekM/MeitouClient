@@ -332,7 +332,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// Whether the witness has spotted the sneaking culprit: its spot meter, kept by <see cref="AggroSystem"/> for every looker, is full (without
     /// one, never).
     /// </summary>
-    bool Spotted(World world, int witness, CharacterId culprit)
+    internal bool Spotted(World world, int witness, CharacterId culprit)
     {
         if (!_aggroLooked)
         {

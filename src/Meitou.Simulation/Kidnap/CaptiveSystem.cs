@@ -1222,9 +1222,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>): the nearest (engine reading of the sensed list: a bare
-    /// sight-range query, no building test) live character in sight in slave state 1 or 2 that is free (not carried, caged or held), no animal, not
-    /// another job's or given up, and <see cref="NeedsProcessing"/>. No distance bound, no cage. -1: none.
+    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>: it walks the watcher's sensed list, masks 0x60 / 0x110):
+    /// the nearest (engine choice; the original takes the first) live character within sight range that the watcher senses
+    /// (<see cref="CharacterFacts.Perceives"/>: one it has not seen or heard, a sneaking one or one in another building, is none, #649), in slave
+    /// state 1 or 2, free (not carried, caged or held), no animal, not another job's or given up, and <see cref="NeedsProcessing"/>. No distance
+    /// bound, no cage. -1: none.
     /// </summary>
     int FreeSlaveToProcess(World world, int slot, CharacterCold me)
     {
@@ -1239,6 +1241,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             var id = table.IdOf(v);
             if (st.System.Busy(id) || st.System.Waiting(st.System._givenUp, id, st.World.GameHours) || !st.System.NeedsProcessing(st.Me, c))
                 return;
+
+            if (!CharacterFacts.Perceives(st.World, st.Self, v)) return;
 
             float d2 = Vector3.DistanceSquared(table.Next[st.Self].Position, table.Next[v].Position);
             if (d2 < st.BestD2 || d2 == st.BestD2 && v < st.Best) (st.Best, st.BestD2) = (v, d2);
