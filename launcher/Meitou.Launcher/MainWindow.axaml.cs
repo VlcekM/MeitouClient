@@ -68,7 +68,7 @@ public sealed partial class MainWindow : Window
     readonly ObservableCollection<ModRow> _mods = [];
 
     /// <summary>
-    /// Reorders the mod list by dragging a row's handle.
+    /// Reorders the mod list by dragging a row's handle or Alt+arrows, moving all selected rows together.
     /// </summary>
     readonly ModListDrag _modDrag;
 
@@ -1083,17 +1083,13 @@ public sealed partial class MainWindow : Window
     void SelectNone_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods) m.Enabled = false; }
 
     /// <summary>
-    /// Alt+Up / Alt+Down move the selected mod, as dragging does.
+    /// Alt+Up / Alt+Down move the selected mods one place, as dragging does.
     /// </summary>
     void ModListBox_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.KeyModifiers != KeyModifiers.Alt || e.Key is not (Key.Up or Key.Down)) return;
-        int i = ModListBox.SelectedIndex, j = i + (e.Key == Key.Up ? -1 : 1);
-        if (i >= 0 && j >= 0 && j < _mods.Count)
-        {
-            _mods.Move(i, j);
-            ModListBox.SelectedIndex = j;
-        }
+
+        _modDrag.MoveSelection(e.Key == Key.Up ? -1 : 1);
         e.Handled = true;
     }
 

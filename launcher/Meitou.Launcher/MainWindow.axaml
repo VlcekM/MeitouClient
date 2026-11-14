@@ -224,7 +224,7 @@
           <TextBlock x:Name="ModDetails" DockPanel.Dock="Bottom" Classes="desc" Margin="0,8,0,0" MaxLines="2" TextTrimming="CharacterEllipsis" />
           <Panel>
           <TextBlock x:Name="ModsEmpty" Classes="empty" IsVisible="False" />
-          <ListBox x:Name="ModListBox" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
+          <ListBox x:Name="ModListBox" SelectionMode="Multiple" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="l:ModRow">
                 <DockPanel>
