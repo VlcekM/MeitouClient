@@ -53,7 +53,7 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     bool _buildPausedGame;
     /// <summary>
-    /// The building category chosen in the menu; null for the first that shows.
+    /// The building category chosen in the menu; null until one is chosen after opening the window.
     /// </summary>
     string? _buildCategory;
     /// <summary>
@@ -182,6 +182,11 @@ sealed class BuildMode(PlayerInterface player)
             _ghostTilt = DefaultTilt;
             _buildCategory = null;
             _buildGroup = 0;
+
+            // The original recreates the window on entry (FUN_1404e65e0); retained list selections must not override the fresh menu bindings.
+            player.FaithfulScreens.ClearSelection("build", "CategoriesList");
+            player.FaithfulScreens.ClearSelection("build", "BuildingsList");
+
             BuildMember = null;
             BuildDiscarded = false;
             player.InventoryWindows.CloseInventoryWindows();
@@ -221,13 +226,12 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The chosen category: the first that shows until one is chosen, none when nothing is unlocked.
+    /// The chosen category, or none until one is chosen or when it is no longer unlocked.
     /// </summary>
     string? CurrentCategory()
     {
         var categories = BuildCategories();
-        if (categories.Count == 0) return null;
-        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : categories[0];
+        return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : null;
     }
 
     /// <summary>
@@ -939,6 +943,7 @@ sealed class BuildMode(PlayerInterface player)
                 _buildCategory = e.Text;
                 BuildDiscarded = false;
                 _buildGroup = 0;
+                player.FaithfulScreens.ClearSelection("build", "BuildingsList");
                 BuildMember = null;
                 break;
             case ("BuildingsList", "select"):

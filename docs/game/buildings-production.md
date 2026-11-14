@@ -505,6 +505,11 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 
 ### Build menu
 
+**Verified** (Kenshi 1.0.68 executable, `FUN_1404e65e0`, `FUN_1404e5210`, `FUN_1404d2a10`, `FUN_1404d1870`): each entry creates a new build
+window and exit destroys it. The constructor clears both lists and fills only the categories; the selected category starts empty. The building list
+is filled after a category click (`FUN_1404d5ff0` -> `FUN_1404d5df0`). No previous category or list highlight is restored. Meitou clears its retained
+list selections on entry and leaves the building list empty until a category is chosen. **Unknown**: live comparison of reopening the original's menu.
+
 **Verified** (`FUN_1406bff30`, `FUN_1404e4480`, `FUN_1404e4210`, `FUN_14082ea60`, `FUN_140830b40`): every BUILDING is a
 candidate; category = `building category` (default "misc"), group = `building group` or the building's own name.
 A building is offered when it is in the research manager's unlocked set, filled from each completed RESEARCH's
