@@ -498,7 +498,8 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
             ? r : (Simulation.Production.RichnessView?)null;
-        if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
+        if (rich is { } richness && player.Production.Machine(focus.SiteId)?.Farm is null)
+            ProductionWindows.AddRichnessLine(richness, stats);
 
         if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
         {
@@ -726,7 +727,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The medical panel's rows of a selected building (its section 4, docs/game/ui-screens.md "Selected building"): the first door's <c>Door
     /// Condition</c>, then <c>Building Condition</c> (<c>Condition</c> without doors), each the construction progress as the number and its fraction
     /// of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no building damage, so a finished
-    /// building's progress is its target (the original's damaged state lowers it).
+    /// building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars after Condition.
     /// </summary>
     internal List<PlayerInterface.MedicalRow> BuildingRows(SelectedBuilding focus)
     {
@@ -749,6 +750,8 @@ sealed class BuildingSelection(PlayerInterface player)
             : fraction >= 1 ? Loc.Tr("The building is in good condition.") : Loc.Tr("The building is damaged.");
         var progressValue = ((int)progress).ToString(CultureInfo.InvariantCulture);
         rows.Add(Bar(Loc.Tr(door is null ? "Condition" : "Building Condition"), fraction, progressValue, tip));
+
+        if (complete && player.Production.Machine(focus.SiteId)?.Farm is { } farm) FarmPanel.AddRows(farm, rows);
 
         // A wind generator's rows (WindGeneratorBuilding::getGUIPower section 4): Wind, its share as a whole percent and the bar; Power Output,
         // the output as an int over the rated.
