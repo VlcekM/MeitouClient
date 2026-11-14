@@ -105,7 +105,9 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
   items)`) but no `is trader`, and their boss's Trade line (48150) has no condition: in the unmodded game they open an unfilled window (**Verified**: the factory and the restock reach the
   squad filler only through `FUN_1404ff5e0`, which refuses a homeless squad without `is trader`; the filler without that test, `FUN_1404fe970`, has no caller: no call, jump or pointer
   to it or its thunk in the exe). **Observed**: the owner's saves with ~100 mods (1.0.65, 1.0.68) hold Caravans stocked from that list with an `inventory refresh time`, which the saver
-  writes only for `is trader` (`FUN_140372ef0`), so a mod sets it; which one is **Unknown**. Meitou (`TradeSystem.StockFor`): such a squad gets an empty shop, never filled, at its first trade; a
+  writes only for `is trader` (`FUN_140372ef0`), so a mod sets it; which one is **Unknown**. Their boss wears no bag either (**Observed**, decompile of `CharacterHuman::setupInventorySections` `FUN_14062c4e0`; the weight is read off its `crossbows` loop, the decompile drops the argument here: a `backpack` entry counts with
+  val0 above 0 and weighs its val1, one is drawn when a roll in [0, 100) is below the sum; `Caravan trader boss` lists `Trader's Wooden Backpack` as (1, 0), chance 0, like 33 of the base data's 66 CHARACTER entries;
+  an animal gets every entry, `FUN_14062a130`, so the Pack Beast carries its empty Garru Backpack), which is what #657 shows. Meitou (`TradeSystem.StockFor`): such a squad gets an empty shop, never filled, at its first trade; a
   housed squad without a shop trades from its home's stock containers, lent to the trade and handed back when it ends (none without containers).
 - Meitou (the right-click Trade verb, engine): a member of a shop squad, or of a homeless squad whose template has `vendors` (a Caravan), whose record sets `is trader` or whose
   dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked). A trader held in a cage or on a pole offers no Trade and an open trade with one closes (engine choice, #641; the original's case is **Unknown**).
