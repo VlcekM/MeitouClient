@@ -72,6 +72,7 @@ static class SaveProbe
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
+            case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
                 return true;
@@ -644,6 +645,34 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The bed the first character named like <paramref name="name"/> lies in: its record, yaw and use node yaws, the lie spot and the sleeper's own
+    /// place and yaw as loaded, in degrees (#718: a sleeper lying across a one-node bed).
+    /// </summary>
+    static void Sleeper(ProbeWorld probe, string name)
+    {
+        int who = probe.Named(name)[0];
+        var c = probe.Characters.Cold(who)!;
+        var me = probe.Characters.Next[who];
+        Console.WriteLine($"{probe.Who(who)} inWhat={c.InWhat} at {me.Position:F1} yaw={Degrees(me.Yaw):F1}");
+
+        // a player-built bed registers on the first tick, which may also see its sleeper's jobs get it up
+        string? what = c.InWhat;
+        if (what is not null && probe.World.Fixtures.Find(what) is null) probe.Tick(1);
+        if (what is null || probe.World.Fixtures.Find(what) is not { Kind: FixtureKind.Bed } bed) return;
+
+        var nodes = string.Join(", ", bed.Bed.Nodes?.Select(n => $"{n.At:F1} yaw {Degrees(n.Yaw):F1}") ?? []);
+        var (spot, yaw) = FixtureRegistry.LieSpot(bed, me.Position, probe.World.GameHours);
+        Console.WriteLine($"bed {bed.Id} '{probe.Db.Find(bed.RecordId)?.Name}' at {bed.Position:F1} marker={bed.Marker:F1} yaw={Degrees(bed.Yaw):F1} "
+            + $"clip={bed.Bed.Clip} nodes=[{nodes}]");
+        Console.WriteLine($"lie spot {spot:F1} yaw={Degrees(yaw):F1}");
+    }
+
+    /// <summary>
+    /// Radians as degrees.
+    /// </summary>
+    static float Degrees(float radians) => radians * 180 / MathF.PI;
+
+    /// <summary>
     /// A container fixture's record name, owner with its faction's lock level and spread, lock, storage fields and what it holds.
     /// </summary>
     static void Container(ProbeWorld probe, Fixture f)
@@ -938,6 +967,7 @@ static class SaveProbe
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
+              sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
