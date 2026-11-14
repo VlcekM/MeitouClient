@@ -148,6 +148,11 @@ public sealed class ItemInstance
     /// </summary>
     public string Uniform { get; set; } = "";
     /// <summary>
+    /// A code mod's mark on this item (docs/modding.md "Item use"), such as the character a note names; empty: none. Saved, copied with the item,
+    /// and items with different marks never stack.
+    /// </summary>
+    public string ModTag { get; set; } = "";
+    /// <summary>
     /// The COLOR_DATA it is dyed with (the save key <c>color sid</c>; empty: none): its record's <c>color</c> when made, else the scheme of the first
     /// wearer (<see cref="Meitou.Data.Gameplay.ItemColours"/>).
     /// </summary>
@@ -324,6 +329,7 @@ public sealed class ItemInstance
         Level = Level,
         Crafter = Crafter,
         Uniform = Uniform,
+        ModTag = ModTag,
         ColourId = ColourId,
         ItemFunction = ItemFunction,
         Quality = Quality,

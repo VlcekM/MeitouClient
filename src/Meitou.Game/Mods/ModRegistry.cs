@@ -47,6 +47,10 @@ sealed class ModRegistrations
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
     /// <summary>
+    /// The item use handlers by item record string id.
+    /// </summary>
+    public Dictionary<string, ItemUseHandler> ItemUses { get; } = new(StringComparer.Ordinal);
+    /// <summary>
     /// The equipment slots, in registration order.
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
@@ -101,6 +105,10 @@ sealed class ModRegistry
     /// The owner of each claimed code, by kind and code.
     /// </summary>
     readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = [];
+    /// <summary>
+    /// The owner of each item record's use, by record string id.
+    /// </summary>
+    readonly Dictionary<string, string> _itemUseOwners = new(StringComparer.Ordinal);
     /// <summary>
     /// The mod and name each world's mod system was made under (weakly held, gone with the world).
     /// </summary>
@@ -162,11 +170,27 @@ sealed class ModRegistry
         foreach (var (code, handler) in r.Effects)
             Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
+        foreach (var (record, handler) in r.ItemUses)
+        {
+            _itemUseOwners[record] = mod;
+            Simulation.ItemUses[record] = Guarded(mod, record, handler);
+        }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
         if (r.Settings is not null) Settings.Add(r.Settings);
+    }
+
+    /// <summary>
+    /// Throws when another mod (or this one) handles the use of <paramref name="record"/> already.
+    /// </summary>
+    public void CheckItemUseFree(string record, ModRegistrations pending, string mod)
+    {
+        if (_itemUseOwners.TryGetValue(record, out var owner))
+            throw new InvalidOperationException($"The use of item '{record}' is taken by mod '{owner}'.");
+        if (pending.ItemUses.ContainsKey(record))
+            throw new InvalidOperationException($"The use of item '{record}' is registered twice by mod '{mod}'.");
     }
 
     /// <summary>
@@ -182,6 +206,22 @@ sealed class ModRegistry
         _owners[(kind, code)] = mod;
         add();
     }
+
+    /// <summary>
+    /// The handler with its throws caught: a mod's fault is logged and the click counts as used, so the item stays where it is.
+    /// </summary>
+    static ItemUseHandler Guarded(string mod, string record, ItemUseHandler handler) => use =>
+    {
+        try
+        {
+            return handler(use);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: use of item '{record}' failed: {e}");
+            return true;
+        }
+    };
 
     /// <summary>
     /// The factory with its systems tagged with the mod (<see cref="TagOf"/>); a system whose factory throws is left out of the world, with a

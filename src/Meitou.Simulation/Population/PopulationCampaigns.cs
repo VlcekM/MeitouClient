@@ -1207,6 +1207,24 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
+    /// A code mod's campaign request (engine API, not in the original): queues <paramref name="campaignId"/> for <paramref name="faction"/> against
+    /// <paramref name="target"/>, due after <paramref name="delayHours"/>, as a dialogue trigger does, so the request pass applies the game's own
+    /// gates (chance, cooldown, range, population) when it falls due. False when the faction has no war manager, the campaign or the town is
+    /// unknown, or the delay is not finite. Serial phases only.
+    /// </summary>
+    public bool RequestCampaign(World world, int faction, string campaignId, CampaignTown target, float delayHours = 0)
+    {
+        if (!float.IsFinite(delayHours)) return false;
+
+        EnsureWars(world);
+        if (WarOf(faction) is not { } m || CampaignOf(campaignId) is not { } c) return false;
+        if (target.IsNone || !Exists(world, target)) return false;
+
+        float delay = Math.Max(0, delayHours);
+        return Queue(world, m, c, target, CampaignTown.None, FactionOfTown(world, target), delay, delay, world.GameHours, callerFlag: true);
+    }
+
+    /// <summary>
     /// The due requests (<c>FUN_1409cb310</c>'s request pass): a gone target (missing, or a player town occupied for a non-hostile campaign or not
     /// active) is redirected, the start waiting for the next run, else delayed 5-10 h; a failed world-state or leader gate drops it; else a start,
     /// tried each run (no chance, cooldown, range or population gate). Delays and starts share one counter

@@ -540,7 +540,7 @@ public static class StandardSystems
                 _systems.Add(StandardParts.Population, _population = new PopulationSystem(_data, _o.Population));
 
             if (Has(StandardParts.Player))
-                _systems.Add(StandardParts.Player, new PlayerSystem(_data) { AnimalsPickUp = _o.AnimalsPickUp });
+                _systems.Add(StandardParts.Player, new PlayerSystem(_data) { AnimalsPickUp = _o.AnimalsPickUp, Extensions = _o.Extensions });
 
             if (Has(StandardParts.Ai)) _systems.Add(StandardParts.Ai, _ai = new Ai.AiSystem(_data, _o.Ai));
 

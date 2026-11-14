@@ -387,6 +387,11 @@ public sealed class Blackboard
     /// The hours the trader stays in a town before it may go on (+0xd4, uniform [5, 8) at each start; see <see cref="TraderState"/>).
     /// </summary>
     public float TraderWait { get; set; }
+    /// <summary>
+    /// A <see cref="VisitTown"/> stay waits for the trader to reach its destination: the step there restarts <see cref="InTownSince"/>, so time
+    /// spent before the command, or in another town, does not count toward the stay (engine API, not in the original).
+    /// </summary>
+    public bool VisitArrivalPending { get; set; }
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
@@ -687,6 +692,9 @@ public sealed class Blackboard
             hasher.Add(InTown.PlayerTown);
             hasher.Add(InTownSince);
         }
+
+        // Only a code mod's visit sets it, so a world without one hashes as before.
+        if (VisitArrivalPending) hasher.Add(VisitArrivalPending);
 
         if (AssaultEnemy >= 0 || AssaultDone)
         {

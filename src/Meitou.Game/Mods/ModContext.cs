@@ -219,6 +219,21 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A right click on an item of <paramref name="record"/> (an item record's string id) in a player character's own inventory window, with no
+    /// other character's window open (docs/modding.md "Item use"): <paramref name="handler"/> runs in a serial step of the tick and may change the
+    /// world. It returns true when it used the click (removing a used-up item itself), false to let the click equip or move the item as usual. One
+    /// mod per record; a throw is logged and leaves the item where it is.
+    /// </summary>
+    public void AddItemUse(string record, ItemUseHandler handler)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(handler);
+        if (string.IsNullOrWhiteSpace(record)) throw new ArgumentException("An item use needs a record id.", nameof(record));
+        _registry.CheckItemUseFree(record, Pending, Id);
+        Pending.ItemUses[record] = handler;
+    }
+
+    /// <summary>
     /// The merged records of a type, in string id order.
     /// </summary>
     public IEnumerable<GameRecord> Records(int type) =>

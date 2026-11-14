@@ -137,6 +137,7 @@ public static class SavedKit
         item.CompanyId = s.CompanyId;
         item.Crafter = s.Crafter;
         item.Uniform = s.Uniform;
+        item.ModTag = s.ModTag;
 
         // "" keeps the record's colour the factory gave: saves from before Meitou kept colours wrote "" for every item.
         if (s.ColourId.Length > 0) item.ColourId = s.ColourId;
@@ -195,6 +196,7 @@ public static class SavedKit
             CompanyId = i.CompanyId,
             Crafter = i.Crafter,
             Uniform = i.Uniform,
+            ModTag = i.ModTag,
             ColourId = i.ColourId,
             Section = section,
             X = i.X,
