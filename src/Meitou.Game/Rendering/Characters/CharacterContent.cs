@@ -11,6 +11,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
@@ -1364,12 +1365,20 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     internal const float HairLodScale = 4;
     /// <summary>
-    /// The disk cache of the generated levels, <c>%LOCALAPPDATA%\Meitou\charlods</c> (<c>MEITOU_CHARACTER_LOD_CACHE</c>; neither read nor written
+    /// The disk cache of the generated levels, <see cref="LoadCaches.Root"/>'s <c>charlods</c> (<c>MEITOU_CHARACTER_LOD_CACHE</c>; neither read nor written
     /// with <c>--no-load-cache</c>), as the objects' (<see cref="ObjectLodGen.Root"/>): building the levels is nearly all of a mesh's preparation,
     /// and a town's crowd took about 40 s of worker time at every load.
     /// </summary>
-    public static string LodRoot { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CHARACTER_LOD_CACHE")
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "charlods");
+    public static string LodRoot
+    {
+        get => s_lodRoot ?? Environment.GetEnvironmentVariable("MEITOU_CHARACTER_LOD_CACHE") ?? LoadCaches.Folder("charlods");
+        set => s_lodRoot = value;
+    }
+
+    /// <summary>
+    /// The folder <see cref="LodRoot"/> was set to; null for the default.
+    /// </summary>
+    static string? s_lodRoot;
     /// <summary>
     /// Bumped when what the character levels are built from changes (with <see cref="FoliageLodBuilder.Version"/>, the cache's key).
     /// </summary>

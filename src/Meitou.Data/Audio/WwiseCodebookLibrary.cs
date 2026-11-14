@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using Meitou.Data.World;
 
 namespace Meitou.Data.Audio;
 
@@ -49,10 +50,9 @@ public sealed class WwiseCodebookLibrary
     public static WwiseCodebookLibrary? FromExecutable(string exePath) => FromExecutable(File.ReadAllBytes(exePath));
 
     /// <summary>
-    /// The default cache folder: <c>%LOCALAPPDATA%\Meitou\audio</c>.
+    /// The default cache folder: <see cref="LoadCaches.Root"/>'s <c>audio</c>.
     /// </summary>
-    public static string DefaultCacheDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "audio");
+    public static string DefaultCacheDirectory => LoadCaches.Folder("audio");
 
     /// <summary>
     /// The first four bytes of <c>codebooks.bin</c>.

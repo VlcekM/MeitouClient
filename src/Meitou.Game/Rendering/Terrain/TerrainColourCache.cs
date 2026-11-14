@@ -166,14 +166,14 @@ static class TerrainColourCache
 
     /// <summary>
     /// The cache file of <paramref name="tile"/>: a hash of the version, its path, length and write time,
-    /// under <c>%LOCALAPPDATA%\Meitou\terrain\colour</c>.
+    /// under <see cref="LoadCaches.Root"/>'s <c>terrain/colour</c>.
     /// </summary>
     static string CachePath(string tile)
     {
         var file = new FileInfo(tile);
         var key = FormattableString.Invariant($"{Version}|{tile}|{file.Length}|{file.LastWriteTimeUtc.Ticks}");
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "terrain", "colour", hash + ".bc3");
+        return LoadCaches.Folder("terrain", "colour", hash + ".bc3");
     }
 
     /// <summary>
