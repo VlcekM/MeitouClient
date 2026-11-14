@@ -1182,7 +1182,7 @@ buildings, e.g. the Snailhouse bar of the Waystation in The Hook (`17.53:4-rebir
 two `Trashed building` homes each in Bast and Endin, whose other buildings are ruins by their default resident. A saved `destroyed` false does not undo a level ruin
 unless the player's repair saved it (`meitou town construction`; engine choice: saves made before this pass wrote those buildings intact). A saved `destroyed` true
 does not ruin a home the residents stand up while the save has the same `residents template` in it and no `meitou town construction` (engine choice: saves made before
-the homes were stood up wrote the level file's ruin; `FixtureRegistry.SavedLevelRuin`). A town's baked distant mesh is a fixed file of the install, drawn as it is (as
+the homes were stood up wrote the level file's ruin; `FixtureRegistry.SavedLevelRuin`). A home housing ruins now stands when the save has it intact under another `residents template` that is not `building ruined` (engine choice, `FixtureRegistry.SavedStanding`: the save was housed differently, e.g. before a mod added residents; **Verified** headless on issue #673's save, where `Bounty hunting for minor factions.mod` adds a Hub resident and the squatters' ruined template lands on the bar's Storm House `20.32:4933-Newwworld-INGAME`). A town's baked distant mesh is a fixed file of the install, drawn as it is (as
 in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class.
 
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
