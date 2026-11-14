@@ -232,7 +232,7 @@ public sealed partial class LockSystem
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return false;
 
         // Its own faction's locked gate is unlocked at the leaf, not bashed (see UnlocksOwn).
-        if (!UnlocksOwn(main.Door, c) && !_gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
+        if (!UnlocksOwn(main.Door, c, world.Characters.Cold(t)) && !_gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
         c.Bashing = main.Door.Id;
         c.BashTime = 0;
         return true;
