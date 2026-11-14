@@ -804,15 +804,21 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// What a bolt hit means for a shooter that still lives: a landed hit when it was meant for the victim, the crime, the victim's alarm and
-    /// replan, the relation events; then a unique's death and the Luckyren burst.
+    /// What a bolt hit means for a shooter that still lives: a landed hit when it was meant for the victim, an NPC shooter's renewed Assault, the
+    /// victim's alarm and replan, the relation events; then a unique's death and the Luckyren burst.
     /// </summary>
     void BoltShooterEffects(World world, in Projectile p, int v, CharacterCold dc, MedicalState medical, bool intended, bool death)
     {
         var prev = world.Characters.Previous;
         bool shooterAlive = p.Shooter < prev.Length && prev[p.Shooter].Alive && prev[p.Shooter].Generation == p.ShooterGeneration;
         if (shooterAlive && intended) _write[p.Shooter].Landed++;
-        if (shooterAlive) Crimes?.Hit(world, p.Shooter, v);
+
+        // No police-hit rule: the original's bolt hit (FUN_140439c90) does not call the hit outcome FUN_140665fa0 that holds it, nor the crime
+        // setter directly (docs/game/economy.md "Hitting the police"), so a stray bolt from a guard does not make its victim the culprit. An NPC
+        // shooter's aimed hit still renews its Assault, as its landed blow does (CrimeSystem.Hit; an engine choice).
+        if (shooterAlive && intended && world.Characters.Cold(p.Shooter) is { IsPlayer: false })
+            Crimes?.Assault(world, p.Shooter, v);
+
         if (shooterAlive && !medical.Incapacitated)
         {
             // the victim senses the shooter, with the alarm flag (FUN_140999d50)
