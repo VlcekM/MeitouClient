@@ -14,6 +14,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [animation](animation.md)
 - [bench](bench.md)
 - [engine](engine.md)
+- [KenshiHarness](../tools/scripts/KenshiHarness/README.md): `kh`, driving the original game (screenshots, GUI as text, state JSON, input, Re_Dev) to check its behaviour
 - [faithful-ui-parity](faithful-ui-parity.md)
 - [character-renderer](character-renderer.md)
 - [character-viewer](character-viewer.md)
