@@ -2,6 +2,10 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.11.1
+
+- A workshop mod's row on the Mods page has a link icon that opens its Steam workshop page with one click, in place of the double click.
+
 ## v1.11.0
 
 - **Legacy macOS 13 packages**: separate `MeitouLauncherLegacy` installers for Intel and Apple silicon, built on .NET 10. The
