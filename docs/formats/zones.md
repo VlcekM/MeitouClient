@@ -230,13 +230,14 @@ TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` fro
   match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). How the exe reaches the field is **Unknown**: the string "nest" does
   not appear in the decompile. Whether such a nest's `debris building` and meshes are stood up is **Unknown**. Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
   the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
-  - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, one roll per home, on its floor or
-    the ground beside it; none round the town's centre unless a home stands there. The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
+  - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, on its floor or the ground
+    beside it; none round the town's centre unless a home stands there. One roll per home is Meitou's reading (the totals fit: 7 Hub homes x 0..7). The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
     1630 from the centre; The Old Prison's 16 within 349 of the Broken Watchtower (`nest armoury ruin`, 350). Measured against Meitou's boot housing; 5 items of 403 lie further.
 Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
 items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town lays its residents' nests' items once when first made, round
-each home whose template names the nest and whose zone the save has no file of, as its own camp's (`PopulationSystem.ResidentNestDrops`); their buildings and meshes are not
-stood up.
+each home whose template names the nest and whose zone the save has no file of, as its own camp's (`PopulationSystem.ResidentNestDrops`); a resident template no building of
+the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's round the centre (**engine choice**, the original's place **Unknown**).
+Their buildings and meshes are not stood up.
 
 ## Open questions
 

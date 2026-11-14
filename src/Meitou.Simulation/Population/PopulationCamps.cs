@@ -79,28 +79,54 @@ public sealed partial class PopulationSystem
     List<NestDrop> ResidentNestDrops(World world, TownSite site)
     {
         var drops = new List<NestDrop>();
+        var housed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var home in site.Buildings)
         {
-            if (world.SavedZones.Contains(WorldLayout.ZoneOf(home.Position.X, home.Position.Z))) continue;
-            if (_data.Db.Find(world.Fixtures.ResidentsTemplate(home)) is not { } template) continue;
+            string templateId = world.Fixtures.ResidentsTemplate(home);
+            housed.Add(templateId);
+            housed.Add(home.ResidentsTemplate);
+            if (world.SavedZones.Contains(home.Zone) || _data.Db.Find(templateId) is not { } template) continue;
 
+            var at = new Vector2(home.Position.X, home.Position.Z);
             foreach (var link in template.GetReferences("nest"))
-                drops.AddRange(HomeNestDrops(world, site, home, link.TargetStringId));
+                drops.AddRange(NestDropsAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:"));
         }
+
+        drops.AddRange(HomelessNestDrops(world, site, housed));
+        return drops;
+    }
+
+    /// <summary>
+    /// The nests of the town's resident templates that none of its buildings houses (<paramref name="housed"/>: the templates housed), rolled
+    /// round the town's centre (<b>engine choice</b>: where the original lays these is Unknown); none in a zone the save has a file of.
+    /// </summary>
+    List<NestDrop> HomelessNestDrops(World world, TownSite site, HashSet<string> housed)
+    {
+        var drops = new List<NestDrop>();
+        var at = new Vector2(site.Position.X, site.Position.Z);
+        if (world.SavedZones.Contains(WorldLayout.ZoneOf(at.X, at.Y))) return drops;
+
+        var nests = site.Town.Residents
+            .Where(r => !housed.Contains(r.Id))
+            .Select(r => _data.Db.Find(r.Id))
+            .OfType<Data.GameRecord>()
+            .SelectMany(t => t.GetReferences("nest"))
+            .Select(n => n.TargetStringId)
+            .Distinct(StringComparer.Ordinal);
+        foreach (string id in nests) drops.AddRange(NestDropsAt(world, at, id, $"town{site.Index}:{id}:"));
 
         return drops;
     }
 
     /// <summary>
-    /// What the nest <paramref name="nestId"/> of <paramref name="home"/>'s residents scatters round the home's origin; none when it is no TOWN.
+    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>; none when it is no TOWN.
     /// </summary>
-    List<NestDrop> HomeNestDrops(World world, TownSite site, TownBuilding home, string nestId)
+    List<NestDrop> NestDropsAt(World world, Vector2 at, string nestId, string idPrefix)
     {
         if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) return [];
 
         ulong seed = world.Seed ^ Rng.StableHash(nestId);
-        var at = new Vector2(home.Position.X, home.Position.Z);
-        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, $"town{site.Index}:{home.Key}:{nestId}:").Drops;
+        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix).Drops;
     }
 
     /// <summary>
