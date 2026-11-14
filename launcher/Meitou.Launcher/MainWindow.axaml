@@ -231,8 +231,12 @@
                   <TextBlock DockPanel.Dock="Left" Classes="handle" Text="≡" VerticalAlignment="Center" Margin="0,0,10,0"
                              PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order" />
                   <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
-                  <StackPanel VerticalAlignment="Center" Background="Transparent" DoubleTapped="ModRow_DoubleTapped"
-                              ToolTip.Tip="{Binding PageTip}">
+                  <!-- A workshop mod's link to its Steam page: a box with an arrow leaving it -->
+                  <Button DockPanel.Dock="Right" Classes="icon" VerticalAlignment="Center" Margin="10,0,0,0" Click="ModPage_Click"
+                          IsVisible="{Binding WorkshopPage, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="{Binding PageTip}">
+                    <Path Data="M0,2 H6 V4 H2 V12 H10 V8 H12 V14 H0 Z M8,0 H14 V6 H12 V3.4 L6.7,8.7 L5.3,7.3 L10.6,2 H8 Z" />
+                  </Button>
+                  <StackPanel VerticalAlignment="Center">
                     <TextBlock Classes="name" Text="{Binding Name}" />
                     <TextBlock Classes="desc" Text="{Binding Detail}" />
                     <TextBlock Classes="warn" Text="{Binding Notes}" IsVisible="{Binding HasNotes}" />

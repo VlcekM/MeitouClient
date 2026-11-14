@@ -1103,9 +1103,9 @@ public sealed partial class MainWindow : Window
     void DragHandle_PointerPressed(object? sender, PointerPressedEventArgs e) => _modDrag.Press(sender, e);
 
     /// <summary>
-    /// A double click on a workshop mod's texts opens its Steam workshop page; a local mod has none.
+    /// A click on a workshop mod's link icon opens its Steam workshop page; a local mod's row has no icon.
     /// </summary>
-    async void ModRow_DoubleTapped(object? sender, TappedEventArgs e)
+    async void ModPage_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: ModRow { WorkshopPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
     }

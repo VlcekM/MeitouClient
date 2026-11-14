@@ -63,9 +63,9 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         : null;
 
     /// <summary>
-    /// The tip of the row's texts: how to open <see cref="WorkshopPage"/>; null (no tip) for a local mod.
+    /// The tip of the row's link icon, which opens <see cref="WorkshopPage"/>; null (no tip) for a local mod, whose row has no icon.
     /// </summary>
-    public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Double-click to open its Steam workshop page");
+    public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
     /// The row's notes: a code mod, an ignored RE_Kenshi plugin, its dependencies, its game version and why it will not load.
