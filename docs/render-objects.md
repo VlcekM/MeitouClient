@@ -32,6 +32,13 @@ and generated levels use projected demand with stable transitions. Do not treat 
 range as an accidental renderer limit: it can be original fidelity. Visibility/depth/shadow/
 reflection and streaming residency need consistent bounds.
 
+**Wall part reach** (**Verified**, original decompile): `FUN_14057cc70` creates a `WallBuilding` for `links together` after checking
+`is wall gate`. Its virtual +0x2c8 returns itself (`FUN_140592760`), so `FUN_14055f6e0` skips the ordinary part-distance assignment.
+All wall parts therefore bypass the small-part cutoff, independently of `link type`, mesh size or LOD. For ordinary parts,
+`FUN_140558b40` also removes the cutoff when the local AABB radius exceeds 100. **Observed**, clean GOG meshes: `Wall3.mesh` has a
+local AABB radius of 182.78, `Wall3_Section01.mesh` 93.17. Applying only the size exemption incorrectly clipped short walls while
+retaining full sections (#667). Meitou uses the owner's wall flags for this exemption; the whole-object reach still applies.
+
 Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
 of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
 compared the jump with the part's mean UV density let tiled decks (Shield Bridge, tread squares) pick another UV island, showing

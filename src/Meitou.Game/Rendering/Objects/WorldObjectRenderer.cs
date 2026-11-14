@@ -1167,7 +1167,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         inst.TurretStamp = -1;   // a turret part is posed again (JointPoses.Pose)
         inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
-            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange)
+            ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange,
+                isWall: inst.Placed.Owner.GetBool("links together") && !inst.Placed.Owner.GetBool("is wall gate"))
             : float.MaxValue;
         if (inst.Stand)
         {
