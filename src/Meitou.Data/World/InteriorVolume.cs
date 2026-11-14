@@ -444,36 +444,69 @@ public sealed partial class FloorSurfaces
         InteriorCollisions collision, bool destroyed = false)
     {
         var result = new FloorSurfaces();
+        foreach (var (part, mesh) in FloorParts(db, building, placementId, position, rotation, collision, destroyed))
+            result.AddPart(part, mesh, node);
+        return result;
+    }
+
+    /// <summary>
+    /// How far (units, unscaled) the collision of <paramref name="building"/>'s floor parts reaches from its origin: the farthest vertex of the
+    /// parts <see cref="For"/> reads, in building space; 0 without any. A placement's floors lie within this times its scale of its position.
+    /// </summary>
+    public static float Reach(GameDatabase db, GameRecord building, InteriorCollisions collision, bool destroyed = false)
+    {
+        float farthest = 0;
+        foreach (var (_, mesh) in FloorParts(db, building, building.StringId, Vector3.Zero, Quaternion.Identity, collision, destroyed))
+            foreach (var v in mesh.Vertices) farthest = MathF.Max(farthest, v.LengthSquared());
+        return MathF.Sqrt(farthest);
+    }
+
+    /// <summary>
+    /// The building's own parts that have floor collision, each once, with its collision in building space (the parts <see cref="For"/> describes).
+    /// </summary>
+    static IEnumerable<(GameRecord Part, CollisionMesh Mesh)> FloorParts(GameDatabase db, GameRecord building, string placementId,
+        Vector3 position, Quaternion rotation, InteriorCollisions collision, bool destroyed)
+    {
         // IGNORE: no floor groups
         if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture"))
-            return result;
+            yield break;
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var state = new BuildingState(destroyed) { WithInterior = !destroyed };
         foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, state))
         {
             var part = p.Source;
             if (p.Owner != building || part.GetBool("passable") || !seen.Add(part.StringId)) continue;
-            if (collision.Mesh(p.CollisionPath(destroyed)) is not { } mesh) continue;
-            // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal
-            // under the building.
-            bool roof = part.GetBool("is unwalkable roof");
-            var kept = new List<Vector3>(mesh.Indices.Length);
-            var under = new List<Vector3>();
-            for (int t = 0; t + 2 < mesh.Indices.Length; t += 3)
-            {
-                var a = Vector3.Transform(mesh.Vertices[mesh.Indices[t]], node);
-                var b = Vector3.Transform(mesh.Vertices[mesh.Indices[t + 1]], node);
-                var c = Vector3.Transform(mesh.Vertices[mesh.Indices[t + 2]], node);
-                var normal = Vector3.Cross(b - a, c - a);
-                bool underside = !roof && mesh.Outward[t / 3] && normal.Y < 0 && -normal.Y >= normal.Length() * MathF.Cos(40 * MathF.PI / 180);
-                var list = underside ? under : kept;
-                list.Add(a); list.Add(b); list.Add(c);
-            }
-            int floor = Math.Clamp(part.GetInt("building floor"), 0, 3);
-            if (Of(floor, part.GetBool("is stairs"), kept) is { } surface) (roof ? result._roofs : result._surfaces).Add(surface);
-            if (Of(floor, false, under) is { } bottom) result._undersides.Add(bottom);
+            if (collision.Mesh(p.CollisionPath(destroyed)) is { } mesh) yield return (part, mesh);
         }
-        return result;
+    }
+
+    /// <summary>
+    /// Adds a part's collision, placed with <paramref name="node"/>: its floor (or unwalkable roof) triangles and its flat undersides.
+    /// </summary>
+    void AddPart(GameRecord part, CollisionMesh mesh, Matrix4x4 node)
+    {
+        // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal
+        // under the building.
+        bool roof = part.GetBool("is unwalkable roof");
+        var kept = new List<Vector3>(mesh.Indices.Length);
+        var under = new List<Vector3>();
+        for (int t = 0; t + 2 < mesh.Indices.Length; t += 3)
+        {
+            var a = Vector3.Transform(mesh.Vertices[mesh.Indices[t]], node);
+            var b = Vector3.Transform(mesh.Vertices[mesh.Indices[t + 1]], node);
+            var c = Vector3.Transform(mesh.Vertices[mesh.Indices[t + 2]], node);
+            var normal = Vector3.Cross(b - a, c - a);
+            bool underside = !roof && mesh.Outward[t / 3] && normal.Y < 0 && -normal.Y >= normal.Length() * MathF.Cos(40 * MathF.PI / 180);
+            var list = underside ? under : kept;
+            list.Add(a);
+            list.Add(b);
+            list.Add(c);
+        }
+
+        int floor = Math.Clamp(part.GetInt("building floor"), 0, 3);
+        if (Of(floor, part.GetBool("is stairs"), kept) is { } surface) (roof ? _roofs : _surfaces).Add(surface);
+        if (Of(floor, false, under) is { } bottom) _undersides.Add(bottom);
     }
 
     /// <summary>

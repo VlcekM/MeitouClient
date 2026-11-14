@@ -84,7 +84,9 @@ not the game speed, so the camera works while the game is paused. Several inputs
   direction is not touched. The pivot then closes on its goal: a gap of 0.1 or less at once, else at **10 × the gap per second**, the
   speed taken when the goal changes (a moving goal is followed with a lag of about 0.1 s). A pivot or eye starting inside geometry
   leaves the height alone (**Observed**). Placing the camera finds the goal at once. Engine: every building's floor-0 ordinary parts
-  within 400 units are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
+  whose collision can reach the point (its record's farthest floor-part vertex from the origin, at the placement's scale; base game up to 2003 for
+  Large Dock Wreck02, 1193 for Flats Lagoon's Lagoon Platform, 216 of 7819 floor buildings past 400, **Verified** by making every placement's floors;
+  zones searched within 2100) are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
   without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
   floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
   ray or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
