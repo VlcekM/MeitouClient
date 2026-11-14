@@ -1178,6 +1178,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground only from the player's
     own windows or a window of a player-faction owner, else it goes back.
   - Back to origin (`FUN_14070d860`): its old cell if still free, else auto-added to that inventory, else that inventory is arranged and it is tried again, else it is dropped on the ground.
+    For a live animal the auto-add leaves its shut grid out: Raw Meat swapped out of a pack beast's Garru Backpack and sent back with Esc, its cell now taken, goes into a free
+    cell of the bag, though the hidden grid has room (**Observed**, original 1.0.68); the arrange and ground steps there are **Unknown**. Meitou: `HeldItems.ReturnHeldItem` adds with
+    the grid shut and arranges only the bag; a non-empty bag goes to the ground rather than inside the worn bag (engine choice) ([animals](animals.md#pack-animals)).
   - Sounds (**Verified**, decompile; all on the GUI object with `Inventory_Items` set from the item, `FUN_14070d230` / `FUN_14075e360`): a lift `Item_Lift` (`FUN_1407139a0`);
     a placement `Item_Drop` (`FUN_140715560`; equipping included; a swap posts no lift); `Sell_Item` instead for any move between a trade pair, buying too; a right-click move `Item_Lift`
     (`FUN_140713d20`; with Shift once), `Sell_Item` in a trade; a ground drop `Character_Drop_Ground`; nothing for giving to a character, a return to the origin, refusals, money becoming

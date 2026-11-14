@@ -841,8 +841,8 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// Puts the held item back (<c>FUN_14070d860</c>, <b>Observed</b>): into its old place when that is still free (a prosthetic refitted on its
-    /// stump), else wherever its window's inventory takes it (<see cref="Inventory.Add"/>), else after arranging that inventory
-    /// (<see cref="InventoryCommands.Arrange"/>), else onto the ground. A machine slot's units go back into the slot.
+    /// stump), else wherever its window's inventory takes it (<see cref="Inventory.Add"/>; a live animal's worn bag only), else after arranging that
+    /// inventory (<see cref="InventoryCommands.Arrange"/>), else onto the ground. A machine slot's units go back into the slot.
     /// </summary>
     internal void ReturnHeldItem(World world)
     {
@@ -866,7 +866,13 @@ sealed class HeldItems(PopulationData? data)
                 _assembly?.RefreshEquipment(owner);
             return;
         }
-        if (root.Add(item) || InventoryCommands.Arrange(root) && root.Add(item)) return;
+
+        // A live animal's shut grid takes nothing back (InventoryCommands.MainClosed): an item swapped out of its bag goes back into the bag, and
+        // only the bag is arranged for room. A bag that is not empty never goes inside it (engine choice, the bag-in-bag rule): it drops.
+        bool shut = InventoryCommands.MainClosed(owner);
+        bool canAdd = !shut || item.Contents is not { Items.Count: > 0 };
+        if (canAdd && root.Add(item, shut)) return;
+        if (canAdd && (shut ? InventoryCommands.Arrange(root, bag: true) : InventoryCommands.Arrange(root)) && root.Add(item, shut)) return;
         if (DropSpot(world, held) is var (at, from)) Ground(world, item, at, from);
     }
 
