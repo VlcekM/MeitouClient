@@ -548,6 +548,15 @@ seed keeps nothing (no largest-region fallback) and is kept through the closure 
 doors in 20.29; built only in 19.29 they had no door join and their 20.29 half was invisible to point queries. Now a path from the
 street reaches the door and the far end of the Y-House. Doorless interiors on a border (20.32/21.32 `20-`, `26-Newwworld`) lose their
 fallback island.
+**Shared boundaries** (engine choice): Recast runs the boundary two regions of a tile share straight between the points where a contour's
+neighbour changes, per contour. An obstacle touching that boundary with a corner only (a tree's cutter cell) is a change for the region it lies
+in and none for the other, so one contour bends at the corner and the other passes it: the triangle between belongs to no polygon, a hole a few
+units wide and up to a tile long with open edges on all sides. `NavContourJoints` (before the polygons are made) gives each contour, along its
+edges toward other regions, the raw outline points that another contour has as vertices (same cell corner, heights within 2 cells).
+**Observed** (zone 35.57, `--obj`, open edges off the tile seams): the hole 17458,116320 / 17458,116352 / 17482,116132 (32 by 220) and four
+shorter ones are gone, 514 → 516 polygons; zones 18.35, 17.35, 35.42, 51.55, 51.56 lose 5, 14, 6, 4 and 1 open edges of 40+ units, none added.
+**Unknown**: whether the holes of #392, #408, #415, #416, #419 and #420 (reported under mods this install lacks) were these; the vanilla
+build has none at those points.
 **Narrow portals** (engine choice): between exterior polygons the kept set does not spread over an edge shorter than `SeedPruner.MinPortalWidth` 9 (in
 plan): not in the seed flood (`SeedPruner.Spread`: own seeds, `KeepAt`, the border rule, the neighbours' kept edges), not in the largest-region
 fallback's regions and not in the interiors' carry (`NavInteriors.CarryKeep`). Links (tile seams, inner seams, door and hull joins) and interior edges
