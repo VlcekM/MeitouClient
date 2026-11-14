@@ -851,6 +851,7 @@ sections are the recipe item's `inventory footprint width` × `inventory footpri
 ([Crafting](buildings-production.md#crafting)). The grid geometry is **Verified** by the original layout and the decompiled layout setup routines (Kenshi 1.0.68):
 
 - `FUN_1401536c0` gets the cell dimensions from `Kenshi_InventorySlotSkin` (25 × 25 in the clean GOG skin).
+  Meitou reads both dimensions from the loaded skin too, including UI mod overrides, for grids, items and pointer placement.
 - `FUN_140155f90` removes the crafting row for non-crafting buildings, moves the titles and contents up, and shortens the frame by that row's height.
 - `FUN_140150e20` (production), `FUN_1401524f0` (crafting) and `FUN_140151a30` (furnace) size each section to its cell dimensions, grow its panel by
   the positive difference from the layout slot, stack inputs vertically, and put the output column immediately beside them. The outer frame

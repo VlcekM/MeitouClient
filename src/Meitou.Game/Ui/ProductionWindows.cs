@@ -364,13 +364,13 @@ sealed class ProductionWindows(PlayerInterface player)
     {
         var geometry = new InventoryGeometry(player.FaithfulScreens.Layout("building"), player.Width, player.Height,
             player.InterfaceScale, player.UiScale);
-        float cell = player.InventoryCell;
+        var cell = player.InventoryCellSize;
         var furnace = FurnaceGrid(machine);
         Vector2[] inputs = furnace is { } grid
-            ? [new(grid.Width * cell, grid.Height * cell)]
-            : machine.Inputs.Take(2).Select(s => new Vector2(s.Width * cell, s.Height * cell)).ToArray();
-        Vector2? output = machine.Output is { } slot ? new(slot.Width * cell, slot.Height * cell)
-            : machine.Craft is { } craft ? new(craft.OutputWidth * cell, craft.OutputHeight * cell) : null;
+            ? [new Vector2(grid.Width, grid.Height) * cell]
+            : machine.Inputs.Take(2).Select(s => new Vector2(s.Width, s.Height) * cell).ToArray();
+        Vector2? output = machine.Output is { } slot ? new Vector2(slot.Width, slot.Height) * cell
+            : machine.Craft is { } craft ? new Vector2(craft.OutputWidth, craft.OutputHeight) * cell : null;
         geometry.FitBuilding(inputs, output, machine.Craft is not null, furnace is not null);
         geometry.Bind(bindings);
     }
@@ -484,7 +484,7 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             Properties = new Dictionary<string, string>(slot.Properties)
             {
-                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
                 ["State"] = "normal",
             },
         };
@@ -513,8 +513,8 @@ sealed class ProductionWindows(PlayerInterface player)
                 if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
 
                 player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
-                    new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell,
-                        item.Height * player.InventoryCell),
+                    new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCellHeight, item.Width * player.InventoryCell,
+                        item.Height * player.InventoryCellHeight),
                     item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
                     g.Clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
             }
@@ -544,7 +544,7 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8)) return;
 
-            var area = new UiRect(ob.X, ob.Y, made.Width * cell, made.Height * cell);
+            var area = new UiRect(ob.X, ob.Y, made.Width * cell, made.Height * player.InventoryCellHeight);
             player.ItemCells.AddItemCell(controls, "machine-out", area, made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8,
                 clip, colour: made.Colour);
             return;
@@ -554,7 +554,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
         // The empty output shows the current craft's item, faded.
         string[] key = current.Key.Split('|');
-        var ghost = new UiRect(ob.X, ob.Y, craft.FrontWidth * cell, craft.FrontHeight * cell);
+        var ghost = new UiRect(ob.X, ob.Y, craft.FrontWidth * cell, craft.FrontHeight * player.InventoryCellHeight);
         AddItemGhost(controls, "machine-out", ghost, key[0], key.Length > 1 ? key[1] : "", clip);
     }
 

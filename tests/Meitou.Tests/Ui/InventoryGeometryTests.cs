@@ -13,6 +13,18 @@ namespace Meitou.Tests.Ui;
 public class InventoryGeometryTests
 {
     /// <summary>
+    /// A UI mod's cell skin controls both dimensions; an absent skin retains the stock fallback.
+    /// </summary>
+    [Fact]
+    public void CellDimensionsFollowTheLoadedSkinOnBothAxes()
+    {
+        var resources = new MyGuiResources();
+        Assert.Equal(new Vector2(25), InventoryGeometry.CellSize(resources, 1));
+        resources.Skins["Kenshi_InventorySlotSkin"] = new("Kenshi_InventorySlotSkin", 28, 32, "atlas", []);
+        Assert.Equal(new Vector2(35, 40), InventoryGeometry.CellSize(resources, 1.25f));
+    }
+
+    /// <summary>
     /// Opening uses the original pixel margin, appends without gaps and tries another row when the current one is full.
     /// </summary>
     [Fact]
@@ -65,7 +77,7 @@ public class InventoryGeometryTests
         var layout = MyGuiTemplates.Expand(MyGuiReader.ReadLayout(files.Find("Kenshi_GenericBuildingWindow.layout")!), resources);
         float uiScale = height / 1080f * scale;
         var geometry = new InventoryGeometry(layout, width, height, scale, uiScale);
-        geometry.FitBuilding([], new(5 * 25 * uiScale, 5 * 25 * uiScale), false, false);
+        geometry.FitBuilding([], InventoryGeometry.CellSize(resources, uiScale) * 5, false, false);
         var bindings = new UiBindings { TemplateScale = uiScale };
         bindings.Hidden.UnionWith(["CraftingPanel", "InputColumn", "InputTitleText"]);
         geometry.Bind(bindings);

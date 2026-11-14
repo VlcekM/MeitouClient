@@ -308,9 +308,19 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     internal float UiScale => Height / 1080f * InterfaceScale;
 
     /// <summary>
-    /// An inventory cell's size, pixels: 25 at 1080 lines.
+    /// An inventory cell's dimensions from the loaded skin, scaled with the interface.
     /// </summary>
-    internal float InventoryCell => 25 * UiScale;
+    internal Vector2 InventoryCellSize => InventoryGeometry.CellSize(UiResources, UiScale);
+
+    /// <summary>
+    /// An inventory cell's width in pixels.
+    /// </summary>
+    internal float InventoryCell => InventoryCellSize.X;
+
+    /// <summary>
+    /// An inventory cell's height in pixels.
+    /// </summary>
+    internal float InventoryCellHeight => InventoryCellSize.Y;
 
     #endregion
 

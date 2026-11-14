@@ -40,7 +40,7 @@ sealed class InventoryLayout(PlayerInterface player)
             var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
                 player.InterfaceScale, player.UiScale);
             if (!TradeWindows.IsAnimal(player.InventoryWindows.WindowCharacter(id)!))
-                geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCell));
+                geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCellHeight));
             geometry.Bind(b);
         }
 
@@ -221,10 +221,10 @@ sealed class InventoryLayout(PlayerInterface player)
             bool open = state is (int)Simulation.Bodies.LimbState.Stump or (int)Simulation.Bodies.LimbState.Replaced;
             controls[index] = slot with
             {
-                Bounds = slot.Bounds with { Width = 2 * player.InventoryCell, Height = (k < 2 ? 6 : 7) * player.InventoryCell },
+                Bounds = slot.Bounds with { Width = 2 * player.InventoryCell, Height = (k < 2 ? 6 : 7) * player.InventoryCellHeight },
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
                     ["State"] = open ? "normal" : "disabled",
                 },
             };
@@ -261,13 +261,13 @@ sealed class InventoryLayout(PlayerInterface player)
             var size = InventoryCommands.SectionSize(section);
             int columns = section == "main" ? grid.Width : size.Width;
             int rows = section == "main" ? grid.Height : size.Height;
-            var bounds = slot.Bounds with { Width = columns * player.InventoryCell, Height = rows * player.InventoryCell };
+            var bounds = slot.Bounds with { Width = columns * player.InventoryCell, Height = rows * player.InventoryCellHeight };
             controls[index] = slot with
             {
                 Bounds = bounds,
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
                     ["State"] = "normal",
                 },
             };
@@ -287,14 +287,14 @@ sealed class InventoryLayout(PlayerInterface player)
 
         var template = controls[belt];
         float cell = player.InventoryCell;
-        string tile = FormattableString.Invariant($"{cell} {cell}");
+        string tile = FormattableString.Invariant($"{cell} {player.InventoryCellHeight}");
 
         // The belt's clip is its own panel's; a mod slot may lie anywhere in the window.
         var clip = window.Clip is { } c ? window.Bounds.Intersect(c) : window.Bounds;
         foreach (var slot in ModSlots.All)
         {
             var bounds = new UiRect(window.Bounds.X + slot.X * player.UiScale, window.Bounds.Y + slot.Y * player.UiScale, slot.Width * cell,
-                slot.Height * cell);
+                slot.Height * player.InventoryCellHeight);
             var properties = new Dictionary<string, string>(template.Properties) { ["TileSize"] = tile, ["State"] = "normal" };
             controls.Insert(++belt, template with { Name = slot.Section, Bounds = bounds, Clip = clip, Properties = properties });
         }
@@ -334,7 +334,7 @@ sealed class InventoryLayout(PlayerInterface player)
     {
         var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
             player.InterfaceScale, player.UiScale);
-        geometry.FitContainer(new(columns * player.InventoryCell, rows * player.InventoryCell), fixedTop);
+        geometry.FitContainer(new(columns * player.InventoryCell, rows * player.InventoryCellHeight), fixedTop);
         geometry.Bind(bindings);
     }
 
@@ -354,7 +354,7 @@ sealed class InventoryLayout(PlayerInterface player)
         {
             Properties = new Dictionary<string, string>(slot.Properties)
             {
-                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCellHeight}"),
             },
         };
     }

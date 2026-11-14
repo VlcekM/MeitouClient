@@ -10,6 +10,13 @@ namespace Meitou.Game.Ui;
 sealed class InventoryGeometry
 {
     /// <summary>
+    /// Inventory cells come from the loaded skin, including mod overrides; stock cells are 25 by 25 pixels before interface scaling.
+    /// </summary>
+    internal static Vector2 CellSize(MyGuiResources resources, float scale) =>
+        resources.Skins.TryGetValue("Kenshi_InventorySlotSkin", out var skin) && skin.Width > 0 && skin.Height > 0
+            ? new Vector2(skin.Width, skin.Height) * scale : new Vector2(25 * scale);
+
+    /// <summary>
     /// One layout widget's local rectangle and its children, including the skin's client and frame pieces.
     /// </summary>
     internal sealed class Node(MyGuiWidget widget, UiRect bounds)

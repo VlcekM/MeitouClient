@@ -375,8 +375,8 @@ sealed class ScreenRouter(PlayerInterface player)
             }
             else
             {
-                area = new(area.X + item.X * player.InventoryCell, area.Y + item.Y * player.InventoryCell,
-                    item.Width * player.InventoryCell, item.Height * player.InventoryCell);
+                area = new(area.X + item.X * player.InventoryCell, area.Y + item.Y * player.InventoryCellHeight,
+                    item.Width * player.InventoryCell, item.Height * player.InventoryCellHeight);
             }
 
             // The name carries the character: the loot window's cells would otherwise take over the same names' tooltips in the player's window.

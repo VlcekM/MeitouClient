@@ -448,8 +448,9 @@ sealed class InventoryWindows(PlayerInterface player)
         Held = view;
         Lifting = whole ? (window, code) : null;
         var b = control.Bounds;
-        float cell = view.Width > 0 ? b.Width / view.Width : player.InventoryCell;
-        _heldGrab = ClampGrab((p - new Vector2(b.X, b.Y)) / MathF.Max(cell, 1), view);
+        var cell = new Vector2(view.Width > 0 ? b.Width / view.Width : player.InventoryCell,
+            view.Height > 0 ? b.Height / view.Height : player.InventoryCellHeight);
+        _heldGrab = ClampGrab((p - new Vector2(b.X, b.Y)) / Vector2.Max(cell, Vector2.One), view);
         LiftPress = p;
         player.InterfaceSounds.Sound("Item_Lift", item: view.Record);
         return true;
@@ -614,7 +615,7 @@ sealed class InventoryWindows(PlayerInterface player)
         var none = new DropSpot(DropKind.World, default, "", 0, 0, default, null, false);
         if (Held is not { } h) return none;
 
-        float cell = player.InventoryCell;
+        var cell = player.InventoryCellSize;
         var topLeft = p - _heldGrab * cell;
         var centre = topLeft + new Vector2(h.Width, h.Height) * cell / 2;
         if ((player.FaithfulScreens.HitTest(p) ?? player.FaithfulScreens.HitTest(centre)) is not { } over) return none;
@@ -664,7 +665,7 @@ sealed class InventoryWindows(PlayerInterface player)
         if (columns == 0) return new(DropKind.Section, window, section, 0, 0, b, slot.Clip, takes);
 
         float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns;
-        float ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Height / rows;
+        float ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCellHeight : b.Height / rows;
         bool fits = h.Width <= columns && h.Height <= rows;
         int x = Math.Clamp((int)MathF.Round((topLeft.X - b.X) / cw), 0, Math.Max(0, columns - h.Width));
         int y = Math.Clamp((int)MathF.Round((topLeft.Y - b.Y) / ch), 0, Math.Max(0, rows - h.Height));
@@ -782,8 +783,9 @@ sealed class InventoryWindows(PlayerInterface player)
             }
 
             float cell = player.InventoryCell;
-            player.ItemCells.AddItemCell(controls, "held-item", new(player.Mouse.X - _heldGrab.X * cell, player.Mouse.Y - _heldGrab.Y * cell,
-                h.Width * cell, h.Height * cell),
+            var bounds = new UiRect(player.Mouse.X - _heldGrab.X * cell, player.Mouse.Y - _heldGrab.Y * player.InventoryCellHeight,
+                h.Width * cell, h.Height * player.InventoryCellHeight);
+            player.ItemCells.AddItemCell(controls, "held-item", bounds,
                 h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour,
                 rotated: h.Rotated);
         }

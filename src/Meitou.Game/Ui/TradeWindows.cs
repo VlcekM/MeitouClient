@@ -144,7 +144,9 @@ sealed class TradeWindows(PlayerInterface player)
 
         var r = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
         float side = columns * player.InventoryCell;
-        return (side - grid.Position.Width * content.Position.Width * r.Width, side - grid.Position.Height * content.Position.Height * r.Height);
+        float gridHeight = columns * player.InventoryCellHeight;
+        return (side - grid.Position.Width * content.Position.Width * r.Width,
+            gridHeight - grid.Position.Height * content.Position.Height * r.Height);
     }
 
     /// <summary>
@@ -169,7 +171,7 @@ sealed class TradeWindows(PlayerInterface player)
                 float w0 = content.Position.Width * r.Width, h0 = content.Position.Height * r.Height;
                 b.RelativePositions[view] = new(view.Position.X * w0 / contentW, view.Position.Y * h0 / contentH,
                     (view.Position.Width * w0 + dx) / contentW, (view.Position.Height * h0 + dy) / contentH);
-                b.Canvas[view.Name] = (columns * player.InventoryCell, rows * player.InventoryCell);
+                b.Canvas[view.Name] = (columns * player.InventoryCell, rows * player.InventoryCellHeight);
             }
         }
     }
@@ -230,9 +232,9 @@ sealed class TradeWindows(PlayerInterface player)
         controls.Insert(viewIndex + 1, slot with
         {
             Bounds = new(MyGuiPresentation.Num(scrollView.Properties, "CanvasX", client.X),
-                MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * cell),
+                MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * player.InventoryCellHeight),
             Clip = client.Intersect(slot.Clip ?? client),
-            Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {cell}") },
+            Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {player.InventoryCellHeight}") },
         });
     }
 
