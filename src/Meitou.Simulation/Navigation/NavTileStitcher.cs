@@ -30,6 +30,11 @@ internal sealed class NavTileStitcher
         /// The edge's start and end.
         /// </summary>
         public Vector3 A, B;
+
+        /// <summary>
+        /// The polygon's height samples, null when the build has none.
+        /// </summary>
+        public HeightGrid? Grid;
     }
 
     /// <summary>
@@ -195,7 +200,7 @@ internal sealed class NavTileStitcher
                 nb[k] = -1;
                 int side = n & 0xf;
                 _borders[tile, side] ??= [];
-                _borders[tile, side].Add(new BorderEdge { Polygon = pBase + p, Edge = k });
+                _borders[tile, side].Add(new BorderEdge { Polygon = pBase + p, Edge = k, Grid = _details?[tile]?[p] });
             }
             else
             {
@@ -233,7 +238,7 @@ internal sealed class NavTileStitcher
         if (side >= 0)
         {
             _borders[tile, side] ??= [];
-            _borders[tile, side]!.Add(new BorderEdge { Polygon = pBase + p, Edge = k });
+            _borders[tile, side]!.Add(new BorderEdge { Polygon = pBase + p, Edge = k, Grid = _details?[tile]?[p] });
             return;
         }
 
@@ -380,7 +385,8 @@ internal sealed class NavTileStitcher
             var spanA = NavGeometry.Span(a.A, a.B, alongX);
             foreach (var b in right)
             {
-                if (!NavGeometry.SpansMeet(spanA, NavGeometry.Span(b.A, b.B, alongX), _climb)) continue;
+                var spanB = NavGeometry.Span(b.A, b.B, alongX);
+                if (!NavGeometry.SpansMeet(spanA, spanB, _climb) && !BorderSurfacesMeet(a, spanA, b, spanB, alongX)) continue;
 
                 if (_areas[a.Polygon] == NavArea.Null || _areas[b.Polygon] == NavArea.Null) continue;
 
@@ -392,6 +398,40 @@ internal sealed class NavTileStitcher
             }
         }
     }
+
+    /// <summary>
+    /// Whether the surfaces of the polygons behind two facing border edges (their own height samples, else the edge) are within the climb of each
+    /// other at every cell of the edges' overlap, with samples on at least one side. An edge simplified straight across a dip or a ramp's foot is
+    /// well off the ground in its middle, where the middle of the overlap alone told the two apart and left the seam shut for its whole length
+    /// (the dune before Squin's west gate, 18.35 at x -63936, #392; docs/game/pathfinding.md "Tile seams").
+    /// </summary>
+    bool BorderSurfacesMeet(BorderEdge a, (float From, float To, float YFrom, float YTo) spanA, BorderEdge b,
+        (float From, float To, float YFrom, float YTo) spanB, bool alongX)
+    {
+        if (a.Grid?.Own is null && b.Grid?.Own is null) return false;
+
+        float lo = Math.Max(spanA.From, spanB.From);
+        float hi = Math.Min(spanA.To, spanB.To);
+        if (hi - lo < 0.01f) return false;
+
+        float line = alongX ? a.A.Z : a.A.X;
+        int cells = Math.Max(1, (int)MathF.Ceiling((hi - lo) / _s.CellSize));
+        for (int k = 0; k <= cells; k++)
+        {
+            float t = float.Lerp(lo, hi, k / (float)cells);
+            float x = alongX ? t : line;
+            float z = alongX ? line : t;
+            if (MathF.Abs(BorderHeight(a, spanA, x, z, t) - BorderHeight(b, spanB, x, z, t)) > _climb) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The height of a border edge's polygon at (x, z) on the edge, <paramref name="t"/> along the border line: its own samples, else the edge's.
+    /// </summary>
+    static float BorderHeight(BorderEdge e, (float From, float To, float YFrom, float YTo) span, float x, float z, float t) =>
+        e.Grid?.Own is not null && OwnHeightAt(e.Grid, x, z, out float own) ? own : NavGeometry.Lerp(span.From, span.To, span.YFrom, span.YTo, t);
 
     /// <summary>
     /// The stitched zone mesh, every polygon kept.

@@ -525,6 +525,16 @@ it (error 1.3 cells): a strip one cell deep along the edge loses its edge vertex
 (zone 19.29, scratch probe): the Longhouse `4-Newwworld-INGAME`'s outside ramp ends on the tile line z−13152 one row short of its
 doorstep, which was cut off from the street and its door never joined; with the border the path from the street reaches the room.
 Kept area grows by 0.04..1.1% (zones 20.32, 21.32, 20.29, 18.35) while polygons drop 20..45%.
+Facing border edges of two tiles (`NavTileStitcher.Link`) and of two zones (`NavWorld.LinkZones`) are linked when their own heights at the
+middle of their overlap are within the climb, or (surfaces) when the two polygons' surfaces are within it at every cell of the overlap
+(`BorderSurfacesMeet`: the tiles' own height samples, on at least one side; `NavWorld.SurfacesMeet`: `ZoneNavMesh.HeightAt`). Contours are
+simplified in X/Z only, so a border edge up to a tile long runs straight in height over a dune's dip or from a stair's top to the floor past
+its foot, 10..30 off the ground in its middle; by the middle alone such a seam stayed shut for its whole length, and in the debug view its two
+edges stood apart in height as a thin wedge. **Observed** (`--path`, length before → after for the straight length): Squin's west gate, 18.35
+at x -63936, -63990,17000 → -63900,17000: 577 → 90 (#392, #585: -63923,17015 → -64200,17200, 547 → 334); 35.57 at x 17280, 17230,115450 →
+17330,115450: 676 → 100 (#415); 41.58 at z 120384: 659 → 90 (#416); 51.55 at x 90432: 841 → 74 (#419); 51.56 at z 114048: 1019 → 85 (#420);
+Flats Lagoon's deck stair on the border of 35.42 and 36.42, 18445,48200 → 18380,48160 at y 401: 414 → 76 (#408). There the stair's strip in
+35.42 now also joins the stair in 36.42 along its side.
 **Zone borders** (engine choice): each zone is pruned by its own seeds and cached that way; when the loaded set changes, every loaded zone's kept set is
 resolved again (`ZoneKeptClosure.Resolve`): its own, plus every region with an open edge on the zone's border line at ground level (edge middle within
 `SeedPruner.BorderGroundSlack` 30 of the terrain, or the water height over it; roofs and walkways crossing the border stay pruned) toward a side whose
@@ -555,8 +565,7 @@ units wide and up to a tile long with open edges on all sides. `NavContourJoints
 edges toward other regions, the raw outline points that another contour has as vertices (same cell corner, heights within 2 cells).
 **Observed** (zone 35.57, `--obj`, open edges off the tile seams): the hole 17458,116320 / 17458,116352 / 17482,116132 (32 by 220) and four
 shorter ones are gone, 514 → 516 polygons; zones 18.35, 17.35, 35.42, 51.55, 51.56 lose 5, 14, 6, 4 and 1 open edges of 40+ units, none added.
-**Unknown**: whether the holes of #392, #408, #415, #416, #419 and #420 (reported under mods this install lacks) were these; the vanilla
-build has none at those points.
+The lines of #392, #408, #415, #416, #419 and #420 were not these but unlinked seams ("Tile seams", surfaces).
 **Narrow portals** (engine choice): between exterior polygons the kept set does not spread over an edge shorter than `SeedPruner.MinPortalWidth` 9 (in
 plan): not in the seed flood (`SeedPruner.Spread`: own seeds, `KeepAt`, the border rule, the neighbours' kept edges), not in the largest-region
 fallback's regions and not in the interiors' carry (`NavInteriors.CarryKeep`). Links (tile seams, inner seams, door and hull joins) and interior edges
