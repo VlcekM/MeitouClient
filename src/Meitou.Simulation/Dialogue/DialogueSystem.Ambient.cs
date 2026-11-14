@@ -110,8 +110,7 @@ public sealed partial class DialogueSystem
         if (force)
         {
             if (!CanSpeak(world.Characters, n) || _open is { } o && (o.Npc == npc || o.Player == npc)) return false;
-            _bubbles.RemoveAll(b => b.C.Npc == npc || b.Speaker == npc);
-            _shown.Remove(npc);
+            DropBubbles(npc);
         }
         else if (!Awake(world.Characters, n) || BubbleOf(npc)) return false;
         var c = new Conversation { Npc = npc, Player = whom, Event = ev, Root = root };
@@ -119,6 +118,16 @@ public sealed partial class DialogueSystem
         _bubbles.Add(new Bubble(c, first.Line, world.Tick, first.Speaker));
         if (now) StepBubbles(world);
         return true;
+    }
+
+    /// <summary>
+    /// Drops what <paramref name="npc"/> is saying: its bubble chains, the chains it speaks in and its shown bubble, without the end step (no
+    /// counter), as when the original overwrites the character's one dialogue state with a new start.
+    /// </summary>
+    void DropBubbles(CharacterId npc)
+    {
+        _bubbles.RemoveAll(b => b.C.Npc == npc || b.Speaker == npc);
+        _shown.Remove(npc);
     }
 
     /// <summary>

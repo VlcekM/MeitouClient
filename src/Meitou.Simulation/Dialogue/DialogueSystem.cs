@@ -562,6 +562,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (!quiet) world.Post($"{nc.Name} has nothing to say.");
             return;
         }
+
+        DropBubbles(npc);   // the conversation takes over the NPC's dialogue state: a chain it was saying does not go on after (#707)
         _open = c;
         Hold(world, n);
         if (TaskStart.OnAiWalk(table, n)) TaskStart.Stand(table, n);   // a walking NPC stops to talk (engine choice); the approach chased it
