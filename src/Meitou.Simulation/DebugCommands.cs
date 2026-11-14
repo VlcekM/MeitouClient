@@ -42,6 +42,11 @@ public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
 /// <summary>
+/// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit character sub-view).
+/// </summary>
+public sealed record DebugSetStats(IReadOnlyList<CharacterId> Characters, IReadOnlyList<StatsEnumerated> Stats, float Value) : DebugCommand;
+
+/// <summary>
 /// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats
 /// at <see cref="DebugCheats.GodStat"/> (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second;
 /// off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
@@ -635,6 +640,9 @@ static class DebugCheats
             case DebugMaxSkills max:
                 MaxSkills(world, max);
                 break;
+            case DebugSetStats set:
+                SetStats(world, set);
+                break;
             case DebugDamage damage when data is not null:
                 foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
                 break;
@@ -720,6 +728,19 @@ static class DebugCheats
         {
             if (table.TryResolveNext(id, out int skilled) && table.Cold(skilled)?.Stats is { } stats)
                 for (var s = StatsEnumerated.None + 1; s < StatsEnumerated.End; s++) stats[s] = 100;
+        }
+    }
+
+    /// <summary>
+    /// Sets the given stats of the characters to the value.
+    /// </summary>
+    static void SetStats(World world, DebugSetStats set)
+    {
+        var table = world.Characters;
+        foreach (var id in set.Characters)
+        {
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot)?.Stats is { } stats)
+                foreach (var stat in set.Stats) stats[stat] = set.Value;
         }
     }
 
