@@ -818,7 +818,7 @@ sealed class BuildMode(PlayerInterface player)
         b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, c))];
         b.SelectedItems["CategoriesList"] = category is null ? -1 : categories.ToList().IndexOf(category);
         b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, g.Name))];
-        b.SelectedItems["BuildingsList"] = group is null ? -1 : groups.ToList().IndexOf(group);
+        b.SelectedItems["BuildingsList"] = group is null ? -1 : Math.Clamp(_buildGroup, 0, groups.Count - 1);
         b.Text["BuildingName"] = building?.Name ?? "";
         b.Text["DescriptionText"] = building is null || Services is null ? "" : Services.Description(building.Id);
         b.Properties["DescriptionText"] = new Dictionary<string, string>
