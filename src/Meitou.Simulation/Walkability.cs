@@ -92,6 +92,12 @@ public interface IWalkability
     /// it meets (docs/game/pathfinding.md "Walls"). Default: the whole step (the caller still tests where it ends).
     /// </summary>
     Vector2 Slide(Vector3 from, Vector2 step, float radius) => step;
+
+    /// <summary>
+    /// Whether the walkable surface runs unbroken along the straight line from <paramref name="from"/> to <paramref name="to"/> (the navmesh line of
+    /// sight a fight's chase test asks, docs/game/combat.md "Combat stance"). Default: clear.
+    /// </summary>
+    bool LineOfSight(Vector3 from, Vector3 to) => true;
     /// <summary>
     /// The terrain's own height at world X/Z, also under the water (where <see cref="GroundHeight(float, float)"/> is the flat water surface): the
     /// depth of the water is the water level minus this.

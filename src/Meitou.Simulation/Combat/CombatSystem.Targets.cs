@@ -40,24 +40,6 @@ public sealed partial class CombatSystem
     const float EyeHeight = 15;
 
     /// <summary>
-    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is
-    /// not skipped).
-    /// </summary>
-    const float SteerLineStep = 2;
-
-    /// <summary>
-    /// The radius of the circle the steering's line test sweeps against the walkable surface's walls (engine choice: near a point, so the line
-    /// itself is tested; a bar line a step thin is crossed between two of the <see cref="SteerLineStep"/> points, #439).
-    /// </summary>
-    const float SteerLineRadius = 0.1f;
-
-    /// <summary>
-    /// How far inside its polygon's edge the line test puts a fighter that stands off it (<see cref="IWalkability.SurfacePoint"/>): clear of the
-    /// swept circle, so the edge it stands by does not stop the sweep at any angle.
-    /// </summary>
-    const float SteerLineInset = 2 * SteerLineRadius;
-
-    /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
     /// </summary>
     struct Choice
@@ -414,30 +396,15 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>) or either side of an open doorway
-    /// (<see cref="AcrossOpenDoor"/>), not on another floor (<see cref="OtherFloor"/>: outdoors a slope's height is no floor's, #705), and
-    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
-    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
-    /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
-    /// line to it, so nobody steered or swung at it (#559). Last tick's places; any thread after Sight's update.
+    /// (<see cref="AcrossOpenDoor"/>), and the navmesh line of sight between them clear (<see cref="IWalkability.LineOfSight"/>, the face walk of
+    /// <c>FUN_1403a56e0</c>). Last tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
         if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t) && !AcrossOpenDoor(world, a, t)) return false;
 
         var prev = world.Characters.Previous;
-        Vector3 from = prev[a].Position;
-        Vector3 to = prev[t].Position;
-        if (OtherFloor(world, a, from, t, to)) return false;
-
-        var leg = new Vector2(to.X - from.X, to.Z - from.Z);
-        float length = leg.Length(), y = from.Y;
-        for (float d = SteerLineStep; d < length; d += SteerLineStep)
-            if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
-
-        var start = world.Walkability.SurfacePoint(from, SteerLineInset);
-        var end = world.Walkability.SurfacePoint(to, SteerLineInset);
-        var line = new Vector2(end.X - start.X, end.Z - start.Z);
-        return world.Walkability.Slide(start, line, SteerLineRadius) == line;
+        return world.Walkability.LineOfSight(prev[a].Position, prev[t].Position);
     }
 
     /// <summary>
