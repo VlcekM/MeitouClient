@@ -1049,6 +1049,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public Production.RichnessView? InspectedRichness { get; init; }
     /// <summary>
+    /// The power of the building the HUD shows when it is a level building of a town that draws power; null for others.
+    /// </summary>
+    public Production.LevelPowerView? InspectedLevelPower { get; init; }
+    /// <summary>
     /// The gun numbers of the building the HUD shows when it is a turret (its Stats 1 gun lines); null for others.
     /// </summary>
     public Combat.TurretPanelView? InspectedTurret { get; init; }
