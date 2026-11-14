@@ -67,6 +67,24 @@ Metal keeps `discard`.
   With FSR every edge kept its render-resolution steps; with TAA edges were smooth.
 - **Unknown**: whether that driver renders the demote build correctly (no AMD hardware to test on), and why FSR did not accumulate there.
 
+### Vertex bindings
+
+Each vertex attribute is a binding of its own: binding = location, the attribute at offset 0 of it, the stride the vertex's, and the buffer bound
+at the attribute's offset in the vertex (`Pipelines.FillVertexInputs`, `LegacyProgram.Attribute`). A binding other than the first therefore
+has less than a whole stride left for the buffer's last vertex. Every buffer with the vertex usage is made 256 bytes longer than asked
+(`GpuAllocator.VertexTailBytes`, at least the largest stride, 64), so the last vertex has a whole stride in every binding.
+- **Verified** (Vulkan spec, "Shader Out-of-Bounds Memory Access"): with robust buffer access a vertex input read "may instead be bounds
+  checked against a range rounded down to the nearest multiple of the stride of its binding", and one read outside lets the binding's others
+  behave as outside too. The device does not enable `robustBufferAccess`; what a driver does without it is its own.
+- **Verified** (`--screenshot` of #661's save and camera, RTX 4070, a scratch build zeroing bytes 12-43 of each object mesh's last vertex):
+  the picture has the report's dark, texture-smeared triangles in the same places (the half of each `carpet1.mesh` quad that uses its last
+  vertex). With the tail and without the zeroing the picture is pixel-identical to the one before, and the
+  validation layer reports 0 errors.
+- **Observed** (#661, GPU not reported, `f2601d8aa`): such triangles in almost every building; not reproduced on the RTX 4070 from the
+  report's save, a new game or the low-end, Medium and Faithful settings.
+- **Unknown**: whether the reporter's driver bounds the bindings that way, so whether the tail removes #661; whether the RX 580's dark edge
+  pixels above are the same last-vertex reads (zero normal and colour).
+
 The renderers state their draw state, their formats and their resources in the GL vocabulary, not
 in Vulkan's: DepthFunction, BlendingFactor, FrontFaceDirection, CullMode, PolygonKind,
 BlendOperation, ColorMask, PrimitiveType, PixelViewport, PixelRect, InternalFormat, LoadOp,

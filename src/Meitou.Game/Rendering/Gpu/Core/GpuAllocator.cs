@@ -1194,6 +1194,14 @@ public sealed unsafe class GpuAllocator : IDisposable
     #region Buffers and images
 
     /// <summary>
+    /// Bytes a buffer with the vertex usage is made longer by (<see cref="BufferAllocation.Size"/> stays the size asked for): each attribute is
+    /// its own binding at its offset in the vertex (<c>Pipelines.FillVertexInputs</c>), and a driver that counts a binding's vertices as whole
+    /// strides from that offset leaves the buffer's last vertex out for every attribute but the first (docs/renderer-native.md "Vertex
+    /// bindings"). At least the largest stride (64: the character vertex and the instance rows).
+    /// </summary>
+    const ulong VertexTailBytes = 256;
+
+    /// <summary>
     /// A new buffer bound to new memory (mapped when host visible) and registered with the device. Any thread.
     /// </summary>
     public BufferAllocation CreateBuffer(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name = null)
@@ -1218,7 +1226,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         var info = new BufferCreateInfo
         {
             SType = StructureType.BufferCreateInfo,
-            Size = size,
+            Size = (usage & BufferUsageFlags.VertexBufferBit) != 0 ? size + VertexTailBytes : size,
             Usage = usage,
             SharingMode = SharingMode.Exclusive,
         };
