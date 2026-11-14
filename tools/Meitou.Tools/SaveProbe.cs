@@ -70,6 +70,7 @@ static class SaveProbe
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
+            case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
@@ -502,6 +503,35 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The leader sneaks and is ordered to knock out the character in <paramref name="slot"/>; every 20 ticks, <paramref name="rounds"/> times, the
+    /// chance shown, whether the target has spotted the leader, the leader's task and the swings rolled.
+    /// </summary>
+    static void Knockout(ProbeWorld probe, int slot, int rounds)
+    {
+        var t = probe.Characters;
+        var leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader;
+        var aggro = probe.World.SystemOf<Meitou.Simulation.Aggro.AggroSystem>();
+        var carry = probe.World.SystemOf<Meitou.Simulation.Carrying.CarrySystem>()!;
+        t.Cold(leader.Slot)!.Orders |= Meitou.Simulation.Player.CharacterOrders.Sneak;
+        Console.WriteLine($"target {probe.Who(slot)} knockable={Meitou.Simulation.Carrying.CarrySystem.CanBeKnockedOut(t.Cold(slot)!)}");
+        probe.World.Commands.Enqueue(new Meitou.Simulation.Carrying.StealthKoOrder([leader], t.IdOf(slot)) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(20);
+            bool spotted = aggro?.Spotted(slot, leader) == true;
+            float chance = Meitou.Simulation.Carrying.CarrySystem.StealthKoChance(t.Cold(leader.Slot)!, t.Cold(slot)!, spotted);
+            float gap = Vector3.Distance(t.Next[leader.Slot].Position, t.Next[slot].Position);
+            var task = (CharacterTask)t.Next[leader.Slot].Task;
+            var targetTask = (CharacterTask)t.Next[slot].Task;
+            Console.WriteLine($"tick {probe.World.Tick} leader task={task} gap={gap:F0} spotted={spotted} unseen={aggro?.Unseen(t, leader)} "
+                + $"chance={chance:F0} target task={targetTask} senses={SensesOfLeader(probe, slot)}");
+            foreach (var k in carry.TakeKnockouts()) Console.WriteLine($"  swing chance={k.Chance:F0} hit={k.Success}");
+            probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
     /// Every character within <paramref name="radius"/> of the leader with its slave state, owner faction, master squad and its squad's town,
     /// platoon and home.
     /// </summary>
@@ -842,6 +872,7 @@ static class SaveProbe
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
+              ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
