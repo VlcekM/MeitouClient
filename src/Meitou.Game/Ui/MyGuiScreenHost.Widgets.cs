@@ -637,7 +637,7 @@ public sealed partial class MyGuiScreenHost
     {
         var viewport = new Vector2(width, height);
 
-        if (s.Viewport != default && s.Viewport != viewport && s.Offset != Vector2.Zero)
+        if (b.WindowPosition is null && s.Viewport != default && s.Viewport != viewport && s.Offset != Vector2.Zero)
         {
             var d = viewport - s.Viewport;
             bool stretchX = s.Align.Contains("Stretch") && !s.Align.Contains("VStretch"), stretchY = s.Align.Contains("Stretch")
@@ -667,9 +667,15 @@ public sealed partial class MyGuiScreenHost
             var (min, max) = SizeLimits(root);
             w = Math.Max(min.X, Math.Min(w, max.X));
             h = Math.Max(min.Y, Math.Min(h, max.Y));
-            w = Math.Clamp(w, 0, Math.Max(0, width - 24));
-            h = Math.Clamp(h, 0, Math.Max(0, height - 24));
-            var (x, y) = OnScreen(s, viewport, new(w, h), (width - w) / 2 + s.Offset.X, (height - h) / 2 + s.Offset.Y);
+            if (b.FitWindowToViewport)
+            {
+                w = Math.Clamp(w, 0, Math.Max(0, width - 24));
+                h = Math.Clamp(h, 0, Math.Max(0, height - 24));
+            }
+            var position = (b.WindowPosition ?? new Vector2((width - w) / 2, (height - h) / 2)) + s.Offset;
+            var (x, y) = b.FitWindowToViewport || s.Dragged
+                ? OnScreen(s, viewport, new(w, h), position.X, position.Y)
+                : (position.X, position.Y);
             b.Positions[root.Name] = new(x, y, w, h);
             if (!first) continue;
 

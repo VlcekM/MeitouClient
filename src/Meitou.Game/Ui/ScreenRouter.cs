@@ -351,7 +351,7 @@ sealed class ScreenRouter(PlayerInterface player)
         bool bagWindow = id is "bag" or "loot-bag";
         string gridSection = bagWindow ? "backpack_content" : "main";
         int columns = bagWindow ? grid.BagWidth : grid.Width, rows = bagWindow ? grid.BagHeight : grid.Height;
-        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(screen, controls, columns, rows);
+        if (bagWindow) player.InventoryLayout.ArrangeContainerGrid(screen, controls);
         else if (id == "limbs") player.InventoryLayout.ArrangeLimbSlots(controls, lead);
         else
         {
@@ -375,8 +375,8 @@ sealed class ScreenRouter(PlayerInterface player)
             }
             else
             {
-                area = new(area.X + item.X * player.InventoryCell, area.Y + item.Y * player.InventoryCell,
-                    item.Width * player.InventoryCell, item.Height * player.InventoryCell);
+                area = new(area.X + item.X * player.InventoryCell, area.Y + item.Y * player.InventoryCellHeight,
+                    item.Width * player.InventoryCell, item.Height * player.InventoryCellHeight);
             }
 
             // The name carries the character: the loot window's cells would otherwise take over the same names' tooltips in the player's window.

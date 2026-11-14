@@ -102,7 +102,7 @@ sealed class ScrollBars(PlayerInterface player)
     internal void ScrollInventory(string id, float steps)
     {
         if (InventoryViews.TryGetValue(id, out var view))
-            InventoryScroll[id] = Math.Clamp(InventoryScroll.GetValueOrDefault(id) - steps * player.InventoryCell * 3, 0, view.Maximum);
+            InventoryScroll[id] = Math.Clamp(InventoryScroll.GetValueOrDefault(id) - steps * player.InventoryCellHeight * 3, 0, view.Maximum);
     }
 
     /// <summary>

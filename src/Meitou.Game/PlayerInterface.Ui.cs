@@ -125,8 +125,8 @@ sealed partial class PlayerInterface
         ("title", "Kenshi_MainMenu", true), ("new-game", "Kenshi_NewGamePanel", true),
         ("save", "Kenshi_SaveGamePanel", true),
         ("load", "Kenshi_LoadGamePanel", true), ("import", "Kenshi_ImportGamePanel", true), ("message", "Kenshi_MessageBox", true),
-        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
-        ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
+        ("bag", "Kenshi_InventoryGenericFixedWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
+        ("loot-bag", "Kenshi_InventoryGenericFixedWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
         ("trader", "Kenshi_InventoryTraderWindow", false),
         ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false),
         ("storage", "Kenshi_InventoryGenericWindow", false),
@@ -734,7 +734,11 @@ sealed partial class PlayerInterface
             else if (action == "inventory" && InventoryWindows.InventoryOwner() is { } lead
                 && InventoryWindows.PinnedInventories.FirstOrDefault(p => p.Value == lead.Id).Key is { } slot)
                 FaithfulScreens.Open(slot);
-            else FaithfulScreens.Open(action);
+            else
+            {
+                FaithfulScreens.Open(action);
+                if (action == "inventory") InventoryLayout.PlaceCharacterWindow();
+            }
         }
         else if (action == "help") ToggleHelpWindow();
         else if (action == "extendedstats") InfoExpanded = !InfoExpanded;

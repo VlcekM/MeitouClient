@@ -31,6 +31,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
     public const double PortraitHoldSeconds = 0.25;
 
     /// <summary>
+    /// The text colour of the verb under the mouse (the original shows it orange-yellow; observed in screenshots of the original, not a data value).
+    /// </summary>
+    internal static readonly Vector4 VerbHover = new(0.86f, 0.62f, 0.2f, 1);
+
+    /// <summary>
     /// A context menu: its title, where it opens and its verbs (caption and what it gives).
     /// </summary>
     internal sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
@@ -794,7 +799,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         controls.Add(new("context-menu", "Widget", new(x, y, w, h), "", "", "Kenshi_FloatingPanelSkin", true, new Dictionary<string, string>(),
             new(0.1f, 0.09f, 0.08f, 0.94f), ink, Pickable: true));
         controls.Add(new("context-title", "TextBox", new(x + 6, y + 2, w - 12, titleH), menu.Title, "", "", true,
-            new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" }, default, ink));
+            new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Center" }, default, ink));
 
         for (int i = 0; i < menu.Verbs.Count; i++)
         {
@@ -803,7 +808,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
             controls.Add(new($"context-verb-{i}", "Button", new(x + w * 0.0208333f, rowY, buttonW, rowH), Loc.Tr(caption),
                 "meitou:context", "Kenshi_Button1Skin", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" },
-                default, ink, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
+                default, ink, HoverColour: VerbHover, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
             if (chance is not { } c) continue;
 
             float p = Math.Clamp(c * 0.01f, 0, 1);

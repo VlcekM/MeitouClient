@@ -830,6 +830,17 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
 `Kenshi_GenericTextBoxFlat`, which draws a panel even with an empty caption. Meitou hides it when there is no restricted-item name, so general
 storage has no blank heading panel over its inventory grid.
 
+Generic inventory sizing (**Verified**, Kenshi 1.0.68 decompile `FUN_14014e530`, fixed `FUN_14014e870`): set the grid to cells × skin cell size;
+grow the frame only by positive differences from the layout's initial grid. Generic storage and research grids centre in `Content` on both axes;
+fixed backpack grids centre horizontally and retain their top offset. No 80%-of-screen height cap or added scrollbar. `BackpackInventoryLayout`
+(`FUN_140155d30`) uses `Kenshi_InventoryGenericFixedWindow`; Meitou uses it for player, pinned and looted bags. Ordinary containers use the generic
+storage layout, with ARRANGE for unrestricted grids, rather than the research layout. Meitou preserves the frame's natural dimensions even when
+larger than the viewport; visible pixels remain clipped to the screen.
+
+Character main-grid alignment (**Verified**, `FUN_14014eee0`): after setting section dimensions, keep `main`'s original bottom edge by shifting its
+top and `InventoryMainTitle` together. The character frame keeps its layout size. Meitou applies this before drawing the cells, including pinned
+and looted character windows; resizing the grid downwards alone can otherwise overlap ARRANGE.
+
 `Kenshi_InventoryResearchWindow` (**Verified**, layout read): `ResearchButton` "SHOW RESEARCH" over `backpack_content`, `ArrangeButton` "ARRANGE" under it
 (HCenter Bottom). Meitou: ARRANGE arranges the bench's grid as an inventory's (`ArrangeMachine`, `InventoryCommands.Arrange`; #639).
 
@@ -837,10 +848,20 @@ storage has no blank heading panel over its inventory grid.
 (`CraftingName`, `QueueButton` "QUEUE..."), `TitlesPanel` (layout INPUTS / OUTPUT, but the constructor `FUN_140155f90` **Verified** overwrites them with the translated `Input` / `Inputs` by the input count, hidden at 0, and `Output`), `Input1Panel` / `Input2Panel` (`InputNText`, `InputNStatusText`,
 slot `inN`, `InputNProgressBar`), output (`out` slot, `OutputProgressBar`, `OutputText`, `OutputDataPanel`). The `inN` / `out` inventory
 sections are the recipe item's `inventory footprint width` × `inventory footprint height` cells (**Verified**, `FUN_14029e7b0` code read); a crafting bench's `out` is as large as the largest thing it makes
-([Crafting](buildings-production.md#crafting)). The grid
-sits centred under its label and progress bar (**Observed**, owner's screenshot of an electrical workbench, 2026-10-24); the rule behind it and whether the bar
-moves for a tall grid are **Unknown**. Meitou keeps the layout's top, centres the grid on the bar (a grid wider than the bar keeps the slot's left edge)
-and pushes the bar under an overlapping grid. For a machine with only an output (a mined rock) the original's window size is **Unknown**; Meitou drops the input column and crafting row and shrinks the window around the output panel. The layout's bar sits under the `out` slot (`OutputContent`: slot `0 0 0.88 0.29`, bar `0 0.53 1 0.29`, Left Bottom; **Verified**, layout read), so an output taller than the slot (a well's water, #638) pushed the bar out of the shrunk window; the window now grows to keep it, up to the layout's height.
+([Crafting](buildings-production.md#crafting)). The grid geometry is **Verified** by the original layout and the decompiled layout setup routines (Kenshi 1.0.68):
+
+- `FUN_1401536c0` gets the cell dimensions from `Kenshi_InventorySlotSkin` (25 × 25 in the clean GOG skin).
+  Meitou reads both dimensions from the loaded skin too, including UI mod overrides, for grids, items and pointer placement.
+- `FUN_140155f90` removes the crafting row for non-crafting buildings, moves the titles and contents up, and shortens the frame by that row's height.
+- `FUN_140150e20` (production), `FUN_1401524f0` (crafting) and `FUN_140151a30` (furnace) size each section to its cell dimensions, grow its panel by
+  the positive difference from the layout slot, stack inputs vertically, and put the output column immediately beside them. The outer frame
+  changes by the difference between the initial and final content dimensions; crafting/furnace width never shrinks below the initial frame.
+- Grids and bars centre independently in their content panels. A panel's growth moves its bottom-aligned bar with it, retaining the layout gap.
+  Output-only production retains one panel column, with its header aligned over it. No previous frame participates in sizing.
+
+Meitou: `InventoryGeometry` resolves real positions once, preserves child alignment during panel growth, then binds the complete geometry before
+placing the window. `ProductionWindows` supplies the section dimensions for every production/crafting/furnace window (#671).
+
 
 Crafting window contents (**Verified**, `CraftingBuilding::updateInventoryWindow` `FUN_1402b6110` and the `BuildInventoryLayout` setters `FUN_14014db60` ... `FUN_14014e330`; field
 names KenshiLib 1ce4a16, **Observed**). Each `inN` and the `out` section get a plain `ImageBox` child made by the layout constructor (`FUN_140155f90`): top-left aligned, no mouse
@@ -853,6 +874,14 @@ ready-made Item it will produce; shown while `out` is empty), `OutputText` that 
 name; otherwise ghost none, `OutputText` `-`, bar 0 and `CraftingName` `#afa68b` + an empty string. The layout's setup (`FUN_1401524f0`) writes "Nothing Queued" into
 `CraftingName` (so it shows only until the first update) and `OutputTitleText` the translated "Output" upper-cased.
 Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a section holds only its ingredient, so "Invalid item!" never shows; the output ghost is the queue front's item (its record and model).
+
+Inventory opening geometry (**Verified**, `FUN_1406e4960`; constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5): independent character
+windows start at the integer margin `0.05 × min(screen width, screen height)`, after other inventory windows on that row. A full row advances by
+twice the margin, trying up to five rows. A linked target starts immediately at its partner's right edge and top; each character's bag precedes
+that character, with no six-pixel gap. Meitou no longer centres or deliberately overlaps the loot row. A dragged main window retains its top when
+linked loot opens. Pinned characters use the same independent placement search. A selected machine's standalone left-centred position remains
+**Observed**, from the screenshots below; the order-opened container goes right of the looter and returns to standalone placement when the
+inventory closes. Exact integer rounding of all nested MyGUI rectangles remains **Unknown**; Meitou retains fractional coordinates.
 
 Opening (**Observed**, owner's screenshots of the original, 2026-10-24): selecting a machine, bench or storage shows its window alone, with no inventory.
 A right click that sends a character to a storage opens the character's inventory with the storage window beside it; once the inventory closes, the
@@ -1183,8 +1212,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     icon; a stump's race item never sits in the slot. Labels `-ARMS-` / `-LEGS-`; `figure.png` never changes. The slots are built on open (a limb lost meanwhile shows on reopening,
     **Observed**; Meitou refreshes live).
   The pin button (`Kenshi_PinButtonSkin` in the `Kenshi_WindowCXP` caption, drawn "O"; the skin's `*_checked` states while pinned) keeps the inventory window on the character shown
-  when it was pressed, and another squad member's inventory opens in a second window, so several show at once (**Observed** by the owner in the original). Engine choices: selecting
-  someone else after pinning opens their inventory left of the pinned one; I on a pinned character raises their window; unpinning gives the window back to the selection (closes it when
+  when it was pressed, and another squad member's inventory opens in a second window, so several show at once (**Observed** by the owner in the original). Opening uses the next free inventory position (the original manager's rule): selecting
+  someone else after pinning opens their inventory after the existing windows; I on a pinned character raises their window; unpinning gives the window back to the selection (closes it when
   the inventory is already open); a pinned window has its own bag window (OPEN BAG; a bag open when pinning stays open beside it) but no limbs window. A pinned window can still be dragged (**Observed** by the owner). A right click moves the item to the other character's window as below; with several open, Meitou picks the one on top (engine choice). The snapshot carries every pinned character's grid (`ShowInventoryCommand`).
   Esc while trading closes the trader and the character's windows in one press, whichever was clicked last (engine choice, as for loot).
   With a loot or container window open, the inventory window shows its looter while that one is selected, else the lead selected character. The original shows the lead even when another selected member looted (**Observed** by a player, #389); Meitou's choice keeps the looter's items beside the loot (`InventoryWindows.InventoryOwner`).
