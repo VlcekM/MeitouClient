@@ -146,6 +146,7 @@ static class SettingHints
         "Item icons" => "Draw inventory item icons supersampled, without jagged edges.",
         "Blood cells" => "Draw blood on every terrain cell within decal range, not only the 8 nearest.",
         "Interior lamps" => "Keep the lamps of building interiors lit by day too. Stealth counts their light.",
+        "Lamp warmth" => "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were.",
         "Shadow cascade 5 (Meitou)" => "Add a fifth shadow cascade for distant scenery.",
         "Mesh welding" => "Store the game's models more compactly: about half the video memory, the same look.",
         "Bolt tracers" => "Draw a faint streak behind a crossbow bolt in flight.",

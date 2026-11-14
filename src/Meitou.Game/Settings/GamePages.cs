@@ -557,6 +557,10 @@ sealed class GamePages(SettingsMenu menu)
         if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Interior lamps") is { } lamps)
             result.Add(new("Interior lamps", SettingHints.ToggleHint(lamps.Label), Toggle: lamps));
 
+        // The lamps' colour is kept here with it, out of the look presets: a preference, not a part of a look.
+        if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Lamp warmth") is { } warmth)
+            result.Add(new("Lamp warmth", SettingHints.ToggleHint(warmth.Label), Toggle: warmth));
+
         AddFightRows(result);
         AddOffscreenRows(result);
         AddWorldRows(result);

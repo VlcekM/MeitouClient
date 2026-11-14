@@ -611,7 +611,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         return label switch
         {
-            "Interior lamps" => "Advanced",
+            "Interior lamps" or "Lamp warmth" => "Advanced",
             "Anti-aliasing" or "Weather particles" => "Hidden",
             "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
                 or WorldFrame.TracedGrassSwitch => "Lighting",

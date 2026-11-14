@@ -94,7 +94,7 @@ drop-downs and hides by `ShownWhen`. A look row that differs from the preset has
 inside); a moved quality row shows as Custom. Named values are drop-downs, amounts sliders with right = more (terrain error
 mirrored, `Slider.Reversed`).
 The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
-Advanced (stealth counts its light). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
+Advanced (stealth counts its light), and so is Lamp warmth (no look preset sets either). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
 `ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start
 with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode, Follow camera offset, Item rotation and Hide hats left out: optional, off by default).
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows

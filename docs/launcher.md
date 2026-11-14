@@ -186,7 +186,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   rows and the game's are the same: names, ranges, value text, choices, impact (`impact`, beside the name) and order.
 - Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour, Post FX, Interface)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
-  is on the game's Advanced page only.
+  is on the game's Advanced page only, as is Lamp warmth.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
   Traced), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid). The switches they stand for
   (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at start, so the launcher's choice wins
