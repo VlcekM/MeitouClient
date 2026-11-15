@@ -1,5 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
+import Wordmark from '../components/Wordmark.astro';
+import LicenseLink from '../components/LicenseLink.astro';
 import DiscordIcon from '../components/DiscordIcon.astro';
 import GithubIcon from '../components/GithubIcon.astro';
 import WindowsIcon from '../components/WindowsIcon.astro';
@@ -64,8 +66,8 @@ const pairs = [
     <div class="stack">
       <h1>Run Kenshi on a new engine</h1>
       <p class="lede">
-        <span class="name">Meitou<span>Client</span></span> is an open-source reimplementation of the Kenshi engine.
-        Fully compatible with FCS mods and vanilla save games. Requires original copy to run
+        <span class="name">Meitou<span>Client</span></span> is an open-source reimplementation of Kenshi's engine.
+        Play your installed copy with FCS mods and vanilla saves.
       </p>
     </div>
     <a class="trailer" href={trailer} target="_blank" rel="noopener">
@@ -74,6 +76,7 @@ const pairs = [
       </span>
       <span class="trailer-label">View trailer</span>
     </a>
+    <Wordmark class="hero-brand" />
     <div class="actions">
       <a class="mt-btn mt-btn-primary" href={releasesPage} data-download>
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0l-5-5m5 5l5-5M5 20h14" /></svg>
@@ -109,7 +112,7 @@ const pairs = [
     <div class="ai">
       <img class="ai-head" src="/skeleton.png" alt="The Dancing Skeleton sign from Kenshi" width="180" height="180" loading="lazy" />
       <div class="ai-text">
-        <h2>AI Disclaimer</h2>
+        <h2 class="section-title">AI Disclaimer</h2>
         <p>
           Agentic coding was used liberally on this codebase. Much of the code, the tests and the documentation was written
           by AI coding agents, directed and reviewed by a human. The result is open source, so judge it by reading it.
@@ -120,27 +123,31 @@ const pairs = [
 
   <section id="about">
     <div class="about">
-      <h2>About</h2>
+      <h2 class="section-title">About</h2>
       <p class="lead">
-        MeitouClient is an open-source reimplementation of the Kenshi engine in C# and .NET 11 with a Vulkan renderer. It is a
+        <a href={`${releasesPage}?q=tag%3Av0%20prerelease%3Afalse`}>MeitouClient</a> is an open-source reimplementation
+        of the Kenshi engine in C# and .NET 11 with a Vulkan renderer. It is a
         drop-in replacement: the original game content, FCS mods and vanilla save games run unchanged. It needs your own copy
         of Kenshi, and no game assets are distributed. For guides to the original game's mechanics, factions, and equipment,
         visit the <a href="https://kenshi.wiki/">Kenshi Wiki</a>.
       </p>
       <div class="modes">
-        <div class="mode">
+        <div class="mode" id="mode-faithful">
           <h3>Faithful</h3>
           <p>The game as it ships: its look, behaviour and formulas, kept close to the original.</p>
         </div>
-        <div class="mode mode-meitou">
+        <div class="mode" id="mode-meitou">
           <h3>Meitou <span>default</span></h3>
           <p>Our graphical and gameplay enhancements in the theme of vanilla Kenshi.</p>
         </div>
       </div>
-      <p class="switches">
-        <svg viewBox="0 0 36 20" width="36" height="20" aria-hidden="true"><rect x="1" y="1" width="34" height="18" rx="9" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="26" cy="10" r="5" fill="currentColor" /></svg>
-        Every enhancement is its own switch, so the two modes can be mixed freely.
-      </p>
+      <div class="mode-picker">
+        <span>Faithful</span>
+        <input class="mode-switch" type="checkbox" role="switch" checked autocomplete="off"
+          aria-label="Preview Meitou mode" aria-description="Turn off to highlight Faithful." aria-controls="mode-faithful mode-meitou" />
+        <span>Meitou</span>
+      </div>
+      <p class="switches">Every enhancement is its own switch, so the two modes can be mixed freely.</p>
       <div class="divider" role="separator"></div>
       <p class="belief">
         We are of the belief that Kenshi is a phenomenal game held back by its technology. The MeitouClient project seeks to
@@ -148,7 +155,7 @@ const pairs = [
         customize the experience to be as close to vanilla as they want.
       </p>
       <div class="divider" role="separator"></div>
-      <p class="license">The project is free, fully open-source and licensed under GPL-3.</p>
+      <p class="license">The project is free, fully open-source and licensed under <LicenseLink />.</p>
       <div class="links">
         <a class="mt-btn" href="https://discord.gg/DVAHH2n9DR"><DiscordIcon /><span>Discord</span></a>
         <a class="mt-btn" href="https://github.com/VlcekM/MeitouClient"><GithubIcon /><span>GitHub</span></a>
@@ -159,15 +166,18 @@ const pairs = [
 
   <section id="compare">
     <div class="cmp-head">
-      <h2>Enhanced Graphics</h2>
-      <p>advanced graphics features such as global illumination, long-distance shadows, vastly increased render distances and DLSS possible. All enhancements are fully configurable.</p>
+      <h2 id="graphics-heading" class="section-title">Enhanced Graphics</h2>
+      <p>Meitou lets you configure global illumination, long-distance shadows, longer render distances and DLSS.</p>
     </div>
-    <div class="mt-tabs cmp-tabs" role="tablist">
-      {pairs.map((p, i) => <button class="mt-tab" type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-tab={i}>{p.name}</button>)}
+    <div class="mt-tabs cmp-tabs" role="tablist" aria-labelledby="graphics-heading">
+      {pairs.map((p, i) => (
+        <button class="mt-tab" type="button" role="tab" id={`graphics-tab-${i}`} aria-controls={`graphics-panel-${i}`}
+          aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{p.name}</button>
+      ))}
     </div>
     <div class="cmp-stage">
       {pairs.map((p, i) => (
-        <div class="cmp" role="tabpanel" hidden={i > 0}>
+        <div class="cmp" role="tabpanel" id={`graphics-panel-${i}`} aria-labelledby={`graphics-tab-${i}`} hidden={i > 0}>
           <img class="cmp-img" src={p.before} alt="" loading="lazy" />
           <img class="cmp-img cmp-after" src={p.after} alt="" loading="lazy" />
           <span class="cmp-label cmp-left">Before</span>
@@ -182,12 +192,17 @@ const pairs = [
   <section id="performance">
     <div class="perf">
       <div class="perf-text">
-        <h2>Built for performance</h2>
+        <h2 class="section-title">Built for performance</h2>
         <p>Developed on a RTX 4070 and Ryzen 5 3600, the goal was 1080p 144FPS at all times with DLSS. Also runs on integrated GPU office PCs.</p>
       </div>
-      <video class="perf-video" controls muted loop playsinline preload="metadata" poster="/fast-loading.jpg">
-        <source src={performanceVideo} type="video/webm" />
-      </video>
+      <figure class="perf-clip">
+        <video class="perf-video" aria-describedby="clip-description" controls muted loop playsinline preload="metadata" poster="/fast-loading.jpg">
+          <source src={performanceVideo} type="video/webm" />
+        </video>
+        <figcaption id="clip-description">
+          In this silent clip, the view jumps from a stand of trees to a sunlit canyon, then moves across the ridges and gullies from above.
+        </figcaption>
+      </figure>
     </div>
   </section>
 
@@ -223,12 +238,33 @@ const pairs = [
   // A click on the backdrop (outside the plate) closes it.
   dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
 
-  const tabs = document.querySelectorAll<HTMLElement>('.cmp-tabs [role=tab]');
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.cmp-tabs [role=tab]'));
   const panels = document.querySelectorAll<HTMLElement>('.cmp');
-  tabs.forEach((tab, i) => tab.addEventListener('click', () => {
-    tabs.forEach((t, j) => t.setAttribute('aria-selected', String(i === j)));
-    panels.forEach((p, j) => { p.hidden = i !== j; });
-  }));
+  function selectTab(index: number) {
+    tabs.forEach((tab, i) => {
+      const selected = i === index;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      panels[i].hidden = !selected;
+    });
+  }
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectTab(i));
+    tab.addEventListener('keydown', (event) => {
+      let next: number;
+      switch (event.key) {
+        case 'ArrowRight': next = (i + 1) % tabs.length; break;
+        case 'ArrowLeft': next = (i + tabs.length - 1) % tabs.length; break;
+        case 'Home': next = 0; break;
+        case 'End': next = tabs.length - 1; break;
+        default: return;
+      }
+      event.preventDefault();
+      selectTab(next);
+      tabs[next].focus();
+    });
+  });
   document.querySelectorAll<HTMLInputElement>('.cmp-range').forEach((r) => r.addEventListener('input', () => {
     r.closest<HTMLElement>('.cmp')!.style.setProperty('--pos', `${r.value}%`);
   }));
@@ -237,7 +273,8 @@ const pairs = [
 <style>
   /* Fills the first view, stack at the top left in place of the wordmark. */
   .hero { position: relative; display: flex; align-items: flex-start; min-height: 100svh; padding: var(--edge) 0; }
-  /* A main menu plate button (320 x 38, icon column 24 at 12, label at 48), bottom left, level with the wordmark. */
+  .hero-brand { position: absolute; right: 0; bottom: calc(var(--edge) + var(--space-4)); }
+  /* The action buttons sit opposite the wordmark on the wide hero. */
   .actions { position: absolute; left: 0; bottom: calc(var(--edge) - 5px); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); max-width: 100%; }
   .more { max-width: 100%; justify-content: flex-start; padding: 0 20px 0 12px; }
   .more-icon { position: relative; flex: none; opacity: .8; transition: opacity .16s ease; }
@@ -270,9 +307,21 @@ const pairs = [
   .dl-note { margin: var(--space-7) 0 0; }
   .dl-note a { color: inherit; }
   @media (max-width: 520px) { .dl { padding: 24px var(--space-6); } .dl-choices { grid-template-columns: 1fr; } .dl-main { flex-direction: row; padding: var(--space-5) var(--space-6); } .dl-file { margin-left: auto; } }
-  .stack { min-width: 0; }
-  h1 { margin: 0 0 var(--space-6); color: #fff; text-shadow: 0 2px 12px rgba(8, 6, 5, .6); white-space: nowrap; font: 600 clamp(32px, 6vw, 52px)/1.1 var(--font-exo); }
-  .lede { max-width: 620px; margin: 0; font-size: 18px; line-height: 27px; text-shadow: 0 1px 8px rgba(8, 6, 5, .8); }
+  .stack { width: fit-content; min-width: 0; max-width: min(100%, 44rem); text-align: center; }
+  h1 { margin: 0 0 var(--space-6); color: #fff; text-shadow: 0 2px 12px rgba(8, 6, 5, .6); text-wrap: balance; font: 600 clamp(32px, 6vw, 52px)/1.1 var(--font-exo); }
+  .lede {
+    max-width: 42rem;
+    margin: 0 auto;
+    padding: var(--space-5) var(--space-6);
+    border: 1px solid rgba(225, 208, 170, .34);
+    border-radius: calc(2 * var(--radius-card));
+    background: rgba(14, 10, 8, .36);
+    color: #f3ebda;
+    text-shadow: 0 1px 3px rgba(8, 6, 5, .9);
+    font-size: 18px;
+    line-height: 27px;
+    text-wrap: balance;
+  }
   /* The name set like the wordmark: Meitou semibold, Client regular. */
   .name { font-weight: 600; }
   .name > span { font-weight: 400; }
@@ -282,34 +331,65 @@ const pairs = [
   #ai, #compare { background: #151010; }
   #about, #performance { background: #0e0a08; }
   /* Performance: title and text on the left, the video filling the rest, at most 1280px wide and centred. */
-  .perf { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 24px; align-items: center; max-width: 1280px; margin: 0 auto; padding: 48px 0; }
+  .perf { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: center; max-width: 1280px; margin: 0 auto; padding: 48px 0; }
   .perf h2 { margin: 0 0 var(--space-5); color: #fff; font: 600 32px/40px var(--font-exo); }
-  .perf p { margin: 0; font-size: 18px; line-height: 27px; }
+  .perf p { margin: 0; font-size: 18px; line-height: 27px; text-wrap: balance; }
+  .perf-clip { min-width: 0; margin: 0; }
+  .perf-clip figcaption { margin-top: var(--space-4); color: var(--main); font-size: 14px; line-height: 21px; }
   .perf-video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: calc(2 * var(--radius-card)); background: #000; }
   @media (max-width: 800px) { .perf { grid-template-columns: 1fr; } }
   /* About: as tall as its content, the text centred. */
-  /* About: a centred column. The lead and the belief are set larger, the modes are two cards (Meitou lit in brass), the
+  /* About: a centred column. The lead and the belief are set larger, the modes are two cards (the previewed mode lit in brass), the
      dividers carry a brass diamond, and the links are plate buttons. */
   .about { max-width: 960px; margin: 0 auto; padding: 88px 0 96px; text-align: center; }
   .about h2 { margin: 0 0 var(--space-7); color: #fff; font: 600 44px/52px var(--font-exo); }
-  .about h2::after { content: ""; display: block; width: 56px; height: 3px; margin: var(--space-6) auto 0; border-radius: 2px; background: var(--brass); }
+  .about .section-title::after { margin: var(--space-6) auto 0; }
   .about p { margin: 0 auto; }
   .about .lead { max-width: 780px; color: var(--paper-light); font-size: 21px; line-height: 33px; }
   .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 48px 0 var(--space-7); text-align: left; }
   .mode { position: relative; padding: var(--space-7) 28px 28px; border-radius: calc(2 * var(--radius-card)); background: rgba(8, 6, 5, .45); box-shadow: var(--plate-border); }
-  .mode::before { content: ""; position: absolute; top: 0; left: 28px; width: 40px; height: 3px; border-radius: 0 0 2px 2px; background: var(--greyed-bright); }
-  .mode-meitou { box-shadow: inset 0 0 0 1px rgba(196, 160, 98, .55), var(--plate-drop); }
-  .mode-meitou::before { background: var(--brass-light); }
+  .mode::before { content: ""; position: absolute; top: 0; left: 28px; width: var(--mode-marker, 40px); height: 3px; border-radius: 0 0 2px 2px; background: var(--mode-accent, var(--greyed-bright)); }
+  .about:has(.mode-switch:checked) #mode-meitou,
+  .about:has(.mode-switch:not(:checked)) #mode-faithful {
+    outline: 1px solid var(--brass-light);
+    outline-offset: -1px;
+    box-shadow: var(--plate-drop);
+    --mode-marker: 56px;
+    --mode-accent: var(--brass-light);
+  }
   .mode h3 { margin: 0 0 var(--space-4); color: #fff; font: 600 26px/32px var(--font-exo); }
-  .mode h3 span { margin-left: var(--space-4); padding: 0 8px; border-radius: var(--radius-portrait); background: var(--brass); color: var(--secondary); font: 600 11px/18px var(--font-exo); letter-spacing: .08em; text-transform: uppercase; vertical-align: middle; }
+  .mode h3 span { margin-left: var(--space-4); padding: 0 8px; border-radius: var(--radius-portrait); background: var(--brass-light); color: var(--secondary); font: 600 11px/18px var(--font-exo); letter-spacing: .08em; text-transform: uppercase; vertical-align: middle; }
   .about .mode p { margin: 0; font-size: 17px; line-height: 26px; }
-  .about .switches { display: flex; align-items: center; justify-content: center; gap: var(--space-5); font-size: 17px; line-height: 26px; }
-  .switches svg { flex: none; color: var(--brass-light); }
+  .mode-picker { display: flex; align-items: center; justify-content: center; gap: var(--space-5); color: var(--paper-light); }
+  .mode-switch {
+    appearance: none;
+    position: relative;
+    width: 48px;
+    height: 44px;
+    margin: 0;
+    border: 0;
+    border-radius: var(--radius-btn);
+    background: transparent;
+    color: var(--brass-light);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mode-switch::before, .mode-switch::after { content: ""; position: absolute; border-radius: 999px; }
+  .mode-switch::before { inset: 10px 2px; border: 2px solid currentColor; background: var(--plate); }
+  .mode-switch::after { left: 8px; top: 16px; width: 12px; height: 12px; background: currentColor; }
+  .mode-switch:checked::after { transform: translateX(20px); }
+  .mode-switch:focus-visible { outline: 2px solid var(--brass-light); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) { .mode-switch::after { transition: transform .15s ease; } }
+  @media (forced-colors: active) {
+    .mode-switch::before { border-color: ButtonText; }
+    .mode-switch::after { background: ButtonText; forced-color-adjust: none; }
+  }
+  .about .switches { font-size: 17px; line-height: 26px; }
   /* A hairline with a brass diamond in the middle. */
   .divider { position: relative; height: 1px; margin: 56px auto; background: linear-gradient(90deg, transparent, rgba(175, 166, 139, .4) 20%, rgba(175, 166, 139, .4) 80%, transparent); }
   .divider::after { content: ""; position: absolute; top: 50%; left: 50%; width: 9px; height: 9px; background: var(--brass-light); box-shadow: 0 0 0 6px #0e0a08; transform: translate(-50%, -50%) rotate(45deg); }
   /* The belief reads as a pull quote. */
-  .about .belief { position: relative; max-width: 780px; color: var(--paper-light); font-size: 23px; line-height: 36px; }
+  .about .belief { max-width: 900px; text-wrap: balance; color: var(--paper-light); font-size: 23px; line-height: 36px; }
   .about .license { display: inline-block; padding: var(--space-4) var(--space-7); border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(196, 160, 98, .5); color: #fff; font-size: 20px; line-height: 30px; }
   .links { display: flex; justify-content: center; gap: var(--space-6); margin-top: 32px; }
   .links .mt-btn { min-width: 160px; }
@@ -317,7 +397,7 @@ const pairs = [
   .ai { display: flex; align-items: center; justify-content: center; gap: 40px; max-width: 1280px; margin: 0 auto; padding: 48px 0; }
   .cmp-head h2, .ai h2 { margin: 0 0 var(--space-5); color: #fff; font: 600 32px/40px var(--font-exo); }
   .cmp-head p, .ai p { max-width: 620px; margin: 0; font-size: 18px; line-height: 27px; }
-  .cmp-head p { max-width: 1000px; }
+  .cmp-head p { max-width: 1000px; text-wrap: balance; }
   /* The disclaimer sits below the first section, a cropped skeleton head beside the text. */
   .ai-head { flex: none; display: block; width: 180px; height: 180px; border-radius: calc(2 * var(--radius-card)); box-shadow: var(--plate-border); }
   /* Compare: title, description and tabs on top, the slider filling what is left of one viewport. It runs as wide as the
@@ -325,7 +405,8 @@ const pairs = [
   #compare { display: flex; flex-direction: column; height: 100svh; min-height: 480px; padding: 32px var(--frame); }
   .cmp-head { padding: 0 calc(var(--edge) - var(--frame)); margin-bottom: var(--space-6); }
   .cmp-tabs { align-self: flex-start; margin: 0 calc(var(--edge) - var(--frame)) var(--space-6); }
-  .cmp-tabs .mt-tab { border: 0; background: none; cursor: pointer; }
+  .cmp-tabs .mt-tab { border: 0; background: none; color: var(--main); cursor: pointer; }
+  .cmp-tabs .mt-tab:hover { color: var(--paper-light); }
   .cmp-tabs .mt-tab[aria-selected="true"] { color: var(--paper-light); background: linear-gradient(#241f1c, #3a3430); box-shadow: inset 0 0 0 1px var(--metal-edge), inset 0 -2px 0 var(--brass); }
   .cmp-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: calc(4 * var(--radius-card)); }
   .cmp { position: absolute; inset: 0; --pos: 50%; }
@@ -339,27 +420,32 @@ const pairs = [
   /* The native range sits invisibly over the whole image: it takes the drag and the arrow keys. */
   .cmp-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; touch-action: pan-y; }
   .cmp:has(.cmp-range:focus-visible) .cmp-bar::after { outline: 2px solid var(--brass-light); outline-offset: 4px; }
-  @media (max-width: 640px) { .ai { flex-direction: column; align-items: flex-start; gap: 24px; } }
   @media (prefers-reduced-motion: no-preference) { :global(html) { scroll-behavior: smooth; } }
   /* Narrow screens: drop the stack below the links at the top right. */
-  @media (max-width: 900px) { .hero { padding-top: calc(var(--edge) + 48px); } }
+  @media (max-width: 1240px) { .hero { padding-top: var(--hero-nav-inset, calc(var(--edge) + 48px)); } }
   /* Too narrow for the buttons side by side beside the wordmark: stack them. */
   @media (max-width: 860px) { .actions { flex-direction: column; align-items: flex-start; } }
-  @media (max-width: 640px) { h1 { white-space: normal; } }
 
   /* Phones. The frame is gone (see Base.astro), so everything runs on the narrow --edge gutter. */
   @media (max-width: 640px) {
-    /* Hero: text on top, the full-width buttons at the bottom, clear of the wordmark below them. */
-    .hero { flex-direction: column; justify-content: space-between; gap: var(--space-7); padding-bottom: calc(var(--edge) + 52px); }
-    .actions { position: static; flex-direction: column; align-items: stretch; gap: var(--space-5); }
-    .lede { color: var(--paper-light); }
-    .trailer { position: static; align-self: center; }
-    .actions .mt-btn { min-height: 44px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto 1fr auto auto;
+      justify-items: center;
+      padding-bottom: calc(var(--edge) + env(safe-area-inset-bottom));
+    }
+    .trailer { position: static; align-self: center; margin-block: var(--space-7); }
+    .hero-brand { position: static; margin-bottom: var(--space-5); }
+    .hero-brand::after { content: ""; display: block; width: 36px; height: 1px; margin: var(--space-3) auto 0; background: var(--brass-light); }
+    .actions { position: static; display: grid; grid-template-columns: minmax(0, 1fr); width: min(100%, 15rem); gap: var(--space-5); }
+    .actions .mt-btn { min-height: 44px; justify-content: center; padding-inline: var(--space-6); }
     .actions .mt-btn-primary { min-height: 52px; }
     .perf, .ai { padding: 40px 0; }
+    .ai { flex-direction: column; align-items: stretch; gap: var(--space-7); }
+    .ai-head { align-self: center; }
     .about { padding: 56px 0 64px; }
     .about .lead { font-size: 19px; line-height: 30px; }
-    .about .switches { flex-direction: column; text-align: center; }
     .divider { margin: 40px auto; }
     .links { flex-wrap: wrap; }
     .links .mt-btn { flex: 1 1 140px; min-width: 0; min-height: 44px; }
@@ -369,5 +455,25 @@ const pairs = [
     .cmp-tabs { align-self: stretch; display: flex; margin: 0 0 var(--space-6); }
     .cmp-tabs .mt-tab { flex: 1 1 auto; justify-content: center; min-height: 40px; padding: 0 var(--space-4); }
     .cmp-stage { min-height: 360px; border-radius: calc(2 * var(--radius-card)); }
+  }
+
+  /* In a short, wide viewport the trailer and actions share a row under the introduction. */
+  @media (min-width: 641px) and (max-height: 600px) {
+    .hero {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      align-content: start;
+      gap: var(--space-7);
+      min-height: calc(100svh - 64px);
+      padding: var(--space-7) 0 64px;
+    }
+    .stack { grid-column: 1 / -1; }
+    .hero-brand { bottom: var(--space-5); }
+    .trailer, .actions { position: static; transform: none; justify-self: start; }
+    .actions { flex-flow: row wrap; }
+  }
+  @media (max-width: 640px) and (max-height: 600px) {
+    .hero { min-height: calc(100svh - 64px); padding-top: var(--space-6); }
   }
 </style>

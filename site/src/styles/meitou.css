@@ -70,6 +70,10 @@ a:focus-visible, .mt-btn:focus-visible, .mt-tab:focus-visible {
   background: var(--vignette);
 }
 
+.page-intro { text-align: center; text-wrap: balance; }
+.section-title::after { content: ""; display: block; width: 56px; height: 3px; margin-top: var(--space-4); border-radius: 2px; background: var(--brass); }
+.page-intro .section-title::after { margin-inline: auto; }
+
 /* ---------- Surfaces ---------- */
 
 /* Plate: the dark rust surface. A faint grain stands in for the texture. */
@@ -103,6 +107,22 @@ a:focus-visible, .mt-btn:focus-visible, .mt-tab:focus-visible {
 .mt-card a { color: var(--title); text-decoration-color: var(--title); }
 
 /* ---------- Buttons ---------- */
+
+.mt-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid rgba(217, 191, 141, .42);
+  border-radius: var(--radius-btn);
+  background: rgba(17, 13, 11, .38);
+  color: #fff;
+  font: 400 16px/21px var(--font-exo);
+  text-decoration: none;
+}
+.mt-link-button:is(:hover, :focus-visible) { border-color: var(--brass-light); background: rgba(25, 19, 15, .85); }
 
 /* Plate button: the charcoal button plate at 70% brightness; brighter, pressed look on hover. */
 .mt-btn {
@@ -151,7 +171,7 @@ a:focus-visible, .mt-btn:focus-visible, .mt-tab:focus-visible {
   font-size: 22px;
   line-height: 24px;
   letter-spacing: .08em;
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 70%, var(--paper-light));
   box-shadow: var(--paper-border), var(--plate-drop);
   transition: filter .16s ease;
 }

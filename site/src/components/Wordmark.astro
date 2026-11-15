@@ -1,0 +1,10 @@
+---
+interface Props { class?: string; }
+---
+<a {...Astro.props} href="/">Meitou<span>Client</span></a>
+
+<style>
+  a { display: inline-block; color: #fff; font: 600 30px/36px var(--font-exo); text-decoration: none; }
+  span { font-weight: 400; }
+  @media (max-width: 640px) { a { font-size: 26px; line-height: 32px; } }
+</style>

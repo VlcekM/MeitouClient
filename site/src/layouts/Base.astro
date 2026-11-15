@@ -5,13 +5,17 @@ import '../styles/meitou.css';
 import DiscordIcon from '../components/DiscordIcon.astro';
 import GithubIcon from '../components/GithubIcon.astro';
 import KofiIcon from '../components/KofiIcon.astro';
+import KofiOverlay from '../components/KofiOverlay.astro';
+import LicenseLink from '../components/LicenseLink.astro';
+import PageJumps from '../components/PageJumps.astro';
+import Wordmark from '../components/Wordmark.astro';
 
 interface Props {
   title: string;
   description?: string;
   /** Ko-fi as a button at the top centre instead of the floating widget at the bottom left. */
   kofiTop?: boolean;
-  /** Loop the background video behind the first view. */
+  /** The homepage hero displays the wordmark over its opening video. */
   video?: boolean;
 }
 
@@ -36,47 +40,30 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
           </video>
         </div>
       )}
-      <header class:list={['top', { 'is-over': video }]}>
-        {!video && <a class="brand" href="/">Meitou<span>Client</span></a>}
+      <header id="top" tabindex="-1" class:list={['top', { 'is-over': video }]}>
+        {!video && <Wordmark class="brand" />}
+        <nav class="site-links" aria-label="Site navigation">
+          <a class="mt-link-button" href="/roadmap">Roadmap</a>
+          <a class="mt-link-button" href="/benchmarks">Benchmarks</a>
+          <a class="mt-link-button" href="https://discord.gg/DVAHH2n9DR"><DiscordIcon /> Discord</a>
+          <a class="mt-link-button" href="https://github.com/VlcekM/MeitouClient"><GithubIcon /> GitHub</a>
+        </nav>
         {kofiTop && (
           <div class="center">
             <a class="kofi" href="https://ko-fi.com/martinvlcek" title="It supports me in the development of Meitou."><KofiIcon />Support me on Ko-fi</a>
             <slot name="center" />
           </div>
         )}
-        <a class="gh" href="/roadmap">Roadmap</a>
-        <a class="gh" href="/benchmarks">Benchmarks</a>
-        <a class="gh" href="https://discord.gg/DVAHH2n9DR">
-          <DiscordIcon />
-          Discord
-        </a>
-        <a class="gh" href="https://github.com/VlcekM/MeitouClient">
-          <GithubIcon />
-          GitHub
-        </a>
       </header>
-      {video && <a class="brand is-corner" href="/">Meitou<span>Client</span></a>}
       <main>
         <slot />
       </main>
-      <footer class="foot mt-caption">
-        GPL-3.0-or-later · No game assets are distributed · Not affiliated with Lo-Fi Games
+      <footer id="bottom" tabindex="-1" class="foot mt-caption">
+        <LicenseLink /> · No game assets are distributed · Not affiliated with Lo-Fi Games
       </footer>
     </div>
-    {!kofiTop && <script is:inline src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>}
-    {!kofiTop && (
-      <script is:inline>
-        kofiWidgetOverlay.draw('martinvlcek', {
-          'type': 'floating-chat',
-          'floating-chat.donateButton.text': 'Support me',
-          'floating-chat.donateButton.background-color': '#323842',
-          'floating-chat.donateButton.text-color': '#fff'
-        });
-        const kofiToggle = () => document.documentElement.classList.toggle('is-scrolled', scrollY > 0);
-        addEventListener('scroll', kofiToggle, { passive: true });
-        kofiToggle();
-      </script>
-    )}
+    <PageJumps />
+    {!kofiTop && <KofiOverlay />}
     {video && (
       <script is:inline>
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelector('.bg video')?.pause();
@@ -84,19 +71,6 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
     )}
   </body>
 </html>
-
-<style is:global>
-  /* Ko-fi floating widget (bottom left): hidden until the page is scrolled (see the script below). */
-  .floatingchat-container-wrap, .floatingchat-container-wrap-mobi,
-  .floating-chat-kofi-popup-iframe, .floating-chat-kofi-popup-iframe-mobi {
-    transition: opacity .2s ease;
-  }
-  html:not(.is-scrolled) :is(.floatingchat-container-wrap, .floatingchat-container-wrap-mobi,
-  .floating-chat-kofi-popup-iframe, .floating-chat-kofi-popup-iframe-mobi) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-</style>
 
 <style>
   /* --frame: the page ground around the video; --edge: where content starts, just inside the frame. */
@@ -135,30 +109,29 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
     padding: var(--edge);
   }
   /* On the video page the hero title takes the top left; the links float at the top right. */
-  .top.is-over { position: absolute; top: 0; right: 0; z-index: 1; }
-  .brand {
-    margin-right: auto;
-    color: #fff;
-    font: 600 30px/36px var(--font-exo);
-    text-decoration: none;
-  }
-  .brand span { font-weight: 400; }
-  /* On the video page the wordmark sits at the bottom right of the first view. */
-  .brand.is-corner { position: absolute; z-index: 1; right: var(--edge); top: calc(100svh - var(--edge) - 36px); margin: 0; }
-  .gh { display: inline-flex; align-items: center; gap: var(--space-4); color: #fff; font: 400 16px/21px var(--font-exo); text-decoration: none; opacity: .85; transition: opacity .16s ease; }
-  .gh:hover { color: #fff; opacity: 1; }
+  .top.is-over { position: absolute; inset: 0 0 auto; z-index: 1; pointer-events: none; }
+  .top.is-over a { pointer-events: auto; }
+  .brand { margin-right: auto; }
+  .site-links { display: flex; gap: var(--space-4); }
   /* Ko-fi button and a page's own note, centred in the header bar on wide screens, on a line of their own below that. */
-  .center { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--space-6); white-space: nowrap; color: var(--main); font: 400 14px/18px var(--font-exo); }
+  .center { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; flex-basis: 100%; gap: var(--space-6); color: var(--main); font: 400 14px/18px var(--font-exo); }
   /* Ko-fi's own button in white, as in the launcher. */
   .kofi { display: inline-flex; align-items: center; gap: var(--space-4); padding: 5px 12px; border-radius: var(--radius-card); background: #fff; color: #000; font: 600 13px/18px var(--font-exo); text-decoration: none; box-shadow: 0 1px 3px rgba(0, 0, 0, .8); transition: background .16s ease; }
   .kofi:hover { background: #ebebeb; color: #000; }
   .kofi:active { background: #d9d9d9; box-shadow: none; }
-  @media (max-width: 1100px) { .center { position: static; transform: none; order: 10; flex-basis: 100%; justify-content: center; white-space: normal; flex-wrap: wrap; } }
+  @media (min-width: 1240px) {
+    .top:has(.center) { display: grid; grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); }
+    .center { grid-area: 1 / 2; flex-wrap: nowrap; }
+    .top:has(.center) .site-links { grid-area: 1 / 3; justify-self: end; }
+  }
+  @media (max-width: 800px) {
+    .top { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: var(--space-5); }
+    .brand { margin: 0; }
+  }
   main { padding: 0 var(--edge); }
   .foot { padding: var(--space-7) var(--edge) 36px; text-align: center; }
 
-  /* Phones: no frame, the video fills the whole first view and the content gets nearly the full width. The wordmark
-     moves to the bottom left under the buttons, and a darker scrim keeps the hero text readable on any frame. */
+  /* On phones the video fills the first view. A darker scrim keeps its text readable. */
   @media (max-width: 640px) {
     .mt-scene { --frame: 0px; --edge: 20px; }
     .bg { border-radius: 0; }
@@ -167,10 +140,23 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
         linear-gradient(rgba(8, 6, 5, .7), rgba(8, 6, 5, .3) 45%, rgba(8, 6, 5, .65)),
         radial-gradient(ellipse at center, transparent 55%, rgba(8, 6, 5, .5) 100%);
     }
-    .top { gap: var(--space-6); padding: calc(var(--edge) - 12px) var(--edge); }
-    .gh { min-height: 44px; }
-    .brand { font-size: 26px; line-height: 32px; }
-    .brand.is-corner { right: auto; left: var(--edge); top: calc(100svh - var(--edge) - 32px); }
-    .foot { padding-bottom: var(--space-7); }
+    .top { padding: var(--space-4) var(--edge); }
+    .site-links { display: grid; grid-template-columns: repeat(4, auto); gap: var(--space-2); width: min(100%, 27rem); }
+    .site-links a { min-height: 44px; padding: 4px 3px; gap: var(--space-2); font-size: 14px; }
+    .site-links :global(svg) { width: 16px; height: 16px; }
+    .center { gap: var(--space-3) var(--space-5); }
+    /* Room below the license for the fixed page jumps and support button. */
+    .foot { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  }
+
+  /* At the narrowest widths the four links form two even rows above the introduction. */
+  @media (max-width: 359px) {
+    .mt-scene { --hero-nav-inset: 112px; }
+    .site-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  /* At high zoom or in landscape, let the header take the space its links need. */
+  @media (max-height: 600px) {
+    .top.is-over { position: relative; padding-block: var(--space-5); }
   }
 </style>

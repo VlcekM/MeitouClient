@@ -1,0 +1,65 @@
+<div id="kofi-support" inert></div>
+<script is:inline src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
+<script is:inline>
+  (() => {
+    const host = document.getElementById('kofi-support');
+    if (!window.kofiWidgetOverlay) return;
+
+    // The widget attaches click handlers to divs for its opener and close control.
+    function enableKeyboard(button, name) {
+      if (!button?.matches('div:not([role])')) return;
+      button.setAttribute('role', 'button');
+      button.setAttribute('aria-label', name);
+      button.tabIndex = 0;
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        if (!event.repeat) button.click();
+      });
+    }
+
+    function updateFrames() {
+      for (const suffix of ['', '-mobi']) {
+        const launcher = host.querySelector('iframe.floatingchat-container' + suffix);
+        if (!launcher) continue;
+        if (!launcher.title.trim()) launcher.title = 'Support Meitou on Ko-fi';
+
+        // The opener is in a same-origin frame. The donation form is a separate Ko-fi document.
+        const opener = launcher.contentDocument?.querySelector('.floatingchat-donate-button');
+        enableKeyboard(opener, 'Support Meitou on Ko-fi');
+        const popup = host.querySelector('.floating-chat-kofi-popup-iframe' + suffix);
+        if (!popup) continue;
+
+        // Ko-fi closes the panel by collapsing it and setting its inline opacity to zero.
+        const closed = popup.style.opacity === '0';
+        if (closed && popup.contains(document.activeElement)) opener?.focus({ preventScroll: true });
+        popup.inert = closed;
+        opener?.setAttribute('aria-expanded', String(!closed));
+        enableKeyboard(popup.querySelector('.floating-chat-kofi-popup-iframe-closer' + suffix), 'Close Ko-fi support');
+        for (const frame of popup.querySelectorAll('iframe')) {
+          if (!frame.title.trim()) frame.title = 'Meitou donation form on Ko-fi';
+        }
+      }
+    }
+
+    function showAfterScroll() {
+      host.inert = window.scrollY <= 0;
+    }
+
+    new MutationObserver(updateFrames).observe(host, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['style']
+    });
+    window.addEventListener('scroll', showAfterScroll, { passive: true });
+    showAfterScroll();
+    window.kofiWidgetOverlay.draw('martinvlcek', {
+      'type': 'floating-chat',
+      'floating-chat.donateButton.text': 'Support me',
+      'floating-chat.donateButton.background-color': '#323842',
+      'floating-chat.donateButton.text-color': '#fff'
+    }, host.id);
+  })();
+</script>
+
+<style>
+  #kofi-support[inert] { visibility: hidden; opacity: 0; }
+</style>

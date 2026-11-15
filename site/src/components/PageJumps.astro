@@ -1,0 +1,69 @@
+<nav class="page-jumps" aria-label="Page jumps" inert>
+  <a href="#top" aria-label="Top of page">
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+    <span>Top</span>
+  </a>
+  <a href="#bottom" aria-label="Bottom of page">
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    <span>Bottom</span>
+  </a>
+</nav>
+
+<script>
+  const jumps = document.querySelector<HTMLElement>('.page-jumps')!;
+
+  const opening = document.querySelector('.hero') ?? document.getElementById('top')!;
+  const page = document.documentElement;
+
+  function updateJumps() {
+    const pastOpening = opening.getBoundingClientRect().bottom < 1;
+    jumps.inert = !pastOpening || page.scrollHeight < 2 * page.clientHeight;
+  }
+
+  // A section link can land exactly where the opening meets the top of the viewport.
+  new IntersectionObserver(updateJumps, { rootMargin: '-1px 0px 0px' }).observe(opening);
+  // Loading benchmarks or filtering the roadmap can change whether there is far enough to jump.
+  new ResizeObserver(updateJumps).observe(document.querySelector('.mt-scene')!);
+  window.addEventListener('resize', updateJumps);
+  updateJumps();
+</script>
+
+<style>
+  .page-jumps {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 5;
+    display: flex;
+    padding: 2px;
+    border: 1px solid var(--brass);
+    border-radius: 999px;
+    background: var(--plate);
+    box-shadow: var(--plate-drop);
+  }
+  .page-jumps[inert] { opacity: 0; visibility: hidden; }
+  @media (prefers-reduced-motion: no-preference) {
+    .page-jumps { transition: opacity .16s ease, visibility .16s; }
+    :global(html:has(#top:target, #bottom:target)) { scroll-behavior: smooth; }
+  }
+  a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: inherit;
+    color: var(--paper-light);
+    font: 600 14px/1 var(--font-exo);
+    text-decoration: none;
+  }
+  a:hover, a:focus-visible { color: var(--brass-light); background: var(--vignette); }
+  a:focus-visible { outline-offset: -2px; }
+  svg { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  @media (max-width: 640px) {
+    a { padding: 0; }
+    span { display: none; }
+  }
+</style>
