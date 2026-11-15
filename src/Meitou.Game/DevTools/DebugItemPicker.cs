@@ -468,6 +468,11 @@ sealed class DebugItemPicker(GameHost host)
     Vector4? _backButton;
 
     /// <summary>
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the sub-view's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
     /// Draws the sub-view in the debug menu's place: the heading, the search text, the list in a window of at most <see cref="MaxRows"/> lines that
     /// scrolls with the highlight (and a scroll bar when the list is longer), the keys and the last drop. All sizes are multiplied by
     /// <paramref name="scale"/> (the framebuffer's pixels per point).
@@ -491,6 +496,7 @@ sealed class DebugItemPicker(GameHost host)
         float bar = 8 * scale, w = chars * charWidth + 2 * pad + bar, h = (count + (Status.Length > 0 ? 8 : 7)) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
 
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float y = y0 + pad;
@@ -522,6 +528,11 @@ sealed class DebugItemPicker(GameHost host)
         else if (cursor >= first + room) first = cursor - room + 1;
         return _scroll[step] = first;
     }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies on the panel as last drawn.
+    /// </summary>
+    internal bool Contains(Vector2 at) => _panelRect is { } rect && DebugMenu.Inside(rect, at);
 
     /// <summary>
     /// A left click on the sub-view: the "back" button steps back as Esc does; a line is picked and chosen as Enter does; a click elsewhere does nothing.

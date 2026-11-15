@@ -1750,7 +1750,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (host.Covered) return;
             if (_settings?.Visible == true) _settings.TextInput(value);
             else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
-            else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
+            else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
             else _hud?.UiText(value);
         };
     }
@@ -1840,9 +1840,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.DebugMenu.DebugParts = null;
             return true;
         }
+        // The debug menu takes every key while its selection takes typed text, else only the navigation and activation keys; the rest are the game's.
         if (host.DebugMenu.DebugMenuOpen)
         {
-            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) host.DebugMenu.DebugMenuKey(menuKey);
+            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is not { } menuKey) return false;
+            if (!host.DebugMenu.DebugMenuTakesText && !DebugMenu.DebugMenuTakesKey(menuKey)) return false;
+            host.DebugMenu.DebugMenuKey(menuKey);
             return true;
         }
         if (key == SilkKey.F10 && _settings is not null)
@@ -1961,8 +1964,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _settings.MouseDown(at, mapped);
                 return;
             }
-            // The debug menu takes every left click while it is open, as it takes every key.
-            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left)
+            // The debug menu takes the left clicks on its panel while it is open; a click elsewhere is the interface's and the world's.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left
+                && host.DebugMenu.DebugMenuContains(at))
             {
                 host.DebugMenu.DebugMenuClick(at);
                 _debugMenuClick = true;
@@ -1998,13 +2002,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _settings.Scroll(wheel.Y);
                 return;
             }
-            // The debug menu takes the wheel while it is open, as it takes every key and click.
-            if (_hud is not null && host.DebugMenu.DebugMenuOpen)
+            var at = Pixels(mouse.Position);
+            // The debug menu takes the wheel over its panel while it is open; elsewhere the wheel zooms the camera as usual.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuContains(at))
             {
                 host.DebugMenu.Scroll(wheel.Y);
                 return;
             }
-            var at = Pixels(mouse.Position);
             if (_hud is { UiVisible: true } && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             // A panel's own scroll wins; over any HUD rectangle the wheel does not zoom the camera, as in the Vulkan host.
             if (_hud is not null && (_hud.UiScroll(at, wheel.Y) || _hud.ContainsUi(at))) return;

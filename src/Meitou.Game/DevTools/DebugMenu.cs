@@ -712,6 +712,28 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
+    /// Whether the menu's selection takes typed text, so the menu must take every key: a row with a field (in a category or its part list), the item
+    /// picker (its search) or a character-editor category (its values). Otherwise it takes only <see cref="DebugMenuTakesKey"/> and the rest are the
+    /// game's.
+    /// </summary>
+    internal bool DebugMenuTakesText
+    {
+        get
+        {
+            if (_itemPicker.Open) return true;
+            if (_characterEditor.Open) return _characterEditor.TakesText;
+            return !DebugAtCategories && DebugHasField(_debugRow);
+        }
+    }
+
+    /// <summary>
+    /// Whether the menu takes <paramref name="key"/> while its selection takes no typed text: the navigation and activation keys only (Escape, Enter
+    /// and the arrows); every other key is the game's, as if the menu were closed.
+    /// </summary>
+    internal static bool DebugMenuTakesKey(EngineKey key) => key is EngineKey.Escape or EngineKey.Enter or EngineKey.Up or EngineKey.Down
+        or EngineKey.Left or EngineKey.Right;
+
+    /// <summary>
     /// A key while the menu is open: at the categories Up and Down pick one and Enter or Right opens it; in a category the rows are walked, edited and
     /// applied, the tools switched, and Esc goes back; in a sub-list Up and Down pick and Enter applies.
     /// </summary>
@@ -1391,6 +1413,11 @@ sealed class DebugMenu(GameHost host)
     Vector4? _backButton;
 
     /// <summary>
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the menu's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
     /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): at the categories their titles with how
     /// many switches inside are on, in a category its rows (scrolled to the highlighted one) with a back button, the selection, camera target and money,
     /// the hint with <paramref name="close"/> and the status. <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display):
@@ -1447,6 +1474,7 @@ sealed class DebugMenu(GameHost host)
         float h = (count + 5 + (root ? 0 : 1) + status.Count) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
         float y = y0 + pad;
         o.TextScaled(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour, scale);
         y += 1.5f * lineHeight;
@@ -1474,9 +1502,20 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
+    /// Whether <paramref name="at"/> lies on the menu as last drawn (the open sub-view's panel while one is open): a click there is the menu's, one
+    /// anywhere else is the interface's and the world's.
+    /// </summary>
+    internal bool DebugMenuContains(Vector2 at)
+    {
+        if (_itemPicker.Open) return _itemPicker.Contains(at);
+        if (_characterEditor.Open) return _characterEditor.Contains(at);
+        return _panelRect is { } rect && Inside(rect, at);
+    }
+
+    /// <summary>
     /// A left click on the menu: at the categories a category is opened; in one, the back button goes back as Esc does, a row is picked and, unless it
-    /// takes typed text, applied as Enter does (a row with a field is only picked), and a line of the open part list is picked and applied. A click
-    /// outside the menu does nothing.
+    /// takes typed text, applied as Enter does (a row with a field is only picked), and a line of the open part list is picked and applied. The caller
+    /// checks <see cref="DebugMenuContains"/> first, so a click outside the menu never reaches it.
     /// </summary>
     internal void DebugMenuClick(Vector2 at)
     {
@@ -1528,7 +1567,7 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// Whether <paramref name="at"/> lies in <paramref name="rect"/> (x0, y0, x1, y1).
     /// </summary>
-    static bool Inside(Vector4 rect, Vector2 at) => at.X >= rect.X && at.X <= rect.Z && at.Y >= rect.Y && at.Y <= rect.W;
+    internal static bool Inside(Vector4 rect, Vector2 at) => at.X >= rect.X && at.X <= rect.Z && at.Y >= rect.Y && at.Y <= rect.W;
 
     /// <summary>
     /// The menu's lines: at the categories one per category (with how many of its switches are on), in a category one per row (with its value and

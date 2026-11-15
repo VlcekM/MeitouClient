@@ -174,9 +174,19 @@ sealed class DebugCharacterEditor(GameHost host)
     Vector4? _backButton;
 
     /// <summary>
-    /// The sub-view is shown (the debug menu gives it every key).
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the sub-view's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
+    /// The sub-view is shown (the debug menu gives it the keys).
     /// </summary>
     internal bool Open { get; private set; }
+
+    /// <summary>
+    /// Whether the sub-view takes typed text: a category's stat values (the root list only picks, so the rest of the keys are the game's).
+    /// </summary>
+    internal bool TakesText => _step == Step.Category;
 
     /// <summary>
     /// Makes the root list: the quick actions, Appearance, then every category.
@@ -243,6 +253,11 @@ sealed class DebugCharacterEditor(GameHost host)
                 break;
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies on the panel as last drawn.
+    /// </summary>
+    internal bool Contains(Vector2 at) => _panelRect is { } rect && DebugMenu.Inside(rect, at);
 
     /// <summary>
     /// A left click on the sub-view: the "back" button steps back as Esc does; a root line is picked and chosen as Enter does; a category row is only
@@ -544,6 +559,7 @@ sealed class DebugCharacterEditor(GameHost host)
         float h = (count + (_status.Length > 0 ? 8 : 7)) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
 
         float y = y0 + pad;
         o.TextScaled(title, x0 + pad, y, DebugOverlay.TextColour, scale);
