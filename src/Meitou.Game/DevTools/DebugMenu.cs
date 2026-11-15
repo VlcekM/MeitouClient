@@ -1541,7 +1541,9 @@ sealed class DebugMenu(GameHost host)
             var (text, highlight, on, _, _) = line;
             if (on) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, DebugOnTint);
             if (highlight) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
-            _drawnLines.Add((line, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
+            var rect = new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight);
+            DrawHover(o, rect, host.Player.Mouse);
+            _drawnLines.Add((line, rect));
             // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
             if (!root && on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
             o.TextScaled(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour, scale);
@@ -1549,7 +1551,7 @@ sealed class DebugMenu(GameHost host)
         y += 0.5f * lineHeight;
         o.TextScaled(info, x0 + pad, y, dim, scale);
         y += lineHeight;
-        _backButton = root ? null : DrawBackButton(o, x0 + pad, y, scale);
+        _backButton = root ? null : DrawBackButton(o, x0 + pad, y, scale, host.Player.Mouse);
         if (!root) y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, dim, scale);
         for (int k = 0; k < status.Count; k++)
@@ -1846,12 +1848,31 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// Draws the sub-views' "back" button at <paramref name="x"/>, <paramref name="y"/> (a click on it steps back, as Esc does); returns its rectangle.
     /// </summary>
-    internal static Vector4 DrawBackButton(DebugOverlay o, float x, float y, float scale)
+    internal static Vector4 DrawBackButton(DebugOverlay o, float x, float y, float scale, Vector2 pointer)
     {
         float pad = 6 * scale, width = 4 * o.CharWidth * scale + 2 * pad, height = o.LineHeight * scale;
-        o.Rect(x, y, x + width, y + height, ButtonColour);
+        var rect = new Vector4(x, y, x + width, y + height);
+        o.Rect(x, y, x + width, y + height, Inside(rect, pointer) ? ButtonHoverColour : ButtonColour);
         o.TextScaled("back", x + pad, y, DebugOverlay.TextColour, scale);
-        return new Vector4(x, y, x + width, y + height);
+        return rect;
+    }
+
+    /// <summary>
+    /// The back button's background while the pointer is on it.
+    /// </summary>
+    internal static readonly Vector4 ButtonHoverColour = new(0.42f, 0.6f, 0.9f, 0.95f);
+
+    /// <summary>
+    /// The tint behind a clickable line while the pointer is on it, so the menus show what a click would pick.
+    /// </summary>
+    internal static readonly Vector4 HoverColour = new(1, 1, 1, 0.12f);
+
+    /// <summary>
+    /// Tints <paramref name="rect"/> with <see cref="HoverColour"/> when <paramref name="pointer"/> lies on it.
+    /// </summary>
+    internal static void DrawHover(DebugOverlay o, Vector4 rect, Vector2 pointer)
+    {
+        if (Inside(rect, pointer)) o.Rect(rect.X, rect.Y, rect.Z, rect.W, HoverColour);
     }
 
     /// <summary>

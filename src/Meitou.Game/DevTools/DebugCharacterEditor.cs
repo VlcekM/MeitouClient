@@ -571,7 +571,7 @@ sealed class DebugCharacterEditor(GameHost host)
         DrawLines(o, x0, y, w - bar, first, count, lines, scale);
         DrawScrollBar(o, x0 + w - pad / 2 - 4 * scale, y, count * lineHeight, first, count, lines.Count, scale);
         y += (count + 0.5f) * lineHeight;
-        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale);
+        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale, host.Player.Mouse);
         y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, Dim, scale);
         if (_status.Length > 0) o.TextScaled(_status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
@@ -645,7 +645,11 @@ sealed class DebugCharacterEditor(GameHost host)
             bool current = i == cursor;
             if (current) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             var (text, title) = lines[i];
-            _drawnLines.Add((i, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
+            var rect = new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight);
+
+            // Title lines take no click, so they get no hover tint.
+            if (!title) DebugMenu.DrawHover(o, rect, host.Player.Mouse);
+            _drawnLines.Add((i, rect));
             o.TextScaled((current ? "> " : "  ") + text, x0 + pad, y, title ? Dim : DebugOverlay.TextColour, scale);
         }
     }

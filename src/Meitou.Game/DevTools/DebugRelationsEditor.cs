@@ -351,7 +351,7 @@ sealed class DebugRelationsEditor(GameHost host)
         y += 1.5f * lineHeight;
         DrawLines(o, x0, y, w, first, count, lines, scale);
         y += (count + 0.5f) * lineHeight;
-        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale);
+        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale, host.Player.Mouse);
         y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, Dim, scale);
         if (_status.Length > 0) o.TextScaled(_status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
@@ -418,6 +418,7 @@ sealed class DebugRelationsEditor(GameHost host)
             var rect = new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight);
             bool current = i == cursor;
             if (current) o.Rect(rect.X, rect.Y, rect.Z, rect.W, Highlight);
+            DebugMenu.DrawHover(o, rect, host.Player.Mouse);
             _drawnLines.Add((i, rect));
             o.TextScaled((current ? "> " : "  ") + lines[i], x0 + pad, y, DebugOverlay.TextColour, scale);
         }

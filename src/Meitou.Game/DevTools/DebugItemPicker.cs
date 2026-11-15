@@ -511,7 +511,7 @@ sealed class DebugItemPicker(GameHost host)
         DrawLines(o, x0, y, w - bar, first, count, scale);
         DrawScrollBar(o, x0 + w - pad / 2 - 4 * scale, y, count * lineHeight, first, count, scale);
         y += (count + 0.5f) * lineHeight;
-        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale);
+        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale, host.Player.Mouse);
         y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, dim, scale);
         if (Status.Length > 0) o.TextScaled(Status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
@@ -565,7 +565,9 @@ sealed class DebugItemPicker(GameHost host)
         {
             bool current = i == _cursor[(int)_step];
             if (current) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
-            _drawnLines.Add((i, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
+            var rect = new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight);
+            DebugMenu.DrawHover(o, rect, host.Player.Mouse);
+            _drawnLines.Add((i, rect));
             o.TextScaled((current ? "> " : "  ") + _lines[i].Text, x0 + pad, y, DebugOverlay.TextColour, scale);
         }
     }
