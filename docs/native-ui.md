@@ -25,9 +25,10 @@ closing; a page button ends it too.
 Mods (`ModsPage`): the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy
 button for the selected mod and one for all problems; a summary line under the version text opens it. Separator files (`[1]---[...]---.mod`) are listed without detail.
 Under a mod's row, a Settings group holds the settings its code registered (`ModSettingsRows`, [modding](modding.md), "Settings"),
-open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A group whose mod
-mods.cfg does not list comes after the list under the mod's name. While a mod has settings, Collapse all and Expand all (arrows to and from a
-line) sit at the title's right end; Display and each Graphics tab with features to fold have them too.
+open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A setting's
+`SubGroup` folds it under a sub-group header (its own arrow, open the first time), and a setting its `VisibleWhen` hides is not drawn. A group
+whose mod mods.cfg does not list comes after the list under the mod's name. While a mod has settings, Collapse all and Expand all (arrows to and
+from a line) sit at the title's right end; Display and each Graphics tab with features to fold have them too.
 
 Graphics techniques that exclude each other are one list each on the Lighting tab (`WorldFrame.AddChoiceSliders`), heading their feature group:
 Sun shadows (Off / Faithful cascades / Meitou cascades / Traced / Traced near, cascades far: Off is the shadow distance at its left end, both traced

@@ -352,7 +352,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
             if (header.Intersect(menu.Viewport).Height >= header.Height - 1)
                 menu.Hits.Add(new(header, () => menu.Grouping.ToggleGroup(group), Label: entry.Label));
 
-            var mark = R(212, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
+            var mark = R(212 + Indent(entry) - 28, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
             Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(menu.Pointer.X, menu.Pointer.Y), menu.Viewport);
         }
     }

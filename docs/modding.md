@@ -180,16 +180,21 @@ holds refuses the second mod.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
-- **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked `[Setting(label, Hint, Min, Max, Step, Options)]`
-  (`ModSettings.cs`) become one group, in declaration order, under the mod's row on the Settings screen's Mods page ([native UI](native-ui.md#settings)): `bool`
-  an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a hundredth of the range otherwise), an enum or a
-  `string` with Options a list. Another type, a number without a range, a list whose value is not one of its options, a struct (the page would
-  change a copy) or no marked property refuses the mod. The player's values are kept in `meitou.user.json` (`modSettings`: mod id, key, invariant
-  text; a default is not kept) and set on the object before `AddSettings` returns, a number clamped to its range, a value that is not one of the
-  setting's (or not finite) ignored with a log line; the values the object had are the defaults Reset and Restore defaults put back as they were,
-  not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's thread,
-  outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's notice. A
-  slider's arrow keys move one Step. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
+- **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
+  sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
+  ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
+  hundredth of the range otherwise), an enum or a `string` with Options a list. `SubGroup` puts a setting under a sub-group header of that name (its
+  own fold, at its first setting's place); `VisibleWhen` names a public `bool` property of the same object and hides the setting while it is false,
+  so a switch can hide its dependents (the page reads it every frame; a throw from it is logged and the setting stays shown). Both are optional; a
+  `VisibleWhen` that is not such a property refuses the mod; a game older than both fails reading the attribute (**Unknown** how it reports), so
+  a mod using them sets `gameVersion`. Another type, a number without a range, a list whose value is not one of its options, a
+  struct (the page would change a copy) or no marked property refuses the mod. The player's values are kept in `meitou.user.json` (`modSettings`: mod
+  id, key, invariant text; a default is not kept) and set on the object before `AddSettings` returns, a number clamped to its range, a value that is
+  not one of the setting's (or not finite) ignored with a log line; the values the object had are the defaults Reset and Restore defaults put back as
+  they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
+  thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
+  notice. A slider's arrow keys move one Step. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group);
   using it in play **Unknown**.
 - **Weather kinds:** a WEATHER or EFFECT `affect type` outside 1-5 is kept as its number, with ARMOUR `weather protection<N>` and RACE `weather

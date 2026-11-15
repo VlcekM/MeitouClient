@@ -96,6 +96,44 @@ public class ModdingTests
         public float Rate { get; set; } = 10;
     }
 
+    /// <summary>
+    /// A mod's settings object with a sub-group and a setting a switch hides.
+    /// </summary>
+    sealed class VideoSettings
+    {
+        [Setting("Advanced")]
+        public bool Advanced { get; set; }
+
+        [Setting("Quality", Min = 0, Max = 3, SubGroup = " Video ")]
+        public int Quality { get; set; } = 2;
+
+        [Setting("Sharpness", Min = 0, Max = 3, SubGroup = "Video", VisibleWhen = nameof(Advanced))]
+        public int Sharpness { get; set; } = 1;
+    }
+
+    /// <summary>
+    /// A setting whose VisibleWhen names no property.
+    /// </summary>
+    sealed class BadVisibleWhen
+    {
+        [Setting("Sharpness", Min = 0, Max = 3, VisibleWhen = "Missing")]
+        public int Sharpness { get; set; }
+    }
+
+    /// <summary>
+    /// A setting whose VisibleWhen property throws.
+    /// </summary>
+    sealed class ThrowingVisibleWhen
+    {
+        [Setting("Sharpness", Min = 0, Max = 3, VisibleWhen = nameof(Broken))]
+        public int Sharpness { get; set; }
+
+        /// <summary>
+        /// Throws on every read.
+        /// </summary>
+        public bool Broken => throw new InvalidOperationException("boom");
+    }
+
     static ModContext Context(IReadOnlyDictionary<string, string>? saved = null) =>
         new(new LoadedMod(new ModInfo("Ores", "mods/Ores/Ores.mod", ModSource.Local),
                 new CodeModManifest("ores", ModApi.Version, ["Ores.dll"], "Ores.Mod")),
@@ -228,6 +266,32 @@ public class ModdingTests
     }
 
     /// <summary>
+    /// A setting's sub-group and the switch that hides it: the sub-group's name is trimmed, and Visible follows the named property.
+    /// </summary>
+    [Fact]
+    public void A_sub_group_and_a_visible_when_describe_a_setting()
+    {
+        var video = new VideoSettings();
+        var group = Context().AddSettings(video);
+
+        Assert.Equal("Video", group.Settings[1].SubGroup);
+        Assert.Equal("Advanced", group.Settings[2].VisibleWhen);
+        Assert.False(group.Settings[2].Visible);
+
+        video.Advanced = true;
+        Assert.True(group.Settings[2].Visible);
+    }
+
+    /// <summary>
+    /// A VisibleWhen property that throws leaves the setting shown rather than breaking the page.
+    /// </summary>
+    [Fact]
+    public void A_throwing_visible_when_leaves_the_setting_shown()
+    {
+        Assert.True(Context().AddSettings(new ThrowingVisibleWhen()).Settings[0].Visible);
+    }
+
+    /// <summary>
     /// A float setting takes a value set on the page and a saved one. Catches the value handed back as a double, which the float property
     /// refuses: the slider changed nothing and a saved value stopped the mod from starting.
     /// </summary>
@@ -274,6 +338,7 @@ public class ModdingTests
         Assert.Contains("'Mode'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new NoChoice())).Message);
         Assert.Contains("'Side'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new NoZeroSide())).Message);
         Assert.Contains("struct", Assert.Throws<ArgumentException>(() => Context().AddSettings(new StructSettings())).Message);
+        Assert.Contains("VisibleWhen 'Missing'", Assert.Throws<ArgumentException>(() => Context().AddSettings(new BadVisibleWhen())).Message);
         var context = Context();
         context.AddSettings(new OreSettings());
         Assert.Throws<InvalidOperationException>(() => context.AddSettings(new OreSettings()));
