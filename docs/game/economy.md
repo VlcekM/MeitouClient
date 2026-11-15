@@ -239,7 +239,7 @@ interior object with an inventory of the trader's home (`FUN_140953850`, `FUN_14
 `unique`, written only when set (`FUN_1407609e0` / `FUN_140761550`).
 
 **Meitou** (`Artifacts`, `PopulationSystem.Artifacts.cs`): the lists are made for a new game and an import (`SaveImport.Filter` writes them into the town states), kept per town,
-saved and read back with the keys above, and given out when a town makes its residents. Engine choices: the candidates are all the town's standing buildings with `interior` parts whose named interior layout (their residents', [layouts](factions-squads-towns.md#town-residents))
+saved and read back with the keys above, and given out when a town makes its residents, before any home is stocked (the fill spares them and its lock step relocks only the containers it could use, so an artifact in a Weapon Cabinet of the Lost Armoury lies unlocked, #758). Engine choices: the candidates are all the town's standing buildings with `interior` parts whose named interior layout (their residents', [layouts](factions-squads-towns.md#town-residents))
 places an object, and whose template Meitou housed there ([town residents](factions-squads-towns.md#town-residents)); ties keep the buildings' placement order, the entries' order and the containers' layout order, and the buildings
 draw in placement order; an entry of 0 or fewer units is skipped. A building with no interior objects is no candidate, as in the original; what goes to a building in another town's centre zone is placed, but a save made before
 that zone is visited writes no file for it, so loses it. Items flagged unique (`ItemInstance.Unique`) do not stack with others; a shop

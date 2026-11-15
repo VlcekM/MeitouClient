@@ -970,6 +970,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.ItemSlots.RegisterSite(world, _data, town.Site);
         StandTownCamp(world, site);
 
+        // The artifacts go out before any home is stocked, as the original's distribution ends the resident chooser (FUN_1409370d0) and the home
+        // fill comes when a squad is built (FUN_140583a10): the distribution empties the containers, the fill spares unique items.
+        GiveArtifacts(world, town);
+
         // Each home is set up for its template before its residents are made (FUN_14057f1f0). The platoon is made for every home, members or not
         // (FUN_14057f4c0 stamps its template's designation on the building, FUN_140583a10 then stocks a home whose template made nothing).
         var trade = world.SystemOf<Trading.TradeSystem>();
@@ -1001,7 +1005,6 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
 
         if (town.Squads.Count > 0) MadeTown(world, town.Site, town.Squads.Where(s => s.Home is not null).Select(s => s.Members.Count));
-        GiveArtifacts(world, town);
         int housed = town.Squads.Count(s => s.Home is not null);
         if (_townLog.Count >= 256) _townLog.RemoveAt(0);   // nobody reads it in a headless world
         _townLog.Add($"{site.Town.Name}: {town.Squads.Count} squad(s), {town.Squads.Sum(s => s.Members.Count)} characters; {housed} at home in " +
