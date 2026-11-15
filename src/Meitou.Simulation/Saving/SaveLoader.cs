@@ -216,9 +216,11 @@ public static class SaveLoader
         if (playerFaction is not null && world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
             MachineSave.Read(save, world, production, data.Items);
 
-        // The machines of NPC town buildings and of worked rocks (docs/formats/save.md "Town machines", "Rock machines").
+        // The machines of NPC town buildings, which take their buildings' saved state when their towns register (older saves: the CAMERA keys, now),
+        // and of worked rocks (docs/formats/save.md "Town machines", "Rock machines").
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } townProduction)
         {
+            townProduction.RestoreTownMachine = TownMachineSave.Restorer(save, data.Items);
             TownMachineSave.Read(camera.Record, world, townProduction, TownMachineSave.Resolver(data));
             RockMachineSave.Read(camera.Record, world, townProduction);
         }

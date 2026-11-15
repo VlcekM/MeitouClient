@@ -1746,7 +1746,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The finder of 232 (<c>FUN_1408cb810</c>, docs/game/ai-tasks.md "Eating crops"): in the town the eater stands in, whose faction it does not get
     /// along with (engine reading of the coexist test: an enemy by the relations), a farm with food
     /// (<see cref="Production.ProductionSystem.HasFood"/>) drawn uniformly at random. Only a player town's are looked at: the towns' farms are
-    /// machines too (<c>ProductionSystem.TownSelfRunning</c>), but their eaters are <b>not modelled</b>. Null: none.
+    /// machines too (<c>ProductionSystem.TownMachines</c>), but their eaters are <b>not modelled</b>. Null: none.
     /// </summary>
     string? CropsToEat(World world, int slot, CharacterCold cold, Blackboard board)
     {

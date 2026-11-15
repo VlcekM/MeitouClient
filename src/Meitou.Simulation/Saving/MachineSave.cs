@@ -67,35 +67,56 @@ public static class MachineSave
     /// <summary>
     /// Replaces the building's inventory record with its items, or removes the record when it holds none.
     /// </summary>
-    static void WriteInventory(SaveFile file, BuildSite site, FcsInstance instance, List<SaveItem> saveItems)
+    static void WriteInventory(SaveFile file, BuildSite site, FcsInstance instance, List<SaveItem> saveItems) =>
+        WriteInventory(file, site.Zone, instance, site.Id + InventorySuffix, saveItems);
+
+    /// <summary>
+    /// Replaces a building instance's inventory record with its items, or removes the record when it holds none: the record
+    /// <paramref name="inventoryId"/>, or with null the INVENTORY_STATE the instance lists (a level building's,
+    /// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> when it has none yet, as the original names it).
+    /// </summary>
+    internal static void WriteInventory(SaveFile file, ZoneCoordinate zone, FcsInstance instance, string? inventoryId, List<SaveItem> saveItems)
     {
-        string inventoryId = site.Id + InventorySuffix;
-        var inventory = file.Records.FirstOrDefault(r => r.StringId == inventoryId && r.RecordType == FcsRecordType.InventoryState);
-        instance.States.Remove(inventoryId);
+        string IdOf(int n) => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{zone.X}.{zone.Y}-INGAME");
+
+        var inventory = inventoryId is null
+            ? ListedInventory(file, instance)
+            : file.Records.FirstOrDefault(r => r.StringId == inventoryId && r.RecordType == FcsRecordType.InventoryState);
+        instance.States.Remove(inventory?.StringId ?? inventoryId ?? "");
+
         if (saveItems.Count == 0)
         {
-            if (inventory is not null) SaveInventory.Replace(file, inventory, [], n => $"{n}-zone{site.Zone.X}.{site.Zone.Y}-INGAME");
-            if (inventory is not null) file.Records.Remove(inventory);
+            if (inventory is null) return;
+            SaveInventory.Replace(file, inventory, [], IdOf);
+            file.Records.Remove(inventory);
             return;
         }
 
         if (inventory is null)
         {
-            inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = SaveBuilder.NextNumber(file), Name = "0",
-                StringId = inventoryId };
+            int n = SaveBuilder.NextNumber(file);
+            inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = n, Name = "0", StringId = inventoryId ?? IdOf(n) };
             file.Records.Add(inventory);
         }
 
-        SaveInventory.Replace(file, inventory, saveItems,
-            n => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{site.Zone.X}.{site.Zone.Y}-INGAME"));
-        instance.States.Insert(0, inventoryId);
+        SaveInventory.Replace(file, inventory, saveItems, IdOf);
+        instance.States.Insert(0, inventory.StringId);
     }
+
+    /// <summary>
+    /// The INVENTORY_STATE a building instance lists among its states (the first), null for none.
+    /// </summary>
+    internal static FcsRecord? ListedInventory(SaveFile file, FcsInstance instance) =>
+        instance.States
+            .Select(id => file.Records.FirstOrDefault(r => r.StringId == id && r.RecordType == FcsRecordType.InventoryState))
+            .FirstOrDefault(r => r is not null);
 
     /// <summary>
     /// Writes a machine's production, power, battery, input and farm keys into its building state.
     /// </summary>
     static void WriteKeys(FcsRecord state, Machine m, double gameHours)
     {
+        // The yield first, as the keys were always written (WriteProduction writes it again in place).
         state.Floats["resource mult"] = m.Yield;
 
         // The power keys (Observed, vfunc_17/18 of the building classes FUN_1402a14b0 / FUN_1402a1750).
@@ -103,6 +124,17 @@ public static class MachineSave
         state.Bools["gets battery"] = m.GetsBattery;
         state.Bools["broken"] = m.Broken;
         if (m.Data.IsBattery) state.Floats["batterycharge"] = m.Charge;
+
+        WriteProduction(state, m, gameHours);
+    }
+
+    /// <summary>
+    /// Writes a machine's production keys into its building state: <c>resource mult</c>, <c>production amount</c>,
+    /// <c>consumption amount-&lt;k&gt;</c>, a bench's crafting keys and a farm's keys (<c>FUN_1402a1fa0</c>, the farm's and the bench's writers after it).
+    /// </summary>
+    internal static void WriteProduction(FcsRecord state, Machine m, double gameHours)
+    {
+        state.Floats["resource mult"] = m.Yield;
         if (m.Output is { } o) state.Floats["production amount"] = o.Progress;
         for (int k = 0; k < m.Inputs.Length; k++)
             state.Floats["consumption amount-" + k.ToString(CultureInfo.InvariantCulture)] = m.Inputs[k].Level;
@@ -184,17 +216,19 @@ public static class MachineSave
     }
 
     /// <summary>
-    /// The machine's items as saved: each input under <c>in&lt;k&gt;</c>, the output under <c>out</c>, then the crafting bench's finished items.
+    /// The machine's items as saved: each input k under <c>in&lt;k + firstInput&gt;</c>, the output under <c>out</c>, then the crafting bench's
+    /// finished items. <paramref name="firstInput"/> is the number of the first input's section: the original's are 1, 2, ... (town machines),
+    /// Meitou's player buildings write 0, 1, ....
     /// </summary>
-    static List<SaveItem> Items(Machine m)
+    internal static List<SaveItem> Items(Machine m, int firstInput = 0)
     {
         var list = new List<SaveItem>();
         for (int k = 0; k < m.Inputs.Length; k++)
         {
             if (m.Inputs[k].Count > 0)
             {
-                list.Add(new SaveItem { BaseId = m.Inputs[k].Item, Section = "in" + k.ToString(CultureInfo.InvariantCulture),
-                    Quantity = m.Inputs[k].Count });
+                string section = "in" + (k + firstInput).ToString(CultureInfo.InvariantCulture);
+                list.Add(new SaveItem { BaseId = m.Inputs[k].Item, Section = section, Quantity = m.Inputs[k].Count });
             }
         }
 
@@ -235,21 +269,26 @@ public static class MachineSave
     }
 
     /// <summary>
-    /// Puts the building's stored items back into its machine: the outputs, the inputs and the storage grid.
+    /// Puts the building's stored items back into its machine (<see cref="PutItems"/>).
     /// </summary>
     static void ReadInventory(SaveGame save, BuildSite site, Machine m, ItemFactory factory)
     {
         if (!save.Zones.TryGetValue(site.Zone, out var zone) || zone.BuildingList?.Instances.FirstOrDefault(i => i.Id == site.Id) is not { } instance)
             return;
 
-        var inventory = instance.States
-            .Select(id => zone.File.Records.FirstOrDefault(r => r.StringId == id && r.RecordType == FcsRecordType.InventoryState))
-            .FirstOrDefault(r => r is not null);
-        if (inventory is null) return;
+        if (ListedInventory(zone.File, instance) is { } inventory) PutItems(m, SaveInventory.Read(zone.File, inventory), factory);
+    }
 
+    /// <summary>
+    /// Puts a building's saved items into its machine: the outputs, the inputs (section numbers from <paramref name="firstInput"/>,
+    /// <see cref="Items"/>) and the storage grid.
+    /// </summary>
+    internal static void PutItems(Machine m, IEnumerable<SaveItem> items, ItemFactory factory, int firstInput = 0)
+    {
         var storage = new List<SaveItem>();
-        foreach (var item in SaveInventory.Read(zone.File, inventory))
+        foreach (var item in items)
         {
+            int k = InputOf(item.Section) - firstInput;
             if (item.Section == "out" && m.Craft is { } craft)
             {
                 if (SavedKit.ItemOf(item, factory) is { } done) craft.Done.Add(done);
@@ -258,9 +297,7 @@ public static class MachineSave
             {
                 o.Count = Math.Min(o.Recipe.Capacity, o.Count + item.Quantity);
             }
-            else if (item.Section.StartsWith("in", StringComparison.Ordinal)
-                && int.TryParse(item.Section.AsSpan(2), CultureInfo.InvariantCulture, out int k)
-                && k < m.Inputs.Length && (m.Inputs[k].Item == item.BaseId || m.Craft is not null && m.Inputs[k].Count == 0))
+            else if (k >= 0 && k < m.Inputs.Length && (m.Inputs[k].Item == item.BaseId || m.Craft is not null && m.Inputs[k].Count == 0))
             {
                 // A crafting bench's sections hold its last craft's ingredients, also with nothing queued.
                 m.Inputs[k].Item = item.BaseId;
@@ -286,6 +323,12 @@ public static class MachineSave
             }
         }
     }
+
+    /// <summary>
+    /// The number of an input section <c>in&lt;n&gt;</c>, -1 for any other section.
+    /// </summary>
+    static int InputOf(string section) =>
+        section.StartsWith("in", StringComparison.Ordinal) && int.TryParse(section.AsSpan(2), CultureInfo.InvariantCulture, out int n) ? n : -1;
 
     /// <summary>
     /// Reads a crafting bench's repeat flag, remembered ingredient levels and finished crafts.
@@ -319,12 +362,21 @@ public static class MachineSave
     /// </summary>
     static void ReadKeys(FcsRecord state, Machine m)
     {
-        if (state.Floats.TryGetValue("resource mult", out float y)) m.Yield = y;
-
         m.PowerOn = state.Bools.GetValueOrDefault("power on", true);
         m.GetsBattery = state.Bools.GetValueOrDefault("gets battery", true);
         m.Broken = state.Bools.GetValueOrDefault("broken");
         if (m.Data.IsBattery) m.Charge = Math.Max(0, state.Floats.GetValueOrDefault("batterycharge"));
+
+        ReadProduction(state, m);
+    }
+
+    /// <summary>
+    /// Reads a machine's production keys from its building state (<see cref="WriteProduction"/>; a missing key leaves the default, a farm without
+    /// <c>plant growth</c> keeps its plants).
+    /// </summary>
+    internal static void ReadProduction(FcsRecord state, Machine m)
+    {
+        if (state.Floats.TryGetValue("resource mult", out float y)) m.Yield = y;
         if (m.Output is { } o) o.Progress = state.Floats.GetValueOrDefault("production amount");
         for (int k = 0; k < m.Inputs.Length; k++)
             m.Inputs[k].Level = state.Floats.GetValueOrDefault("consumption amount-" + k.ToString(CultureInfo.InvariantCulture));

@@ -1313,15 +1313,39 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// A container takes a loose stack (<c>StorageBuilding</c> slot 0x4a0, <c>FUN_1402988c0</c>, <b>Observed</b>): the item's type is the container's
     /// <c>itemtype limit</c> and, when it has a <c>limit inventory</c> list, the item is in it, and there is room (a stack of it with space, or a
-    /// free cell). Same test as <see cref="Production.ProductionSystem.Stores"/> for a machine.
+    /// free cell). Same test as <see cref="Production.ProductionSystem.Stores"/> for a machine. A building shop's stock container is asked about its
+    /// rectangle of the shop's stock, which is what it holds (<see cref="Trading.Shop.RegionTakes"/>): <paramref name="shop"/> is the shop
+    /// <paramref name="f"/> is a stock container of (<see cref="ContainerAccess.ShopOf"/>), null for none.
     /// </summary>
-    bool Takes(Fixture f, ItemInstance item)
+    bool Takes(Trading.Shop? shop, Fixture f, ItemInstance item)
+    {
+        if (shop is null) return GridTakes(f, item);
+
+        return Accepts(f, item) && shop.RegionTakes(f.Id, item, f.Contents!.LimitOf(item));
+    }
+
+    /// <summary>
+    /// Whether a container's record takes <paramref name="item"/> at all: it is a store, the item lies loose in a carrier's grid, and its type and
+    /// the store's list allow it.
+    /// </summary>
+    bool Accepts(Fixture f, ItemInstance item)
     {
         var (storage, type, limit) = StorageOf(f);
-        if (!storage || f.Contents is not { } box || item.Section is not ("main" or "backpack_content") || item.LockedOn || item.Contents is not null)
+        if (!storage || f.Contents is null || item.Section is not ("main" or "backpack_content") || item.LockedOn || item.Contents is not null)
             return false;
 
-        if (item.Type != type || limit.Length > 0 && Array.IndexOf(limit, item.Record) < 0) return false;
+        return item.Type == type && (limit.Length == 0 || Array.IndexOf(limit, item.Record) >= 0);
+    }
+
+    /// <summary>
+    /// <see cref="Takes"/> on the container's own grid (a shop's stock container while it is lent its rectangle,
+    /// <see cref="Trading.TradeSystem.Lend"/>).
+    /// </summary>
+    bool GridTakes(Fixture f, ItemInstance item)
+    {
+        if (!Accepts(f, item)) return false;
+
+        var box = f.Contents!;
         int room = box.LimitOf(item);
         foreach (var other in box.Items)
         {
@@ -1378,9 +1402,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             if (f.Contents is null || !Usable(f.Owner)) continue;
             float d = Vector3.DistanceSquared(at, f.Position);
-            if (d <= Production.ProductionSystem.JobRangeSq && d < bestD && AiSystem.TownAt(data, world, f.Position) == search
-                    && loot.Any(i => Takes(f, i)))
-                (best, bestD) = ((f.Id, Flat(f.Position)), d);
+            if (d > Production.ProductionSystem.JobRangeSq || d >= bestD || AiSystem.TownAt(data, world, f.Position) != search) continue;
+
+            var shop = ContainerAccess.ShopOf(world, f);
+            if (loot.Any(i => Takes(shop, f, i))) (best, bestD) = ((f.Id, Flat(f.Position)), d);
         }
 
         return best;
@@ -1494,16 +1519,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
         {
             TaskStart.Stand(table, g);
-            foreach (var item in (d.Kind == TownDutyKind.Ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc)).Where(i
-                    => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
-            {
-                inv.Remove(item);
-                if (store.Add(item)) continue;
-                if (!inv.Add(item)) world.GroundItems.Drop(item, gn.Position, 0);
-                break;
-            }
-
-            if (machine is not null) world.Machines.Touch();
+            StashHere(world, d, gc, inv, machine, box, store, gn.Position);
             return End(world, d);
         }
 
@@ -1520,6 +1536,29 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
         return true;
+    }
+
+    /// <summary>
+    /// The errand's member at its store puts the items in, whole stacks while there is room. A building shop's stock container is lent its
+    /// rectangle of the stock for it (<see cref="Trading.TradeSystem.Lend"/>), so what goes in joins the shop's stock: the original's stock is what
+    /// the home's containers hold (docs/game/economy.md "Building shops"), and the ditch finder takes a shop's storages as any other.
+    /// </summary>
+    void StashHere(World world, TownDuty d, CharacterCold gc, Inventory inv, Production.Machine? machine, Fixture? box, Inventory store, Vector3 at)
+    {
+        var shop = box is not null ? ContainerAccess.ShopOf(world, box) : null;
+        if (shop is not null) Trading.TradeSystem.Lend(world, shop, box!.Id);
+
+        var carried = d.Kind == TownDutyKind.Ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc);
+        foreach (var item in carried.Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : GridTakes(box!, i)).ToList())
+        {
+            inv.Remove(item);
+            if (store.Add(item)) continue;
+            if (!inv.Add(item)) world.GroundItems.Drop(item, at, 0);
+            break;
+        }
+
+        if (shop is not null) Trading.TradeSystem.TakeBack(world, shop, box!.Id);
+        if (machine is not null) world.Machines.Touch();
     }
 
     /// <summary>

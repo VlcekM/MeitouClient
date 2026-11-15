@@ -95,8 +95,8 @@ sealed class TownMachineUse(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether the town machine of <paramref name="site"/> runs with no operator (raw max operators 0); its machine exists once its zone is active
-    /// (<c>ProductionSystem.TownSelfRunning</c>).
+    /// Whether the town machine of <paramref name="site"/> runs with no operator (raw max operators 0); its machine exists once its town registers
+    /// (<c>ProductionSystem.TownMachines</c>).
     /// </summary>
     bool Automatic(string site) => player.Production.Machine(site) is { IsAutomatic: true };
 

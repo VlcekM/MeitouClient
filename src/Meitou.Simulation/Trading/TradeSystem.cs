@@ -683,22 +683,59 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     static void TakeContents(World world, Shop shop)
     {
-        for (int k = 0; k < shop.Containers.Count; k++)
+        for (int k = 0; k < shop.Containers.Count; k++) TakeContents(world, shop, k);
+    }
+
+    /// <summary>
+    /// Stock container <paramref name="k"/> of a building shop hands what it holds to its rectangle of the stock.
+    /// </summary>
+    static void TakeContents(World world, Shop shop, int k)
+    {
+        if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid } || grid.Items.Count == 0) return;
+
+        var region = shop.Stock.Regions![k];
+
+        foreach (var item in grid.Items)
         {
-            if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid } || grid.Items.Count == 0)
-                continue;
-
-            var region = shop.Stock.Regions![k];
-
-            foreach (var item in grid.Items)
-            {
-                item.X += region.X;
-                item.Y += region.Y;
-                shop.Stock.Items.Add(item);
-            }
-
-            grid.Items.Clear();
+            item.X += region.X;
+            item.Y += region.Y;
+            shop.Stock.Items.Add(item);
         }
+
+        grid.Items.Clear();
+    }
+
+    /// <summary>
+    /// A building shop's stock container <paramref name="fixture"/> gets its rectangle of the stock back into its own grid while something is put
+    /// into it (a ditch, docs/game/ai-tasks.md "Ditching": the original's stock is what the home's containers hold, so what goes into one is for
+    /// sale); <see cref="TakeBack"/> returns it to the stock afterwards.
+    /// </summary>
+    internal static void Lend(World world, Shop shop, string fixture)
+    {
+        if (shop.Stock.Regions is null || IndexOf(shop, fixture) is not (>= 0 and var k)) return;
+
+        GiveBack(world, shop, k, all: true);
+    }
+
+    /// <summary>
+    /// The stock container <paramref name="fixture"/> lent by <see cref="Lend"/> hands its grid back to its rectangle of the shop's stock.
+    /// </summary>
+    internal static void TakeBack(World world, Shop shop, string fixture)
+    {
+        if (shop.Stock.Regions is null || IndexOf(shop, fixture) is not (>= 0 and var k)) return;
+
+        TakeContents(world, shop, k);
+    }
+
+    /// <summary>
+    /// The index of a stock container among a building shop's (<see cref="Shop.Containers"/>), -1 for none.
+    /// </summary>
+    static int IndexOf(Shop shop, string fixture)
+    {
+        for (int k = 0; k < shop.Containers.Count; k++)
+            if (shop.Containers[k] == fixture) return k;
+
+        return -1;
     }
 
     /// <summary>
@@ -720,19 +757,27 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     internal static void GiveBack(World world, Shop shop, bool all = false)
     {
-        if (shop.Stock.Regions is not { } regions) return;
+        if (shop.Stock.Regions is null) return;
 
-        for (int k = 0; k < shop.Containers.Count; k++)
+        for (int k = 0; k < shop.Containers.Count; k++) GiveBack(world, shop, k, all);
+    }
+
+    /// <summary>
+    /// Stock container <paramref name="k"/> of a building shop takes its unique items (with <paramref name="all"/>, everything) of its rectangle of
+    /// the stock back into its own grid, at the same cells.
+    /// </summary>
+    static void GiveBack(World world, Shop shop, int k, bool all)
+    {
+        if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid }) return;
+
+        var region = shop.Stock.Regions![k];
+
+        foreach (var item in shop.Stock.Items.Where(i => (all || i.Unique) && region.Holds(i)).ToList())
         {
-            if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid }) continue;
-
-            foreach (var item in shop.Stock.Items.Where(i => (all || i.Unique) && regions[k].Holds(i)).ToList())
-            {
-                shop.Stock.Items.Remove(item);
-                (item.X, item.Y) = (item.X - regions[k].X, item.Y - regions[k].Y);
-                if (grid.IsFree("main", item.X, item.Y, item.Width, item.Height)) grid.Items.Add(item);
-                else grid.AddTo("main", item);
-            }
+            shop.Stock.Items.Remove(item);
+            (item.X, item.Y) = (item.X - region.X, item.Y - region.Y);
+            if (grid.IsFree("main", item.X, item.Y, item.Width, item.Height)) grid.Items.Add(item);
+            else grid.AddTo("main", item);
         }
     }
 
