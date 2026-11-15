@@ -161,14 +161,17 @@ public static class CharacterFacts
     /// Whether <paramref name="target"/> is on the looker's sensed list, as the original's finders that walk it (<c>FUN_140853960</c>) take their
     /// candidates: an entry of its senses, with <paramref name="now"/> only one seen or heard at the last look. The capped block
     /// (<see cref="SenseBlock.Cap"/>) may lack a character the original's unbounded map holds, so one it lacks is judged by the shared sight test
-    /// (<see cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice). True without senses.
+    /// (<see cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice), except a sneaker on its feet, which only
+    /// the look senses (its spot meter, #649). True in a world without the look; false for a looker that has not looked yet (#759: a guard's first
+    /// think after load took a sneaking escaped slave 480 away).
     /// </summary>
     public static bool Perceives(World world, int looker, int target, bool now = false)
     {
         var table = world.Characters;
-        if (Senses(world, looker) is not { } block) return true;
+        if (Senses(world, looker) is not { } block) return world.SystemOf<AggroSystem>() is null;
         if (block.TryGet(table.IdOf(target), out var entry)) return !now || entry.Now;
-        if (table.Cold(looker) is not { } cold) return false;
+        if (table.Cold(looker) is not { } cold || table.Cold(target) is not { } seen) return false;
+        if ((seen.Orders & Player.CharacterOrders.Sneak) != 0 && seen.Medical is not { Incapacitated: true }) return false;
 
         float outdoor = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight);
         return world.Sight.Sees(looker, target, table.Next[looker].Position, table.Next[target].Position, outdoor) > 0;

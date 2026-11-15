@@ -75,6 +75,7 @@ static class SaveProbe
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
+            case ("captors", _): Captors(probe, a.Count > 0 ? int.Parse(a[0]) : 15, a.Count > 1 && a[1] == "walk"); return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
             case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
@@ -342,6 +343,8 @@ static class SaveProbe
                 Console.WriteLine($"  part flesh={p.Flesh:F2} stun={p.Stun:F2} rig={p.Rig:F2} max={p.MaxHp:F2} wear={p.Wear:F2} fraction={p.Fraction:F3}");
         }
 
+        // A player character's decision trace: which source won and why each one before it could not run.
+        probe.World.Decisions.Tracing = true;
         for (int round = 0; round < rounds; round++)
         {
             foreach (int i in slots)
@@ -349,7 +352,9 @@ static class SaveProbe
                 var c = probe.Characters.Cold(i)!;
                 Console.WriteLine($"tick {probe.World.Tick} {probe.Who(i)} in={c.InSomething} carrying={c.Carrying} behaviour={c.Ai?.Behaviour} "
                     + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal} "
-                    + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count} target={Target(probe, i)}");
+                    + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count} target={Target(probe, i)} "
+                    + $"hunger={c.Medical?.Hunger:F2} fed={c.Medical?.Fed:F2}");
+                if (c.Decision is { } d) Console.WriteLine($"  decision {d.Tick} {d.Winner}: {string.Join("; ", d.Lines)}");
             }
 
             probe.PrintMessages();
@@ -579,6 +584,43 @@ static class SaveProbe
             foreach (var k in carry.TakeKnockouts()) Console.WriteLine($"  swing chance={k.Chance:F0} hit={k.Success}");
             probe.PrintMessages();
         }
+    }
+
+    /// <summary>
+    /// Every 20 ticks <paramref name="rounds"/> times: the captive jobs on the player's leader (a slave watcher walking over to process it, #759)
+    /// with each worker's phase, gap and how it senses the leader; <paramref name="walk"/> clears the leader's sneak first (the control run).
+    /// </summary>
+    static void Captors(ProbeWorld probe, int rounds, bool walk)
+    {
+        var t = probe.Characters;
+        var leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader;
+        var captives = probe.World.SystemOf<Meitou.Simulation.Kidnap.CaptiveSystem>()!;
+        if (walk) t.Cold(leader.Slot)!.Orders &= ~Meitou.Simulation.Player.CharacterOrders.Sneak;
+
+        for (int round = 0; round < rounds; round++)
+        {
+            bool sneaking = (t.Cold(leader.Slot)!.Orders & Meitou.Simulation.Player.CharacterOrders.Sneak) != 0;
+            Console.WriteLine($"tick {probe.World.Tick} leader {probe.Who(leader.Slot)} sneak={sneaking} jobs={captives.Jobs.Count}");
+            foreach (var j in captives.Jobs)
+                if (j.Captive == leader && t.TryResolveNext(j.Worker, out int w)) Console.WriteLine(CaptorLine(probe, j, w, leader.Slot));
+
+            probe.PrintMessages();
+            probe.Tick(20);
+        }
+    }
+
+    /// <summary>
+    /// One captive job on the leader: its kind and phase, the worker, their gap, the worker's sense entry of the leader and entry count, and
+    /// whether it perceives the leader.
+    /// </summary>
+    static string CaptorLine(ProbeWorld probe, Meitou.Simulation.Kidnap.CaptiveJob j, int w, int leader)
+    {
+        var t = probe.Characters;
+        float gap = Vector3.Distance(t.Next[w].Position, t.Next[leader].Position);
+        int? entries = Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, w)?.Entries.Count;
+        bool perceives = Meitou.Simulation.Bodies.CharacterFacts.Perceives(probe.World, w, leader);
+
+        return $"  {j.Kind} {j.Phase} by {probe.Who(w)} gap={gap:F0} senses={SensesOfLeader(probe, w)}/{entries} perceives={perceives}";
     }
 
     /// <summary>
@@ -896,7 +938,22 @@ static class SaveProbe
         {
             Console.WriteLine($"site {site.Id} '{site.Name}' at {site.Position:F1} floor={site.Floor} parent={site.Parent} complete={site.Complete} "
                 + $"level={site.LevelPlacement is not null} town={site.Town}");
+            if (probe.World.Machines.Find(site.Id) is { } m) Console.WriteLine($"  {MachineLine(m)}");
         }
+    }
+
+    /// <summary>
+    /// A machine's status, output, inputs and, for a crafting bench, its queue, repeat flag and finished items.
+    /// </summary>
+    static string MachineLine(Meitou.Simulation.Production.Machine m)
+    {
+        var inputs = string.Join(" ", m.Inputs.Select(i => $"{i.Item}:{i.Count}/{i.Level:F2}"));
+        var output = m.Output is { } o ? $"{o.Recipe.Item}:{o.Count} ({o.Progress:F2})" : "none";
+        var craft = m.Craft is { } c
+            ? $" queue=[{string.Join(", ", c.Queue.Select(j => $"{j.Option.Item}:{j.Progress:F2}"))}] repeat={c.Repeat} "
+                + $"done=[{string.Join(", ", c.Done.Select(d => $"{d.Name}x{d.Quantity}"))}]"
+            : "";
+        return $"machine '{m.Data.Id}' st={m.Status} out={output} in=[{inputs}]{craft} operators={m.LastOperators}";
     }
 
     /// <summary>
@@ -1116,6 +1173,7 @@ static class SaveProbe
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
+              captors [rounds] [walk]  captive jobs on the leader: worker, phase, gap, its senses of the leader; walk clears sneak (#759)
               cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
