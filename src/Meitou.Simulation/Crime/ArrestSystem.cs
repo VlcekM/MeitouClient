@@ -675,7 +675,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// Whether the looker in slot <paramref name="w"/> sees the suspect <paramref name="c"/> in slot <paramref name="s"/> now: the shared sight
-    /// test within <paramref name="range"/>, and for a sneaking suspect only once the looker has spotted it (its spot meter is full,
+    /// test within <paramref name="range"/> with the sight ray (<see cref="SightRay.Sees"/>), and for a sneaking suspect only once the looker has spotted it (its spot meter is full,
     /// <see cref="CrimeSystem.Spotted"/>; docs/game/perception.md "Spotting a sneaker"), not at first sight (#649).
     /// </summary>
     bool SeesSuspect(World world, int w, int s, CharacterCold c, float range)

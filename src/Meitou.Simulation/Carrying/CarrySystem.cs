@@ -1493,8 +1493,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Whether a member of the victim's faction sees the looter: awake, not carried, and the looter within its sight (<see cref="SightMap.Sees"/>,
-    /// outdoor range <see cref="CarrySettings.Sight"/> x its race's <c>vision range mult</c>). The original's witness rules are richer
+    /// Whether a member of the victim's faction sees the looter: awake, not carried, and the looter within its sight (<see cref="SightRay.Sees"/>,
+    /// with the sight ray; outdoor range <see cref="CarrySettings.Sight"/> x its race's <c>vision range mult</c>). The original's witness rules are richer
     /// (docs/game/carry-loot.md "Witnesses"); this is the part the engine has.
     /// </summary>
     bool Witnessed(World world, CharacterTable table, int looter, int victim)

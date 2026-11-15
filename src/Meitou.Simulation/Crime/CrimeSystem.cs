@@ -364,8 +364,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// that regards the culprit as friendly costs it <see cref="BetrayalDelta"/>. A witness then sets the timer to 20 and, police-like of a faction
     /// that books bounties, books the crime. With <paramref name="kidnapping"/>, a witness that cares about the carried body first sets a pending
     /// Kidnapping (timer 20) on the carrier (the carrying check that runs before the crime check); with <paramref name="premises"/>, a witness that
-    /// <see cref="Trespasses"/> sets a pending Trespassing against its own faction. A sneaking culprit is seen only through a full spot meter
-    /// (<see cref="Spotted"/>).
+    /// <see cref="Trespasses"/> sets a pending Trespassing against its own faction. A culprit is seen by the sight test with the sight ray
+    /// (<see cref="SightRay.Sees"/>), a sneaking one only through a full spot meter (<see cref="Spotted"/>).
     /// </summary>
     void Witnesses(World world, int culprit, CharacterCold c, bool kidnapping, Premises? premises, float seconds)
     {

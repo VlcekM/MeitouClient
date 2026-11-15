@@ -161,7 +161,7 @@ public static class CharacterFacts
     /// Whether <paramref name="target"/> is on the looker's sensed list, as the original's finders that walk it (<c>FUN_140853960</c>) take their
     /// candidates: an entry of its senses, with <paramref name="now"/> only one seen or heard at the last look. The capped block
     /// (<see cref="SenseBlock.Cap"/>) may lack a character the original's unbounded map holds, so one it lacks is judged by the shared sight test
-    /// (<see cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice), except a sneaker on its feet, which only
+    /// (<see cref="SightRay.Sees"/>: same building or outdoors, unless either stands on top, and the sight ray; engine choice), except a sneaker on its feet, which only
     /// the look senses (its spot meter, #649). True in a world without the look; false for a looker that has not looked yet (#759: a guard's first
     /// think after load took a sneaking escaped slave 480 away).
     /// </summary>
