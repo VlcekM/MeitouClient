@@ -280,6 +280,12 @@ interpolated string, which no translation could match.
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
+- An enabled mod that blanks mods above it reads "Empties file paths in N records of A, B, C and K more: move it above them"
+  (`ModBlanking`, `ModRecordScan`, Meitou.Core; [why](animation.md#animation-files)). It counts a record when it is stated whole (flag
+  bit 0 clear), empties more of the filename values set so far than it gives itself, and the mod its string id names is enabled above it;
+  REMOVED resets the record. Not counted: changes (bit 0 set), the base game's records, stubs for mods that are not enabled, records of a
+  renamed mod (the id keeps the old name), and patches that overwrite with full copies instead of blanks. The data files are scanned
+  once per list load, off the UI thread (363 files, 131 MB: 0.14 s), and the list is walked again on every change.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
