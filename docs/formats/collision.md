@@ -10,6 +10,10 @@ NXUSTREAM2/NxuPhysicsCollection sdk285/nxu103; Max .PxProj is exporter project, 
 NxSceneDesc actors/globalPose/shapes/localPose/materials/groups; poses row-major3x3 then
 translation. Cooked mesh descriptions also carry an `NxSimpleTriangleMesh` with empty points/triangles (**Verified**: vanilla `data/buildings`, `CollisionInstallTests`). A description with empty cookedData is read from those plain lists instead (Building Collision Fix: the Longhouse base and stairs; **Observed**: without it the Longhouse had no ground floor in its interior navmesh). Box dimensions half extents,
 capsule radius/height, plane/sphere and mesh IDs retained. Exporter Z-up/gravity(0,0,-981).
+A value field (pose, group, cookedData, points...) is looked up as an attribute of that exact case, else as a child element ignoring case
+(**Verified**: NXU readers such as the pose's `FUN_140246070`, `"fff fff fff fff"`, use `FUN_140245120` then `FUN_14023f6e0`, a `_stricmp`
+child search). Less Buggy Bughouse (`BughouseFix.mod`) writes `<globalpose>` on all its boxes; read case-sensitively they all keep the identity pose
+and pile up at the building's origin, burying its ground floor (**Observed**, #766: the World's End Bughouse interior kept only an upper slab, no door).
 
 Triangle blob `NXS 01 MESH`: version1,flags,convex-edge threshold,heightfield-axis0xff,
 heightfield extent,vertex-count,triangle-count, floatXYZ vertices,3indices/triangle.
