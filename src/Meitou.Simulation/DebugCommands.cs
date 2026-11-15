@@ -89,7 +89,8 @@ public sealed record DebugOnePunch(bool On) : DebugCommand;
 public sealed record DebugNoStumble(bool On) : DebugCommand;
 
 /// <summary>
-/// The console's gigachad mode: "Set stats to 1000" and "Auto heal" together (<see cref="PlayerState.StatsTo1000"/>, <see cref="PlayerState.AutoHeal"/>).
+/// The console's gigachad mode: "Set stats to 1000" and "Auto heal" together (<see cref="PlayerState.StatsTo1000"/>,
+/// <see cref="PlayerState.AutoHeal"/>).
 /// </summary>
 public sealed record DebugGigachadmode(bool On) : DebugCommand;
 

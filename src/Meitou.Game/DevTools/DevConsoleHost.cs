@@ -366,8 +366,8 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("heal", "heal", "heal the selected characters fully (else the inspected one)", ConsoleHeal);
 
-        Add("gigachadmode", "gigachadmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, for every player character (also later recruits): "
-            + "all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
+        Add("gigachadmode", "gigachadmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, "
+            + "for every player character (also later recruits): all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
             + "character's own stats; no argument toggles; reports the state", ConsoleGigachadmode);
 
         Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected "
