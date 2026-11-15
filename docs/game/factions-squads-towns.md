@@ -451,6 +451,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (a gate not offering the template's `layout interior`, which the chooser does not test for gates) stays free, is chosen again, and the entry
   houses nobody more. Then every free building whose interiors take the default resident's
   `layout interior` gets it (`FUN_14092e4b0`).
+  **Observed** (base data, these rules): the Grid's Workshop Complex (rebirth) has three Metal Warehouses, `workshop empty` v0 2 and no default
+  resident, so the highest-serial one, `15.47:4-rebirth-INGAME` at the map marker, keeps its level state's empty interior and stands bare (#730).
 - **Layouts** (**Verified**, decompile): housing (`FUN_14092e4b0`, called only by the driver, → `FUN_140552140`, called only by it) re-owns the home
   to the template's `faction` (else the town's), clears its interior and exterior objects, sets the interior layout name (LayoutInterior vfunc 12
   `FUN_14054c420`, a name only) to the template's `layout interior` and the exterior one to `layout exterior`, empty ones included, whatever the level
