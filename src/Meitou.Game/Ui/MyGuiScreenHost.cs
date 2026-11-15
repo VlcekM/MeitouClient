@@ -71,6 +71,16 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     const double DoubleClickSeconds = 0.5;
 
     /// <summary>
+    /// The last press in an edit box and when, for the double click that selects a word.
+    /// </summary>
+    (string Screen, string Widget, long At)? _lastEditPress;
+
+    /// <summary>
+    /// An edit box's double-click time, seconds (MyGUI <c>INPUT_TIME_DOUBLE_CLICK</c>, from one click to the next on the same widget).
+    /// </summary>
+    const double EditDoubleClickSeconds = 0.25;
+
+    /// <summary>
     /// A button pressed, a list line selected or accepted, or an edit box's text changed.
     /// </summary>
     public event Action<MyGuiEvent>? Activated;
@@ -489,13 +499,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
         if (c.Type == "EditBox" && c.Properties.GetValueOrDefault("Static") != "true")
         {
-            FocusEdit(id, c);
-            if (CaretAt?.Invoke(p) is { } at)
-            {
-                _edit!.Place(at);
-                _selecting = true;
-            }
-
+            PressEdit(id, c, p);
             return true;
         }
 
@@ -509,6 +513,28 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
         BeginWindowDrag(id, s, p);
         return true;
+    }
+
+    /// <summary>
+    /// A press in an editable box: focuses it and places the caret for a drag selection, or on a second press soon after selects the word there.
+    /// </summary>
+    void PressEdit(string id, UiControl c, Vector2 p)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool twice = _lastEditPress is { } last && last.Screen == id && last.Widget == c.Name
+            && System.Diagnostics.Stopwatch.GetElapsedTime(last.At, now).TotalSeconds < EditDoubleClickSeconds;
+        _lastEditPress = twice ? null : (id, c.Name, now);
+        if (!twice || _focus != (id, c.Name)) FocusEdit(id, c);
+        if (CaretAt?.Invoke(p) is not { } at) return;
+
+        if (twice)
+        {
+            _edit!.SelectWord(at);
+            return;
+        }
+
+        _edit!.Place(at);
+        _selecting = true;
     }
 
     /// <summary>

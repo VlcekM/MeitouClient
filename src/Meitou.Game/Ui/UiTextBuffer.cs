@@ -272,6 +272,26 @@ public sealed class UiTextBuffer(string text = "")
     }
 
     /// <summary>
+    /// A double click at <paramref name="index"/>: selects the run of characters around it up to the nearest ASCII space or punctuation on each
+    /// side, the caret at its end (MyGUI <c>EditBox::notifyMouseButtonDoubleClick</c>); on a break character the selection is empty.
+    /// </summary>
+    public void SelectWord(int index)
+    {
+        int start = Math.Clamp(index, 0, Text.Length);
+        int end = start;
+        while (start > 0 && !IsWordBreak(Text[start - 1])) start--;
+        while (end < Text.Length && !IsWordBreak(Text[end])) end++;
+
+        _anchor = start;
+        Caret = end;
+    }
+
+    /// <summary>
+    /// What ends a double-clicked word: C's <c>ispunct</c> or <c>isspace</c>, which MyGUI asks only below 265, so in the "C" locale only ASCII.
+    /// </summary>
+    static bool IsWordBreak(char c) => c is >= '\t' and <= '\r' or ' ' || c is > ' ' and < '\x7f' && !char.IsAsciiLetterOrDigit(c);
+
+    /// <summary>
     /// A caret or editing key: select all, undo, redo, erase, or a caret move (selecting with <paramref name="extend"/>); Up and Down go to the ends
     /// of a single-line box.
     /// </summary>
