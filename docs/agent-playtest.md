@@ -85,7 +85,7 @@ c help                                # one usage line per command; `c help <nam
 | `find-item` | `find-item <text> [--type armour\|weapon\|item\|crossbow\|container] [--limit n] [--stats]` |
 | `firstaid` | `firstaid <id>` |
 | `follow` | `follow <id> [--guard]` |
-| `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the highlighted row and its value) |
+| `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the category, the highlighted row and its value) |
 | `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
 | `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id or name>] [--model <id or name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |

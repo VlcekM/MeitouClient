@@ -16,15 +16,15 @@ namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
-/// <see cref="DebugCommand"/>s. Up/Down pick a row, typing fills its field, Enter applies it, Esc or the close key closes; while open it takes every
-/// key. The rows are grouped in labelled sections (<see cref="DebugCheatSections"/>: Character, World / Spawn, Combat; then Mods for code mods' rows
-/// ([modding](docs/modding.md)); then Tools and Overlays, <see cref="DebugTools"/>, whose rows also take Space, Left and Right); Up and Down walk
-/// them in the order shown. Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the middle
-/// of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; its sub-row Heal fully gives
-/// them back. Godmode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills hostiles
-/// within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too: while on,
-/// a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player character's), all
-/// or one faction's.
+/// <see cref="DebugCommand"/>s. The menu opens on its categories (<see cref="DebugCategories"/>: Character, Squad / Faction, World / Spawn, Combat,
+/// Cheats, then Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a
+/// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
+/// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
+/// (the middle of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
+/// gives them back. God mode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills
+/// hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too:
+/// while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player
+/// character's), all or one faction's.
 /// </summary>
 sealed class DebugMenu(GameHost host)
 {
@@ -129,43 +129,63 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     internal static readonly string[] DebugLabels =
     [
-        "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)",
+        "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
         "Edit character", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)",
-            "Explosion level", "Explode at target", "Explode on click", "Drop item (at camera target)",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "God mode (all characters)",
+            "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click", "Drop item",
     ];
 
     /// <summary>
-    /// The cheat rows' sections, in the order shown (and walked by Up / Down).
+    /// A category of the menu: its title and its rows (a cheat's number, a mod row's, or <see cref="GameMods.DebugRowCount"/> + a tool's index).
     /// </summary>
-    static readonly (string Title, DebugRow[] Rows)[] DebugCheatSections =
-    [
-        ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.EditCharacter, DebugRow.Godmode, DebugRow.ClearBounties]),
-        ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.DropItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.ExplodeLevel, DebugRow.Explode,
-            DebugRow.ExplodeClick]),
-    ];
+    readonly record struct DebugCategory(string Title, int[] Rows);
 
     /// <summary>
-    /// The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or
-    /// <see cref="GameMods.DebugRowCount"/> + the tool's index).
+    /// The menu's categories, in the order shown: the cheats by purpose, then the code mods' rows (skipped when no mod added one), then the tools.
     /// </summary>
-    List<(string? Header, int Row)> DebugLayout()
+    DebugCategory[] DebugCategories()
     {
-        var layout = new List<(string?, int)>();
-        foreach (var (title, rows) in DebugCheatSections)
-            for (int k = 0; k < rows.Length; k++) layout.Add((k == 0 ? title : null, (int)rows[k]));
-        for (int m = DebugLabels.Length; m < host.Modding.DebugRowCount; m++)
-            layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
+        var worldRows = new List<int> { (int)DebugRow.Teleport, (int)DebugRow.SpawnNpc, (int)DebugRow.DropItem };
+        var tools = new List<int>();
+        var overlays = new List<int>();
         if (DebugToolsOn)
         {
             for (int t = 0; t < DebugTools.Length; t++)
             {
-                layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null,
-                    host.Modding.DebugRowCount + t));
+                int row = host.Modding.DebugRowCount + t;
+                switch (DebugTools[t].Section)
+                {
+                    case "World": worldRows.Add(row); break;
+                    case "Overlays": overlays.Add(row); break;
+                    default: tools.Add(row); break;
+                }
             }
         }
-        return layout;
+
+        var categories = new List<DebugCategory>
+        {
+            new("Character", [(int)DebugRow.EditCharacter, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
+                (int)DebugRow.GiveItem]),
+            new("Squad / Faction", [(int)DebugRow.Money, (int)DebugRow.UnlockResearch]),
+            new("World / Spawn", [.. worldRows]),
+            new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
+                (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
+            new("Cheats", [(int)DebugRow.Godmode, (int)DebugRow.Guard]),
+        };
+        if (host.Modding.DebugRowCount > DebugLabels.Length)
+            categories.Add(new("Mods", [.. Enumerable.Range(DebugLabels.Length, host.Modding.DebugRowCount - DebugLabels.Length)]));
+        if (tools.Count > 0) categories.Add(new("Tools", [.. tools]));
+        if (overlays.Count > 0) categories.Add(new("Overlays", [.. overlays]));
+        return [.. categories];
+    }
+
+    /// <summary>
+    /// The open category's rows, in the order shown (and walked by Up / Down); empty at the categories.
+    /// </summary>
+    List<int> DebugLayout()
+    {
+        var categories = DebugCategories();
+        return _category >= 0 && _category < categories.Length ? [.. categories[_category].Rows] : [];
     }
 
     /// <summary>
@@ -194,12 +214,37 @@ sealed class DebugMenu(GameHost host)
     readonly DebugCharacterEditor _characterEditor = new(host);
 
     /// <summary>
-    /// The menu is open.
+    /// The menu is open; opening it shows the categories again.
     /// </summary>
-    internal bool DebugMenuOpen;
+    internal bool DebugMenuOpen
+    {
+        get => _debugMenuOpen;
+        set
+        {
+            _debugMenuOpen = value;
+            if (!value) return;
+            _category = -1;
+            DebugParts = null;
+        }
+    }
 
     /// <summary>
-    /// The highlighted row.
+    /// The open flag behind <see cref="DebugMenuOpen"/>.
+    /// </summary>
+    bool _debugMenuOpen;
+
+    /// <summary>
+    /// The open category, or -1 at the categories.
+    /// </summary>
+    int _category = -1;
+
+    /// <summary>
+    /// The highlighted category at the categories.
+    /// </summary>
+    int _categoryCursor;
+
+    /// <summary>
+    /// The highlighted row of the open category.
     /// </summary>
     int _debugRow;
 
@@ -212,6 +257,25 @@ sealed class DebugMenu(GameHost host)
     /// The highlighted row (the photo and agent tools read it).
     /// </summary>
     internal int RowIndex => _debugRow;
+
+    /// <summary>
+    /// The menu is at the categories (no category is open, or the open one is gone).
+    /// </summary>
+    internal bool DebugAtCategories => _category < 0 || _category >= DebugCategories().Length;
+
+    /// <summary>
+    /// The open category's title, or the highlighted one at the categories (the agent tools read it).
+    /// </summary>
+    internal string DebugCategoryTitle
+    {
+        get
+        {
+            var categories = DebugCategories();
+            if (categories.Length == 0) return "";
+            int at = _category >= 0 && _category < categories.Length ? _category : Math.Clamp(_categoryCursor, 0, categories.Length - 1);
+            return categories[at].Title;
+        }
+    }
 
     /// <summary>
     /// The status line (the photo and agent tools read it).
@@ -533,11 +597,6 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.
-    /// </summary>
-    int DebugMenuRows => host.Modding.DebugRowCount + (DebugToolsOn ? DebugTools.Length : 0);
-
-    /// <summary>
     /// Whether <paramref name="row"/> is a tool row.
     /// </summary>
     internal bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
@@ -561,8 +620,9 @@ sealed class DebugMenu(GameHost host)
     int DebugStep(int delta)
     {
         var layout = DebugLayout();
-        int at = layout.FindIndex(l => l.Row == _debugRow), n = layout.Count;
-        return layout[((at < 0 ? 0 : at) + delta % n + n) % n].Row;
+        if (layout.Count == 0) return _debugRow;
+        int at = layout.IndexOf(_debugRow), n = layout.Count;
+        return layout[((at < 0 ? 0 : at) + delta % n + n) % n];
     }
 
     /// <summary>
@@ -571,8 +631,8 @@ sealed class DebugMenu(GameHost host)
     const int ScrollLines = 1;
 
     /// <summary>
-    /// The mouse wheel while the menu is open: the open sub-view (or the main menu) moves its highlight by <see cref="ScrollLines"/> rows a notch, up for
-    /// a wheel away from the user, so a long list scrolls with it.
+    /// The mouse wheel while the menu is open: the open sub-view (or the categories, or the open category) moves its highlight by
+    /// <see cref="ScrollLines"/> rows a notch, up for a wheel away from the user, so a long list scrolls with it.
     /// </summary>
     internal void Scroll(float wheel)
     {
@@ -596,12 +656,19 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
+        if (DebugAtCategories)
+        {
+            var categories = DebugCategories();
+            if (categories.Length > 0) _categoryCursor = Math.Clamp(_categoryCursor + lines, 0, categories.Length - 1);
+            return;
+        }
+
         _debugRow = DebugStep(lines);
     }
 
     /// <summary>
-    /// A key while the menu is open: in a sub-list Up and Down pick and Enter applies; otherwise the rows are walked, edited and applied, the tools
-    /// switched.
+    /// A key while the menu is open: at the categories Up and Down pick one and Enter or Right opens it; in a category the rows are walked, edited and
+    /// applied, the tools switched, and Esc goes back; in a sub-list Up and Down pick and Enter applies.
     /// </summary>
     internal void DebugMenuKey(EngineKey key)
     {
@@ -618,28 +685,103 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
-        if (DebugParts is { } parts)
+        if (DebugAtCategories) RootKey(key);
+        else CategoryKey(key);
+    }
+
+    /// <summary>
+    /// A key at the categories: Up and Down pick one (wrapping), Enter or Right opens it, Esc closes the menu.
+    /// </summary>
+    void RootKey(EngineKey key)
+    {
+        var categories = DebugCategories();
+        if (categories.Length == 0) return;
+        switch (key)
         {
-            switch (key)
-            {
-                case EngineKey.Escape or EngineKey.Left:
-                    DebugParts = null;
-                    break;
-                case EngineKey.Up:
-                    _debugPart = (_debugPart + parts.Length - 1) % parts.Length;
-                    break;
-                case EngineKey.Down:
-                    _debugPart = (_debugPart + 1) % parts.Length;
-                    break;
-                case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
+            case EngineKey.Up:
+                _categoryCursor = (_categoryCursor + categories.Length - 1) % categories.Length;
                 break;
-                case EngineKey.Enter:
-                    _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
-                    break;
-            }
-            return;
+            case EngineKey.Down:
+                _categoryCursor = (_categoryCursor + 1) % categories.Length;
+                break;
+            case EngineKey.Enter or EngineKey.Right:
+                OpenCategory(_categoryCursor);
+                break;
+            case EngineKey.Escape:
+                DebugMenuOpen = false;
+                break;
         }
+    }
+
+    /// <summary>
+    /// Opens category <paramref name="index"/> on its first row.
+    /// </summary>
+    void OpenCategory(int index)
+    {
+        var categories = DebugCategories();
+        if (categories.Length == 0) return;
+        _category = Math.Clamp(index, 0, categories.Length - 1);
+        _categoryCursor = _category;
+        var rows = categories[_category].Rows;
+        _debugRow = rows.Length > 0 ? rows[0] : 0;
+        _debugPart = 0;
+        DebugParts = null;
+    }
+
+    /// <summary>
+    /// Esc from a category: back to the categories.
+    /// </summary>
+    void CloseCategory()
+    {
+        _category = -1;
+        _categoryCursor = Math.Clamp(_categoryCursor, 0, Math.Max(DebugCategories().Length - 1, 0));
+        _debugPart = 0;
+        DebugParts = null;
+    }
+
+    /// <summary>
+    /// A key in a category: in a sub-list Up and Down pick and Enter applies; otherwise the rows are walked, edited and applied, the tools switched,
+    /// and Esc goes back to the categories.
+    /// </summary>
+    void CategoryKey(EngineKey key)
+    {
+        if (DebugParts is { } parts) PartKey(key, parts);
+        else RowKey(key);
+    }
+
+    /// <summary>
+    /// A key while the open part list is shown: Up and Down pick, Enter applies the row to the picked part, Backspace edits the row's field, Esc or
+    /// Left closes the list.
+    /// </summary>
+    void PartKey(EngineKey key, (string? Id, string Name)[] parts)
+    {
+        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
+        switch (key)
+        {
+            case EngineKey.Escape or EngineKey.Left:
+                DebugParts = null;
+                break;
+            case EngineKey.Up:
+                _debugPart = (_debugPart + parts.Length - 1) % parts.Length;
+                break;
+            case EngineKey.Down:
+                _debugPart = (_debugPart + 1) % parts.Length;
+                break;
+            case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
+            break;
+            case EngineKey.Enter:
+                _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A key on the rows of a category: Up and Down walk them, Enter applies the highlighted one (or opens its part list or sub-view), Backspace edits
+    /// its field, the tools switch on Enter, Space, Left or Right, and Esc goes back to the categories.
+    /// </summary>
+    void RowKey(EngineKey key)
+    {
+        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
         switch (key)
         {
             case EngineKey.Enter or EngineKey.Left or EngineKey.Right when _debugRow < DebugLabels.Length
@@ -662,7 +804,7 @@ sealed class DebugMenu(GameHost host)
                 if (DebugParts is not null) _debugPart = Math.Min(_debugPart, DebugParts.Length - 1);
                 break;
             case EngineKey.Escape:
-                DebugMenuOpen = false;
+                CloseCategory();
                 break;
             case EngineKey.Up:
                 _debugRow = DebugStep(-1);
@@ -740,7 +882,7 @@ sealed class DebugMenu(GameHost host)
         host.Modding.EnsureDebugFields();
         if (_itemPicker.Open) _itemPicker.Type(c);
         else if (_characterEditor.Open) _characterEditor.Type(c);
-        else if (DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
+        else if (!DebugAtCategories && DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
     /// <summary>
@@ -1112,10 +1254,10 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// A line of the menu as drawn: its text, whether it is a section title, whether it is highlighted, whether it is a switch that is on, the row it
-    /// belongs to (-1 for a section title) and, for a line of the open part list, the part's index (-1 otherwise).
+    /// A line of the menu as drawn: its text, whether it is highlighted, whether it is a switch that is on, the row (or category) it belongs to and,
+    /// for a line of the open part list, the part's index (-1 otherwise).
     /// </summary>
-    readonly record struct MenuLine(string Text, bool Title, bool Highlight, bool On, int Row, int Part);
+    readonly record struct MenuLine(string Text, bool Highlight, bool On, int Row, int Part);
 
     /// <summary>
     /// The menu's lines as last drawn, with their rectangles; a click hit-tests them.
@@ -1123,10 +1265,15 @@ sealed class DebugMenu(GameHost host)
     readonly List<(MenuLine Line, Vector4 Rect)> _drawnLines = [];
 
     /// <summary>
-    /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): the title with the switches on, the
-    /// rows (scrolled to the highlighted one), the selection, camera target and money, the hint with <paramref name="close"/> and the status.
-    /// <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display): the text and every size in the menu grow with it.
-    /// While the item picker or the Edit character sub-view is open it is drawn instead of the rows.
+    /// The category view's "back" button's rectangle as last drawn (a click on it goes back to the categories); null at the categories.
+    /// </summary>
+    Vector4? _backButton;
+
+    /// <summary>
+    /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): at the categories their titles with how
+    /// many switches inside are on, in a category its rows (scrolled to the highlighted one) with a back button, the selection, camera target and money,
+    /// the hint with <paramref name="close"/> and the status. <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display):
+    /// the text and every size in the menu grow with it. While the item picker or the Edit character sub-view is open it is drawn instead.
     /// </summary>
     internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1)
     {
@@ -1148,22 +1295,27 @@ sealed class DebugMenu(GameHost host)
         var onNames = new List<string>();
         host.Modding.EnsureDebugFields();
         DebugMenuAddLines(world, lines, onNames);
+        var categories = DebugCategories();
+        bool root = _category < 0 || _category >= categories.Length;
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money "
             + $"c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = DebugParts is null ? $"Up/Down or click pick   type to edit   Enter apply   Esc/{close} close"
-            : $"Up/Down or click pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
-                + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
+        string hint = root
+            ? $"Up/Down or click pick   Enter open   Esc/{close} close"
+            : DebugParts is null
+                ? "Up/Down or click pick   type to edit   Enter apply   Esc back"
+                : $"Up/Down or click pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
+                    + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10 * scale, y0 = top + 16 * scale, charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale;
-        int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, 30)));
-        // The title line names every switch that is on, cut with "+N more" to the panel's width.
-        string title = $"Debug   ({close} closes)";
+        int chars = Math.Max(lines.Count > 0 ? lines.Max(l => l.Text.Length) : 0, Math.Max(info.Length, Math.Max(hint.Length, 30)));
+        // The title names the open category, or, in one, every switch that is on (cut with "+N more" to the panel's width).
+        string title = root ? $"Debug   ({close} closes)" : $"Debug > {categories[_category].Title}   ({close} closes)";
         if (onNames.Count > 0) title = DebugOnSummary(title, onNames, chars);
         chars = Math.Max(chars, title.Length);
+        var status = WrapStatus(_debugStatus, chars, 3);
         float w = chars * charWidth + 2 * pad;
-        // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view (titles take a little
-        // extra height).
-        int room = (int)((height - y0 - 4 * pad) / lineHeight) - 6;
+        // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view.
+        int room = (int)((height - y0 - 4 * pad) / lineHeight) - (root ? 6 : 7);
         int first = 0, count = lines.Count;
         if (count > room && room > 4)
         {
@@ -1171,7 +1323,7 @@ sealed class DebugMenu(GameHost host)
             first = Math.Clamp(at - room / 2, 0, count - room);
             count = room;
         }
-        float h = (count + 8) * lineHeight + 2 * pad;
+        float h = (count + 5 + (root ? 0 : 1) + status.Count) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
@@ -1181,32 +1333,29 @@ sealed class DebugMenu(GameHost host)
         for (int i = first; i < first + count; i++, y += lineHeight)
         {
             var line = lines[i];
-            var (text, isTitle, highlight, on, _, _) = line;
-            if (isTitle)
-            {
-                o.TextScaled("-- " + text + " --", x0 + pad, y, dim, scale);
-                continue;
-            }
+            var (text, highlight, on, _, _) = line;
             if (on) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, DebugOnTint);
             if (highlight) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             _drawnLines.Add((line, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
             // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
-            if (on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
+            if (!root && on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
             o.TextScaled(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour, scale);
         }
         y += 0.5f * lineHeight;
         o.TextScaled(info, x0 + pad, y, dim, scale);
-        o.TextScaled(hint, x0 + pad, y + lineHeight, dim, scale);
-        // The status never sets the panel's width: it wraps to it, at most three lines, cut with "...".
-        var status = WrapStatus(_debugStatus, chars, 3);
+        y += lineHeight;
+        _backButton = root ? null : DrawBackButton(o, x0 + pad, y, scale);
+        if (!root) y += lineHeight;
+        o.TextScaled(hint, x0 + pad, y, dim, scale);
         for (int k = 0; k < status.Count; k++)
-            o.TextScaled(status[k], x0 + pad, y + (2 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
+            o.TextScaled(status[k], x0 + pad, y + (1 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
         o.Flush(width, height);
     }
 
     /// <summary>
-    /// A left click on the menu: a row is picked and, unless it takes typed text, applied as Enter does; a row with a field is only picked (Enter applies
-    /// it); a line of the open part list is picked and applied. A click outside the menu does nothing.
+    /// A left click on the menu: at the categories a category is opened; in one, the back button goes back as Esc does, a row is picked and, unless it
+    /// takes typed text, applied as Enter does (a row with a field is only picked), and a line of the open part list is picked and applied. A click
+    /// outside the menu does nothing.
     /// </summary>
     internal void DebugMenuClick(Vector2 at)
     {
@@ -1223,9 +1372,22 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
+        if (_backButton is { } back && Inside(back, at))
+        {
+            CloseCategory();
+            return;
+        }
+
         foreach (var (line, rect) in _drawnLines)
         {
             if (!Inside(rect, at)) continue;
+            if (DebugAtCategories)
+            {
+                _categoryCursor = line.Row;
+                OpenCategory(line.Row);
+                return;
+            }
+
             if (line.Part >= 0 && DebugParts is { } parts)
             {
                 _debugPart = Math.Min(line.Part, parts.Length - 1);
@@ -1233,7 +1395,6 @@ sealed class DebugMenu(GameHost host)
                 return;
             }
 
-            if (line.Row < 0) return;   // a section title
             bool partsOpen = DebugParts is not null;
             DebugParts = null;
             _debugRow = line.Row;
@@ -1249,14 +1410,26 @@ sealed class DebugMenu(GameHost host)
     static bool Inside(Vector4 rect, Vector2 at) => at.X >= rect.X && at.X <= rect.Z && at.Y >= rect.Y && at.Y <= rect.W;
 
     /// <summary>
-    /// The debug menu's lines: section titles, one per row (with its value and whether it is on) and the part list of the row picking one;
-    /// <paramref name="onNames"/> collects the switches that are on.
+    /// The menu's lines: at the categories one per category (with how many of its switches are on), in a category one per row (with its value and
+    /// whether it is on) and the part list of the row picking one; <paramref name="onNames"/> collects the switches that are on.
     /// </summary>
     void DebugMenuAddLines(Simulation.World world, List<MenuLine> lines, List<string> onNames)
     {
-        foreach (var (header, i) in DebugLayout())
+        var categories = DebugCategories();
+        if (_category < 0 || _category >= categories.Length)
         {
-            if (header is not null) lines.Add(new(header, true, false, false, -1, -1));
+            for (int c = 0; c < categories.Length; c++)
+            {
+                bool current = c == _categoryCursor;
+                int active = DebugActiveCount(categories[c], world);
+                string value = active > 0 ? $"{active} active" : "";
+                lines.Add(new((current ? "> " : "  ") + DebugCategoryColumns(categories[c].Title, value), current, active > 0, c, -1));
+            }
+            return;
+        }
+
+        foreach (int i in DebugLayout())
+        {
             bool current = i == _debugRow;
             string mark = current && DebugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
@@ -1265,7 +1438,7 @@ sealed class DebugMenu(GameHost host)
                 string state = tool.State();
                 bool toolOn = tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
-                lines.Add(new(mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn, i, -1));
+                lines.Add(new(mark + DebugColumns(tool.Label, tool.Key, state), current && DebugParts is null, toolOn, i, -1));
                 continue;
             }
             string value = DebugRowValue(i, current, world, out bool rowOn);
@@ -1277,13 +1450,43 @@ sealed class DebugMenu(GameHost host)
                         : ""));
             }
             string text = mark + DebugColumns(host.Modding.DebugLabel(i), "", value);
-            lines.Add(new(text, false, current && DebugParts is null, rowOn, i, -1));
+            lines.Add(new(text, current && DebugParts is null, rowOn, i, -1));
             if (DebugPicksPart(i) && current && DebugParts is { } parts)
             {
                 for (int k = 0; k < parts.Length; k++)
-                    lines.Add(new((k == _debugPart ? "    > " : "      ") + parts[k].Name, false, k == _debugPart, false, i, k));
+                    lines.Add(new((k == _debugPart ? "    > " : "      ") + parts[k].Name, k == _debugPart, false, i, k));
             }
         }
+    }
+
+    /// <summary>
+    /// How many of a category's rows are switches that are on.
+    /// </summary>
+    int DebugActiveCount(DebugCategory category, Simulation.World world)
+    {
+        int count = 0;
+        foreach (int row in category.Rows)
+        {
+            if (DebugRowOn(row, world)) count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Whether row <paramref name="i"/> is a switch that is on (a cheat's live state, or a tool's).
+    /// </summary>
+    bool DebugRowOn(int i, Simulation.World world)
+    {
+        if (DebugIsTool(i))
+        {
+            var tool = DebugTools[i - host.Modding.DebugRowCount];
+            string state = tool.State();
+            return tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
+        }
+
+        DebugRowValue(i, false, world, out bool on);
+        return on;
     }
 
     /// <summary>
@@ -1436,6 +1639,11 @@ sealed class DebugMenu(GameHost host)
     /// One menu line after its 2-character marker: label, key hint and value, each in its own column so every value starts at the same place.
     /// </summary>
     static string DebugColumns(string label, string key, string value) => $"{label,-DebugLabelWidth} {key,-DebugKeyWidth} {value}".TrimEnd();
+
+    /// <summary>
+    /// A category line after its 2-character marker: the title, then how many of its switches are on, in a narrower column than the rows'.
+    /// </summary>
+    static string DebugCategoryColumns(string title, string value) => value.Length > 0 ? $"{title,-18} {value}" : title;
 
     /// <summary>
     /// The pick & collision inspector's menu (Meitou only, docs/viewer.md "Pick & collision inspector"). The F10 debug menu's Tools row opens it; it
