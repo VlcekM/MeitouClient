@@ -218,8 +218,9 @@ Reset squad positions 0x1, Buildings 0x4, Research 0x8, Dead NPCs 0x10, Relation
    transition (`FUN_14066db50`), money = max(0, `player money`) (+10000 when salvaged), the faction name = `pfaction name` (empty: as step 1), the camera pose
    (`FUN_1407ade60`) and the squad option bools (`FUN_1403ebf50`).
 10. **Reset**: the camera goes to (-43500, 0, -6625) and `FUN_14036b370` puts every player squad at that point + (i, 0, i), i the squad's index in the list (an inactive one is
-    activated there). **Observed** (the original's zone 22.30 navmesh tile against Meitou's, `meitou-tools navmesh --compare`, and a headless walk, #734): the point is
-    walkable ridge (y about 1433); about 90 units east a trench about 100 deep runs north-south (x -43410..-43280, z -6430..-6730) with no navmesh in either.
+    activated there). **Observed** (#734: a 10-unit height grid of the original's zone 22.30 navmesh tile and of Meitou's, sampled by a scratch patch, and headless
+    walks): the point is walkable ridge (y about 1433); about 90 units east a trench about 100 deep runs north-south (x about -43410..-43280, z at least
+    -6380..-6780) with no navmesh in either, so nobody walks into it or out of it.
 11. **Relations**: each GAMESTATE_FACTION of the save is loaded into its faction's relation object with the import flag set (`FUN_1409ef4e0`; which fields the flag skips is
     **Unknown**). Without the tick the factions keep their FACTION record values.
 12. Last, `FUN_1406ba3a0` (per faction, activates one squad failing a 100-unit test; meaning **Unknown**) and a rescan of the save folder.
