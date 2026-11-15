@@ -964,7 +964,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var self = world.Characters.IdOf(slot);
         if (mind.Target is null)
         {
-            var (centre, scatter) = PatrolArea(world, board, world.Characters.Previous[slot].Position);
+            var (centre, scatter) = PatrolArea(world, mind.Squad, board, world.Characters.Previous[slot].Position);
             mind.Target = PatrolPoint(world, self, centre, scatter);
         }
 
@@ -982,9 +982,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
     /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: its mission town, else its home town) at a scatter of half the town's radius,
-    /// at least 500; with neither, the character's own position at 1250.
+    /// at least 500; a nest squad's town is its nest (the original's <c>Nest</c> is a town: #771, Meitou had its members random-walk kilometres
+    /// away); with none, the character's own position at 1250.
     /// </summary>
-    (Vector2 Centre, float Scatter) PatrolArea(World world, Blackboard board, Vector3 from)
+    (Vector2 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
         var town = board.Destination.IsNone && board.Town >= 0 ? CampaignTown.OfSite(board.Town) : board.Destination;
         if (town.Site >= 0)
@@ -997,6 +998,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             return (Flat(player.Position), MathF.Max(PatrolScatterMin, player.Radius * 0.5f));
         }
+
+        if (squad is not null && world.SystemOf<PopulationSystem>()?.NestOf(squad.Id) is { } nest)
+            return (squad.HomeCentre, MathF.Max(PatrolScatterMin, nest.Radius * 0.5f));
 
         return (Flat(from), PatrolScatter);
     }

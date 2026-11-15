@@ -477,10 +477,11 @@ public sealed partial class PopulationSystem
     {
         if (p.Saved is not { } sp || RollTemplate(world, p).Built is not { } built) return null;
 
-        var (centre, homeRadius) = WildHome(sp, p.Position);
+        var (centre, homeRadius, nest) = WildHome(sp, p.Position);
         var squad = SpawnSquad(world, built, null, 0, platoonId: p.Id, wild: true);
         squad.HomeCentre = centre;
         squad.HomeRadius = homeRadius;
+        BindNest(squad, nest);
         squad.Money = p.Money;
 
         p.Stored = new StoredSquad { Name = squad.Name, Pinned = false };

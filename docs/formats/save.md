@@ -437,7 +437,7 @@ placed `basetown` makes it homeless (in the samples `basetown` is the nest's TOW
 at its saved place that never travels and is made as its saved characters when its zone is active: a nest's counts its living members against the nest's pool (as the
 original), a homeless one counts as one of the squads of the sector it stands in (the original files a platoon in the sector of its position, **Verified** by code
 `FUN_1408f6c80`, but a loaded one starts in the sector at the origin and is moved later, so for a while its real sector may spawn beside it; engine choice: bound at once).
-A nest squad more than 3 nest radii from its nest wanders where it stands (engine choice: saves hold nest squads kilometres away). On save the wild squads the
+A nest squad is bound to its nest however far it stands (saves hold nest squads kilometres away), so its town goals walk it back, as the original's town hand (the nest, [town goals](../game/ai-tasks.md#town-goals)). On save the wild squads the
 population made are written as new platoons: a nest's with `basetown` = its TOWN and `hometown` = the nest's handle, a homeless one with neither, `sqt` 2.
 NPC squads of no town, platoon or wild site (a dismissed character's, a slave bought free or handed over, one separated by dialogue) are written the same way as homeless
 platoons with `persistent` true (as the original's dismissed platoon; engine choice for the others), so they load as homeless wild platoons of the sector they stand in
