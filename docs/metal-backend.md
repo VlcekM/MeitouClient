@@ -975,11 +975,7 @@ plumbing, profiling, docs) need no Vulkan run.
   `MetalFxUpscaler` is the temporal scaler at the 0.77/0.67/0.59/0.50/0.40 presets; `MetalFxSpatialUpscaler` covers
   the explicit 0.50/0.40 alternatives. 0.40 is the floor; 0.33 crashed before the first frame on this device and is
   clamped/rejected. Native is the fallback when MetalFX is unavailable. The FSR path stays for Vulkan.
-
-## Open questions
-
-- Scene depth: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
+- **Scene depth**: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
   `MEITOU_DEPTH_REVERSED`). The chain's edits for the one-depth interface (`MetalPostChain.BeginScene`, `PostTaa`/`PostComposite`
-  without far-depth or clip-convention uniforms) are **Unknown**: `MetalPostChain.cs` is compiled only on macOS, so they are
-  unverified until a macOS build runs the Metal screenshot checks. Going reversed later: `Reversed = true`, the define in
-  `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").
+  without far-depth or clip-convention uniforms) work (**Observed**, 2026-11-15, the owner's macOS build). Going reversed later:
+  `Reversed = true`, the define in `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").
