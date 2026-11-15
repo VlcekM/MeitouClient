@@ -602,6 +602,7 @@ public static partial class SaveCapture
 
             squads++;
             var platoon = PlayerPlatoon(builder, world, squad, alive, index, kept, playerState, playerFactionName, playerFactionId);
+            var inOrder = new List<SaveCharacter>(alive.Count);
             foreach (var id in alive)
             {
                 members++;
@@ -615,7 +616,11 @@ public static partial class SaveCapture
 
                 written[id] = WriteCharacter(
                     builder, world, data, options, clock, buildings, races, platoon, sc, id, playerFactionId, squad.Leader == id, orders: true);
+                inOrder.Add(written[id]);
             }
+
+            // The loader makes the squad's members in the file's order, so the file follows the squad's (a reorder on the squads screen).
+            SaveBuilder.OrderCharacters(platoon, inOrder);
 
             // The platoon's `imprisoned` is set only when it unloads (FUN_1407ef4b0), which these squads do not: the record keeps the save's value.
             SetCharCount(platoon);

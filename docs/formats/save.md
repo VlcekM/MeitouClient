@@ -345,6 +345,8 @@ One PLATOON per player squad, `squad index` its place in the squad order (**Obse
 copies its text into the platoon's record name, `FUN_14048df00`, **Observed**; 962 PLATOON records of two saves all have name = `platoon stringID`, none
 renamed). Meitou keeps each loaded squad on its own file (`Squad.SaveName`) and writes a squad made since as a new platoon, empty squads included; a
 character that changed squads is written anew in its new platoon and leaves the old file; a removed squad's platoon is deleted.
+A squad's member order is its platoon file's INSTANCE_COLLECTION order: Meitou reads the members in that order (the first leads) and, when saving,
+rewrites the collection in the squad's current order, slots and handles unchanged, so a reorder on the squads screen survives a reload.
 Meitou-only, for an [autonomous squad](../simulation.md#autonomous-player-squads) (`Saving/AutonomySave`): `meitou autonomous` (bool), its packages in the
 NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou home` (string: a town building key or a player building id) while a home is
 assigned. Other player platoons' AI keys stay as read.
