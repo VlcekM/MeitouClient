@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Execution",
+    "author": "Jame",
+    "summary": "Give a squad member the order to execute a downed enemy.",
+    "workshopId": "3838346946"
+  },
+  {
+    "name": "Guild & Quests",
+    "author": "BeatTheCount",
+    "summary": "Take quests from the board, attempt trials, and rise through the ranks of the Adventurers Guild in 20 towns.",
+    "workshopId": "3834435274"
+  },
+  {
+    "name": "Kenshi Ultimate Overhaul",
+    "author": "BeatTheCount",
+    "summary": "Builds world politics on Universal Wasteland Expansion and Kenshi Kaizo, letting nations go to war in MeitouClient.",
+    "workshopId": "3837593428"
+  },
+  {
+    "name": "Landmark Banners",
+    "author": "BeatTheCount",
+    "summary": "Spot shops, bars, and town services from the street by the colored banners hanging outside their doors.",
+    "workshopId": "3839659223"
+  },
+  {
+    "name": "TimeLight Map",
+    "author": "pizzy",
+    "summary": "Follow your squad from above with a live 3D minimap in the corner of the screen.",
+    "workshopId": "3839458940",
+    "links": [
+      {
+        "label": "Nexus Mods",
+        "href": "https://www.nexusmods.com/kenshi/mods/2285"
+      },
+      {
+        "label": "GitHub source",
+        "href": "https://github.com/pizzy00/timelight-map"
+      }
+    ]
+  }
+]

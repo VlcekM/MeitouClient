@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "refresh:workshop": "node scripts/refresh-workshop.mjs",
     "preview": "astro preview"
   },
   "dependencies": {

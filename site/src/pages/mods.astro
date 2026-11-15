@@ -1,0 +1,146 @@
+---
+import Base from '../layouts/Base.astro';
+import catalog from '../data/mods.json';
+import snapshot from '../data/workshop.json';
+
+type Link = { label: string; href: string };
+interface Mod {
+  name: string;
+  author: string;
+  summary: string;
+  workshopId?: string;
+  links?: Link[];
+  previewUrl?: string;
+}
+
+const workshop: Record<string, { title: string; previewUrl: string }> = snapshot;
+const guide = 'https://github.com/VlcekM/MeitouClient/wiki/Writing-code-mods';
+const mods = [...catalog].sort((a, b) => a.name.localeCompare(b.name, 'en')).map((mod: Mod) => {
+  const links = [...(mod.links ?? [])];
+  let preview = mod.previewUrl;
+  let sourceTitle = mod.name;
+  if (mod.workshopId) {
+    const item = workshop[mod.workshopId];
+    if (!item) throw new Error(`Refresh the Workshop snapshot for ${mod.name} (${mod.workshopId}).`);
+    const thumbnail = new URL(item.previewUrl);
+    const size = new URLSearchParams({ imw: '720', imh: '420', ima: 'fit', impolicy: 'Letterbox', letterbox: 'false' });
+    size.forEach((value, key) => thumbnail.searchParams.set(key, value));
+    preview = thumbnail.href;
+    sourceTitle = item.title;
+    links.unshift({ label: 'Steam Workshop', href: `https://steamcommunity.com/sharedfiles/filedetails/?id=${mod.workshopId}` });
+  }
+  if (!links.length) throw new Error(`Missing public listing for ${mod.name}.`);
+  return { ...mod, preview, sourceTitle, links };
+});
+---
+<Base title="Mods - Meitou" description="Browse community mods for MeitouClient and learn how to create and check your first C# code mod." kofiTop>
+  <div class="mods-page">
+    <header class="mods-intro">
+      <h1>Meitou mods</h1>
+      <p>Find community mods for MeitouClient, from guild quests to a live map of your squad.</p>
+      <a class="mt-btn guide-jump" href="#make-a-mod"><span>Make a code mod</span><span aria-hidden="true">↓</span></a>
+    </header>
+
+    <section class="catalog" aria-labelledby="community-mods">
+      <h2 id="community-mods">Community mods</h2>
+      <div class="mod-grid">
+        {mods.map(mod => (
+          <article class="mod-card">
+            {mod.preview && <div class="art"><img src={mod.preview} alt="" width="720" height="405" decoding="async" loading="lazy" /></div>}
+            <div class="card-body">
+              <h3><a href={mod.links[0].href} title={mod.sourceTitle}>{mod.name}</a></h3>
+              <p class="credit">By {mod.author}</p>
+              <p class="summary">{mod.summary}</p>
+              <div class="sources">
+                {mod.links.map(link => <a href={link.href} aria-label={`${link.label} for ${mod.name}`}>{link.label}<span aria-hidden="true"> ↗</span></a>)}
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+      <p class="community-link">Meet other modders in <a href="https://discord.gg/DVAHH2n9DR">the Meitou Discord</a>.</p>
+    </section>
+
+    <section class="guide" aria-labelledby="make-a-mod">
+      <h2 id="make-a-mod" tabindex="-1">Make a code mod</h2>
+      <p>Ordinary Kenshi mods change game data or assets. A Meitou code mod can also run C# when the game loads.</p>
+      <ol class="guide-steps">
+        <li>
+          <h3><a href={guide + '#a-code-mod-in-five-minutes'}>Create your first mod</a></h3>
+          <p>Build a C# library against your installed copy of Meitou. Put the DLL in your mod folder and name its entry type in <a href={guide + '#the-manifest'}><code>meitou.json</code></a>.</p>
+        </li>
+        <li>
+          <h3><a href={guide + '#what-you-can-register'}>Choose what it changes</a></h3>
+          <p>Register a dialogue condition, react to a combat hit, or add a control to the game interface. The guide shows where each connects to the game.</p>
+        </li>
+        <li>
+          <h3><a href={guide + '#checking-your-mod'}>Check it in game</a></h3>
+          <p>Enable the mod in the launcher and try it in Meitou. Run <code>meitou-tools mod-check</code> on a save to compare simulation ticks across three runs. If it flags a difference, start with the first tick it reports.</p>
+        </li>
+      </ol>
+      <div class="guide-links"><a href={guide}>Full code-mod guide</a><a href={guide + '#troubleshooting'}>Troubleshooting</a></div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  :global(.mt-scene:has(.mods-page)) { background: #1c1613; }
+  :global(.mt-scene:has(.mods-page) > .top) { padding-block: 1rem; }
+  .mods-page { max-width: 74rem; margin-inline: auto; padding: .5rem 0 2rem; color: var(--paper-light); line-height: 1.55; }
+  .mods-page :is(h1, h2, h3, p) { margin: 0; }
+  .mods-page :is(h1, h2, h3) { line-height: 1.16; text-wrap: balance; }
+  .mods-page :is(h1, h2)::after {
+    content: ""; display: block; width: 3rem; height: 3px; border-radius: 2px; margin-top: .65rem; background: var(--brass-light);
+  }
+  .mods-page h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+  .mods-intro {
+    padding: clamp(1.3rem, 2.5vw, 2.1rem) 1rem; border-radius: calc(2 * var(--radius-card)); text-align: center;
+    background: linear-gradient(90deg, rgb(19 15 12 / .76), rgb(19 15 12 / .69), rgb(19 15 12 / .76)), url('/roadmap-bg/bg-2.jpg') center 52% / cover;
+  }
+  .mods-intro h1 { color: #fff; font-size: clamp(2.1rem, 5vw, 3.1rem); }
+  .mods-intro h1::after { margin-inline: auto; }
+  .mods-intro p { max-width: 74ch; margin: .8rem auto 1rem; text-wrap: balance; }
+  .guide-jump { min-height: 44px; color: var(--paper-light); }
+  .catalog { margin: clamp(1.6rem, 3vw, 2.25rem) 0; }
+  .mod-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.15rem; margin: 1.2rem 0; }
+  .mod-card {
+    display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+    border: 1px solid #493c31; border-radius: calc(1.5 * var(--radius-card)); background: #2a201b;
+  }
+  .art { position: relative; aspect-ratio: 16 / 9; background: #171210; border-bottom: 1px solid #493c31; }
+  .art img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+  .card-body { display: flex; flex: 1; flex-direction: column; padding: 1rem 1.15rem .7rem; }
+  .card-body h3 { font-size: 1.35rem; }
+  .card-body h3 a { color: #f4e8d4; text-decoration: none; }
+  .card-body h3 a:is(:hover, :focus-visible) { text-decoration: underline; }
+  .card-body .credit { color: var(--brass-light); font-size: .9rem; margin: .25rem 0 .65rem; }
+  .card-body .summary { flex: 1; margin-bottom: .9rem; }
+  .sources, .guide-links { display: flex; align-items: center; flex-wrap: wrap; gap: .1rem 1rem; }
+  .sources { border-top: 1px solid #493c31; }
+  .sources a, .guide-links a { display: inline-flex; align-items: center; gap: .2rem; min-height: 44px; }
+  .sources a { font-size: .9rem; }
+  .sources span { color: var(--brass-light); }
+  .community-link { font-size: .95rem; }
+  .guide {
+    padding: clamp(1.2rem, 3vw, 2.4rem); border: 1px solid #464139; border-radius: calc(2 * var(--radius-card));
+    background: #222220;
+  }
+  .guide h2 { scroll-margin-top: 1.25rem; }
+  .guide h2:focus-visible { outline: 2px solid var(--brass-light); outline-offset: 4px; }
+  .guide > p { margin-top: .85rem; max-width: 70ch; }
+  .guide-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.4rem; margin: 1.5rem 0 1rem; padding-left: 1.5rem; }
+  .guide-steps li { padding-inline: .15rem 1rem; }
+  .guide-steps li::marker { color: var(--brass-light); font-weight: 600; }
+  .guide-steps h3 { font-size: 1.15rem; }
+  .guide-steps p { margin-top: .5rem; }
+  .guide-links { border-top: 1px solid #464139; padding-top: .35rem; }
+  @media (max-width: 62rem) {
+    .mod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .guide-steps { grid-template-columns: 1fr; max-width: 70ch; }
+  }
+  @media (max-width: 42rem) {
+    .mod-grid { grid-template-columns: 1fr; }
+    .catalog { margin-block: 1.6rem; }
+    .guide-steps li { padding-right: 0; }
+  }
+</style>

@@ -121,6 +121,7 @@ const pairs = [
   <section id="about">
     <div class="about">
       <h2>About</h2>
+      <a class="mt-btn roadmap-link" href="/roadmap/"><span>Development roadmap</span></a>
       <p class="lead">
         MeitouClient is an open-source reimplementation of the Kenshi engine in C# and .NET 11 with a Vulkan renderer. It is a
         drop-in replacement: the original game content, FCS mods and vanilla save games run unchanged. It needs your own copy
@@ -313,6 +314,7 @@ const pairs = [
   .about .license { display: inline-block; padding: var(--space-4) var(--space-7); border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(196, 160, 98, .5); color: #fff; font-size: 20px; line-height: 30px; }
   .links { display: flex; justify-content: center; gap: var(--space-6); margin-top: 32px; }
   .links .mt-btn { min-width: 160px; }
+  .roadmap-link { margin-bottom: var(--space-7); }
   @media (max-width: 640px) { .modes { grid-template-columns: 1fr; } .about h2 { font-size: 36px; line-height: 44px; } .about .belief { font-size: 20px; line-height: 32px; } .about .license { border-radius: calc(2 * var(--radius-card)); } }
   .ai { display: flex; align-items: center; justify-content: center; gap: 40px; max-width: 1280px; margin: 0 auto; padding: 48px 0; }
   .cmp-head h2, .ai h2 { margin: 0 0 var(--space-5); color: #fff; font: 600 32px/40px var(--font-exo); }

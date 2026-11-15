@@ -44,7 +44,7 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
             <slot name="center" />
           </div>
         )}
-        <a class="gh" href="/roadmap">Roadmap</a>
+        <a class="gh" href="/mods/" aria-current={Astro.url.pathname.replace(/\/$/, '') === '/mods' ? 'page' : undefined}>Mods</a>
         <a class="gh" href="/benchmarks">Benchmarks</a>
         <a class="gh" href="https://discord.gg/DVAHH2n9DR">
           <DiscordIcon />
