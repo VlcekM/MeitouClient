@@ -488,7 +488,6 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         TutorialWindow.PollTutorials();
         StealthView.UpdateStealthArrows();
         DamageFloaters.DrawFloaters(o);
-        MoveMarker.FadeMarker();
 
         // The box.
         if (Dragging && _dragFrom is { } from)

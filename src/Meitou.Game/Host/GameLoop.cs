@@ -1794,6 +1794,9 @@ sealed class GameLoop(GameHost host)
         StageClock.UiPart(StageClock.UiMarkers);
         if (!host.GameOptions.NoPopulation && !covered && _panel?.Visible != true) host.Player.Steer();
         StageClock.UiPart(StageClock.UiSteer);
+
+        // The world draws the marker, so it fades with the interface hidden (F7) too.
+        host.Player.MoveMarker.FadeMarker();
         if (ui && _overlay is not null && !host.GameOptions.NoPopulation) host.Player.Draw(_overlay, size.X, size.Y);
         else if (host.AgentChannel.InterfaceHidden && !_cinema.Clean && !take && !covered && _overlay is not null && !host.GameOptions.NoPopulation)
             host.Player.DrawSpeechOnly(_overlay, size.X, size.Y);
