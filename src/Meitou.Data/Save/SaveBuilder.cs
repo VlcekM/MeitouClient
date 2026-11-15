@@ -453,6 +453,26 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
+    /// Puts <paramref name="first"/> (characters of the platoon) at the front of its collection and character list in that order, the others after
+    /// them as they were. A squad's member order is its collection's order (docs/formats/save.md "Player platoons"); handles and slots stay.
+    /// </summary>
+    public static void OrderCharacters(SavePlatoon platoon, IReadOnlyList<SaveCharacter> first)
+    {
+        var front = new HashSet<SaveCharacter>(first);
+        var rest = platoon.Characters.Where(c => !front.Contains(c)).ToList();
+        var order = first.Where(platoon.Characters.Contains).Concat(rest).ToList();
+        platoon.Characters.Clear();
+        platoon.Characters.AddRange(order);
+        if (platoon.Collection is not { } collection) return;
+
+        var instances = new HashSet<FcsInstance>(order.Select(c => c.Instance));
+        var others = collection.Instances.Where(i => !instances.Contains(i)).ToList();
+        collection.Instances.Clear();
+        collection.Instances.AddRange(order.Select(c => c.Instance));
+        collection.Instances.AddRange(others);
+    }
+
+    /// <summary>
     /// Replaces what a character's INVENTORY_STATE holds with <paramref name="items"/>: the old item records (and the contents of containers among
     /// them) leave the file, and each item gets an INVENTORY_ITEM_STATE (<see cref="SaveInventory"/>) linked by an instance numbered from 1; a
     /// container's contents get an INVENTORY_STATE of their own, linked by the item's one instance, as the game writes them. An item read from this
