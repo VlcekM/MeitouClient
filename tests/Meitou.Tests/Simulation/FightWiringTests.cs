@@ -17,11 +17,12 @@ namespace Meitou.Tests.Simulation;
 /// </summary>
 public class FightWiringTests
 {
-    static (SimWorld World, CombatSystem Combat, CharacterId A, CharacterId B, CharacterId C) Fight(ulong seed, int threads, float distance = 120)
+    static (SimWorld World, CombatSystem Combat, CharacterId A, CharacterId B, CharacterId C) Fight(ulong seed, int threads, float distance = 120,
+        Func<float, float, float>? ground = null)
     {
         var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
                 new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true });
-        var walk = new OpenGroundWalkability((_, _) => 150);
+        var walk = new OpenGroundWalkability(ground ?? ((_, _) => 150));
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
             [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
                     new RetaliationSystem(combat)]);
@@ -74,6 +75,31 @@ public class FightWiringTests
         world.RunTicks(120);
 
         Assert.Equal(at, table.Previous[down].Position);
+    }
+
+    /// <summary>
+    /// A fight begun on dry ground ends, for both sides, once the attacker walks into deep water, and neither starts one again while it stays
+    /// there (the melee rows' swim tests, re-checked each update; docs/game/ai-tasks.md "Melee row gates", #778).
+    /// </summary>
+    [Fact]
+    public void A_fight_ends_when_a_fighter_goes_into_deep_water_and_does_not_start_again()
+    {
+        var (world, _, a, b, _) = Fight(5, 1, distance: 40, ground: (x, _) => x < 2000 ? 150 : 0);
+        using var _ = world;
+        var table = world.Characters;
+        world.RunTicks(60);
+
+        Assert.True(table.Cold(a.Slot)!.InCombat && table.Cold(b.Slot)!.InCombat, "both fight on dry ground");
+
+        table.Place(a.Slot, new Vector3(3000, Meitou.Data.World.WorldWater.Height, 1000), 0, CharacterTask.Attack);
+        world.RunTicks(10);
+
+        Assert.Equal(3, table.Cold(a.Slot)!.WaterState);
+        for (int tick = 0; tick < 300; tick++)
+        {
+            Assert.False(table.Cold(a.Slot)!.InCombat || table.Cold(b.Slot)!.InCombat, $"a fight runs {tick} ticks after the swim");
+            world.RunTick();
+        }
     }
 
     [Fact]
