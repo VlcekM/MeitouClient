@@ -32,7 +32,27 @@ Native accepts8..17;17 skips declared header,16 reads version/skips4strings,8..1
 nextId: the data's counter restarts at 0 per file and ends at least at that file's nextId ([ids](zones.md#containers-and-ids)). byteSize ignored; flags from15,vec3/vec4 from9. Only flag0/1 affect merge.
 Silently truncate at NUL and byte limits: keys64, names/IDs/ref/instance identities512,
 string/filename4096. Prior types have integer IDs/extra tags and older refs; partial support is
-not a complete old-format specification. Error mid-record behaviour unverified.
+not a complete old-format specification.
+
+### Files that fail to load
+
+**Verified** (decompile 1.0.68: loader `FUN_1406c0b50`, game-data load `FUN_140870ae0` called from `FUN_14082b370` and
+`FUN_140872d70`, which ignore its result; `mods.cfg` reader `FUN_1408693a0`):
+- The loader fails only when the file does not open or its first int (the type) is outside 8..17; the latter logs
+  `[GameDataContainer::load] Invalid data file '<path>' (Version: <n>)`. Past that check it has no failure exit and never tests the stream,
+  so a truncated or damaged file counts as loaded, silently, with the records read before the damage.
+- `gamedata.base` failing: log `[Mods] Failed to load gamedata.base.`, box "Error!" / "Failed to load the core '{1}' file." with
+  `gamedata.base`; it stays first in the file list (its level folder is still read). A core `.mod` failing: log
+  `[Mods] Failed to load core mod: <name>`, the same box with `<name>.mod`, left out of the list. Loading goes on either way.
+- A mod failing: log `[Mods] Failed to load mod: <name>`, ` (*)` appended for a Workshop mod; left out of the list (no records, no level
+  data). After all mods, one box "Mod error(s) (Ignored files)": "Failed to load the following mod(s):" and a line per name. Loading goes on.
+- A `mods.cfg` name with no mod on disk is logged (`[Mods] Mod '<name>...`) and skipped before loading; it is not in the box.
+
+Meitou (`GameDatabase.LoadDataFile`, `FcsReader.HasKnownType`, `DataLoadErrors`): a file that does not open or has a type the reader does
+not know is left out (`GameDatabase.NotLoaded`, issue `DataFileNotLoaded`) and has no level layer; one that fails later keeps the records
+read whole before the problem (issue `DataFileDamaged`). The log lines go to the console log (`log.txt`) when the world loads; the boxes
+open, one after another, the first time the title screen opens. **Engine choices**: types 8..14 are left out (the reader knows 15..17); past
+the damage the original reads on without a defined result, Meitou stops there.
 
 Core files→core translation→ordered mods→first mod translation→postpasses→world leveldata.
 GLOBAL CONSTANTS lookup by name AND type27. Postpass resolves refs. **Verified** (`FUN_1406c34f0`, `GameDatabase.AddWallMasters`):
@@ -185,7 +205,7 @@ CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugG
 
 ## Open questions
 
-- The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
+- The exact layouts of file types 8–14.
 - Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
   bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
   the raw bytes.

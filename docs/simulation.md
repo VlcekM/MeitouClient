@@ -588,8 +588,10 @@ Own DotRecast builder/cache (`Meitou.Simulation.Navigation`), not Havok runtime.
 areas. A* checks portal clearance (radius per wall end, default radius 4), water factor and doors. `NavAdapter` exposes simulation interfaces;
 `ZoneGate` holds population until ready. Collision and world placement rules:
 [collision.md](formats/collision.md), [pathfinding.md](game/pathfinding.md).
-Cache key: the zone's building hash, the build settings and a content hash (the data files in load order, `seeds.def` and the
-height, blend, biome and overlay maps by size and write time, the DotRecast version). The cache holds the zone's own pruning; the kept set of every loaded
+Cache key: the zone's building hash (id, position with height, full rotation, destroyed, layout names of the buildings near it), the build settings and a content hash (`NavContentHash`, by name, size and write time: the data
+files in load order, `seeds.def`, the height, blend, biome, map feature and overlay maps, every zone, level and interiors file of every
+level layer, every collision file a record names (collision and boundary fields, any `.xml`) as the install resolves it (missing ones too), and the DotRecast version), so a mod
+update that changes any of them builds the meshes again. The cache holds the zone's own pruning; the kept set of every loaded
 zone is resolved again whenever one is published or unloaded (the border rule toward unloaded sides, the neighbours' kept edges, `KeepAt` points;
 [zone borders](game/pathfinding.md#own-builder)); the flood, the interiors' carry and the fallback region never pass an exterior edge under 9 units
 ([narrow portals](game/pathfinding.md#own-builder)). Unloading a zone skips its queued build;
@@ -2036,4 +2038,4 @@ the level data) stay.
 **Engine gaps** are listed where they apply, not here: [unique characters](#unique-characters) and [campaigns](#off-screen-tier),
 [locks](#cages-beds-and-locks),\n[slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets),\n[prospecting](#prospecting), [AI](#ai) (planner finders).\nSmuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-parity.md).
 
-- Navmesh: the cache key does not see a changed collision file; a running build is not stopped on unload (it finishes into the cache).
+- Navmesh: a running build is not stopped on unload (it finishes into the cache).

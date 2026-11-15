@@ -411,11 +411,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public void Notice(string text, bool error = false, string? logText = null) => MessageRoller.QueueNotice(text, error, logText);
 
     /// <summary>
-    /// A message box with only an Ok button.
+    /// A message box with only an Ok button; <paramref name="ok"/> runs after it closes.
     /// </summary>
-    internal void MessageBox(string title, string text)
+    internal void MessageBox(string title, string text, Action? ok = null)
     {
-        Frontend.PendingConfirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), () => { },
+        Frontend.PendingConfirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), ok ?? (() => { }),
             TitleMenu.UpperTr("Ok")) { OkOnly = true };
         FaithfulScreens.Open("message");
     }

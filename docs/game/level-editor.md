@@ -64,7 +64,7 @@ F10 → Tools → "Level editor..." (`LevelEditorHost`, `LevelEditorPanel`, `Bui
   list is written as the trailer. The folder gets `meitou-level-editor.txt` and an empty `Meitou Level Editor.mod`, so the
   launcher can activate it; Meitou never writes into a folder of that name without the marker, nor into `data/`, another mod or
   `settings.cfg`. `leveldata.level` and `fogfeatures.dat` are not written (towns and fog are not edited).
-- Meitou reads each active mod's `leveldata/` as a layer in load order ([zones](../formats/zones.md), "Level data layers"), so after a
+- Meitou reads each active mod's `leveldata/` as a layer in load order ([zones](../formats/zones.md#mods)), so after a
   restart with the mod `Meitou Level Editor` active the saved buildings are level buildings read at load, as the session's were.
 - **Simulation side**: a building placed or cleared in the session is a town building at once, as one the level data holds at load. The host makes the placed building's `TownBuilding` with
   `TownBuildingBuilder`, the code the boot pass (`TownBuildings.Build`) runs for every level building (town by radius, owner from the state or the town, doors, beds, seats, containers, item slots, interior layouts),

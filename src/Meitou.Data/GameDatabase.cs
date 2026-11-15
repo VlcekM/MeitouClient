@@ -37,6 +37,11 @@ public sealed class GameDatabase
     public List<string> Files { get; } = [];
 
     /// <summary>
+    /// The load order's files that failed to load and were left out (they do not open, or their file type is unknown), in order.
+    /// </summary>
+    public List<LoadOrderEntry> NotLoaded { get; } = [];
+
+    /// <summary>
     /// The header of each file applied (version, author, description), by file name.
     /// </summary>
     public Dictionary<string, FileHeader> Headers { get; } = new(StringComparer.Ordinal);
@@ -81,7 +86,7 @@ public sealed class GameDatabase
                 db.LoadTranslation(loadOrder.Language.CoreTranslationFile);
                 coreTranslated = true;
             }
-            db.Apply(FcsReader.ReadFile(entry.Path), entry.Name);
+            db.LoadDataFile(entry);
         }
         if (!coreTranslated) db.LoadTranslation(loadOrder.Language.CoreTranslationFile);
         db.LoadTranslation(loadOrder.Language.ModTranslationFile);
@@ -89,6 +94,33 @@ public sealed class GameDatabase
         db.AddWallMasters();
         db.AddGearBlueprints();
         return db;
+    }
+
+    /// <summary>
+    /// Reads and applies one data file of the load order as the game does (docs/formats/fcs-mod.md, "Files that fail to load"): one that does not
+    /// open or has an unknown file type is left out (<see cref="NotLoaded"/>), one damaged further on is applied with the records read before the
+    /// damage.
+    /// </summary>
+    void LoadDataFile(LoadOrderEntry entry)
+    {
+        FcsFile file;
+        try
+        {
+            file = FcsReader.ReadFile(entry.Path);
+        }
+        catch (FcsFormatException e) when (e.Partial is { } partial)
+        {
+            Issues.Add(new GameDataIssue(GameDataIssueKind.DataFileDamaged, entry.Name, null, e.Message));
+            file = partial;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FcsFormatException)
+        {
+            Issues.Add(new GameDataIssue(GameDataIssueKind.DataFileNotLoaded, entry.Name, null, e.Message));
+            NotLoaded.Add(entry);
+            return;
+        }
+
+        Apply(file, entry.Name);
     }
 
     /// <summary>
@@ -377,6 +409,14 @@ public enum GameDataIssueKind
     /// A world level file could not be read (a mod's file with its zero bytes turned to spaces); it is left out.
     /// </summary>
     LevelFileNotLoaded,
+    /// <summary>
+    /// A data file of the load order does not open or has an unknown file type; the game leaves it out and goes on.
+    /// </summary>
+    DataFileNotLoaded,
+    /// <summary>
+    /// A data file is damaged past its file type; the records read before the damage are applied and the file counts as loaded.
+    /// </summary>
+    DataFileDamaged,
 }
 
 /// <summary>

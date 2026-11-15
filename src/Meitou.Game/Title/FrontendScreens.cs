@@ -117,6 +117,11 @@ sealed class FrontendScreens(PlayerInterface player)
     internal Confirmation? PendingConfirmation;
 
     /// <summary>
+    /// Whether the boxes for data files that failed to load were shown (once per run, as the game shows them after loading its data).
+    /// </summary>
+    bool _loadErrorsShown;
+
+    /// <summary>
     /// The game data (<see cref="ConfigureFrontend"/>; null without it).
     /// </summary>
     internal GameDatabase? GameData;
@@ -147,6 +152,18 @@ sealed class FrontendScreens(PlayerInterface player)
         player.FaithfulScreens.Open("title");
         RefreshSlots();
         player.UpdateMenuPause();
+        ShowLoadErrors();
+    }
+
+    /// <summary>
+    /// The first time the title opens: the error boxes of the data files that failed to load (<see cref="DataLoadErrors.Show"/>).
+    /// </summary>
+    void ShowLoadErrors()
+    {
+        if (_loadErrorsShown || GameData is null) return;
+
+        _loadErrorsShown = true;
+        DataLoadErrors.Show(player, GameData);
     }
 
     /// <summary>

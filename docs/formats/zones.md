@@ -13,7 +13,7 @@ three reference ints from10 and13 trailers of8-byte entries; read-only support.
 State ID=placementID+'-S'+hex type (35→S23,94→S5e), verified31849 records. Definition target IDs
 join merged game data, not names. Base placements/layers and save-state overrides are distinct.
 **Observed** WorldLevelData merges fields per key/instances per ID, empty target deletes;
-flags0 may still override. Exact original zone/mod merge behaviour remains partly unknown.
+flags0 may still override. The game merges level layers with its game-data loader (**Verified**, [Mods](#mods)).
 **Observed** (`--data-check`, unmodded 1.0.68): later layers define 4047 earlier-layer ids again (all zone, level and interiors
 files; 957 in `rebirth/interiors.level`) and nothing else; that is how layers replace placements, so it is not reported as a problem.
 
@@ -184,11 +184,26 @@ files are rewritten byte for byte (`LevelFileTests.Every_base_game_level_file_pa
 
 ### Mods
 
-A mod's world edits are a flat `leveldata/` folder beside its `.mod` file (Workshop or `mods/<name>/`): zone files, `leveldata.level`,
-`interiors.level`. **Observed**: all 179 such folders in a 1368-mod install are flat and lower-case; the exe holds `/leveldata/` beside
-`./data/newland/leveldata/`; the original game showed one install's mod-expanded Hub from them (path rule not traced in code). Meitou
-(`WorldLevelData.Load`): after the core files' layers, one layer per enabled mod that has the folder, in `mods.cfg` order, merged as the
-core layers are. A file the reader refuses is left out with a `LevelFileNotLoaded` issue (**Observed**: Great Frontiers - World
+Level data layers (**Verified**, decompile of 1.0.68: core list `FUN_14086ab20`, mod discovery `FUN_14086f7a0`, load `FUN_140870ae0`,
+readers below): every game-data file the game loaded is one layer, in its load order, with a level folder:
+- `gamedata.base`: `data/newland/leveldata/`; `Newwworld`, `Dialogue`, `rebirth` (a fixed list): `data/newland/leveldata/<name>/`. The
+  base file's layer is listed even when it fails to load (the game reports it); a core `.mod` only when it loaded.
+- A mod, after the core files in `mods.cfg` order: `<mod folder>/leveldata/`, the folder holding its `.mod` (`mods/<name>/`, or its
+  Workshop item's folder), set when its `.mod` loaded ("[Mods] Loaded mod"); a mod that failed is not listed and adds no level data.
+  The readers use no other folder for a mod.
+- Readers walk the list front to back and read the exact file name in each folder: `leveldata.level` once at game-data load
+  (`FUN_140870ae0`), `interiors.level` once (`FUN_14054c330`, a flag stops a second read), `zone.<x>.<y>.zone` each time the zone
+  loads (`FUN_1409ffad0`), then the save's `zone/zone.<x>.<y>.zone` over them. All go through the game-data loader that reads `.mod`
+  files (`FUN_1406c0b50`, `GameDataContainer::load`), so a later layer's record merges over an earlier one's by the FCS rules
+  ([fcs-mod](fcs-mod.md)). The loader stores the layer's index on the records, references and instances it adds (the save's file
+  passes -1 and stores none).
+
+A mod's folder is flat: zone files, `leveldata.level`, `interiors.level` (**Observed**: all 179 such folders in a 1368-mod install are flat
+and lower-case). Meitou (`WorldLevelData.Load`) builds the same list from the load order: the base folder, the core files' sub-folders,
+then each mod's `leveldata` folder when it exists, leaving out a core `.mod` or mod that fails to load
+([fcs-mod](fcs-mod.md#files-that-fail-to-load)), merged with
+`GameDatabase.Apply`. **Verified** (`meitou-tools objects`, Workshop mod GuildQuests in the load order): its `leveldata/zone.20.33.zone`
+places the Adventurers Guild, its sign and banners. A file the reader refuses is left out with a `LevelFileNotLoaded` issue (**Observed**: Great Frontiers - World
 Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174
 mods enabled): 54 473 placed buildings in 1222 zones against 11 714 in 913 without the mod layers.
 
@@ -247,10 +262,6 @@ items kept apart from the ground item limit; a nest loaded again, and one a save
 names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
 no file of. The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
 the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre.
-
-## Open questions
-
-- The game's layer merge rules, and where mods put level data.
 
 ## Expression reference
 

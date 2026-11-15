@@ -22,7 +22,7 @@ Steamworks. Saves use `%LOCALAPPDATA%\kenshi\save\` unless `User save location=0
 2. Core language `.translation` (`locale/<code>/<code>.translation`, same record format) for the language chosen from `settings.cfg` ([localisation](localisation.md)).
 3. Mods in `data/mods.cfg` order, then the translation of the first mod that has one (`<folder>/locale/X/X.translation`; that mod also sets the language). Header
    dependencies do not affect runtime order. Unopenable/invalid mods are skipped and collected
-   in one ignored-files dialog, workshop entries marked `(*)`.
+   in one ignored-files dialog ([failed files](fcs-mod.md#files-that-fail-to-load)).
 
 `mods.cfg`: text-mode lines up to 999 characters, CRLF accepted, empty lines skipped, **no
 trimming**. First character `#`, `/`, `;` means comment. Suffix after last dot must equal

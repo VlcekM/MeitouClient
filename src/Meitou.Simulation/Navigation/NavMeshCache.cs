@@ -61,48 +61,10 @@ public sealed class NavMeshCache
     }
 
     /// <summary>
-    /// Hash of the inputs every zone shares, by size and write time (not contents): the data files in load order (record contents: buildings,
-    /// layouts, foliage), the seed, height, biome, map feature and overlay files the gather and the foliage placer read, and the DotRecast version.
-    /// Collision files are not in it.
+    /// Hash of the inputs every zone shares, by size and write time (not contents): the data files, map files, level files of every layer,
+    /// collision files the records name and the DotRecast version (<see cref="NavContentHash"/>).
     /// </summary>
-    public static uint ContentHash(GameInstall install, GameDatabase db)
-    {
-        uint h = 2166136261;
-        void Add(string text)
-        {
-            foreach (char c in text)
-                h = (h ^ c) * 16777619;
-
-            h = (h ^ 0xff) * 16777619;
-        }
-
-        void Stamp(string path)
-        {
-            var file = new FileInfo(GameFiles.Resolve(path));
-            Add(file.Name);
-            Add(file.Exists ? $"{file.Length}:{file.LastWriteTimeUtc.Ticks}" : "-");
-        }
-
-        var mods = ModList.FindMods(install);
-        foreach (var name in db.Files)
-        {
-            Stamp(LoadOrder.BaseFiles.Contains(name) ? Path.Combine(install.DataDirectory, name)
-                : mods.TryGetValue(Path.GetFileNameWithoutExtension(name), out var mod) ? mod : name);
-        }
-
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap,
-            MapFeatureFile.RelativePath })
-            Stamp(Path.Combine(install.DataDirectory, rel));
-
-        if (Path.GetDirectoryName(TerrainMaps.OverlayTile(install, "new_overlay", 0, 0)) is { } overlays && System.IO.Directory.Exists(overlays))
-        {
-            foreach (var tile in System.IO.Directory.GetFiles(overlays, "new_overlay.*").Order(StringComparer.OrdinalIgnoreCase))
-                Stamp(tile);
-        }
-
-        Add(typeof(DotRecast.Recast.RcBuilder).Assembly.GetName().Version?.ToString() ?? "");
-        return h;
-    }
+    public static uint ContentHash(GameInstall install, GameDatabase db, WorldLevelData levels) => NavContentHash.Of(install, db, levels);
 
     /// <summary>
     /// The cached mesh when the file exists and matches the hashes; null otherwise (missing, stale or damaged).

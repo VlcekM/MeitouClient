@@ -35,16 +35,17 @@ public static class FcsReader
     public static FcsFile Read(Stream stream) => Read(stream, lossless: false);
 
     /// <summary>
-    /// Reads a whole file from <paramref name="stream"/>, which is left open.
+    /// Reads a whole file from <paramref name="stream"/>, which is left open. A file that does not parse throws an <see cref="FcsFormatException"/>
+    /// whose <see cref="FcsFormatException.Partial"/> holds what was read before the problem once the file type was known.
     /// </summary>
     /// <param name="lossless">Decode strings with <see cref="LosslessUtf8"/> (bytes that are not UTF-8 are kept) instead of failing on them; save
     /// files need it.</param>
     public static FcsFile Read(Stream stream, bool lossless)
     {
         using var r = new FcsBinaryReader(stream, lossless);
+        var file = new FcsFile();
         try
         {
-            var file = new FcsFile();
             ReadHeader(r, file);
             file.NextId = r.ReadInt32();
             int count = ReadCount(r);
@@ -55,9 +56,42 @@ public static class FcsReader
         }
         catch (EndOfStreamException e)
         {
-            throw new FcsFormatException("Unexpected end of file.", stream.Position, e);
+            throw new FcsFormatException("Unexpected end of file.", stream.Position, e) { Partial = Typed(file) };
+        }
+        catch (FcsFormatException e) when (e.Partial is null)
+        {
+            e.Partial = Typed(file);
+            throw;
         }
     }
+
+    /// <summary>
+    /// Whether the file at <paramref name="path"/> opens and starts with a file type this reader knows: what decides whether the game loads a data
+    /// file at all (docs/formats/fcs-mod.md, "Files that fail to load"); damage past it does not.
+    /// </summary>
+    public static bool HasKnownType(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            Span<byte> type = stackalloc byte[4];
+            return stream.ReadAtLeast(type, 4, throwOnEndOfStream: false) == 4 && IsKnownType(BitConverter.ToInt32(type));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="file"/> when its type was read and known, else null.
+    /// </summary>
+    static FcsFile? Typed(FcsFile file) => IsKnownType((int)file.FileType) ? file : null;
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is a file type this reader reads (V15, V16, V17).
+    /// </summary>
+    static bool IsKnownType(int type) => type is (int)FcsFileType.V15 or (int)FcsFileType.V16 or (int)FcsFileType.V17;
 
     /// <summary>
     /// Reads the file type and, unless V15, the header into <paramref name="file"/>; a V17 header's editor bookkeeping sections are read only as far
@@ -66,7 +100,7 @@ public static class FcsReader
     static void ReadHeader(BinaryReader r, FcsFile file)
     {
         int type = r.ReadInt32();
-        if (type is not ((int)FcsFileType.V15 or (int)FcsFileType.V16 or (int)FcsFileType.V17))
+        if (!IsKnownType(type))
             throw new FcsFormatException($"Unknown file type {type}.", r.BaseStream.Position - 4);
         file.FileType = (FcsFileType)type;
         if (file.FileType == FcsFileType.V15) return;
@@ -253,4 +287,10 @@ public sealed class FcsFormatException(string message, long offset, Exception? i
     /// The byte offset in the stream where the problem was found.
     /// </summary>
     public long Offset { get; } = offset;
+
+    /// <summary>
+    /// What was read before the problem when the file's type was a known one (the header as far as it got, the records read whole); null when the
+    /// type itself was not, or the problem was not met by <see cref="FcsReader.Read(Stream, bool)"/>.
+    /// </summary>
+    public FcsFile? Partial { get; internal set; }
 }
