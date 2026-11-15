@@ -213,7 +213,7 @@ public static partial class SaveCapture
         // Again, with the states of the buildings first written now (job targets name them by handle).
         buildings = HeldSave.BuildingStates(game);
         MachineSave.Write(game, world);
-        TownMachineSave.Write(game.Camera.Record, world);
+        TownMachineSave.Write(game, world);
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
             RockMachineSave.Write(game.Camera.Record, world, production);
         world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault()?.WriteTurretShots(world, buildings);

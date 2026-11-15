@@ -1,50 +1,121 @@
 using System.Globalization;
 using Meitou.Data.Fcs;
+using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Production;
 
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The machines of NPC town buildings on the CAMERA record (docs/formats/save.md "Town machines"): the original keeps the production state
-/// of every building in its GAMESTATE_BUILDING (<c>production amount</c>, <c>consumption amount-&lt;k&gt;</c>, the items in an INVENTORY_STATE);
-/// Meitou's town buildings of a new game have no state record to put them in, so they are Meitou-only keys:
-/// <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c> (progress, float),
+/// The machines of NPC town buildings in a save (docs/formats/save.md "Town machines"). As the original does, a town machine's state is in its
+/// building's GAMESTATE_BUILDING of the zone file (<see cref="MachineSave.WriteProduction"/>: <c>resource mult</c>, <c>production amount</c>,
+/// <c>consumption amount-&lt;k&gt;</c>, a farm's keys) and its items in the INVENTORY_STATE the building lists (sections <c>in1</c>, <c>in2</c>, ... and
+/// <c>out</c>); a machine is read back from them when its town registers and the machine is made (<see cref="Restore"/>). A machine whose
+/// building has no state record in the save (its zone has no file) keeps Meitou-only keys on CAMERA, which older Meitou saves wrote for every
+/// town machine: <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c> (progress, float),
 /// <c>meitou tm&lt;i&gt; outn</c> (output items, int), <c>meitou tm&lt;i&gt; st</c> (status, int),
 /// <c>meitou tm&lt;i&gt; in&lt;k&gt;</c> (items of input k, int) and <c>meitou tm&lt;i&gt; lv&lt;k&gt;</c> (its level, float); a farm's the farm keys
-/// of its GAMESTATE_BUILDING as <c>meitou tm&lt;i&gt; pg</c> (<c>plant growth</c>), <c>pd</c> (<c>plant death</c>), <c>ps</c> (<c>plant start</c>),
-/// <c>pt</c> (<c>save time</c>), floats, and <c>ph</c> (<c>plants harvested</c>), int. The original ignores them (keys are read by name).
+/// as <c>meitou tm&lt;i&gt; pg</c> (<c>plant growth</c>), <c>pd</c> (<c>plant death</c>), <c>ps</c> (<c>plant start</c>), <c>pt</c>
+/// (<c>save time</c>), floats, and <c>ph</c> (<c>plants harvested</c>), int. The original ignores them (keys are read by name).
 /// </summary>
 public static class TownMachineSave
 {
-    /// <summary>
-    /// The prefix of every town machine key.
-    /// </summary>
-    const string Prefix = "meitou tm";
+    #region Zone states
 
     /// <summary>
-    /// The key of entry <paramref name="i"/>.
+    /// The number of a machine's first input section (<b>Observed</b>, the owner's original saves: 62 <c>in1</c> and 12 <c>in2</c> item sections,
+    /// no <c>in0</c>; the loader <c>FUN_14029e7b0</c> names section <c>in</c> + (k + 1)).
     /// </summary>
-    static string Key(int i) => Prefix + i.ToString(CultureInfo.InvariantCulture);
+    const int FirstInput = 1;
 
     /// <summary>
-    /// Writes the town machines over the camera record's entries (the old ones removed first).
+    /// Writes the town machines into their buildings' states and inventories, the ones whose building has no state into CAMERA keys (the old
+    /// CAMERA keys removed first).
     /// </summary>
-    public static void Write(FcsRecord camera, World world)
+    public static void Write(SaveGame game, World world)
     {
+        var camera = game.Camera.Record;
         Clear(camera, Prefix);
 
+        var instances = Instances(game);
         int n = 0;
         foreach (var m in world.Machines.All)
         {
             if (!ProductionSystem.IsTownWork(m.Site)) continue;
-            camera.Strings[Key(n)] = m.Site[ProductionSystem.TownWorkPrefix.Length..];
+
+            string key = m.Site[ProductionSystem.TownWorkPrefix.Length..];
+            if (instances.TryGetValue(key, out var placed) && placed.State is { } state)
+            {
+                MachineSave.WriteProduction(state, m, world.GameHours);
+                MachineSave.WriteInventory(placed.Zone.File, placed.Zone.Coordinate, placed.Instance, null, MachineSave.Items(m, FirstInput));
+                continue;
+            }
+
+            camera.Strings[Key(n)] = key;
             WriteState(camera, Key(n), m);
             WriteFarm(camera, Key(n), m, world.GameHours);
             n++;
         }
     }
+
+    /// <summary>
+    /// What a town machine just made takes from the loaded save (<see cref="ProductionSystem.RestoreTownMachine"/>): its building's state, read by
+    /// <see cref="Restore"/> from the zones' instances (indexed at the first call).
+    /// </summary>
+    public static Action<TownBuilding, Machine> Restorer(SaveGame save, ItemFactory factory)
+    {
+        Dictionary<string, (SaveZone Zone, FcsInstance Instance, FcsRecord? State)>? instances = null;
+        return (building, m) =>
+        {
+            instances ??= Instances(save);
+            if (instances.TryGetValue(building.Key, out var placed)) Restore(m, placed, factory);
+        };
+    }
+
+    /// <summary>
+    /// A town machine takes its building's saved state: the production keys of its GAMESTATE_BUILDING and the items of the INVENTORY_STATE its
+    /// instance lists.
+    /// </summary>
+    static void Restore(Machine m, (SaveZone Zone, FcsInstance Instance, FcsRecord? State) placed, ItemFactory factory)
+    {
+        if (placed.State is { } state) MachineSave.ReadProduction(state, m);
+        if (MachineSave.ListedInventory(placed.Zone.File, placed.Instance) is { } inventory)
+            MachineSave.PutItems(m, SaveInventory.Read(placed.Zone.File, inventory), factory, FirstInput);
+    }
+
+    /// <summary>
+    /// The zones' building instances with their zone and GAMESTATE_BUILDING (null when it lists none) by <see cref="BuildingKey"/>.
+    /// </summary>
+    static Dictionary<string, (SaveZone Zone, FcsInstance Instance, FcsRecord? State)> Instances(SaveGame save)
+    {
+        var map = new Dictionary<string, (SaveZone, FcsInstance, FcsRecord?)>(StringComparer.Ordinal);
+        foreach (var zone in save.Zones.Values)
+        {
+            if (zone.BuildingList is not { } list) continue;
+
+            var states = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
+            foreach (var r in zone.BuildingStates) states[r.StringId] = r;
+
+            foreach (var i in list.Instances)
+            {
+                var state = i.States.Select(id => states.GetValueOrDefault(id)).FirstOrDefault(r => r is not null);
+                map[BuildingKey.Of(zone.Coordinate, i.Id)] = (zone, i, state);
+            }
+        }
+
+        return map;
+    }
+
+    #endregion
+
+    #region Camera keys
+
+    /// <summary>
+    /// The prefix of every town machine key.
+    /// </summary>
+    const string Prefix = "meitou tm";
 
     /// <summary>
     /// The town building of a run-time key and the faction owning its town now, over the population's sites (built at the first use).
@@ -69,7 +140,7 @@ public static class TownMachineSave
     }
 
     /// <summary>
-    /// Makes the machines the save holds (a key naming no town building of the data is dropped).
+    /// Makes the machines the save's CAMERA keys hold (a key naming no town building of the data is dropped).
     /// </summary>
     public static void Read(FcsRecord camera, World world, ProductionSystem production, Func<string, (TownBuilding Building, int Owner)?> resolve)
     {
@@ -146,6 +217,11 @@ public static class TownMachineSave
     }
 
     /// <summary>
+    /// The key of entry <paramref name="i"/>.
+    /// </summary>
+    static string Key(int i) => Prefix + i.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
     /// Writes a farm's growth, death, start, harvested plants and the hour it last grew (the game's hour when it has not grown yet) as the parts of
     /// the entry <paramref name="entry"/>; nothing for a machine that is no farm.
     /// </summary>
@@ -175,4 +251,6 @@ public static class TownMachineSave
         if (camera.Floats.TryGetValue(entry + " pt", out float saved)) f.LiveHours = saved;
         for (int i = 0; i < f.Plants.Length; i++) f.Plants[i] = i < f.Harvested ? -10 : f.Growth;
     }
+
+    #endregion
 }

@@ -1288,10 +1288,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   waits for it to load (`PopulationSystem.ShippingCamp`); a save's travelling platoon not made yet ships too, its slaves read from the save (slave role, `slavestate` 1), to the nearest
   such camp (the save's mission town is not read). Not
   shipped off screen: wild ones (a save's homeless platoons and the squads `KeepWild` keeps), which their sector makes again where they stood, so they stay there as other wild squads.
-- Not built: goal 112 as such (captives are carried by the kidnapping system), short-term tag 6 of the strip, and the real operation of NPC town machines by
-  workers: it would need a `Machine` (recipe, input and output inventories, progress) for every level building with a functionality, made when its town registers, and their
-  states written into the zone files' GAMESTATE_BUILDING as the original's are; production would also feed the shops' stock, whose origin from machines is **Unknown**. Left out
-  for now: workers act out the work (clip, hunger rate) with no output.
+- Not built: goal 112 as such (captives are carried by the kidnapping system) and short-term tag 6 of the strip. Town workers run real machines:
+  [NPC town machines](game/buildings-production.md#npc-town-machines).
 
 ## Buildings
 
@@ -1537,7 +1535,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   yields `ResourceField.NodeYield` (at least 0.1) and is kept in memory, not saved; a saved job keeps the id (`meitou pjob<i>`). The ore stays in
   the rock's output (5) until taken: a left click selects the rock and opens its machine window once it has been mined (**Observed** by the
   owner: the base game's ore is picked up by hand), or a storage within `HaulRange` takes it as for any machine. Engine choices: the rock is picked by its mesh's triangles where the instance places them (the original picks its building's collision); its radius, the longest half-extent of the mesh's bounds box scaled by the instance and at least `NodeRadius` 25, sizes its resource richness (the original takes the mesh's bounds the same way); without the mesh file a rock is picked as a sphere of 25 round its origin; the pointer over a rock is `mine` (with characters selected, after sites and doors, as the click order is); level-placed `is foliage`
-  buildings (not drawn, not in `FoliageResourceNodes`) cannot be mined. An NPC town building a worker operates is a machine of its own (`TownWork`, [NPC town machines](game/buildings-production.md#npc-town-machines)).
+  buildings (not drawn, not in `FoliageResourceNodes`) cannot be mined. An NPC town's farms and producers are machines of their own from its registration, saved in their buildings' zone states (`TownWork`, [NPC town machines](game/buildings-production.md#npc-town-machines)).
 - **Town training dummies** (`ProductionSystem.TownDummy`, fixtures `FixtureKind.Training`, UI `FurnitureUse`). A town building's BF_TRAINING
   furniture (its interior layout's, or the building itself) is a fixture `<building>@dummy<n>` (n in layout order) of the building's owner; like a rock it is no
   registry site, so it is neither drawn, saved nor built: the production system makes a complete site of it once its town has registered, and its machine is kept in

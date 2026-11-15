@@ -217,6 +217,28 @@ public sealed class Shop
     }
 
     /// <summary>
+    /// Whether container <paramref name="fixture"/>'s rectangle of <see cref="Stock"/> takes one unit of <paramref name="item"/> (a pure read, as
+    /// the container's own grid would): a stack of it there with room left under <paramref name="stackLimit"/>, or a free cell.
+    /// </summary>
+    public bool RegionTakes(string fixture, ItemInstance item, int stackLimit)
+    {
+        if (!RegionOf(fixture, out var r)) return false;
+
+        foreach (var other in Stock.Items)
+        {
+            if (r.Holds(other) && other.Record == item.Record && other.Quality == item.Quality && other.Mark == item.Mark
+                    && other.Section == "main" && other.Quantity < stackLimit)
+                return true;
+        }
+
+        for (int y = r.Y; y + item.Height <= r.Y + r.Height; y++)
+            for (int x = r.X; x + item.Width <= r.X + r.Width; x++)
+                if (Stock.IsFree("main", x, y, item.Width, item.Height)) return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// Adds the next restock tick, the fill count and the stock to the world hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
