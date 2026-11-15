@@ -81,14 +81,14 @@ public static class BoostHashOrder
     }
 
     /// <summary>
-    /// <c>boost::hash&lt;std::string&gt;</c> before boost 1.56 (<c>hash_range</c>: each character, sign-extended, combined as seed ^= c + 0x9e3779b9
-    /// + (seed &lt;&lt; 6) + (seed &gt;&gt; 2) on a 64-bit seed). <b>Observed</b>: the exe holds the 0x9e3779b9 constant and not the later 64-bit
-    /// combine's 0xc6a4a7935bd1e995.
+    /// <c>boost::hash&lt;std::string&gt;</c> before boost 1.56 (<c>hash_range</c>: each byte of the stored string, sign-extended, combined as
+    /// seed ^= c + 0x9e3779b9 + (seed &lt;&lt; 6) + (seed &gt;&gt; 2) on a 64-bit seed). <b>Observed</b>: the exe holds the 0x9e3779b9 constant and
+    /// not the later 64-bit combine's 0xc6a4a7935bd1e995.
     /// </summary>
     public static ulong StringHash(string s)
     {
         ulong seed = 0;
-        foreach (byte c in System.Text.Encoding.UTF8.GetBytes(s)) seed ^= (ulong)(long)(sbyte)c + 0x9e3779b9UL + (seed << 6) + (seed >> 2);
+        foreach (byte c in Fcs.LosslessUtf8.GetBytes(s)) seed ^= (ulong)(long)(sbyte)c + 0x9e3779b9UL + (seed << 6) + (seed >> 2);
         return seed;
     }
 }

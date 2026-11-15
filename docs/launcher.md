@@ -244,7 +244,8 @@ The Settings page's Language picks the game's and the launcher's language: Engli
 languages Meitou has texts for, marked when Meitou's own texts are not translated. Choosing one writes only the `language` line of the Kenshi
 folder's `settings.cfg` (encoding and line endings kept) and remembers the code in `launcher.json` (`Language`, used without a Kenshi folder); at
 start the `settings.cfg` value wins. The launcher's labels come from the same `.po` catalogs as the game's Meitou texts
-([localisation](formats/localisation.md)); a string without a translation stays English. Mod names, news and release notes are data, not translated.
+([localisation](formats/localisation.md)), without the mods' `meitou.po`; a string without a translation stays
+English. Mod names, news and release notes are data, not translated.
 Labels the layout holds are translated by one walk of the visual and logical trees (texts, button captions, placeholders, tooltips; a control
 never shown has only logical children). Combo box items are data and not walked, except the label items of the Mac renderer and memory
 boxes (`LabelCombos`); the closed box keeps the content its selected item had when chosen, so a selection-box template redraws it in the

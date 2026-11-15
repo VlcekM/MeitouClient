@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Meitou.Content;
+using Meitou.Localisation;
 
 namespace Meitou.Game.Host;
 
@@ -91,7 +92,8 @@ sealed unsafe class SteamSession : IDisposable
                 }
             }
             var session = new SteamSession { _library = library, _shutdown = stop };
-            Console.WriteLine("Steamworks: initialized for Kenshi (233860).");
+            GameLanguage.SteamClientLanguage = ReadGameLanguage(library);
+            Console.WriteLine($"Steamworks: initialized for Kenshi (233860), language {GameLanguage.SteamClientLanguage ?? "unknown"}.");
             return session;
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or FileLoadException)
@@ -100,6 +102,44 @@ sealed unsafe class SteamSession : IDisposable
             Console.WriteLine($"Steamworks: could not load Kenshi's Steam API ({e.Message}).");
             return null;
         }
+    }
+
+    /// <summary>
+    /// The language the Steam client runs Kenshi in (<c>ISteamApps::GetCurrentGameLanguage</c>, which the original asks at start to override its
+    /// setting, docs/formats/localisation.md); null when the library lacks the exports.
+    /// </summary>
+    static string? ReadGameLanguage(nint library)
+    {
+        if (!NativeLibrary.TryGetExport(library, "SteamAPI_ISteamApps_GetCurrentGameLanguage", out nint current)) return null;
+        nint apps = SteamApps(library);
+        if (apps == 0) return null;
+
+        byte* language = ((delegate* unmanaged[Cdecl]<nint, byte*>)current)(apps);
+        return language is null ? null : Marshal.PtrToStringUTF8((nint)language);
+    }
+
+    /// <summary>
+    /// The <c>ISteamApps</c> interface of version 008 (the original's): the newer libraries' accessor, else through <c>SteamClient</c> as Kenshi's own
+    /// library offers it; 0 when neither is there.
+    /// </summary>
+    static nint SteamApps(nint library)
+    {
+        if (NativeLibrary.TryGetExport(library, "SteamAPI_SteamApps_v008", out nint accessor)) return ((delegate* unmanaged[Cdecl]<nint>)accessor)();
+        if (!(NativeLibrary.TryGetExport(library, "SteamClient", out nint client)
+            && NativeLibrary.TryGetExport(library, "SteamAPI_GetHSteamUser", out nint user)
+            && NativeLibrary.TryGetExport(library, "SteamAPI_GetHSteamPipe", out nint pipe)
+            && NativeLibrary.TryGetExport(library, "SteamAPI_ISteamClient_GetISteamApps", out nint getApps)))
+        {
+            return 0;
+        }
+
+        nint steamClient = ((delegate* unmanaged[Cdecl]<nint>)client)();
+        int steamUser = ((delegate* unmanaged[Cdecl]<int>)user)(), steamPipe = ((delegate* unmanaged[Cdecl]<int>)pipe)();
+        if (steamClient == 0 || steamPipe == 0) return 0;
+
+        // A UTF-8 literal is stored with a terminating zero after its bytes.
+        fixed (byte* version = "STEAMAPPS_INTERFACE_VERSION008"u8)
+            return ((delegate* unmanaged[Cdecl]<nint, int, int, byte*, nint>)getApps)(steamClient, steamUser, steamPipe, version);
     }
 
     /// <summary>

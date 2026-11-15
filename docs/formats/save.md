@@ -11,8 +11,8 @@ Usual header: int32 type15, nextId, recordCount, ordinary FCS records; no mod me
 The CAMERA `version` string is game version. Type17 editor-written platoon files also occur;
 accept their real header/sizes/flags rather than forcing type15. [FCS layout](fcs-mod.md).
 
-**Verified/Observed in later saves:** preserve invalid UTF-8 bytes with LosslessUtf8 (byte maps
-to lone U+DC00+byte), and exact NaN/denormal float bits. TERRAIN_DECALS IDs can be binary int32
+**Verified/Observed in later saves:** preserve invalid UTF-8 bytes (every FCS string is lossless,
+[fcs-mod](fcs-mod.md#strings)), and exact NaN/denormal float bits. TERRAIN_DECALS IDs can be binary int32
 in a string slot. Record string IDs reflect quick/platoon/zone origin and `-INGAME-S<hex type>`;
 do not infer numeric ID universally from StringId. Handles have C/CS/I/S/type components;
 join by handle and instance slot, not row position. Slots can be sparse; char-count can lag.

@@ -36,9 +36,14 @@ public static class Loc
     public static bool Translating => s_catalog.Count > 0 || s_meitou.Count > 0;
 
     /// <summary>
-    /// Selects the language of <paramref name="install"/> and loads its message catalog.
+    /// Selects the language of <paramref name="install"/> (stored in its settings.cfg as the original does, <see cref="GameLanguage.StoreChoice"/>)
+    /// and loads its message catalog.
     /// </summary>
-    public static void Use(GameInstall install) => Use(GameLanguage.Detect(install));
+    public static void Use(GameInstall install)
+    {
+        GameLanguage.StoreChoice(install);
+        Use(GameLanguage.Detect(install));
+    }
 
     /// <summary>
     /// Makes <paramref name="selected"/> the active language and loads its message catalog.
@@ -46,7 +51,7 @@ public static class Loc
     public static void Use(GameLanguage selected)
     {
         var loaded = GettextCatalog.Load(selected.MessagesDirectory);
-        var own = MeitouTranslations.Load(selected.Code, selected.OverlayFolder);
+        var own = MeitouTranslations.Load(selected.Code, selected.MeitouFiles);
         s_language = selected;
         s_catalog = loaded;
         s_meitou = own;

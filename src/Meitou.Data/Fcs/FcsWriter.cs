@@ -8,7 +8,7 @@ namespace Meitou.Data.Fcs;
 public static class FcsWriter
 {
     /// <summary>
-    /// Writes <paramref name="file"/> to a new file at <paramref name="path"/> (strict UTF-8, real record sizes).
+    /// Writes <paramref name="file"/> to a new file at <paramref name="path"/> (real record sizes).
     /// </summary>
     public static void WriteFile(FcsFile file, string path)
     {
@@ -17,22 +17,22 @@ public static class FcsWriter
     }
 
     /// <summary>
-    /// Writes <paramref name="file"/> to <paramref name="stream"/>, which is left open; <paramref name="lossless"/> encodes strings with
-    /// <see cref="LosslessUtf8"/> (save files).
+    /// Writes <paramref name="file"/> to <paramref name="stream"/>, which is left open. Strings are encoded with <see cref="LosslessUtf8"/>, so the
+    /// bytes a string was read from are written back unchanged.
     /// </summary>
     /// <param name="keepByteSizes">
     /// Write each record's <see cref="FcsRecord.ByteSize"/> as stored instead of its real size. World-state files
     /// (<c>.zone</c>, <c>.level</c>) contain sizes that don't match their records; this keeps them byte-exact.
     /// </param>
-    public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false, bool lossless = false)
+    public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false)
     {
-        using var w = new FcsBinaryWriter(stream, lossless);
+        using var w = new BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true);
         w.Write((int)file.FileType);
 
         if (file.FileType == FcsFileType.V17)
         {
             var header = new MemoryStream();
-            using (var hw = new FcsBinaryWriter(header, lossless))
+            using (var hw = new BinaryWriter(header, FcsReader.Encoding, leaveOpen: true))
                 WriteHeaderBody(hw, file);
             w.Write(checked((int)header.Length));
             header.WriteTo(stream);
@@ -46,7 +46,7 @@ public static class FcsWriter
         w.Write(file.Records.Count);
 
         foreach (var record in file.Records)
-            WriteRecord(w, record, keepByteSizes, lossless);
+            WriteRecord(w, record, keepByteSizes);
     }
 
     /// <summary>
@@ -92,11 +92,11 @@ public static class FcsWriter
     /// <summary>
     /// Writes a record with its leading size field: the stored <see cref="FcsRecord.ByteSize"/> when kept or 0, else the real size.
     /// </summary>
-    static void WriteRecord(BinaryWriter output, FcsRecord record, bool keepByteSize, bool lossless)
+    static void WriteRecord(BinaryWriter output, FcsRecord record, bool keepByteSize)
     {
         // Buffered so the leading size field can hold the record's real size.
         var buffer = new MemoryStream();
-        using (var w = new FcsBinaryWriter(buffer, lossless))
+        using (var w = new BinaryWriter(buffer, FcsReader.Encoding, leaveOpen: true))
             WriteRecordBody(w, record);
         output.Write(keepByteSize || record.ByteSize == 0 ? record.ByteSize : checked((uint)buffer.Length + 4));
         output.Flush();
@@ -195,23 +195,12 @@ public static class FcsWriter
     }
 
     /// <summary>
-    /// Writes a length-prefixed string: strict UTF-8, or <see cref="LosslessUtf8"/> when the writer is lossless.
+    /// Writes a length-prefixed string, its escaped bytes as they were read (<see cref="LosslessUtf8"/>).
     /// </summary>
     static void WriteString(BinaryWriter w, string s)
     {
-        var bytes = w is FcsBinaryWriter { Lossless: true } ? LosslessUtf8.GetBytes(s) : FcsReader.Encoding.GetBytes(s);
+        var bytes = LosslessUtf8.GetBytes(s);
         w.Write(bytes.Length);
         w.Write(bytes);
     }
-}
-
-/// <summary>
-/// A binary writer that also tells <see cref="FcsWriter"/> how to encode strings.
-/// </summary>
-sealed class FcsBinaryWriter(Stream stream, bool lossless) : BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true)
-{
-    /// <summary>
-    /// True when strings are encoded with <see cref="LosslessUtf8"/> (save files) rather than strict UTF-8.
-    /// </summary>
-    public bool Lossless { get; } = lossless;
 }

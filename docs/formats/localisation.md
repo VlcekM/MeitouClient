@@ -11,10 +11,17 @@ fr_FR, it_IT, ja_JP, ko_KR, pt_BR, ru_RU, zh_CN; `en_GB` has only the `.pot`. Me
 Addresses are `kenshi_x64.exe` (1.0.68).
 
 - **Verified** (`FUN_140175a90`): a fixed table maps the ten Steam names (english, german, french, russian, italian, portuguese,
-  spanish, chinese, japanese, korean) to codes. A non-empty `language` in `settings.cfg` wins when it is one of the table's codes or a
-  `locale/` folder (not `_`-prefixed); when empty, `steam_language` decides; anything unknown is `en_GB`. With Steam running a changed Steam
-  language overrides `language` and the choice is written back to `settings.cfg` (**Observed**; Meitou does not use Steam; its launcher writes `language` when the user picks a language).
-  Related: `FUN_1401753e0`, `FUN_1401751d0`, `FUN_1401750a0`, `FUN_140174c00`, `FUN_140174d50`; launcher language message `FUN_140124650`.
+  spanish, chinese, japanese, korean) to codes; each `locale/` folder not `_`-prefixed and not in the table is added with an empty Steam name.
+  At every start, from `settings.cfg`'s `language` (L) and `steam_language` (S):
+  1. Only when `SteamAPI_Init` succeeded (`FUN_140745490`): the Steam client's language (`ISteamApps` version 008,
+     `GetCurrentGameLanguage`) replaces S when it differs, and that counts as a change.
+  2. When L is empty and S is not, or on a change: the table entry whose Steam name is S.
+  3. Else, or when none matched: L, if it is a table code or a folder.
+  4. Else `en_GB`.
+  5. Written back: `language` = the chosen code; `steam_language` = S, or when S is empty the chosen entry's Steam name. Setting a key
+     replaces its line or appends one (`FUN_14017e1d0`), then the file is saved (`FUN_14013c0b0`).
+  So a language picked in `settings.cfg` stays until the Steam client's language changes. Related: `FUN_1401753e0`, `FUN_1401751d0`,
+  `FUN_1401750a0`, `FUN_140174c00`, `FUN_140174d50`; launcher language message `FUN_140124650`.
 - **Verified** (`Ogre_RegisterResourceLocations` `140816d90`): for a non-English language its `locale/<code>` is registered as a resource
   folder after the base game's and before the mods' (the last registered location wins a name), so fonts, layouts, images and sounds
   placed there override the base. `en_GB` adds nothing.
@@ -31,8 +38,11 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 
 ## Meitou implementation
 
-- `GameLanguage.Detect` applies the rules above (reads only `settings.cfg`; no Steam); Meitou also accepts a code it has built-in texts for
-  (`MeitouTranslations.HasEmbedded`) without a `locale/` folder. `Loc.Use` runs at start after `UserConfig.Load()`. The launcher's Settings page
+- `GameLanguage.Detect` applies the rules above; Meitou also accepts a code it has built-in texts for (`MeitouTranslations.HasEmbedded`)
+  without a `locale/` folder. `SteamSession` reads the Steam client's language once Steamworks has started (`GameLanguage.SteamClientLanguage`;
+  none in headless, screenshot and listing runs, which start no Steam). `Loc.Use` runs at start after `UserConfig.Load()`:
+  `GameLanguage.StoreChoice` writes the two lines back (only when they change, other lines and bytes kept), then the language is
+  detected. The launcher's Settings page
   picks the language for the game and itself: it writes only the `language` line of `settings.cfg` ([launcher](../launcher.md)).
 - **Catalog** (`GettextCatalog`): `main.mo` (LE/BE, plural splits, `\x04` context), else `main.po` (fuzzy and obsolete skipped). Plural rule
   (`PluralRule`) is parsed from the header `Plural-Forms`; Germanic when absent. Verified for all eight locales: `.mo` and `.po` give the same messages.
@@ -51,9 +61,11 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
   are not in Kenshi's catalog, so after it `Loc.Tr` looks them up in a second gettext catalog: `src/Meitou.Core/Localisation/locale/<code>.po`
-  (embedded; `pt_BR` and `zh_CN` so far), with `locale/<code>/meitou.po` in the Kenshi folder read over it (a user or mod adds a language or overrides a
-  string without a rebuild). Same format and rules as the game's catalog, exact lookups, English msgids; the launcher reads the same files for
-  its own labels. Settings rows measure the active font's wrapped label and hint and grow to fit. A text the code builds with a value in it
+  (embedded; `pt_BR` and `zh_CN` so far). Over it go `locale/<code>/meitou.po` of the Kenshi folder, then of each loaded mod in load order, a
+  later file winning a message as a later resource location wins a file (`GameLanguage.MeitouFiles`; `<code>` is the active code, a translation
+  mod's too), so a user or mod adds a language or overrides a string without a rebuild. Meitou's rule: the original has no such file. Same format
+  and rules as the game's catalog, exact lookups, English msgids; the launcher reads the built-in and Kenshi folder files for its own labels.
+  Settings rows measure the active font's wrapped label and hint and grow to fit. A text the code builds with a value in it
   keeps the English sentence as its msgid with the game's `{1}`, `{2}` placeholders (`LauncherText.Translate("Version {1} for {2}.", …)`), so
   the catalog matches it and a translation may reorder the holes. Game and simulation messages do the same (`Loc.Tr("{1} is arresting {2}!", …)`). A
   character's line in a message ("name: line", `LockSystem.Say`) keeps the line as its own game msgid ("Pick failed") inside a `{1}: {2}` frame,
@@ -63,9 +75,4 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   en_GB `main.pot`, zh_CN `main.po`).
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
-- All text files are read and written as UTF-8.
-
-## Unknown / not done
-
-- Steam-language override while Meitou itself is running.
-- Meitou texts in other languages than `pt_BR` (a `locale/<code>.po` each); `meitou.po` from mods (only the Kenshi folder is read).
+- All text files are read and written as UTF-8, except `settings.cfg`: without a byte order mark it is edited as Latin-1, so its bytes are kept.

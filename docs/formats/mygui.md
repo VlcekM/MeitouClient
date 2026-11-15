@@ -145,6 +145,22 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
   sizing, inherited pick flags, localisation, tab button sizing and clipping
   equivalence with the original. No full MyGUI compatibility claim is made yet.
 
+## Text of game strings
+
+**Verified** (MyGUIEngine_x64.dll disassembled: `UString::assign(const std::string&)`, `_utf8_char_length`, `_utf8_to_utf32`,
+`_utf32_to_utf16`; the `const char*` constructor and assign go through it): the game's byte strings become UTF-16 like this.
+
+- The lead byte gives the length: ASCII 1, `110xxxxx` 2, `1110xxxx` 3, `11110xxx` 4, `111110xx` 5, `1111110x` 6, anything else
+  (continuation byte, 0xFE, 0xFF) 1.
+- A one-byte sequence is the code point of the byte's value. A longer one takes the lead byte's low bits and six bits of each continuation byte,
+  with no check for overlong forms, surrogates or range. When a following byte is no continuation byte (the string's end counts as one), the
+  lead byte alone is taken as its value and reading goes on at the next byte. So no string is rejected; Latin-1 text shows as Latin-1.
+- A code point up to U+FFFF is stored as one unit, a surrogate value too; above it as a pair from the low 20 bits of (value − 0x10000).
+- `_verifyUTF8` only sizes the buffer (it throws nothing).
+
+Meitou: `MyGuiText.Runes` applies this to the escaped bytes of a lossless string ([fcs-mod](fcs-mod.md#strings)); text drawing and measuring
+(`DebugOverlay`, `UiFont.Ensure`) enumerate it instead of `string.EnumerateRunes`.
+
 ## Implementation (2026-10-13)
 
 `Meitou.Data.Ui` reads layouts, properties and user strings, decodes skin atlas

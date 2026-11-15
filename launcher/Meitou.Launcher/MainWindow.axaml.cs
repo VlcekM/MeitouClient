@@ -348,7 +348,7 @@ public sealed partial class MainWindow : Window
     /// The language to start in: the Kenshi folder's settings.cfg choice, else the launcher's last one.
     /// </summary>
     string StartLanguage(GameInstall? found) =>
-        (found is null ? null : KenshiLanguageSettings.GetLanguage(found)) is { Length: > 0 } game ? game : _config.Language;
+        (found is null ? null : KenshiSettingsFile.Get(found, "language")) is { Length: > 0 } game ? game : _config.Language;
 
     /// <summary>
     /// A language picked: saved, applied to the launcher and written to Kenshi's settings.cfg (said in the status).
@@ -365,7 +365,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                KenshiLanguageSettings.SetLanguage(_install, code);
+                KenshiSettingsFile.Set(_install, ("language", code));
                 Status(Tr("Game language set to {1}. It applies when the game starts.", code));
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
