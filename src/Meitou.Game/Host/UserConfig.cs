@@ -273,6 +273,10 @@ sealed class UserConfig
     /// </summary>
     public bool FeedbackButton { get; set; } = true;
     /// <summary>
+    /// The Meitou load window's Hide Kenshi saves tick: the base game's saves are left out of the list (off by default).
+    /// </summary>
+    public bool HideKenshiSaves { get; set; }
+    /// <summary>
     /// The original's splash at startup in the Faithful UI (Advanced settings: the switch's Faithful side), off by default; off, the menu shows as
     /// soon as the game has loaded.
     /// </summary>

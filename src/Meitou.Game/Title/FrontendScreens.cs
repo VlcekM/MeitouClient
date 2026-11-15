@@ -85,15 +85,10 @@ sealed class FrontendScreens(PlayerInterface player)
     const string HideKenshiTick = "HideKenshiTickBox";
 
     /// <summary>
-    /// The load window's tick that leaves the base game's saves out is set.
-    /// </summary>
-    bool _hideKenshiSaves;
-
-    /// <summary>
     /// The saves the window lists: the save window only Meitou's, the load window without Kenshi's when its tick is set.
     /// </summary>
     SaveSlot[] VisibleSlots(string id) =>
-        [.. Slots.Where(s => s.Writable || id != "save" && !(id == "load" && _hideKenshiSaves && player.UiMode == UiMode.Meitou))];
+        [.. Slots.Where(s => s.Writable || id != "save" && !(id == "load" && HideKenshiSaves && player.UiMode == UiMode.Meitou))];
 
     /// <summary>
     /// The import window's ticks as the flag bits of <c>importGame</c> (ticks in the order of <see cref="TickBoxes"/>: 0x1, 0x4, 0x8, 0x10, 0x20).
@@ -262,6 +257,16 @@ sealed class FrontendScreens(PlayerInterface player)
     /// Deletes a save folder (the host's); returns an error to show, or null.
     /// </summary>
     public Func<string, string?>? DeleteSave { get; set; }
+
+    /// <summary>
+    /// The load window's tick that leaves the base game's saves out is set (restored by the host from <c>meitou.user.json</c>).
+    /// </summary>
+    public bool HideKenshiSaves { get; set; }
+
+    /// <summary>
+    /// Keeps the Hide Kenshi saves tick when the player changes it (the host's: writes it to meitou.user.json).
+    /// </summary>
+    public Action<bool>? HideKenshiSavesChanged { get; set; }
 
     /// <summary>
     /// The load window's Delete / Backspace (<b>Verified</b>, <c>LoadSaveWindow::keyPressed</c>): the save in use cannot be deleted; any other asks
@@ -481,7 +486,8 @@ sealed class FrontendScreens(PlayerInterface player)
     /// </summary>
     void ToggleHideKenshiSaves(string screen)
     {
-        _hideKenshiSaves = !_hideKenshiSaves;
+        HideKenshiSaves = !HideKenshiSaves;
+        HideKenshiSavesChanged?.Invoke(HideKenshiSaves);
 
         if (SelectedSlot is not null && !VisibleSlots(screen).Contains(SelectedSlot))
         {
@@ -774,8 +780,8 @@ sealed class FrontendScreens(PlayerInterface player)
             Enable(b, HideKenshiTick);
             b.Properties[HideKenshiTick] = new Dictionary<string, string>
             {
-                ["StateSelected"] = _hideKenshiSaves ? "true" : "false",
-                ["Checked"] = _hideKenshiSaves ? "true" : "false",
+                ["StateSelected"] = HideKenshiSaves ? "true" : "false",
+                ["Checked"] = HideKenshiSaves ? "true" : "false",
             };
         }
         else if (id == "load")
