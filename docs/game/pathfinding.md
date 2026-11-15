@@ -261,9 +261,15 @@ stand test there looked only in zone 33 and found nothing, and it stood for good
 How it got in (**Observed**, scratch probe on that save: 1-unit `Slide` steps east from 4600): `Slide` counted every edge on the zone line as open, also where
 the next zone was loaded with nothing across, and root motion (`AnimationSystem.Relocate`) makes a step with the ground at hand though its end has no mesh; the
 walk and the combat approach test the end point and stopped at the edge (the ninjas' ring round the hole). Now such an unlinked edge is a wall (engine choice;
-**Unknown** whether the original's agent meets one there): the same steps stop 2.5 short of the line, and cross it where zone 32 and 33 link (z -36230).
+the original's check below): the same steps stop 2.5 short of the line, and cross it where zone 32 and 33 link (z -36230).
 A wall never stops a body behind it (off the mesh across it), so one in a hole or beyond the line moves back onto the mesh freely (engine reading of the
 original's "closes on" rule above; with two-sided walls the change trapped a body west of an unlinked line, z -36150).
+The original (**Observed**, Kenshi 1.0.65 through `kh`, #774's save, 2026-11-15): loaded, Carp walked out of the hole on its move order; teleported (Re_Dev) to
+its middle (4626,-36197) the ninjas circled its edge and left without reaching it; ordered west from there it walked out by the hole's north side (24 away)
+and round to the goal, not over the line 18 away; from 1.5 inside the line it walked straight west over it. A move order into the hole is refused (the
+cursor's no-entry sign, goal Aimless). In 3 fights with Carp teleported to 4606,-36197 a standing ninja stood up to 3 past the line inside the hole for
+about 1 s, so the line held no fighter at its radius there: whether an unlinked zone-line edge is a wall is still **Unknown** (a 3-unit overshoot fits
+neither a wall at the line nor a free step). Nobody stayed in the hole.
 **No path at all** (the start sits on a pocket of the mesh with no way out: inside a cage whose walls are not a navmesh cut, or a walker shoved into solid geometry): a player's move order
 is kept instead of being dropped when its goal is within 64 units (`StraightOrderReach`) and walkable at the walker's height: the walker heads straight at
 the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`); a goal further off or off the mesh still drops the
