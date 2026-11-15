@@ -258,6 +258,10 @@ A polygon within `EdgeTolerance` counts across a zone border too (`NavWorld.TryE
 choice). **Observed** (#774, the issue's save, Iron Valley zone 33.24 at 4614,-36197, `meitou-tools probe --nav`): a hole in the mesh east of the
 zone line x 4608, about 36 square, which the original's `tile33.24` lacks too; a character in it got a path whose first point lay on the line, the
 stand test there looked only in zone 33 and found nothing, and it stood for good, its attackers stalled at the hole's edge. Now it walks out and the fight goes on.
+How it got in (**Observed**, scratch probe on that save: 1-unit `Slide` steps east from 4600): `Slide` counts every edge on the zone line as open, also where the
+next zone is loaded and has nothing across, so the sweep never stops at x 4608; root motion (`AnimationSystem.Relocate`) then makes a step with the ground at hand
+even though its end has no mesh, and inside the hole every step is made. The walk and the combat approach test the end point and stop at the edge (the
+ninjas' ring round the hole). **Unknown**: whether the original's agent meets a wall on such an edge.
 **No path at all** (the start sits on a pocket of the mesh with no way out: inside a cage whose walls are not a navmesh cut, or a walker shoved into solid geometry): a player's move order
 is kept instead of being dropped when its goal is within 64 units (`StraightOrderReach`) and walkable at the walker's height: the walker heads straight at
 the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`); a goal further off or off the mesh still drops the
