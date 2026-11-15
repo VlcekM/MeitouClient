@@ -343,6 +343,8 @@ const pairs = [
   @media (prefers-reduced-motion: no-preference) { :global(html) { scroll-behavior: smooth; } }
   /* Narrow screens: drop the stack below the links at the top right. */
   @media (max-width: 900px) { .hero { padding-top: calc(var(--edge) + 48px); } }
+  /* The header links take two rows here (see Base.astro). */
+  @media (max-width: 359px) { .hero { padding-top: calc(var(--edge) + 96px); } }
   /* Too narrow for the buttons side by side beside the wordmark: stack them. */
   @media (max-width: 860px) { .actions { flex-direction: column; align-items: flex-start; } }
   @media (max-width: 640px) { h1 { white-space: normal; } }

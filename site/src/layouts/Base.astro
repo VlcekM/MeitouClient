@@ -44,16 +44,18 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
             <slot name="center" />
           </div>
         )}
-        <a class="gh" href="/roadmap">Roadmap</a>
-        <a class="gh" href="/benchmarks">Benchmarks</a>
-        <a class="gh" href="https://discord.gg/DVAHH2n9DR">
-          <DiscordIcon />
-          Discord
-        </a>
-        <a class="gh" href="https://github.com/VlcekM/MeitouClient">
-          <GithubIcon />
-          GitHub
-        </a>
+        <nav class="site-links" aria-label="Site navigation">
+          <a class="gh" href="/roadmap">Roadmap</a>
+          <a class="gh" href="/benchmarks">Benchmarks</a>
+          <a class="gh" href="https://discord.gg/DVAHH2n9DR">
+            <DiscordIcon />
+            Discord
+          </a>
+          <a class="gh" href="https://github.com/VlcekM/MeitouClient">
+            <GithubIcon />
+            GitHub
+          </a>
+        </nav>
       </header>
       {video && <a class="brand is-corner" href="/">Meitou<span>Client</span></a>}
       <main>
@@ -145,6 +147,7 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
   .brand span { font-weight: 400; }
   /* On the video page the wordmark sits at the bottom right of the first view. */
   .brand.is-corner { position: absolute; z-index: 1; right: var(--edge); top: calc(100svh - var(--edge) - 36px); margin: 0; }
+  .site-links { display: flex; align-items: center; gap: var(--space-7); }
   .gh { display: inline-flex; align-items: center; gap: var(--space-4); color: #fff; font: 400 16px/21px var(--font-exo); text-decoration: none; opacity: .85; transition: opacity .16s ease; }
   .gh:hover { color: #fff; opacity: 1; }
   /* Ko-fi button and a page's own note, centred in the header bar on wide screens, on a line of their own below that. */
@@ -167,10 +170,19 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
         linear-gradient(rgba(8, 6, 5, .7), rgba(8, 6, 5, .3) 45%, rgba(8, 6, 5, .65)),
         radial-gradient(ellipse at center, transparent 55%, rgba(8, 6, 5, .5) 100%);
     }
-    .top { gap: var(--space-6); padding: calc(var(--edge) - 12px) var(--edge); }
-    .gh { min-height: 44px; }
-    .brand { font-size: 26px; line-height: 32px; }
+    /* The header is a centred column: the wordmark, then the four links in one even row. */
+    .top { justify-content: center; gap: 0; padding: calc(var(--edge) - 12px) var(--edge); }
+    .top.is-over { left: 0; }
+    .site-links { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: var(--space-4); width: min(100%, 27rem); }
+    .gh { justify-content: center; gap: var(--space-3); min-height: 44px; font-size: 15px; }
+    .gh :global(svg) { width: 16px; height: 16px; }
+    .brand { flex-basis: 100%; margin: var(--space-4) 0 0; text-align: center; font-size: 26px; line-height: 32px; }
     .brand.is-corner { right: auto; left: var(--edge); top: calc(100svh - var(--edge) - 32px); }
     .foot { padding-bottom: var(--space-7); }
+  }
+
+  /* Too narrow for the four links in a row: two rows of two. */
+  @media (max-width: 359px) {
+    .site-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
