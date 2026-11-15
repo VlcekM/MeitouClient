@@ -40,6 +40,16 @@ public sealed class SettingAttribute(string label) : Attribute
     /// A string's choices; the chosen string is the value.
     /// </summary>
     public string[] Options { get; init; } = [];
+
+    /// <summary>
+    /// The sub-group the setting is shown under on the Mods page: a header row with the setting's rows under it (empty: the mod's group itself).
+    /// </summary>
+    public string SubGroup { get; init; } = "";
+
+    /// <summary>
+    /// The name of a public <c>bool</c> property of the same object: the setting is shown only while it is true (empty: always shown).
+    /// </summary>
+    public string VisibleWhen { get; init; } = "";
 }
 
 /// <summary>
@@ -79,10 +89,18 @@ public sealed class ModSetting
     /// The list's choices (an enum's names or the attribute's options); empty for the other kinds.
     /// </summary>
     readonly string[] _options;
+    /// <summary>
+    /// The property <see cref="Visible"/> reads; null when the setting is always shown.
+    /// </summary>
+    readonly PropertyInfo? _visibleWhen;
+    /// <summary>
+    /// Whether <see cref="Visible"/> has logged a throw from its property already (it logs once, not every frame).
+    /// </summary>
+    bool _visibleFailed;
 
     /// <summary>
     /// Reads the attribute and the property: its kind, choices and range; the value now becomes <see cref="Default"/>. Throws when the property
-    /// cannot be a setting or a list's value is not one of its options.
+    /// cannot be a setting, a list's value is not one of its options, or a <c>VisibleWhen</c> is not a public <c>bool</c> property.
     /// </summary>
     internal ModSetting(ModSettingsGroup group, object target, PropertyInfo property, SettingAttribute about)
     {
@@ -91,10 +109,13 @@ public sealed class ModSetting
         this._property = property;
         Label = about.Label;
         Hint = about.Hint;
+        SubGroup = about.SubGroup.Trim();
+        VisibleWhen = about.VisibleWhen.Trim();
         var type = property.PropertyType;
         Kind = KindOf(property, type, about);
         _options = type.IsEnum ? Enum.GetNames(type) : about.Options;
         if (Kind == ModSettingKind.Slider) (Min, Max, Step) = Range(property, type, about);
+        if (VisibleWhen.Length > 0) _visibleWhen = VisibleProperty(target, property, VisibleWhen);
         Default = Get();
         if (Kind == ModSettingKind.List && Choice < 0)
             throw new ArgumentException($"Setting '{property.Name}': its value '{Format(Default)}' is not one of its options.");
@@ -118,6 +139,36 @@ public sealed class ModSetting
     /// The line under the label: what the setting does.
     /// </summary>
     public string Hint { get; }
+    /// <summary>
+    /// The sub-group the setting is shown under (empty: the mod's group itself).
+    /// </summary>
+    public string SubGroup { get; }
+    /// <summary>
+    /// The name of the property <see cref="Visible"/> reads (empty: always shown).
+    /// </summary>
+    public string VisibleWhen { get; }
+    /// <summary>
+    /// Whether the page shows the setting now: its <see cref="VisibleWhen"/> property is true, or it has none; a throw from that property is logged
+    /// once and the setting stays shown.
+    /// </summary>
+    public bool Visible
+    {
+        get
+        {
+            if (_visibleWhen is null) return true;
+            try
+            {
+                return _visibleWhen.GetValue(_target) is true;
+            }
+            catch (Exception e)
+            {
+                if (!_visibleFailed)
+                    Console.Error.WriteLine($"mod       {Group.ModId}: setting '{Key}' VisibleWhen '{VisibleWhen}' failed: {e}");
+                _visibleFailed = true;
+                return true;
+            }
+        }
+    }
     /// <summary>
     /// How the Settings screen draws it.
     /// </summary>
@@ -212,6 +263,17 @@ public sealed class ModSetting
         if (type.IsEnum || type == typeof(string) && about.Options.Length > 0) return ModSettingKind.List;
         string reason = $"a {type.Name} can't be a setting (bool, int, float, double, an enum, or a string with Options).";
         throw new ArgumentException($"Setting '{property.Name}': {reason}");
+    }
+
+    /// <summary>
+    /// The public <c>bool</c> property a <c>VisibleWhen</c> names; throws when the object has no such property.
+    /// </summary>
+    static PropertyInfo VisibleProperty(object target, PropertyInfo property, string name)
+    {
+        var visible = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+        if (visible is null || visible.PropertyType != typeof(bool) || !visible.CanRead || visible.GetIndexParameters().Length > 0)
+            throw new ArgumentException($"Setting '{property.Name}': VisibleWhen '{name}' is not a public bool property of {target.GetType().Name}.");
+        return visible;
     }
 
     /// <summary>
