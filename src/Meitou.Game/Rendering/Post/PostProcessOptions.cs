@@ -104,6 +104,12 @@ public sealed class PostOptions
     public bool GiCache = true;
 
     /// <summary>
+    /// Whether each GI probe traces <see cref="Gi.GiProbes.MaxRays"/> rays an update instead of <see cref="Gi.GiProbes.DefaultRays"/>: half the
+    /// noise variance at the same response (docs/render-gi.md "Probes"). Off by default.
+    /// </summary>
+    public bool GiMoreRays;
+
+    /// <summary>
     /// Whether the probes are relocated this frame: <see cref="GiHybrid"/> with <see cref="GiRelocate"/>.
     /// </summary>
     public bool GiRelocating => GiHybrid && GiRelocate;
@@ -673,6 +679,7 @@ public sealed class PostOptions
         GiRelocate = other.GiRelocate;
         GiCloudShadows = other.GiCloudShadows;
         GiCache = other.GiCache;
+        GiMoreRays = other.GiMoreRays;
         CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField;
         DofAperture = other.DofAperture;

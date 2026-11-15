@@ -81,8 +81,8 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly GpuComputePipeline _invalidatePipeline;
 
     /// <summary>
-    /// The trace and blend programs and their pipelines by the rays per probe (the workgroup size): the default, and the other one once the bench's
-    /// gi-rays switch asks for it; apart for a trace from relocated places and with the cloud shadows, made once those run.
+    /// The trace and blend programs and their pipelines by the rays per probe (the workgroup size): the default, and the other one once the
+    /// "GI 64 probe rays" setting asks for it; apart for a trace from relocated places and with the cloud shadows, made once those run.
     /// </summary>
     readonly Dictionary<(int Rays, bool Relocate, bool Clouds), (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline,
         GpuComputePipeline BlendPipeline)> _variants = [];
@@ -223,8 +223,8 @@ internal sealed unsafe class GiProbes : IDisposable
     public int Phases { get; set; } = 4;
 
     /// <summary>
-    /// Rays each probe traces per update (32 or 64; the bench's gi-rays switch). The hysteresis is scaled with it so that the noise stays the same
-    /// (<see cref="UpdateHysteresis"/>).
+    /// Rays each probe traces per update (32 or 64; the "GI 64 probe rays" setting). The hysteresis stays that of 32, so 64 halves the noise
+    /// variance (<see cref="UpdateHysteresis"/>).
     /// </summary>
     public int Rays { get; set; } = DefaultRays;
 
@@ -521,15 +521,15 @@ internal sealed unsafe class GiProbes : IDisposable
     }
 
     /// <summary>
-    /// The hysteresis of one update. <see cref="Hysteresis"/> is the per-frame figure for 64 rays; with fewer rays the same noise needs a longer
-    /// memory: an exponential average of independent samples has a variance of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the
-    /// variance of 64 / n times that of 64 rays, so (1 - h) / (1 + h) is scaled by n / 64.
+    /// The hysteresis of one update, the same for every ray count. <see cref="Hysteresis"/> is the per-frame figure for 64 rays; the memory is
+    /// that of <see cref="DefaultRays"/>, which needs a longer one for the same noise: an exponential average of independent samples has a variance
+    /// of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the variance of 64 / n times that of 64 rays, so (1 - h) / (1 + h) is
+    /// scaled by n / 64. More rays thus lower the noise (64: half the variance) and keep the response.
     /// </summary>
     float UpdateHysteresis(int phases)
     {
         float h = MathF.Pow(Hysteresis, phases);
-        if (Rays >= MaxRays) return h;
-        float k = (1 - h) / (1 + h) * Rays / MaxRays;
+        float k = (1 - h) / (1 + h) * DefaultRays / MaxRays;
         return (1 - k) / (1 + k);
     }
 

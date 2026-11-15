@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Gi;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
@@ -284,6 +285,7 @@ static partial class WorldFrame
             giProbes.Reflections = reflections;
             giProbes.Relocate = giResolve && post.Options.GiRelocating;
             giProbes.CloudShadows = post.Options.GiCloudShadowing;
+            giProbes.Rays = post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;
         }
 
         return giResolve;

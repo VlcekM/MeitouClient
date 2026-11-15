@@ -120,6 +120,7 @@ static class SettingHints
         WorldFrame.GiRelocateSwitch => "Move the light probes out of walls.",
         WorldFrame.GiCloudShadowsSwitch => "Clouds shade the bounced light and the light shafts.",
         WorldFrame.GiCacheSwitch => "A traced cache adds fine indirect light near the camera.",
+        WorldFrame.GiRaysSwitch => "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost.",
         "Tone map and grade" => "Use hybrid tone mapping and scene colour grading.",
         "Light shafts" => "Let shadows shape the light scattered through haze.",
         "Heat haze" => "Use Meitou's reduced heat distortion strength.",

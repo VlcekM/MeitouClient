@@ -245,6 +245,8 @@ static class LauncherSchema
         yield return Switch(WorldFrame.GiRelocateSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.GiCloudShadowsSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.GiCacheSwitch, "Off", "On", true);
+        // The probes' rays, 32 at start.
+        yield return Switch(WorldFrame.GiRaysSwitch, "32 rays", "64 rays", false);
         // The Advanced materials' parts, on at start.
         yield return Switch(WorldFrame.MaterialHairSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialClothSwitch, "Off", "On", true);

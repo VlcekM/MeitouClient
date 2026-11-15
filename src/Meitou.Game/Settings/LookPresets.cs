@@ -319,7 +319,7 @@ sealed class LookPresets(SettingsMenu menu)
             or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or "Medium foliage range" or "Terrain detail: error px (less = finer)"
             or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
             or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider or "Ground trails"
-            or WorldFrame.DepthOfFieldSwitch => "Medium impact",
+            or WorldFrame.DepthOfFieldSwitch or WorldFrame.GiRaysSwitch => "Medium impact",
         "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)"
             or "Cloud shadows in fog" or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)"
             or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Bloody footprints" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
