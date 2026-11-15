@@ -66,8 +66,8 @@ static class SettingHints
         "Far water clarity" => "Adjust underwater visibility at a distance.",
         "Water see-through distance" => "Distance over which submerged scenery stays visible.",
         "Shadow distance" => "How far shadows are drawn; zero disables them.",
-        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, or ray-traced shadows "
-            + "(needs ray tracing, turns on global illumination).",
+        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near "
+            + "and soft cascades further away (both need ray tracing and turn on global illumination).",
         "Ambient occlusion type" => "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate).",
         WorldFrame.GiChoice => "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. "
             + "Needs ray tracing.",

@@ -556,9 +556,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     static readonly (string Choice, int First, string Label, string[] Options, string Hint, string Section)[] Techniques =
     [
-        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced"],
+        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced", "Ray traced + cascades"],
             "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too "
-                + "(needs ray tracing, turns on indirect light).",
+                + "(needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away.",
             "Lighting"),
         (WorldFrame.OcclusionChoice, 1, "Ambient occlusion technique", ["SSAO", "GTAO"],
             "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more.",
@@ -614,7 +614,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             "Interior lamps" or "Lamp warmth" => "Advanced",
             "Anti-aliasing" or "Weather particles" => "Hidden",
             "Shadows" or "Traced sun shadows" or "Contact shadows" or "Lamp shadows" or "Soft grazing sun" or WorldFrame.FifthCascadeSwitch
-                or WorldFrame.TracedGrassSwitch or WorldFrame.TracedFarCascadesSwitch => "Lighting",
+                or WorldFrame.TracedGrassSwitch => "Lighting",
             "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine"
                 or WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => "Lighting",
             "Water" or "Water contact foam, wakes and ripples" or "Reflections" => "Water & reflections",
@@ -790,22 +790,21 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>
     /// Whether a Graphics row acts now: a setting of an effect shows only while that effect is on, and one of a technique only with that technique
     /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade, the size and filter also with their far
-    /// cascades; the grass shadows and the far cascades' switch with them; the screen-space contact shadows with the cascades; the cache's parts
+    /// cascades; the grass shadows with them; the screen-space contact shadows with the cascades; the cache's parts
     /// with the hybrid indirect light).
     /// </summary>
     bool RowShown(string label)
     {
         int sun = ChoiceAt(WorldFrame.SunShadowsChoice), occlusion = ChoiceAt(WorldFrame.OcclusionChoice), gi = ChoiceAt(WorldFrame.GiChoice);
-        bool farCascades = SwitchOn(WorldFrame.TracedFarCascadesSwitch);
 
         return label switch
         {
             WorldFrame.ShadowDistanceSlider => sun != 0,
-            WorldFrame.ShadowMapSlider => sun != 0 && (sun != 3 || farCascades),
-            WorldFrame.ShadowFilterSlider => sun is -1 or 2 || (sun == 3 && farCascades),
+            WorldFrame.ShadowMapSlider => sun is not (0 or 3),
+            WorldFrame.ShadowFilterSlider => sun is -1 or 2 or 4,
             WorldFrame.FifthCascadeSwitch => sun is -1 or 2,
-            "Contact shadows" => sun != 3,
-            WorldFrame.TracedGrassSwitch or WorldFrame.TracedFarCascadesSwitch => sun is -1 or 3,
+            "Contact shadows" => sun is not (3 or 4),
+            WorldFrame.TracedGrassSwitch => sun is -1 or 3 or 4,
             "Indoor GI" => gi != 0,
             WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => gi is -1 or 2,
             WorldFrame.GtaoQualitySlider => occlusion is -1 or 2,

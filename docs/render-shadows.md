@@ -147,9 +147,9 @@ the volume 0.09-0.11 ms, a close-up character 0.06 ms. With a still camera the f
 
 ## Traced near, cascades far
 
-`TracedFarCascades` ("Cascades past traced shadows", Meitou engine choice, off; shown under the traced technique; `ShadowPass.FarCascades`): the rays take the sun to
-view depth 2000 (`ShadowPass.TracedHandoff`) and four cascades (`HandoffCascades`) from 1600 to the shadow range, split by the practical scheme without the focus rule
-(`CascadeSplits`), drawn, cached and filtered as the Meitou cascades are (their blocker search included). `atmoTracedShare` falls from 1 to 0 over 1600-2000 (cascade 0's
+`TracedFarCascades` (the switch of the sun shadows' fourth position, "Traced near, cascades far": Meitou engine choice, off by default, on in the
+tiers that trace the sun, Ultra and Extreme; `ShadowPass.FarCascades`): the rays take the sun to view depth 2000 (`ShadowPass.TracedHandoff`)
+and four cascades (`HandoffCascades`) from 1600 to the shadow range, split by the practical scheme without the focus rule (`CascadeSplits`), drawn, cached and filtered as the Meitou cascades are (their blocker search included). `atmoTracedShare` falls from 1 to 0 over 1600-2000 (cascade 0's
 first depth to `msHandoff`), the colour taking the cascades' share; past 2000 no pixel is marked traced, so the rays and the grass reach (`TracedDepth` 2000) end there. The
 sun map stays for what draws no traced pixel nearer than cascade 0 (shafts and lit dust switch at its first depth, `msVolumeServes`; `kenshiShadowMeitou` blends map into
 cascades over the band; a traced receiver's other share there reads the cascades alone, `msCascadesOnly`). A set shadow range under 4000 traces every depth

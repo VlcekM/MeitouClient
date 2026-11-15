@@ -343,7 +343,7 @@ static partial class WorldFrame
     public const string TracedGrassSwitch = "Traced grass shadows";
 
     /// <summary>
-    /// The traced sun shadows near, cascades far (<see cref="PostOptions.TracedFarCascades"/>), a plain on / off row under them.
+    /// The traced sun shadows near, cascades far (<see cref="PostOptions.TracedFarCascades"/>), the <see cref="SunShadowsChoice"/>'s fourth position.
     /// </summary>
     public const string TracedFarCascadesSwitch = "Cascades past traced shadows";
 
@@ -438,7 +438,7 @@ static partial class WorldFrame
     /// The switches the <see cref="ChoiceSliders"/> replace on screen.
     /// </summary>
     public static readonly string[] ChoiceDrivenSwitches =
-        ["Shadows", "Traced sun shadows", "Ambient occlusion", "Ground-truth occlusion", "Indirect light", "Hybrid GI"];
+        ["Shadows", "Traced sun shadows", TracedFarCascadesSwitch, "Ambient occlusion", "Ground-truth occlusion", "Indirect light", "Hybrid GI"];
 
     /// <summary>
     /// The weather particles slider's position for the renderer's state: 0 off, 1 quarter, 2 half, 3 by sprite size (auto), 4 full size.
@@ -563,17 +563,17 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced), ambient occlusion (Off / SSAO / GTAO) and global illumination (Off /
-    /// Probes / Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance it stands for, so a
-    /// settings file of the switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns the GI on, and the
-    /// GI off leaves the cascades.
+    /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced / Traced near, cascades far), ambient occlusion (Off / SSAO / GTAO) and
+    /// global illumination (Off / Probes / Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance
+    /// it stands for, so a settings file of the switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns
+    /// the GI on, and the GI off leaves the cascades.
     /// </summary>
     static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
     {
         if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow
             && ChoiceToggle(toggles, "Shadows") is not null)
         {
-            sliders.Add(new Slider(SunShadowsChoice, 0, 3, () => SunShadowsMode(toggles, shadow),
+            sliders.Add(new Slider(SunShadowsChoice, 0, 4, () => SunShadowsMode(toggles, shadow),
                 v => SetSunShadowsMode(toggles, shadow, distance, ChoiceIndex(v)), "0"));
         }
 
@@ -607,12 +607,13 @@ static partial class WorldFrame
     static int ChoiceIndex(float v) => (int)MathF.Round(v);
 
     /// <summary>
-    /// The <see cref="SunShadowsChoice"/> the switches stand for: 0 off, 1 Faithful cascades, 2 Meitou cascades, 3 traced.
+    /// The <see cref="SunShadowsChoice"/> the switches stand for: 0 off, 1 Faithful cascades, 2 Meitou cascades, 3 traced, 4 traced near and
+    /// cascades far.
     /// </summary>
     static float SunShadowsMode(List<Toggle> toggles, ShadowPass shadow)
     {
         if (!shadow.Enabled) return 0;
-        if (ChoiceOn(toggles, "Traced sun shadows")) return 3;
+        if (ChoiceOn(toggles, "Traced sun shadows")) return ChoiceOn(toggles, TracedFarCascadesSwitch) ? 4 : 3;
 
         return ChoiceOn(toggles, "Shadows") ? 2 : 1;
     }
@@ -622,7 +623,8 @@ static partial class WorldFrame
     /// </summary>
     static void SetSunShadowsMode(List<Toggle> toggles, ShadowPass shadow, Slider distance, int mode)
     {
-        ChoiceSet(toggles, "Traced sun shadows", mode == 3);
+        ChoiceSet(toggles, "Traced sun shadows", mode >= 3);
+        if (mode >= 3) ChoiceSet(toggles, TracedFarCascadesSwitch, mode == 4);
         if (mode == 0)
         {
             distance.Set(distance.Min);
@@ -639,7 +641,7 @@ static partial class WorldFrame
         }
 
         ChoiceSet(toggles, "Shadows", mode >= 2);
-        if (mode == 3) ChoiceSet(toggles, "Indirect light", true);
+        if (mode >= 3) ChoiceSet(toggles, "Indirect light", true);
     }
 
     /// <summary>
@@ -1076,7 +1078,7 @@ static partial class WorldFrame
         toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
         toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
 
-        // The traced sun shadows' grass and their far cascades, plain on / off rows; they act while the sun's shadows are traced.
+        // The traced sun shadows' grass, a plain on / off row, and their far cascades (the sun shadows' choice); they act while the sun is traced.
         toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));
         toggles.Add(new Toggle(TracedFarCascadesSwitch, () => post.Options.TracedFarCascades, v => post.Options.TracedFarCascades = v));
     }
