@@ -351,7 +351,8 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// DC_HAS_ILLEGAL_ITEM (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): a member of S's squad that Me perceives (<see cref="Known"/>)
     /// carries an item on the <c>illegal goods</c> of the culture of Me's town's faction, else of Me's faction. Each carrier found posts the
-    /// smuggling message (not on the Talk menu's dry run, and once per carrier and item per game hour: engine choice).
+    /// smuggling message (not on the Talk menu's dry run, and once per carrier and item per game hour: engine choice). The search is the grid and the
+    /// worn backpack, and with <see cref="World.BagSearchFix"/> also bags carried in the grid (<see cref="Items.Inventory.Searched"/>).
     /// </summary>
     bool HasIllegalItem(World world, Conversation c, CharacterId me, CharacterCold mc, CharacterId subject)
     {
@@ -363,7 +364,7 @@ public sealed partial class DialogueSystem
         foreach (var m in Known(world, me, subject))
         {
             if (Cold(world, m) is not { Inventory: { } inventory } carrier
-                || inventory.All().FirstOrDefault(i => culture.Illegal.Contains(i.Record)) is not { } item)
+                || inventory.Searched(world.BagSearchFix).FirstOrDefault(i => culture.Illegal.Contains(i.Record)) is not { } item)
             {
                 continue;
             }

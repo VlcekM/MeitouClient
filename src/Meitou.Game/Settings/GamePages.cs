@@ -545,6 +545,11 @@ sealed class GamePages(SettingsMenu menu)
             + "in the Shinobi Thieves tower. The game's world places them there and draws them inside the room.",
             Toggle: new("Walls inside buildings", () => menu.Config.FixPartsInBuildings, v => menu.Config.FixPartsInBuildings = v,
                 Remaster: true, OnOff: true)));
+        result.Add(new("Bags in the inventory",
+            "Guards searching for smuggled goods and starving bandits after food also look inside bags carried in the inventory. "
+            + "The game searches only the inventory and the worn backpack, so contraband in a bag put in the inventory is never found.",
+            Toggle: new("Bags in the inventory", () => menu.Config.FixBagSearch,
+                v => { menu.Config.FixBagSearch = v; menu.BagSearchChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
     }
 

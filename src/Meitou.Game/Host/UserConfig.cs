@@ -444,6 +444,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBenchFacing { get; set; } = true;
     /// <summary>
+    /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings; off: only the grid
+    /// and the worn backpack, as the game does; docs/game/dialogue.md "Conditions").
+    /// </summary>
+    public bool FixBagSearch { get; set; } = true;
+    /// <summary>
     /// Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off:
     /// drawn, as the game does; docs/render-interior-cut.md).
     /// </summary>

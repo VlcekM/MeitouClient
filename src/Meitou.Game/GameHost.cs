@@ -632,6 +632,7 @@ sealed partial class GameHost(
             clock: clock, simulation: settings, systems: systems, walkability: walkability);
 
         Session.World.BenchFacingFix = Config.FixBenchFacing;
+        Session.World.BagSearchFix = Config.FixBagSearch;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         if (Gpu.Characters is { } nearChars)
