@@ -65,13 +65,13 @@ sealed class QuickMoves(PopulationData? data)
 
     /// <summary>
     /// Whether a right click may act on <paramref name="item"/> (a quick move, or a mod's item use, <see cref="ItemUses"/>): the item the token
-    /// names, in a movable or limb section, held by <paramref name="root"/> or its bag (<paramref name="holder"/>). The caller checks
-    /// <see cref="ItemInstance.LockedOn"/>.
+    /// names, with the mod tag the window showed (a stale click never acts on a differently tagged item in its cell), in a movable or limb
+    /// section, held by <paramref name="root"/> or its bag (<paramref name="holder"/>). The caller checks <see cref="ItemInstance.LockedOn"/>.
     /// </summary>
     internal static bool Clickable(Inventory root, ItemInstance? item, InventoryItemToken token, [NotNullWhen(true)] out Inventory? holder)
     {
         holder = null;
-        if (!HeldItems.Matches(item, token)) return false;
+        if (!HeldItems.Matches(item, token) || item!.ModTag != token.ModTag) return false;
         if (!(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section))) return false;
 
         holder = HeldItems.HolderOf(root, item);

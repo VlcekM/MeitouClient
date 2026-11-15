@@ -12,8 +12,9 @@ namespace Meitou.Simulation.Items;
 public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality)
 {
     /// <summary>
-    /// The item's code-mod tag as the window showed it (<see cref="ItemInstance.ModTag"/>; "" none): a mod's item use acts only on the item that
-    /// still carries it, so a stale click never reaches a differently tagged item in the same cell.
+    /// The item's code-mod tag as the window showed it (<see cref="ItemInstance.ModTag"/>; "" none): a right click (a mod's item use or a quick
+    /// move) acts only on an item that still carries it, so a stale click never reaches a differently tagged item in the same cell. Two items with
+    /// the same tag and token fields are not told apart.
     /// </summary>
     public string ModTag { get; init; } = "";
 
