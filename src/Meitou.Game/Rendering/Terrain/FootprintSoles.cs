@@ -119,6 +119,9 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
                 // A body whose feet give no skin sole (a skeleton's frame) prints their outline as footwear does, never the drawn bare mask.
                 var triangles = Triangles(mesh);
                 var all = Positions(mesh);
+                // A fitted Human or Hive leg's mesh is only the cap above the knee: no foot of its own, the body's prints.
+                if (all.Length == 0 || all.Min(p => p.Y) > NoFootAbove) return [null, null];
+
                 return [BakeBare(triangles, false) ?? Bake(all, false), BakeBare(triangles, true) ?? Bake(all, true)];
             }
 
@@ -173,6 +176,17 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
     const float BareBand = .45f;
 
     /// <summary>
+    /// A mesh whose lowest point is higher than this (units over the model's feet) has no foot: a limb's cap, not a leg (the Human Leg's lies at 7.4).
+    /// </summary>
+    const float NoFootAbove = 2;
+
+    /// <summary>
+    /// Whether the mesh was read and has no foot of its own (<see cref="NoFootAbove"/>): its wearer's prints come from another mesh.
+    /// </summary>
+    public bool Footless(string path) => _models.TryGetValue(Key(path, true), out var entry)
+        && entry.Source.IsCompletedSuccessfully && entry.Source.Result is [null, null];
+
+    /// <summary>
     /// A bare sole at least this many times as long as wide; a squatter one (a band catching part of a skeleton's foot) takes the generic mask.
     /// </summary>
     const float MinBareAspect = 1.6f;
@@ -217,7 +231,8 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
         var min = new Vector2(points.Min(p => p.X), points.Min(p => p.Y));
         var max = new Vector2(points.Max(p => p.X), points.Max(p => p.Y));
         var size = max - min;
-        if (size.X is < .4f or > 4 || size.Y is < 1.2f or > 7 || size.Y < MinBareAspect * size.X) return null;
+        // A Hive's foot is a pointed tip, about 0.4 x 0.85 units: small soles count.
+        if (size.X is < .2f or > 4 || size.Y is < .5f or > 7 || size.Y < MinBareAspect * size.X) return null;
 
         var half = size * .54f;
         var centre = (min + max) * .5f;

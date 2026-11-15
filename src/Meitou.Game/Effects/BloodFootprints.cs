@@ -199,7 +199,7 @@ sealed class BloodFootprints(GameHost host)
         look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
 
     /// <summary>
-    /// The prosthetic leg worn on that side (LIMB_REPLACEMENT <c>slot</c> 52 left, 53 right); null for a natural leg.
+    /// The leg fitted on that side (LIMB_REPLACEMENT <c>slot</c> 52 left, 53 right: a prosthetic, or a Human or Hive leg); null for the body's own.
     /// </summary>
     static CharacterPart? Prosthetic(CharacterAppearance look, bool right)
     {
@@ -325,21 +325,24 @@ sealed class BloodFootprints(GameHost host)
         var source = SourceColour(store, point);
         if (source is null && !Wet(sole, now)) return;
 
-        // A boot, else a prosthetic leg, prints a hard sole (its lowest vertices' outline); a natural foot the body's skin.
+        // A boot prints its sole's outline. A foot, the body's or a fitted leg's, prints its skin sole, else (a robot's frame) its outline; with no
+        // mesh, the generic mask: a boot's for a boot or a prosthetic, the bare one for a natural foot.
         bool bootOnThisFoot = boot is not null && boot.HideSide != (right ? 2 : 1);
-        var hard = bootOnThisFoot ? boot : Prosthetic(look, right);
-        string? mesh = host.Assets.FindMesh(hard?.Mesh ?? look.BodyMesh);
+        var leg = Prosthetic(look, right);
+        string? mesh = host.Assets.FindMesh(bootOnThisFoot ? boot!.Mesh : leg?.Mesh ?? look.BodyMesh);
         if (source is { } colour)
         {
             sole = Sole.Wet(colour, now);
-            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: hard is null);
+            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: !bootOnThisFoot);
+            if (leg is not null && host.Assets.FindMesh(look.BodyMesh) is { } own) host.Gpu.Decals?.PrepareFootprint(own, bare: true);
             return;
         }
 
         uint alpha = (uint)(50 + 45 * sole.Steps);
-        byte variant = (byte)((hard is null ? 2 : 0) + (right ? 1 : 0));
+        byte variant = (byte)((bootOnThisFoot || leg is not null ? 0 : 2) + (right ? 1 : 0));
         at.Y = host.Gpu.Terrain.HeightAt(point.X, point.Y);
-        host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh);
+        host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh, skin: !bootOnThisFoot,
+            host.Assets.FindMesh(look.BodyMesh));
         sole.Steps--;
     }
 
