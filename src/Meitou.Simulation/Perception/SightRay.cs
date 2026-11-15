@@ -55,13 +55,15 @@ static class SightRay
     /// <summary>
     /// Whether the ray from <see cref="From"/> over the looker's feet at <paramref name="eye"/> to <see cref="To"/> over the target's at
     /// <paramref name="target"/> meets nothing solid more than <see cref="Slack"/> short of the target: the terrain and the buildings' collision
-    /// (walls, floors, stairs, furniture and roofs; not doors or passable parts, <see cref="SolidHits"/>).
+    /// (walls, floors, stairs, furniture and roofs; not doors or passable parts, <see cref="SolidHits"/>). Blocked while the collision on the way is
+    /// still being read.
     /// </summary>
     public static bool Clear(IWalkability walk, IRagdollEnvironment? buildings, Vector3 eye, Vector3 target)
     {
         var from = eye + new Vector3(0, From, 0);
         var seg = target + new Vector3(0, To, 0) - from;
-        float hit = SolidHits.Hit(walk, buildings, from, seg, RangedTuning.TerrainStep, out _);
+        float hit = SolidHits.Hit(walk, buildings, from, seg, RangedTuning.TerrainStep, out _, out bool ready);
+        if (!ready) return false;
 
         return hit < 0 || hit * seg.Length() >= Vector3.Distance(eye, target) - Slack;
     }

@@ -263,7 +263,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <paramref name="from"/> through <paramref name="to"/> (the original's is unbounded; here <paramref name="reach"/> long at least) and the first
     /// thing it meets of the click hulls, the terrain and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any
     /// enemy's lets it go (1), the target's included; the terrain lets it go (it names no object); a building closes in (0) when it is nearer the
-    /// shooter than the target is (feet to feet), else lets it go; nothing met fires.
+    /// shooter than the target is (feet to feet), else lets it go; nothing met fires. Buildings on the way still being read hold it (engine choice).
     /// </summary>
     int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach)
     {
@@ -277,8 +277,12 @@ public sealed partial class CombatSystem : IProjectileSource
 
         // The terrain and the buildings only up to the first hull: whichever comes first decides.
         var solidSeg = hit >= 0 ? seg * atHull : seg;
-        float solid = SolidHits.Hit(world.Walkability, Buildings, from, solidSeg, RangedTuning.TerrainStep, out bool building);
+        float solid = SolidHits.Hit(world.Walkability, Buildings, from, solidSeg, RangedTuning.TerrainStep, out bool building, out bool ready);
         var prev = world.Characters.Previous;
+
+        // The buildings on the way still being read: hold fire until they are known rather than shoot through a wall.
+        if (!ready) return 2;
+
         if (solid < 0 && hit >= 0) return Hostile(world.Characters, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
         if (solid < 0 || !building) return 1;
 
@@ -570,7 +574,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// The closing ray (<c>FUN_140438c70</c> → <c>FUN_140435b40</c> with mask <c>0x87f9e04</c>: the terrain and the buildings, no characters): from
     /// the barrel along the line between the two feet (both raised <see cref="RangedTuning.ClosingRayHeight"/>), it passes when it meets something
-    /// farther from the shooter than the target is (<c>FUN_1404346d0</c>). A ray that meets nothing does not pass. The original's ray is unbounded;
+    /// farther from the shooter than the target is (<c>FUN_1404346d0</c>). A ray that meets nothing, or crosses collision still being read, does not
+    /// pass. The original's ray is unbounded;
     /// here it ends <see cref="RangedTuning.RayReach"/> on.
     /// </summary>
     bool ClosingRayPasses(World world, int i, int t, Vector3 barrel)
@@ -581,8 +586,8 @@ public sealed partial class CombatSystem : IProjectileSource
         if (length < 1e-3f) return false;
 
         var seg = line * (RangedTuning.RayReach / length);
-        float hit = SolidHits.Hit(world.Walkability, Buildings, barrel, seg, RangedTuning.TerrainStep, out _);
-        if (hit < 0) return false;
+        float hit = SolidHits.Hit(world.Walkability, Buildings, barrel, seg, RangedTuning.TerrainStep, out _, out bool ready);
+        if (hit < 0 || !ready) return false;
 
         return length * length < Vector3.DistanceSquared(barrel + seg * hit, prev[i].Position);
     }

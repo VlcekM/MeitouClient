@@ -716,8 +716,9 @@ an NPC by its planner's UNEQUIP_WEAPON step (one without an AI at once).
 Crossbow reload/steady aim, skill spread, bolt flight, ammo, obstruction and friendly hits are
 simulation state; `Schedule` advances bolts. Targets without medical bodies do not stop bolts. Bolts and the line of fire stop at the
 terrain heightmap and the buildings' collision triangles (the ragdolls' environment, `SolidHits`), not the walkable surfaces (a roof over
-the shooter counted as ground). A building is there once its zone's collision has been read on a worker; until then bolts pass it, which
-breaks determinism for those first shots.
+the shooter counted as ground). A building is there once its zone's collision has been read on a worker (about 0.1-0.2 s a zone, headless, Black Desert City);
+until then the line of fire holds the shot and the closing ray, the melee alert line and the sight ray (`SightRay`) count as blocked, while a
+bolt already flying passes it, which breaks determinism for such a bolt.
 A crossbow reload paused by the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
 [combat.md](game/combat.md#turrets) fire gate); in a fight without a target the controller stays on (state 3) and the reload counts on.
 Bolts and the line of fire hit each character's click hull, an axis-aligned box from the race's `hull size` (`CombatSystem.HullHalf`); the line of fire and the closing

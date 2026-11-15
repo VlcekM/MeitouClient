@@ -91,7 +91,7 @@ dt = the scan interval; a meter decays also when the target is out of range. Cri
 witnesses and the stealth knock-out read the same meters. Line of sight (`SightRay.Clear`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
 looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
 furniture 19..22, unwalkable roofs 27; not doors 5 or passable parts 23..26), with foliage 6 and 14 added (`0x87fde44`) when the looker is inside a building. Meitou tests the terrain and
-the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty: the original clears the entry's in-view
+the buildings' collision of `SolidHits` (map features included, foliage never; collision still being read counts as blocked) and, blocked, lets the meter empty: the original clears the entry's in-view
 flag (`FUN_140863520`, **Verified** decompile) and the meter drains by dt / 260 (`FUN_140853aa0`). The crime and bounty witnesses, disguise, loot witnesses
 and the sensed-list stand-ins take the same ray after the sight test (`SightRay.Sees`, #781). A sneaking player
 character gets the arrows (`MarkerRenderer`, both passes like the movement marker, lit by the sun; no green) and the original's stealth icon left of its name in the tag

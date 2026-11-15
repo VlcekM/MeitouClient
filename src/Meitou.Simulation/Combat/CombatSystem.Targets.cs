@@ -390,7 +390,8 @@ public sealed partial class CombatSystem
         var seg = prev[t].Position + new Vector3(0, EyeHeight, 0) - from;
         if (world.Sight.Inside(t) && MathF.Abs(seg.Y) > SameFloorHeight) return false;
 
-        return SolidHits.Hit(world.Walkability, Buildings, from, seg, RangedTuning.TerrainStep, out _) < 0;
+        // collision still being read counts as a wall
+        return SolidHits.Hit(world.Walkability, Buildings, from, seg, RangedTuning.TerrainStep, out _, out bool ready) < 0 && ready;
     }
 
     /// <summary>
