@@ -21,8 +21,9 @@ namespace Meitou.Game.DevTools;
 /// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
 /// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
 /// (the middle of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
-/// gives them back. God mode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills
-/// hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too:
+/// gives them back. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move instantly, One-punch man mode, No
+/// stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard (<see cref="DebugGuard"/>: kills hostiles
+/// within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too:
 /// while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player
 /// character's), all or one faction's.
 /// </summary>
@@ -94,9 +95,29 @@ sealed class DebugMenu(GameHost host)
         ClearBounties,
 
         /// <summary>
-        /// Switches godmode for every player character.
+        /// Switches "Set stats to 1000" for every player character.
         /// </summary>
-        Godmode,
+        StatsTo1000,
+
+        /// <summary>
+        /// Switches "Auto heal" for every player character.
+        /// </summary>
+        AutoHeal,
+
+        /// <summary>
+        /// Switches "Move instantly": a right click teleports the selected characters instead of walking them.
+        /// </summary>
+        InstantMove,
+
+        /// <summary>
+        /// Switches "One-punch man mode": every hit landed by a player character kills.
+        /// </summary>
+        OnePunch,
+
+        /// <summary>
+        /// Switches "No stumbling": a hit no longer staggers a player character.
+        /// </summary>
+        NoStumble,
 
         /// <summary>
         /// Switches the guard (kills hostiles near the lead and heals the player's characters).
@@ -131,8 +152,9 @@ sealed class DebugMenu(GameHost host)
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
         "Edit character", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "God mode (all characters)",
-            "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click", "Drop item",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Set stats to 1000", "Auto heal", "Move instantly",
+            "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
+            "Drop item",
     ];
 
     /// <summary>
@@ -170,7 +192,8 @@ sealed class DebugMenu(GameHost host)
             new("World / Spawn", [.. worldRows]),
             new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
                 (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
-            new("Cheats", [(int)DebugRow.Godmode, (int)DebugRow.Guard]),
+            new("Cheats", [(int)DebugRow.StatsTo1000, (int)DebugRow.AutoHeal, (int)DebugRow.InstantMove, (int)DebugRow.OnePunch,
+                (int)DebugRow.NoStumble, (int)DebugRow.Guard]),
         };
         if (host.Modding.DebugRowCount > DebugLabels.Length)
             categories.Add(new("Mods", [.. Enumerable.Range(DebugLabels.Length, host.Modding.DebugRowCount - DebugLabels.Length)]));
@@ -329,6 +352,17 @@ sealed class DebugMenu(GameHost host)
     /// "on" or "off".
     /// </summary>
     static string OnOff(bool on) => on ? "on" : "off";
+
+    /// <summary>
+    /// A switch's new state from a typed field ("on", "1", "true" / "off", "0", "false"), or the opposite of <paramref name="current"/> when the
+    /// field says neither.
+    /// </summary>
+    static bool Toggled(string field, bool current) => field.Trim().ToLowerInvariant() switch
+    {
+        "on" or "1" or "true" => true,
+        "off" or "0" or "false" => false,
+        _ => !current,
+    };
 
     /// <summary>
     /// The tool rows below the cheats: each opens a tool or switches an overlay; a new tool adds its row here (tools first, then the Overlays
@@ -606,8 +640,9 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacter or DebugRow.ForceHits
-            or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode
-            or DebugRow.ExplodeClick or DebugRow.DropItem));
+            or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
+            or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
+            or DebugRow.DropItem));
 
     /// <summary>
     /// The rows that open the body part list.
@@ -1106,13 +1141,27 @@ sealed class DebugMenu(GameHost host)
                 DebugParts = null;
                 string whose = selected.Length > 0 ? $"{selected.Length} selected" : "your characters";
                 return faction is null ? $"every bounty cleared on {whose}" : $"{part.Name?.Split("   ")[0]} bounties cleared on {whose}";
-            case DebugRow.Godmode:
-                bool godOn = field.Trim().ToLowerInvariant() switch { "on" or "1" or "true" => true, "off" or "0" or "false" => false,
-                    _ => !world.Player.Godmode };
-                world.Commands.Enqueue(new DebugGodmode(godOn) { Tick = tick });
-                return godOn
-                    ? "godmode on: every player character has all stats 1000 and is healed 5 times a second"
-                    : "godmode off: each character has its own stats back";
+            case DebugRow.StatsTo1000:
+                bool statsOn = Toggled(field, world.Player.StatsTo1000);
+                world.Commands.Enqueue(new DebugStats1000(statsOn) { Tick = tick });
+                return statsOn ? "stats 1000 on: every player character has all stats at 1000"
+                    : "stats 1000 off: each character has its own stats back";
+            case DebugRow.AutoHeal:
+                bool healOn = Toggled(field, world.Player.AutoHeal);
+                world.Commands.Enqueue(new DebugAutoHeal(healOn) { Tick = tick });
+                return healOn ? "auto heal on: every player character is healed 5 times a second" : "auto heal off";
+            case DebugRow.InstantMove:
+                bool instantOn = Toggled(field, world.Player.InstantMove);
+                world.Commands.Enqueue(new DebugInstantMove(instantOn) { Tick = tick });
+                return instantOn ? "move instantly on: a right click teleports the selected characters" : "move instantly off";
+            case DebugRow.OnePunch:
+                bool punchOn = Toggled(field, world.Player.OnePunch);
+                world.Commands.Enqueue(new DebugOnePunch(punchOn) { Tick = tick });
+                return punchOn ? "one-punch man mode on: every hit by one of your characters kills" : "one-punch man mode off";
+            case DebugRow.NoStumble:
+                bool stumbleOff = Toggled(field, world.Player.NoStumble);
+                world.Commands.Enqueue(new DebugNoStumble(stumbleOff) { Tick = tick });
+                return stumbleOff ? "no stumbling on: hits no longer stagger your characters" : "no stumbling off";
             case DebugRow.Guard:
                 return DebugGuardApply(world, field, tick);
             case DebugRow.Explode:
@@ -1136,6 +1185,21 @@ sealed class DebugMenu(GameHost host)
         string status = DebugApply(row, field, part, at);
         if (host.Session.World.Commands.Count > queued) ApplyWhilePaused();
         return status;
+    }
+
+    /// <summary>
+    /// The console's god mode, the menu's "Set stats to 1000" and "Auto heal" together: <paramref name="field"/> is on / off, or empty to toggle
+    /// (on unless both are already on).
+    /// </summary>
+    internal string DebugGodmodeApply(string field)
+    {
+        DebugFailed = false;
+        var world = host.Session.World;
+        bool on = Toggled(field, world.Player.StatsTo1000 && world.Player.AutoHeal);
+        world.Commands.Enqueue(new DebugGodmode(on) { Tick = world.Tick });
+        return on
+            ? "godmode on: every player character has all stats 1000 and is healed 5 times a second"
+            : "godmode off: each character has its own stats back";
     }
 
     /// <summary>
@@ -1527,9 +1591,25 @@ sealed class DebugMenu(GameHost host)
                     value = $"{_explodeLevel} {ExplodeLevels.Names[_explodeLevel - 1]}";
                     rowOn = _explodeLevel != ExplodeLevels.Normal;
                     break;
-                case DebugRow.Godmode:
-                    value = OnOff(world.Player.Godmode);
-                    rowOn = world.Player.Godmode;
+                case DebugRow.StatsTo1000:
+                    value = OnOff(world.Player.StatsTo1000);
+                    rowOn = world.Player.StatsTo1000;
+                    break;
+                case DebugRow.AutoHeal:
+                    value = OnOff(world.Player.AutoHeal);
+                    rowOn = world.Player.AutoHeal;
+                    break;
+                case DebugRow.InstantMove:
+                    value = OnOff(world.Player.InstantMove);
+                    rowOn = world.Player.InstantMove;
+                    break;
+                case DebugRow.OnePunch:
+                    value = OnOff(world.Player.OnePunch);
+                    rowOn = world.Player.OnePunch;
+                    break;
+                case DebugRow.NoStumble:
+                    value = OnOff(world.Player.NoStumble);
+                    rowOn = world.Player.NoStumble;
                     break;
                 case DebugRow.DropItem:
                     value = "Enter: pick an item";
@@ -1610,7 +1690,7 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// A row label without its hint: "Godmode (all players)" is "Godmode", "Teleport on map..." is "Teleport on map".
+    /// A row label without its hint: "Guard (kill + heal in radius)" is "Guard", "Teleport on map..." is "Teleport on map".
     /// </summary>
     static string DebugShortName(string label)
     {

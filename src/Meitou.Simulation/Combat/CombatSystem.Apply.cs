@@ -177,8 +177,9 @@ public sealed partial class CombatSystem
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
-        var (part, damage, absorbed) =
-            HitResolver.LandDetailed(medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
+        var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
+            ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, tech.LowStrike, direction == 6, events)
+            : HitResolver.LandDetailed(medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         aSlot.Landed++;
         dSlot.Taken++;
@@ -416,6 +417,9 @@ public sealed partial class CombatSystem
     /// </summary>
     void Stagger(World world, ref CombatSlot dSlot, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
     {
+        // The debug "No stumbling": a player character keeps its swing, reaction and task, whatever the hit.
+        if (world.Player.NoStumble && dc.IsPlayer) return;
+
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned
         // again from its start, unless it mans a turret (shooting at a live target).
         bool outsideFight = dSlot.TargetSlot < 0 && !dc.InCombat;

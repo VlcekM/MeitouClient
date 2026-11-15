@@ -785,11 +785,20 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     }
 
     /// <summary>
-    /// Orders the selected characters to walk to <paramref name="target"/>; <paramref name="queued"/> adds it after their orders.
+    /// Orders the selected characters to walk to <paramref name="target"/>; <paramref name="queued"/> adds it after their orders. With the debug
+    /// "Move instantly" on, the selected characters are teleported there instead (a player-issued move only: jobs and fights keep walking).
     /// </summary>
-    public void Move(Vector3 target, bool queued) =>
-        Say(new MoveOrder([], target) { Tick = Session.World.Tick, Queued = queued });
+    public void Move(Vector3 target, bool queued)
+    {
+        var world = Session.World;
+        if (world.Player.InstantMove)
+        {
+            Say(new DebugTeleport([], target) { Tick = world.Tick });
+            return;
+        }
 
+        Say(new MoveOrder([], target) { Tick = world.Tick, Queued = queued });
+    }
 
     /// <summary>
     /// Returns true when the click belonged to the HUD or the interface (the camera input should not see it).
@@ -1165,7 +1174,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         Furniture.UpdateSeat();
         WorldMap.UpdateMap();
         if (!final) Build.UpdateBuild();
-        if (!Steering || OverHud(Mouse)) return;
+        if (!Steering || Session.World.Player.InstantMove || OverHud(Mouse)) return;   // a teleport happens on the press, not every frame
         if (Ray(Mouse) is not { } ray || Picking.MoveHit(ray.Origin, ray.Direction) is not { } hit) return;
         MoveMarker.PlaceMarker(hit);   // the marker follows the cursor every frame; the order only once a tick
         if (!final && Session.World.Tick == _steerTick) return;

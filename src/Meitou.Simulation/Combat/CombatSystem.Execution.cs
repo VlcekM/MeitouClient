@@ -42,7 +42,9 @@ public sealed partial class CombatSystem
         ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, blow, 0);
         bool wasIncapacitated = medical.Incapacitated;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, _combat, events);
+        var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
+            ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, false, false, events)
+            : HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
 
         ref var dSlot = ref _write[d];

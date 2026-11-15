@@ -83,6 +83,22 @@ public static class HitResolver
         new(packet.Cut * armour.CutReduction, packet.Blunt * armour.BluntReduction, MathF.Min(packet.Pierce, armour.PierceFlat));
 
     /// <summary>
+    /// The debug "One-punch man mode": <paramref name="damage"/> cut damage on the part a blow would pick (the same roll as a normal hit, with the
+    /// strike's height and direction), ignoring armour and toughness. A body the damage does not kill (a robot's limb, which cannot bleed) is killed
+    /// outright. Returns what <see cref="LandDetailed{TCover}"/> returns, with nothing absorbed.
+    /// </summary>
+    public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed) LandLethal(MedicalState medical, in MedicalContext ctx, float damage,
+        bool lowStrike, bool directionSix, List<MedicalEvent>? events)
+    {
+        int part = medical.ChoosePart(ctx, lowStrike, directionSix);
+        if (part < 0) return (-1, default, default);
+        var hit = new HitDamage(damage, 0, 0);
+        medical.ApplyHit(part, hit, ctx, events);
+        if (!medical.Dead) medical.Kill(events);
+        return (part, hit, default);
+    }
+
+    /// <summary>
     /// <see cref="Land{TCover}"/> that also reports what the armour stopped.
     /// </summary>
     public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed) LandDetailed<TCover>(
