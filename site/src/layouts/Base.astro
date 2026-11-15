@@ -25,6 +25,7 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
     <meta name="description" content={description} />
     <link rel="icon" href="/favicon.ico" />
     <title>{title}</title>
+    <slot name="head" />
   </head>
   <body>
     <div class="mt-scene">
