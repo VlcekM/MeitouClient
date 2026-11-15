@@ -75,8 +75,15 @@ sealed class ProbeWorld : IDisposable
         NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, save, height) : null;
         IWalkability walk = nav is null ? new OpenGroundWalkability(height) : new NavAdapter(nav.Walkability);
         var world = MakeWorld(data, walk, save);
+        if (nav is not null) GiveGateCodes(world, nav);
         return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav };
     }
+
+    /// <summary>
+    /// Hands the world the gate codes of the built zones, as the game's host does once their meshes are live (docs/game/pathfinding.md "Gate codes").
+    /// </summary>
+    static void GiveGateCodes(World world, NavSystem nav) =>
+        world.Commands.Enqueue(new Meitou.Simulation.Locks.GateRegionsCommand(nav.LabelGates()) { Tick = world.Tick });
 
     /// <summary>
     /// Puts the save's player characters at <paramref name="spot"/> on the terrain, a step apart.

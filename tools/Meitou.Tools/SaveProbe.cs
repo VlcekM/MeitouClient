@@ -679,7 +679,21 @@ static class SaveProbe
             Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)} "
                 + $"designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
             if (f.Kind == FixtureKind.Container) Container(probe, f);
+            if (f.Kind == FixtureKind.Door) Door(probe, f);
         }
+    }
+
+    /// <summary>
+    /// A door fixture's motion, lock and the flags that decide them; a gate's also with the gate codes it joins and its gate state.
+    /// </summary>
+    static void Door(ProbeWorld probe, Fixture f)
+    {
+        Console.WriteLine($"  door motion={f.Motion} open={f.OpenAmount:F2} broken={f.DoorBroken} gate={f.IsGate} wantsLock={f.WantsLock} "
+            + $"restored={f.Restored} lock={f.Lock?.Level} locked={f.Lock?.Locked} effective={f.Lock?.EffectivelyLocked}");
+        if (probe.World.SystemOf<LockSystem>()?.Regions is not { } regions) return;
+
+        var links = regions.Gates.Where(g => g.Building == f.Building).Select(g => string.Join("|", g.Codes));
+        Console.WriteLine($"  gate codes=[{string.Join(" ", links)}] state={LockSystem.GateState(probe.World.Fixtures, f.Building)}");
     }
 
     /// <summary>
