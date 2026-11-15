@@ -148,6 +148,8 @@ Plan:
 - Consider `LanguageVersion = MTLLanguageVersion.Version30` only if it produces a measurable change; do not
   change it for its own sake.
 
+Likely win: small. Main scene is not ALU-bound. Treat a sub-2% change as inconclusive.
+
 ## 2. Function constants / specialized variants
 
 Current terrain fragment shader branches on `uNormalMaps`, `uTextured`, `uFeature`, `uDebug` and layer weights.
@@ -188,6 +190,12 @@ Plan:
   the intended precision, use a Metal-only fragment variant.
 - Do **not** regex-replace `float4` with `half4` in generated MSL. It can break layouts, positions and precision.
 - A/B at raw and shipping scale; check terrain seams, distant shimmering, normal-map shading and shadows.
+
+Likely win: uncertain. Revert if the image changes or the frame improvement is below the noise floor.
+
+Result: not implemented. A probe showed `mediump` still translates to `float`; explicit `float16_t`/`f16vec4` does
+translate to `half`, but using it in the terrain needs a Metal-only shader path and a shaderFloat16 capability check.
+Given the wide/ALU-light profile, that does not clear the bar for a direct MSL fallback yet.
 
 ## 4. `[[early_fragment_tests]]`
 
@@ -233,6 +241,10 @@ through GLSL/SPIR-V-Cross:
 Keep the shared GLSL for Vulkan. Add the MSL as a **Metal-only terrain program** that uses the same
 `TerrainConstants` and bindless argument-buffer ABI; do not fork the C# terrain renderer. Gate it behind an env or
 option, compare images and timings, and remove it if it does not clear the acceptance bar.
+
+Do not start with a full MSL rewrite merely to use "Metal tricks". The current translated shader already uses
+texture arrays, bindless argument buffers, explicit gradients, a depth prepass and late colour. The likely missing
+wins are specialization, sampling and fill, not the language.
 
 Result: not started. The measured no-normal saving is real but is a quality switch, and no default-path variant
 cleared the noise floor. Revisit only with a matched capture that shows terrain is the shipping bottleneck.

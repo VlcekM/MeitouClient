@@ -106,6 +106,9 @@ Joint (raw 0x264-byte struct; offsets):
   everything else: garbage
 ```
 
+The 0x7c records are lights (**Observed**, `packbeast_pole_simple.phs`: position, an orientation, colour
+255 255 255, a range 100); the game hands them to the insert target. The 0x38c record is **Unknown**.
+
 ## Building the PhysX objects (Verified, decompiled)
 
 - **Scale**: before building, actor positions, shape positions and joint anchors are multiplied by the
@@ -131,9 +134,13 @@ Joint (raw 0x264-byte struct; offsets):
   - Spherical: limits enabled → twist low = 0x5c, twist high = 0x58, swing = 0x60 (degrees → radians);
     springs 1/2/3 → twist/swing/joint spring (targets are multiplied by 57.29578, i.e. treated as radians
     → degrees); projection distance.
+  - D6 reads 0x58/0x5c and spring 3 into its own fields (**Unknown** which; no ragdoll uses D6).
 - **Bones**: each created actor is registered in a map under its **bone name** (`@ 1401a8be0`); the
   ragdoll binds bodies to skeleton bones through it. The stored bone transform is read only by the
   attachment loader, not by the physics build.
+- **Ragdoll actors** (`ScytheRagdollPhysicsT` slot 8): set NxActor virtuals `0x1a0`/`0x1b0` to 0.5
+  (**Observed**: likely linear/angular damping) and raise body flag 0x80 (kinematic) — the ragdoll
+  starts driven by the animation.
 
 ## Ragdoll content (Verified against the files)
 
@@ -201,5 +208,7 @@ later gets ([../characters.md](../characters.md#assembly-and-generation)).
 
 - How the running ragdoll maps body poses to bones after the switch to dynamic (offsets from the live
   skeleton or the bind pose), and which joint end PhysX treats as parent for the reversed joints.
+- Actor fields marked unknown, the 32-byte blocks, joint 0x80 / 0xe8, shape tail bytes, the 0x38c
+  record, D6 field mapping, and what Kenshi does with lights and `root`-actor callbacks.
 - Mass at runtime: the files give each human body mass 1 (cannibal file: density 1, mass 0); whether
   the game rescales masses later was not traced.

@@ -16,6 +16,8 @@ On a Windows PC where Kenshi is installed through Steam:
 3. Put it somewhere permanent, such as `~/Games/Kenshi`.
 4. In the Meitou launcher, choose **Settings → Kenshi folder → Browse** and select that folder.
 
+The folder must contain `data/gamedata.base`. Meitou does not need `kenshi_x64.exe` or Steam to be running.
+
 ## 2. Windows Steam through CrossOver or Whisky
 
 This is the most self-contained route if you do not have a Windows PC:

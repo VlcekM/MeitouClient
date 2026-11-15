@@ -3,6 +3,17 @@
 Ogre serializer/source, base-file scans and Kenshi bone/animation binary research; chunk/version
 and surveyed data tables follow. Reader: OgreSkeletonReader; runtime: [animation](../animation.md).
 
+## Stream and chunk exceptions
+
+Same header/chunk/string primitives as [mesh](ogre-mesh.md). Vector3=XYZ floats;
+quaternion=XYZW on disk (not Ogre in-memory WXYZ), verified unit rotations on base files.
+**Verified** BONE length EXCLUDES name:36 without scale,48 with; parse newline name, do not skip
+by stored length. Scale present iflength>36. Keyframe base38, scale if>38. Other scanned chunk
+lengths match consumed bytes. Handles<256, parents must exist, duplicate/second-parent constraints
+come from Ogre; our rejection behaviour is documented separately from original permissiveness.
+Missing blend mode=average. Missing linked animation skeleton can fail skeleton load; mesh can
+still load unanimated when skeleton fails. Orientation renormalization is unverified.
+
 ## Binding and bone maths
 
 Character race/base/animation sources and worn mesh skeleton links can differ. Map intended
@@ -52,6 +63,17 @@ retain source scope; [animation](../animation.md) supplies slider/factor definit
 | 1, shared skeleton | ARMOUR (3), CONTAINER (46, backpacks), ATTACHMENT (6, hair/beards), LIMB_REPLACEMENT (111) | The item entity goes on the body's scene node and calls `Entity::shareSkeletonInstanceWith(body)`, with its own animation-state update turned off. |
 | 0, attach to bone | everything else (weapons etc.) | `Entity::attachObjectToBone(body, boneName, entity, orientation, position)`; the node under it gets scale `1 / body node scale` so the item isn't scaled with the character. The bone's own scale (body-shape bone size, scale keys) doesn't reach it either: **Verified** (OgreMain `TagPoint::updateFromParentImpl`, the same modified rule as `OldBone`) a tag point's derived scale is its own size × own scale, not inherited, and `TagPoint::updateNode` copies only its derived position and orientation to the item's node. A bone name the skeleton lacks falls back to the root bone (`@ 1406466a0`). |
 | 2 | ARMOUR/CONTAINER/ATTACHMENT records with neither `mesh` nor `mesh female` | No visible entity; only a physics attachment (CHARACTER_PHYSICS_ATTACHMENT `bone name`, `file male`/`file female`, `@ 140535f20`). |
+
+## Open questions
+
+- Whether an entity whose own skeleton failed to load (`Human_Skin_Suit.mesh`, `Iron Clad Jacket_F.mesh`)
+  still deforms after sharing the body's instance: Kenshi's Ogre compiles bone assignments in
+  `Entity::_initialise` (`OgreMain_x64.dll @ 1800bfac0`), but whether that happens without a mesh
+  skeleton wasn't traced. Unknown.
+- `whistler.mesh` (bone indices up to 54): no data references it, so its behaviour is untested. Unknown.
+- ~~Where the bone name for mode-0 attachments (weapons) comes from~~: answered in
+  [../characters.md](../characters.md#assembly-and-generation): `hands` is `Bip01 Prop2`, the rest
+  come from the RACE `attachment points` file ([phs.md](phs.md)).
 
 ## Expression reference
 

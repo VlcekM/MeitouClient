@@ -26,6 +26,12 @@ decode, so a change applies to meshes loaded after it; LOD caches key on it (`Me
 Hub, TAA off): Faithful matches the build without the switch within run-to-run noise; Meitou changes buildings by 0.06/255 mean,
 object meshes 98 → 50 MB. About 115 ns per vertex on the decode thread.
 
+Faithful uses researched object/part distances; Meitou `reach` extends size-aware ranges and
+distant landmarks/towns. Distant town stand-ins fade separately from real parts. Source/manual
+and generated levels use projected demand with stable transitions. Do not treat a shorter part
+range as an accidental renderer limit: it can be original fidelity. Visibility/depth/shadow/
+reflection and streaming residency need consistent bounds.
+
 Part distance, **Verified** (decompile `FUN_140558b40`, constants read from the exe): a part still at the `objects view range` whose
 entity's local box radius (`MovableObject::getLocalAabb().getRadius()`, half the mesh box's diagonal, unscaled) is above 100 gets the
 largest float as rendering distance; `ObjectRanges.PartRenderingDistance` with `ObjectMeshCache`'s radius is the same measure.
@@ -36,6 +42,12 @@ All wall parts therefore bypass the small-part cutoff, independently of `link ty
 `Wall3.mesh` has a local AABB radius of 182.78, `Wall3_Section01.mesh` 93.17. Applying only the size exemption incorrectly clipped short
 walls while retaining full sections (#667). Meitou uses the owner's wall flags for this exemption; the whole-object reach still applies.
 
+Stand-in colour, **Verified** (mesh probe): a building's `distant mesh` carries its look in vertex colours alone, which need not match the
+building (`hivehut-distant.mesh`: 13 triangles, mean colour 0.58 0.56 0.37, khaki, for the purple-brown Hive Commune Hut). The water
+reflection draws real parts to its own shorter reach (`ReflectionPass.ObjectDistance`, 2000) but starts stand-ins and distant towns where
+the scene does (`WorldObjectRenderer.StandInDistance`), so a hut the scene still shows as built never mirrors as its stand-in (#668);
+between the two reaches a building mirrors nothing.
+
 Generated object levels (`ObjectLodGen`, `MeshSimplifier.Chain` with the texture guard): a collapse re-points a corner at a vertex
 of the new point, so the texture coordinate jumps unless that vertex is chosen by the triangle's own mapping. A guard that only
 compared the jump with the part's mean UV density let tiled decks (Shield Bridge, tread squares) pick another UV island, showing
@@ -43,17 +55,102 @@ planks and diagonal patches from about 700 units. Now a corner takes the vertex 
 extended to the new position, and the collapse is refused when none is within 0.01 UV. **Verified** (Shield Bridge at 34816,-112031,
 offscreen at distance 700: the deck matches a build without generated levels). Cost: such meshes keep about half their triangles at most.
 
+## Arrival prefetch
+
+During a character flight or squad tour hop ([viewer.md](viewer.md#squad-tour)) the host sets `WorldFrame` `Ahead` to the landing
+view's eye from the tap on. Object zones are laid out and kept by the nearer of the eye and that point (`ObjectStreamer.Near`), and what
+is loaded near either stays. New object work (mesh requests, a resolving instance's LOD level and first texture need, mark-pass texture needs
+and mesh LOD remakes) counts only that point and the kept points (`ObjectStreamer.LoadNear`): the flight path draws what is already
+loaded and stand-ins, and asks for nothing finer. The mark pass's camera-speed margin is 0 during a flight and after any camera move of
+more than 10000 units between passes (a cut), else a flight asked everything near the path, or round the landing, for full detail.
+Terrain biome textures gather cells round both. Foliage zones within the near reach of
+that point are laid out and kept as well. The load order puts the arrival first: zone layouts, mesh decodes, instance resolves, terrain
+biome pairs and foliage layouts rank by distance from the arrival, and what is only near the eye (the flight path) ranks after all of it
+(`ObjectStreamer.Rank`). Object textures the arrival view uses are touched first and decode ahead of the other streaming work
+(`WorldTextureCache.Urgent`, `BackgroundWork.RunUrgent`). The terrain height window and the grass pages still follow only the eye.
+The simulation focus moves to the landing character at once, so its towns populate during the flight.
+
 ## Shared texture images
+
+The object, foliage and character texture caches share images (`TextureShare`, per GPU context): a file one cache holds at the current quality
+level is taken by another instead of loaded when it drops no more top levels than that cache's mip streaming would, and two loads of the same file
+and levels that land together keep one. An image goes with its last user; each cache still counts its bytes. **Observed** (VRAM dump, 2026-11-01):
+about 150 MB of the same files were resident twice before this.
+Debris (severed limbs, bolts) takes its textures from the character cache rather than loading its own copies (~30 MB of skins were held twice, VRAM dump 2026-11-01).
 
 The sharing caches also have one high-water mark together (`TextureShare.ResidentBytes` against `MarkMb`, 2 GB at full quality), not one each.
 Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,
 a texture is unloaded after 20 s unused.
+
+Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
+(`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a
+6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
+Zones within 3000 of the camera (`VramGuard.NearReach`) are still laid out and their object meshes decoded under pressure, also while the use stays under
+94.5% (`StreamsNear`); farther ones wait for the pressure to end. Before this, a 4 GB laptop (3.4 GB budget, never back under 80%) never loaded the town the
+start put it in (**Observed**, issue #336 log).
+An allocation the driver refuses is retried after the spare blocks are freed, then (render thread only) after the submitted frames are waited for,
+their deferred frees run and the empty blocks are given back (`GpuAllocator.Reclaim`). A refusal that survives puts the guard into pressure.
+The post targets of a resize can't use that path (the old ones are released in the same frame), so when they can't be made the frame draws no world
+and the next frame tries again (`PostProcess.Unallocated`). Before this, a 3840 → 1920 resize at 96% of a 3.5 GB budget crashed (**Observed**, #135 log).
+
+## Kept points
+
+Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to
+the drawn position of every squad bar member each frame; its sub-option "Keep textures at all squads" (default off, shown only while the
+main one is on, `KeepTexturesAtAllSquads`) takes every player squad's members instead. `ObjectStreamer.Near` / zone layout count the nearest of eye, `Ahead` and `Kept`,
+so object meshes and texture mips stay loaded round each character (a resolving instance's first texture need is measured the same way, else
+its textures load coarse for the far eye and wait for refines). Detail (texture mips, mesh levels) counts a kept point from at least the camera's
+distance to its target (`KeptViewDistance`), the view a jump there would have; residency counts from the point itself. **Observed** (VRAM dump
+2026-11-01, squad member at a town gate): 189 MB of object textures at need 0; whether from the kept point or the bounding sphere is
+**Unknown** (that dump did not list the points; the dump's header now does). Terrain biome pairs gather cells round each (ranked after the
+eye's); a pair within its near range of a point, measured from the point, takes a full-size near slot while the eye's leave one free.
+Foliage zones within the near reach of a point are laid out and kept, ranked after the eye's, and their meshes and textures stay resident
+(texture needs from at least `KeptViewDistance`); their waiting layouts do not hold up the loading screen. `Kept` ranks after the eye in the load order. The colour, overlay and fine height windows keep
+standby copies round far points ([render-terrain.md](render-terrain.md#geometry-and-material) "Standby windows"). Grass pages are made round the points too,
+after the eye's, sharing the one store: while an eye page waits for room, the kept page farthest from its point is freed (one a frame). The ground
+relief needs nothing more (its heights come with the biome pairs' far tier). Built characters within `KeptReach` of a point but beyond the
+eye's reach offer their textures from the point (at least `KeptViewDistance`) each budget pass; before, nothing read them and the 20 s idle
+limit unloaded them whatever the mark. **Areas** (`WorldFrame` `Areas`): 1 + the merged points, held at its highest for 30 s. The shared texture
+mark and the mesh mark are that many times larger, their shares of the memory budget at most 0.5 and 0.2 (`MaxAreaShare`; together under the budget), so the
+character `NeedScale` blur also starts later; the grass store, standby counts and terrain near slots scale too (render-foliage.md, render-terrain.md).
+Costs video memory
+(the VRAM guard still applies). `WorldFrame` merges the points first (`ObjectStreamer.MergeKept`): one within 500 units of the eye or of an
+earlier point is dropped, so a squad standing together is one point. Every distance test walks the kept points, and `ObjectStreamer.Scan`
+tests each unresolved instance every frame. Out-of-range instances (stand-ins and unknown part distances included) are therefore parked per
+zone and come back by one zone test against the current ranges. **Observed** (offscreen bench at Fog Islands, Release, 16.5k instances of which
+2.4k resolved): upd-objects 3.1 ms → 0.17 ms with 10 points together, 9.3 ms → 2.0 ms with 30 points 600 units apart. The same instances and meshes resolve.
+
+## Batching and depth
+
+Batch compatible mesh/material/state instances; sort colour batches near-first when enabled.
+Building parts cull back faces ("Back faces" below; **Observed** by a mesh probe too: Tower of Abuse's level-1 inner wall faces inward, so from outside its near side is not seen). Other open meshes are double-sided. A cut-out clips on the normal map's alpha whether or not the mesh has tangents (**Verified**: installed `objects.hlsl` runs `clip(normalTex.a - threshold)` under `TRANSPARENCY` alone, and `shadowcaster.hlsl` clips under `ALPHA` with no tangent condition either; the vertex declarations of `Carpet_RustyRug.mesh` and `Carpet_Fancy Rug.mesh` hold no tangents. **Observed** in the decoded normal maps: the mask cuts the Rusty Rug's holes and ends and the Fancy Rug's fringes and black margin), so Meitou loads and samples that map for its alpha, in colour and shadows, and leaves the lighting to check for tangents. Floor view: a part is drawn when its floor (clamped to 3) is at most the building's viewed floor, 4 (all) for a building not in the view (**Observed**, decompile `FUN_14092add0`, the clamp in `FUN_14055f6e0`; Meitou does not clamp, so a floor-4 roof hides at viewed floor 3). Fade uses per-instance dither lo/hi windows; solid,
+fading and distant-town batches have different coverage needs. `EarlyDepth.Enabled` selects
+opaque, discard-free colour only for no-cutout/non-fading parts. Draw solids first; retain
+cutout/dither shaders for other batches. Cache native state per program so solid/fading variants
+do not evict one another. Depth/caster coverage must remain compatible with colour.
+
+### Back faces
+
+**Verified (decompiled, exe 1.0.68)**: `FUN_140841a50` (the material builder) is the only code that disables culling for these materials: with flag 0x10 it sets the pass to no hardware and no software culling (`Pass::setCullingMode` and `setManualCullingMode`, mode none); without it nothing touches the cull mode. `FUN_14057a920` sets 0x10 only for `material type` 2 (FOLIAGE), nothing else in the building-part path does (no per-mesh, per-record or alpha rule; INTERIOR 0x100 and CLIP_INTERIOR 0x200 do not affect culling). The `StaticObject` script (`data/materials/deferred/objects.material`) has no `cull_hardware` (Ogre default, clockwise) and names `standardShadowCaster` (`common/shadows.material`, `cull_hardware clockwise`); the shadow-variant builder `FUN_140840da0` does not test 0x10, so casters are culled too. So the game culls the back faces of every building part whose material is not FOLIAGE. Meitou culls them for building parts and `interior` parts in colour (`Batch.BackCull`, a double-sided material excepted); its shadow passes cast building parts with both sides by default (`WorldObjectRenderer.CastersBothSides`, docs/render-shadows.md), an engine choice. **Observed** (Ancient Lab with the Forgotten Buildings ceilings, `building floor` 0..2 parts without the `interior` list): drawn double-sided, the ceiling of the viewed floor covered it from above as a black disk; culled, it vanishes seen from above as in the game. Before this, only `interior` list parts were culled.
+
+### Precision
+
+The objects' vertex stage projects each vertex relative to the eye: `mat3(instance) × vertex + (instance origin − eye)`, with a
+view-projection that has no translation (the scene's `RelativeRotation × jittered`, as the characters', [character-renderer.md](character-renderer.md#precision);
+shadow cascades and the reflection take translation(eye) × theirs). The world position at tens of thousands of units steps by 0.004, and in a
+whole-world transform the layers of one mesh a hair apart can fight for depth; the origin less the eye is one exact subtraction per instance.
+Shading still uses the absolute world position. **Observed** (The Hub, offscreen, three views): the picture within 0.15/255 mean of the
+whole-world transform. **Unknown** whether this was the z-fighting the user reported on ruins (not reproduced: no location yet).
 
 ## See-through items (Meitou, issue #562)
 
 For mods and Meitou's glass bottles (below); no base-game record has the field. A `MATERIAL_SPECS_CLOTHING` record with the file field `opacity map` (`OpacityDither.MapField`) is partly
 see-through: the map's red channel is the opacity (1 solid, 0 clear), on the item's own UVs. Without the field nothing changes.
 
+- **The original** shows such an item solid: **Verified** `fcs.def` (1.0.68) has no `opacity` key and the 1.0.68 decompile no `opacity map` string.
+  A separate map because the existing alphas are taken: diffuse alpha is gloss, and the original cuts worn items where normal alpha is under 0.6
+  and drawn icons under 0.5 ([characters](characters.md), [ui-screens](game/ui-screens.md) "Item icons"), so opacity there would punch holes.
+  **Unknown**: whether FCS shows the field once a modder adds `opacity map: TEXTURE_ANY` under `[MATERIAL_SPECS_CLOTHING]` in their `fcs.def`.
 - **Main view: a blended pass** (`WorldFrame.DrawSeeThrough`, in `FinishScene` after the GI's resolve, the lamps' shadows, the characters'
   occlusion and the reflections, before the shafts and fog). The colour passes leave the see-through draws out and they are drawn afterwards
   over the scene by their opacity, into the scene's colour and depth alone (the GI's albedo and traced-sun targets keep the opaque scene),
@@ -72,6 +169,17 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   filter blurs it into a lighter shadow), the water reflection, the objects' selection mask, icons (supersampled ones average 4 x 4 samples
   into alpha) and portraits. Hover and pick are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
 - Drawn solid until the opacity map is resident.
+- **Glass bottles** (`glass` switch, Meitou, on; `GlassBottles`): Sake (`Item_Alcohol1.mesh`) and Cactus Rum / Empty Rum Bottle (`rumjug.mesh`),
+  on the ground or placed in buildings, get a map Meitou makes from the mesh at first use (its triangles drawn at their UVs by height share;
+  `%LOCALAPPDATA%\Meitou\glass`, one file per mesh and fill). Red is the opacity the dithered views draw: Sake 45 % up to 55 % of its height,
+  solid from 63 % (neck, stopper); rum 60 %, solid from 94 % (cork). Green is the drink, 1 under its level and 0 over a 3 % band (Sake 42 %,
+  rum 70 %, the Empty Rum Bottle `44428-rebirth.mod` none; a bottle placed by another record is full); blue how solid it is. The drink's
+  colour rides in the material's tint (unused without a grey channel). Only while the mesh's vertex count, the diffuse and the material are
+  the game's and the material has no alpha or grey channel of its own: a mod's own `opacity map` wins and is not switched. Faithful draws
+  them solid, at once (`Material` reads the switch per frame). Icons stay solid (drawn once and saved). Grog (a can) and the Water Jug stay
+  solid. **Observed** (the user's save, hidden frames, no mods, the opacity-only version): see-through on, solid with `--faithful glass`; the
+  rum map lies on the texture's body and base, the neck and cork solid. Cost of that version (play bench idle, Sake in view, 2 interleaved
+  pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
   - **The main view draws them as glass** (Vulkan; elsewhere ordinary see-through items): `MeshSurface.Glass` (bit 128 of the push spare)
     marks the draws, `PrepareSeeThrough` blits the scene's colour at the render size into `GlassScene` before the blended pass (only with a
     bottle held), and `DrawSeeThrough` records the bottles first in a job of their own: front faces only, writing depth (each fragment
@@ -82,6 +190,22 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
     near wall and the drink), each the game lighting's specular of a smooth dielectric (`kenshiLight` with no albedo, gloss 0.96: sun, sky
     and lamps; at most 16), and 6 % of the lit texture; where the map is solid the lit texture. The copy's lookup is bent along the refracted
     view ray, at most 6 pixels. The other see-through items follow, writing no depth.
+  - Limits: no depth copy, so the bend can pull in what stands just in front of the bottle; a bottle seen through another shows the scene
+    behind both (the copy is taken once); what comes after the pass (fog volumes, particles, the upscaler) sees the bottle's depth, as an
+    opaque object's. **Unknown**: the look in play (unseen; the glass program compiles, glslang), and its cost.
+- **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
+  frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
+  **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):
+  the body is evenly see-through with no pattern, the stopper solid. **Unknown**: a worn see-through item and frame generation, both unseen.
+- Cost without such a material: the solid (no-discard) object program is untouched; the others gain one constant or flag test. **Observed**
+  (offscreen `--view hub`, 3 interleaved pairs of builds, RTX 4070, DLSS 0.667 at 720p, the dithered version): GPU total 2.62 against 2.63 ms,
+  objects 0.205 against 0.205 ms, shadows 0.249 against 0.250 ms. **Unknown**: the character pass (the viewer draws none, `--crowd` included).
+
+## Building sign highlight
+
+`WorldObjectRenderer.HighlightSigns` splits real parts with owning BUILDING `is sign` into yellow-tinted
+batches using `FlatColour`, retaining textures, cutouts, lighting, depth and LOD fades. Shadow batches,
+distant stand-ins and placement ghosts keep their normal appearance. Input/evidence: [controls](game/ui-input.md#building-sign-highlight).
 
 ## Player buildings and the placement ghost
 
@@ -91,6 +215,15 @@ incrementally (`ObjectStreamer.AddRuntime`, no zone reload, so nothing flickers;
 reload). Town-house repairs replace only the matching placement and its furniture/interior after the replacement layout
 is ready; loaded neighbours retain their instances and GPU bindings, including while a zone is still being filled.
 Host diff: [simulation.md](simulation.md#buildings).
+
+**Scaffold.** The original clips each part at `1.2 f` of its mesh height and draws the scaffold grid (`construction.dds`)
+above it ([construction look](game/buildings-production.md#construction-look)). Meitou: the part's instance matrix carries
+`M44` = `ScaffoldBase` (10000) + `f`, and `M34` adds 4 x (the part's mesh top in decimetres + 4096 x round(16 x the building's
+`scaffolding tex scale`)) over its two flag bits (`BuildingLodShaders.PackSite`). The vertex shader passes mesh y / top; the
+fragment samples `construction.dds` (bindless index + 1 in the push spare's bits 8+) at the tiled mesh coordinates x the tiling,
+discards above `1.2 f` unless grid alpha > 0.7, and blends the grid over the albedo below `1 - 5 (f - 0.8)`. The shadow pass
+clips the same. Until the texture is resident a procedural world-space grid stands in. Not done: the grid's gloss 0.4 and
+normal blend. Sites always use the fading (discard-capable) batch.
 
 **Ghost.** `WorldObjectRenderer.SetGhosts(GhostDraw[])` draws a building's parts (laid out once at the origin, exterior
 only) at a transform, from the `ObjectStreamer.Loose` pseudo-zone (never streamed out, scanned each frame like the
@@ -106,6 +239,43 @@ mesh). Each plant's colour (`FarmLayout.Tint`, the death tint and brightness of
 [farm plants](game/buildings-production.md#farm-plants)) multiplies its albedo, packed into a negative spare `M44`
 (`FarmPlants.PackTint`: 8 bits per channel over [0, 1.275]).
 
+## Doors
+
+Door parts carry `PlacedMesh.DoorIndex` (their entry in the building's `doors` list) and take the parent building's `scale`, not
+their own, as the door collision does ([collision](formats/collision.md#placement-and-groups); **Observed**: Defensive Gate III/IV
+are 0.85 with doors at 1, and the leaf drawn at 1 sat oversized and off-centre in the frame). The host hands the renderer the snapshot's
+open amounts (`DoorPoses.Open`, by placement id and index); `DrawReal` poses a door part from its closed placement by
+`DoorLeaf.LocalOffset` ([motion](game/locks.md#doors)) along the axes of the part's collision box (`DoorFrame`, the first box of its
+`xml collision`, PhysX Z-up mapped to the part's Y-up), in world units, when its amount changed. Colour and shadow passes see the moved leaf; the GI acceleration structures take
+the instance transform only when they gather instances (not checked for leaves in motion).
+The interior view's floor never hides a door part (`WorldObjectRenderer.InteriorHidden`). **Verified** (probe over the base game's BUILDING `doors`): 15 of
+47 door entries have a leaf part with `building floor` 1 (Storm Houses A-H, the shacks, the swamp houses), so hiding by floor left their doorway empty at
+floor 0 (issue #170). In the game a door is a building of its own (`Building::createPhysical` makes one per entry); that its parent's floor view
+leaves it shown is **Unknown** in code, inferred from those common houses.
+
+## Turrets
+
+A turret's turning parts (BUILDING_PART `rotation function` ROTATION_TARGET) are joints: the layout (`WorldObjectLayout.PartJoints`) gives each part that is or hangs from one
+`PlacedMesh.Joints` (the joints above it and its own, outermost first; `TurnJoint` = part record, pivot = its node's place, axis = its node's Y for a yaw part or X for the
+gun's pitch, both as placed). The host (`GameHost.UpdateTurretPoses`) gives the renderer `JointPoses.Turrets` (placement id = turret key → `TurretPose`: the
+simulation's `TurretRig` angles from `MannedTurret.Angles`, interpolated between the last two snapshots by the simulation's alpha, kept after the gunner leaves).
+`DrawReal` poses a part (`JointPoses.Pose`) when the pose's version changed: its placement times, from the innermost joint out, a turn about the joint's pivot and axis by its
+angle. **Verified** by a probe over every turret building of the install (random yaw, position and angles): the posed part's origin and its Z and Y directions equal the
+simulation's `TurretRig.Derived` (30 of 30 parts). **Unknown**: the pose has not been looked at in a rendered frame. Only simulated turrets (the combat system) turn; the
+viewer never does. Parts that are not joints (the six-barrel add-on, the lamp) ride on their joint.
+
+## Rotating parts
+
+Parts with `rotation function` 1 to 4 ([facts](game/buildings-production.md#rotating-parts)) are joints too: `TurnJoint.Rotor` (`RotorSpec`: function, speeds, wind
+range, start roll, parent X/Z) with pivot = the node's place and axis = its `rotation axis` in world, as placed (at the start roll). The six-barrel now spins on the
+turret's joints; the wind generator's blades ride on its head. A part's state (`RotatingParts`, by placement, part and pivot) is made when one of
+its meshes is first drawn and dropped 600 frames after the last; the host (`GameHost.UpdateRotors`) calls `RotatingParts.Advance` once a frame with real time x speed (0
+paused), the scheduled wind (`WeatherWorld.WindAt`, a forced weather does not count) and the mult (`MachineSnapshot.Rotation`, level buildings by data); construction sites stand still (`RotatingParts.Unbuilt`). A head
+hears the weather when the wind at it differs from the last frame (the original's notifications come while it interpolates). Joint meshes under a rotor are posed
+every frame: angle less the start roll (functions 1 to 3 stay at the roll until they first move). **Unknown**: not looked at in a rendered frame; shadow caches not checked.
+
+Motion vectors (temporal upscalers): an instance with a door, turret joint or rotor (`PlacedMesh.DoorIndex`, `Joints`) that is drawn in the scene view notes its transform of the last frame it was drawn (`Instance.LastDrawn`); when it differs from this frame's its meshes (the LOD level the colour draw picks, `PlainMesh`) go into `MotionMeshes` with both transforms, relative to the eye, in the post chain's object-motion pass (`WorldObjectRenderer.DrawMotion`, after the characters', with the debris). One not drawn the frame before has no motion from before. Cut-out holes are not tested (the pass writes only where the depth buffer shows the part's own surface). **Observed** in live DLSS captures of a wind generator and a door; no shadow or reflection pass writes motion. Movers left without their own vectors: none known in the objects; the scene's other movers are the characters, grass sway, loose pieces ([birds](game/birds.md)), clouds and water (own paths, [render-post](render-post.md)); the foliage docs describe sway for grass only (**Unknown** for tree meshes).
+
 ## Closed interiors
 
 **Original** (**Verified** by code, Ghidra, unless marked):
@@ -116,12 +286,25 @@ mesh). Each plant's colour (`FarmLayout.Tint`, the death tint and brightness of
 - **The outside flag:**
   - Loaded from a state's `flags` bit 0, or the older `is outside` (`FUN_140552b70`).
   - Exterior-layout objects get it from their layout (`+0xa0`, `FUN_1405765c0`).
+  - Interior-layout objects spawn without it (`FUN_140583400`). Runtime setters exist (`FUN_1404ec160`, `FUN_14047d830`), but their triggers are **Unknown**.
 - `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
+- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**).
+- **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.
 
 **Meitou:**
 - Opening is `GameHost.UpdateInteriorView`, which holds a left building open with all floors for 10 s of simulation time, or until it is unloaded, removed or destroyed.
+- An interior layout's object is hidden while its building is closed unless its `interiors.level` state has the outside flag (`LayoutItem.Outside`). The flag set at the editor is taken as the runtime setters' result (**Observed**).
   - In the install's interior layouts, 10 170 objects without the flag are `is exterior furniture` (barrels, cages, camp beds, Stack's rooftop awnings); these are now hidden while closed.
   - 1 820 objects with the flag (yard tents, torches) stay.
 - A building inside another (`PlacedMesh.Contained`) is hidden while the building whose hull holds it is closed (`ClosedAround`); a player site takes its parent's hull over a neighbour's within the 2-unit margin (`PlacedMesh.ContainerId`). These are player sites with a parent (saved with `flags` 0), and zone states with `is inside building` and no outside flag.
 - Shadow passes keep what the floor view hides above the viewed floor (parts, objects standing above it; `WorldObjectRenderer.DrawReal`), so a lower
   floor stays shaded under its ceiling (a watchtower's floor 0 was sunlit). The traced scene keeps them too (`WorldObjectRenderer.LeftOutOfRays`): the rays stand for the sun and the sky, so a roof the view hides still shades the room and blocks the sky. Faithful shadows leave them out (`HiddenFloorsCast`), as the game does: **Verified** (decompile) `Building::setFloorVisibility` (`FUN_1405482e0`) calls the scene node's `setVisible(vis, cascade)` for each physical entity of the floor, and an invisible object is in no camera's queue, the shadow cameras' included.
+- **Not done:** interior lamps still light a closed interior.
+
+## Validation
+
+Main, reflection and shadow stages repeat object work; inspect all three. **Observed** swamp
+probes: hidden fragment shading can dominate despite large triangle counts. Generated LOD,
+early depth and sorting change different costs. Validate doors/interiors, town stand-in joins,
+LOD fades, mirrored/reflected geometry and texture/memory pressure in still and moving views.
+[bench.md](bench.md), [render-shadows.md](render-shadows.md), [render-water.md](render-water.md).

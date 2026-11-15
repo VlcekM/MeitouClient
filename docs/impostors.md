@@ -30,6 +30,14 @@ from the cache, not for queued reads or bakes (**Observed** cold cache, 1,174 mo
 pools10s idle. Prepare lazy frame globals outside rendering; warm programs/quad/pipelines safely.
 **Verified** pooled output MD5 for267 meshes and split tests; cold-cache validation named views.
 
+Atlas budget min(clamp(share*deviceBudget,48MB,cap),12%budget):discrete8%/1024MB,
+integrated5%/256MB, unknown192MB; pressure*0.75; explicit --impostor-budget overrides (the "Impostor memory budget" row, 0 to 2048 MB, lowest position automatic; read at each scan).
+Nearest-first plan degrades far mips before excluding; lookahead3s, one-level margin plus
+upscaler bias. Refine on approach, retain old atlas until ready; retry refused upload2s.
+Unwanted atlases unload after 20 s idle; after a jump of 10000+ units between scans (a save loaded from the menu's
+scene, a teleport) at once. **Observed** (2026-11-01): 1014 MB (the limit) just after a load, 310 MB later; the menu scene's atlases are the inferred cause, not measured.
+Integrated heap/budget adequacy unverified. Never reuse in-flight views/indices prematurely.
+
 ## Rock and fade rules
 
 TERRAIN atlases use mesh/biome-row/material, cached by RockBakerVersion/BiomeKey/source metadata.
@@ -89,6 +97,12 @@ moved. Bump `ImpostorAtlas.BakerVersion` when the baker's output changes.
    the build's (their keys can never match again; a newer version is left, since another build sharing the folder may read it);
 2. deletes temporary files (`*.mimp.<pid>.tmp`) an hour old (a crashed writer's);
 3. when the remaining `.mimp` files total more than the cap, deletes the least recently used until the total is under 90% of it.
+
+Other files in the folder are not touched. The cap is `MaxBytes`: default 4096 MB (a constant; the
+`--impostor-cache-mb` flag and `MEITOU_IMPOSTOR_CACHE_MB` were removed, `ImpostorCacheMb` stays as a property, 0 = no cap). **Verified**
+(`ImpostorTests`, a temporary folder, never the user's cache): eviction order and the 90% target, no cap, the stale rules above (older baker,
+older format, junk, short file, old temporary go; current, newer, fresh temporary and foreign files stay), and that loads and saves set the last use.
+**Unknown**: two viewers evicting at once (each deletion tolerates a failure; the worst case is a rebake).
 
 **Deleting the cache (`ImpostorCache.Clear`, the Tab panel's "Delete billboard cache" button).** Deletes every `.mimp` in the folder after a
 Yes / No question that names the count and size (`Measure`); temporary files and foreign files stay, a file another process holds stays. Resident

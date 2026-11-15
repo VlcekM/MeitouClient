@@ -224,6 +224,10 @@ Combat runs and blood decals/debris are wired on Metal, including luckyren Mode.
 atmosphere-lit native path (MEP-3); the Hub/desert gameplay check passed, with explicit bone/limb visibility still an
 optional luckyren check.
 
+Ground severed limbs, stuck bolts and an animal's held limb (`mouth` point) are not Metal code: `WorldFrame.Draw` (`CollectBolts`, `DrawSceneLate`),
+`UpdateBlood`/`UpdateBuildings` and `DebrisRenderer` are shared. Both draw-list sources (`FillDrawList`, the no-HUD `FillWorldDrawList`) build each
+`CharacterInstance` through `GameHost.Drawn`, so they carry the same bolts, mouth, stance, build and blood. **Observed** in code only; not run on macOS.
+
 ### Changes
 
 - Change `GameHost.SetUpBlood(GpuContext context)` to accept `IGpuContext`; the renderers it
@@ -332,12 +336,37 @@ enabled while nothing changes.
 
 ## Item 8: Renderer-only content-check gaps
 
+### Why
+
+These do not block gameplay, but they make Metal/Vulkan content comparison incomplete. Keep them
+out of the P0 content-testing gate.
+
 ### Known gaps
 
+- The shared water reflection pass now runs on Metal; the scene is mirrored into the water.
+- Meitou water (FFT/shore/foam/reflection/refraction) now runs on Metal. Metal omits water foam sun
+  shadows to fit its 16-sampler stage.
 - Low-resolution particle targets are shared; the Metal near-plane close pass is still skipped.
 - No fog-rate (fog shading-rate) target.
+- Object motion (grass/characters) is shared; MetalFX gets the water reactive mask, while particle coverage remains absent.
 - No HDR/EDR output.
+- The Meitou cloud renderer is seam-neutral; compare its parity views with Vulkan.
 - Metal GI remains experimental and opt-in; do not make it part of content testability.
+
+### Work order
+
+1. Water reflection only if a content pass genuinely needs mirrored scenery.
+2. Meitou water and cloud/fog parity once the content gate is closed.
+3. Fog rate as performance/visual parity work.
+4. Particle coverage in the upscaler's reactive mask.
+5. HDR/EDR at presentation time.
+
+### Acceptance
+
+- A fixed camera/time/weather comparison against Vulkan has no unexplained content difference
+  (objects, foliage, characters, buildings, water surface) beyond the known renderer list.
+- Any remaining difference is documented here or in [metal-backend](metal-backend.md).
+- None of these changes alter Vulkan output.
 
 ## Execution order
 
@@ -429,6 +458,8 @@ targeted build/test and short runtime checks.
 
 - **F10 conflict:** keep settings and debug on separate keys; do not silently steal settings.
 - **`SetUpBlood` signature:** change it to `IGpuContext`, not a copy of the Vulkan path.
+- **Crowd semantics:** the existing `CrowdHarness` is a renderer stand-in; keep it clearly
+  separate from the simulated `--crowd` path.
 - **Boot ordering:** sandbox/duel/crowd must be set up before the camera, navmesh and first
   streamer settle, as in Vulkan, or the first frame starts in the wrong place.
 - **Metal-only changes:** keep them behind `MEITOU_METAL`; Vulkan must compile and run unchanged.

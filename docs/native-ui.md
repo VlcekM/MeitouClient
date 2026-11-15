@@ -40,6 +40,17 @@ A row whose setting is read at start-up only (`SettingsMenu.RestartKeys`: frame 
 
 Graphics (`LookPresets`, `QualityTiers`, `FeatureGrouping`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:
+- **Look**: Faithful | Meitou (`faithfulLook`). Faithful is the game as it ships: every Faithful / Meitou effect switch off,
+  look sliders at the game's value (the one the label names, "(0 = game)"), a strength under a switch kept. It is a starting
+  point: changes from it are counted ("N changes from the game", Revert). It leaves the pure-performance switches alone (Mesh
+  welding, Far impostors, Foliage levels, Character levels: `PerformanceSwitches`), which save memory or time without changing
+  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in), examples (Hot and dry, Vanilla colours),
+  the player's. A preset is Meitou plus the look values it sets, keyed as `meitou.user.json` saves them; changes from it are
+  unsaved (Revert, Save for one's own; Save as, Delete). Files `presets/<name>.json` beside `meitou.user.json` (`format`,
+  `name`, `meitou` = the build's tag, `values`); Share copies `MT1:` + base64 of the deflated JSON, Paste adds one (at most
+  64 KiB inflated; names at most 40 characters, `LookPresetFile`, shared with the launcher). A preset whose file fails to write is
+  not added. Unsaved `faithfulLook` is guessed from the effect switches (tier switches and bloom ignored) and not saved;
+  `--faithful all` / `--meitou all` set it, a partial list leaves it guessed.
 - **Quality**: Low / Medium / High / Ultra / Extreme / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider
   makes it Custom). Each tier is meant for a class of GPU: Low a GTX 1050 to an RTX 3050, Medium an RTX 3060, High an RTX 3070 to
   4070, Ultra an RTX 4070 Ti to 4080, Extreme above. It sets the distance, foliage, grass, reflection, shadow, particle density,
@@ -166,3 +177,10 @@ language's catalog (`locale/<code>/LC_MESSAGES/main.mo`) and draws the translati
 caption sections in capitals (`SKILLS`, `WEAPON I`, `OPEN BAG`) while the catalog keys are written normally (`Skills`, `Weapon I`,
 `Open bag`), so the lookup is made ignoring case as well as exactly (`Loc.TrCaption`, `GettextCatalog.FindIgnoringCase`; the case-free
 index keeps the first spelling when the catalog holds both `Map` and `MAP`).
+
+Punctuation that belongs to the panel stays outside the lookup: the dashes of the skill column titles (`"-" + Loc.Tr("Weapons") + "-"`),
+the brackets of the jobs hint (`"[" + Loc.Tr("No jobs assigned") + "]"`) and the dash of the burden row (`"-" + Loc.Tr("Weightless")`)
+are added after the translation, so a translation only ever holds the words. **Verified** (shipped `main.mo` of de/es/fr/ja/ko/pt_BR,
+`GettextCatalogTests`): the catalogs have `Skills`, `Weapon I`, `Weapons`, `No jobs assigned`, `Weightless` but not the capitalised or
+punctuated forms, and hold both `Map` and `MAP`. **Observed**: those captions render translated in the original, hence the case-free
+lookup; the original's lookup code is not located (**Unknown**).

@@ -20,6 +20,12 @@ and identification of the speed global are **Observed**. Planets use planet01 sp
 asin(radius*scale*tan0.01deg), minute-based world-Y spin. Moon2 overlaps Moon; clouds draw in
 front. Texture*max(dot(normal,realSun),0)+Rayleigh scattering; night side black, depth at far plane.
 
+**Verified** global latitude54, sunrise5, sunset23, days/year100, night-darkness0.35 after overrides.
+Day tests (`IsDay`, the daylight ramp) use the raw CONSTANTS sunrise and sunset; a sunset not after the sunrise means no daytime. The 6 / 20 fallback only feeds the sun direction (**Verified**, `FUN_14066e380`; `SkyClock.FromDatabase`).
+Exposure composite=0.55/adapted with adapted bounded by night-adjusted min0.8/max1.2; no gamma
+or tone curve. Sun colour from SkyX towards sun, blue+0.04, divided by4*exposure, black below
+sunY=-0.2. Original sun billboard existence remains **Unknown**.
+
 ## Haze and weather
 
 Original main haze is post/atmospherefog, not SkyX_Fog2. World-to-dome scale70000; distance

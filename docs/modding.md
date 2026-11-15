@@ -8,6 +8,15 @@ RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in or ported 
 
 ## Why this shape
 
+- **Not BepInEx.** Its chainloader discovers plugins from its own folder, not `mods.cfg`, so code mods would not enable, disable or order
+  with their data mod. It injects via Doorstop (proxy DLL on Windows, `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` on Unix), which fights the
+  launcher and the signed macOS build when the host is ours. **Observed**
+  ([BepInEx.Utility.IL2CPP r2](https://github.com/BepInEx/BepInEx.Utility.IL2CPP/releases/tag/r2), 2026-06): BepInEx 6 had no stable
+  release; downstream projects built on `be.*` builds.
+- **Harmony is not an alternative to an API.** It works on the game's JIT publish whether blessed or not, so the decision is only what the
+  engine promises beyond raw patching. **Observed** (2026-11-11, scratch app, win-x64, tiered compilation off): Lib.Harmony 2.4.3
+  throws `PlatformNotSupportedException` ("CoreCLR version 11.0.0 is not supported") on .NET 11; 3.0.0-rc.5 patches (prefix, postfix,
+  unpatch), and code compiled against 2.4.3 runs unchanged on the 3.0.0-rc.5 `0Harmony.dll`.
 - **No accessor mirrors.** Mods reference `Meitou.*` assemblies directly, as a patch needs the types anyway. Compatibility is per game
   version (RimWorld's model).
 
@@ -59,6 +68,10 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
 - Between the two: an assembly a declared dependency exports comes from that dependency's context, so a framework loads once
   ([dependencies](modding-dependencies.md#assembly-resolution)).
+- **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
+  2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the
+  same method. The game references Lib.Harmony 3.0.0-rc.5 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
+  that copy.
 - Refusals, each a log line and a notice, the game going on: not allowed, unreadable manifest, other `apiVersion`, an id another mod
   took, a missing DLL, an entry type that is absent, not an `IMod` or without a public parameterless constructor, a throwing
   `Initialize`.
@@ -116,6 +129,8 @@ holds refuses the second mod.
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
   for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
   computes "no" / does nothing, as an unknown vanilla code.
+- **Record types:** `AddRecordType(type, name)` claims a number (not a vanilla `itemType`); `Records(type)` lists the merged records.
+  Survival of such records through the FCS merge and saves is **Unknown** until tested.
 - **Equipment slots:** `AddEquipmentSlot(new ModSlot(section, fcsSlot, width, height, x, y))` (`ModSlots`, `src/Meitou.Simulation/Items`) adds
   an inventory section that takes the ARMOUR and ITEM records whose FCS `slot` is `fcsSlot`, so the items stay a data mod. `fcsSlot` is 4, 10
   (ATTACH_GLOVES), 11 (ATTACH_NECK) or 15 and up; the others map to vanilla sections. A vanilla section name, a name or `slot` another slot
@@ -123,6 +138,24 @@ holds refuses the second mod.
   stats, look, trade, looting, locks), and shows in the character and loot windows as a copy of the belt slot at (`x`, `y`) layout pixels
   (UI scale 1) from the window's top-left corner, clipped to the window: the mod picks a free spot; the window does not grow. Animals get none.
   Saves keep the section name ([save](formats/save.md#compatibility-exceptions)). Races' `no hats`-style closing never applies.
+- **Medical meters:** `AddMedicalMeter(label)` returns a `ModMeter` (`ModMeters`, `src/Meitou.Simulation/Bodies`): a bar on the medical panel after
+  Hunger, in registration order. The mod's system sets a character's `MeterReading(Green, Value) { Yellow, Red, Arrows, Tooltip }` in the tick with
+  `meter.Set(cold, reading)` (the character's own partition in a parallel phase) and hides it with `Clear`; layers are width fractions clamped to
+  0..1, drawn as a part's green, yellow and red. A selected or inspected character's readings are published with the snapshot; not saved, not
+  hashed, read by no system, so the mod keeps its value (`IModSaveData`) and sets the reading again after a load. The layout has nine rows,
+  which a human fills; each meter adds a copy of the ninth, and more than nine rows share the nine rows' height. A label another meter has
+  (case-insensitive), one over 32 characters or a fifth meter of all mods together refuses the mod. A building's rows never show meters.
+  Drawing **Unknown** (not yet run in game).
+- **Skills:** `AddSkill(new ModSkill(id, label, column) { Description, Affects, Training, Start })` (`ModSkills`, `src/Meitou.Simulation/Bodies`)
+  lists the skill at the foot of a stats-window column (`SkillColumn`: Weapons, Combat, Thievery, Sciences, under that column's last heading)
+  with its whole level, and a click shows the description pane with the mod's lines and the next-level bar. The mod's systems read
+  `skill.Level(stats)` (`Start`, default 1, until set), `Set` it, or `Gain(stats, amount)` on the game's curve (`CharacterStats.CoreGain`, no
+  race multiplier) in the tick: a character's own in its partition of a parallel phase, another's only outside the parallel phases; the
+  game's own actions never train it. Levels live in
+  `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
+  ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
+  mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
+  full column refuses the mod. Not shown in the HUD's stat lines or the debug character editor. Drawing **Unknown** (not yet run in game).
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own
@@ -130,8 +163,15 @@ holds refuses the second mod.
   code is needed. Display only: not saved, not hashed, read by no system, so set it again after a load and keep the character's simulated
   position at its carrier's (that position culls it, and draws it while the carrier is not drawn or lacks the bone). The vanilla shoulder
   carry overrides it while the character is carried.
+- **Bone meshes:** `cold.SetBoneMesh(new BoneMesh(key, mesh, bone, offset, rotation))` hangs a rigid mesh on the character's named bone (a saddle
+  on a mount) as the renderer poses it in the drawn frame, its origin moved by `offset` and turned by `rotation` in the bone's frame, offset and
+  mesh scaled with the character; `RemoveBoneMesh(key)` takes it off, and a second `SetBoneMesh` with the key replaces it, so several mods share a
+  character. The look and worn gear stay as they are (an animal keeps its bag). `mesh` is a file name found as a record's mesh is (the install and
+  the mods' folders, by bare name), drawn with its own material as a loose mesh: no shadow, no outline or picking
+  ([character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)). Set it in the tick from the mod's system, as `DrawAnchor`;
+  display only: not saved, not hashed, read by no system, so set it again after a load. Drawing **Unknown** (not yet run in game).
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
-  (save), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
+  ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.
 - **Interface:** `AddUi(IUiExtension)`: namespaced styles, controls, actions, overrides and slot contributions (`UiSlots`), registered
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
@@ -140,16 +180,54 @@ holds refuses the second mod.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
+- **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
+  sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
+  ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
+  hundredth of the range otherwise), an enum or a `string` with Options a list. `SubGroup` puts a setting under a sub-group header of that name (its
+  own fold, at its first setting's place); `VisibleWhen` names a public `bool` property of the same object and hides the setting while it is false,
+  so a switch can hide its dependents (the page reads it every frame; a throw from it is logged and the setting stays shown). Both are optional; a
+  `VisibleWhen` that is not such a property refuses the mod; a game older than both fails reading the attribute (**Unknown** how it reports), so
+  a mod using them sets `gameVersion`. Another type, a number without a range, a list whose value is not one of its options, a
+  struct (the page would change a copy) or no marked property refuses the mod. The player's values are kept in `meitou.user.json` (`modSettings`: mod
+  id, key, invariant text; a default is not kept) and set on the object before `AddSettings` returns, a number clamped to its range, a value that is
+  not one of the setting's (or not finite) ignored with a log line; the values the object had are the defaults Reset and Restore defaults put back as
+  they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
+  thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
+  notice. A slider's arrow keys move one Step. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
+  `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group);
+  using it in play **Unknown**.
 - **Weather kinds:** a WEATHER or EFFECT `affect type` outside 1-5 is kept as its number, with ARMOUR `weather protection<N>` and RACE `weather
   immunity<N>` naming it the same way, so a mod defines a hazard in data and acts on it from its own system
   ([weather](formats/weather.md#effects-on-characters), "Undefined kinds": what the vanilla systems still do with such a kind). Nothing
   claims a number; take one from 1000 up, as the other mod codes.
+- **Stat modifiers:** `cold.Stats.Modifiers.Set(key, stat, amount)` / `Remove(key, stat)` / `RemoveAll(key)` (`StatModifiers`) add a temporary
+  amount to a character's stat (a drug's +10 strength, a sickness's -5 dexterity) under the mod's own key. Every gameplay read of the stat
+  (`CharacterStats` indexer, `Strength`...) adds it before the injury, hunger, gear and animal-age multipliers, and the stats window shows it;
+  training (`Gain`, the XP difference terms), saves, the debug stat boost, taming and the debug editor use `Stored(stat)`, so it is never trained in or
+  saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
+  Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
+  a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash); in play
+  **Unknown**.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
+- **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
+  the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
+  `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
+  `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
+  (`BuildSite.Id`); null clears it. The player's orders and jobs come first. The switch, package and home are saved with the squad. Off drops the
+  package and the members' minds. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
+  **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
+  move order takes them at once and they resume after it, and a re-saved game loads autonomous.
 
 ## Harmony
 
 - With code mods enabled the JIT warm-up (`JitWarmup`) starts only after `Initialize` returns. Tiered compilation is off, so a caller
   compiled before a patch keeps any inlined copy of its target.
+- **Observed** ([Harmony docs](https://harmony.pardeike.net/articles/patching-edgecases.html)): an inlined method cannot be patched; the
+  patch silently does nothing. Patch methods large enough not to be inlined, or their callers. `Rng` helpers are `AggressiveInlining`.
+- **Observed** (2026-11-04, scratch run): Harmony finds a patch method again by module identity, so the same DLL file loaded by two mods
+  makes their patches resolve to one copy. A helper library copied into several mods must not hold patch methods; a framework shared
+  as a [dependency](modding-dependencies.md) loads once and may.
 
 ## Determinism contract
 
@@ -173,6 +251,9 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - The parallel phases cut slots into partitions of at least 32, so a world under 64 characters runs them as one partition and cannot show
   a threading mistake; the command warns.
 - It sees only hashed state: a mod's unhashed state, or a patch that changes nothing hashed, passes.
+- **Observed** (2026-11-04, win-x64, saves `autosave0`, `Gigachad`, `260`): a clean scratch mod passes; a mod rolling `Random.Shared` in
+  `SlowWorld` differs from tick 1 in both comparisons and is named; a mod whose `Act` writes one field from every partition differs only
+  across thread counts once the population passes 64 characters (tick 152) and is named; the game alone agrees.
 
 ## Versioning
 
@@ -181,6 +262,14 @@ difference it runs the game without mods: if that differs too, the fault is the 
   `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against.
 - Harmony patches non-public members; compile-time references need public types or a publicizer. Open: which simulation types to make
   public, or ship publicized reference assemblies; ship reference assemblies per release so modders build without a game install.
+
+## Platforms
+
+- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core, whose support for .NET Core
+  on Linux and macOS is **Observed** only as a fix note in [MonoMod's releases](https://github.com/MonoMod/MonoMod/releases) and for arm64
+  only in a third-party write-up, so patches off `win-x64` are **Unknown** until tested on each build.
+- **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched. The game runs on .NET 11, so this applies to any
+  method compiled as runtime-async; which of the game's async methods are is **Unknown**.
 
 ## Evidence
 

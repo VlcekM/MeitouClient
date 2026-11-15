@@ -3,6 +3,10 @@
 Status: **MEP-1, MEP-2, MEP-3 and MEP-5 accepted (2026-10-24); MEP-4 (tessellation/terrain relief) was evaluated and
 removed, so it is not shipping.** MEP-I is not full Vulkan parity because Metal keeps the flat/parallax terrain path.
 
+Starting point: `metal-spike` at `7eb04a96` (`docs: plan Metal Effects Parity I (MEP-I) milestones`), after the
+effect-parity audit `84193e4a` and the upstream `57a7968a` merge. Read
+[the effect-parity audit](../HANDOFF.md#effect-parity-audit-2026-10-24) for the measured/known gaps.
+
 ## MEP-1 implementation (2026-10-24)
 
 The code is implemented and the MetalFX path is accepted in game (desert/dust/LOD views, 2026-10-24).
@@ -84,6 +88,8 @@ Work items:
   and object/particle terms, or keep TAA labelled experimental and make MetalFX Balanced the tested default. Do not
   make TAA the default while it ghosts.
 
+Likely files:
+
 - `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` (`MarkParticleDraws`, `MarkParticles`, `BuildShadingRate`, `RunGiResolve`,
   `End`)
 - `src/Meitou.Game/Rendering/Post/PostTaa.cs` (sun motion, particle coverage, velocity)
@@ -105,6 +111,11 @@ Acceptance:
 
 Work items:
 
+- **Done: MSAA/resolve.** `IGpuContext.MaxSampleCount` is the shared device capability; Vulkan keeps its
+  colour+depth sample-count intersection and Metal asks `supportsTextureSampleCount` (2x/4x, 8x where available).
+  `ReflectionPass` builds the same multisampled colour and depth targets on both backends, resolves colour into the
+  sampled texture the water reads, and leaves the existing backend-deferred release on resize. The Metal MSAA targets
+  use private storage; the reflection fog reads sample 0 of the multisample depth.
 - **Done: level 2 characters.** The reflection's level 2 now draws `CharacterRenderer` (the game's queue 50) on both
   backends, after objects/foliage as in the main view. Levels 1-4 now mean terrain, characters, placed objects and
   foliage respectively; level 4 also contains characters and objects.
@@ -116,6 +127,8 @@ Work items:
   fraction of the 8120 MB High budget at typical Retina sizes.
 - **Accepted in game (2026-10-24):** water edges/horizons, level-2 characters, levels 1-4, resize/alt-tab and the
   MSAA A/B passed the user's visual check.
+
+Likely files:
 
 - `src/Meitou.Game/Rendering/Frame/ReflectionPass.cs`
 - `src/Meitou.Game/Rendering/Frame/WorldFrame.cs`
@@ -165,6 +178,10 @@ What was tried and why it was rejected:
 - Moving both factor kernels to a Metal GPU compute pre-pass removed the CPU cost and reached **~35 fps** at 800x600
   points (1600×1200 pixels), versus the ~54 fps MEP-3 baseline in that scene. Tessellation itself still adds geometry
   and GPU work; the drop was not acceptable.
+- The deferred-colour path then exposed `NotSupportedException: no Metal primitive for PatchList` when a factor
+  allocation failed and the job fell back to an indexed draw while the program still had patch topology. A safe
+  per-patch flat fallback, factor-allocation failure handling and a full visual/performance validation would still be
+  required.
 - The code was removed rather than left behind a disabled flag. The UI must keep hiding the tessellation toggles.
 
 If this is revisited, it needs a hard Metal performance budget, near-range tessellation/quality caps, a per-patch
@@ -207,6 +224,7 @@ tessellation is not shipping; terrain displacement/rock smoothing/outline refine
 
 | Gate | Requirement |
 |---|---|
+| **Preview test** | After MEP-3: build 0/0, non-Metal tests, Metal smoke, no GPU timeout, known gaps documented; Vulkan remains default |
 | **Remaining effects gate** | After MEP-5: MEP-1..3 and MEP-5 accepted, MEP-4 recorded as evaluated/removed, Vulkan comparisons, 30-minute soak, no hidden no-op settings. Not full parity while tessellation is absent |
 | **Default switch** | Only after a separate performance/stability decision and an explicit decision on the tessellation limitation; not part of MEP-I |
 

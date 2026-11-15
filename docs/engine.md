@@ -25,6 +25,79 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 
 ## Host and loading
 
+`WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
+GameHost adds the code mods and the systems. GameHost partials keep boot, the Metal loop, loading, transitions and the character feed; each other feature is a class the host holds and makes in
+`CreateFeatures`: `GameLoop` (the Vulkan and headless run), `GameSound`, `GameSaves`, `TitleScreen`, the scenarios, `Host/WorldSync`, `Effects`, `DevTools`, `Editor`;
+PlayerInterface keeps the input entry points, selection, commands and shared UI helpers (core and `PlayerInterface.Ui.cs`); its windows, HUD panels, picking and pointer are classes it makes on first use (`Ui`, `Building`, `Title`, `Editor`). StandardSystems supplies order. NavAdapter
+bridges Navigation; never let UI/rendering duplicate simulation state.
+GUI executable attaches a caller's console; folder prompt creates its own when necessary.
+Native splash precedes Vulkan (Windows only); worker loading and render-thread GPU steps keep the window
+responsive. Both backends draw the start's loading frames through `ILoadingCanvas` (`GameHost.LoadingFrame`): Vulkan's swapchain, or
+Metal's context frame until its boot ends (docs/metal-backend.md).
+On Wayland the window is shown and its first configure taken before the first loading frame is presented: a buffer attached before the shell role makes the compositor drop the client (**Verified** natively on KDE Wayland, GLFW 3.4). Full screen at start shows the window before going full screen there: GLFW ignores showing a full-screen window, and on Wayland (unlike X11) going full screen while hidden never maps it (**Verified** KDE Plasma, GLFW 3.4, PR #77). Scene transitions draw loading between stages, wait on asynchronous results, and
+preserve world on failure. Gameplay warm-up waits for nearby population, terrain, scenery, character
+assets and used textures (including deferred loads), then <40ms frames for0.5s (max5s for frame pacing).
+After 5s of continuous `VramGuard` pressure, content it holds back is no longer waited for (it cannot load until the use falls).
+Device-local memory: `VramGuard` holds back 384 MB (at most an eighth) of the driver's budget and works on the rest; where offered, `VK_EXT_memory_priority` and `VK_EXT_pageable_device_local_memory` let a full heap page streamed textures (priority 0.3, the rest 0.7) to system memory instead of failing. **Observed** by the reporter of #745 (GTX 1650 4 GB, driver 610.57.04, 795 mods): 11-90 MB allocations failed at 92% of the reported budget with 300-500 MB free; the reserve ended them, and paging held 6 GB on the 4 GB heap in a test program. Paging is a fallback only: with the guard's ceiling over 100% the driver paged constantly and the frame rate collapsed. **Unknown**: whether the reported budget excludes other programs' use.
+A game's warm-up waits only for the characters within 3000 units of the camera's focus (`CharacterRenderer.LoadingFocus`, `LoadingReach`); the rest are prepared once
+the screen lifts. The original's loaded zones (the camera's 3 x 3 block) can hold hundreds of NPCs, whose meshes' generated levels are built once and then read from a disk
+cache ([character-renderer](character-renderer.md#content-lod-and-memory)). **Observed** (a Great Desert save near Heng, RTX 4090): 479 looks pending and a 130 s wait before this rule, 35 and 40 s with it.
+The warm-up (title and game) waits for grass only within the range of the default grass distance (`FoliageRenderer.LoadingPending`, `DefaultGrassRange`);
+pages a longer setting reaches grow in, nearest first, after the screen lifts. **Observed** (save siwa-test4, the Ultra tier's grass distance x 2): the title waited
+107 s and the game about as long for 16 000 and 27 000 grass pages made at about 400 a second, everything else ready.
+The objects count the same way (`WorldObjectRenderer.LoadingPending`): the remakes that coarsen a resident mesh are housekeeping and not waited for. **Observed** (save gut, 655 mods, RTX 4090, 2026-11-12): with the camera at rest two such remakes at a time kept the warm-up waiting 20+ s after everything else was ready.
+Phase timing of a start or a load: `MEITOU_LOG_TIMES=1` stamps every log line with the seconds since the process started; the warm-up report prints the GC counts, pause total and CPU seconds so far, the "still preparing" line the streaming queue and the VRAM guard, and each scene-load stage prints when it starts. **Observed** (gut, hidden 2560x1440, warm caches): menu interactive at 17-20 s (device 1.2 s, game data 1.6 s, world files 3.5 s, renderer 2.5 s, jit warm-up on 3 threads 5-7 s in parallel, content wait about 8 s); a quickload: read 1.4 s, systems 3.3 s (under the sky ascent), build 1.1 s (the weather replay 0.8 s of it, now only for regions the save lacks), then the warm-up 6-10 s unloaded. Another GPU load (a second game instance) stretches the warm-up to 20-40 s: the render thread then waits in the frame fence.
+Under the cover the streams' frames need not be smooth: the character, foliage and object renderers (`Covered`, set by the host each frame) upload and build for up
+to 16 ms a frame instead of their play budgets, foliage layouts and grass pages are queued four per streaming thread (`BackgroundWork.Threads`; finished ones are
+taken once a frame), and objects take eight times the zones and resolves a frame. Once the warm-up's content is ready the streams are back at their play budgets, so
+its run of smooth frames measures play. **Observed** (siwa-test, Ultra settings, 662 mods, RTX 4090, 9800X3D, warm disk caches): the game's warm-up went from 20.8
+to about 6.5 s with this, the grass picking, the coarsening rule and the character LOD cache.
+Population builds are queued/applied at frame boundaries without advancing game time, AI or movement;
+navmesh-gated spawns are retried while loading. Warm-up and the flight hold the simulation paused.
+Which title shows is the Interface setting Main menu style (`MeitouMainMenu` in `meitou.user.json`, default Meitou), independent of the UI mode; the main-menu sky flight needs the Meitou title.
+The Faithful title does not wait: its picture is opaque, so the start ends with the splash ([ui-screens](game/ui-screens.md#splash)) and the boot.
+While it is up the world is not drawn (`GameHost.TitleHidesWorld`: a black backbuffer, no frame generation; Vulkan host), so its streaming waits for a game's warm-up.
+The Meitou title waits for terrain, scenery, character assets and used textures (including deferred loads), then
+one full second of <40ms frames (max5s of ready content for frame pacing, so slow GPUs reach the menu). Its menu artwork/fonts/pipelines warm under the opaque cover too;
+streaming uploads retire and a compacting GC completes before that final smooth run.
+**GC:** the stock runtime (server GC, four heaps, gen0 budget at most 16 MB: `System.GC.Gen0MaxBudget`, GC threads not pinned: `System.GC.NoAffinitize`) in builds and release zips alike; the startup `gc` line names the collector (`GcName`).
+**Observed** (2026-10-24, play benchmark, 5 min, ~160 MB/s allocated, RTX 4090): the default budget let ~1 GB build up between collections, 27 gen0/gen1 collections paused
+20-190 ms (median ~26); at 16 MB, 330 collections paused 2.5 ms median and 31 ms at most, total pause about the same. 64 MB: max 122 ms; workstation concurrent GC: max 25 ms
+but 3.6 s of pauses in all; DATAS (`DynamicAdaptationMode=1`): max 66 ms. `System.GC.Gen0MaxBudget` is read from runtimeconfig (**Verified**: collection counts with
+and without it); `GCgen0MaxBudget` there is ignored and `DOTNET_GCgen0size` changed nothing. The
+experimental Satori GC (github.com/VSadov/Satori, `PublishWithSatoriGC` SDK) is not used in official builds. **Observed** earlier A/B (RTX 4070, 10.0.13
+Satori vs stock 10.0.12 fast flight): longest GC pause 15-21 ms stock vs 1-18 ms Satori, frames unchanged (long frames are foliage updates, docs/viewer.md).
+**Observed** (2026-11-01, headless simulation probe of a ~1600-character town save, Ryzen 5600X, 60 s runs): `HeapCount` pins the four GC threads to CPUs 0-3, and about 1 in 40 ephemeral collections paused 100-290 ms while doing 1.5-3 ms of GC work: the time is between the suspension finishing and the collection starting (GC events `SuspendEEStop` to `GCStart`). Pinned: 6 such pauses in 5 runs; `NoAffinitize`: none in 5 (max 2.6 ms); workstation GC: none in 3. Loading CPUs 0-3 with normal-priority busy loops did not reproduce it, so what holds the pinned core is **Unknown** (interrupt or driver work is a guess). The game was not measured.
+`GCConserveMemory` is not set. **Observed** A/B (`DOTNET_GCConserveMemory=5`, 3600-frame fly benchmark, 3 clean runs each): managed heap at the end
+1.42 vs 1.93 GB, working set 3.37 vs 3.93 GB, but gen2 GCs 12-14 vs 7-8 and pause totals 54-306 vs 36-53 ms (one run 64 frames over 33 ms).
+Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
+**Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
+~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling;
+what triggers them is **Unknown**. Pooled now:
+DDS file bytes of `WorldTextureCache.Load` (`DdsReader.ReadKept(..., pool)`, `ArrayPool<byte>.Shared`; returned in `Load` after an RGBA8 decode or
+by the last upload step of a stored BC upload), the GI terrain grid's samples (one array per `TerrainGrid`), the card trimmer's clip/hull scratch
+(`FoliageCardTrimmer.Hull`) and the grass generator (`[ThreadStatic]` `FoliageRandom`, reseeded). Contract: a rented array may be longer than asked,
+so its length is never the logical size (pass counts; `DdsFile.TrailingBytes` is meaningless on a pooled file); return it in a `finally` or at the
+one point after its last reader, never while anything keeps it; a buffer that is dropped instead (a texture never pumped) just goes to the GC.
+`ArrayPool<byte>.Shared` rounds up to a power of two (a 4.2 MB file rents 8 MB) and trims idle arrays on gen2; textures in flight bound what it holds.
+**Observed** (swamp, 1920x1080, 3000-frame flight, 4 alternating pairs, 2026-10-21): allocated 6.2 GB to 4.8 GB (2.1 to 1.6 MB a frame), gen0+gen1
+45 to 35 in total, gen2 count unchanged; frame percentiles unchanged within noise.
+Not pooled, kept by their owners: `HeightWindow` arrays (read through `HeightSnapshot` on workers), grass blade arrays (kept as `PendingBlades`),
+particle texture decodes (preloads not drawn within 30 s are dropped). How to rank allocation sites: docs/bench.md.
+**Native buffers** (`Meitou.Data.NativeBuffer`, a `MemoryManager<byte>` over `NativeMemory`): outside the GC heap, freed at once on `Dispose`, so a
+transient buffer leaves no LOH garbage or holes. No finalizer (CA2015: it could free a block a `Span` still reads), so an undisposed block leaks;
+`NativeBuffer.LiveBytes` (in the F11 `ram` total, the flight's `gc` line) shows what is held. Used for impostor atlases read from the cache: `ImpostorAtlas.Read`
+inflates every kept level into one block, the levels are `ReadOnlyMemory<byte>` slices of it (baked atlases stay managed arrays; disposing them does
+nothing). The atlas's owner disposes it where it lets go: `FoliageRenderer` after the upload completes, on a refused upload, an abandoned or
+finished refine, a mismatched load, and `UnloadImpostor`/teardown (after the `Next` textures that read it). `ImpostorTextures` never frees.
+**Observed** (swamp, 1920x1080, 3000-frame flight, 2026-10-21): traced large-object allocations after loading 6.0 to 1.8 GB (`ImpostorAtlas.Read`
+4.2 GB to 85 MB); 4 alternating pairs (both orders): allocated 4.9-5.0 to 4.0-4.1 GB, peak working set 5.4-6.4 to 4.9-5.8 GB (set while loading),
+0 MB native held at the end, gen2 counts 3-4 vs 3, p99 unchanged. GC pause totals 28-161 ms (base) vs 98-158 ms (native): inconclusive, **Unknown**.
+Cancel on window close. Helpers/services dispose/join with their owning scene/session.
+After warm-up, loading panels ease off the left/right edges over 0.7s while the loading image fades to the live scene and UI (Faithful: hidden at once, as the original).
+Input remains blocked through this reveal. A new game ends warm-up as soon as the squad's characters are drawable, skips the sky arrival and opens the
+character editor first (`CharacterEditorHost`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.
+
 Meitou UI mode presents title controls over a live view of the real world; Faithful retains
 the original title image and loading screen. Advanced settings persist two independent scene-transition
 toggles in `meitou.user.json`, both on by default: `mainMenuTransitions` covers entering a new game/save
@@ -63,6 +136,15 @@ while the title draws or shows and cleared when it closes; simulation and saves 
   visible rays through the haze; `FogVolumes.HidePlaced` leaves out the placed `fogfeatures.dat` volumes
   (one stood as a dark dome where the sun is). `PostOptions.Balance` (1.1, 0.98, 0.88; 1 in play), a white balance
   before the tone map, keeps the orange of a lower sun.
+- `WorldObjectRenderer.Staged` adds the foreground: a cliff top for the wanderer, the flat-topped hoodoo `FLatTop_Pillar01`
+  (drawn through its FOLIAGE_MESH record `FlatTop_Hoodoo01`, terrain texturing), its top ~45 units ahead at the bottom of the
+  frame and the block moved 125 units left, so its sheer right side drops to the valley just right of him; on that top, a
+  little scree and a stone scaled to pebbles, desert shrubs on its left and a tiny one at its right edge (FOLIAGE_MESH records
+  drawn as staged meshes), a few more on the far hill; and the
+  buildable `Watchtower` building on the valley floor ~2600 units ahead at the far right, yaw 145° from the view, laid out as a placed
+  building (setting or clearing it lays their zones out again). The object streamer reads a staged FOLIAGE_MESH's TERRAIN
+  texturing from `material type` (a map feature's from `texture mode`); without it the mesh loses its level indices and
+  draws white (**Observed** on this title).
 - `FoliageRenderer.Shift` moves the ghost-town ruin (FOLIAGE_MESH houses and scrap piles) ~400 units left,
   applied as foliage zones are accepted.
 - One wanderer (sandbox character in drifter's gear, with a stronger build: `CharacterAppearance.Shape`, null in play, sets 0.6
@@ -71,6 +153,37 @@ while the title draws or shows and cleared when it closes; simulation and saves 
   three times as strong at the silhouette) so his back, turned to the sun, is not a flat silhouette, ~300 px tall at 900 p, his back to the camera looking
   10° left of the heading, in a frozen `idle_stand_confident` pose. The camera's `MaxNear` is lowered to 20 for
   the title (the near plane is a quarter of the eye's ~350-unit clearance, ~87, which clipped him).
+- Three Paladin–Dust Bandit pairs fight on the foreground road in `TitleBattle`'s separate world, using the regular combat and
+  animation systems with zero damage and no medical tick. Real time advances them while gameplay is paused; their pair centres
+  stay at the authored road points despite animation root motion. Bodies and pair spacing render at 2.5× scale for visibility,
+  grounded on the road; combat keeps its normal dimensions. Their poses update every frame, exempt from distance throttling.
+  They start three seconds into combat.
+The title menu is the [Meitou UI kit](meitou-ui.md)'s main menu (`MeitouTitleMenu`): its stack, save card and plate buttons at the kit's
+1600×900 sizes scaled with the height, over the kit's vignette. The card (paper, edge, rounded corners, drop shadow), the plates (Button1Skin
+9-slice at 70%, pushed skin at 85% under the mouse) and the key chip are baked on the CPU from crops of `Kenshi_UI.png` and uploaded as
+the atlas is (UNORM, so they draw in its colours); icons are atlas rectangles. The card shows the newest save's name, day, place,
+squad (when it differs from the name), money and members (play time is not read from saves yet) and is Enter's default. The original buttons stay as invisible hit targets at the
+same bounds, so input is the faithful screen's. Lettering is Exo 2 from the painter's 16 px atlas (ASCII and Latin-1 up to U+00B7),
+or a 48 px bake past 1.25x, so it stays sharp.
+The Meitou wordmark, top right, is `assets/branding/kenshi-logo.png` (Lo-Fi's logo, embedded; see THIRD_PARTY_NOTICES),
+because the game ships none as a file ([ui-screens](game/ui-screens.md#title-artwork-and-location)).
+No title actor enters gameplay or save data; the normal camera lens and character source
+are restored when leaving the title.
+Title character preparation starts ahead of ordinary streaming during boot; the complete scene uses the readiness contract above.
+`--title-preview --screenshot <path>` captures it for visual QA (`--settings-showcase` the settings menu's Graphics page in its states); `--ticks` advances the fight. Save arrival still uses the
+loader's leader-focused camera contract; saved camera pose restoration remains unimplemented.
+
+### Eye height
+
+Engine choice (`EyeLift`): loading adds the eye's height above the ground beyond the game's highest camera (1840, `KenshiCamera.MaxHeightAbovePivot`)
+to a distance across the ground, so the game's camera heights load as before and a free camera high above the land loads only what it can see. It
+measures the terrain's biome textures and which load at full size (`TerrainTextures.UpdateBiomes`), the object zones laid out, kept and unparked
+(`ObjectStreamer.NearZone`), foliage zones and grass pages ([render-foliage](render-foliage.md)). Characters: only those within drawing reach of the eye
+(6000, 3000 while lifted, `CharacterRenderer.LiftedReach`) or 3000 of a kept point or a flight's arrival are built (meshes, textures); all were before,
+the draw list holding every loaded character. **Observed** (play benchmark flights, ~1,400 characters): character textures 576 MB to 122 MB. Drawing
+and the kept points and arrivals still measure as before.
+A free camera over 3000 above the ground under it (`KenshiCamera.FlightHeight`, the focus gate in [camera](formats/camera.md)) has the weather's fog and
+camera particle effects off, the fog thinning over the 500 below it (`SkyRenderer.WeatherFogScale`): they surround a ground-level eye and would fill a flight's whole view.
 
 ## Rendering and upscaling
 
@@ -78,3 +191,24 @@ WorldFrame prepares/streams sky/shadows/reflection, the scene (one depth) and po
 live in render-* references; Data holds backend-independent terrain/placement/light rules.
 Own GLSL compiles through bundled shaderc, explicit native resource/state recording and ordered
 secondary jobs. [Native API](renderer-native.md).
+
+Single-sample jittered HDR reconstruction, separate near/far depth, unjittered reflection/shadows.
+**Observed** (RTX 4090, shared with other processes): Streamline returns result 39 (`eWarnOutOfVRAM`, with the log line "Exceeded VRAM budget") from `slEvaluateFeature` when the card runs short of memory; the call still records and runs. Meitou took it for a failure, freed DLSS under the recorded frame and the next fence wait said `ErrorDeviceLost` (seen after 30 DLSS/off toggles with other games on the card). Now result 39 counts as success (logged once), and a real failure retires the upscaler at the start of the next frame, not under the frame that holds its commands. 60 toggles with enough memory never failed and did not grow the memory in use (the `vram` control command).
+FSR Vulkan SDK1.1.4 runtime DLL; Streamline2.14.16 manual hook, initialize before Vulkan, request
+features and proxy present; when it reports DLSS unsupported (any non-NVIDIA GPU) it is shut down at
+once. **Observed** (#55, RX 6600): on AMD `slInit` still loads `sl.common`, whose Vulkan hooks warn
+"NOT supported". On Linux DLSS goes through NVIDIA's NGX client library and the DLSS model, beside the
+executable or in `MEITOU_DLSS_PATH` ([post](render-post.md)). Bottom-up images require matching clip matrices/presentation.
+Vendor DLLs are not committed; paths/packaging/licensing: [notices](../THIRD_PARTY_NOTICES.md).
+Mip biases and temporal/GI contracts: [post](render-post.md). GI requested by default unless
+--no-gi, unsupported ray queries fall back to flat ambient; gi Enhancement chooses output.
+
+## Validation and performance
+
+Tiering/PGO off, serverGC4 heaps, compact after loading then SustainedLowLatency; avoid streaming
+allocations and measure tails. Offscreen fixed grass sway enables repeatable pictures. Parity
+scripts compare10views; establish baseline noise for temporal vendors. Game --screenshot/--ticks,
+--quit-after and --load exercise host wiring; [bench](bench.md) documents measurement.
+**Observed** NVIDIA OpenGL/Vulkan sampling: anisotropy -0.25 bias reduced rock mean1.21→0.0009;
+other vendors untested. Alpha-to-coverage differs; depth usesD32_SFLOAT. These are reference
+observations, not a supported OpenGL backend.

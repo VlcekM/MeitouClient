@@ -6,6 +6,15 @@ patches (`Plugin_Terrain_x64.dll`). Implementation: `TerrainDecalStore`, `Terrai
 `TerrainDecalRenderer` and the terrain colour shader. Settings: [settings.md](../formats/settings.md#graphics-decals-and-effects);
 save layout: [save.md](../formats/save.md#folder-and-state-mapping).
 
+## Types and textures
+
+**Verified** (`FUN_1408dfaf0` strings, `resources.cfg`): four types by the folder name of each
+`FileSystem` location of the `Blood` resource group: 0 `line`, 1 `splash`, 2 `pool`, 3 `smear`.
+A type's variants are every texture in its folders (install: line 3 at 1024×512, splash 7 at 512² +
+1 at 1024², pool 5 at 512², smear 1 at 512×256). Each variant keeps its full-size texel dimensions
+(the loader shifts them back up by the texture-quality level for names ending `.dds`). Type 0 has
+no caller found (**Unknown** whether anything makes `line` decals).
+
 ## Cells
 
 **Verified** (`Terrain::getPatchInfo`; keys of two saves): decals are kept per terrain quadtree node
@@ -15,6 +24,10 @@ in, each copy placed relative to its own cell (checked: placing the saves' decal
 their cells and local places).
 
 ## Making a decal
+
+**Verified** (`FUN_1408dce50`, `FUN_1408dc6b0`): random variant; angle = atan2(dir.x, dir.z), the
+texture's width axis along (sin, cos) and its height axis along (cos, −sin); half extents in world
+units = size × texels × 288 / 4096 (**Verified**: `FUN_1408dfaf0` sets the factor at `+0x1c0` to cell 288 × 0.5 × 1/2048 = 288/4096; the draw agrees, below). Life starts at 99 (seconds; the medical and hit callers pass 99.0; the bleed pool's value is lost in the decompile, **Unknown**, we use 99).
 
 Sources (`FUN_140652000` medical update, `FUN_140793b20` hit), all only with `Blood` on and the
 character out of the water (`FUN_1405c7fd0` = water state 0); colour = race `blood colour` (FCS
@@ -26,6 +39,12 @@ default #800000), alpha 1 unless stated:
 | bleeding > 0, moving, not carried | smear, size 0.2 | once more than 4 units from the last place; along the velocity; alpha = clamp(bleeding, 0, 1) |
 | bleeding > 0.01, otherwise (carried) | pool, size min(0.5, bleeding × 0.1) | build-up += rand × bleeding × dt × 10; past 1: a drop if more than 1 unit from the last place, then build-up 0 |
 | a hit (`FUN_1406508d0`), a severed limb (`FUN_14064edc0`) | splash, size clamp(min(1, (cut + blunt + pierce) / 100), 0.05, 0.5) | a direction (a character vector at `+0x640`, `+0xd0`), flipped or turned ±90° by a hit-side flag (2, 4, 8), turned by a random ±50°; placed up to 20 units along it |
+
+**Unknown**: the second condition of the first two rows (`FUN_14028ddc0`, a flag or count on the
+character; taken as true), the medical dt's unit in the drip row (taken as game seconds), the
+splash's direction vector and side flag (we use attacker → victim, bolt flight), whether the 20 is
+a random distance (we roll 0..20), and the race check of the hit row's `vfunc 0x330` (we skip
+bloodless races, `bleed rate` 0). We emit no limb-sever splash.
 
 **Pool growth** (**Verified**, `FUN_1408dcfa0`): per character a token (place, size). Increment =
 bleeding × scaled frame dt × 0.2. No token: size = increment. Within √10 units (X/Z) of the token:
@@ -55,23 +74,89 @@ count and distance (**Observed**; we take the nearest). Consequence (**Observed*
 footage): a big battle's blood ends at a straight cell edge, and the cells past the eighth age out
 unseen.
 
+## Meitou
+
+The `blood` switch (Meitou, default): every cell within `Decal Range` is drawn, up to 32 layers (at
+most 256 MB of them: 16 at 2048²), the array growing by 8 as more cells are near; Faithful keeps the
+game's 8. Expiry is unchanged (undrawn cells still age). Engine choices: the blood is mixed into the terrain colour shader's
+albedo before lighting (our terrain is forward-lit, no second pass); the cells are a texture array
+read by cell index. Marks more than 20 units above the ground are dropped (upper floors). A pool's
+decal is grown whenever its stored half size changes (as the game does), in place in each cell's list. A cell's layer is cleared and drawn again
+when decals leave the cell or one of its pools grew (`CellRewrite`, once a frame however many ticks the pool grew in, so growth is as smooth as the
+frames); otherwise only the decals placed since are drawn over it (`Appended`). Growing pools used to be drawn over their old copy in 25th steps:
+that was visibly stepped, stacked the translucent edge dozens of times and popped when the cell was later redrawn. The
+original likely draws incrementally too (**Observed**, inferred: it clears only for a new cell and keeps a drawn cell's dead decals); a log past twice the cell's decals + 64 forces a redraw.
+A layer is one instanced draw (each decal's texture by bindless index, colour and alpha blended separately in one pass).
+Row order: the terrain shader reads a layer with v = the cell's Z fraction from row 0, and Vulkan's row 0 is NDC −1 but Metal's is NDC +1 (`RenderTargetsBottomUp`), so `DrawLayer` mirrors the quads' Y on Metal. Before this, Metal terrain blood landed in the right cell but mirrored in Z across it (up to ~290 units off). **Observed** (owner, in play on Metal): outdoor blood now appears where the fight is.
+The store finds a pool by a per-cell index of place → first pool there, not a list scan, and keeps each life as the store
+clock's expiry time, so ageing visits only cells with a decal due. Decals
+are saved and loaded as stored (`SaveDecals`, TERRAIN_DECALS in [save.md](../formats/save.md#folder-and-state-mapping));
+the bleed tokens are not, so a pool under a still-bleeding character starts anew after a load.
+
 ## On the body and on severed limbs
 
+**Verified** (shader sources `data/materials/deferred/character.hlsl`, `skin.hlsl`, `character.material`; exe `FUN_140530b30`, `FUN_1400cf490`):
+characters carry blood on their skin, not only on the ground.
+- Body and worn-item shaders (`BLOOD` define) lay `bloody.png` (256², RGBA splatter, `materials/`) over the albedo before the darkening:
+  `albedo = lerp(albedo, tex × bloodColour, saturate(tex.a - 1 + amount))`. The map is a cylinder projection in the part's own space:
+  u = height along the mesh Y × the race's `blood vertical`, v = angle round Y (atan2(normal.x, normal.z) / 2π, shifted half a turn where
+  normal.z < 0) × `blood horizontal` (human: 0.15 and 1). `amount` is per body part, `bloodAmount[8]` (the first 8 parts), written by
+  `FUN_140530b30` as 1 − clamp((flesh − stun + bandage) / (base × mult × scale − wear), 0, 1) (the +0x48 field is the bandage, not the rig): a damaged part is bloodier, a part far below zero is
+  fully covered. Only `Character_VP` (bodies) defines `BLOOD` among the people's programs; worn clothing (`skin.program`) has none, animals have their own (`creature.hlsl`).
+  **Unknown**: the part index a stump mesh's vertices carry, the exact `bloodColour` alpha, the animals' mapping.
+- A severed limb item draws with the `SeveredLimb` material (`FUN_1400cf490`, cloned as `Limb_<name>`): textures from the item's MATERIAL record
+  (`texture map`, `normal map`, `color map` = skin-tone mask; the human's are the female body's), shader `severed_limb_fs`: skin-tone mask tint
+  (a vec4 stored on the item), then blood with the same texture, `bloodColour` (a vec4 on the item) and an extra alpha of
+  max(−2 × 0.3 × mesh x, 0), so the cut end (negative x) is solid blood. Its mapping: u = 0.3 × x, v = the angle round X (atan2(normal.y, normal.z)).
+  **Verified** (`FUN_1400ced10`, the item's setup from the cut character, called by `FUN_14064edc0`; `FUN_1400cf490` hands the values to the entity): the item keeps a vec4 skin tone at
+  `+0x1f4` (shader `skinTone`, custom parameter 2) = 1 − the character's appearance `Skin Tone` colour per channel, i.e. the body shader's `skintone` (our `SkinToneParameter`); a vec4
+  blood colour at `+0x204` (custom 3) = the race's `blood colour` as ARGB, alpha 1.0; and at `+0x1e8` the size of the character's forearm (arm slots) or calf (leg slots) bone, which
+  `FUN_1400cf490` sets as the item node's scale (**Unknown** whether that follows the body shape in play; we draw the limb at scale 1). The fragment is `albedo × (1 − skinTone × colourMap.r)`,
+  then the blood, × 0.7, with the normal map on the frame (tangent, cross(tangent, normal) × tangent.w, normal) (DXT5, x in alpha, z rebuilt). The `1-itemlist` save keeps no state for an
+  item (save.md), so the tint is not saved: **Unknown** what a limb loaded from a save shows (we apply none).
+
+
 **Meitou**
+- Body: `CharacterContent.BodyBlood` gives a person's body material the race's blood colour (`blood colour`), scales (`blood horizontal`, `blood vertical`) and `bloody.png`
+  (none for animals and bloodless races, `bleed rate` 0). `MedicalState.BloodAmounts` publishes the first 8 parts' amounts (`CharacterSnapshot.BloodAmounts`), the host hands them
+  to the renderer (`CharacterInstance.Blood`), which writes them as exact integers in the w of the body instance's matrix rows (`CharacterRenderer.WithBlood`); the vertex program
+  reads its vertex's part (colour Y bits 16-19, `CharacterContent.MarkBody`) and passes the amount on. **Observed**: a vertex's part is the part claimed by its heaviest bone or its
+  nearest named ancestor (as the hidden limbs are, `LimbHideOf`), numbered in the health parts' order (`BodyPartTemplate.MedicalOrder`, the order `bloodAmount` is indexed in). The
+  race's `combat anatomy` order is a different one: numbering by it put the left arm's blood on the head (sandbox render).
 - Stump: a limb-replacement item without a material wears the body material at the full amount (`BloodFull`): a severed part is far below its health.
+- Fallen limb: `Debris` draws a race's `severed limbs` items with the debris renderer, falling and at rest, instead of as a world object: the MATERIAL record's
+  texture map, the race's blood colour, blood with the cut end solid, and the Meitou skin's scattering (the same table and rule per race as the body; the curvature baked by
+  `CharacterContent.MarkCurvature`), the cut character's skin tone through the colour map (`FallSource.SkinTone`, set in `PopulationSystem.DropSeveredLimb`, not saved: a limb read from a
+  save has none) and the MATERIAL's normal map on the mesh's own tangents (`Model.Build` `tangentSign`). A limb piece sits at its mesh's origin and keeps the mesh's own space (the blood
+  mapping reads x). A limb as a debris piece casts no shadow. **Observed** (sandbox, a light and a red-tinted character): the limb matches the body it came from; the skin normal map is faint
+  (clearly visible only amplified).
+- **Observed** (sandbox, a dressed character): a stump under a coat or trousers is not visible at all; the blood shows on a bare stump and on a fallen limb. The ground limb of the
+  sandbox is white without a material because the sandbox has no world-object layer, so the debris path (no material) drew it.
 
 ## Blood on surfaces (Meitou)
 
+The `bloodsurfaces` switch (Meitou, default; Faithful: terrain only, as the game): the same marks also land on walls, buildings, rocks and other static objects. **Observed** (Hub battle, sandbox screenshots), not a game behaviour.
+`TerrainDecalRenderer.Surfaces`:
+
 - Each mark is also kept with its 3D place (upper floors included: the terrain path drops marks 20 units above the ground), saved with the terrain's ([save.md](../formats/save.md#folder-and-state-mapping) "Terrain decals"; a loaded pool no longer grows). A pool grows by the store's rule, kept apart.
 - Lifetime, **Verified** for the rule (the terrain's, above) and **Observed** for the symptom (hidden run, a wall splash and a floor pool kept in view past 2970 ticks): a mark has the same 99 s life, and as a drawn cell keeps its dead decals, one whose life ran out is removed only while it is out of `Decal Range` of the camera (`AgeSurfaces`; saved with life 0 while it stays). Blood in view never goes by itself, as the terrain's beside it; the colour alpha is the mark's own (no fade in the last second: the terrain draws a decal once, at its full alpha). Before, a mark faded out 99 s after it was made while the camera stood on it.
+- No cap drops a live mark: all kept marks within `Decal Range` and in the view are drawn (4096 per draw call); the kept list is only guarded at 32768 (oldest first). Before, 1024 kept and 512 nearest drawn made marks vanish in a big fight (**Observed**: 1100 marks placed far away erased the live marks in view).
 - Drawn as a screen-space decal after the opaque scene, before the characters and the water, so they never take blood: a sphere round the decal's square, each scene pixel in it rebuilt from the scene depth, its normal from the depth's slope, the texture projected along that normal. The result multiplies the lit scene colour.
 - Pools, drips and smears only on up-facing pixels (normal Y > 0.8) within 0.4 units of the mark's height. Splashes are centred 0.9 above the feet (above the terrain under the mark on the ground) and take any surface facing the mark, fading over the outer 45 % of the radius.
 - The terrain keeps its cells' blood: the depth is copied after the terrain's draw and again after the static objects; a pixel whose two copies hold the same bits (no object drew over the terrain there) is skipped. An exact test: comparing the scene depth with the terrain copy within a tolerance (2 cm plus 0.05 % of the distance) took floors and rocks lying almost level with the ground for terrain and dropped their blood, and a height-map test failed (the terrain LOD departs from the height map by up to the pixel error). A second copy after the static objects, before the foliage, skips every pixel nearer than it (grass, trees, debris sway or move; the decal would slide over them). Any mesh drawn with the static objects but animated (rotors, doors) is still decorated.
 - Debug command `bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]` puts a mark (n spread over 60 x 60 units) for controlled repros.
+- Cost, **Observed** (Hub battle with about 100 surface decals in view, 2560x1440, Vulkan, wall-clock per frame): +0.35 ms (6.88 to 7.24 ms), two extra depth copies and pass splits plus the pass, made only while a kept mark is within `Decal Range` (`SurfacesNear`). Low impact.
+- **Observed** (owner, in play): works inside buildings and on their floors.
+- Depth convention: each scene texel's view depth comes from `depthViewZ` (`DepthConvention.Glsl`): Vulkan's scene depth is reversed, `z = n f / (n + d (f - n))`. **Unknown** for this pass on real data: the earlier **Verified** probe (flat sandbox floor, stored depth 0.9377 at three camera distances) checked the former 0.5..1 storage and has not been rerun. The camera's near plane is a quarter of its distance, so a wrong mapping rebuilt positions far off at play distance and showed blood only in close-ups. The texel's ray is rebuilt from the jittered projection (the upscaler's jitter moved out of the texel centre).
 
 ## On weapons and gear (Meitou)
 
+**Verified** (install `data/materials/deferred`: `skin.program`, `skin.material`, `objects.program`, `objects.hlsl`, `construction.hlsl`; grep for `blood`): the original bloodies the body only. `BLOOD` is defined for `character.material` (bodies), `creature.material` and the terrain's `Terrain_Blood_FP`; worn items (`skin.hlsl`, no `BLOOD` define in `skin.program`) and held items (`objects.hlsl`, no blood code) draw clean, and nothing in the simulation records blood on a weapon. So this is a Meitou addition: the optional `gearblood` switch ("Blood on weapons and gear", Meitou, **off** in both looks like `objmetal`; `Optional`, `GearBlood.Enabled`; debug command `bloody <hits> [RRGGBB] [--id]`).
+- Worn items (`CharacterShaders.GearBloody` material flag, `AssetPart` skinned): the body's splatter (same mapping and scales, the wearer's race colour) by the blood of the body part the vertex is skinned to. `MarkWorn` writes the part of the heaviest bone into bits 16-19 of the vertex's colour Y as `MarkBody` does; the instance carries the amounts as for the body. Same texture and mapping as the skin, so a wound reads as one pattern across skin and cloth. The look depends on the item (hard = its metal share, or gloss over 0.3-0.6): on plate, lacquer and hard leather a wet film as on a blade (below); cloth soaks it in, a soft-edged stain that dyes the weave with the blood's hue (x 0.6 to 0.3 with thickness, the cloth's pattern kept), gloss at least 0.4. Metal share goes to 0 where it lies. **Observed** (t_flats_shore, `hurt`): laid as an opaque film on cloth it read as paint.
 - Weapons: a melee hit with a weapon (not fists, not bolts) that draws blood (the `Splash` rule: bleeding race, not in water) carries the attacker (`BloodMark.Attacker`); `BloodDecals` hands it to `CharacterRenderer.WeaponHit`. Per character (by draw key, in `_weaponBlood`) the renderer keeps amount, wetness, colour (mixed with the old by weight), which weapon (back or hip). A hit adds 0.15 + splash size (0.05-0.5); wetness drops to 0 over 150 game s (colour darkens/browns, gloss 0.94 to 0.25); then the amount flakes off at (1 - wet) / 1500 per s; water over the hand (1.1 x depth above the feet over 8) washes it in 8 s; rain (`WeatherSurfaces.Wetness`) in 300 s of full rain. Stepped only while the character is drawn, from the elapsed game time.
+- The blade: the weapon's long axis from the mesh's box, towards the end farther from the mesh origin (the grip); coverage starts at 30-50 % of the length and grows to the tip; as on the body it is the splatter's own alpha less (1 - amount), times a finer copy of the map, so the blade shows spatters and runs at any amount, never a full coat (**Observed**: 0.15..0.6 of the alpha painted the blade red after four hits); the splatter map projected skewed over the mesh, 5 tiles along it. The grip is not told apart from the blade by material (none does), only by position. The weapon's instance matrix rows 0 and 1 carry colour (24 bits) and amount + wetness (2 bytes) in w (instance flag bit 30); only weapon parts (Slot Weapon, `bare sword` or `mesh` without a sheath, not crossbows) take it. The film: opaque a little way in from its edge (no thin tint over the steel), the blood colour x 0.45 at the edge to 0.16 where thick while wet (0.6 to 0.4 dry), and while wet a rounded rim (0.6 mm high, slope limited) that turns the normal so it catches the light. **Observed**: tinted by the splatter map and blended thin it read as rust; at the race colour's full brightness it turned orange in the sun; an unlimited rim slope outlined every spot. The film is laid after the metal estimate, on top of the metal: the lighting has one albedo (reflection colour where metal, diffuse where not), so the albedo is set to give the film's diffuse light at the metalness left bare (`metal x (1 - cover)`), the bare remainder reflecting in the blood's colour; mixing steel and blood in the albedo made a pale red metal, pink in the light (user report). The same for the film on worn plate.
+- Saved: weapon blood goes to `meitou-weapon-blood.json` at the root of the save folder ([save.md](../formats/save.md#weapon-blood)), not into the original's files; worn blood follows the saved wounds. A save without the file (or a damaged or newer one) loads clean weapons. The entries are keyed by the character's save handle, put back by `BloodDecals.ReadWeaponBlood` on the characters in the world and, for those not in it yet (their zone unloaded), as they appear; the ageing clock restarts at the load (the time between sessions does not count). With the switch off a save carries the loaded file on unchanged. **Observed** (hidden run, t_flats_shore, `bloody` then `quicksave <name>`, load): the bloodied blade of one character is back after the load, clean when the file is deleted. The colour on a weapon is the blood colour of the race that was hit (`BloodMark.Colour`, the bleeding character's), on a worn item the wearer's. **Observed** (hidden run, t_flats_shore): blade and trousers red with the switch on, clean off; a blue-blooded wearer's trousers stain blue; after about 400 game s the blade is speckled dark brown and thinner. Not checked: a robot's oil colour (the colour is the race's `blood colour`, passed through unchanged), the washing.
+- The colour on a weapon is the blood colour of the race that was hit (`BloodMark.Colour`, the bleeding character's), on a worn item the wearer's. **Observed** (hidden run, t_flats_shore): blade and trousers red with the switch on, clean off; a blue-blooded wearer's trousers stain blue; after about 400 game s the blade is speckled dark brown and thinner. Not checked: a robot's oil colour (the colour is the race's `blood colour`, passed through unchanged), the washing.
 
 ## Bloody footprints (Meitou)
 

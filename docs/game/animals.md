@@ -6,8 +6,15 @@ and fields retained. Animal records substitute for CHARACTER in squad animals/an
 
 ## Stats, body and techniques
 
+Race controls anatomy/blood/hunger/speed/footprint; forelegs are ARM parts. Age/scale/HP-mult and
+animal-strength use animal factory/race factors, not unmodified human stats/body. Creature
+WEAPON category/natural technique flags differ from human fists; no block for surveyed weapons.
+Weapon-level references manufacturer. Attack-type can disagree with weapon category and was
+not found as an exe string (**Observed** editor-only inference, not all-mod guarantee).
+Bonedog/Garru/Bull/Leviathan/spider/crab and other creatures have distinct clips/materials/limits.
+
 Animal faction/hostility/run-away ratio applies ordinary relations; smell/egg behaviours were not found
-(below). Race carriable gate governs lifting (Leviathan excluded in
+([below](#breeding-and-eggs)). Race carriable gate governs lifting (Leviathan excluded in
 survey), not an invented mass threshold. The Skimmers faction (`56098-rebirth.mod`, not real) lists no relations and default 0, so it is
 neutral to every town; its solo hunters (package `animal patrol aggressive`) attack through ATTACK_ENEMIES_AND_NEUTRALS, and
 guards answer only through their protect goals ([combat goals](ai-tasks.md#combat-goals); **Verified** by probe of the merged base data). Death items ([below](#death-items)), backpack and natural weapon are record inputs.
@@ -41,8 +48,14 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
   type` (13), `_robot spider type` (12), `_skimmer` (13). None can block. Lengths 18 (duck, small spider) to 120
   (elephant). Swamp Turtle and "Pack Beast Dead" name no weapon (**Verified**, dump).
 - `weapon level` is a WEAPON_MANUFACTURER: "Ancient" on all but the Skimmer ("Unknown") (**Verified**).
+- `attack type` (an int in the creature category range) does **not** always match the weapon's category: Wild
+  Bull 11 with a category-20 weapon, Cage Beast 14 and Landbat 19 with the dog weapon (10). The string "attack
+  type" does not occur in `kenshi_x64.exe` (**Observed**: absent from the binary's string table), so the game does
+  not read it; it is an editor-only field.
 
 ### 3. Body
+
+`CharacterAnimal` (**Observed**, vtable `1416f2208`):
 
 | Character slot | Human | Animal | Used by |
 | --- | --- | --- | --- |
@@ -84,6 +97,14 @@ from the start.
 
 - `death items` (ANIMAL_CHARACTER and CHARACTER) lists ITEMs, value 0 the quantity, the others 0 in the install (**Verified**,
   merged data: 43 animals, e.g. Bonedog 1 Animal Skin / 4 Animal Teeth / 3 Raw Meat; Pet Dog, Settler's Pup, Pack Beast Dead none).
+- Added when a new character's inventory is set up, after the `inventory` list (`Character::vfunc_88` `FUN_140622e80`, called last
+  by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
+  set (**Observed**, decompile). An emptied inventory loads empty (**Observed**, original: a player's Bonedog saved with an empty INVENTORY_STATE was
+  loaded and saved again with nothing; Meitou `SavedCharacters`, an empty state is the whole kit). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is is
+  **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the character is made from (**Inferred**).
+  The player's own animals have them too (**Observed**: a new game's start squad, Bonedog, Pack Beast and Iron Spider, saved by the original holds them,
+  flagged; out of sight in the window, below).
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
@@ -93,12 +114,24 @@ from the start.
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).
+- No inventory-window filter on the flag was found (**Observed**, absence in the decompile). The player's own animal's inventory window
+  shows no main grid at all, so they are out of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**,
+  original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
+  window keeps the grid).
+- Death items weigh nothing for a living owner (**Observed**, original: a Garru pup with a 6 kg backpack and 14 flagged 1 kg meat/skin items
+  shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. A dead owner's are **Unknown**.
+  Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
 Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to every new character, stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
 
 ## Ageing
 
+`CharacterAnimal` keeps `lifespan` at `+0x6f8`, `scale min` / `scale max` at `+0x6f0` / `+0x6f4`, `smell blood` / `smell eggs` at `+0x6e8` /
+`+0x6ec`, `HP mult` at `+0x6dc` (all read by `FUN_14062f000`, slot 0x378), the age at `+0x700` and the age of the last size refresh at `+0x6fc`
+(the constructor `FUN_1405c8150` sets both to its age argument) (**Observed**).
+- Getters (**Observed**): slot 0x398 the age; 0x388 sets it (only the save loader `FUN_140626f50` calls it on an animal); 0x390 the size
+  lerp(age, min, max); 0x3a8 `1 - (1 - scale min) x age` (consumers not traced); 0x430 / 0x438 the two smells (callers not traced).
 - Growth (slot 0xe8, `FUN_1405cdf00`, run by the character update, **Observed**): while alive (`+0x5bc` clear) and age < 1.1, age +=
   `dt / 2618.18 / lifespan`, dt the update's elapsed time (`+0xcc`, the same value the base update passes on) and 2618.18 s the day length
   (`FUN_14066cd50`). So `lifespan` is the game days from age 0 to 1. When the age has moved more than 0.05 past `+0x6fc`, `+0x6fc` takes it and,
@@ -127,6 +160,21 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
   ([`FUN_1409540d0`](factions-squads-towns.md#loose-items-in-buildings), for the animal's faction), at most twice as many tries, a pick that does not fit is destroyed. No chance, weight or
   `is trader` test. So the pack animals of any squad with `vendors` carry goods: all a Traders Guild `Caravan` sells ([who trades](economy.md#who-trades)). Meitou: `PackLoad`, not for a
   homeless trader squad, whose squad stock stands in for its bags.
+- The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
+  shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
+  and `athletics mult` are not separately verified, **Unknown**). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.
+- An animal with no backpack gets the naked bonus as a person with no armour and no backpack does (**Observed** for dexterity: at age 0.5 an Iron Spider with
+  Dexterity 40 shows 22 (+2) and a Bonedog with 23.3 shows 12 (+1), 1.1 times the aged value, while a Pack Beast wearing its backpack shows the plain value; the
+  dodge and stealth factors are not separately verified, **Unknown**). Meitou uses the shared refresh's 1.1 dodge and 1.2 stealth factors
+  (`Fighter.Naked`).
+- The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
+  or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
+  **Unknown**. Nothing given or bought goes in either: food dropped on the player's bonedog with no bag is "No room for that item." and stays with the giver,
+  and stock right-clicked while a trade shows the dog's window is refused the same way and stays in stock, nothing paid (**Observed**, original; whether a
+  worn bag then takes either is **Unknown**). Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it (but for
+  food it fetches to eat: [Eating](character-stats.md#eating)), and gives, trade buys and a held item's return past its old cell put grid items into the
+  worn bag only (`Inventory.Add` with the main grid shut; the return into the bag is **Observed** in the original,
+  [holding an item](ui-screens.md#6-inventory-trade-dialogue-build)); what is in it can still be taken out.
 - The worn bag is drawn on the animal: Garru Backpack's `pack_beast_luggage.mesh` and rebirth.mod's Bull Backpack `bull_bags.mesh` are skinned to skeletons
   whose bone handles and names match `pack_beast.skeleton` and `bull.skeleton` (**Verified**, 44 and 37 bones compared), so they share the body's skeleton
   as a person's clothing does; the material is the CONTAINER's `material` (gar backpack). Meitou: `CharacterAppearance.BuildAnimal` with the bag in
@@ -137,6 +185,9 @@ Meitou: `ItemFactory.AddAnimalBackpacks`.
 
 ## AI goals
 
+The character's permanent goals (`FUN_140621b70`, called on creation and on every faction change `FUN_1405cbac0`, **Observed**):
+IDLE (14) at 0.1, SELF_PRESERVATION (32, target itself) at 1.0, the FACTION's `AI Goals` (unless a platoon field, `+0x658 -> +0x78 -> +0xf8 + 0x210`,
+is set; the player faction's lists "Protect allies"), then:
 - not the player's faction (FACTION `+0x250` clear): the RACE's `AI Goals`;
 - the player's faction: AQUIRE_FOOD_AT_HOMEBASE (243) at 0.5 unless present; an animal also gets its RACE's `AI Goals`, EAT_FOOD_ON_GROUND (259)
   at 0.5, and loses EAT_A_RANDOM_DEAD_BODY (230).
@@ -175,6 +226,7 @@ Rows: price = (val0 if 1 or more, else 14000) x (age + 0.1), truncated. Panel 1 
 (`FUN_140884ee0`; both read the age), "Gender:" Female / Male (appearance `sex female`, `FUN_140295a50`); panel 2 the name and "Age:" with
 "<age word> (<age x 100>)".
 
+Confirm (`FUN_1406aac20`, **Observed**):
 - more ticked rows than free places (CONSTANTS `max faction size` minus the player's characters): message box "Character Limit Reached",
   "You cannot hire any more characters" / "You can only hire {1} more character(s)"; nothing is bought.
 - each bought animal: its AI orders cleared, toughness, athletics, melee defence, melee attack, martial arts, dodge, stealth, mass combat and
@@ -189,6 +241,12 @@ Rows: price = (val0 if 1 or more, else 14000) x (age + 0.1), truncated. Panel 1 
 Meitou: `DialogueSystem` `CharacterTradeKind.AnimalBuying`; the town test is `Squad.Town`; the confirm publishes a `DialogueRequestKind.AnimalEditor`
 request listing the bought animals and the host opens the editor (`EditKind.Recruit`, the in-play kind) on them; the names are saved by the
 name-only `EditCharacter` ([characters.md](../characters.md#character-editor)).
+
+## Breeding and eggs
+
+No breeding was found: "egg", "eggs", "pregnant", "mother" and "baby" are not strings of the exe (whole-string search), and the only `female chance` readers are the character
+factories, which roll the look's gender (`FUN_140581770`, `FUN_1402e2b50`; **Observed**). `smell eggs` is stored and has a getter whose callers
+were not traced. So the original has no egg laying, and Meitou builds none.
 
 ## Not found
 

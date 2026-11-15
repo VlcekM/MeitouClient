@@ -71,6 +71,7 @@ items); the launcher never downloads or hosts mods.
   downloads and applies a newer version and restarts into it (Settings toggle, `AutoUpdateLauncher`, default on); when off or failed, the title bar and Settings offer "Update launcher to
   <v>" / "Update to <v>" to retry. Launchers up to 1.0.4 only offer the buttons. Run from anywhere else (a build, a copied folder):
   the same buttons open the newest `launcher-v*` release page.
+- **Unknown**: the update path end to end (1.0.1 → 1.0.2 is the first real one).
 
 ## Unsigned macOS packages
 
@@ -84,6 +85,14 @@ through a browser may be blocked outright.
 - Publish SHA-256 checksums beside the release; the source is public, so the warning is at least understandable.
 - Test the launcher's self-update path while unsigned; if macOS blocks it, a manual update is the fallback.
 - If the project ever gets a Developer ID, notarize the launcher and game binaries; no code change should be needed.
+
+## Unsigned Windows binaries
+
+No Windows exe or DLL we ship has an Authenticode signature (ours and NuGet ones like `DotRecast.*`, `BepuPhysics`).
+**Observed** (issue #127): Smart App Control refused `DotRecast.Recast.dll` (`FileLoadException`, `0x800711C7`) on one Windows 11
+machine while other unsigned files loaded; its verdict is per-file cloud reputation, so any of them can be the one refused. The game
+then shows a message box (`GameConsole.ExplainBlocked`) saying to turn Smart App Control off, and closes. Code signing every Windows
+binary in `package-release.ps1` is the real fix (not set up).
 
 ## Game zips per runtime
 
@@ -155,6 +164,7 @@ folder containing `data/gamedata.base`. DepotDownloader is not bundled or automa
 - In a Debug launcher run, Play uses `src/Meitou.Game/bin/Debug/net11.0/MeitouClient.exe` when available, so source changes are tested instead of an older downloaded release; Release builds continue using the selected installed version. Debug runs redirect the child's stdout/stderr into the launcher's console and debugger output.
 - Settings → **Launch as Kenshi on Steam** (Windows, `LaunchAsSteamKenshi`, on by default; also asked in the first-start dialog) gates this. Off, Play sets no app ID, removes inherited `SteamAppId`/`SteamGameId` and a leftover `steam_appid.txt` holding `233860`, so the game skips Steamworks (no overlay or play time).
 - On, on Windows Kenshi installs that include `steam_api64.dll`, Play writes `steam_appid.txt` (`233860`) in the working directory and beside the Meitou executable and sets `SteamAppId`/`SteamGameId` for the game, then removes the files when Meitou exits (or on the next Play, if the launcher closed first). If either place already holds another ID, it writes nothing and sets no variables. The game (not for `--screenshot` or a start listing) loads the install's Steamworks DLL and calls `SteamAPI_InitFlat` when exported, else `SteamAPI_Init`, before creating its graphics device, and `SteamAPI_Shutdown` on exit; Meitou ships no Steamworks binaries. Other platforms and installs without the DLL skip it.
+- **Unknown** (from the [Steamworks API](https://partner.steamgames.com/doc/sdk/api) and [overlay](https://partner.steamgames.com/doc/features/overlay) docs, not yet checked against a Steam run): a direct launch with `steam_appid.txt` counts as Kenshi play time, needs a Kenshi licence and a running Steam client, and gets the overlay on Vulkan, whose FPS counter is under Steam Settings → In Game.
 
 The version folders and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
 is saved) an overlay asks for the install folder, the Kenshi folder and the renderer, prefilled with the current and the
@@ -199,6 +209,14 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--benchmark-baseline`, `--meitou` or `--faithful`), so a preset chosen in
   the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
   saves Custom, so the game keeps that change. No saved preset shows High without saved graphics, else Custom.
+- Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
+  headless Vulkan device (the GPU it would pick), reads the memory and the cores, and writes `{ preset, summary, gpu, integrated,
+  videoMemoryMb, memoryMb, cores, problem }`; the launcher saves `preset` as above and shows `summary`. Without Vulkan (a Metal-only Mac)
+  the memory and cores decide alone. The rule (`HardwareProbe.Recommend`) is a judgement, **Unknown** whether it suits: integrated
+  GPU (Apple's: under 16 GB memory), under 3 GB video memory, 8 GB memory or 4 threads is Low; a GeForce by its model against the
+  classes the tiers are meant for (`GeForceTier`: RTX 3060 Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090
+  Extreme, other series by their place among these, a laptop GPU a class lower); any other card by video memory (under 6 GB Medium,
+  under 12 GB High, under 24 GB Ultra, else Extreme); under 12 GB memory or 6 threads Medium at most. Observed: Intel Iris Xe (integrated) is Low, in 2.5 s.
 - The launcher detects once by itself (`PresetDetected` in `launcher.json`): when the version Play starts can detect and the game has no
   graphics settings or preset saved yet, so the first start (or first install) of a fresh setup gets a preset; saved settings are kept.
   A failed detection is tried again at the next start.
@@ -262,6 +280,14 @@ interpolated string, which no translation could match.
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
+- An enabled mod that blanks mods above it reads "Empties file paths in N records of A, B, C and K more: it likely belongs above them"
+  (`ModBlanking`, `ModRecordScan`, Meitou.Core; [why](animation.md#animation-files)). It counts a record when it is stated whole (flag
+  bit 0 clear), empties more of the filename values set so far than it gives itself, and the mod its string id names is enabled above it;
+  REMOVED resets the record. Not counted: changes (bit 0 set), the base game's records, stubs for mods that are not enabled, records of a
+  renamed mod (the id keeps the old name), and patches that overwrite with full copies instead of blanks. It also names a mod that
+  restates another's record with most of its paths cleared, which may be meant (**Observed**: two armour records of one overhaul among
+  363 workshop files). The data files are scanned once per list load, off the UI thread (363 files, 131 MB: 0.14 s from a warm file
+  cache; a cold start with a long list is not measured), and the list is walked again on every change.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
@@ -281,6 +307,11 @@ or update the subscribed items and waits until they are installed; subscribing a
   (`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/Frameworks/Steam Helper.app/Contents/MacOS/`, hardcoded). Without it
   nothing is done. Meitou ships no Steam binary.
 - Steam is not started: when its process (`steam_osx`) is absent, the status asks the user to start it and sign in first.
+- The sync runs in a **child process**: the launcher's own executable started with `--macos-workshop-sync` (`WorkshopSyncChild`, no window), which
+  prints `meitou-sync:`-prefixed `progress`, `result` or `problem` lines that `WorkshopSyncRunner` reads. Steam counts the account as playing Kenshi
+  until the process that initialised Steamworks exits, not until `SteamAPI_Shutdown`; in the launcher's own process the client then waited on
+  "Kenshi" when quitting (**Observed**: `gameprocess_log.txt` tracked the launcher's PID from the sync until Steam itself quit, while the spike's
+  short-lived processes were untracked at exit).
 - The child sets `SteamAppId`/`SteamGameId` (233860) in the real process environment (`setenv`; .NET's own copy is not seen by native code),
   calls `SteamAPI_InitFlat`, lists `GetSubscribedItems`, calls `DownloadItem` for each item not installed and current, polls `GetItemState`
   (current = Installed without NeedsUpdate, Downloading or DownloadPending) every 0.5 s and prints `installed of total`; then `SteamAPI_Shutdown`
@@ -289,6 +320,16 @@ or update the subscribed items and waits until they are installed; subscribing a
   the child, Steam keeps downloading by itself.
 - Items land in the client's `steamapps/workshop/content/233860/<id>/` (one `.mod` each). `GameInstall.WorkshopDirectory` falls back to that
   folder on macOS when the install is not inside a Steam library, so the launcher and the game find them whether or not Steam is running.
+
+**Verified** (macOS Steam client, the owner's account, 19 subscribed items, 7.3 GB, Kenshi not installed): `SteamAPI_InitFlat` succeeds as app
+233860 with the bundled dylib; `GetSubscribedItems` lists all 19; after `DownloadItem` all read state 5 (Subscribed|Installed, before: 9) with their
+folders; `SubscribeItem` alone downloads an item within a second (11 KB), `UnsubscribeItem` drops the count and Steam deletes the folder within about
+20 s; with Steam closed `SteamAPI_InitFlat` fails ("Could not determine Steam client install directory") and does not start it.
+**Observed**: Steam's `content_log.txt` shows the subscriptions' download starting when the first process that queried them ran as app 233860, and
+`DownloadItem` only raising its priority ("Priority First"); `GetItemDownloadInfo` reported 0 bytes throughout, so progress is the installed count.
+**Unknown**: whether the dylib path survives Steam updates; whether pre-UGC (legacy `ISteamRemoteStorage`) items download this way (Valve's
+[Workshop guide](https://partner.steamgames.com/doc/features/workshop/implementation) says `DownloadItem` covers ISteamUGC items only); how a sync
+behaves offline or without a Kenshi licence beyond Steam's init message.
 
 ## Continue
 
@@ -311,6 +352,11 @@ Debug builds run from a checkout read its own `news/` from disk instead (found a
 to preview posts before they are pushed; the header then says "Debug: local news/". Markdown is parsed by Markdig and drawn
 by `MarkdownView` (headings, paragraphs, emphasis, code, links, lists, quotes, code blocks, rules, images); raw HTML is dropped
 and links open only for http(s).
+
+News videos are hosted on the site, not in git: `tools/scripts/upload-media.sh` copies them into the `meitou-site` container's
+`/usr/share/nginx/html/media` volume on Cloudovna (5 GB disk), served at `https://meitou.kenshi.wiki/media/<name>` with Range
+support; the site is not behind Cloudflare. **Observed** 2026-10-25: GitHub plays no repository `.webm` in the browser (its file page
+offers only the raw file, which raw.githubusercontent.com sends as an attachment), so it cannot host the full video either.
 
 A `.webm` in place of an image is a video (`VideoView`, the post's full width): its first MB is fetched with a Range request (`NewsMediaCache.HeadAsync`, cached as `.head`) for the poster, the whole file (cached like an image) only on the first Play, the button dimmed meanwhile; `WebmFile` reads the
 first video and audio track (Matroska elements, Block lacing), and the first decoded picture is the poster under a play button.

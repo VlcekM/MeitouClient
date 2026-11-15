@@ -14,6 +14,14 @@ not auto-create. Explicit flag-driven scaffold/dual/interior/dust units append a
 
 **Verified** (`FUN_1409b4610`, used by the item mesh, material texture and colour map paths `FUN_140537690`, `FUN_140841a50`, `FUN_140536210`, `FUN_14044a0d0`): FCS file fields are cut to the text after the last `/` or `\`, so lookups are by bare name. **Verified** (OgreMain `ResourceGroup::addToIndex` `FUN_1802869a0`, `openResource` `0x18027f160`): a group keeps an exact-case index (a later registration overwrites) and, for case-insensitive archives, a lower-case one; `openResource` tries the exact-case name first. So `Boots.dds` (Expanded Vanilla Armor's Police boots) is not hidden by the `boots.dds` of vanilla and other mods, whichever mod registers later; Meitou's `OgreScriptResources.Find` follows this. **Observed** (the original, same mod list, compared by the user): the female "Mercenary Plated Chausses" draw Expanded Vanilla Armor's identically named, later-registered `Police/PlatePantsF.mesh` with the item's texture, as these rules predict and as Meitou does; the Police boots draw right.
 
+DOUBLESIDED disables hardware/software culling. Flags select shader defines and caster variant;
+not every material supports every flag. Parameters: tiling default(1,1,1) if either tile axis0;
+threshold=alpha-threshold/255, default128; gloss=specular-mult; scaffold scale; emissive custom0;
+interior viewport; dust BIOMES ground colour/noise only in supporting shader branches.
+Caller template/flags and dye colour-mask texture rules must be preserved per item/body/hair/
+building/feature. Script defaults remain when a field is absent; a guessed shader input is not
+proof the game supplies it. Unknown paths and custom-parameter interpretation remain scoped.
+
 ### Hair and beards
 
 **Verified**, native 1.0.68 `FUN_140532600`: the attachment's float `mipmap bias` is passed to
@@ -35,6 +43,16 @@ The Metal colour pass also needs the [discard/depth workaround](../metal-backend
    | DUAL_TEXTURE (0x2) | `diffuseMap2`, `normalMap2`, `metalnessMap2` | `texture map 2`, `normal map 2`, `metalness map 2` |
    | CLIP_INTERIOR (0x200) | `interiorMask` | content type compositor, texture `rt_interiormask`, index 0 |
    | DUST (0x40) | `dust` | `Turbulent.dds` |
+
+| Program | Parameter | Value |
+   | --- | --- | --- |
+   | vertex | `tiling` | (`tile X`, `tile Y`, 0); (1, 1, 1) if either is 0 |
+   | fragment | `scaffoldTiling` | `scaffolding tex scale` (float) |
+   | fragment | `threshold` | `alpha threshold` / 255 (int field, default 128 when absent) |
+   | fragment | `glossMult` | `specular mult` |
+   | fragment, EMISSIVE | `brightness` | auto constant, type 87 = `ACT_CUSTOM` index 0 (per-renderable custom parameter; **Observed (source)** for the enum value) |
+   | fragment, CLIP_INTERIOR | `viewport` | auto constant, type 110 = `ACT_VIEWPORT_SIZE` (**Observed (source)**) |
+   | fragment, DUST | `dustColour` | `ground colour` (ARGB int) of the `BIOMES` record at the object's position (**Observed**: biome lookup through the terrain object). The shader reads the dust noise from the `dust` unit (`Turbulent.dds`) and uses the colour as the dust's albedo ([weather.md](weather.md)); only `objects.hlsl` and `triplanar.hlsl` have a DUST branch (**Verified** by searching `data/materials`), so a material built without the DUST flag never gets dust: by the caller table below that is every map feature (**Unknown** whether the Triplanar template turns DUST on some other way; nothing in the scripts does), item and character |
 
 ### Flag word
 

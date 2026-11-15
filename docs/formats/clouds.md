@@ -30,6 +30,10 @@ inputs, not arbitrary sky tint or physical cloud volume.
 
 ### Options (Verified (decompiled): `CloudLayer::CloudLayer` defaults, FUN_14066e380 values)
 
+Kenshi's `CloudLayer::Options` is 0x30 bytes with the fields below; `DensityMultiplier`, `DensityOffset` and `Darkness` look
+like Kenshi additions (**Observed**: from memory of the open-source SkyX 0.4, not checked against its source here).
+The game creates the layer with:
+
 | Option (offset) | Value | Shader constant | Used by Kenshi's shader |
 |---|---|---|---|
 | Height (0x00) | 100 | `uHeight` | yes |
@@ -55,6 +59,15 @@ inputs, not arbitrary sky tint or physical cloud volume.
 | 0.5 | −0.10 | 0.54 | 99.6 % | 49 % | 0.40 | 0 |
 | 0.6 | 0.04 | 0.83 | 100 % | 91 % | 0.54 | 0.50 |
 | 1 | 0.60 | 1.00 | 100 % | 100 % | 1 | 0.81 |
+
+## Unknowns
+
+- The dome mesh's texcoord layout (taken as the unit direction from the shader's use) and the dome's lower half (below the
+  horizon the shader gives `alpha = o + 0.5`, hidden by terrain in practice).
+- The exact render queue (6 from SkyX's struct order), which decides that the clouds cover the planets (queue 6, priorities 1 and 2;
+  [sky.md](sky.md), "Planets"): the viewer draws the planets first.
+- Whether the game's mip-less sampling looks noticeably different from the viewer's mipmapped one near the horizon (needs a game
+  screenshot in a cloudy weather at a low pitch).
 
 ## Expression reference
 

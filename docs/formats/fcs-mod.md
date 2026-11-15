@@ -7,6 +7,14 @@ saves opt into lossless bytes ([save](save.md)). Layouts retained below, [load o
 
 ## Merging
 
+**Verified original loader** table keyed exact case-sensitive StringId, files in load order.
+Bit0 only controls missing-base warning; both new/modifying records merge or create. Retain
+first definition's type even if later record differs. New takes name; existing renames when bit1,
+independent of bit0. Each key merges within its own bool/float/int/vec3/vec4/string/filename table;
+same spelling in other kinds remains distinct. Missing fields remain; an empty string/filename overwrites like any value
+(**Observed** `FUN_1406c9ce0`: no empty test; its per-key filter is filled only for types 11, 13, 14). REMOVED=true in merged
+bool table removes every index; later same ID creates fresh record, no old fields.
+
 References merge by(list,target), append new at end, replace existing in place. Remove only when
 ALL three values=int.MaxValue (editor removes on v2 alone); unresolved targets remain. Instances
 merge by ID and overwrite target/position/rotation; append states WITHOUT dedup. Empty target
@@ -19,6 +27,12 @@ Source native load1406c0b50; reference set/remove1400b61b0/1406cb110, instances1
 remove1406bf680, rename1406bfb70. These are facts, not translated binary logic.
 
 ## Game loader
+
+Native accepts8..17;17 skips declared header,16 reads version/skips4strings,8..15 headerless.
+Keep maximum nextId. byteSize ignored; flags from15,vec3/vec4 from9. Only flag0/1 affect merge.
+Silently truncate at NUL and byte limits: keys64, names/IDs/ref/instance identities512,
+string/filename4096. Prior types have integer IDs/extra tags and older refs; partial support is
+not a complete old-format specification. Error mid-record behaviour unverified.
 
 Core files→core translation→ordered mods→first mod translation→postpasses→world leveldata.
 GLOBAL CONSTANTS lookup by name AND type27. Postpass resolves refs. **Verified** (`FUN_1406c34f0`, `GameDatabase.AddWallMasters`):
@@ -166,9 +180,13 @@ the second is one int field per type (names from the editor's built-in enums, **
 | ITEM | `item function` (`ItemFunction`) | 0 none, 1 first aid, 2 med rigging (splints), 3 food, 4 container, 5 weapon, 6 clothing, 7 unused, 8 narcotic, 9 tool, 10 anything, 11 blueprint, 12 robot repair, 13 book, 14 money, 15 restricted food (raw meat), 16 ammo, 17 severed limb |
 | LIMB_REPLACEMENT | `slot` (`LimbSlot`) | 50 left arm, 51 right arm, 52 left leg, 53 right leg |
 
+CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugGiveItem.QualityTypes`): armour, crossbows and limbs are graded 5 / 20 /
+40 / 60 / 80 / 95 (Prototype to Masterwork, `ArmourTooltip.GradeNames`); a weapon is graded by a MATERIAL_SPECS_WEAPON model that a WEAPON_MANUFACTURER lists in `weapon models` (value 0 = level; **Observed** on the vanilla install with Rebirth: the player's `PLAYER_WEAPONS` maker lists levels 5 to 80, and the Meitou grade, level 100, is only in a Rebirth maker's list).
+
 ## Open questions
 
 - The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
+- Save games: the same record format, file type 15, with GAMESTATE_* / *_STATE types; see [save.md](save.md).
 - Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
   bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
   the raw bytes.

@@ -80,6 +80,13 @@ Traced 2026-10-17 from the audio manager (`AudioSystemGlobal`: biome music `FUN_
   action scope numbering, [wwise-bnk.md](formats/wwise-bnk.md#action-3)); the theme ends with the first ambience `Enter_` event (Stop/2, global scope) or the bank unload above.
 - **What `_Play` does** (Observed, banks): plays the biome's three layers directly, no `Biomes` switch involved; what they are, how long
   they last and how the day/night switch behaves: [wwise-bnk.md Music](formats/wwise-bnk.md#music).
+- **Pause and speed.** `Pause_Game` / `Resume_Game` (`FUN_140787d40`, on object 100, when paused or speed 0 flips) duck the SFX bus
+  `59927CD0` to −96 dB and the ambience bus `95836E4C` by −9 dB (1 s), and reset both (3 s); the music bus `BA70EAC8` (child of the master
+  bus, −4 dB) is not touched, so music plays on through pause. All four actions use fade curve 4 (linear; `SFX_General_Bank`, dumped with
+  `meitou-tools audio`). Volume fades run straight in linear gain, not in dB (Wwise's transitions on dB properties; **Observed** from the
+  Wwise runtime's documented behaviour, not checked in the exe): half way through the 3 s reset the SFX bus is at −6 dB, where a dB ramp
+  would still be at −48 dB and leave hits near-silent for seconds after every unpause. Game speed sets the state `Game_Speed` (`C2E2475B`) to `Normal` / `x2` /
+  `x4` at speeds 1 / 2 / 5 (`FUN_140787e40`, `FUN_140787fb0`); only `SFX_Bank` and `SFX_General_Bank` use it, so speed does not affect music.
 - **Not in the game:** combat or danger music, stingers, intensity parameters, indoor rules for music, focus-loss muting
   (`MuteBackgroundMusic` is never called): no such strings or calls in the exe. **Radio:** `Radio_On` (`D272B88E`: stops the biome music
   root `00DBE1E6` over 10 s, plays a click and the radio playlist `34220ED8`), `Radio_Off` (`D0987A94`) and `FCC71927` (name Unknown, stops
@@ -104,6 +111,10 @@ it, so the critters fade out as the camera rises (0 at the ground, 100 at 2000 u
 
 Traced 2026-10-17 from the last part of the camera update (`FUN_1406b0140`, with the ambience); **Verified** unless marked.
 
+- **What is tested.** Each frame a physics ray from (pivot x, 40000, pivot z) straight down, the closest hit among collision groups 2 and 13 (mask `0x2004`). Group 13 is the building's `interior mask`
+  collision, the indoor trigger hull ([collision.md](formats/collision.md#collision-groups-observed-fun_14055f6e0-and-the-loaders)); group 2 is paired with 9 or 14 in the game's ground-height rays
+  (masks `0x204`, `0x4004`), so it is the terrain (**Observed**). So *indoors* means the pivot's X/Z lies inside an interior-mask hull whatever the height, and the highest hull wins. The test does not
+  look at the selected character, a roof or the interior view; the pivot is the camera's target, as for the biome. The update is skipped when the ray helper reports failure (no physics scene; **Observed**).
 - **When.** The hit object's handle is compared with last frame's (null: nothing hit, or no building). On a change: `Leave_Building` if the previous one was a building (even one without an ambience), then,
   if the new building's `interior ambience` (enum `InteriorSound`: 1 Metal, 2 Stone, 3 Wicker, 4 Wood; 0 None starts nothing) is not None: switch `Indoors` = its name, `Building_Integrity` = its
   `interior integrity`, `Enter_Building`, or `Enter_Building_Big` when `cavernous`; all on object 100. The events also flip the reverbs ([below](#reverb-and-aux-buses)).
@@ -123,10 +134,24 @@ power, `FUN_140258260` destroys), the building set-up `FUN_14055c240`, its loade
   `chance` 0..1, `cutoff` (50; `Sun_Beams` 300), `intensity` 0..1, `efficiency multiplier` 0..1, `needs power`. Users: BUILDING `sounds` (about 50 buildings; each reference's three values are an offset),
   EFFECT `sound` (SkyBeam, venge beam, beam1: `Sun_Beams`), RACE `ambient sound` (the two robot spiders: `Iron_Spider`, on the character's own object), FOLIAGE_MESH and MAP_FEATURES `sounds` (none in the
   base game; the exe walks all their entries, each rolled by its `chance`).
+- **Range.** Every frame the squared distance from the camera **eye** (the node the listener uses) to the emitter is compared with `cutoff² × 100`, i.e. a range of cutoff × 10 units (500; 3000 for `Sun_Beams`):
+  strictly beyond it stops the emitter, otherwise it starts if it is not playing and is allowed (below). Buildings run this from their per-frame update (**Observed**). There is **no cap** on the number playing: the range and Wwise's 256 voices are the only limits.
+- **Start and stop.** The first start registers a game object of the emitter's own (counter from `0xFFFFF`; a building's emitter uses the building's object); then `SetSwitch("Emitters", name)`, `SetPosition`
+  (zero orientation), `SetRTPCValue("Intensity")` only when `intensity × 100` is not 0, and `Start_Emitter` (Play/3, 500 ms fade); a stop is `Stop_Emitter` (Stop/3, 1 s). Destroying an emitter posts the stop and then
+  stops everything on its object and unregisters it. With a base intensity of 0 the parameter is never sent for the object, so Wwise reads the **global** `Intensity` (the wind's, set by the weather) until a machine sets
+  its own (**Observed**, from the code paths).
 - **Power.** An emitter starts unpowered. One that has `needs power` waits for `FUN_140258c20(efficiency, powered)`; it also sets `Intensity` = efficiency × `efficiency multiplier` × 100 + `intensity` × 100 when the value changed,
   for an emitter in range. An emitter without `needs power` starts by distance alone. Only two places call it (**Verified**, the callers of `FUN_140258c20`; nothing else starts or stops an emitter but the distance update and the teardown):
   - **Each frame**, `ProductionBuilding::vfunc_28` (the class of mines, wells, refineries, generators, batteries, wind generators, rain collectors and furnaces; skipped while the game is paused, `DAT_1421349c9` = GameWorld `+0x8b9`, [game-loop](game/game-loop.md#speed-and-pause)):
     efficiency = the building's slot 110, powered = `FUN_140299370` (has power) and efficiency above 0.
+  - **Once**, `FarmBuilding::vfunc_72` (finishing construction, and `Zones_BuildBuilding` for a building with nothing left to build): powered, efficiency = slot 108, only if the emitter exists and the building is not yet marked complete.
+    `FarmBuilding`, `CraftingBuilding` (the Medical Workbenches, Robotics and Skeleton Limb benches) and `ResearchBuilding` override `vfunc_28` without the call, as do other classes (the Peeler Machine), so their emitters are never told again.
+    At that moment nobody works them (efficiency 0), so the `Intensity` stays the base (0 is never sent, so the object hears the global wind `Intensity`) and the emitter plays whether or not the bench is used.
+    **Observed**: the order of `read_building_n3` (makes the emitter, only for a complete state) and this call is not traced for a building the player finishes; if the emitter comes second it is never powered.
+- **Efficiency** (the chain **Verified**, its meaning **Observed**): `FarmBuilding::vfunc_110` calls slot 108 for every class except `WindGeneratorBuilding`, which returns its turbine's animation value (`FUN_1404cbd90`, units **Unknown**).
+  Slot 108 = operators ÷ raw `max operators` (1 when that is 0) × slot 109 (health × granted ÷ demand of slot 163, 1 with no demand) × slot 119 (the yield `FarmBuilding::vfunc_92` × the BUILDING's raw `output rate` (`+0x1a8`, not the
+  `+0x1a4` one that includes `production mult`) × the research production multiplier). Nothing caps it (a drill with `output rate` 1.4 gives 140), so Wwise's curve limits it.
+  A generator's demand is 0, so its efficiency is health × `output rate` whatever its fuel or switch. A battery's demand is its rate while its charge is below capacity (efficiency = granted ÷ rate, negative while it drains), else 0.
 - **Has power** (`FUN_140299370`, **Verified** from the decompile): true for a pure generator (output above 0, no capacity) whatever its fuel or `power on` (**a generator with no fuel or switched off still hums**); true for a machine
   drawing nothing (output plus research increase 0: wells, looms, silos, furnaces); else false when `power on` is off; else true if the town's generator output (`Town::vfunc_87`'s `+0x474`) is above 0, or the machine
   `gets battery`, the town is in battery mode (`+0x470`) and its batteries' output (`+0x480`) is above 0; no town: true. It is town-wide, not the machine's own grant (a starved machine is powered, with a low efficiency).
@@ -142,6 +167,22 @@ power, `FUN_140258260` destroys), the building set-up `FUN_14055c240`, its loade
   (an object of its own from the counter, registered at the first start), `needs power` and `efficiency multiplier` forced to 0, base `intensity` kept. Every frame `vfunc_2` copies the handler's position into the emitter (and calls `SetPosition` once registered),
   then runs the range test above, so a wandering beam's sound moves with it. The emitter ends (`Stop_Emitter`, `StopAll`, unregister) with the handler's particle system: after the handler's life is over, its fade-out has run (`FUN_1400f8d10` at 1 or more) and no particle
   of the system is left alive. Base data: EFFECT `SkyBeam` and `venge beam` (type 9, WANDERING_GAS) and `beam1` (type 3, WANDERING) have `Sun_Beams` (AMBIENT_SOUND `Inferno`: cutoff 300, so range 3000; `intensity` 1, so `Intensity` 100 is sent); no other EFFECT has a `sound`.
+- **Races** (`uses_ambient_sound` `140629940`, `FUN_1405cfd90`). A character's emitter is made from the **first** `ambient sound` of its RACE on the character's own Wwise object (shared: the emitter registers and unregisters nothing), for a living character only (the corpse
+  flag `+0x5bc` clear); every call of `uses_ambient_sound` destroys the old emitter and makes a new one. Who calls it is **Unknown** (no caller or vtable entry in the dump). `FUN_1405cfd90` (the character's frame update) copies the character's position into the emitter (no
+  `SetPosition`: the character's object is placed right after) and runs the range test. Base data: the two robot spiders (`Robot Spider Worker`, `Robot Guard Spider`) have `Iron_Spider` (cutoff 50, range 500; `intensity` 0, so the object hears the global `Intensity`).
+  A corpse gets a sound too (**Observed**, `CharacterHuman::vfunc_29` `1405ccd90`): AMBIENT_SOUND `Corpse Flies` (`95425-sfx.mod`, emitter `Corpse_Flies`, cutoff 50, `intensity` 1) and the `Fly-Particle` effect (`55393-Newwworld.mod`), made once the body has lain more than 4 of the game's time units
+  (`FUN_14066cc00`, hours) in an active zone and removed with the effect; **not done in Meitou**.
+- **Meitou** (`WorldEmitters`, `BuildingEmitters`, `WorldObjects.Emitters`; `WorldAudio`). Every emitter gets its own object (ids from 2³²) and the same rules; the roll is a stable hash of the placement (the exe
+  uses `rand()`); the level's buildings with a destroyed or incomplete state get none, a player-built building gets its emitter when its site is complete. The level's emitters are read once for the whole world
+  (a worker task, about 0.2 s) and culled by distance, where the exe makes and tears them down with the zone. They also cover the furniture of each building's interior and exterior layout (`WorldObjects.Emitters`
+  mirrors the placement of `Lay`; **Observed**: the exe's furniture path was not traced, layout objects are ordinary BUILDING records with `sounds`). The base level then has 1,252 emitters: 534 from buildings and
+  718 from layout furniture. 585 play by distance: 333 `Fire` (campfires, torch posts, streetlights), 157 `Oven` (bread ovens, cooking stoves) and 95 `Water_Tank`. 667 need power (265 `Generator`, 96 `Windmill_Large`,
+  94 `Battery_Bank`, 44 `Water_Well`, 36 `Electronics_Bench`, 32 `Research_bench`, 28 `Windmill_Small`, 17 `Auto_Mine`, 14 `Medical_Bench`, 14 `Stone_Processor`, 12 `BioFuel`, 8 `Rum_Still`, 4 `Silo_Grind`, 3 `Furnace`)
+  and are driven as [below](#machine-sounds-meitou). Rendered: `Fire` at `Intensity` 10 is −58, −66, −81 dBFS and silent at 50, 200, 400 and 600 units from the listener
+  (**Observed**); in the game, with the sound eye moved 84 units from two campfires both started and at 904 units both stopped (a temporary log line).
+  **Effects** (`EffectRecord.Sound`, `WorldAudio`): each live effect unit of a group whose EFFECT has a `sound` (the weather's and the placers' groups) gets an emitter `effect/N` at the unit's position, moved to it each frame (`WorldEmitters.Move`) and
+  removed when the unit is done. The sky beams (`beam1` in the weather, `SkyBeam`, `venge beam`) therefore play `Sun_Beams` within 3000 units. **Robot spiders** (`CharacterSounds`, `CharacterSoundProfile.Ambient`): the profile's race `ambient sound` starts when a
+  living character is within its range of the eye (the character's own object, the current position) and stops when it is out of range or down; the call frequency of `uses_ambient_sound` being Unknown, the emitter is simply kept as long as the rule holds. Corpse flies: an emitter per corpse with flies (`CorpseFlies`). Not done: FOLIAGE_MESH and MAP_FEATURES emitters.
 
 #### Machine sounds (Meitou)
 
@@ -156,10 +197,23 @@ each frame (`GameHost.UpdateEmitters`, key = the building's instance id). **Engi
   A battery bank (constant `Intensity` 100) plays while it is full or charging, not while it drains or is empty.
 - **Once-powered classes** (benches, research, farms, others): `Sound` = (0, powered), the exe's completion call: they play from the moment the machine exists, at the base `Intensity` (global when 0). **Engine choice**: the order for
   a building the player finishes is Observed only (above), the sound is given to it as for the level's.
+- **The level's buildings** and layout furniture have no machine (the simulation runs only the player's buildings), so the host decides once when it adds the emitter (`GameHost.LevelPowered`, **engine choice**; the exe runs their
+  classes): needs-power emitters of once-powered classes play as above; generators, wind generators (efficiency their wind share, each frame), battery banks (the town is assumed to produce power) and furnace-like machines needing no operators
+  play; machines that need operators or town power (wells, mines, processors, stills, looms, silos, distillers, the Electrical Workbench) stay silent, since the NPC workers and town grids are not simulated. Level furniture
+  that is a bench or generator follows the same rule through its own BUILDING record.
 - **Power switch.** The exe's `FarmBuilding::vfunc_161` (the machine panel's power button) flips `power on`, then sets the `Generator` switch to `On` / `Off` on the GUI object 110 and posts `UI_Generator`
   (**Verified**). Meitou has `Machine.PowerOn` (saved, default on) but its machine panel (`ProductionWindows`) has no power button and no command sets it, so `UI_Generator` has no trigger.
 
 ### Other world-side events
+
+From the same trace (**Verified**; hashes in [wwise-bnk.md](formats/wwise-bnk.md)). **Doors** register a Wwise object at construction (the door class sets the flag that buildings with `sounds` get) and set `Door_Type` from `door type`
+(DoorMaterial 0 Wood, 1 `Mechanical_Metal`, 2 `Gate`). On the door's object: `Door_Open` when it starts to open (state 0 to 2), `Door_Close` when it starts to close (1 to 3), `Door_Shut` when closing ends (3 to 0) **and**
+when opening ends (2 to 1), and `Break` for doors and walls whose integrity falls to 0 (`DoorStuff::vfunc_62`, `WallBuilding::vfunc_62`; see **Break** below). Turrets post `Turret_Mvt_Start` / `Turret_Mvt_Stop` (`TurretBuilding::vfunc_28`) and the
+gun's shot sounds on the building's object (see **Turrets**). `UI_Generator` (`FarmBuilding::vfunc_161`), the `Building_*` build-mode sounds and `Building_Click` (select sound) belong to the interface.
+**Meitou:** door sounds as above (`Meitou.Game.Audio.DoorSounds`, fed each frame by `GameHost.UpdateDoorSounds` from the snapshot's doors, which carry each door's
+position, record and broken flag). A door object takes the leaf's centre, else its building's origin. A door missing from the snapshot is closed, since the
+snapshot leaves out plainly closed doors. A door seen for the first time is assumed to have been closed (if it is opening) or open (if it is closing); one at rest is taken as it is, so a load is quiet. Doors over 3000 units from the eye are skipped
+(**engine choice**; the exe posts for every door). The `--quit-after` log counts the door sounds.
 
 **Break** (**Verified**, `DoorStuff::vfunc_62` `14029d690`, `WallBuilding::vfunc_62` `14029d560`; the damage entry of the building, called through the vtable). Given a hit's two floats (`p0`, `p1`; `p1` is the heavier term): a door that is not already broken takes
 `clamp(2·p1 + 0.5·p0, 20, 60)` and loses 0.015 × that of its integrity (wall: half the sum, clamped 10 to 60, 0.003 ×); when the integrity is 0 or less it is marked broken (virtual `+0x310`/`+0x340`) and `Break` posts on the building's object. **Neither
@@ -168,6 +222,16 @@ is silent (**Observed**, rendered). **Meitou:** `DoorSounds` posts `Break` when 
 (**engine choice**: it fixes the exe's omission; Fixes settings page, `Door break sound`, off plays as the exe). Neither break posts `Character_Unlock_Success`. Walls: a wall line hit to 0
 (`CombatSystem.ApplyZoneBuildings`) emits `SoundKind.WallBroken`; the host posts `Break` on a pooled object at the wall's position (`CharacterSounds.WallBreak`; the exe uses the
 building's object), with `Break` = `Gate` under the same setting (**engine choice**; off: unset, silent as the exe).
+
+**Turrets** (`TurretBuilding::vfunc_28` `140434b70`, `RotatingEnt::vfunc_2`). **Verified:** each frame of an active turret with a target the largest angle its turning parts still have to turn (`FUN_1404cc0d0`, degrees) is kept; with the counter at 0 and that angle over 0.1 it posts `Turret_Mvt_Start` and sets
+the counter to 8; the counter counts down every frame and posts `Turret_Mvt_Stop` on reaching 0 (so a turret that keeps turning posts a start and a stop every 8 frames; no fade on either). Both post on the building's object (`+0x208`, registered when the gun first asks for it).
+The turning parts are the BUILDING_PART records with `rotation function` 5 (ROTATION_TARGET): in order, each takes the aim point in its own frame and turns by its error (yaw part, `rotation axis` Y: `atan2(x, z)`; pitch part: `atan2(-y, √(x²+z²))`) limited to
+± the turning speed × frame time (efficiency × `aim speed` × (1 + 0.01 × damage), [combat](game/combat.md#turrets)). A shot posts `Attack` on the building's object with the `Weapons` switch `Turret`. **Unknown:** the
+idle behaviour of a manned turret without a target. **Meitou:** the simulation fires turrets and publishes who mans which turret and its aim point (`CharacterSnapshot.Turret`, outside the hash).
+`TurretAudio` keeps a display-only copy of each manned turret's parts within 4000 units, turned toward that aim point by the rule above in game time at efficiency 1 (`TurretSounds`, `TurretRig`),
+and posts the two events on an object of its own at the turret (a start beyond 3000 units from the eye is dropped; **engine choice**). The gun mesh turns with the simulation's angles ([render-objects](render-objects.md#turrets)). A shot
+(`SoundKind.TurretShot`) posts `Attack` with `Weapons` = `Turret` on a pooled object at the muzzle (**engine choice**).
+To hear it: a town under attack whose guards man their turrets, or a player character sent to a turret with an enemy in range.
 
 ### Weather
 
@@ -193,7 +257,14 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   object first) and `stop` (posted when the animation ends). Only the highest-weight animation that has events fires them (`FUN_1405b5c30`); the cursor (`FUN_140064690`) fires
   the events between the last and the current fraction, the rest of the pass when the clip wraps, and everything up to the fraction at once when an animation becomes the dominant one.
   An event named exactly `Footsteps` with no override first sets `Armor_Worn` to the body armour's `material type` (Cloth, Leather, Chain, Plate; the heaviest body-slot item, `FUN_1405d28b0`).
+- **Surface** (`CharMovement::vfunc_11` calls `FUN_14065df80` while a character moves; `FUN_1405cafc0` sets the switch, `FUN_140a08c70` names it). **Verified** unless marked. GroundType 0..8 names Sand, Grass,
+  Concrete, Wood, Metal, Water, Mud, Snow, Dirt; a RACE with `barefoot` and no boots uses `BFoot_Sand`, `BFoot_Grass`, `BFoot_Wood`, `BFoot_Metal`, `BFoot_Dirt` for those (the rest are shared). The name table has no bound:
+  a type past 8 reads beyond it (**Unknown**; one record, `Bridgehead`, has `interior material` 9). In order:
   1. Height under 100: `Water`.
+  2. The ground ray (`FUN_14065f160`, run for the movement: from 20 units above the character straight down) leaves the hit's collision group and the hit object's handle on the movement. Its masks are `0x7de04` (groups 2,
+     9..12, 14, 15..18) when the character is in no building and `0x7f9e00` (groups 9..12, 15..22; no terrain or foliage) when it is in one. The terrain can override a lower hit (**Observed**; gated by a character flag at `+0x1a9` and, in a building, a building property via vfunc `0x330`; not decoded). Group 2 (the terrain,
+     **Observed**): the BIOMES record under the point (biome map pixel, five bytes: ground, slope, grass, dirt, road type) picks by the overlay map's channels at that point (A above `0xA0` road, B dirt, G or R grass, else
+     ground), only within ~346 units of the camera (squared 120,000).
   3. Any other group: when the hit object is a BUILDING (handle type 0; any other object, such as a foliage one, leaves the switch as it was), the building's `exterior material` (`FUN_14029e0c0` reads both fields into
      the building, `+0x220`) when the character is in no building (its place handle, `CharacterAnimal::vfunc_59`, is the null handle, type `0xb`), else its `interior material` (`+0x21c`). Both are GroundType BUILDING
      fields (fcs.def defaults: interior Wood, exterior Concrete) and belong to the whole building, not to the part hit. No distance limit on this branch.
@@ -210,6 +281,13 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   `sounds` less 4 indexing Beak, Bull, Cage, Dog, Duck, Gar, Goat, Gorillo, IronSpider, Leviathan, Pack, Spider, Turtle (below 4: Dog). A landed hit: **50 %** (`random & 8`) `VO_Get_Hit` (animals `VO_Creature_Take_Damage`).
   Animals only: `VO_Creature_Die` when they go down, `VO_Creature_Victory` for the attacker, `VO_Creature_Alert` when threat goes from none to some, `VO_Creature_Passive` on a 20 to 60 s timer (the first up to 100 s; **Verified** `FUN_1405cdf00`: nothing while the animal is down and the timer stays due; in combat mode the call is skipped but the timer still reschedules). People have no
   other voice events in the exe's character code (grunts on swings are inside the attack events' containers).
+- **Character tasks** (all through the same helper unless noted; slots 1 / 2 / 3 of a task are start / update / end): `Character_Build_Loop_Start` and `_Stop` (Build 2, Repair 95), `Character_Medic_Start` / `_Stop` (First aid),
+  `Character_Unlock` (loop, 1000 units; started by Task_UnlockDoor, Task_PickLock (also for shackles) and Task_CutShackles (also locks) at their start; Task_BruteForceShackles starts none) stopped by `Character_Unlock_Success` (slot 2 when a roll, cut or
+  break works; a click that holds the Stop) and `Character_Unlock_Fail` (a bare Stop, slot 3 of Task_PickLock and Task_UnlockDoor, so at every end of the task, success included; Task_CutShackles posts none at its end: what stops the loop of an interrupted cut is **Unknown**;
+  all **Verified**: strings, callers and the bank's actions), `Character_Lock` (Task_LockDoor), `Character_Bed` with `Bed` = `Get_In` / `Get_Out`,
+  `Character_Pick_Up_Ground` (`Task_Pickup` slot 2, 1000 units, after the `Inventory_Items` switch, which the bank ignores; posted when any of the stack went into the inventory, not when nothing fitted), `Character_Pick_Up_Person` / `Character_Drop_Person` (on the carried person, with its `Armor_Worn`), `Character_Loot` (character target) / `Character_Inspect`,
+  `Character_Consume` with `Consume` = `Eat` (200 units) and `Sell_Item` (200 units). `Character_Building_Materials` is posted but **no bank has it** (silent). Involuntary drops (knock-out, ragdoll) are silent.
+  `Character_Drop_Ground`, `Taunt` and `Create_Character` are posted on the GUI object ([Interface](#interface)).
 - **Machine work** (**Verified**, decompile): each update of `Task_OperateMachine` (slot 2 `FUN_14035bc90`, once `tryOperate` passes and the clip, the functionality's `animation` else
   `stonemine`, plays) and of `Task_UseTrainingDummy` (slot 2 `FUN_14035c1e0`) adds the BUILDING_FUNCTIONALITY's `animation events` to that clip on the operator (`FUN_140065280`, `FUN_140064e10`;
   time = value x 0.01): a sorted insert that skips an event record already there at that time and moves the clip's next-event index past an event inserted before its last fraction
@@ -217,11 +295,52 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   `Ore` / `Stone` / `Copper` at 30 %, plates and weapon smiths `Plate` 30 %, farms `Character_farm` 30 % (with a ground effect, below), sword and assassin training `Dummy` 40 %;
   the `stonemine` clip's own `Pickaxe` is `Attack` with `Weapons` = `Work_Pick` at 10 %. SFX_General_Bank has those `Impacts` cases and `Attack`'s `Work_Pick` (**Verified**, hashed names).
   The AI's worker goals act out through the same task (87 / 221, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), so NPC town workers and obedient slaves sound alike.
+- **Ground effect** (a particle, not a sound; **Verified**, decompile, unless marked): an ANIMATION_EVENT with `ground effect` set also becomes an `AnimationGroundEvent` on the clip
+  (`FUN_140064e10`; it keeps the `bone`). Base game and rebirth (**Verified**, probe): `Footstep R` / `Footstep L` (bones `Bip01 R/L Foot`) and the farms' `Impact Farm` (no bone).
+  Firing (`FUN_140065330`): nothing while a character flag at `+0x1a9` is clear (**Unknown** meaning) or without a body entity (**Observed**). The point is the named bone's world position (the character's
+  without a bone or when the bone's height comes out 0). Ground events share the clip's event list and cursor with the sounds (`FUN_140064690` calls each event's own fire), so only the
+  dominant clip fires them. Under the water height (the depth is the water height less the point's height, so the ankle bone, not the sole): the BIOMES record's `water effects` entry
+  (v0 depth, v1 speed) with the greatest v0 at most the depth, then greatest v1 at most the speed, at the water surface, no turn; the biome is the one under the point (`FUN_140a0ac00`,
+  the footsteps' lookup), else the record `EMPTY`; none when no entry fits. Dry: only when the ground ray's hit has the null handle (type `0xb`, the terrain; **Observed**); the biome's
+  `ground effects` slot for the overlay channel at the point (`FUN_140a16f70`, the footsteps' channel pick), fired when the speed is at least its min speed and `rand()`/32768 is at most
+  its chance; a bone puts the point on the terrain. Slots (biome loader `FUN_140a13750`): an entry's v0 above 2 is lowered by one, then 0..4 picks the slot; v1 is the min speed, v2 x 0.01
+  the chance. The effect spawns through a pool (none when full) only inside the camera frustum widened by 100 units (`FUN_140a08c00`, `FUN_1406ae7b0`, the constant at
+  `DAT_141683250`). Data (`gamedata.base` dump): 59 BIOMES list `ground effects`
+  (`Dustkick01`, `01a`, `01b`, `01c`; min speed 0, 30 or 40; chance 100), 70 list `water effects` (`Watersplash` v0 0, `WadingFoam` v0 3; v1 0); a farmer standing at work (speed 0) kicks
+  dust only where the slot's min speed is 0 (**Observed**). The EFFECT records (**Verified**, probe of the user's load order): `Watersplash` is system `Footsplashes01` (three one-particle
+  crowns, 7 to 14 units, standing on the surface, gone in 0.2 to 0.5 s), `WadingFoam` is `WadingFoam` (flat foam on the water: a base for 1 s, splashes for 0.8 to 2 s, a residue
+  for 11 s that wanders 0.4 units a tenth of a second and turns, emitted over 0.4 to 2.5 s). So a foot whose ankle bone stays above the water (ankle-deep water) shows nothing.
+  **Meitou** (`GameHost.Splashes`): the water half, as above, on the snapshot's dominant layer with the sounds' cursor; the system is fired with `ParticleRenderer.Burst` for 3 s
+  (its emitters stop at their own `duration`); the speed is the shown snapshots' horizontal speed. The dry half (dust) and the farms are not done. **Unknown**: the pool's size
+  and how it ends an instance, the `+0x1a9` flag, the v0 slot shift.
 
 Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Game.Audio`; `CharacterAudio`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
 the host hands each character's place, facing, speed (horizontal distance between the last two snapshots over the tick) and animation layers (`AnimationLayer.Length` and `.Definition`, added to the snapshot) every frame.
 Combat facts come from `World.Sounds`, a display-only queue the host sets while audio runs (blocks, hits, shots, bolt hits and sticks, characters going down, fighters taking up a fight); nothing in the simulation reads it, so
 it is outside the state hash. Overlay tiles for the ground load on a worker (6 kept).
+
+Building floors in Meitou (`BuildingFloors` in `Meitou.Game.Rendering.Objects`, `FloorSurfaces.HighestBelow`, `CharacterSounds.Floor`, `CharacterAudio`; display only, nothing reaches the simulation). For a moving character within the
+surface limit (120,000 squared; the exe has none for buildings, but footsteps sound only within 200 units), asked again after it moved a unit: the placed BUILDINGs (ruins on their `destroyed collision`, as the exe hits them) of the zones within 400 units (X/Z of the building's
+position) are listed on a worker; a building's floor collision (`FloorSurfaces.For`: ordinary and stairs parts, groups 9..12 and 15..18) is made on a worker when a character first comes within 400 units. The highest floor
+triangle under the feet and at most 20 above them is the hit, taken when within 4 units below the feet (engine choice: the sim stands on the navigation mesh); the highest across buildings wins. The character is "in a
+building" when the renderer's indoor hull test (`InteriorAt`, margin 2) holds, else outdoors. A hit gives the building's `interior material` or `exterior material`; no hit, or the floors not made yet, leaves the terrain overlay
+(and a material past 8 changes nothing). Differences from the exe (**Observed**, engine choices): the terrain override above is not implemented (a floor slab at or just below the terrain, within the 4 units, gives the building's material where the exe may say terrain); buildings under construction count as finished (the exe shifts their parts to the passable groups until built); furniture (groups 19..22, in the indoor mask) is not
+a floor, and terrain showing through holes in an indoor floor falls to the overlay (the exe's indoor ray has no terrain bit); walkable foliage outdoors uses the overlay (the exe leaves the switch unchanged); a building
+whose floor lies farther than 400 units from its position is missed at that distance; the first steps near a building not yet loaded use the overlay.
+
+Task sounds in Meitou (`CharacterLoop`, `CharacterSounds.Job` / `.Carried`; `CharacterAudio`). The snapshot carries the movement task, whether a lock is being picked and whether the character is in a bed (read-only, outside the hash):
+`Task.Build` is the `Character_Build_Loop_Start` / `_Stop` loop, `Task.Treat` the `Character_Medic_*` loop, a lock being picked or shackles being picked or cut (`WorkingShackles`; not while walking to it) the `Character_Unlock` loop (a change of job stops the old loop first, with `Character_Unlock_Fail`, the exe's bare Stop; a character that gets its object mid-job starts it
+then; **engine choice**: an interrupted cut is stopped too). Breaking shackles has no loop, as in the exe. One-shots: `Character_Loot` when `Task.Loot` starts; `Character_Bed` (`Bed` = `Get_In` / `Get_Out`) when the bed state changes; `Character_Pick_Up_Person` when a body is lifted and `Character_Drop_Person` when a put-down order sets it down (both on the carried person, with
+its `Armor_Worn`; a drop by knock-out or ragdoll is silent, as in the exe); from `World.Sounds`: `Character_Consume` (`Consume` = `Eat`, 200 units) when `FeedSystem` feeds, `Character_Unlock_Success` when a pick works, a character is freed from shackles (picked, cut or broken) or a warden unlocks a door or cage, `Character_Lock` when a
+warden locks one, `Character_Pick_Up_Ground` on a character that takes a ground item (all or part of the stack), and, as the sound of `PutShacklesOrder` (the player's stand-in for the exe's drag of shackles onto the target's armour slot, which posts `Item_Drop`
+on the GUI object with `Inventory_Items` of the item, `FUN_140715560`), that `Item_Drop` through `UiSounds` when the shackles are on. The exe's AI cuffing (`Task_CuffTarget`: "Restraining" bar, `medic` animation) posts no event (**Verified**: no `PostEvent` caller in it), so a put-on by anyone but the player is silent. The RE found no task sound for dismantling (order 96; only `Task_Build`, orders 2 and 95, loops: **Observed**), so it is silent but for `Thing_Complete` when done. **No trigger in Meitou:** `Character_Inspect` (loot targets
+only characters), `Character_Unlock_Fail` as a sound of its own (it is only the loop's Stop; a failed roll posts nothing, as in the exe), `Character_Building_Materials` (no bank has it), `Sell_Item` from NPC shoppers, `Character_Drop_Person` from the corpse machine.
+Meitou's wardens have no unlock loop (their rounds only start the click); the player's lock picking loops as the exe's `Task_PickLock`.
+Machine work: while an operator works (the player's operate task, or an AI worker's or obedient slave's standing work at its building's functionality clip: `CharacterCold.ActionWork`),
+the snapshot's `WorkEvents` (functionality and clip) has the host give that clip's layer its events with the functionality's added (`AnimationSoundEvents.Attach`), kept until the layer
+is gone; a clip still playing when its worker starts at another machine takes that machine's events too, as the exe's instance would. Not covered: the town's training dummies, which
+Meitou's AI stands at with no clip. The simulation's time of a looping clip that is neither synched nor a side step runs on past its length; the host wraps
+its fraction, so the events of `stonemine`, `chop down static` and the swim clips fire on every pass, as the exe's cursor does.
 
 **Unarmed `Weapons`** (`FUN_1402b4570`, when a technique is chosen): the switch becomes `HtH_Punch` when the technique's last blow uses limb 0 or 1 (the arms, **Verified**) else `HtH_Kick`, with `_Robot` appended for a robot (**Observed**: the exe also appends it when a limb check on the attacker's race says robotic limbs). Meitou applies it when the animation of a COMBAT_TECHNIQUE valid
 for unarmed fighting only (not a block or dodge, not a creature's) starts (**Observed**: the exe's guard on the technique is a flag whose meaning is not traced).
@@ -233,6 +352,7 @@ the exe's). Posts are unconditional unless noted. Events that are not in `SFX_Ge
 
 | Event (switch) | When |
 |---|---|
+| `Hover` | the pointer enters one of the seven title buttons (**Observed**: the binder is probably mouse-set-focus) |
 | `General_Click` | title and Esc-menu buttons, new-game, load/save, options and message-box buttons, save-list rows, inventory Arrange, Jobs toggle, run-speed arrows, job Remove, a portrait click that selects, character-editor arrows and buttons; Sneak turned **off** |
 | `Create_or_Load_Game` | a load or new game starts (music director) |
 | `Game_Speed_Normal` / `_x2` / `_x4` (state `Game_Speed`) | the HUD speed buttons (the exe also on F2 to F4); speeds 1, 2 and 5 only |
@@ -250,6 +370,26 @@ the exe's). Posts are unconditional unless noted. Events that are not in `SFX_Ge
 | `Notifications` (`Notifications` = `Building_Complete`, `Thing_Complete`, `Bounty_Fulfilled`, `New_Biome`) | construction finished; research or blueprint learned, a dismantle finished; a bounty paid; the HUD biome banner appearing ([Biome banner](game/ui-screens.md#biome-banner), `MainBarGUI::vfunc_10`, **Verified**) |
 | `Slider`, `Create_Character` | data-panel slider; the character editor's Done (and a released prisoner) |
 | `Prospect_Click`; `Prospect_Results` | the HUD Prospect button when it gives a character the prospecting task (`FUN_140721800`; closing the open window is silent); the Prospecting Results window shown (`FUN_14049f180`), a second after the click ([Prospecting](game/ui-screens.md#prospecting)) |
+| `Research_Tab` (`Research_Tabs`) | a pick in the overview research tab's type list (`ResearchTypeList`; `FUN_14049b5e0`, not for a deselect); the switch value is the list item's text, the RESEARCH `category`. **Verified** bank: five values, `Industry` and `Defense` resolved by hash, three **Unknown**; an unmatched value is silent |
+
+`Inventory_Items` (`FUN_14075e360`, **Verified**): WEAPON and CROSSBOW by `material` (`Weapon_Metal`, `Weapon_Wood`); ARMOUR by `material type` (`Fabric`, `Leather`, `Robotic_Component`, `Steel_Bar`); ITEM, CONTAINER, NEST_ITEM
+and MAP_ITEM by `inventory sound` (`Backpack`, `Building_Material`, `Fabric`, `Flour`, `Food`, `Kits`, `Leather`, `Luxury`, `Narcotics`, `Ore`, `Potato`, `Robotic_Component`, `Rum`, `Steel_Bar`, `Tools`, `Water`, `Wheat`,
+`Armor_Plating`, `Blueprints`, `Meat`); LIMB_REPLACEMENT `Robotic_Component`. The `Notifications` bank also has `Raid` and `Under_Attack` and three unresolved values the exe never passes. **Unknown:** the MyGUI events behind
+Hover and Slider; whether the editor's speed reset posts `Game_Speed_Normal`; what Wwise does for a NULL switch value.
+
+Meitou (`UiSounds` in `Meitou.Game.Audio`, `InterfaceSounds`, `UiAudio`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
+the commands `Say` sends (orders, item moves, trades, dialogue choices; `AddJob` and the Shift Medic / Rescue commands as `Permanent_Job`), and a poll in `Draw` for windows opening and closing, the title button under the pointer, the speed keys (F2 to F4, when the clock moves to a new speed without a button), a building of the player's finishing
+(`Building_Complete`) and a research finished or a building unlocked by a blueprint (`Thing_Complete`, one a frame; the sim also queues `DismantleDone` for a finished dismantle and `BountyPaid` for a reward, played as `Thing_Complete` / `Bounty_Fulfilled`).
+The prospecting, research tab and biome sounds are posted where the exe posts them: the HUD's Prospect action when it gives the task (`Prospect_Click`), the results window opening (`Prospect_Results`, in the poll), a type list pick in the overview (`Research_Tab`),
+and the banner (`New_Biome`, `BiomeBanner`).
+`Building_Click`: selecting a building (`SetBuilding`, so a click on the one already selected sounds again) switches `Buildings_Click` by the BUILDING's `select sound` (`UiSounds.BuildingSound`) and posts nothing for 0. The switch values are the exe's table at
+`0x141e17308` read by `FUN_1405504a0` (**Verified**: read from kenshi_x64.exe; 1 `Bed`, 2 `Dummy`, 3 `Farm`, 4 `Generator`, 5 `Grain_Silo`, 6 `House`, 7 `Mine_Ore`, 8 `Mine_Stone`, 9 `Research_Bench`, 10 `Store_Armor`, 11 `Store_Building_Materials`, 12 `Store_Flour`, 13 `Store_Ore`,
+14 `Store_Prisoner`, 15 `Store_Rum`, 16 `Store_Stones`, 17 `Stove`, 18 `Well`, 19 `Wind_Generator`, 20 `Chain_Bench`, 21 `Fabric_Loom`, 22 `Leather_Bench`, 23 `Medical_Desk`, 24 `Plate_Station`, 25 `Shop_Counter`, 26 `Smithy`, 27 `Stone_Processor`, 28 `Armorer`, 29 `Bar`, 30 `Boxes`,
+31 `Campfire`, 32 `Gate`, 33 `Gen_Goods`, 34 `Hive_Hut`, 35 `Lamp`, 36 `Long_House`, 37 `Outhouse`, 38 to 42 `Store_Armor`, `Store_Building_Materials`, `Store_Flour`, `Store_Ore`, `Store_Prisoner` again, 43 `Tailor`, 44 `Tower`, 45 `Travel`, 46 `Turret`, 47 `Wall_Metal`,
+48 `Wall_Station_House`, 49 `Wall_Stone`, 50 `Wall_Wood`, 51 `Wood_Obj_Big`, 52 `Wood_Obj_Small`; the **Unknown** is which BUILDING records set which index, and whether the bank has a sound for each value). `Building_Lock_Unlock`: Meitou's stand-in for the Security button is the
+building menu's Lock Doors / Unlock Doors verb (all the doors at once; `Build_Lock` is the state before the press). `Create_or_Load_Game` comes from `MusicDirector.OnCreateOrLoadGame`, `Hover` from the poll.
+**No trigger in Meitou (not played):** `UI_Generator` (the machine panel has no power switch, [above](#machine-sounds-meitou)), `Create_Character` on a prisoner's release,
+`Slider` outside the editor (no data-panel slider yet; its drag events would sound through `SoundForScreen` as the editor's do). `Building_Place` is `Indoors` for a ghost on a building's floor (a parent building), else `Outdoors`.
 
 ## Meitou's player
 
@@ -285,6 +425,10 @@ host running without sound.
 - **Music engine** (`WwisePlayer.Music.cs`; the layouts and meanings are in [wwise-bnk.md](formats/wwise-bnk.md#music)). Music nodes are
   instances in the same tree as the sounds, so fades, stop actions (also on an ancestor, across banks), the gain chain up to the music bus
   (`BA70EAC8`: −4 dB, the `User_Volume_Music` curve) and the voices are the same code.
+  - **Switch** (`MusicSwitchInstance`): the decision tree is read with the current values of its groups (the child keyed with the value,
+    else the one keyed 0; `SetSwitch` shares the state table). When a value changes during playback the playlist playing is held after its
+    current segment and the new pick starts at that segment's exit cue (**Unknown**: the other candidate is the rule that crossfades at once,
+    ~10 s); a change back before the cue cancels it; once the last segment's cue has passed (only its tail left) a change does nothing.
   - **Playlist**: the tree is walked lazily, the next segment pulled at each exit cue and started there, the old one's tail sounding on.
     Segment items repeat by loop count (0 forever); groups make loop-count passes of one child (step) or all (continuous), in order
     (sequence) or by weight (random; shuffle = weighted without replacement). Avoid-repeat history and sequence positions are kept per
@@ -293,6 +437,10 @@ host running without sound.
   - **Timing.** A start is placed at the output frame at or after the exact time inside the block being mixed, with the fractional part as
     the clip's starting phase, and a clip fades into silence over its last frame, so a segment that follows another at its cue leaves no
     gap and no overlap: the main theme's 281.7 s loop, 12,423,326.475 output frames long, repeats without a missing or doubled frame.
+  - Plays are not exclusive: a `_Play` posted while the last still sounds (a short `Music frequency`) starts a second instance (**Unknown**
+    whether Wwise limits music nodes). Not done, since no Kenshi bank needs it: stingers, transition segments, special track types, clip
+    automation, the transition rules' fades, `continue playback`, the radio's 3D attenuation. `UnloadBank` cuts what plays from the bank,
+    drops its recordings and objects (those of the same id in another loaded bank stay).
 - `MusicDirector` is the game's music rules above. `Update(music)` each frame takes the `music` of the region under the pivot (null when
   none): on a change it sets the `Biomes` switch and remembers `Music_<Name>_Play` (when the bank is loaded, else after loading it; the
   first change unloads `MT_Music_Bank`); a real-time stopwatch timer (first deadline construction + F, then now + F × (0.8 + 0.6 r)) posts
@@ -301,7 +449,18 @@ host running without sound.
   `OnCreateOrLoadGame` (posts `Create_or_Load_Game`, resumes it) are for a host with a title screen (the game, see below); the viewer has none and does not call
   them. `Music frequency` (minutes, default 5) and `Music volume` (default 0.5, sent as `User_Volume_Music` × 100) come from `AudioSettings`.
 
+### Volume curves (Observed)
+
+All 111 volume RTPC curves in the version-112 banks (scaling 2, "dB") have y between −1 and +0.08, while pitch curves are in cents and
+low-pass curves in its units. Read as **linear gain − 1** (−1 silent, 0 unchanged), they make sense everywhere: the sliders' curves are
+silent at 0 and unchanged at 100, the critters fade out with height. The player multiplies the gain by 1 + y. Not checked against Wwise
+itself.
+
 ### Levels (Observed)
+
+The ambience is quiet: the Desert bed is mastered at −45 dBFS RMS (the general sound effects at −25 to −33), its layer container takes
+12 dB, the slider's default another 8.5, so the desert by day mixes at about −66 dBFS RMS. That is what the banks say; whether the game
+sounds the same was not measured. The viewer's `--audio-gain <dB>` raises the whole mix.
 
 The music at `Music volume` 0.5 (`User_Volume_Music=50`): the main theme's loudest second is about −29 dBFS RMS, a biome play's about −37 to −45
 (one segment per layer, so seconds of silence between pieces). `Init.bnk` defaults the parameter to 100 (the curve is half at 50, so +6 dB),
@@ -327,6 +486,14 @@ parametric EQ (`0x69`), compressor (`0x6C`) and one effect `0x6E` (Unknown).
 - **Position.** A node whose positioning is game-defined (3D, no paths) is placed at its object. Distance and pan come from the object's offset in the
   listener's frame (`Spatial.Locate`): the pan is side over horizontal distance, front and back folded, pulled to the centre within 50 units, then the
   equal-power law. Paths (3D type 3) move relative to the listener as before.
+- **Attenuation.** The node's [attenuation](formats/wwise-bnk.md#attenuation-14) gives the dry gain (curve 0 at the distance, linear gain − 1 as for
+  RTPC curves; zero beyond the last point), the low-pass (curve 3) and, only for a placed object with a front, the cone (full inside the inner angle,
+  the outside volume and low-pass beyond the outer, linear between). Measured by rendering: a sound 100 / 200 / 300 / 500 units away fell by about
+  8 / 18 / 26 dB / to silence against the one at the listener, and was louder on the side it was placed. The emitters (AMBIENT_SOUND) are placed with a zero orientation, so cones are inert there.
+  **Characters** (`FUN_1405cfd90` copies the position and a facing vector into the object's placement, **Verified** by disassembly; what Wwise does with that vector, whose second
+  orientation slot looks unset like the listener's, is **Unknown**): the impact sounds (the hit and parry variants of `Impact`) use attenuation `2E5501C5`, the only one with a cone, 90° / 245°
+  and −6 dB with no low-pass. Logged in a sandbox fight (listener 150 to 180 units away), a blow's dry gain was 0.30 for a fighter facing away from the listener (angle 150°),
+  0.40 at 86° and 0.55 facing it, at the same distance: half the amplitude on and off. Meitou places characters without a front (engine choice), so no sound has a cone.
 
 ### Reverb and aux buses
 
@@ -336,13 +503,41 @@ parametric EQ (`0x69`), compressor (`0x6C`) and one effect `0x6E` (Unknown).
 - **Which sounds** reach it: the nearest node with aux-send bits 04/08 sends to the bus ids it lists (`SFX_General_Bank`: 6 nodes, `VO_Bank`: 1, to both
   aux buses), the level being the voice's level times the attenuation's aux curve (usually the dry curve) and the output bus gain (Meitou's choice).
   Every ambience and weather node has no sends, so the beds never go through the reverb.
+- **The reverb** (`RoomReverb`, a clean-room approximation of RoomVerb, **Observed** parameters in [wwise-bnk.md](formats/wwise-bnk.md#effects-18-and-19)):
+  Freeverb-style, 8 damped combs and 4 Schroeder all-passes per side with a stereo spread, comb feedback set for the effect's decay time, damping from
+  the HF damping parameter, a pre-delay of up to 250 ms, a 250 Hz input high-pass (below it all combs add coherently), input normalisation, the wet level
+  the root-sum-square of the two wet level parameters scaled by the effect's RTPC curves (the outdoor one follows `Camera_Zoom`). A bypassed reverb takes no
+  input and rings out (Wwise's behaviour is **Unknown**); slots of one bus run in parallel (Wwise runs them in series, **Unknown**). A silent tail is skipped.
+  Measured by rendering: decay about 3.5 s (big indoor), 0.9 s (small), 2 s (outdoor); the level is near unity.
+  Unknown: which wet level is early reflections or tail, the pattern id and millisecond bytes, the outdoor pre-delay curve.
+
+### Voice cap
+
+Meitou's rule, the Audio settings' Sound voices slider (`AudioSettings.Voices`, kept in meitou.user.json: 16 to 256 in steps of 8, Meitou 96, the top
+"All" mixes every sound; the viewer uses 96). Each block the player works out every sound's gains first
+(`SoundInstance.Prepare`: the node chain, buses, place and attenuation), then mixes the music and that many of the loudest
+other sounds at the listener (dry or sent); a sound mixed in the last block counts 1.5 times as loud, so one at the edge does not flip every block. The rest
+are silent: one heard last block first fades out over a block, then its voice keeps its clock without decoding (`Voice.Skip`); back among the loudest it
+fades in over one block, from the place its clock says when that is still inside the decoded frames or the clip's samples are shared (`PcmCache`), else (a
+stream) from where it stopped; a one-shot that ran out meanwhile ends. Trimmed music clips are never
+capped. A stream is never sought: NVorbis 0.10.5's `SeekTo` does not work on the converted WEMs (**Verified** on the install's banks: a fresh reader, one
+seek, one read of 4096 frames against the straight decode, 12 places in each clip of 15 s or more; of the first 1601 seeks 60 never returned from the read,
+131 threw `GranulePos mismatch` and 138 gave other samples). A read that never returns stops the mixer: every sound gone until restart, nothing in the log
+(issues #538, #542; the quiet ambience beds are the first voices capped in a crowd, and sought when they came back). The game's own Wwise limits (`STMG` max voices and volume threshold, each node's max instances, read but not modelled) are not this rule. The `--quit-after` log
+shows how many sounds were capped. After the mix a peak limiter (both modes, `AudioOutput.Limit`: ceiling 0.89, instant attack, 0.15 s release) turns a
+loud sum down instead of hard-clipping it at the 16-bit conversion.
+
+Starting a sound is the real cost of a big fight: opening a Vorbis stream (its codebooks) took about 1.7 ms and every voice decoded its clip again, so
+hundreds of footsteps, swings and hits a second overran the audio thread (**Observed** with `meitou-tools audio render`: 700 hits and grunts in 8 s cost 1.7 s
+of mixing). Clips up to 20 s are decoded once and shared by their voices (`PcmCache`, up to 256 MB; longer clips, the music and anything past the budget
+stream as before): the same render takes 0.57 s, about 0.3 ms a sound once its clip is decoded. A capped voice on shared samples catches up by moving its place.
 
 ### Hearing range
 
 Meitou's rule, the Audio settings' Sound range slider (`AudioSettings.Range`, meitou.user.json: 1 to 4 in steps of 0.25, Faithful 1, Meitou 2, which the viewer
 also uses). `WwisePlayer.Reach` divides every distance before it is read: the attenuation curves (dry, aux, low-pass) and the game-side limits
 (`WwisePlayer.HeardDistanceSquared`: character tracking and event limits, door and turret ranges, the AMBIENT_SOUND ranges). The pan uses the true
-distance. More reach means more objects and sounds at once, which the voice cap bounds.
+distance. More reach means more objects and sounds at once, which the [voice cap](#voice-cap) bounds.
 
 ### API for event sources
 
@@ -359,7 +554,7 @@ Open for the next wave: which event each game action posts and on which object, 
 ### Not done
 
 The emitters of foliage and map features, the callers that post effects, the task and interface sounds whose trigger Meitou lacks (listed under [Characters](#characters-footsteps-combat-voices) and [Interface](#interface)) (the engine is ready:
-[API](#api-for-event-sources)), the game's Wwise voice limits (Meitou has its own cap), obstruction and occlusion (the game uses none), the radio, serial effect slots and the cone as Wwise draws it, and unloading ambience
+[API](#api-for-event-sources)), the game's Wwise voice limits (Meitou has its own [cap](#voice-cap)), obstruction and occlusion (the game uses none), the radio, serial effect slots and the cone as Wwise draws it, and unloading ambience
 banks left behind (they stay loaded: about 5 to 14 MB of Ogg each; the music banks unload as above).
 
 ## In the viewer and the game
@@ -376,8 +571,12 @@ main theme or the remembered biome music, seconds until the timer next posts it,
   (paused or speed 0): `Pause_Game` / `Resume_Game` post on object 100. `SFX_General_Bank` loads with the ambience banks.
   - **Audio sliders.** The settings menu's Audio page has the original's seven (`Music volume`, `Ambient volume`, `Footstep volume`, `Sfx volume`, `UI volume`, `VO volume`, `Music frequency`;
     [settings.md](formats/settings.md)), kept in `meitou.user.json` (`audio`); the first run takes them from the install's `settings.cfg`. They apply at once (`AudioSystem.Apply`),
-    where the original applies them when its options close. Meitou adds Sound voices (Voice cap), Sound range ([Hearing range](#hearing-range)) and Hear from (Listener, above).
+    where the original applies them when its options close. Meitou adds Sound voices ([Voice cap](#voice-cap)), Sound range ([Hearing range](#hearing-range)) and Hear from (Listener, above).
     The viewer still reads `settings.cfg` once at start.
+  - **Title screen.** `StartMainTheme` when the world is up and the title is open (either UI mode: the faithful title or the Meitou game menu).
+    While the title is open the host does not update the ambience or the music (**Unknown** whether the original's camera update runs there; if it did, its first biome call would unload the theme's bank), so no `Enter_` event or
+    music-bank unload cuts the theme. A new game or a load posts `Create_or_Load_Game` (5 s fade) as it starts; `--new-game` and `--load` skip the
+    title and start no theme. Importing is not offered by the game's menu.
   - **Return to the main menu** (Meitou's choice: the original has no such path): the ambience is ended (`AmbienceDirector.Silence`: `Leave_<biome>`,
     rain and wind end) and `StartMainTheme` runs again, so the menu sounds as at start-up; the next game's first update re-enters its biome.
   - **World sounds** (`WorldAudio`, each frame after the ambience): the building under the pivot (`InteriorSounds`, [Interiors](#interiors)) and the building emitters (`WorldEmitters`,

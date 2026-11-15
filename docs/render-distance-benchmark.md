@@ -40,6 +40,12 @@ Example forest camera: `--world --at -37582,-80684 --yaw -70.5 --pitch 6.1 --dis
 Use `--fly-speed 0` for a still flight benchmark. Detailed pass timings use
 `MEITOU_PASS_STATS=1 MEITOU_PASS_STATS_SKIP=30`; current triangle diagnostics use `--bench-tris`.
 
+**Observed** (RTX 4070, 1600x900 forest, paired paced/pipelined runs): at light load the GPU
+clocks down between paced frames (4.75 ms paced versus 2.52 ms pipelined); at heavy load both
+were about 8 ms. Frame-slot waits can land inside CPU stage timings. Pipelined flights can also
+outpace streaming, changing the rendered instance set. Match counts and isolate waits before
+attributing a cost difference to a renderer.
+
 ## Cost interpretation
 
 - Missing or evicted impostors fall back to meshes: atlas residency can increase geometry cost
@@ -56,3 +62,10 @@ Use `--fly-speed 0` for a still flight benchmark. Detailed pass timings use
   from secondary-command recording and GPU cull kernels.
 - Cached shadow cascades create periodic spikes. Use tail latency, cadence and caster counts.
 - Impostor quads may themselves be subpixel work. Count projected size before raising ranges.
+
+**Observed** (RTX 4070 range sweeps, 1600x900, forest/Hub/Stack): extreme all-class ranges became
+GPU-bound before exhausting available VRAM. This is evidence about those views/settings, not a
+current performance guarantee. Re-run the protocol after changing LOD, residency or streaming.
+
+**Unknown:** how much geometry a range-only cull retains below one pixel without a projected-size
+survey; the general cause of long-range shadow outliers without per-frame diagnostics.

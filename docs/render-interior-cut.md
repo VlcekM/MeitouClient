@@ -13,6 +13,10 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
 - **Verified** readers (installed `data/materials`): `terrain.material`/`terrainfp4.hlsl` (patches, always);
   `foliage.material` `Grass` (`grass_fs`, always; the `Foliage` material there is commented out); `objects.hlsl` and
   `triplanar.hlsl` under `CLIP_INTERIOR` (0x200); `mapfeature.material` `Feature_Terrain_DX11` (`interiorClip` unit).
+- **Verified (decompiled)**: map features always get CLIP_INTERIOR ([runtime-materials](formats/runtime-materials.md)),
+  and so do foliage leaves (FUN_1406d1380 copies the `leaves *` fields and calls FUN_140843920 with mode 4, FOLIAGE).
+  Building parts and items do not. **Observed**: the foliage meshes' own materials also come from FUN_140843920
+  (FUN_1406cf140 / FUN_1406cf640 read `material type` and call it; not traced further), so Meitou cuts them too.
 - **Verified (decompiled)**: the mask entity exists only while the building's interior is open. It is made in the open path
   (render queue 0x10, visibility 0x800, no shadows; skipped with `skip stencil tricks`) and destroyed on close, so a closed
   building cuts nothing ([closed interiors](render-objects.md#closed-interiors)). Meitou cuts with every loaded mask (engine
@@ -40,6 +44,13 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   - TERRAIN-mode features and rocks (the terrain's mesh path): placements over a box are drawn with the meshes' full
     colour program with `TerrainConstants.interiorCut` on (features and CPU-culled rocks in their own list; GPU-culled
     rocks get the fade 1.5 too and are drawn by the fading draw).
+  - other buildings' parts (Fixes settings, `Walls inside buildings`, on; off draws them, as the game): a part whose sphere overlaps the mask box of a
+    building in the interior view takes the map features' cut batch (`WorldObjectRenderer.CutsIntoViewed`), so the Hub's wall stays out of the Shinobi
+    Thieves tower ([data](formats/zones.md#interior-masks), issue #111). Not cut: parts of a building whose mask is drawn (the viewed one's own), doors,
+    layout objects, contained buildings, stand-ins. Their shadows: in the shadow passes the same parts (sphere over a viewed building's hull) cast
+    nothing inside the hull (convex footprint and height range of up to 4 viewed buildings, 32 edges in all, in `ViewConstants.cutPlanes`; the
+    objects' depth program discards). Limits: the mask is shared, so such a part between two masks along a ray, or in a non-convex mask's concavity, is
+    cut too; a far cascade cached before the view opened keeps the shadow until it is redrawn.
 - Only the main view; not shadows or the water reflection.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.

@@ -15,6 +15,13 @@ use system age times scale_time; Scale uses life fraction unless since_start_sys
 template (logged "already exists; old template deleted"); scripts come from every registered location,
 mods included ([overview](overview.md#resource-lookup-and-mod-overrides)).
 
+**Verified plugin** control points sort byX. Linear extrapolates first segment below firstX,
+holds lastY beyond last. Spline uses u=min(x/(lastX-firstX),1), WITHOUT subtracting firstX;
+even parameter spacing, Hermite/Catmull-Rom y tangents, not interpolation at control-point X.
+**Observed** oscillation base+amplitude*wave(frequency*t+phase), exact plugin formula untraced.
+all_particle_dimensions takes precedence; xyz_scale excludes per-axis rates. Default visual
+quota500 is Verified from constructor, not inferred from current ash density.
+
 ## Simulation and rendering
 
 CPU emission/ages/forces/curves/size/rotation/colour/observers mirror decoded inputs; unsupported
@@ -109,3 +116,6 @@ Evidence scopes below apply only to their named sources/checks.
 - The plugin's defaults other than the Verified quota500 (assumed: size100, box100, velocity100, rate10, life3); the oscillation
   formula and phase unit, Circle (ring or disc), the SineForce rules, the unit
   of the rotation values; `oriented_shape`; mass.
+- How `sky colour multiplier` tints the particles; the group's fade-in and -out times; how often a camera group is renewed.
+- Whether the system node is nudged by the small term in `FUN_140101800` (a distance squared along the pivot-to-camera direction; not
+  modelled).

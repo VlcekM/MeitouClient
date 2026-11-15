@@ -10,6 +10,7 @@ code was used. Reader: `Meitou.Data.Audio.WwiseBank`. Dump tool: `meitou-tools a
 
 | Bank | Version | Contents |
 |---|---|---|
+| `Init.bnk` | 112 | Buses (9), effects (6), aux buses (2); global settings `STMG` (decoded) and `ENVS` (not decoded) |
 | `Reverb_Indoor_Bank`, `Reverb_Outdoor_Bank` | 112 | One bus, effect share set, effects, aux bus each |
 | `SFX_Amb_<Biome>` ×10 | 112 | Ambience beds of Ashlands, Boneyard, Canyons, Coast, Desert, Forest, Jungle, Plains, Swamplands, Tarsands |
 | `SFX_Amb_Indoors_Bank` | 112 | Interior ambience (`Enter_Building`, `Enter_Building_Big`, `Leave_Building`) |
@@ -34,7 +35,8 @@ by length. **Verified** for all 24 banks (the sections tile the file exactly).
 | `DATA` | The WEM files back to back, at the `DIDX` offsets |
 | `HIRC` | The object hierarchy (below) |
 | `STID` | Bank names: u32 string type (1), u32 count, per entry u32 bank id, u8 length, ASCII name. Lists the bank itself, and in `MT_Music_Bank` also `SFX_General_Bank` (which its event plays from). **Verified** |
-| `STMG` | Only in `Init.bnk`: global settings, see below |
+| `STMG` | Only in `Init.bnk`: global settings, see [below](#global-settings-stmg) |
+| `ENVS` | Only in `Init.bnk`: environment (obstruction / occlusion) curves. **Unknown**, not decoded |
 
 ## Ids and names
 
@@ -48,6 +50,14 @@ Names found (from the exe's strings, combined as the exe's fragments suggest; **
 - Ambience, per biome bank: `Enter_<Biome>_Day`, `Enter_<Biome>_Night`, `Leave_<Biome>` (exactly these three events in each of the 10).
 - Interiors: `Enter_Building`, `Enter_Building_Big`, `Leave_Building`; switch group `Indoors` (`F49BEF3F`) with `Wood` `7AAB588A`, `Wicker` `18B774EE`, `Metal` `9375C65E`,
   `Stone` `48896D1C`; game parameter `Building_Integrity` (`00C01EF9`, an RTPC of the room-tone containers). **Verified** by hash.
+- Weather: `Weather_Rain_Start`, `Weather_Rain_End`, `Weather_Wind_Start`, and **`Weather_Wind_End`**. The exe's string table holds
+  `Weather_Wind_Stop`, which is no event in any bank (**Verified** by hash); if the game posts that name ([weather.md](weather.md#sounds-verified-decompiled-fun_1409e8f70-names-only)),
+  the wind bed is never stopped by it. **Observed**, not tested in the game.
+- Music: `Music_<Biome>_Play` / `Music_<Biome>_Stop` (Dunes, Savannah, Swamplands, Tarsands), `Boot_Up_Game` (`7D68E3F0`, plays the main theme; **Verified** by hash 2026-10-17), `Create_or_Load_Game`, `Radio_On`,
+  `Radio_Off`; switch groups `General` (`07F737F7`: `menu`, `In_Game`, `Radio`) and `Biomes` (`3A1DA55A`: `Dunes`, `Savannah`,
+  `Swamplands`, `Tarsands`, `Ashlands`); group `80FF233D` (values `Beds`, `Frames`, `6CF968BD`). Not matched: event
+  `FCC71927` (stops radio and biome music), group `80FF233D`, state `6CF968BD`, `Biomes` values `56E982E5`,
+  `A36D90EE`, `AE786C6D` (**Verified** by hash against every string in `kenshi_x64.exe`; whether the exe uses `General` / `Biomes` is not checked).
 - State group `Time_in_Game` (`5DBE7335`) with states `Day`, `night`, `none` (used by switch containers in Ashlands and Coast, and by the
   biome music); interior switch `Wicker`.
 - General: `Start_Emitter`, `Stop_Emitter`, `Footsteps`, `Door_Open`, `Map_Open`, UI clicks and many more in `SFX_General_Bank`.
@@ -77,6 +87,12 @@ said otherwise.
 
 - **Property list**: u8 count, that many u8 property ids, then a u32 value each (float or int by property); then u8 count, the ids,
   and a (f32 min, f32 max) random range each.
+- **RTPC list**: u16 count; per entry u32 game parameter id, u8 type (0), u8 accumulation (1), u8 target property (0 volume, 2 pitch,
+  3 low-pass), u32 curve id, u8 scaling (2 = dB for volume curves, 0 otherwise), u16 point count, points of (f32 x, f32 y, u32 interpolation:
+  4 linear, 9 constant and others seen, the Wwise curve shapes). **Observed**: the y of all 111 volume curves (scaling 2) lies in −1 .. +0.08
+  while pitch curves are in cents and low-pass curves in its units; read as linear gain − 1 (−1 silent, 0 unchanged) every one makes
+  sense (the slider curves are silent at 0 and unchanged at 100; [audio.md](../audio.md#volume-curves-observed)). Layer crossfade curves
+  are plain linear gains (all 1 in Kenshi).
 
 ### Event (4)
 
@@ -100,6 +116,8 @@ on the posting object, 6/7 = all but the exceptions. Kinds seen in version 112 b
 | 0x12 | Set state | u32 state group, u32 state |
 | 0x1A | Bypass effects | u8 bypass (1 = bypass, 0 = unbypass), u8 slot mask (bit n = slot n, 0x10 = all slots), exceptions as Stop |
 
+Action properties seen: `0x0F` (int ms, 1000 to 10000 on stops and plays: the fade time) and `0x0E` (int ms, 6000; probably a delay).
+
 ### Sound (2)
 
 - Source: u32 plugin (`0x00040001` Wwise Vorbis for every real sound; `0x00650002` the silence source, 41 in `SFX_General_Bank`),
@@ -112,6 +130,7 @@ on the posting object, 6/7 = all but the exceptions. Kinds seen in version 112 b
 ### Node base (sounds and containers)
 
 1. u8 override parent effects, u8 effect count; if any: u8 bypass bits, then per effect u8 slot, u32 effect id, u8 is share set, u8 is rendered.
+2. u8 **Unknown** (0 in every object).
 3. u32 override bus id, u32 parent id (the actor-mixer or container above; 0 at the top).
 4. u8 priority bits (0 everywhere).
 5. Property list. Node properties seen: `0x00` volume (dB), `0x02` pitch (cents), `0x03` low-pass (0..100), `0x3A` loop count
@@ -122,6 +141,8 @@ on the posting object, 6/7 = all but the exceptions. Kinds seen in version 112 b
    u32 path count, paths (u32 first vertex, u32 vertex count), then per path three floats (random range in x, y, z). Values seen:
    `C0` (no override), `C3` (override, 2D), `C9`/`D9` (3D: bit 3 and the 3D byte, a game-defined position), `79`/`F9` (3D with paths, 3D type 3: the random one-shots of the ambience move along
    paths around the listener). With bit 0 clear a node takes its parent's positioning.
+7. Aux sends: u8 bits; bit 2 = overrides the parent's sends, bit 3 = four user-defined aux bus ids follow (u32 each, 0 = none). Seen: `00`, `04`, `08`, `0C`. Only 6 nodes of `SFX_General_Bank` and one of `VO_Bank`
+   send, all to `[23F4785D, 5E1D37D4]`; there is no send level property (**Observed**: the send is the voice level times the attenuation's aux curve).
 8. Advanced settings: u8 bits, u8 virtual voice behaviour (1), u16 max instances, u8 below-threshold behaviour, u8 bits.
 9. States: u32 group count; per group u32 group id, u8 sync type, u16 count, (u32 state id, u32 state object id) pairs.
 10. RTPC list.
@@ -140,6 +161,11 @@ on the posting object, 6/7 = all but the exceptions. Kinds seen in version 112 b
 
 ## Music
 
+Types 10-13, in the six music banks only: 402 segments, 239 tracks, 27 switches, 19 playlists. Reader: `WwiseMusicSegment`,
+`WwiseMusicTrack`, `WwiseMusicSwitch`, `WwiseMusicPlaylist`; `meitou-tools audio <X>_Music_Bank` prints the tree. The layouts are
+**Verified** by size (all 687 decode exactly). Fields marked *const* hold one value in every object, so their meaning is a guess
+(**Unknown**); a non-zero stinger count, transition segment or track type is rejected (kept raw), since no Kenshi object has one.
+
 ### Layouts
 
 - **Music node** (start of 10, 12, 13): u8 flags (*const* 0, but 6 on the top switch), node base, u32 child count and ids, the grid
@@ -149,6 +175,18 @@ on the posting object, 6/7 = all but the exceptions. Kinds seen in version 112 b
 - **Segment (10)**: music node (children = tracks), f64 duration ms, u32 marker count, markers (u32 id, f64 position ms, u32 name length,
   ASCII name; names all empty). Every segment has two markers: `0298DF12` at 0 (entry cue) and `5BBBD648` (exit cue) at the duration,
   except five radio jingles whose exit cue is 210-325 ms before the end (Observed). 163 segments have no track: silences of 5-60 s.
+- **Track (11)**: u8 flags (*const* 0), u32 source count, sources (the [sound source](#sound-2) layout), u32 clip count, clips (u32 sub-track,
+  u32 source id, f64 play-at ms, f64 begin trim ms, f64 end trim ms, f64 source duration ms), u32 sub-track count (*const* 1), u32 clip
+  automation count (*const* 0; per item u32 clip index, u32 type, u32 point count, points as RTPC, a guess), node base, u8 track type
+  (*const* 0), s32 look-ahead ms (*const* 0). Kenshi: one source, one untrimmed clip at 0 per track. **Verified**: each clip's source
+  duration equals its WEM's decoded length (239 of 239) and the segment's duration ends where the clip does.
+- **Transition rules** (12, 13): u32 rule count; per rule u32 count + source ids, u32 count + destination ids (`FFFFFFFF` = any); exit:
+  s32 fade-out ms, u32 fade curve, s32 fade-out offset ms, u32 sync type, u32 cue filter (*const* 0), u8 play post-exit; entry: s32
+  fade-in ms, u32 curve, s32 fade-in offset ms, u32 cue filter (*const* 0), u32 jump-to playlist item, u16 entry type (*const* 0), u8 play
+  pre-entry, u8 match source cue name (*const* 0); u8 has a transition segment (*const* 0). Observed: the first rule of every container
+  is any → any, sync 7, no fades, post-exit and pre-entry on (the default rule). Sync types seen: 7 (exit cue), 0 (immediate, the
+  crossfade rules) and 2 (on the layer switches, which set a grid: probably next bar). Curves 1, 2, 4 (linear), 6: the
+  [RTPC interpolation](#shared-pieces) numbers. Jump-to `09EA0775` is the main theme playlist's root item (the id resolves).
 - **Switch (12)**: music node, rules, u8 continue playback, u32 depth, depth × u32 group id, depth × u8 group type (0 switch, 1 state;
   depth is 1 everywhere, so the order of these two lists is Unknown), u32 tree size in bytes, u8 mode (*const* 0), then the decision
   tree: 12-byte nodes, u32 key (0 = any), then on the last level u32 music object id, above it u16 first child index and u16 child count,
@@ -195,6 +233,9 @@ Silences are 15-60 s in the beds, 5-60 s in the other layers. Segment volumes ra
 
 ### Playback semantics
 
+The Wwise music model as it applies to these banks; the field meanings are Observed, the timing rules **Unknown** until heard against the
+original.
+
 - **Segment.** Segment time 0 is its start. A clip sounds its source from `BeginTrim` at segment time `PlayAt + BeginTrim` until
   `PlayAt + SourceDuration + EndTrim` (in Kenshi: the whole WEM from 0). The entry cue is where the segment counts as started (0 here),
   the exit cue where the next segment is aligned; audio after the exit cue is the post-exit tail (the radio jingles), before the entry
@@ -203,8 +244,21 @@ Silences are 15-60 s in the beds, 5-60 s in the other layers. Segment volumes ra
   old tail keeps sounding over it. Groups: *step* plays one child per pass of the group, *continuous* plays all children (in random
   order for random, shuffled without replacement with shuffle); weights set the odds; avoid-repeat excludes the last N picks; the loop
   count repeats the group (0 forever) and a segment item (MT: forever = sample-exact repeat at 281,708.1 ms).
+- **Rules.** The rule with the best (source, destination) match applies. With two any → any rules (the bed switches, the main theme)
+  which one wins is **Unknown**: the first means switching `Day` ↔ `Night` waits for the current piece's exit cue (up to ~100 s) and cuts,
+  the second crossfades at once (fade-out ~10.4 s, fade-in ~10 s). Which reference point the fade offsets shift is **Unknown**; the
+  values (+3200 out, −3200 in) suggest a crossfade that straddles the sync point.
 - **Stop.** A stop action fades the playing instance over its fade time and ends it; a stop on an ancestor (`00DBE1E6`) ends everything
   under it, in any bank.
+
+## Global settings (`STMG`)
+
+In `Init.bnk` only. f32 volume threshold (−80), u16 maximum voices (256), u32 state group count, per group u32 id, u32 default transition
+(ms), u32 count and (u32 from, u32 to, u32 ms) transitions; u32 switch group count, per group u32 id, u32 game parameter, u32 count and
+(f32, u32, u32) points; u32 game parameter count, per parameter u32 id, f32 **default value**, u32 ramp type, f32 ramp up, f32 ramp down,
+u8 built-in. **Verified** by size (the 546 bytes are used exactly; the switch group entry layout is a guess, Kenshi has none). Kenshi: two
+state groups (`Time_in_Game` 1000 ms, `C2E2475B` 500 ms) and 24 game parameters, `Camera_Zoom` 50, `Time_in_Game` 5, the user volumes 50
+or 100 ([audio.md](../audio.md#game-parameters-and-states)).
 
 ## Buses
 
@@ -215,6 +269,12 @@ effect u8 slot, u32 effect id, u8 is-share-set, u8 is-rendered; 6 bytes (Unknown
 listed in [audio.md](../audio.md#volumes)); u32 state group count (0). **Verified**: exact size for all 15 buses (11 buses, 4 aux buses).
 Sounds reach a bus through the nearest node with an override bus id (in the biome banks the top actor-mixer goes to the SFX bus
 `59927CD0` and the one below it to the ambience bus `95836E4C`).
+
+**Aux buses** (**Observed**, `Init.bnk`, `Reverb_*` banks): indoor `23F4785D` has slot 0 = RoomVerb `21C5CB35` (big room) and slot 1 = `1284F30B`
+(small room), both bypassed at start (bypass bits 3); outdoor `5E1D37D4` has slot 0 = `3C6A9ABC`, bus volume −9 dB, bypassed at start.
+The game switches them with Bypass-effects actions (scope 2): every biome `Enter_*` event unbypasses outdoor slot 0 (mask 01);
+`Enter_Building_Big` (`AD014E1F`) unbypasses indoor slot 0 and bypasses outdoor (mask 0x11 = all slots); `Enter_Building` (`C26421B4`) unbypasses
+indoor slot 1 and bypasses outdoor; `Leave_Building` (`704C22D9`) bypasses indoor and unbypasses outdoor.
 
 ## Attenuation (14)
 
@@ -230,6 +290,13 @@ which the game cannot use: it sets no orientation on emitters.
 Effect (19) and effect share set (18): u32 plug-in id, u32 parameter size, the parameters, u8 media count (0), the RTPC list, u16 0. **Verified**:
 exact size for all 11 (6 in `Init.bnk`, 3 more in the reverb banks). Plug-ins in the banks: `0x00760003` RoomVerb (`1284F30B` 0.9 s decay, `21C5CB35`
 3.2 s, `3C6A9ABC` outdoor 1.9 s, share sets `769EF412`, `02E5E37F`), `0x00690003` parametric EQ (`1E402603`, `2CB4FF60`), `0x006C0003` compressor (`395A8EFF`).
+
+**RoomVerb parameters** (**Observed**, from the values; 20 f32 then bytes): 0 decay time (s), 1 high-frequency damping (kHz), 2 diffusion (%), 3 stereo width
+(degrees), 4-12 three filter bands (gain dB, frequency, Q), 13-15 front, rear and centre level, 16 dry level (−96.3 dB), 17-19 levels in dB: 17 is 0
+and 18 and 19 are the two wet levels (small indoor −7 / −28, big indoor −16 / −21, outdoor −25 / −20). **Unknown**: the trailing bytes (byte 80 = 1, a
+pattern id 23 / 9 / 29, millisecond values such as 34 / 6 / 11 / 67 / 79 or 123 / 95 / 53 / 62), which of the two wet levels is early reflections
+and which the tail. The outdoor effect has three RTPCs on `Camera_Zoom` for parameter ids 16 (a 25.6 .. 175.4 curve, read as pre-delay ms,
+**Unknown**), 60 and 62 (dB curves falling to about −1 at zoom 100, so the reverb fades as the camera rises).
 
 ## How an ambience bank is built (Observed, e.g. `SFX_Amb_Desert`)
 
@@ -314,6 +381,16 @@ expanded codebooks decode):
   `lookup1_values` multiplicands as in Vorbis.
 - Each takes `bits / 8 + 1` bytes: a whole extra byte when it ends on a byte boundary.
 
+### The codebook library
+
+The library is part of the game's Wwise decoder in `kenshi_x64.exe`: a table of 599 increasing 64-bit pointers in `.data` (598
+codebooks and the end) into one block of packed codebooks in `.rdata` (about 72 KB). `WwiseCodebookLibrary.FromExecutable` finds it in any non-code section by
+that shape (a run of 200+ increasing pointers at most 8000 bytes apart) and accepts it only if every entry parses to exactly its span.
+So it is read from the user's install, never shipped, and no exe build's offsets are hardcoded. **Verified** on the Steam exe
+(36,718,592 bytes): one such table, 598 codebooks (**Observed**; every ambience WEM decodes against it). Other builds (GOG, older
+versions): **Unknown**. A GOG install has no `kenshi_x64.exe` (**Observed** in a GOG user's log); its exe is taken to be `kenshi_GOG_x64.exe` (**Unknown**: the
+name GOG's build is known by, not checked on a GOG install), so `GameInstall.Executable` takes the first of the two names that exists. A failure logs why: the exe missing, or its size, sections and longest pointer run.
+
 ### Audio packets
 
 A Vorbis audio packet without its first bit (the packet type, 0) and, for a long block, without the previous/next window flags. The
@@ -321,3 +398,13 @@ converter writes the type bit, copies the mode number (`ilog(modes - 1)` bits), 
 packets' modes (previous = the previous packet is a long block, next = the next one is), then copies the rest. Granule positions are
 rebuilt from the block sizes (each packet after the first adds a quarter of its own and of the previous block size), and the last page
 gets the sample count so the decoder trims the end.
+
+The flags follow the Vorbis definition (the encoder writes exactly the neighbours' block types), but no signal test singles them out:
+at long/short transitions, forcing every flag to "short" gives identical output (both reconstruct completely there), while forcing them
+to "long" or swapping them changes it, and a mismatched window both attenuates and aliases, so energy measures do not decide.
+**Observed**, and confirmed by listening (2026-10-10: the owner heard the decoded beds and one-shots clean, no clicks).
+
+## Version 88 (`SFX_Bank`)
+
+The sections and object headers read the same way. The object bodies differ: e.g. a sound's source has a u32 where version 112 has
+the u8 stream type (the source id is 3 bytes later). Not decoded; **Unknown**.

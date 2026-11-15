@@ -44,6 +44,7 @@ surveyed post/compositor files. Absence is scoped to those sources, not all poss
 
 | Unit | Texture | Sampling |
 | --- | --- | --- |
+| 0 `flow` | `materials/FlowHAZE.dds` (2048², BC1, 12 mips) | not set in the material: Ogre's default, which the game sets to **anisotropic, anisotropy 16** (FUN_140815b40: `MaterialManager::setDefaultTextureFiltering(TFO_ANISOTROPIC)` through its vtable slot 37, then `setDefaultAnisotropy(16)`; **Verified (decompiled)**, slot checked against OgreMain's RTTI table), wrap addressing (Ogre's default; **Observed**) |
 | 1 `perturbation` | `materials/Perturber.dds` (2048², BC1, 12 mips; a tangent-space normal map) | the same default |
 | 2 `depth` | G-buffer target 2 | `filtering none`, clamp |
 | 3 `base` | the previous node's picture | `filtering bilinear`, clamp |
@@ -56,7 +57,8 @@ surveyed post/compositor files. Absence is scoped to those sources, not all poss
 | Exposure | Kenshi's auto exposure (game sky) | exposure multiplier (Tab slider, keys) | Kenshi: 0.55 / adapted, band from CONSTANTS |
 | Curve | clamp at 1 | clamp at 1; shoulder or aces (the Tab slider; the `--tonemap` options were removed) as options (not a switch) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
-| Bloom | off | off; an option a look preset or the slider sets (point spread function, render-post.md) | Kenshi: magnitude 0 |
+| SSAO on characters | n/a (no SSAO) | the occlusion is scaled to 0.25 on the characters' own pixels (`PostOptions.SsaoCharacterStrength`, a constant; Meitou feature, no game counterpart; **Observed** on a `--crowd` view, no game reference) | Kenshi: none |
+| Bloom | off | off; an option a look preset or the slider sets (point spread function, [render-post.md](../render-post.md#bloom)) | Kenshi: magnitude 0 |
 | Depth of field | off | off; an optional switch for the free and cinematic cameras ([render-post.md](../render-post.md#depth-of-field)) | Kenshi: none found |
 | Grading, vignette | none | grading (Tab slider; saturation 1.06, contrast 1.05 as constants; the `--grade`, `--saturation` and `--contrast` options were removed); no vignette | Kenshi: none |
 | FXAA | FXAA 3.11 quality, green as luma, subpix 0.75, thresholds 0.166 / 0.0833, preset-12 search steps, on the LDR composite (Faithful anti-aliasing; `--no-fxaa`) | TAA, FSR or DLSS instead (Meitou anti-aliasing) | Kenshi: FXAA 3.11, 0.75 |
