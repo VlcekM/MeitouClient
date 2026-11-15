@@ -117,7 +117,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
 
             string mods = string.Join(", ", Blanks.Take(NamedBlanks).Select(b => b.Mod));
             if (Blanks.Count > NamedBlanks) mods = Loc.Format(LauncherText.Translate("{1} and {2} more"), mods, Blanks.Count - NamedBlanks);
-            string text = LauncherText.Translate("Empties file paths in {1} records of {2}: move it above them");
+            string text = LauncherText.Translate("Empties file paths in {1} records of {2}: it likely belongs above them");
             return Loc.Format(text, Blanks.Sum(b => b.Records), mods);
         }
     }
