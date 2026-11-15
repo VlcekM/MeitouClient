@@ -1228,6 +1228,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             bool wantNormal = part.HasTangents || m?.Alpha == AlphaSource.NormalAlpha || (m?.Emissive ?? false);
             bool wantSecond = part.HasColours;
 
+            // A see-through item's opacity map rides in the second set's diffuse slot: an item's material is never dual.
+            var second = m?.Alpha == AlphaSource.Opacity
+                ? m.Opacity
+                : wantSecond
+                    ? m?.Diffuse2
+                    : null;
+
             // The textures are made without loading (<c>deferred</c>): <see cref="Resolve"/> tells them how near they are used, then reads their
             // keys.
             var tile = m?.Tile ?? Vector2.One;
@@ -1237,7 +1244,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;
             result[i] = new ObjectPartMaterial(m, _textureCache.Get(m?.Diffuse, border, deferred: true),
                 wantNormal ? _textureCache.Get(m?.Normal, border, deferred: true) : null,
-                wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null,
+                second is null ? null : _textureCache.Get(second, border, deferred: true),
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
             {
@@ -1821,6 +1828,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal Func<Vector3, float, bool>? MirrorCull { get; set; }
 
     /// <summary>
+    /// The frame's jitter in NDC (0 without a temporal method), set by the world frame: it moves the see-through items' dither each frame
+    /// (<see cref="OpacityDither"/>). The shadow passes take none, so a cascade kept over several frames holds a still pattern.
+    /// </summary>
+    public Vector2 DitherJitter { get; set; }
+
+    /// <summary>
     /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>. The vertices are projected relative to the eye
     /// (BuildingLodShaders.Vertex): <paramref name="relative"/> is the view-projection without the eye's translation when the caller has it
     /// formed precisely (the scene's, WorldFrame), else translation(eye) x <paramref name="viewProjection"/>.
@@ -1880,6 +1893,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 LightDir = light,
                 FogColour = fogColour,
                 FogDistance = fogDistance,
+                JitterNdc = _depthPass ? default : DitherJitter,
             };
             if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
@@ -2511,7 +2525,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
-                    d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
+                    bool dithered = d.Push.AlphaSource == (int)AlphaSource.Opacity;
+                    d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f && !dithered;
                     d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true } && !(_depthPass && CastersBothSides);
                 }
                 DrawCalls++;
@@ -2547,14 +2562,18 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         uint normalId = textured ? pm.Normal : 0;
         bool normal = options.NormalMaps && textured && normalId != 0 && gp.HasTangents;
         uint diffuse2 = textured ? pm.Diffuse2 : 0;
-        bool dual = textured && diffuse2 != 0 && gp.HasColours;
+        var alpha = m?.Alpha ?? AlphaSource.None;
+
+        // A see-through item: its opacity map is in the second diffuse slot (MakeMaterials); drawn solid until that map is resident.
+        bool seeThrough = alpha == AlphaSource.Opacity && textured && diffuse2 != 0;
+        bool dual = textured && diffuse2 != 0 && gp.HasColours && alpha != AlphaSource.Opacity;
         d.Diffuse = textured ? diffuse : 0;
         d.Normal = normalId;
-        d.Diffuse2 = dual ? diffuse2 : 0;
+        d.Diffuse2 = dual || seeThrough ? diffuse2 : 0;
         d.Normal2 = dual ? pm.Normal2 : 0;
         d.Metal = textured ? pm.Metal : 0;
-        var alpha = m?.Alpha ?? AlphaSource.None;
-        if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
+        bool noCutMap = alpha == AlphaSource.NormalAlpha && normalId == 0 || alpha == AlphaSource.Opacity && !seeThrough;
+        if (!textured || noCutMap) alpha = AlphaSource.None;
 
         // The cut-out mask is the normal map's alpha: sampled whenever the map exists (the lighting checks for tangents itself).
         bool cut = alpha == AlphaSource.NormalAlpha;
@@ -2570,7 +2589,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         pc.AlphaChannel = Math.Clamp(m?.AlphaChannel ?? 3, 0, 3);
         pc.GreyChannel = textured ? m?.GreyChannel ?? -1 : -1;
         pc.Tint = m?.Tint ?? Vector3.One;
-        pc.AlphaThreshold = alpha == AlphaSource.None ? 0f : m!.AlphaThreshold;
+        pc.AlphaThreshold = alpha is AlphaSource.None or AlphaSource.Opacity ? 0f : m!.AlphaThreshold;
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;

@@ -235,4 +235,6 @@ GPU culling, merged far shadow casters (one skinning per frame for every cascade
 original animation-update budgets remain incomplete. The `charlod` switch picks the files' own levels instead (Faithful; [characters](characters.md#lod-of-character-meshes)). Tests pin layouts/data; visual parity requires named screenshots across
 races, bodies, gear, animals, attachments, motion and shadow views. [bench](bench.md).
 
+**See-through items** (Meitou, a mod's `opacity map`): [render-objects](render-objects.md#see-through-items-meitou-issue-562).
+
 **Gear blood** (Meitou, optional `gearblood`): material flag `GearBloody` (1 << 29) rides in the item's hair fields (colour, scales, blade axis); instance flag bit 30 `WeaponBlood` puts a weapon's colour and amounts in the w of matrix rows 0 and 1, worn items' body amounts in all four as for the body. See [blood-decals.md](game/blood-decals.md#on-weapons-and-gear-meitou).

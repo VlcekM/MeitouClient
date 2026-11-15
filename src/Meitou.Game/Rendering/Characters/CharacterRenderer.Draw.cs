@@ -182,6 +182,12 @@ internal sealed unsafe partial class CharacterRenderer
     internal FogVolumes? FogCull { get; set; }
 
     /// <summary>
+    /// The frame's jitter in NDC (0 without a temporal method), set by the world frame: it moves the see-through items' dither each frame
+    /// (<see cref="OpacityDither"/>). The shadow, icon and portrait views take none: a still pattern.
+    /// </summary>
+    public Vector2 DitherJitter { get; set; }
+
+    /// <summary>
     /// Room masks used to give indoor characters the same indirect-light gain as their surroundings.
     /// </summary>
     internal WorldObjectRenderer? InteriorObjects { get; set; }
@@ -195,8 +201,16 @@ internal sealed unsafe partial class CharacterRenderer
         Matrix4x4? relative = null)
     {
         _shownLight = light;
-        DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance },
-            eye, frustum, relative: relative);
+        var view = new ViewConstants
+        {
+            ViewProjection = viewProjection,
+            Eye = eye,
+            LightDir = light,
+            FogColour = fogColour,
+            FogDistance = fogDistance,
+            JitterNdc = DitherJitter,
+        };
+        DrawView(view, eye, frustum, relative: relative);
     }
 
     /// <summary>

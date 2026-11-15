@@ -66,7 +66,9 @@ static class CharacterShaders
         LimbMetal = 1 << 28,
         // Blood on a worn item (drawn from the race's blood and the body part under each vertex) or on a held weapon's blade (from the instance;
         // Meitou, optional: docs/game/blood-decals.md "On weapons and gear").
-        GearBloody = 1 << 29;
+        GearBloody = 1 << 29,
+        // A see-through item (Meitou; OpacityDither): its opacity map, in SlotOpacity and resident, is dithered in the colour and shadow passes.
+        SeeThrough = 1 << 30;
     /// <summary>
     /// Instance flag (CharInstance.Flags; bit 0 interior, 1-11 the water's mark (CharacterRenderer.SoakBits), 12-15 hidden limbs, 16-17 the boots'
     /// side, 18-27 hidden parts): a headless body (Meitou decapitation): its head vertices (CharacterContent.HeadBit) are hidden.
@@ -96,6 +98,11 @@ static class CharacterShaders
     /// </summary>
     public const int SlotDiffuse = 0, SlotNormal = 1, SlotColourMap = 2, SlotHeadDiffuse = 3, SlotHeadNormal = 4, SlotHeadMask = 5, SlotBodyMask = 6,
         SlotHairOverlay = 7, SlotBeardOverlay = 8, SlotVest = 9, SlotBlendNormal = 18, SlotBlood = 19, Slots = 20;
+
+    /// <summary>
+    /// A see-through item's opacity map (<see cref="SeeThrough"/>): the muscle blend's slot, which only a body uses.
+    /// </summary>
+    public const int SlotOpacity = SlotBlendNormal;
 
     /// <summary>
     /// The push block's members (<see cref="CharacterPush"/>): the flat colour, the motion pass's depth index, the fill light and the skin table's
@@ -293,9 +300,16 @@ static class CharacterShaders
     /// instances differ in material) but constant over a primitive, so the derivatives of the quad are fine. The cut-outs discard after every lookup
     /// (no derivatives after an OpKill).
     /// </summary>
-    const string Lookup = """
+    static readonly string Lookup = """
         vec4 tex(uint i, vec2 uv) { return texture(textures2D[nonuniformEXT(i)], uv); }
         vec4 hairTex(CharMaterial m, vec2 uv) { return texture(textures2D[nonuniformEXT(m.tex[0])], uv, m.hairColour.w); }
+        """ + OpacityDither.Function("view.jitterNdc") + $$"""
+        // A see-through item (flag SeeThrough): whether the frame's dither drops the fragment, by its opacity map's red.
+        bool seeThroughCut(CharMaterial m, vec2 uv)
+        {
+            return m.shading == 0u && (m.flags & {{SeeThrough}}u) != 0u && opacityDither() >= tex(m.tex[{{SlotOpacity}}], uv).r;
+        }
+
         """;
 
     /// <summary>
@@ -481,6 +495,7 @@ static class CharacterShaders
                 vec3 cm = flag(f, 1024u) ? tex(m.tex[2], uv).rgb : vec3(0.0);
                 // Inventory RTT materials reject at 0.5; worn clothing retains its separate 0.6 threshold.
                 cut = clip && nm.a < (view.fogDistance < 0.0 ? 0.5 : 0.6);
+                if (seeThroughCut(m, uv)) cut = true;
                 if (flag(f, 1024u))
                 {
                     float intensity = dot(d.rgb, vec3(1.0 / 3.0));
@@ -779,6 +794,7 @@ static class CharacterShaders
                 cut = dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold;
             else if (m.shading == 0u && (f & 512u) != 0u)
                 cut = tex(m.tex[1], vUv).a < 0.6;
+            if (seeThroughCut(m, vUv)) cut = true;
             if (cut) discard;
             shadowWriteDepth();
         }
@@ -811,6 +827,8 @@ static class CharacterShaders
             if ((f & 32768u) != 0u) discard;
             if (m.shading == 2u && (f & 1u) != 0u) { if (dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold) discard; }
             else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
+            // A see-through item needs no dither here: where the colour pass dropped its fragment the stored depth is what lies behind,
+            // which the test below rejects.
             float stored = texelFetch(textures2D[nonuniformEXT(pc.depthIndex)], ivec2(gl_FragCoord.xy), 0).r;
             if (depthIsSky(stored)) discard;
             float zs = depthViewZ(stored, view.nearPlanes), zf = depthViewZ(gl_FragCoord.z, view.nearPlanes);

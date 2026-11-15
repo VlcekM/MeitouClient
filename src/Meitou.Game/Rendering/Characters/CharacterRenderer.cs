@@ -1872,6 +1872,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (m.LimbMetal) flags |= CharacterShaders.LimbMetal;
         if (m.MetalMap && has[CharacterShaders.SlotColourMap]) flags |= CharacterShaders.HasMetalMap;
 
+        // Solid until the opacity map is resident.
+        if (m.SeeThrough && has[CharacterShaders.SlotOpacity]) flags |= CharacterShaders.SeeThrough;
+
         // Textures assigned but not resident yet: a hair's diffuse (its cut-out), a clipped item's normal map, the head's maps.
         if (m.Shading == CharacterShaders.ShadeHair && m.Tex[CharacterShaders.SlotDiffuse] is not null && !has[CharacterShaders.SlotDiffuse]
             || m.ClipOnNormalAlpha && m.Tex[CharacterShaders.SlotNormal] is not null && !has[CharacterShaders.SlotNormal])

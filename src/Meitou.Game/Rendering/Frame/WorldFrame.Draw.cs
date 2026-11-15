@@ -252,6 +252,11 @@ static partial class WorldFrame
         f.Render.TerrainPixelScale = TerrainLod.ProjectionScale(f.RenderHeight, f.Camera.FieldOfView);
         if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = f.Render.TerrainPixelScale;   // the terrain layers' near ranges
         f.Jitter = post.JitterPixels;
+
+        // The see-through items' dither moves with the jitter (OpacityDither).
+        var ditherJitter = OpacityDither.JitterNdc(f.Jitter, f.RenderWidth, f.RenderHeight);
+        if (gpu.Objects is { } ditherObjects) ditherObjects.DitherJitter = ditherJitter;
+        if (gpu.Characters is { } ditherCharacters) ditherCharacters.DitherJitter = ditherJitter;
         f.Eye = f.Camera.Eye;
         f.EyeResidual = f.Camera.EyeResidual;
         gpu.Guard?.Tick();

@@ -142,6 +142,33 @@ whole-world transform the layers of one mesh a hair apart can fight for depth; t
 Shading still uses the absolute world position. **Observed** (The Hub, offscreen, three views): the picture within 0.15/255 mean of the
 whole-world transform. **Unknown** whether this was the z-fighting the user reported on ruins (not reproduced: no location yet).
 
+## See-through items (Meitou, issue #562)
+
+For mods; no base-game record uses it. A `MATERIAL_SPECS_CLOTHING` record with the file field `opacity map` (`OpacityDither.MapField`) is partly
+see-through: the map's red channel is the opacity (1 solid, 0 clear), on the item's own UVs. Without the field nothing changes.
+
+- **The original** shows such an item solid: **Verified** `fcs.def` (1.0.68) has no `opacity` key and the 1.0.68 decompile no `opacity map` string.
+  A separate map because the existing alphas are taken: diffuse alpha is gloss, and the original cuts worn items where normal alpha is under 0.6
+  and drawn icons under 0.5 ([characters](characters.md), [ui-screens](game/ui-screens.md) "Item icons"), so opacity there would punch holes.
+  **Unknown**: whether FCS shows the field once a modder adds `opacity map: TEXTURE_ANY` under `[MATERIAL_SPECS_CLOTHING]` in their `fcs.def`.
+- **How it is drawn**: no blended pass. A fragment is dropped where `opacityDither()` (the LOD cross-fade's interleaved gradient noise plus a
+  per-frame offset hashed from the view's `jitterNdc`) is not under the opacity, so the surface keeps its depth for SSAO, motion vectors, the
+  water and the sun passes, and TAA/FSR/DLSS average it into glass. With no jitter (no temporal method, shadow cascades, icons, portraits) the
+  pattern is still: a fixed stipple. The water reflection's draw takes the frame's jitter too.
+- **Ground items** (`WorldObjectRenderer`): `AlphaSource.Opacity`, the map in the second diffuse slot (an item's material is never dual), the
+  cut-out program only; it replaces the ALPHA type's cut-out. The shadow caster uses the same dither, the shadow filter blurring it. The GI's and
+  the traced sun's rays take the item as solid (`RayCut`).
+- **Worn and held items, icons** (`CharacterShaders.SeeThrough`, the map in `SlotOpacity`): colour and shadow passes; the worn and icon cut-outs
+  on normal alpha stay. The motion pass needs no dither (its depth compare rejects the dropped pixels); hover and pick masks are solid.
+  Supersampled icons average 4 x 4 samples into alpha.
+- Drawn solid until the opacity map is resident.
+- Cost without such a material: the solid (no-discard) object program is untouched; the others gain one constant or flag test. **Observed**
+  (offscreen `--view hub`, 3 interleaved pairs of builds, RTX 4070, DLSS 0.667 at 720p): GPU total 2.62 against 2.63 ms, objects 0.205 against
+  0.205 ms, shadows 0.249 against 0.250 ms. **Unknown**: the character pass (the viewer draws none, `--crowd` included).
+- **Observed** (headless icons of four base items given their diffuse as opacity map): plain icons alpha 0 or 255 with mean alpha about halved,
+  supersampled ones all partial alpha; a diagonal grain shows (17 levels). **Unknown**: the look in the world (ground, worn, shadows, under DLSS
+  in motion) has not been seen; only the shaders' compilation is checked there.
+
 ## Building sign highlight
 
 `WorldObjectRenderer.HighlightSigns` splits real parts with owning BUILDING `is sign` into yellow-tinted
