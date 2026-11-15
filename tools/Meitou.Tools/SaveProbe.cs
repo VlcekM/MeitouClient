@@ -90,6 +90,7 @@ static class SaveProbe
             case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : null); return true;
             case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
+            case ("containers", >= 1): Containers(probe, float.Parse(a[0])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
             case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
@@ -930,6 +931,37 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The containers within <paramref name="radius"/> of the leader: building, record, lock, own items, and the building shop whose stock
+    /// container each is, with its rectangle and the stock items in it (what its window shows).
+    /// </summary>
+    static void Containers(ProbeWorld probe, float radius)
+    {
+        var world = probe.World;
+
+        foreach (var f in world.Fixtures.All.Where(f => f.Contents is not null && Vector3.Distance(f.Position, probe.LeaderPosition) < radius))
+        {
+            Console.WriteLine($"container {f.Id} building={f.Building} '{probe.Db.Find(f.RecordId)?.Name}' at {f.Position:F0} "
+                + $"locked={f.Lock?.Locked} own={f.Contents!.Items.Count}");
+
+            foreach (var q in world.Squads.All)
+            {
+                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.RegionOf(f.Id, out var region)) continue;
+
+                int held = shop.Stock.Items.Count(region.Holds);
+                Console.WriteLine($"  shop of squad {q.Id} '{q.Name}' template={q.TemplateId} region={region} stock={shop.Stock.Items.Count} "
+                    + $"here={held}");
+            }
+        }
+
+        foreach (var q in world.Squads.All.Where(q => q.HomeBuilding is { } h && Vector3.Distance(h.Position, probe.LeaderPosition) < radius))
+        {
+            string shop = q.Shop is { } s ? $"{s.Stock.Items.Count} items, fills={s.Fills} restock={s.NextRestockTick}" : "none";
+            Console.WriteLine($"home {q.HomeBuilding!.Key} squad {q.Id} '{q.Name}' template={q.TemplateId} members={q.Members.Count} "
+                + $"shop={shop} tick={world.Tick}");
+        }
+    }
+
+    /// <summary>
     /// The player's buildings within <paramref name="radius"/> of the leader: id, record, position, floor, the building they stand in and whether
     /// they are complete.
     /// </summary>
@@ -1185,6 +1217,7 @@ static class SaveProbe
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
+              containers <radius>      containers near the leader: own items, building shop stock in each, homes
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors

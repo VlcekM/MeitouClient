@@ -864,24 +864,81 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Fills the shop again (the specials on its first fill), sets the squad's purse, relocks a building shop's containers that hold stock and sets
-    /// the next restock tick.
+    /// Fills the shop again (the specials on its first fill), sets the squad's purse, spreads a building shop's new stock over its containers and
+    /// relocks those that hold some, and sets the next restock tick.
     /// </summary>
     void Refill(World world, Squad squad, Shop shop, SquadTemplate template)
     {
         squad.Money = ShopFiller.Fill(shop, template, Market(world), _data, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
 
-        // The building filler unlocks the stock containers it fills (FUN_14095b210), then locks each that holds something (FUN_1409565e0, #328).
         if (shop.Building is not null && squad.HomeBuilding is { } home)
         {
-            foreach (var f in home.Fixtures)
-            {
-                if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Lock is { } l)
-                    l.Locked = shop.RegionOf(f.Id, out var region) && shop.Stock.Items.Any(region.Holds);
-            }
+            SpreadStock(world, shop, home, template, (ulong)squad.Id);
+            Relock(world, shop, home);
         }
 
         shop.NextRestockTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);
+    }
+
+    /// <summary>
+    /// A building shop's new stock is spread over its containers as a stocked home's (<see cref="HomeStock"/>): the original's building filler
+    /// (<c>FUN_14095b210</c>) fills a trader's home the same way, so its barrels and cabinets hold goods, not only the first container (#768). The
+    /// unique items kept from before stay where they lie, their cells taken by copies while the spread runs; what no usable container takes is
+    /// lost. A shop none of whose containers is registered keeps the fill as it was put.
+    /// </summary>
+    void SpreadStock(World world, Shop shop, Meitou.Data.World.TownBuilding home, SquadTemplate template, ulong key)
+    {
+        var boxes = StockBoxes(world, home).Where(b => shop.RegionOf(b.Fixture.Id, out _)).ToList();
+        if (boxes.Count == 0) return;
+
+        var made = shop.Stock.Items.Where(i => !i.Unique).ToList();
+        shop.Stock.Items.RemoveAll(i => !i.Unique);
+        var kept = BlockKept(shop, boxes);
+
+        var usable = HomeStock.Usable(boxes, VendorEntries(template, FactionRecord(shop.Terms.Faction)));
+        var rng = new RandomStream(world.Seed, Rng.Mix(key ^ SpreadSalt ^ ((ulong)shop.Fills << 40)), RngPurpose.Trade);
+        HomeStock.Spread(usable, made, Market(world).BaseValue, ref rng);
+
+        foreach (var box in boxes) box.Grid.Items.RemoveAll(kept.Contains);
+        TakeContents(world, shop);
+    }
+
+    /// <summary>
+    /// Puts a copy of each unique item of the stock into the container whose rectangle holds it, at its cell there, so the spread leaves those cells
+    /// free; returns the copies.
+    /// </summary>
+    static HashSet<ItemInstance> BlockKept(Shop shop, List<StockBox> boxes)
+    {
+        var kept = new HashSet<ItemInstance>(ReferenceEqualityComparer.Instance);
+
+        foreach (var box in boxes)
+        {
+            shop.RegionOf(box.Fixture.Id, out var region);
+
+            foreach (var item in shop.Stock.Items.Where(region.Holds))
+            {
+                var copy = item.WithQuantity(item.Quantity);
+                copy.Unique = true;
+                (copy.X, copy.Y) = (item.X - region.X, item.Y - region.Y);
+                box.Grid.Items.Add(copy);
+                kept.Add(copy);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// The building filler unlocks the stock containers it fills (<c>FUN_14095b210</c>), then locks each that holds something (<c>FUN_1409565e0</c>,
+    /// #328).
+    /// </summary>
+    static void Relock(World world, Shop shop, Meitou.Data.World.TownBuilding home)
+    {
+        foreach (var f in home.Fixtures)
+        {
+            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Lock is { } l)
+                l.Locked = shop.RegionOf(f.Id, out var region) && shop.Stock.Items.Any(region.Holds);
+        }
     }
 
     /// <summary>

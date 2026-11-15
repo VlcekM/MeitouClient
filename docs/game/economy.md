@@ -156,6 +156,8 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   (meaning **Unknown**); the first fill passes 1 and never skips.
 - Meitou, non-traders (`TradeSystem.FillHome`, `StockEmptyHome`): the stock rolls as a building shop's and is spread as below (`HomeStock`); engine choices: the special items are
   spread with the vendor items, the purse is untouched, and a refill comes every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
+- Meitou, traders (`TradeSystem.SpreadStock`): each fill of a building shop is spread the same way over its stock containers, the kept unique items staying where they lie; before
+  #768 it all went into the first container's rectangle, so a stock saved then stays there until its next restock.
 - **Containers** (`FUN_1409562f0`): the home's interior objects whose functionality is 2 BF_RESOURCE_STORAGE, 9 BF_SHOP or 13 BF_GENERAL_STORAGE and that have an inventory. Each
   has a type (the `StorageBuilding` field `+0x440`, read as a function 2 building's `itemtype limit`; ITEM for any other building, **Observed**), its section's `limit inventory`
   list (function 2 only, [storage](buildings-production.md)) and its lock's level (0 without a lock).
