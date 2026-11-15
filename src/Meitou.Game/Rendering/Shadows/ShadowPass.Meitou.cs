@@ -419,9 +419,10 @@ public sealed unsafe partial class ShadowPass
     bool _storedHandoff;
 
     /// <summary>
-    /// The cascades this frame start where the rays end: traced with <see cref="FarCascades"/>, over a range that leaves them room.
+    /// The cascades this frame start where the rays end: traced with <see cref="FarCascades"/>, over a set range that leaves them room (the set
+    /// one, not <see cref="EffectiveRange"/>: the fog's cap and the memory guard move that from frame to frame, and each change of mode redraws all).
     /// </summary>
-    bool Handoff => Traced && FarCascades && EffectiveRange >= 2 * TracedHandoff;
+    bool Handoff => Traced && FarCascades && Settings.Range >= 2 * TracedHandoff;
 
     /// <summary>
     /// One frame of the Meitou shadows: the splits, which cascades are drawn now (wanted, the far budget, a flight), the drawing, the blocker,
@@ -433,7 +434,7 @@ public sealed unsafe partial class ShadowPass
         Array.Clear(PhaseMs);
         bool handoff = Handoff;
         int count = handoff ? HandoffCascades : MeitouCascades;
-        if (_atlas is not null && _atlasLayers != count) _meitouValid = false;   // a new array holds nothing: every cascade again
+        if (_atlas is not null && (_atlasLayers != count || handoff != _storedHandoff)) ForgetCascades();
         Resize(Settings.TileSize, count);
         if (_phases.Length != count) _phases = Phases(count);
         var splits = CascadeSplits(view, handoff, count);
@@ -490,12 +491,21 @@ public sealed unsafe partial class ShadowPass
     }
 
     /// <summary>
+    /// Every cascade drawn again, none kept waiting: a new array holds nothing, and a stored cascade of another layout covers other depths.
+    /// </summary>
+    void ForgetCascades()
+    {
+        _meitouValid = false;
+        Array.Clear(_stored);
+    }
+
+    /// <summary>
     /// The splits of <paramref name="count"/> cascades: from the camera's near plane, the first sized by its focus; past the traced sun's rays, from
     /// the start of their handoff band to the range.
     /// </summary>
     float[] CascadeSplits(ShadowView view, bool handoff, int count)
     {
-        if (handoff) return MeitouShadowFit.Splits(TracedHandoff * (1 - HandoffBand), EffectiveRange, count);
+        if (handoff) return MeitouShadowFit.Splits(TracedHandoff * (1 - HandoffBand), Math.Max(EffectiveRange, 2 * TracedHandoff), count);
 
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         return MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
@@ -869,7 +879,7 @@ public sealed unsafe partial class ShadowPass
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
-        _meitouValid = false;   // back to the cascades: every one drawn again
+        ForgetCascades();   // back to the cascades: every one drawn again, as the maps hold what was there before the rays
 
         _timer.Begin();
         if (_coarse is not null) _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);

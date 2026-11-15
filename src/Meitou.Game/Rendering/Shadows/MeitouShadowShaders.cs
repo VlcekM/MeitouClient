@@ -72,6 +72,8 @@ static class MeitouShadowShaders
         };
         // While set (kenshiLight, the traced sun's term): the cascades are left out; the rays hold their casters.
         bool msTraced = false;
+        // While set (kenshiLight, the share of a traced receiver the rays hand to the cascades): the cascades alone, not the sun map.
+        bool msCascadesOnly = false;
         // The cross product of the world position's derivatives (the surface's plane), taken by kenshiLight before a branch around the lookup (derivatives need
         // the whole quad), and whether it is set: the lookup then uses it instead of its own.
         vec3 msPlane = vec3(0.0);
@@ -285,12 +287,10 @@ static class MeitouShadowShaders
                 // Traced, what draws no traced pixel (impostors, the reflection, foam, skin entry) reads the sun map: at every depth with no cascade,
                 // else handed to the cascades over the band from cascade 0's first depth to where the rays end, as the traced share is (atmoTracedShare).
                 float cascades = 1.0;
-                if (msVolumeOn())
-                {
-                    csm = msVolumeSurface(world, depth);
+                if (msVolumeOn() && !msCascadesOnly)
                     cascades = int(uShadowForward.w) == 0 ? 0.0 : smoothstep(uMsSlice[0].x, msHandoff(), depth);
-                }
 
+                if (cascades < 1.0) csm = msVolumeSurface(world, depth);
                 if (cascades > 0.0) csm = mix(csm, msCascades(world, depth, ng, nl, noise), cascades);
                 csm = mix(csm, 1.0, smoothstep(uMsParams.z, uMsParams.y, depth));   // no hard edge where the range ends
             }

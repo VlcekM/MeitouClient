@@ -152,7 +152,10 @@ view depth 2000 (`ShadowPass.TracedHandoff`) and four cascades (`HandoffCascades
 (`CascadeSplits`), drawn, cached and filtered as the Meitou cascades are (their blocker search included). `atmoTracedShare` falls from 1 to 0 over 1600-2000 (cascade 0's
 first depth to `msHandoff`), the colour taking the cascades' share; past 2000 no pixel is marked traced, so the rays and the grass reach (`TracedDepth` 2000) end there. The
 sun map stays for what draws no traced pixel nearer than cascade 0 (shafts and lit dust switch at its first depth, `msVolumeServes`; `kenshiShadowMeitou` blends map into
-cascades over the band). A shadow range under 4000 traces every depth as without the switch. In a flight only cascade 0 is published, as with the cascades.
+cascades over the band; a traced receiver's other share there reads the cascades alone, `msCascadesOnly`). A set shadow range under 4000 traces every depth
+as without the switch (the set range: the fog cap moves the effective one each frame). Cascade 0 (1600 to about 2800 at range 10000) is redrawn every frame, cascade 1
+every 4th; in a flight only cascade 0 is published, as with the cascades. A change of layout (the switch, 4 or 5 cascades, back from the rays) drops the stored
+cascades, so every one is drawn that frame instead of one far cascade a frame over stale layers (`ForgetCascades`).
 **Unknown** (not run on a GPU): look and cost; the casters differ across the band (grass, small foliage and construction sites are in one set only), so such shadows
 appear or end there, and the ray penumbra meets the cascades' filter.
 

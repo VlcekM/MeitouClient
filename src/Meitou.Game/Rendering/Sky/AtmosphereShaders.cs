@@ -570,7 +570,9 @@ static class AtmosphereShaders
             bool sunFaced = max(max(nl, max(diffuseNl.x, max(diffuseNl.y, diffuseNl.z))), 0.0) > 0.0;
             bool sunReaches = sunFaced && max(sunBase.x, max(sunBase.y, sunBase.z)) > 0.0 && atmoSelfShadow > 0.0;
             // The sun shadow term (deferred.hlsl: lightColor * shadow); what the traced sun takes over leaves the colour, shadowed by the characters' layers alone.
+            msCascadesOnly = tracedShare > 0.0;   // the rays' handoff band: its other share is the cascades'
             vec3 sun = tracedShare < 1.0 && sunReaches ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
+            msCascadesOnly = false;
             vec3 tracedSun = vec3(0.0);
             if (tracedShare > 0.0)
             {
