@@ -317,6 +317,11 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public int StolenFrom { get; init; } = -1;
     /// <summary>
+    /// The name of the character a stolen item was taken from (<see cref="Items.ItemInstance.Owner"/>; <see cref="CharacterTable.OwnerNameOf"/>), ""
+    /// when that character is not in the world, null when the item is not stolen or its mark names no character: the tooltip's <c>Stolen from:</c>.
+    /// </summary>
+    public string? StolenOwner { get; init; }
+    /// <summary>
     /// The item's <c>unique</c> flag (<see cref="Items.ItemInstance.Unique"/>): the tooltip's [Unique] row.
     /// </summary>
     public bool Unique { get; init; }

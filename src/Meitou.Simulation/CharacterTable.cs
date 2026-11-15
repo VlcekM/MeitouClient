@@ -1467,6 +1467,17 @@ public sealed class CharacterTable
     public CharacterId IdOf(int slot) => new(slot, _previous[slot].Generation);
 
     /// <summary>
+    /// The name of the character <paramref name="id"/> names, "" when it names none in the world (<see cref="TryResolveNext"/>).
+    /// </summary>
+    public string NameOf(CharacterId id) => TryResolveNext(id, out int slot) && Cold(slot) is { } cold ? cold.Name : "";
+
+    /// <summary>
+    /// The tooltip's robbed owner of a stolen item whose mark names <paramref name="owner"/>: its name, "" when it has left the world, null when the
+    /// mark names no character (a building's owning faction; the tooltip then names the faction).
+    /// </summary>
+    public string? OwnerNameOf(CharacterId owner) => owner.IsNone ? null : NameOf(owner);
+
+    /// <summary>
     /// Whether <paramref name="id"/> names a character alive as of the last tick.
     /// </summary>
     public bool IsAlive(CharacterId id) =>

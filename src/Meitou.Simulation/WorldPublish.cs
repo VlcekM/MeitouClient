@@ -826,25 +826,37 @@ public sealed partial class World
     /// <summary>
     /// The inventory panel's items shown in a grid, with <paramref name="steal"/>'s stealing chance of each (null: none).
     /// </summary>
-    static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population,
+    IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population,
         Func<Items.ItemInstance, float?>? steal = null) =>
-        Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section,
-            shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality)
+        Array.AsReadOnly(grid.Shown().Select(shown => ItemViewOf(shown.Index, shown.Item, faction, population, steal)).ToArray());
+
+    /// <summary>
+    /// One item of <see cref="ItemsOf"/>: the stolen faction and the robbed character's name only when it counts as stolen for its holder's
+    /// <paramref name="faction"/>.
+    /// </summary>
+    InventoryItemView ItemViewOf(int index, Items.ItemInstance item, int faction, PopulationData? population, Func<Items.ItemInstance, float?>? steal)
+    {
+        bool stolen = item.IsStolenFor(faction, population);
+
+        return new InventoryItemView(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight,
+            item.Quality)
         {
-            Material = shown.Item.MaterialId,
-            Rotated = shown.Item.Rotated,
-            Colour = shown.Item.ColourId,
-            Charge = shown.Item.ChargeFraction,
-            Company = shown.Item.CompanyId,
-            Crafter = shown.Item.Crafter,
-            Level = shown.Item.Level,
-            Charges = shown.Item.Charges,
-            MaxCharges = shown.Item.MaxCharges,
-            StolenFrom = shown.Item.IsStolenFor(faction, population) ? shown.Item.StolenFrom : -1,
-            Unique = shown.Item.Unique,
-            BagItems = shown.Item.Contents?.Items.Count ?? -1,
-            StealChance = steal?.Invoke(shown.Item)
-        }).ToArray());
+            Material = item.MaterialId,
+            Rotated = item.Rotated,
+            Colour = item.ColourId,
+            Charge = item.ChargeFraction,
+            Company = item.CompanyId,
+            Crafter = item.Crafter,
+            Level = item.Level,
+            Charges = item.Charges,
+            MaxCharges = item.MaxCharges,
+            StolenFrom = stolen ? item.StolenFrom : -1,
+            StolenOwner = stolen ? Characters.OwnerNameOf(item.Owner) : null,
+            Unique = item.Unique,
+            BagItems = item.Contents?.Items.Count ?? -1,
+            StealChance = steal?.Invoke(item)
+        };
+    }
 
     /// <summary>
     /// The bar of Task_PickLock and Task_PickLock_Shackles (docs/game/locks.md "Lockpicking"): "Lockpicking (Chance {p}%)" with the cage penalty,
