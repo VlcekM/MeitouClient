@@ -635,7 +635,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   `uniform` key, a FACTION id resolved through the faction manager; an unresolved id leaves it null), `+0x208` the length of the `crafter` string at `+0x1f8` (the item writer `FUN_140761c00` writes
   `crafter` only when it is set). A uniform costs and sells at 0.3x (both directions, after the sale factor); a crafted piece takes `loot price mult player armour` / `player weapons` instead of GEAR
   when sold. In the siwa-test save 3250 of 14448 item states (the commonest are armour) carry a `uniform` that resolves to a faction record (e.g. `defaultEmpireFactionSID`, the Hive, the Tech Hunters). Meitou: `ItemInstance.Uniform`
-  (read and written with the save key, `Market.UnitPrice`); a recruit join clearing it is **Observed** only (earlier reading, not re-checked).
+  (read and written with the save key, `Market.UnitPrice`); a recruit join clears it ([recruiting](dialogue.md#recruiting), read from the decompile; Meitou: `DialogueSystem` recruit).
   Where it comes from: CHARACTER `wears uniform` (88 true; read by `CharacterHuman::setupInventorySections` `FUN_14062c4e0`, which then takes the faction for the clothing setup,
   **Verified** read, use **Observed**). Meitou (`CharacterAssembly.Attach`): the worn armour of a new character with it is its faction's uniform.
 - **Whether the town being set up is already in the global town list `DAT_142134100` when its own market factors are rolled.**

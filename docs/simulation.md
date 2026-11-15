@@ -1753,8 +1753,7 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
   `max squad size` members: player faction, role Squad1, NPC class Adventurer (as every player-faction character, `CharacterAssembly`), player
   default orders, speed mode Free (2), no AI mind, stopped, its save link dropped (a save writes it as a new member of the player's platoon).
   Its dialogue becomes the player set (`DialogueDatabase.SetFor`). DA 3 ends the conversation and opens the editor in recruit mode
-  (`EditKind.Recruit`: free, race and gender kept). Not modelled: the original's extra empty platoon at the `max squads` cap, and the
-  uniform clear (Meitou has no uniforms).
+  (`EditKind.Recruit`: free, race and gender kept). Every piece a recruit carries loses its `uniform` faction (`ItemInstance.Uniform`, as the original: [recruiting](game/dialogue.md#recruiting)).
 - **Conditions**: most DCs are computed (slavery: 59, 61, 62, 64; faction trust 3; tech level 12; town levels 73, 74); those needing state Meitou lacks (AI flags, strength, perception counters, walls,
   training equipment) compute "no"; DC 69 HAS_ILLEGAL_ITEM (the gate guards' inspections) checks the culture's `illegal goods` ([dialogue](game/dialogue.md#conditions)), posting each find (not on the Talk menu's dry run, once per carrier and item per game hour: engine choice). IN_MY_BUILDING uses the squad's home building and the lock rounds' extent; IS_INDOORS the sight map's building.
 - **Squad memory** (`SquadMemory`, `DialogueSystem.Memory`; [facts](game/dialogue.md#squad-memory)): per squad and character a time and long / short tags, the player faction
