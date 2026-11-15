@@ -789,8 +789,10 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
   current target; × 0.1 when its sense entry is not seen, × 1.5 for the current; best above 1e-6. None: with the player's **Shoot first** option (`DAT_142134690 +0x11a`) a player gunner takes
   sensed characters of fundamental type 0 or 8 or a default-hostile faction (k 0.6); an NPC gunner takes default-hostile ones it is aware of (`FUN_14099b820`) and those fighting a member
   of its own group. An unseen chosen target is looked at (slot 0x3b0).
-- **NPC turret goals** 149/222/234 have list A `isNoEnemiesInVicinity` (with the `*` flag): done, so not chosen, while no enemy is near ([ai-tasks](ai-tasks.md#perma-jobs)).
-- **Unknown:** the meaning of target slots 0x360/0x368 and `FUN_1405ca6f0`; the facing `+0x458`'s writer; how far "vicinity" is; whether `+0x464` resets when the gunner leaves.
+- **NPC turret goals** 149/222/234 have list A `isNoEnemiesInVicinity` (with the `*` flag): done, so not chosen, while the gunner senses no enemy (state 6 is AI `+0xbc`
+  `numEnemies` == 0, `FUN_140597630`, **Verified**; no radius of its own: the senses' reach, [perception](perception.md#senses); [ai-tasks](ai-tasks.md#perma-jobs)).
+  So in peace a town's turrets stand empty and its guards keep their other goals.
+- **Unknown:** the meaning of target slots 0x360/0x368 and `FUN_1405ca6f0`; the facing `+0x458`'s writer; whether `+0x464` resets when the gunner leaves.
 
 - **Save** (**Verified**, decompile): a turret saves its building and machine keys, the `mounted` handle and its gun's int `current shots` (loaded harpoons, capped at the gun's shots on load); the aim error, rotation and reload timer are not saved ([save](../formats/save.md#faction-trust-war-flags-bed-rent-and-turrets)).
 

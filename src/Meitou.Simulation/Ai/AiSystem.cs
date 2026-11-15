@@ -130,12 +130,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float StoreSlack = 20;
 
     /// <summary>
-    /// How near an enemy must be for <c>isNoEnemiesInVicinity</c> to fail (units; <b>engine choice</b>, about a turret's range: the original's radius
-    /// is <b>Unknown</b>).
-    /// </summary>
-    public const float EnemyVicinity = 1000;
-
-    /// <summary>
     /// The live relation table (the population data's).
     /// </summary>
     FactionRelations Relations => data.Relations;

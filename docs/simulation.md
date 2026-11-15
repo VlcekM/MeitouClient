@@ -1914,9 +1914,8 @@ Turret goals (149, 222, 234, 146) man a turret of the squad's town: a placed BUI
 GUN_DATA). In member order each slot claims the nearest free turret and walks to a spot behind its
 gun, facing its way; the home-building goal (222) takes only a turret mounted on its home (the
 state's `mounted` handle). Claim order and gunner spot are engine choices. The goals are done while
-no enemy is near (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): the planner holds it false while an enemy
-(the relations) is within `AiSystem.EnemyVicinity` 1000 (engine choice: the original's radius is Unknown), so guards man the turrets only
-while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
+no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
+enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
 
 ## New-game difficulty
 
