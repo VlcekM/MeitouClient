@@ -111,6 +111,8 @@ sealed class OrdersPanel(PlayerInterface player)
             jobs.Add(new(id, (i + 1).ToString(CultureInfo.InvariantCulture) + ": " + JobRowText(job)));
         }
 
+        AddModJobRows(jobs, lead);
+
         b.Lists["JobsPanel"] = jobs;
         b.Properties["JobsPanel"] = new Dictionary<string, string>
         {
@@ -129,6 +131,22 @@ sealed class OrdersPanel(PlayerInterface player)
 
         b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n["
             + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
+    }
+
+    /// <summary>
+    /// The code mods' jobs (docs/modding.md "Mod jobs") after the lead's own, numbered on, as "Text: building"; their row id is <c>modjob:</c> and the
+    /// kind, so they take the X but no drag.
+    /// </summary>
+    void AddModJobRows(List<UiListItem> jobs, Simulation.CharacterSnapshot? lead)
+    {
+        foreach (var job in lead?.ModJobs ?? [])
+        {
+            if (Simulation.Production.ModJobs.Of(job.Kind) is not { } kind) continue;
+
+            string text = Loc.Tr(kind.Text);
+            if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == job.Site) is { } site) text += ": " + player.Build.SiteName(site);
+            jobs.Add(new("modjob:" + kind.Id, (jobs.Count + 1).ToString(CultureInfo.InvariantCulture) + ": " + text));
+        }
     }
 
     /// <summary>
@@ -326,6 +344,11 @@ sealed class OrdersPanel(PlayerInterface player)
     internal void RemoveJob(string job)
     {
         if ((player.Selected().FirstOrDefault() ?? player.Lead()) is not { IsPlayer: true } lead) return;
+        if (job.StartsWith("modjob:", StringComparison.Ordinal))
+        {
+            player.Say(new Simulation.Production.RemoveModJob(lead.Id, job["modjob:".Length..]) { Tick = player.Session.World.Tick });
+            return;
+        }
         if (!job.StartsWith("job:", StringComparison.Ordinal)) return;
         if (!int.TryParse(job.AsSpan(4), NumberStyles.None, CultureInfo.InvariantCulture, out int index)) return;
 

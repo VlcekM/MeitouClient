@@ -219,6 +219,21 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A job (docs/modding.md "Mod jobs"): the context menu of a finished player building of record
+    /// <see cref="Meitou.Simulation.Production.ModJobKind.Building"/> offers its caption to a selection with a character it takes, who then lists it
+    /// in the jobs list. The engine only offers and lists it: the mod's system reads <see cref="Meitou.Simulation.CharacterCold.ModJobs"/> in the
+    /// tick, does the work and saves the jobs. An id another mod took refuses it.
+    /// </summary>
+    public void AddJob(Meitou.Simulation.Production.ModJobKind job)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(job);
+        if (Meitou.Simulation.Production.ModJobs.Refusal(job) is { } refusal) throw new ArgumentException(refusal, nameof(job));
+        if (Pending.Jobs.Any(j => j.Id == job.Id)) throw new ArgumentException($"The mod already has a job '{job.Id}'.", nameof(job));
+        Pending.Jobs.Add(job);
+    }
+
+    /// <summary>
     /// A right click on an item of <paramref name="record"/> (an item record's string id) in a player character's own inventory window, with no
     /// other character's window open (docs/modding.md "Item use"): <paramref name="handler"/> runs in a serial step of the tick and may change the
     /// world. It returns true when it used the click (removing a used-up item itself), false to let the click equip or move the item as usual. One

@@ -158,4 +158,9 @@ internal static class SeedSalts
     /// A code mod's platoon (<c>PopulationSystem.SpawnPlatoon</c>): the salt XORed into its key, and counter base of its placement tries.
     /// </summary>
     public const ulong ModPlatoon = 0x30D5UL, ModPlatoonPlace = 0x30D90UL;
+
+    /// <summary>
+    /// A code mod's animal born into a squad (<c>PopulationSystem.SpawnAnimal</c>): the salt of its look's seed.
+    /// </summary>
+    public const ulong ModAnimal = 0x30DAUL;
 }

@@ -564,6 +564,7 @@ public sealed partial class World
         s.Orders = cold?.Orders ?? CharacterOrders.None;
         s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
         s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
+        s.ModJobs = cold is { ModJobs.Count: > 0 } ? cold.ModJobs.ToArray() : [];
         s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
         s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? RaceData.GiganticDrawScale : 1;
         s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None;

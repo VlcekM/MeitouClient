@@ -190,7 +190,16 @@ holds refuses the second mod.
   player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
   trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
-  keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused.
+  keeps the original: NPCs never pay). `PopulationSystem.SpawnAnimal(world, record, squad, at, age)` adds
+  one ANIMAL_CHARACTER to an existing squad at a walkable point (else the squad's first member's spot), aged 0 to 1.1, idle, with its species'
+  look and its record's kit (a player squad's animal is a player character; none at the faction's head cap): a mod's newborn. Non-finite delays, hours, points and radii are refused.
+- **Mod jobs** (engine API, not in the original; untested in play): `AddJob(new ModJobKind(id, building, caption, text, takers))`. The context
+  menu of a finished player building whose record is `building` offers `caption` to a selection holding a character `takers` allows (people,
+  animals or both); each such player character then holds the job on that building (`CharacterCold.ModJobs`, one per kind, a new building
+  replacing the old) and its jobs list shows `text: building name` after its vanilla jobs, with an X that takes it off (`RemoveModJob`; no
+  drag). The engine only offers and lists the job: the mod's system reads the list in the tick and does the work, saves it (the engine
+  neither saves nor hashes `ModJobs`), puts it back after a load (`cold.ModJobs.Add`) and takes it off when the building goes. An id another
+  mod took refuses the mod.
 - **Driving NPCs** (engine API; serial phases; untested in play): `PopulationSystem.HoldPlatoon` stops a roaming platoon's trips and its
   stand-in's travel (not saved: hold again after a load; it still unloads and despawns as any platoon). `CharacterCold.Engaged` keeps the AI
   off one member (self-preservation still answers an attack); the mod then drives it with what the engine's own duties use: `TaskStart.Walk`,

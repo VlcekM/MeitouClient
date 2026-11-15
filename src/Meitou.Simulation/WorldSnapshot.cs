@@ -476,6 +476,11 @@ public sealed class CharacterSnapshot
     /// The job list (<see cref="CharacterCold.Jobs"/>), first = highest priority.
     /// </summary>
     public IReadOnlyList<Production.PermaJob> Jobs { get; internal set; } = [];
+
+    /// <summary>
+    /// The code mods' jobs (<see cref="CharacterCold.ModJobs"/>).
+    /// </summary>
+    public IReadOnlyList<Production.ModJob> ModJobs { get; internal set; } = [];
     /// <summary>
     /// The path being followed from the next waypoint, for selected and inspected characters only (the host's F11 path view draws it).
     /// </summary>
