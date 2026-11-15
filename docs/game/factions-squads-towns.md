@@ -732,8 +732,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   among them, so their patrols target NPC towns as above; no other town check was found (**Verified**, record dump).
   A Starving Bandit mob spawned just west of the Hub leaves in any direction and sometimes walks straight through the town on its first
   patrol: 1 of 9 complete original runs from one save (closest 211 to the town centre; 2026-11-15), Meitou 6 of 20 probe seeds, within chance
-  (**Observed**). Whether the original's path also cuts the town's north end for an east sector point whose straight line misses it by ~1000,
-  as Meitou's does, is **Unknown** (a player walk can't be ordered that far; the camera clamps to ~2000 from the squad).
+  (**Observed**). For an east sector point whose straight line misses the town by ~1100, both cut through it: a player ordered on the world map
+  from (-47560, 1640) to the mob's spawn (-55251, 2070) passed 265 from the centre, Meitou's navmesh path ~200 on the same corners (**Observed**,
+  KH 2026-11-15; the camera clamps to ~2000 from the squad, so long walks need the map: ~36 units a pixel after 12 zoom-ins).
 - **Traders**: restocked only while active, when the clock passes the platoon's `inventory refresh time`; an unloaded one catches up at
   its first active tick.
 - **Prisoners** (**Observed**): frozen with their platoon; sentences are absolute timestamps and release is a loaded AI task.
