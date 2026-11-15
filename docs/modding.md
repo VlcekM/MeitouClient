@@ -162,6 +162,13 @@ holds refuses the second mod.
   code is needed. Display only: not saved, not hashed, read by no system, so set it again after a load and keep the character's simulated
   position at its carrier's (that position culls it, and draws it while the carrier is not drawn or lacks the bone). The vanilla shoulder
   carry overrides it while the character is carried.
+- **Bone meshes:** `cold.SetBoneMesh(new BoneMesh(key, mesh, bone, offset, rotation))` hangs a rigid mesh on the character's named bone (a saddle
+  on a mount) as the renderer poses it in the drawn frame, its origin moved by `offset` and turned by `rotation` in the bone's frame, offset and
+  mesh scaled with the character; `RemoveBoneMesh(key)` takes it off, and a second `SetBoneMesh` with the key replaces it, so several mods share a
+  character. The look and worn gear stay as they are (an animal keeps its bag). `mesh` is a file name found as a record's mesh is (the install and
+  the mods' folders, by bare name), drawn with its own material as a loose mesh: no shadow, no outline or picking
+  ([character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)). Set it in the tick from the mod's system, as `DrawAnchor`;
+  display only: not saved, not hashed, read by no system, so set it again after a load. Drawing **Unknown** (not yet run in game).
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.

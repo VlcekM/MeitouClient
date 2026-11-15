@@ -409,7 +409,7 @@ static partial class WorldFrame
 
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {
-            posed.CollectBolts(gpu.BoltPieces);
+            posed.CollectBolts(gpu.BoltPieces, mesh => boltMeshes.Centre(mesh));
 
             // loads a mesh the first time (a held limb's with its look)
             foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null, bolt.Limb);

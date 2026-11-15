@@ -524,6 +524,7 @@ public sealed partial class World
         s.CarriedBy = cold?.CarriedBy ?? CharacterId.None;
         s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
         s.Anchor = cold?.DrawAnchor;
+        s.BoneMeshes = cold?.BoneMeshes ?? [];
         s.Carrying = cold?.Carrying ?? CharacterId.None;
         s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null }
             ? cold.OperateTool

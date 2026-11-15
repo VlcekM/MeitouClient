@@ -588,6 +588,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public DrawAnchor? Anchor { get; internal set; }
     /// <summary>
+    /// The rigid meshes code mods hang on its bones (<see cref="CharacterCold.BoneMeshes"/>); empty: none.
+    /// </summary>
+    public IReadOnlyList<BoneMesh> BoneMeshes { get; internal set; } = [];
+    /// <summary>
     /// The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c>
     /// (docs/game/buildings-production.md "Production"); null for none.
     /// </summary>

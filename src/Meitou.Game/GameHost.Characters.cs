@@ -465,6 +465,7 @@ sealed partial class GameHost
             Shots = c.CrossbowShots,
             Bolts = Debris.BoltsOf(c),
             Mouth = Debris.MouthOf(c),
+            BoneMeshes = c.BoneMeshes,
             Scale = c.Scale,
             DrawDistanceScale = c.DrawDistanceScale,
             Hidden = hidden,

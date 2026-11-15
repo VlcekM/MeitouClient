@@ -794,6 +794,32 @@ public sealed class CharacterCold
     public DrawAnchor? DrawAnchor { get; set; }
 
     /// <summary>
+    /// The rigid meshes code mods hang on this character's bones (docs/modding.md "Bone meshes"), in the order first set: replaced as a whole on each
+    /// change, so the snapshot publishes it as it is. Not saved, not hashed and read by no system.
+    /// </summary>
+    public IReadOnlyList<BoneMesh> BoneMeshes { get; private set; } = [];
+
+    /// <summary>
+    /// Hangs <paramref name="mesh"/> on its bone, in place of the one with the same <see cref="BoneMesh.Key"/> (ordinal).
+    /// </summary>
+    public void SetBoneMesh(BoneMesh mesh)
+    {
+        var list = BoneMeshes.ToList();
+        int at = list.FindIndex(m => m.Key == mesh.Key);
+        if (at >= 0) list[at] = mesh; else list.Add(mesh);
+        BoneMeshes = [.. list];
+    }
+
+    /// <summary>
+    /// Takes off the bone mesh keyed <paramref name="key"/> (ordinal); nothing without one.
+    /// </summary>
+    public void RemoveBoneMesh(string key)
+    {
+        if (BoneMeshes.All(m => m.Key != key)) return;
+        BoneMeshes = [.. BoneMeshes.Where(m => m.Key != key)];
+    }
+
+    /// <summary>
     /// The code mods' medical-panel readings by <see cref="Bodies.ModMeter.Index"/> (null: none), set through <see cref="Bodies.ModMeter.Set"/>
     /// (docs/modding.md "Medical meters"): published for a selected or inspected character, not saved, not hashed and read by no system.
     /// </summary>

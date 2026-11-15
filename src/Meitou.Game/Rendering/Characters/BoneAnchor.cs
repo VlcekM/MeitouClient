@@ -15,9 +15,18 @@ static class BoneAnchor
     /// <paramref name="rig"/>) pose it under <paramref name="world"/>, moved by the anchor's offset (scaled with the carrier) and turned by its
     /// rotation, both in the bone's frame. The carrier's size moves the node and does not size it. Null without the bone.
     /// </summary>
-    public static (Vector3 Position, Quaternion Rotation)? Node(SkeletonRig rig, Matrix4x4[] bones, in Matrix4x4 world, in CharacterAnchor anchor)
+    public static (Vector3 Position, Quaternion Rotation)? Node(SkeletonRig rig, Matrix4x4[] bones, in Matrix4x4 world, in CharacterAnchor anchor) =>
+        Node(rig, bones, world, anchor.Bone, anchor.Offset, anchor.Rotation);
+
+    /// <summary>
+    /// A node at <paramref name="bone"/> as <paramref name="bones"/> (a skin palette on <paramref name="rig"/>) pose it under <paramref name="world"/>,
+    /// moved by <paramref name="offset"/> (scaled with the world transform) and turned by <paramref name="rotation"/>, both in the bone's frame (a
+    /// code mod's bone mesh, <see cref="CharacterRenderer.CollectBolts"/>). Null without the bone.
+    /// </summary>
+    public static (Vector3 Position, Quaternion Rotation)? Node(SkeletonRig rig, Matrix4x4[] bones, in Matrix4x4 world, string bone, Vector3 offset,
+        Quaternion rotation)
     {
-        if (rig.Handle(anchor.Bone) is not int h || (uint)h >= (uint)bones.Length) return null;
+        if (rig.Handle(bone) is not int h || (uint)h >= (uint)bones.Length) return null;
 
         // The skin matrix is the bone's scale, then its turn from the binding pose, about the binding position (SkeletonRig's skinning transform):
         // so it carries the binding position to the posed one, and its rotation after the binding one is the bone's model-space rotation.
@@ -27,7 +36,7 @@ static class BoneAnchor
         var at = Vector3.Transform(rig.BindPosition[h], bones[h] * world);
         var turn = Quaternion.Normalize(placed * fromBind * Quaternion.Conjugate(rig.BindRotationInverse[h]));
 
-        var offset = Vector3.Transform(anchor.Offset * world.ScaleLength(), turn);
-        return (at + offset, Quaternion.Normalize(turn * anchor.Rotation));
+        var moved = Vector3.Transform(offset * world.ScaleLength(), turn);
+        return (at + moved, Quaternion.Normalize(turn * rotation));
     }
 }
