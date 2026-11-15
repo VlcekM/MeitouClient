@@ -226,7 +226,7 @@ public sealed partial class CollisionFile
         foreach (var scene in collection.Elements("NxSceneDesc"))
             foreach (var actor in scene.Elements("NxActorDesc"))
             {
-                var global = Pose.Parse(actor.Element("globalPose")?.Value ?? "1 0 0 0 1 0 0 0 1 0 0 0");
+                var global = Pose.Parse(Field(actor, "globalPose")?.Value ?? "1 0 0 0 1 0 0 0 1 0 0 0");
                 bool body = string.Equals((string?)actor.Attribute("hasBody"), "true", StringComparison.OrdinalIgnoreCase);
                 foreach (var el in actor.Elements())
                 {
@@ -244,7 +244,7 @@ public sealed partial class CollisionFile
 
                     // A few hand-made files (tents) carry bare shapes with no NxShapeDesc: identity local pose, group 0.
                     var desc = el.Element("NxShapeDesc") ?? new XElement("NxShapeDesc");
-                    var local = Pose.Parse(desc.Element("localPose")?.Value ?? "1 0 0 0 1 0 0 0 1 0 0 0");
+                    var local = Pose.Parse(Field(desc, "localPose")?.Value ?? "1 0 0 0 1 0 0 0 1 0 0 0");
                     CookedMesh? mesh = null;
                     if (kind is CollisionShapeKind.Convex or CollisionShapeKind.TriangleMesh)
                     {
@@ -262,7 +262,7 @@ public sealed partial class CollisionFile
                         Height = Float(el.Attribute("height")),
                         Mesh = mesh,
                         Name = (string?)desc.Attribute("name") ?? "",
-                        Group = int.TryParse(desc.Element("group")?.Value, CultureInfo.InvariantCulture, out var g) ? g : 0,
+                        Group = int.TryParse(Field(desc, "group")?.Value, CultureInfo.InvariantCulture, out var g) ? g : 0,
                         ActorHasBody = body,
                     });
                 }
@@ -274,6 +274,13 @@ public sealed partial class CollisionFile
     /// </summary>
     [System.Text.RegularExpressions.GeneratedRegex(@"&(?!(amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")]
     private static partial System.Text.RegularExpressions.Regex BareAmpersand();
+
+    /// <summary>
+    /// The first child element named <paramref name="name"/> ignoring case, as the game's NxuStream reader finds a field's element (<c>_stricmp</c>;
+    /// docs/formats/collision.md): Less Buggy Bughouse writes <c>globalpose</c>. Null when there is none.
+    /// </summary>
+    static XElement? Field(XElement parent, string name) =>
+        parent.Elements().FirstOrDefault(e => string.Equals(e.Name.LocalName, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The attribute's value as an invariant float; 0 when it is absent.
@@ -300,7 +307,7 @@ public sealed partial class CollisionFile
     /// </summary>
     static CookedMesh Mesh(XElement desc, bool hull)
     {
-        if (string.IsNullOrWhiteSpace(desc.Element("cookedData")?.Value) && desc.Element("NxSimpleTriangleMesh") is { } plain)
+        if (string.IsNullOrWhiteSpace(Field(desc, "cookedData")?.Value) && desc.Element("NxSimpleTriangleMesh") is { } plain)
             return Plain(plain, hull);
 
         return hull ? CookedMeshReader.ReadConvex(Cooked(desc)) : CookedMeshReader.ReadTriangleMesh(Cooked(desc));
@@ -315,7 +322,7 @@ public sealed partial class CollisionFile
     {
         static string[] Words(string? text) => (text ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        var numbers = Words(simple.Element("points")?.Value);
+        var numbers = Words(Field(simple, "points")?.Value);
         if (numbers.Length % 3 != 0)
             throw new InvalidDataException($"points: {numbers.Length} numbers, not a multiple of 3");
         if (numbers.Length == 0) throw new InvalidDataException("Mesh has neither cooked data nor points");
@@ -337,7 +344,7 @@ public sealed partial class CollisionFile
 
         if (hull) return new CookedMesh(vertices, []);
 
-        var corners = Words(simple.Element("triangles")?.Value);
+        var corners = Words(Field(simple, "triangles")?.Value);
         if (corners.Length % 3 != 0)
             throw new InvalidDataException($"triangles: {corners.Length} indices, not a multiple of 3");
         if (corners.Length / 3 > 1 << 20) throw new InvalidDataException("Implausible mesh triangle count");
@@ -358,9 +365,9 @@ public sealed partial class CollisionFile
     /// </summary>
     static byte[] Cooked(XElement mesh)
     {
-        var hex = string.Concat((mesh.Element("cookedData")?.Value ?? "").Where(c => !char.IsWhiteSpace(c)));
+        var hex = string.Concat((Field(mesh, "cookedData")?.Value ?? "").Where(c => !char.IsWhiteSpace(c)));
         var bytes = Convert.FromHexString(hex);
-        if (int.TryParse(mesh.Element("cookedDataSize")?.Value, CultureInfo.InvariantCulture, out var size) && size != bytes.Length)
+        if (int.TryParse(Field(mesh, "cookedDataSize")?.Value, CultureInfo.InvariantCulture, out var size) && size != bytes.Length)
             throw new InvalidDataException($"cookedDataSize {size} but {bytes.Length} bytes");
 
         return bytes;

@@ -186,7 +186,6 @@ CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugG
 ## Open questions
 
 - The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
-- Save games: the same record format, file type 15, with GAMESTATE_* / *_STATE types; see [save.md](save.md).
 - Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
   bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
   the raw bytes.

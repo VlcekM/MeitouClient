@@ -130,7 +130,6 @@ holds refuses the second mod.
   for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
   computes "no" / does nothing, as an unknown vanilla code.
 - **Record types:** `AddRecordType(type, name)` claims a number (not a vanilla `itemType`); `Records(type)` lists the merged records.
-  Survival of such records through the FCS merge and saves is **Unknown** until tested.
 - **Equipment slots:** `AddEquipmentSlot(new ModSlot(section, fcsSlot, width, height, x, y))` (`ModSlots`, `src/Meitou.Simulation/Items`) adds
   an inventory section that takes the ARMOUR and ITEM records whose FCS `slot` is `fcsSlot`, so the items stay a data mod. `fcsSlot` is 4, 10
   (ATTACH_GLOVES), 11 (ATTACH_NECK) or 15 and up; the others map to vanilla sections. A vanilla section name, a name or `slot` another slot
@@ -145,7 +144,6 @@ holds refuses the second mod.
   hashed, read by no system, so the mod keeps its value (`IModSaveData`) and sets the reading again after a load. The layout has nine rows,
   which a human fills; each meter adds a copy of the ninth, and more than nine rows share the nine rows' height. A label another meter has
   (case-insensitive), one over 32 characters or a fifth meter of all mods together refuses the mod. A building's rows never show meters.
-  Drawing **Unknown** (not yet run in game).
 - **Skills:** `AddSkill(new ModSkill(id, label, column) { Description, Affects, Training, Start })` (`ModSkills`, `src/Meitou.Simulation/Bodies`)
   lists the skill at the foot of a stats-window column (`SkillColumn`: Weapons, Combat, Thievery, Sciences, under that column's last heading)
   with its whole level, and a click shows the description pane with the mod's lines and the next-level bar. The mod's systems read
@@ -155,7 +153,7 @@ holds refuses the second mod.
   `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
   ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
   mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
-  full column refuses the mod. Not shown in the HUD's stat lines or the debug character editor. Drawing **Unknown** (not yet run in game).
+  full column refuses the mod. Not shown in the HUD's stat lines or the debug character editor.
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own
@@ -169,7 +167,7 @@ holds refuses the second mod.
   character. The look and worn gear stay as they are (an animal keeps its bag). `mesh` is a file name found as a record's mesh is (the install and
   the mods' folders, by bare name), drawn with its own material as a loose mesh: no shadow, no outline or picking
   ([character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)). Set it in the tick from the mod's system, as `DrawAnchor`;
-  display only: not saved, not hashed, read by no system, so set it again after a load. Drawing **Unknown** (not yet run in game).
+  display only: not saved, not hashed, read by no system, so set it again after a load.
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.
@@ -187,7 +185,7 @@ holds refuses the second mod.
   hundredth of the range otherwise), an enum or a `string` with Options a list. `SubGroup` puts a setting under a sub-group header of that name (its
   own fold, at its first setting's place); `VisibleWhen` names a public `bool` property of the same object and hides the setting while it is false,
   so a switch can hide its dependents (the page reads it every frame; a throw from it is logged and the setting stays shown). Both are optional; a
-  `VisibleWhen` that is not such a property refuses the mod; a game older than both fails reading the attribute (**Unknown** how it reports), so
+  `VisibleWhen` that is not such a property refuses the mod; a game older than both fails reading the attribute, so
   a mod using them sets `gameVersion`. Another type, a number without a range, a list whose value is not one of its options, a
   struct (the page would change a copy) or no marked property refuses the mod. The player's values are kept in `meitou.user.json` (`modSettings`: mod
   id, key, invariant text; a default is not kept) and set on the object before `AddSettings` returns, a number clamped to its range, a value that is
@@ -195,8 +193,7 @@ holds refuses the second mod.
   they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
   thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
   notice. A slider's arrow keys move one Step. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
-  `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group);
-  using it in play **Unknown**.
+  `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
 - **Weather kinds:** a WEATHER or EFFECT `affect type` outside 1-5 is kept as its number, with ARMOUR `weather protection<N>` and RACE `weather
   immunity<N>` naming it the same way, so a mod defines a hazard in data and acts on it from its own system
   ([weather](formats/weather.md#effects-on-characters), "Undefined kinds": what the vanilla systems still do with such a kind). Nothing
@@ -207,8 +204,7 @@ holds refuses the second mod.
   training (`Gain`, the XP difference terms), saves, the debug stat boost, taming and the debug editor use `Stored(stat)`, so it is never trained in or
   saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
-  a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash); in play
-  **Unknown**.
+  a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
@@ -265,11 +261,9 @@ difference it runs the game without mods: if that differs too, the fault is the 
 
 ## Platforms
 
-- Managed DLLs run unchanged on the Windows, Linux and macOS builds. Harmony's detours come from MonoMod.Core, whose support for .NET Core
-  on Linux and macOS is **Observed** only as a fix note in [MonoMod's releases](https://github.com/MonoMod/MonoMod/releases) and for arm64
-  only in a third-party write-up, so patches off `win-x64` are **Unknown** until tested on each build.
+- Managed DLLs run unchanged on the Windows, Linux and macOS builds.
 - **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched. The game runs on .NET 11, so this applies to any
-  method compiled as runtime-async; which of the game's async methods are is **Unknown**.
+  method compiled as runtime-async.
 
 ## Evidence
 

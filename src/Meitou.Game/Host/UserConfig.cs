@@ -273,6 +273,10 @@ sealed class UserConfig
     /// </summary>
     public bool FeedbackButton { get; set; } = true;
     /// <summary>
+    /// The Meitou load window's Hide Kenshi saves tick: the base game's saves are left out of the list (off by default).
+    /// </summary>
+    public bool HideKenshiSaves { get; set; }
+    /// <summary>
     /// The original's splash at startup in the Faithful UI (Advanced settings: the switch's Faithful side), off by default; off, the menu shows as
     /// soon as the game has loaded.
     /// </summary>
@@ -443,6 +447,11 @@ sealed class UserConfig
     /// docs/game/ai-tasks.md "Town goals").
     /// </summary>
     public bool FixBenchFacing { get; set; } = true;
+    /// <summary>
+    /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings; off: only the grid
+    /// and the worn backpack, as the game does; docs/game/dialogue.md "Conditions").
+    /// </summary>
+    public bool FixBagSearch { get; set; } = true;
     /// <summary>
     /// Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off:
     /// drawn, as the game does; docs/render-interior-cut.md).

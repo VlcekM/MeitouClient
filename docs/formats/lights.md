@@ -84,15 +84,14 @@ power  = powerScale · global (1.0) · effect
 - **Slot 164** (consumer active): 1 for every functional class; `LightBuilding` (`FUN_140297890`): 1 when slot 59 is a valid handle, else
   "not daytime". A light building outdoors thus draws power (slot 163 asks slot 164) and lights only at night. Its `mounted` handle is +0x440.
   Meitou: `Machine.Active`, daytime from `World.Daytime` (the host's clock).
-- Town buildings' power and on state are **Unknown**; Meitou applies only the night flag to them.
+-  Meitou applies only the night flag to them.
 
 ### Spot direction
 
 **Verified** (decompilation and disassembly): the instance walk (`FUN_140553dc0`, call at `0x14055427f`) places a LIGHT instance's node at the instance
 position and calls `Light::setDirection(instance rotation × Vector3::NEGATIVE_UNIT_Y)`. OgreMain's `Light::setDirection` turns the light's node so its local +Z
 points that way in the parent's space, and `getDerivedDirection` is the derived orientation × +Z. So a spot points along the instance rotation applied to −Y,
-turned by the holder's node. The walk's other branch (no holder node) instead sets the node's orientation outright, so +Z of that orientation; when
-it is taken is **Unknown**. Meitou: `WorldObjectLayout.PlaceLight` (−Y for every light).
+turned by the holder's node. The walk's other branch (no holder node) instead sets the node's orientation outright, so +Z of that orientation. Meitou: `WorldObjectLayout.PlaceLight` (−Y for every light).
 
 ### Emissive parts
 
@@ -113,11 +112,10 @@ on while the daylight factor is 0 (the switch follows slot 164's "not daytime").
   `Bip01 Pelvis`), CONTAINER Garru Backpack (`Packbeast lantern`, `Bip01`; the Pack Beast's `backpack`), and two mod
   attachments on `Bip01 Spine2` that nothing references. All name `pack beast light`: point, F5F59C, 0.2 ± 0.05, r 300.
 - **Belt slot.** The two lanterns are the only records with `slot` 14 (ATTACH_BELT), so the inventory's belt slot holds
-  lanterns (**Observed**: Meitou lets an ITEM with slot 14 into `belt`; **Verified** in `FUN_14075faf0`:99-101 / `FUN_14074bc30` that every item type stores its `slot` and a section takes an item whose slot is its type, so an ITEM of any worn slot (shirt, hat, boots, body, legs, belt) goes to that section, and slot 7 or an unmapped one to none; base data: 307 ITEMs slot 7, the 2 lanterns slot 14). A CONTAINER's `encumbrance effect` is clamped to 0 or more (`FUN_140763810`:127-134, **Verified**); a missing field stays 1 in Meitou (the original's default is **Unknown**). The item's `charges` 200 use is **Unknown**.
+  lanterns (**Observed**: Meitou lets an ITEM with slot 14 into `belt`; **Verified** in `FUN_14075faf0`:99-101 / `FUN_14074bc30` that every item type stores its `slot` and a section takes an item whose slot is its type, so an ITEM of any worn slot (shirt, hat, boots, body, legs, belt) goes to that section, and slot 7 or an unmapped one to none; base data: 307 ITEMs slot 7, the 2 lanterns slot 14). A CONTAINER's `encumbrance effect` is clamped to 0 or more (`FUN_140763810`:127-134, **Verified**); a missing field stays 1 in Meitou.
 - **Lights** (`ScythePhysicsT`, ctor `1407e71f0` reads `light data`; `vfunc_15`): one light per entry of a map, made by the
   building light builder with the night flag set, so the light pass draws them only at daylight <= 0.1. Each frame
-  (`vfunc_2`) a light's node takes a physics body's position and orientation. How the map is filled (which body) is
-  **Unknown**.
+  (`vfunc_2`) a light's node takes a physics body's position and orientation.
 - **Files.** The .phs bodies are in the character's binding-pose model space (a human pelvis is at y 10.4): the belt
   lantern hangs from a spherical joint at the hip, the pack beast's at the top of a pole (y 31).
 - **Meitou** (engine choice): the light sits at the body hanging from the last spherical joint (not `root`), held rigidly

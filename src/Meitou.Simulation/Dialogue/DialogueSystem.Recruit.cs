@@ -154,7 +154,7 @@ public sealed partial class DialogueSystem
         mc.Fleeing = false;
         mc.Pending = null;
         mc.Jobs.Clear();   // an NPC's list, if any, does not carry over
-        // a recruit's clothes are no longer a faction's uniform (economy.md "Unknowns", Observed)
+        // a recruit's clothes are no longer a faction's uniform (dialogue.md "Recruiting")
         if (mc.Inventory is { } kit)
         {
             foreach (var piece in kit.All()) piece.Uniform = "";

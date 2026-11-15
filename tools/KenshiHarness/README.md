@@ -31,6 +31,7 @@ taskbar entry, the launcher dialog included) and muted; a hidden game still rend
 | `shot <file.png>` | Screenshot of the frame, GUI included |
 | `ui [filter] [--all]` | The GUI as text: class, `"caption"`, `name=`, `@x,y` (where a click lands), size |
 | `state [--near=<radius>] [--brief] [--json]` | Clock, speed, camera, squad (position, `screen` point, health parts, stats); `--near` adds everyone else around the camera's centre; text, or JSON with `--json` |
+| `containers [radius] [--all]` | The buildings and furniture with an inventory within `radius` (default 300) of the camera's centre, each with its items and stack sizes; `--all` also the empty ones |
 | `click <x> <y> [left\|right\|middle]` | A click; `--double`, `--hold=<ms>`, `--shift`, `--ctrl`, `--alt` |
 | `click <caption or name> [button]` | A click on a widget; `--nth=<n>` when several match |
 | `mouse <point>`, `mouse down\|up [button]` | Moves the cursor; presses or releases a button where it is |

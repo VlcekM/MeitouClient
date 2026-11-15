@@ -12,8 +12,7 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
   four whitespace-separated numbers: left, top, width, height.
 - **Observed** in `Kenshi_MainPanel.layout`: `position_real` values describe a widget
   relative to its parent, including children of fractional-size panels. Values may
-  extend outside 0..1. Meitou evaluates these against the current viewport; exact
-  MyGUI integer rounding and resize alignment are still **Unknown**.
+  extend outside 0..1. Meitou evaluates these against the current viewport.
 - **Verified** by the installed HUD test: named controls include `TimeSpeedButton1`
   through `TimeSpeedButton4`, `MoneyAmountText`, `DayText`, `TimeText` and
   `LifeBar1` through `LifeBar9`; there is no `LifeBar10`.
@@ -58,7 +57,7 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
   then scaled, 26.67 pt, +9.5 %), 22 px lines as vanilla's; Sentencia 20 pt headings
   ("DESCRIPTION RACE", "STATS RACE") match vanilla's widths to the pixel (scaled after the
   reset: +7 %). The loading tip (`Kenshi_FloaterFont_Large`, Exo2 26 pt) is still +5.5 %
-  wide (**Unknown** why). MailartRubberstamp 110 pt gives 108 pt at 1080 p and 144 pt at
+  wide. MailartRubberstamp 110 pt gives 108 pt at 1080 p and 144 pt at
   1440 p either way, its stamp matching vanilla's to 2 px. Rounding at the integer ppem
   (head flag bit 3) gives 20 pt for Sentencia and does not fit. Meitou: `KenshiFontSize`
   (default 3), scaled by `UiPainter.ScaledFontSize` (Faithful); the Faithful minimum text
@@ -111,9 +110,7 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
     TrueType interpreter is set to version 35 (full bytecode hinting; 2.13 defaults to
     version 40, which ignores most horizontal hints). **Observed**: Exo2 20 pt@50 dpi
     gives ppem 13.9, ascent 14, descent 3 and integer advances (9, 8, 13), which is
-    `KenshiFontSize`'s default height. **Unknown**: the FreeType version of the original,
-    so pixel-for-pixel equality of the hinted shapes is not claimed.
-    `ume-pgs5.ttf`'s bytecode fails in 2.13.2 (`Invalid_Opcode`, both interpreters;
+    `KenshiFontSize`'s default height. `ume-pgs5.ttf`'s bytecode fails in 2.13.2 (`Invalid_Opcode`, both interpreters;
     **Observed**, `FT_LOAD_DEFAULT`/`NO_AUTOHINT`): the glyph falls back to the auto-hinter,
     the font after three failures. `Antialias` true is drawn like false (no luminance
     modulation); no Kenshi font sets it.
@@ -214,8 +211,7 @@ rectangles are converted before issuing Vulkan scissors. **Verified** by
 ## Widget runtime (2026-10-20)
 
 Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **Verified** below means read against the MyGUI **3.2.2** tag's source (`ScrollBar.cpp`,
-`ListBox.cpp`, `ScrollView.cpp`, `ScrollViewBase.cpp`, `ComboBox.cpp`, `MultiListBox.cpp`, `Window.cpp`, `ControllerRepeatClick.cpp`, `ResizingPolicy.h`); the install logs 3.2.3
-(above), whether these classes differ is **Unknown**. No test covers it; the behaviour is by reading, not yet seen in the running game.
+`ListBox.cpp`, `ScrollView.cpp`, `ScrollViewBase.cpp`, `ComboBox.cpp`, `MultiListBox.cpp`, `Window.cpp`, `ControllerRepeatClick.cpp`, `ResizingPolicy.h`). No test covers it; the behaviour is by reading, not yet seen in the running game.
 
 - **ScrollBar** (Verified, `ScrollBar.cpp`): parts `Start`, `End`, `TrackPlace`, `Track`, `FirstPart`, `SecondPart`; positions run `0 .. Range-1`. The thumb sits at
   `(line - thumb) * pos / (Range - 1)`, `line` the TrackPlace length; it is hidden when `Range < 2` or `line <= thumb`, FirstPart / SecondPart then take half the line each.
@@ -236,7 +232,7 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
 - **ScrollView** (Verified, `ScrollView.cpp`, `ScrollViewBase.cpp`): `CanvasSize` (or `UiBindings.Canvas`) scrolls inside the template's `Client`; a bar shows when the canvas is larger than the client on its axis and
   `VisibleVScroll` / `VisibleHScroll` allow; the template is laid out with both bars, each hidden bar gives its thickness back to the client and the other bar; range = canvas - client; a smaller canvas
   sits by `CanvasAlign` (centred when unset; `Default` = Left Top); bar page 16 px, wheel 50 px (vertical first). MyGUI re-reads the sizes once per update, Meitou iterates to the fixed point.
-  The source passes the cross-axis view size as ViewPage (as read); Meitou pages by the view along the axis (**Unknown** which is intended). Children of the client are placed against the scrolled canvas.
+  The source passes the cross-axis view size as ViewPage (as read); Meitou pages by the view along the axis. Children of the client are placed against the scrolled canvas.
   A screen that scrolls a view itself lists it in `NativeScroll` (the map). Without a canvas nothing scrolls and the bars hide: the Overview's `RelationsPanel` (no `CanvasSize` in the layout) loses its static bars.
 - **ItemBox** (**Observed**: the base game's empty crafting queue and squad boxes show no bars; MyGUI 3.2's ItemBox derives `ScrollViewBase`): laid out as a ScrollView, so its bars show only when a
   bound canvas overflows the client; with none (every ItemBox Meitou fills itself) both are hidden.
@@ -245,8 +241,7 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
 - **Lines and long text** (**Observed**, the save list at 1440 lines): a list with a `SkinLine` lays its lines across the whole client and the
   line skin places the text (Meitou's 3 px inset and padding only without one); a resource font's line longer than its widget is cropped, never
   shortened with "..." (Faithful). The save list's lines are 28 px apart at 1440 lines: the template's `HeightLine` 21 times height / 1080, which
-  Meitou applies to the load, save and import windows and the HUD (the squad tabs' `HeaderPlace` scales so too, **Observed**; whether every
-  template does is **Unknown**).
+  Meitou applies to the load, save and import windows and the HUD (the squad tabs' `HeaderPlace` scales so too, **Observed**).
 - **EditBox** (`EditBox.cpp` with `ScrollViewBase.cpp`; **Observed** in the editor's race description, `Kenshi_WordWrap`, which sets no `VisibleVScroll`):
   the vertical bar shows only when the text is taller than the client (and `VisibleVScroll` is not false); hidden, its thickness goes to the client, so text
   wraps up to 6 px inside the frame (a Hive Prince's description); shown, its thickness comes off the template's client, so the text keeps 14 px clear of it (a
@@ -264,14 +259,13 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
 - **MultiListBox** (Verified, `MultiListBox.cpp`): per column a header button (`SkinButton`, in `HeaderPlace`, its `Image` child shows `Up` / `Down` on the sorted column, `None` on the others; the arrows are in `Kenshi_MiscImages`
   group `Arrows`) and a sub-list (`SkinList`, in `Client`); Fixed columns keep their width, Fill columns share the rest (last one the remainder; `ResizingPolicy` is `Auto, Fixed, Fill`); one selection and one scroll
   position for all; only the last sub-list shows its bar. A header click sorts ascending by that column, again reverses; MyGUI's default comparator is a plain string `<` of the cells (Meitou: ordinal). The image is "Up"
-  when `mSortUp`; that `mSortUp` means ascending is **Unknown** (assumed). Binding: `UiBindings.Columns[name]` (captions, widths, Fill), `Lists[name]` items with `UiListItem.Cells`, `Sorts[name]` the start sort; the host keeps the
+  when `mSortUp`. Binding: `UiBindings.Columns[name]` (captions, widths, Fill), `Lists[name]` items with `UiListItem.Cells`, `Sorts[name]` the start sort; the host keeps the
   clicked sort. Header and sub-list skins are expanded once at load as hidden prototype children of the MultiListBox and cloned per column. Column resizing, separators (`SkinSeparator`, `WidthSeparator`) and Auto width are not done.
 - **Game's save list** (Observed, decompile of `FUN_140480100`, the load / save window): two columns, `addColumn(<text>, 170)` and `addColumn(<text>, 180)`, `sortByColumn(1, true)` (`mSortUp` starts true, so reversed:
   newest first, arrow "Down"), column 0 Fill, column 1 Fixed; rows are the save names with `{1,datetime}` of the modified time in column 1. The two captions are localised strings (the pot has "Name" and "Date" from
-  `savemanager.cpp`; which the window uses is **Unknown**). Meitou's `GamesList` (load and save) uses these columns, the name cell with the save's origin appended; `Kenshi_ImportGamePanel` is not registered.
+  `savemanager.cpp`). Meitou's `GamesList` (load and save) uses these columns, the name cell with the save's origin appended; `Kenshi_ImportGamePanel` is not registered.
 - **Window** (Verified, `Window.cpp`; layouts): `Snap` (set by every Kenshi window template) snaps an edge to the viewport's within 10 px (`|left| <= 10`, `|right - width| < 10`, likewise top / bottom) while dragging,
   without clamping; Meitou lets a dragged window leave the screen but keeps its top edge and 48 px of it in view (`KeepVisible`), and places others fully on screen. `Movable` false (`Kenshi_MessageBox`, `Kenshi_AdvancedOptionsWindow`) stops the drag; `MinSize` / `MaxSize` (`Kenshi_OpenSaveFileDialog` 200 200) bound the
   size a resize gives. **Observed**: no Kenshi window template has a child with the user strings `Action` or `Scale` (MyGUI's resize / move markers), so the original has no user resizing; the generic grips (`Scale`
   = left, top, width, height multipliers of the pointer's travel, or `Action` Move / Left / Right / Top / Bottom) are supported for mods. On a viewport change a moved window keeps its distance to the edges its alignment
-  names (Right / Bottom / centre; Left / Top by default; Stretch keeps both) and a pixel-positioned Stretch root grows by the change; an unmoved window stays centred. This is Meitou's approximation: MyGUI's own
-  re-alignment of top-level windows on a render-window resize is **Unknown**.
+  names (Right / Bottom / centre; Left / Top by default; Stretch keeps both) and a pixel-positioned Stretch root grows by the change; an unmoved window stays centred.

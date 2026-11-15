@@ -28,20 +28,21 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--stream] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         var rest = new List<string>(args);
-        bool nav = rest.Remove("--nav");
+        bool stream = rest.Remove("--stream");
+        bool nav = rest.Remove("--nav") || stream;
         int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
         Vector2? at = ProbeLoadOrder.TakeOption(rest, "--at") is { } spot ? Spot(spot) : null;
         ulong seed = ProbeLoadOrder.TakeOption(rest, "--seed") is { } s ? ulong.Parse(s) : 1;
         var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
-        if (ProbeWorld.Load(install, order, rest[0], nav, at, seed) is not { } loaded) return 1;
+        if (ProbeWorld.Load(install, order, rest[0], nav, at, seed, stream) is not { } loaded) return 1;
         using var probe = loaded;
         probe.Tick(ticks);
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
@@ -90,6 +91,7 @@ static class SaveProbe
             case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : null); return true;
             case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
+            case ("containers", >= 1): Containers(probe, float.Parse(a[0])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
             case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
@@ -930,6 +932,37 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The containers within <paramref name="radius"/> of the leader: building, record, lock, own items, and the building shop whose stock
+    /// container each is, with its rectangle and the stock items in it (what its window shows).
+    /// </summary>
+    static void Containers(ProbeWorld probe, float radius)
+    {
+        var world = probe.World;
+
+        foreach (var f in world.Fixtures.All.Where(f => f.Contents is not null && Vector3.Distance(f.Position, probe.LeaderPosition) < radius))
+        {
+            Console.WriteLine($"container {f.Id} building={f.Building} '{probe.Db.Find(f.RecordId)?.Name}' at {f.Position:F0} "
+                + $"locked={f.Lock?.Locked} own={f.Contents!.Items.Count}");
+
+            foreach (var q in world.Squads.All)
+            {
+                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.RegionOf(f.Id, out var region)) continue;
+
+                int held = shop.Stock.Items.Count(region.Holds);
+                Console.WriteLine($"  shop of squad {q.Id} '{q.Name}' template={q.TemplateId} region={region} stock={shop.Stock.Items.Count} "
+                    + $"here={held}");
+            }
+        }
+
+        foreach (var q in world.Squads.All.Where(q => q.HomeBuilding is { } h && Vector3.Distance(h.Position, probe.LeaderPosition) < radius))
+        {
+            string shop = q.Shop is { } s ? $"{s.Stock.Items.Count} items, fills={s.Fills} restock={s.NextRestockTick}" : "none";
+            Console.WriteLine($"home {q.HomeBuilding!.Key} squad {q.Id} '{q.Name}' template={q.TemplateId} members={q.Members.Count} "
+                + $"shop={shop} tick={world.Tick}");
+        }
+    }
+
+    /// <summary>
     /// The player's buildings within <paramref name="radius"/> of the leader: id, record, position, floor, the building they stand in and whether
     /// they are complete.
     /// </summary>
@@ -1159,7 +1192,7 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
@@ -1185,12 +1218,14 @@ static class SaveProbe
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
+              containers <radius>      containers near the leader: own items, building shop stock in each, homes
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
               layout <building key>    a town building (zone:instance id): layout names now, ruin state and its interior layout's objects (needs --nav)
+            --stream: build only the player's box first and stream the other zones in as the game does, ticks at game speed (implies --nav)
             """);
         return 2;
     }

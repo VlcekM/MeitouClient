@@ -214,6 +214,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// Whether VK_EXT_device_address_binding_report is enabled (only when tracking: the driver then reports each range it binds).
     /// </summary>
     public bool HasAddressBindingReport { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_memory_priority is enabled: every allocation tells the driver how much it would rather keep it resident.
+    /// </summary>
+    public bool HasMemoryPriority { get; private set; }
+    /// <summary>
+    /// Whether VK_EXT_pageable_device_local_memory is enabled: a full heap pages the lowest priority memory out instead of failing an allocation.
+    /// </summary>
+    public bool HasPageableMemory { get; private set; }
 
     /// <summary>
     /// Guards the handle tables below. They are added to from any thread (the allocator's callers, the recording jobs' views) under this lock and
@@ -822,6 +830,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} " +
             $"swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
+        sb.AppendLine($"memoryBudget={HasMemoryBudget} memoryPriority={HasMemoryPriority} pageableDeviceLocalMemory={HasPageableMemory}");
         sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate " +
             $"{MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
         sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} " +
@@ -1410,6 +1419,11 @@ public sealed unsafe class VulkanDevice : IDisposable
         var presentId = new PhysicalDevicePresentIdFeaturesKHR { SType = StructureType.PhysicalDevicePresentIDFeaturesKhr };
         var fault = new PhysicalDeviceFaultFeaturesEXT { SType = StructureType.PhysicalDeviceFaultFeaturesExt };
         var binding = new PhysicalDeviceAddressBindingReportFeaturesEXT { SType = StructureType.PhysicalDeviceAddressBindingReportFeaturesExt };
+        var priority = new PhysicalDeviceMemoryPriorityFeaturesEXT { SType = StructureType.PhysicalDeviceMemoryPriorityFeaturesExt };
+        var pageable = new PhysicalDevicePageableDeviceLocalMemoryFeaturesEXT
+        {
+            SType = StructureType.PhysicalDevicePageableDeviceLocalMemoryFeaturesExt,
+        };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
@@ -1428,6 +1442,10 @@ public sealed unsafe class VulkanDevice : IDisposable
         // A lost device's own account of its fault (issue #319); the address reports go to a debug messenger and only when tracking.
         bool extFault = have.Contains("VK_EXT_device_fault");
         bool extBinding = DeviceFault.Tracking && _debugUtils is not null && have.Contains("VK_EXT_device_address_binding_report");
+
+        // Device-local memory the driver may page out to system memory when the heap is full, lowest priority first (#745).
+        bool extPriority = have.Contains("VK_EXT_memory_priority");
+        bool extPageable = extPriority && have.Contains("VK_EXT_pageable_device_local_memory");
 
         void* chain = null;
 
@@ -1457,6 +1475,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref presentId, extPresentId);
         Link(ref fault, extFault);
         Link(ref binding, extBinding);
+        Link(ref priority, extPriority);
+        Link(ref pageable, extPageable);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
@@ -1470,10 +1490,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         EnableVersionFeatures(ref v13, ref v12, ref v11);
         EnableExtensionFeatures(ref eds2, ref eds3, ref vid, ref bary, ref accel, ref rayQuery, ref vrs, extVrs);
         EnableFaultFeatures(ref fault, ref binding, extFault, extBinding);
+        EnableMemoryFeatures(ref priority, ref pageable, extPriority, extPageable);
         f2.Features = EnabledCoreFeatures(in core);
         var names = DeviceExtensionNames(have, extEds2, extEds3, extVid, extPush, extBary, extVrs, extPresentId);
         if (HasDeviceFault) names.Add("VK_EXT_device_fault");
         if (HasAddressBindingReport) names.Add("VK_EXT_device_address_binding_report");
+        if (HasMemoryPriority) names.Add("VK_EXT_memory_priority");
+        if (HasPageableMemory) names.Add("VK_EXT_pageable_device_local_memory");
         var fams = PickQueueFamilies(pd);
         f2.PNext = chain;
         uint graphicsQueues = CreateDevice(pd, &f2, names, fams);
@@ -1711,6 +1734,28 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     /// <summary>
+    /// Reads and keeps only the memory priority and pageable memory features (pageable needs priority).
+    /// </summary>
+    void EnableMemoryFeatures(ref PhysicalDeviceMemoryPriorityFeaturesEXT priority, ref PhysicalDevicePageableDeviceLocalMemoryFeaturesEXT pageable,
+        bool extPriority, bool extPageable)
+    {
+        HasMemoryPriority = extPriority && priority.MemoryPriority;
+        HasPageableMemory = HasMemoryPriority && extPageable && pageable.PageableDeviceLocalMemory;
+        priority = new PhysicalDeviceMemoryPriorityFeaturesEXT
+        {
+            SType = StructureType.PhysicalDeviceMemoryPriorityFeaturesExt,
+            PNext = priority.PNext,
+            MemoryPriority = HasMemoryPriority,
+        };
+        pageable = new PhysicalDevicePageableDeviceLocalMemoryFeaturesEXT
+        {
+            SType = StructureType.PhysicalDevicePageableDeviceLocalMemoryFeaturesExt,
+            PNext = pageable.PNext,
+            PageableDeviceLocalMemory = HasPageableMemory,
+        };
+    }
+
+    /// <summary>
     /// The core features to enable, from the queried <paramref name="core"/>.
     /// </summary>
     PhysicalDeviceFeatures EnabledCoreFeatures(in PhysicalDeviceFeatures core) => new()
@@ -1749,7 +1794,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extVrs) names.Add("VK_KHR_fragment_shading_rate");
         if (extPresentId) names.Add("VK_KHR_present_id");
 
-        // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
+        // Read by VideoMemory (the VRAM guard and the statistics): the process's usage and budget per heap.
         HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
         if (HasMemoryBudget) names.Add("VK_EXT_memory_budget");
 

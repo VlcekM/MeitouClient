@@ -1,7 +1,6 @@
 # Documentation
 
-Read only the topic/sections needed. Original-game facts use **Verified** (source/check),
-**Observed** (limited evidence), **Unknown** (unresolved). Keep facts current; no development
+Read only the topic/sections needed. Keep facts current; no development
 diaries, asset dumps or decompiled output. Current choices: [DECISIONS](../DECISIONS.md).
 Class layouts, field names and method names cited as **KenshiLib 1ce4a16** come from
 [BFrizzleFoShizzle/KenshiLib](https://github.com/BFrizzleFoShizzle/KenshiLib) (GPLv3, Kenshi 1.0.65),

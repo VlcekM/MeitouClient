@@ -78,8 +78,8 @@ not the game speed, so the camera works while the game is paused. Several inputs
   floor-0 parts included), no stairs, doors, furniture or unwalkable roofs. When the hit object answers a virtual check (vtable
   +0x330, unknown) the ray is cast again with `0x200` only; the hit building is remembered and, when the ray misses, a radius-40 sweep
   keeps the pivot on it; a second ray, 100 above, mask `0x4000` (group 14), also raises it (all **Observed**). The eye's ground is
-  the terrain and group 14 only: its building ray (`0x200`.., from 1000 above) can only lower it, gated by `FUN_1409b6d00`
-  (**Unknown**). The water surface (a node at the sea height) is the lowest ground of both. The pivot's
+  the terrain and group 14 only: its building ray (`0x200`.., from 1000 above) can only lower it, gated by `FUN_1409b6d00`.
+  The water surface (a node at the sea height) is the lowest ground of both. The pivot's
   goal is its height after coming down to the ground under the eye if that is lower (never below the ground at the pivot), then
   **raised by the shortfall until the eye is `min(0.2 · boom, 20) + 10` above the ground under it**: the pivot rises, the view
   direction is not touched. The pivot then closes on its goal: a gap of 0.1 or less at once, else at **10 × the gap per second**, the
@@ -117,9 +117,8 @@ is kept within **2250** of the player's characters (`KenshiCamera.LeashRadius`).
 distance from the pivot to each object's position (vtable `+0x40`, so a carried character counts at its carrier), is found; when it is farther
 than 2250 (the compared square, 5062500, sits in writable data but no writer was found) the pivot is set to that character's position + 2250
 along the line towards the pivot (the decompile garbles the direction's operand; that reading is **Observed**). A hard set, no easing; it runs on any mode (free, tracking, the `;` camera). Skipped when the list is empty,
-while `DAT_142134690+0x298` or `+0x2f0` is set (**Unknown**), and while the caller's check `FUN_14025c6d0` holds (**Unknown**).
-**Observed**: the list holds the player's characters (the next step, `FUN_1407f7230`, walks it for the zones around them); whether it holds dead or
-unconscious ones too is **Unknown**. Meitou: `CameraLeash`, inside `CameraRig.Update` before the tick's state is kept, on every character with
+while `DAT_142134690+0x298` or `+0x2f0` is set, and while the caller's check `FUN_14025c6d0` holds.
+**Observed**: the list holds the player's characters (the next step, `FUN_1407f7230`, walks it for the zones around them). Meitou: `CameraLeash`, inside `CameraRig.Update` before the tick's state is kept, on every character with
 `IsPlayer`; the strategy pivot is placed on the sphere's point (its height then found as usual), the free camera's eye is pulled the same way
 and loses its outward speed (engine choice). Advanced **Camera stays near your squads** (`UserConfig.CameraLeash`, default on, in neither
 side of the gameplay switch) turns it off. Engine choices: off on the title, in photo mode, during squad tours, character flights and the

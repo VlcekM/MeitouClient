@@ -14,10 +14,13 @@ drop-in replacement that runs original content and mods unchanged.
 - Whenever you learn something about the original game's files or behaviour (a field's meaning, a
   layout, a merge rule, a disproved guess), write it into the matching doc in the same change.
   Create a new doc in `docs/formats/` for a new format and link it from `docs/README.md`.
-- Mark each claim **Verified** (say against which files and how), **Observed**, or **Unknown**.
-  Don't promote a guess to Verified without a test that checks it.
+- Mark each claim **Verified** (say against which files and how) or **Observed**. Don't promote a guess to Verified
+  without a test that checks it.
+- Don't write unknowns, open questions or guesses into the docs. When the original's behaviour is unknown, work it out
+  (decompile, game data, the Kenshi harness) before implementing, and implement it faithfully from the start, not as a
+  stand-in to fix later. If it can't be worked out in the task, tell the user instead of documenting the gap.
 
-- Document current contracts, facts, evidence and unresolved questions. Do not append development
+- Document current contracts, facts and evidence. Do not append development
   narration, progress diaries, completed plans, merge history or raw benchmark logs. Keep one
   authoritative description per fact and link to it; Git retains historical implementation details.
 

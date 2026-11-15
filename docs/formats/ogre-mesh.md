@@ -102,11 +102,6 @@ and w lie in [-1, 1], weights and colours in [0, 1]. `OgreMeshWeld` (key also in
 handedness) takes all 3277 files from 22.7M to 9.2M vertices (40.5%) and pose entries from 160,616 to 34,212, with every submesh, LOD,
 bone-assignment and pose index in range afterwards (scratch check over the install). CPU renders of six normal-mapped building meshes: mean pixel change 0.0–0.3/255.
 
-## Open questions
-
-- How pose weights are derived from appearance values. Observed: body files store values under the pose
-  names themselves ([../characters.md](../characters.md#shading-poses-and-lod)); whether Kenshi scales them is Unknown.
-
 ## Expression reference
 
 - Pose chunks: ` 0xC000 POSES 0xC100 POSE string name, ushort target (0 = shared vertices, else submesh index + 1), [1.100 / 1.8] bool includesNormals (repeats) 0xC111 POSE_VERTEX uint vertex index, Vector3 offset, [Vector3 normal if includesNormals] (repeats) `

@@ -729,7 +729,9 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (player.Lead() is { } wanted && ShowsBountyPanel(wanted))
         {
             var rows = wanted.Status is { } status ? StatusRows(status) : wanted.Slave is { } slave ? SlaveRows(slave, wanted.IsPlayer) : [];
-            if (wanted.Bounties.Count > 0 && wanted.Status is not { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped })
+            // The leader, kidnapped and diplomat entries list no bounty rows (FUN_1405d4260, Verified: docs/game/ui-screens.md section 4).
+            var bare = wanted.Status is { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped or StatusKind.Diplomatic };
+            if (wanted.Bounties.Count > 0 && !bare)
                 rows.AddRange(BountyRows(wanted.Bounties, wanted.Prison, player.UiMode == UiMode.Meitou));
 
             foreach (string name in new[] { "BountyPanel", "BountyText" })

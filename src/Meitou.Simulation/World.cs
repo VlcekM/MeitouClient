@@ -338,6 +338,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BenchFacingFix { get; set; } = true;
     /// <summary>
+    /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings, Meitou); off, only
+    /// the grid and the worn backpack, as the game does (docs/game/dialogue.md "Conditions", docs/game/carry-loot.md "NPC looting").
+    /// </summary>
+    public bool BagSearchFix { get; set; } = true;
+    /// <summary>
     /// The player's pick-ups and right-click takes out of loot, containers and storage go into the character's backpack first, then its slots and
     /// grid (Controls settings, off by default as in the game, where only an open bag window does that).
     /// </summary>

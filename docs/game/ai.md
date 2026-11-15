@@ -94,9 +94,9 @@ Meitou: [simulation, captives](../simulation.md#captives).
 | `Package_CannibalsAtHome` (27, a `Package_HangAroundBar` subclass) | the platoon's current town is its home town; or a town of a faction not hostile to it whose town vfunc `0x2d0(3, leader)` list (its BD_BAR buildings) is not empty (**Observed**) | a player-owned town with town vfunc `0x298` false, else not can-start | the bar package's table pick |
 | `PrisonerGathering` (10), `_unholy` (24) | the squad is intact and slot 19 finds a prisoner: the leader's town, else the nearest town of its faction within 3062 (squared 9.375e6), not a slave camp or prison; a cage (function flag 0x100) of a faction allied to it (`FUN_1406b2630`), not player-owned, with an occupant that is not down (24: a woman or another race than the leader) | the platoon's slave list holds more than 3 x its members, or no prisoner is left | base |
 | `SlaverPrisonerShipping_Camps` (11) | the platoon's slave list is not empty | it is empty | mission town = slot 19: the nearest slave camp (type 5) of a faction not hostile to it (`FUN_140927f10`) |
-| `..._AnywhereTownsIncluded` (28) | as 11 | as 11 | a TOWN (type 2) with town flag bit 10 (`FUN_140936e60` sets the flags from the town and faction records; bit 10's meaning **Unknown**) within 0.7 x the camp's squared distance, not hostile, else the camp (`FUN_140939090`) |
+| `..._AnywhereTownsIncluded` (28) | as 11 | as 11 | a TOWN (type 2) with town flag bit 10 (`FUN_140936e60` sets the flags from the town and faction records) within 0.7 x the camp's squared distance, not hostile, else the camp (`FUN_140939090`) |
 
-Slot 3 returns 4 in the base class, 1 for signals 1 and 25, 2 for `RetreatAndRefresh`, 0 for 11 and 28 (meaning **Unknown**).
+Slot 3 returns 4 in the base class, 1 for signals 1 and 25, 2 for `RetreatAndRefresh`, 0 for 11 and 28.
 
 The goals these packages list (capture 167, carry 168, work the slaves 188, the slaves' own worker 189 / 190 and obedience 187) are in [ai-tasks, slave work, shout and capture](ai-tasks.md#slave-work-shout-and-capture).
 A slave's Slave role list runs through the Obedient Slave job (187): [role lists](#goal-loading).
@@ -117,12 +117,12 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   (Town +0x380) or of its own faction, not hostile, not in its `no-go zones` (FactionWarMgr +0xa0); the 4 nearest by X/Z, one uniformly). Update: no town → start
   again; in its town state 0 → 1 → 2, and when ready (`FUN_1402868c0`: in a player town that is not public at once, else W h after arriving and between
   06:00 and 20:59) it drops its town (`FUN_140288bd0`) to draw another. Can start while state < 2 or when ready; finished at state 2. So templates with a slot-0 bar
-  package hop town to town, sitting in each town's bar 5-8 h. Unread: a leader flag (Character +0x648 → +0x70) that also lets it leave 0.2 h after being set (**Unknown**).
-  Meitou (`PopulationData.TraderTown`): placed towns and the player's outposts (`PlayerTown.Public`, the [town panel](ui-screens.md#town-panel)'s tick) in one nearest-4 draw, placed towns first in a tie (the original's order over its two lists is **Unknown**).
+  package hop town to town, sitting in each town's bar 5-8 h. Unread: a leader flag (Character +0x648 → +0x70) that also lets it leave 0.2 h after being set.
+  Meitou (`PopulationData.TraderTown`): placed towns and the player's outposts (`PlayerTown.Public`, the [town panel](ui-screens.md#town-panel)'s tick) in one nearest-4 draw, placed towns first in a tie.
 - **Package_PassingByTownAssault** (29): can start when `attacks` (settings.cfg) is not 5, it is not spent (+0xb4), its leader's town is a player town whose faction it is
   not allied with (`FUN_1406b2630`: same or relation ≥ 50), the platoon is intact, the faction's wait has passed (global map by faction `DAT_14212dde0` of
   {last end, running}: free while one runs; a faction that never ended one is free; else more than the wait since the last end) and that town's faction has someone
-  within 2500 of it (and Town vfunc 0x2f0, +0x3b0 set, **Unknown**). Start: the wait for next time by `attacks` (`FUN_140286a70`, uniform, game hours **Observed**: 0 none, 1 [6, 48),
+  within 2500 of it (and Town vfunc 0x2f0, +0x3b0 set). Start: the wait for next time by `attacks` (`FUN_140286a70`, uniform, game hours **Observed**: 0 none, 1 [6, 48),
   2 [32, 96), 3 [72, 144), 4 [130, 188)), the town as mission town and target, its faction the enemy (+0x100), start hour, and the enemy's people within 2500 as targets;
   each one seen later (and every enemy-tagged, awake, posture-0 character in a town in the members' sensed lists, `FUN_140294980`) is added, never removed, and tagged squad memory 4 (the tag has no expiry and the end does not clear it, **Verified** `FUN_140296150` never calls the clearer; Meitou: `AggroSystem.Refresh` emits it for every sensed character of `Squad.War`, the hook's in-view gate `+0x1a9` taken as always true, engine choice). End: the faction's running count drops, at 0 the last-end hour is set. Finished: not intact (spent); else not
   before 0.25 h, not while a target stands (**Verified**, `FUN_14028eca0` and the hand-over `FUN_14028ea90`: its current town is the mission town — the hand compare vfunc `0x10`, `FUN_1400cd0b0`, returns "differs", the test wants it false — with the inside-town-walls value `0x118` non-zero, not unconscious or dead, `+0x2f8` not 2 caged, posture 0; Meitou `AiSystem.DefenderStanding`, the walls value not modelled), then (spent) with at least 2 members up. May lead
@@ -146,7 +146,7 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   call, read as seconds, **Observed**). No ownership change: the town stays the player's. `campaign victory occupy town` sits only in an unread `victory AI leader`.
 - **Package_Refugee** (22, 4 templates: the Bandit Raiders roamers, Black Dragon and the two White Eyebrow camp squads; all list it beside patrol/bar/assault/occupy packages, at slot 0 or 2; goals
   215 TRAVEL_TO_TARGET_PACKAGE to the mission, 15, 22, 127 RUN_AWAY_HOMETOWN, 36). **Verified** by decompile (vtable `Package_Refugee` 0x1416adf38; the package's +0x88 is its platoon):
-  - Can start (`FUN_140288ed0`): the home town's vfunc 0x288 (`TownBase +0xe0 → +8`, meaning **Unknown**, read as destroyed), or the platoon's leader is a slave
+  - Can start (`FUN_140288ed0`): the home town's vfunc 0x288 (`TownBase +0xe0 → +8`, read as destroyed), or the platoon's leader is a slave
     (the status object at Character +0x1a0, its first int = `slavestate` 1 slave / 2 escaped, `FUN_1405c8aa0`; [carry-loot](carry-loot.md#unknowns)) and its squad (platoon +0x1d8 → +0x58) has fewer than 3 members.
   - Start (`FUN_140287760`): platoon +0x115 cleared (not persistent), flag `broken` (+0xb0) = the platoon is not intact (`FUN_1407ac7b0`), mission target cleared, mission town = the nearest town of the platoon's
     faction other than its home (`FUN_140927ad0`, X/Z), and with the home destroyed the platoon is re-homed there (`FUN_1407ec8d0`).
@@ -171,7 +171,7 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
    calls `FUN_14027b3a0`; that skips an entry whose task type and target hand equal one already in the list, so **the parent's
    entry wins**. The hand (`FUN_1400cd060`) is equal when both are null or kind and all four id words match; at load (`FUN_1402704e0`) only `targeting` 2 LEADER, 3 SQUAD_MISSION and 4 HOME_GATE fill it, so two same-type entries with `targeting` SPECIFIC and/or SELF (hands null; SELF's is filled at goal sync, after) count as duplicates (**Verified**; Meitou `AiData.SameHand`; a LEADER or SQUAD_MISSION hand that is null at activation would also match them in the original, not modelled).
    One base-game record has two parents (`warrior guild`: `Guard building, residents` and `Shop-24hr`, which share an ancestor; **Observed** in the data 2026-10-14); Meitou
-   loads them in the listed order and counts only a true cycle as a problem. Whether the original walks every parent is **Unknown**.
+   loads them in the listed order and counts only a true cycle as a problem.
 3. Entries go into five role lists on the Blackboard (index to offset is identical in `FUN_140268e10` and the sync `FUN_14026b790`,
    and the constructor lays the lists out at that stride):
 
@@ -204,15 +204,9 @@ Scope: of the 143 task types with a real `Task_*` class (147 of 290 fall to `Tas
 
 - Which of the six category registries (flag bits 1, 2, 4, 0x10, 0x20, 0x40; [planner](ai-tasks.md#planner)) a character plans with; the meaning of the `*` marker on some
   condition entries (the entry's second flag byte) and of the TaskData flag +0x14.
-- The extra x1.25 under an owner-object condition in scoring; the rule that drops a candidate whose B list holds with no effect.
-- (Answered: AI +0xbc is the senses' `numEnemies`, [perception](perception.md#senses).) +0x70 of `OrdersReceiver` is the one-shot order list ([perma-jobs](ai-tasks.md#perma-jobs)).
-- Why `clears existing jobs` has no string reference in the exe (editor-only field, or read some other way).
 - Which AI packages use which `unloaded func` value, beyond the shipping ones (signals 11 and 28: all four have 5 TRAVEL_TARGET, **Verified**
   by a base-data dump of the AI_PACKAGE records). The unloaded update itself, the keep test `FUN_1407ec570`
   and the 60 s orphan timer are in [off-screen world](factions-squads-towns.md#off-screen-world).
 - The meaning of `squad mem type` value 3, and Blackboard role list 3. Tiers 0 (JUST_ACTION) and 4 (OBEDIENCE) are never scored by the
   chooser: the normal passes sync role lists with the mask `1 << tier` for tiers 3, 2, 1, and the slave special case in `FUN_14050e5b0`
   syncs role list 4 with mask 0xe (tiers 1..3); what tier 0 and 4 are for is **Unknown**.
-- Why 37 task types have no TaskData; types 289 and 290 (no enum name).
-- `ending` events (DA/DC behaviour: [dialogue](dialogue.md#unknowns)).
-- What squad-template slots 1..4 mean beyond descending priority.

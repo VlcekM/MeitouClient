@@ -342,9 +342,9 @@ public sealed partial class AiSystem
             // 7 and 48 are not wired: no goal reaches those rows.
             StateType.IsCarryingArmOk => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
             StateType.HasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
-            // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come
+            // The turret goals' done test (149, 222, 234: list A "6*"): no enemy sensed, so guards man the turrets only while enemies come
             // (docs/simulation.md "AI", turrets).
-            StateType.IsNoEnemiesInVicinity => !EnemyNear(cold),
+            StateType.IsNoEnemiesInVicinity => !SensesEnemy(),
             // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low,
             // playing dead or in a bed; the two unidentified flag reads are not modelled.
             StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
@@ -374,47 +374,10 @@ public sealed partial class AiSystem
         };
 
         /// <summary>
-        /// The state of one enemy scan of the planner: what it compares against, and whether it found one.
+        /// An enemy is sensed (the negation of <c>isNoEnemiesInVicinity</c>, <c>FUN_140597630</c>: AI <c>+0xbc</c> <c>numEnemies</c> non-zero,
+        /// <b>Verified</b>): the character's senses as of its last look count an enemy (<see cref="CharacterFacts.Senses"/>); none before it.
         /// </summary>
-        struct EnemyScan
-        {
-            /// <summary>
-            /// The character table scanned.
-            /// </summary>
-            public CharacterTable Table;
-            /// <summary>
-            /// The faction relations it judges by.
-            /// </summary>
-            public FactionRelations Relations;
-            /// <summary>
-            /// The scanning character's slot and faction.
-            /// </summary>
-            public int Self, Faction;
-            /// <summary>
-            /// Whether an enemy was found.
-            /// </summary>
-            public bool Found;
-        }
-
-        /// <summary>
-        /// An enemy is near (the negation of <c>isNoEnemiesInVicinity</c>): a living character up within <see cref="EnemyVicinity"/> whose faction is
-        /// an enemy of this one's (the relations table). <b>Engine choice</b>: the original's test and its radius are <b>Unknown</b>.
-        /// </summary>
-        bool EnemyNear(CharacterCold cold)
-        {
-            if (!_system.Relations.Contains(cold.Faction)) return false;
-            var p = Me.Position;
-            var scan = new EnemyScan { Table = _world.Characters, Relations = _system.Relations, Self = _slot, Faction = cold.Faction };
-            _world.Grid.Query(p.X, p.Z, EnemyVicinity, ref scan, static (int other, ref EnemyScan st) =>
-            {
-                if (st.Found || other == st.Self || !st.Table.Previous[other].Alive
-                    || st.Table.Cold(other) is not { Medical.Incapacitated: false } oc)
-                    return;
-
-                if (AggroSystem.IsEnemy(st.Relations, st.Faction, oc.Faction)) st.Found = true;
-            });
-            return scan.Found;
-        }
+        bool SensesEnemy() => CharacterFacts.Senses(_world, _slot) is { Enemies: > 0 };
 
         /// <summary>
         /// The target finders of the goals Meitou acts out (the spots, beds, seats, turrets and towns it already picks); none for the rest.

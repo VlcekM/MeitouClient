@@ -25,7 +25,7 @@ static const Entry COMMANDS[] = {
     {"shot", cmd_shot}, {"window", cmd_window}, {"ui", cmd_ui}, {"state", cmd_state}, {"load", cmd_load}, {"speed", cmd_speed}, {"wait", cmd_wait},
     {"camera", cmd_camera}, {"select", cmd_select}, {"mouse", cmd_mouse}, {"click", cmd_click}, {"drag", cmd_drag},
     {"scroll", cmd_scroll}, {"key", cmd_key}, {"type", cmd_type}, {"peek", cmd_peek}, {"sym", cmd_sym},
-    {"fault", cmd_fault}, {"sound", cmd_sound},
+    {"fault", cmd_fault}, {"sound", cmd_sound}, {"containers", cmd_containers},
 };
 
 int fail(Command* c, const char* format, ...)

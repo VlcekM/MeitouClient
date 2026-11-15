@@ -11,9 +11,7 @@
   440 (description), and 451 (racial XP bonus). These are catalog metadata, not
   original source code. Original prose stays in the installation.
 - The UI reads English help at runtime, joins continuations, retains all matching
-  references and selects the longer entry for a description. Source-reference
-  numbering in other game versions and the precise original
-  numeric affected-stat readouts remain **Unknown** / unimplemented.
+  references and selects the longer entry for a description.
 - **Verified** (`main.mo`/`main.po` of the eight shipped locales agree): other languages ship `locale/<code>/LC_MESSAGES/main.mo` (gettext
   binary, either byte order, `\0`-separated plurals) and a `main.po`. Plural forms come from the header `Plural-Forms`; placeholders are
   `{N}`, `{N,num}`, `{N,num=fix,p=K}`. Meitou reads the `.mo` (else `.po`) and translates the source strings that exist as msgids; see

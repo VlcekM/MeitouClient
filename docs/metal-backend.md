@@ -69,7 +69,7 @@ bindings start at 0.
 **Observed**, macOS Metal with `Haircut08-hobo`: the shaded, depth-tested editor loses hair layers while an unlit mask agrees with native Kenshi 1.0.68 D3D11.
 Writing the unchanged `gl_FragCoord.z` to `gl_FragDepth` restores 98.9% mask overlap at matched cameras, with depth testing and writes enabled;
 the source alpha in mip levels 0–3, channel selection, threshold and bone transforms agree. `MetalShaders.DiscardNeedsLateDepth` requests this output
-from the character colour shader; the interface default is false. **Unknown**: the exact compiler/driver optimization responsible. Disabling fast math alone does not fix it.
+from the character colour shader; the interface default is false. Disabling fast math alone does not fix it.
 
 **The one binding table per stage.** Metal maps a resource to its MSL index by the binding
 decoration alone, set ignored, so two sets with the same binding number would land on one
@@ -160,7 +160,7 @@ Two sharp edges:
 
 **No LOD bias in the table** (**Code reading**, not on a GPU): a Metal sampler has no LOD bias, and `MetalBindless` stores only the sampler's resource id, so the
 upscaler's `LodBias` (`SamplerDesc.LodBias`) reaches only the legacy samplers bound through the encoder (`MetalCommandList`, which passes it as the LOD clamps). Textures read through the
-table (terrain layers, objects, foliage, characters) sample at the unbiased level under MetalFX or TAA; Vulkan's sampler adds the bias there. **Unknown**: how much sharper they look with it.
+table (terrain layers, objects, foliage, characters) sample at the unbiased level under MetalFX or TAA; Vulkan's sampler adds the bias there.
 
 ## The backend so far
 
@@ -804,9 +804,6 @@ other composite passes stay as the options set them. Where the picture is as lar
   launcher's (schema keys `metalUseUpscaling`, `metalUpscaler`, `metalRenderScale`, `metalRetinaResolution`, `metalRenderDivisor`,
   `metalUiAtScreenResolution`, [launcher](launcher.md)); `metalUpscaler` and `metalRenderScale` shown with the switch on, the last three with it off.
 
-**Unknown** (no run on the target Mac yet): the GPU cost of the stretch pass and the frame rate gain against the 1080p baseline in
-METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run.
-
 ### Resume notes (facts already established)
 
 - Binding: one table per stage at `(kind base) + set*8 + binding`; the bindless table at `buffer(28)` both stages;
@@ -978,15 +975,7 @@ plumbing, profiling, docs) need no Vulkan run.
   `MetalFxUpscaler` is the temporal scaler at the 0.77/0.67/0.59/0.50/0.40 presets; `MetalFxSpatialUpscaler` covers
   the explicit 0.50/0.40 alternatives. 0.40 is the floor; 0.33 crashed before the first frame on this device and is
   clamped/rejected. Native is the fallback when MetalFX is unavailable. The FSR path stays for Vulkan.
-
-## Open questions
-
-- Metal's GPU timestamps (MTLCounterSampleBuffer), when the pass timings matter on Metal.
-- Scene depth: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
+- **Scene depth**: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
   `MEITOU_DEPTH_REVERSED`). The chain's edits for the one-depth interface (`MetalPostChain.BeginScene`, `PostTaa`/`PostComposite`
-  without far-depth or clip-convention uniforms) are **Unknown**: `MetalPostChain.cs` is compiled only on macOS, so they are
-  unverified until a macOS build runs the Metal screenshot checks. Going reversed later: `Reversed = true`, the define in
-  `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").
-
-(Resolved in the plan: per-entry sampler state — sized sampler arrays in the argument buffer.
-Resolved: the vertex-stage binding table — the kind-aware flatten, in the road table.)
+  without far-depth or clip-convention uniforms) work (**Observed**, 2026-11-15, the owner's macOS build). Going reversed later:
+  `Reversed = true`, the define in `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").

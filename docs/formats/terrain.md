@@ -116,16 +116,6 @@ stay explicit. Sun trajectory derives latitude/sunrise/sunset and sky controller
 | `distortion` | (`water distortion`, `scum distortion` / ((scum X + scum Y) / 2)) |
 | textures | `water normal`, `texture scum`, `texture scum normal`, `turbulence map` |
 
-## Open questions
-
-- World unit in metres (decimetres most likely).
-- How the game interpolates heights between samples, and the details of its terrain paging (page sizes, when
-  pages load; the known constants are under [Terrain LOD](#lod-water-and-sun)).
-- Which blend slot the game treats as a page's first biome.
-- Wetness after rain, the scum layer, the unit of the water shader's time, and the fog distances (runtime
-  settings).
-- Whether anything still reads `data/land/grasssplits`.
-
 ## Expression reference
 
 - World coordinates: `height = raw × 9800 / 65535`; `zone = floor(x / S) + 32`

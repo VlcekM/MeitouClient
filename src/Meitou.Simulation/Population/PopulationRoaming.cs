@@ -1071,8 +1071,9 @@ public sealed partial class PopulationSystem
         else if (p.Saved is { Wild: not null } wild)
         {
             // A save's wild platoon wanders round its nest, or (homeless) round where it stands.
-            var (centre, homeRadius) = WildHome(wild, p.Position);
+            var (centre, homeRadius, nest) = WildHome(wild, p.Position);
             squad = b.Saved is { } wildMembers ? Saving.SavedCharacters.Spawn(world, p, wild, wildMembers, _data, _assembly, centre, homeRadius) : null;
+            BindNest(squad, nest);
         }
         else
         {
@@ -1131,20 +1132,25 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Where a save's wild platoon keeps to: its nest's centre and radius (as the nest's own squads, <c>PopulationWild.cs</c>) when it stands within
-    /// 3 radii of it, else its own place with the homeless radius (engine choice: saves hold nest squads kilometres from their nest, and they are not
-    /// walked back).
+    /// Where a save's wild platoon keeps to: its nest's centre and radius, and the nest, as the nest's own squads (<c>PopulationWild.cs</c>), however
+    /// far it stands from it (the original's town hand is the nest, so a stray one walks back: #771); a homeless one its own place with the homeless
+    /// radius and no nest.
     /// </summary>
-    (Vector2 Centre, float Radius) WildHome(Saving.SavedPlatoon sp, Vector2 at)
+    (Vector2 Centre, float Radius, TownData? Nest) WildHome(Saving.SavedPlatoon sp, Vector2 at)
     {
         if (sp.Wild == WildKind.Nest && sp.WildSite >= 0 && sp.WildSite < WildSites.Count && WildSites[sp.WildSite].Nest is { } nest)
-        {
-            var centre = _wildCentres[sp.WildSite] ?? WildSites[sp.WildSite].Spots[0];
-            float radius = NestRadius(nest);
-            if (Vector2.DistanceSquared(centre, at) <= 9 * radius * radius) return (centre, radius);
-        }
+            return (_wildCentres[sp.WildSite] ?? WildSites[sp.WildSite].Spots[0], NestRadius(nest), nest);
 
-        return (at, _settings.HomelessHomeRadius);
+        return (at, _settings.HomelessHomeRadius, null);
+    }
+
+    /// <summary>
+    /// Binds a save's nest squad to its nest (<see cref="NestOf"/>), as the nest's own squads are: its town hand is the nest, so
+    /// it patrols round it (<c>FUN_1409f9100</c> takes a nest's type 85 hand as a town, #771) and its territory is the nest's.
+    /// </summary>
+    void BindNest(Squad? squad, TownData? nest)
+    {
+        if (squad is not null && nest is not null) _nestSquads[squad.Id] = nest;
     }
 
     #endregion

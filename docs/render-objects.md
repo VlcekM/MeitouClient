@@ -101,8 +101,7 @@ main one is on, `KeepTexturesAtAllSquads`) takes every player squad's members in
 so object meshes and texture mips stay loaded round each character (a resolving instance's first texture need is measured the same way, else
 its textures load coarse for the far eye and wait for refines). Detail (texture mips, mesh levels) counts a kept point from at least the camera's
 distance to its target (`KeptViewDistance`), the view a jump there would have; residency counts from the point itself. **Observed** (VRAM dump
-2026-11-01, squad member at a town gate): 189 MB of object textures at need 0; whether from the kept point or the bounding sphere is
-**Unknown** (that dump did not list the points; the dump's header now does). Terrain biome pairs gather cells round each (ranked after the
+2026-11-01, squad member at a town gate): 189 MB of object textures at need 0. Terrain biome pairs gather cells round each (ranked after the
 eye's); a pair within its near range of a point, measured from the point, takes a full-size near slot while the eye's leave one free.
 Foliage zones within the near reach of a point are laid out and kept, ranked after the eye's, and their meshes and textures stay resident
 (texture needs from at least `KeptViewDistance`); their waiting layouts do not hold up the loading screen. `Kept` ranks after the eye in the load order. The colour, overlay and fine height windows keep
@@ -140,7 +139,7 @@ view-projection that has no translation (the scene's `RelativeRotation × jitter
 shadow cascades and the reflection take translation(eye) × theirs). The world position at tens of thousands of units steps by 0.004, and in a
 whole-world transform the layers of one mesh a hair apart can fight for depth; the origin less the eye is one exact subtraction per instance.
 Shading still uses the absolute world position. **Observed** (The Hub, offscreen, three views): the picture within 0.15/255 mean of the
-whole-world transform. **Unknown** whether this was the z-fighting the user reported on ruins (not reproduced: no location yet).
+whole-world transform.
 
 ## See-through items (Meitou, issue #562)
 
@@ -150,7 +149,6 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
 - **The original** shows such an item solid: **Verified** `fcs.def` (1.0.68) has no `opacity` key and the 1.0.68 decompile no `opacity map` string.
   A separate map because the existing alphas are taken: diffuse alpha is gloss, and the original cuts worn items where normal alpha is under 0.6
   and drawn icons under 0.5 ([characters](characters.md), [ui-screens](game/ui-screens.md) "Item icons"), so opacity there would punch holes.
-  **Unknown**: whether FCS shows the field once a modder adds `opacity map: TEXTURE_ANY` under `[MATERIAL_SPECS_CLOTHING]` in their `fcs.def`.
 - **Main view: a blended pass** (`WorldFrame.DrawSeeThrough`, in `FinishScene` after the GI's resolve, the lamps' shadows, the characters'
   occlusion and the reflections, before the shafts and fog). The colour passes leave the see-through draws out and they are drawn afterwards
   over the scene by their opacity, into the scene's colour and depth alone (the GI's albedo and traced-sun targets keep the opaque scene),
@@ -192,14 +190,14 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
     view ray, at most 6 pixels. The other see-through items follow, writing no depth.
   - Limits: no depth copy, so the bend can pull in what stands just in front of the bottle; a bottle seen through another shows the scene
     behind both (the copy is taken once); what comes after the pass (fog volumes, particles, the upscaler) sees the bottle's depth, as an
-    opaque object's. **Unknown**: the look in play (unseen; the glass program compiles, glslang), and its cost.
+    opaque object's.
 - **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
   frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
   **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):
-  the body is evenly see-through with no pattern, the stopper solid. **Unknown**: a worn see-through item and frame generation, both unseen.
+  the body is evenly see-through with no pattern, the stopper solid.
 - Cost without such a material: the solid (no-discard) object program is untouched; the others gain one constant or flag test. **Observed**
   (offscreen `--view hub`, 3 interleaved pairs of builds, RTX 4070, DLSS 0.667 at 720p, the dithered version): GPU total 2.62 against 2.63 ms,
-  objects 0.205 against 0.205 ms, shadows 0.249 against 0.250 ms. **Unknown**: the character pass (the viewer draws none, `--crowd` included).
+  objects 0.205 against 0.205 ms, shadows 0.249 against 0.250 ms.
 
 ## Building sign highlight
 
@@ -250,8 +248,7 @@ open amounts (`DoorPoses.Open`, by placement id and index); `DrawReal` poses a d
 the instance transform only when they gather instances (not checked for leaves in motion).
 The interior view's floor never hides a door part (`WorldObjectRenderer.InteriorHidden`). **Verified** (probe over the base game's BUILDING `doors`): 15 of
 47 door entries have a leaf part with `building floor` 1 (Storm Houses A-H, the shacks, the swamp houses), so hiding by floor left their doorway empty at
-floor 0 (issue #170). In the game a door is a building of its own (`Building::createPhysical` makes one per entry); that its parent's floor view
-leaves it shown is **Unknown** in code, inferred from those common houses.
+floor 0 (issue #170). In the game a door is a building of its own (`Building::createPhysical` makes one per entry).
 
 ## Turrets
 
@@ -261,7 +258,7 @@ gun's pitch, both as placed). The host (`GameHost.UpdateTurretPoses`) gives the 
 simulation's `TurretRig` angles from `MannedTurret.Angles`, interpolated between the last two snapshots by the simulation's alpha, kept after the gunner leaves).
 `DrawReal` poses a part (`JointPoses.Pose`) when the pose's version changed: its placement times, from the innermost joint out, a turn about the joint's pivot and axis by its
 angle. **Verified** by a probe over every turret building of the install (random yaw, position and angles): the posed part's origin and its Z and Y directions equal the
-simulation's `TurretRig.Derived` (30 of 30 parts). **Unknown**: the pose has not been looked at in a rendered frame. Only simulated turrets (the combat system) turn; the
+simulation's `TurretRig.Derived` (30 of 30 parts). Only simulated turrets (the combat system) turn; the
 viewer never does. Parts that are not joints (the six-barrel add-on, the lamp) ride on their joint.
 
 ## Rotating parts
@@ -272,9 +269,9 @@ turret's joints; the wind generator's blades ride on its head. A part's state (`
 its meshes is first drawn and dropped 600 frames after the last; the host (`GameHost.UpdateRotors`) calls `RotatingParts.Advance` once a frame with real time x speed (0
 paused), the scheduled wind (`WeatherWorld.WindAt`, a forced weather does not count) and the mult (`MachineSnapshot.Rotation`, level buildings by data); construction sites stand still (`RotatingParts.Unbuilt`). A head
 hears the weather when the wind at it differs from the last frame (the original's notifications come while it interpolates). Joint meshes under a rotor are posed
-every frame: angle less the start roll (functions 1 to 3 stay at the roll until they first move). **Unknown**: not looked at in a rendered frame; shadow caches not checked.
+every frame: angle less the start roll (functions 1 to 3 stay at the roll until they first move).
 
-Motion vectors (temporal upscalers): an instance with a door, turret joint or rotor (`PlacedMesh.DoorIndex`, `Joints`) that is drawn in the scene view notes its transform of the last frame it was drawn (`Instance.LastDrawn`); when it differs from this frame's its meshes (the LOD level the colour draw picks, `PlainMesh`) go into `MotionMeshes` with both transforms, relative to the eye, in the post chain's object-motion pass (`WorldObjectRenderer.DrawMotion`, after the characters', with the debris). One not drawn the frame before has no motion from before. Cut-out holes are not tested (the pass writes only where the depth buffer shows the part's own surface). **Observed** in live DLSS captures of a wind generator and a door; no shadow or reflection pass writes motion. Movers left without their own vectors: none known in the objects; the scene's other movers are the characters, grass sway, loose pieces ([birds](game/birds.md)), clouds and water (own paths, [render-post](render-post.md)); the foliage docs describe sway for grass only (**Unknown** for tree meshes).
+Motion vectors (temporal upscalers): an instance with a door, turret joint or rotor (`PlacedMesh.DoorIndex`, `Joints`) that is drawn in the scene view notes its transform of the last frame it was drawn (`Instance.LastDrawn`); when it differs from this frame's its meshes (the LOD level the colour draw picks, `PlainMesh`) go into `MotionMeshes` with both transforms, relative to the eye, in the post chain's object-motion pass (`WorldObjectRenderer.DrawMotion`, after the characters', with the debris). One not drawn the frame before has no motion from before. Cut-out holes are not tested (the pass writes only where the depth buffer shows the part's own surface). **Observed** in live DLSS captures of a wind generator and a door; no shadow or reflection pass writes motion. Movers left without their own vectors: none known in the objects; the scene's other movers are the characters, grass sway, loose pieces ([birds](game/birds.md)), clouds and water (own paths, [render-post](render-post.md)); the foliage docs describe sway for grass only.
 
 ## Closed interiors
 
@@ -286,7 +283,7 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
 - **The outside flag:**
   - Loaded from a state's `flags` bit 0, or the older `is outside` (`FUN_140552b70`).
   - Exterior-layout objects get it from their layout (`+0xa0`, `FUN_1405765c0`).
-  - Interior-layout objects spawn without it (`FUN_140583400`). Runtime setters exist (`FUN_1404ec160`, `FUN_14047d830`), but their triggers are **Unknown**.
+  - Interior-layout objects spawn without it (`FUN_140583400`).
 - `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
 - Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**).
 - **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.

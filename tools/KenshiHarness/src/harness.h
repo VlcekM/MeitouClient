@@ -69,6 +69,7 @@ int cmd_type(Command* c);
 // ---- state.c: the game's world as JSON ----------------------------------------------------------------------------------
 
 int cmd_state(Command* c);
+int cmd_containers(Command* c);
 
 // ---- control.c: the save, the speed, the camera and the selection -------------------------------------------------------
 

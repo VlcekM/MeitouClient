@@ -135,11 +135,13 @@ public sealed partial class PopulationSystem
     /// </summary>
     Squad? SpawnStoredWithoutTown(World world, Platoon platoon, StoredSquad stored)
     {
-        var (centre, radius) = platoon.Saved is { Wild: not null } saved
+        var (centre, radius, nest) = platoon.Saved is { Wild: not null } saved
             ? WildHome(saved, platoon.Position)
-            : (platoon.Position, _settings.HomelessHomeRadius);
-        return SpawnKept(world, stored, platoon.TemplateId, platoon.Faction, -1, platoon.Id, platoon.Position, centre, radius, platoon.Size,
+            : (platoon.Position, _settings.HomelessHomeRadius, null);
+        var squad = SpawnKept(world, stored, platoon.TemplateId, platoon.Faction, -1, platoon.Id, platoon.Position, centre, radius, platoon.Size,
             wild: platoon.Wild);
+        BindNest(squad, nest);
+        return squad;
     }
 
     /// <summary>

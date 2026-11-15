@@ -24,9 +24,7 @@ colours) → beard (men; no draw for women), hair, hair colour (`FUN_14007adc0`)
 order of a boost `unordered_map<short>` of 16 buckets (bucket mix64(group) & 15; a group in a new bucket goes first, one in a used bucket first in
 that bucket's run): human bodies draw group 1 before group 0. Sliders and colours keep separate group maps. The skin re-roll is
 `Int(max(min, mid − w), min(max, mid + w))` with w = round(max − min), so it covers the whole range. A morph face's poses come from `srand(FNV-1a-32
-(mesh name))` when its mesh is made, so draws after the appearance (money, bounty, name) follow a reseeded or uncached sequence. **Unknown**: the
-Character constructor's own draws (it runs before the race pick), where equipment is rolled, the faction field skipping the skin re-roll and morph,
-the morph mesh name. Meitou (`CharacterGenerator`, `MsvcRandom`): the same generator and appearance order, one sequence per character from its
+(mesh name))` when its mesh is made, so draws after the appearance (money, bounty, name) follow a reseeded or uncached sequence. Meitou (`CharacterGenerator`, `MsvcRandom`): the same generator and appearance order, one sequence per character from its
 seed (scrambled, as neighbouring `srand` seeds start alike), equipment after the morph index (backpack, `robot limbs`, clothing, crossbows,
 weapons: `setupInventorySections` order, **Verified**), the poses from FNV-1a of race/gender/index; money,
 names and personality keep their own per-purpose seeds.
@@ -40,7 +38,7 @@ Default variation uses the runtime deviation (raw CONSTANTS ×0.5; **Verified** 
 evidence in [character-stats](game/character-stats.md#constants-used-by-this-subsystem)), not the raw field.
 Base-game 0.4 therefore gives a ±20% range around the midpoint: human height 92–108, not 84–116.
 Explicit XML `random_variation` remains a percentage of the full slider range. Rolls are not
-clamped; **Unknown** whether the original applies a later clamp for extreme modded limits.
+clamped.
 
 **Observed** (Kenshi x64 disassembly: template initialization `@ 140073fb2`, randomizers'
 final copies `@ 14007acc2`, `@ 14007bc2d`, `@ 14007bfda`): randomization restores `Posture`
@@ -55,7 +53,7 @@ are separate; .phs attachment points are data. Part scales/transforms must follo
 Worn ARMOUR is drawn from the inventory sections `head`, `shirt`, `armour`, `legs`, `boots` and `belt` (`SavedKit.Worn`); the section follows the
 record's `slot` (3 hat, 8 shirt, 5 body, 6 legs, 9 boots, 14 belt). **Observed** (merged data of a modded install): mods put masks, goggles and
 robes in slot 14 (845 ARMOUR records, 632 with a mesh), so a worn belt-slot ARMOUR must be drawn like any other (it was dropped until fixed: no goggles
-or mask showed). A worn ITEM in `belt` (lanterns) shows only its light (`Loadout.Carried`); whether the original also draws an ITEM's own `mesh` there is **Unknown**.
+or mask showed). A worn ITEM in `belt` (lanterns) shows only its light (`Loadout.Carried`).
 A code mod's equipment slot ([modding](modding.md#registration-surface)) is drawn the same way: its ARMOUR as clothing, its ITEM as carried.
 
 **Verified** (decompilation, `AppearanceBase::setupItemMaterial` `FUN_140536210`): an attached item without a material record whose type is
@@ -70,8 +68,7 @@ material. Meitou: `CharacterContent.ItemMaterial` (they were untextured, white, 
 three-component tangent). Both human bodies store BINORMAL = cross(tangent, normal); `human_male` has four-component tangents (w ±1),
 `human_female` three. Meitou (`Model.Build` `gameBinormals`, characters only): w is set so that cross(normal, tangent) × w is that binormal; worn
 items flip their normal map's green (skin.hlsl), so their binormal is the opposite. Albedo is written darkened: × 0.7 for bodies, heads, hair and severed limbs (`character.hlsl`
-`DARKEN`), × 0.8 for worn items (`skin.hlsl`); the icons' forward shader (`rtticons.hlsl`) has none. Items attached with their own mesh (`StaticObject`):
-their darken and green flip are **Unknown**; Meitou applies neither (both keyed on `PartMaterial.Worn`).
+`DARKEN`), × 0.8 for worn items (`skin.hlsl`); the icons' forward shader (`rtticons.hlsl`) has none. Meitou applies neither (both keyed on `PartMaterial.Worn`).
 Worn items (template `Skinned`, `AppearanceBase::setupItemMaterial` `FUN_140536210`) write gloss = diffuse alpha × `glossMult`, metalness = colour
 map blue; nothing sets `glossMult` there and `Skinned_FP` has no default, so it is 0: worn clothing is matte (**Observed**: no setter in the function,
 no default in `skin.program`). The worn items' diffuse alpha is still a painted gloss map, cloth near 0 and metal bright (**Observed**, `Samurai_d_HI.dds`, `whites.dds`; 66 of 107 vanilla armour diffuses have a varied alpha, 24 are flat), unused by the game; `Advanced materials` uses it to tell plate from cloth. The diffuse alpha is the gloss everywhere else too (**Verified**, `objects.hlsl`, `skin.hlsl`, `character.hlsl` `writeGloss`). Character normal maps hold no hidden channel: X in alpha, Y in green, red a copy of green (**Verified**, channel correlation on 8 `character/skins` normals). No roughness, AO or height map is authored (**Observed**, shaders and channel scan by family). Surfaces cut out by the normal map's alpha (`FeatureAlpha`, `Building_Alpha`, farm plants) are translucent to the sun only: translucency = 1 - (normal alpha - threshold) / (1 - threshold), and a side facing away takes -N.L times it (**Verified**, `objects.hlsl` TRANSPARENCY, `lightingFunctions.hlsl` `CalcPunctualLight`, `deferred.hlsl`; lamps do not pass it); Meitou applies the same in `kenshiLight`. **Observed** (main menu scene, the value displayed): 0 on the bushes, non-zero on a few texels only, so the term changes almost nothing there. Foliage has no gloss or metal data: `foliage.hlsl` forces both to 0. Weapons (and their sheaths, which copy the item's material) read the model record's `metalness map`, red channel (**Verified**, decompile: `FUN_140844030` → `FUN_140446e60` → `FUN_140841a50` binds `metalnessMap` when the field is set; `objects.material` `StaticObject`, `objects.hlsl`); Meitou reads it too (`HasMetalMap`). The colour map is bound only with a `color map` and a dye record (`FUN_140536210`), and vanilla masks rarely fill blue (**Verified**, byte scan of `color map` in the four base files, blue channel of each item texture read: 0 in the samurai, barbarian, police, monk, helmet, coat and fancy-clothes masks; set in `robotmask_metal_hi`, `f_medplate_d5c`, `jacket-trader-01_color`, `cargo01_color`, `fancy-rug_colourmap`): vanilla armour is almost never metal. Items attached with their own mesh (`StaticObject`) keep `glossMult` 1. Lighting (**Verified**, `deferred.hlsl` / `rtt.hlsl`, `lightingFunctions.hlsl`): specular colour = lerp(0.04, albedo, metalness),
@@ -107,7 +104,7 @@ legacy layouts (types 5, 8, 9, 10, 13: the `.body` files and three `.bod2`), and
 
 FACTION `faces weirdness` (0.2-1, most 0.5; `AppearanceBase::buildBody` `FUN_140539020`, **Verified** read): for a race without a fixed body and a character not in a
 player squad, floor(weirdness x 10) goes into the generated morph mesh's name (which seeds the face roll) and `AppearanceManager::randomPoses` draws the random morph offsets with it
-(**Observed** meaning: the strength of the faction NPCs' random face and body morphs). Not modelled (the name's form and the pose formula are **Unknown**).
+(**Observed** meaning: the strength of the faction NPCs' random face and body morphs). Not modelled.
 
 CHARACTER `race` overrides the body file's race (fcs.def "will override race in .body file"; the viewer
 follows this, not traced). The candidates (`Faction::chooseARace` `FUN_1407ff1a0`, **Verified** in outline): the squad template's
@@ -143,7 +140,7 @@ arm, 8.6 for a leg. Bones map to limbs through the race's `combat anatomy` LOCAT
 & 0x12. `hiddenMask` (`uses_hide_parts`) = OR of worn items' `hide parts`, 1 << (`slot` - 38) per worn LIMB_REPLACEMENT, and bit 12 + k
 for every limb not in state 0 (`FUN_1400cd470`); `character.hlsl` clips where the interpolated flag is above 0. Meitou: the limb bits
 ride in the body vertices' colour Y, the mask in the instance flags (`CharacterContent.MarkBody`, `CharacterAppearance.HiddenLimbs`);
-an unnamed root-chain bone (pelvis) is no limb (the original's fallback part index 1 is **Unknown** in effect). The part-map bit (**Verified** read, `FUN_140075600` / `FUN_140071f90`): the race's `part map male` / `part map female`
+an unnamed root-chain bone (pelvis) is no limb. The part-map bit (**Verified** read, `FUN_140075600` / `FUN_140071f90`): the race's `part map male` / `part map female`
 image loaded by name through Ogre's resources; a DXT1-5 file is refused (logged "Convert this to png instead"), so no bits. Each body vertex samples the
 texel (clamp(int(W x u)), clamp(int(H x v))) at its UV; with alpha > 0 an exact table colour sets its bit, any other colour is logged as invalid and sets
 none. Meitou: `CharacterContent.MarkBody` (vertex colour Y: limb bits 0-3, part bits from 4), `CharacterAppearance.HiddenParts` in instance flags bits 18-27.
@@ -160,8 +157,8 @@ Boots (slot 9, not `is locked`) on a character with exactly one fitted leg prost
 
 **Verified** (base-game data, 23 MATERIAL_SPECS_WEAPON records read with `GameDatabase`): the look of a weapon grade is its **model**, the item's `material sid`, a MATERIAL_SPECS_WEAPON, and nothing else. The record holds `texture map`, `normal map` (may be empty), `specular mult` (1, except `001` = 0), `attack mod` / `defence mod`, an empty `metalness map` and the scale fields `overall scale` / `scale length` / `scale thickness` / `scale width` (all 1 in the base game; only the item icon reads them). No rust, wear or dirt amount exists as a number: a rusted blade is a rust texture. The manufacturer (`company sid`, WEAPON_MANUFACTURER) only decides which models exist (`weapon models`: model, level in value 0, pick weight in value 1); the level and the manufacturer change stats, name and weight, not the picture. Base textures, in `data/items/weapons/tex/`: Rusted Junk, Rusting blade-, Mk 0, Mk IV, Mk V, Mk VI and Industrial 007 share `01_HI` (no normal map); Rusting Blade `02`; Mid-Grade Salvage `03`; Old Refitted Blade `04`; Refitted Blade `05`; Catun No.1-3 `06`-`08`; Mk I `09`; Mk II `10`; Mk III `11`; Edge Type 1-3 `12`-`14` (each with a `_n_HI` normal map from `02` up); Merchants Blade `tech5r`; `001` `plain2`. The model's texture covers the whole mesh of the weapon (blade, handle, sheath).
 
-**Verified** (decompile, `FUN_140844030` via `FUN_140446e60`, ground items and weapons): the material built for a weapon is the model's record with shader flags 0. **Observed** (no other input found there and none in the data): no per-level or per-manufacturer parameter. A lying weapon takes the same model as a held one (the item instance's `material sid`). Meitou draws it: held and sheathed (`CharacterPart.Material`), on the ground (`GroundItemSnapshot.Material` -> `BuildingPlacement.ItemMaterial` -> `PlacedMesh.Material`), and in icons (`ItemIcons.MaterialOf`). A weapon with no model keeps the resolver's pick (**Unknown** whether the original rolls one).
-**Observed** (decompile: `FUN_1405d24b0` sheath attach, `FUN_140535e50` attach, `FUN_1405358a0` attachment object, `FUN_140536210` `setupItemMaterial`; `data/materials/deferred/skin.hlsl`): a weapon's `sheath` mesh is attached like `bare sword` and `mesh`: the attachment copies the weapon item's material record (the saved `material sid` model, `FUN_140535e50` takes the item and the mesh name), so the scabbard wears the same MATERIAL_SPECS_WEAPON model (grade) as the blade. Meitou gave the sheath no model and resolved it as an unowned mesh (the first model of the weapon's manufacturer: a Rusted Junk look on every graded sword); fixed, and the crossbow's model reaches its `mesh`, `extra mesh` and `live ammo` parts the same way. A weapon with no saved model keeps the resolver's choice (**Unknown** whether the original then picks one at random, `FUN_140840140`).
+**Verified** (decompile, `FUN_140844030` via `FUN_140446e60`, ground items and weapons): the material built for a weapon is the model's record with shader flags 0. **Observed** (no other input found there and none in the data): no per-level or per-manufacturer parameter. A lying weapon takes the same model as a held one (the item instance's `material sid`). Meitou draws it: held and sheathed (`CharacterPart.Material`), on the ground (`GroundItemSnapshot.Material` -> `BuildingPlacement.ItemMaterial` -> `PlacedMesh.Material`), and in icons (`ItemIcons.MaterialOf`). A weapon with no model keeps the resolver's pick.
+**Observed** (decompile: `FUN_1405d24b0` sheath attach, `FUN_140535e50` attach, `FUN_1405358a0` attachment object, `FUN_140536210` `setupItemMaterial`; `data/materials/deferred/skin.hlsl`): a weapon's `sheath` mesh is attached like `bare sword` and `mesh`: the attachment copies the weapon item's material record (the saved `material sid` model, `FUN_140535e50` takes the item and the mesh name), so the scabbard wears the same MATERIAL_SPECS_WEAPON model (grade) as the blade. Meitou gave the sheath no model and resolved it as an unowned mesh (the first model of the weapon's manufacturer: a Rusted Junk look on every graded sword); fixed, and the crossbow's model reaches its `mesh`, `extra mesh` and `live ammo` parts the same way. A weapon with no saved model keeps the resolver's choice.
 
 **Verified** (`skin.hlsl`): worn items always `clip(normal.a - 0.6)`, so a normal map whose alpha is low (BC1 punch-through, atlas islands) hides those texels.
 
@@ -214,8 +211,8 @@ the look of those 11 materials is not checked against the game. The icon path al
 platoon faction's scheme, 7,634 the `color` of some CHARACTER (the wearer's record was not matched), 1,632 their record's own, 98 other (looted, mod colours). No uncoloured worn piece is in a faction with
 a scheme. 31 of 103 base FACTIONs have one; 42 of 142 ARMOUR records have `dont colorise` false.
 Meitou: `ItemColours`, `ItemInstance.ColourId` (factory: the record's; `CharacterAssembly.Dye`: the scheme, for any item outside the main grid), `LoadoutItem.Colour`,
-`CharacterPart.Colour`. Whether the scheme follows a faction change (a recruit) is **Unknown**. Meitou uses the current faction. A vest texture (body layer) takes
-its item's colour like the meshes (the shader has one shirt colour: the first dyed vest's); the original's vest colour source is **Unknown**.
+`CharacterPart.Colour`. Meitou uses the current faction. A vest texture (body layer) takes
+its item's colour like the meshes (the shader has one shirt colour: the first dyed vest's).
 Vest slot (**Observed**, decompile `FUN_140533b50`): the body's `vestDiffuse` / `vestNormal` / `colorMap` come only from the attachment in the `shirt` slot; an
 ARMOUR in another slot draws its mesh alone, its vest fields unread. All 15 base ARMOURs with a vest texture are shirts (slot 8); the Re Final Fantasy - Viera mod
 sets one on body armour (slot 5) and a collar (slot 14), whose atlas would cover the whole body (#533). Meitou: `CharacterAppearance.AddWorn`, shirt slot only.
@@ -230,10 +227,10 @@ the CROSSBOW's `equip offset` (fcs.def default 1.2). Drawn to shoot (task 264 "E
 crossbow (at all points): loaded shows with shots > 0, unloaded with 0, bolt i with i < shots; bolts at (`barrel pos Y`, `barrel pos Z`,
 0) turned X -90°, Z -90° (bolt +z along the crossbow's +y). Firing hides the loaded string and bolt[shots - 1]; the end of a reload shows them
 (`FUN_14043a730`, `FUN_140436fb0`). Meitou: carried and in-hand crossbow with the loaded or unloaded string and its bolts by the combat slot's loaded
-bolts (`CharacterCold.CrossbowShots`; 0 until the first reload, the original's starting count is **Unknown**); the snapshot's
+bolts (`CharacterCold.CrossbowShots`); the snapshot's
 `RangedDrawn` selects them (#36: a staff was shown firing while the crossbow stayed on the back). A generated character's crossbow takes row 0 of `back`
 (10 x 2); a two-row crossbow fills it, so a rolled back weapon goes to `hip` when free, else is left out, and the inventory never puts two weapons
-on the same cells (taken cells: `hip`, then the pockets). The original's placement for this case is **Unknown** (Meitou engine choice).
+on the same cells (taken cells: `hip`, then the pockets).
 
 ### LOD of character meshes
 
@@ -253,13 +250,13 @@ checks `human_male.mesh`):
 Meitou: the `charlod` switch (Character levels). Faithful draws the files' own levels by the rule above with the stored bounding radius (unclamped) and
 bias 1, the shadow passes as the picture; Meitou draws its generated levels ([character-renderer](character-renderer.md)). Both sets are prepared at
 load (`CharacterContent.PrepareMesh`), so the switch needs no rebuild. 400-character crowd at The Hub, Release: Faithful 2.07M character triangles
-a frame against 0.75M, +0.9 ms GPU in the picture and +0.9 ms in the shadows. Whether Kenshi's shadow cameras take the main camera's LOD is **Unknown**.
+a frame against 0.75M, +0.9 ms GPU in the picture and +0.9 ms in the shadows.
 
 ## Names
 
 **Observed** (character setup `FUN_14062b210`, pool loader `@ 140641d80`): CHARACTER `named` false → the record's name; true → a uniform pick
 from the look's sex's list (appearance `sex female`): `data/namesM.txt` (men) or `data/namesF.txt` (women), with `data/namesMF.txt` appended to
-both. Lines are trimmed, blank ones skipped; each file is optional. An empty list gives a fixed fallback string (**Unknown**; Meitou: the record
+both. Lines are trimmed, blank ones skipped; each file is optional. An empty list gives a fixed fallback string (Meitou: the record
 name). 135 of 639 merged CHARACTERs are `named`, among them most start-squad members (Wanderer, Nobody, start slave; not Citizen, Exile).
 Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.Name`) from the world seed, which a new game from the menu rolls afresh
 (`--seed` keeps one), so the start squad's names differ from game to game as the original's; files read from the install, not mods.
@@ -280,7 +277,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   animal's page (`FUN_1405efd60`, no humanoid appearance): body view, IMPORT and EXPORT hidden; `FUN_1405ee0c0` then hides the tab buttons, the
   rows (`TabsPanelContent`), RANDOMISE, RANDOMISE ALL, RESET and every race/subrace/gender arrow, shows the RACE name as race and subrace, gender
   "-", and the race's description and stats. NameText renames whichever character is shown (`FUN_1405e9410`), animals included. CLOTHES,
-  CONFIRM and CHANGE CHARACTER stay. The preview idle the original sets for an animal is **Unknown** in detail (Meitou: its world pose). Meitou:
+  CONFIRM and CHANGE CHARACTER stay. Meitou:
   `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look, accepted in every kind (a bought animal's
   goes through `EditKind.Recruit`; [animals](game/animals.md#buying-animals)); in the Meitou bar an animal not shown is not
   drawn (no seat).
@@ -288,8 +285,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   (mode 0) and, with a `force race` list, in it (none left: "Game start has no valid races", the list is unrestricted). Showing a character in
   mode 0 (`FUN_1405efd60`) whose race isn't listed switches it to the first group's first race (a race missing from its group: that group's
   first), so The Hive Exile's raceless `Exile` becomes a hive race. Base data: Human
-  {Greenlander, Scorchlander}, Shek, Hive {Prince, Soldier Drone, Worker Drone}, Skeleton (**Verified** by probe). Group order **Unknown**
-  (Meitou: data order). Gender "-" when the race's gender list has fewer than two entries (**Verified**, `FUN_1405ee0c0`; Meitou: `single gender`); the
+  {Greenlander, Scorchlander}, Shek, Hive {Prince, Soldier Drone, Worker Drone}, Skeleton (**Verified** by probe). Gender "-" when the race's gender list has fewer than two entries (**Verified**, `FUN_1405ee0c0`; Meitou: `single gender`); the
   subrace box always shows the RACE name. Description = RACE `description`. Stats panel (`FUN_1405ee0c0`, **Observed**):
   "Hit Points:" and the character's first medical part's maximum as an integer (Meitou, while the draft shows another race: that race's new medical state's), "No bleeding" below `bleed rate` 0.1, then the stat multipliers
   above 1, then those below 1, each as the stat's name (no colon) and (m-1)x100 %. Within each group the order is the race stat map's iteration order
@@ -324,12 +320,12 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   `squat`), so the default `idle_stand_normal` is 6, as the original's screen shows. RANDOMISE never rolls it (**Verified**: no randomiser writes it).
   The stance clips are 1-frame poses (0.033 s, two keys) with `play speed` 0 (`squat` 0.01), **Verified** by probe on base data; looped at
   real time they flicker between the keys. The preview plays the chosen stance at its `play speed`, cross-faded at `animation blend rate`
-  (Meitou: `PlayerInterface.EditorIdle`, `EditorStances.EditorStancePoses`; the original's fade is **Observed** smooth, its rate **Unknown**). In the
+  (Meitou: `PlayerInterface.EditorIdle`, `EditorStances.EditorStancePoses`; the original's fade is **Observed** smooth). In the
   world a character stands in its stance whenever it fits ([animation.md](animation.md#idle-stance)).
 - **Buttons** (randomisers **Verified** by decompilation, `FUN_1405efa50`, `FUN_1405ef930`): RANDOMISE rolls the current tab: FACE = head and face
   sliders, then face poses; BODY = body sliders and colours, no skin re-roll; HAIR = hair, no faction limits. RANDOMISE ALL = hair, face, body
   (`FUN_14007f040`), then face poses; the rest stays. Draws as in [Original random sequence](#assembly-and-generation). RESET ALL = the appearance template's defaults (hair, beard,
-  colours, `Posture`, idle stance `idle_stand_normal`; slider values **Unknown**, Meitou: XML mid, poses 0, Posture 20); CLOTHES toggles worn
+  colours, `Posture`, idle stance `idle_stand_normal`; Meitou: XML mid, poses 0, Posture 20); CLOTHES toggles worn
   clothing in the preview; IMPORT/EXPORT: see [below](#import-and-export). CONFIRM asks first when some
   characters were never shown, closes, unpauses and sets the speed to Normal (`FUN_1405e9f40`, **Verified**; the generic editor confirm, so surgery too); it charges nothing. No cancel widget; Esc opens the game menu over the editor
   (**Observed**, vanilla play; Meitou does so in both modes).
@@ -360,7 +356,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   races, every head/hair/beard of the race) are prepared ahead; a click shows in 1-2 frames. **Blend**: a slider moves the character along: when a new preview look is ready it is drawn
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
-  head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
+  head, hair or clothes swaps at once.
 - **Meitou bar** (the `editorbar` switch, Meitou, off by default, else the platform; both hosts; `EditorBar`, `EditorBarScene`, `CharacterEditorHost`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
   Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, from records alone (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar`, `BuildingPlacement.Standalone`: no town's material, the part variants of a fixed place; barman from residents `44856-rebirth.mod`, patrons from The Hub's `bar squads`), the frame holding nothing of the world (`WorldObjectRenderer.Isolated`, `GiScene.SkipWorld`), 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldGpu.ViewCap`: far plane and
@@ -392,14 +388,12 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
 Folder `./data/character/bodies/export/` under the install, extension `.bod2` (`FUN_141539ad0`/`b10`). **Observed**: EXPORT (`FUN_1405ea410`)
 needs no dialog: it writes the edited appearance record to the folder as `<NameText>.bod2` and shows "Character '{1}' exported to file {2}".
 IMPORT opens `Kenshi_OpenSaveFileDialog` titled "Import character" on the folder (`FUN_1405f4dd0`); the chosen file must hold a type 66 record,
-else "Error loading appearance file '{1}'. The file is in an old format or invalid." (`FUN_1405f4280`), and its look replaces the editor's;
-what the original does with another race in mode 1 is **Unknown**. **Verified** (FcsReader + FcsWriter on the install's 12 exports): all are
+else "Error loading appearance file '{1}'. The file is in an old format or invalid." (`FUN_1405f4280`), and its look replaces the editor's. **Verified** (FcsReader + FcsWriter on the install's 12 exports): all are
 type 15, one record, id 1, `1--INGAME`, name `default` or `0`, and round-trip byte-exact. Meitou (`CharacterDraft.Import`/`Export`,
 `CharacterEditorPanel`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
 race the editor doesn't offer (creation) or another race or sex (surgeon).
 **Observed** (native 1.0.68 editor import/export): an imported appearance with head `99184-Newwworld.mod` exports with a different head id and explicit neutral face-slider defaults.
-For rendering comparisons, use the native editor's exported result on both sides; importing the same input alone does not establish identical appearance data. The head fallback rule is **Unknown**.
-Dialog (`FUN_1401a0b10`, refresh `FUN_14019fd70`, **Observed**): `CurrentFolder` shows the folder as kept (no trailing separator; "./data"
+For rendering comparisons, use the native editor's exported result on both sides; importing the same input alone does not establish identical appearance data. Dialog (`FUN_1401a0b10`, refresh `FUN_14019fd70`, **Observed**): `CurrentFolder` shows the folder as kept (no trailing separator; "./data"
 when empty); `ListFiles` gets "[..]" and the subfolders as "[name]", then (open mode) the matching files by file name with extension, item data
 folder + "/" + name; ButtonUp cuts the folder at its last `\` or `/`; ButtonCancel is `Tr("Cancel")`, ButtonOpenSave `Tr("Import")` here, both
 upper-cased. Order: case-sensitive (vanilla screenshot: "Yumi" before "yoshim"). Meitou: a double click (or IMPORT) on a folder opens it.
@@ -416,16 +410,6 @@ mode 1, already paid ([dialogue](game/dialogue.md#meitou-design)). Opening it in
 a line gated only by money or `DC_IS_RECRUITABLE`.
 **Observed** (the user, base game): the surgeon's editor (its `NameText`) is the only way to rename a squad member; the portrait's `NameText`
 EditBox takes no typing. Meitou matches.
-
-## Open questions
-
-- ~~Body-shape slider formulas~~, ~~`hide parts` bits~~, ~~`hide stump`~~, ~~`muscleBlend`~~: answered (animation.md
-  "Body shape sliders", "Hidden body parts" above). Left: the
-  stats/nutrition fields listed in animation.md's open questions.
-- Random appearance details: the untraced part of the morph-face name, the faction flag that re-rolls the skin tone
-  (and a body file's gender); extra hip copies; `RaceLimiter` rules.
-- Where the original puts a rolled weapon whose footprint doesn't fit its pool's slot (hip 7x1, back 10x2). Meitou (engine choice,
-  `CharacterGenerator`): the slot it fits, hip pool preferring the hip and back pool the back; fitting neither, it is left out.
 
 ## Expression reference
 

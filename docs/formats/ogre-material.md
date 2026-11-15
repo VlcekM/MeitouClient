@@ -125,13 +125,6 @@ use **no** variables and **no** `abstract` (Verified by search); both are implem
 
 - Whether Kenshi's Ogre build matches the v2-0 lexer/parser quirks above (the DLL is 2.0 "Tindalos", but the
   quirks themselves are untested; test with a mod).
-- Whether the SkyX plugin registers resource locations of its own.
-- The terrain and character-body material builders (see [runtime-materials.md](runtime-materials.md)).
-
-Answered (see the sections above): which duplicate definition wins (the first parsed; Kenshi's collision
-listener returns false), recursion (none for `resources.cfg`; mod folders are scanned and every sub-folder
-added), `OgreCore.zip` (registered) and Caelum (not registered), group initialisation order (`GUI`, then
-ordinal name order), and how records map onto materials.
 
 ## Expression reference
 

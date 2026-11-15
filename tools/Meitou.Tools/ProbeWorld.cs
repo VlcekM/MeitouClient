@@ -42,6 +42,11 @@ sealed class ProbeWorld : IDisposable
     public NavSystem? Nav { get; init; }
 
     /// <summary>
+    /// The zone streaming of <c>--stream</c>; null when the zones were all built before the load.
+    /// </summary>
+    public ProbeZoneStreamer? Streamer { get; init; }
+
+    /// <summary>
     /// The characters of the world.
     /// </summary>
     public CharacterTable Characters => World.Characters;
@@ -55,9 +60,12 @@ sealed class ProbeWorld : IDisposable
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
     /// <paramref name="at"/> moves the player's characters there (X, Z) before the load, to look at another place with the same save; <paramref name="seed"/>
-    /// is the world seed (the game's default is 0). Null, with the reason on stderr, when the save has no character of the player's faction.
+    /// is the world seed (the game's default is 0). <paramref name="stream"/> (with <paramref name="navmesh"/>) builds only the zones of the player's
+    /// box first and streams the rest in while the world runs (<see cref="ProbeZoneStreamer"/>). Null, with the reason on stderr, when the save has no
+    /// character of the player's faction.
     /// </summary>
-    public static ProbeWorld? Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null, ulong seed = 1)
+    public static ProbeWorld? Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null, ulong seed = 1,
+        bool stream = false)
     {
         var db = GameDatabase.Load(order);
         var levels = WorldLevelData.Load(install, order, includeInteriors: true);
@@ -78,11 +86,13 @@ sealed class ProbeWorld : IDisposable
         }
         if (at is { } spot) MovePlayer(save, spot, height);
 
-        NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, save, height) : null;
+        var zones = ZoneActivation.ZonesAround(SavedStart(save), stream ? 0 : 1);
+        NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, zones, height) : null;
         IWalkability walk = nav is null ? new OpenGroundWalkability(height) : new NavAdapter(nav.Walkability);
-        var world = MakeWorld(data, walk, save, seed);
+        var streamer = stream && nav is not null ? new ProbeZoneStreamer(nav, zones) : null;
+        var world = MakeWorld(data, walk, save, seed, streamer);
         if (nav is not null) GiveGateCodes(world, nav);
-        return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav };
+        return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav, Streamer = streamer };
     }
 
     /// <summary>
@@ -118,14 +128,14 @@ sealed class ProbeWorld : IDisposable
     }
 
     /// <summary>
-    /// The navmesh with the 3 x 3 zones round the player's first character built, and the building sight and layouts it needs in the data.
+    /// The navmesh with <paramref name="zones"/> built, and the building sight and layouts it needs in the data.
     /// </summary>
     static NavSystem LoadNavmesh(GameInstall install, GameDatabase db, WorldLevelData levels, BuildingLayouts layouts, PopulationData data,
-        SaveGame save, Func<float, float, float> height)
+        IEnumerable<ZoneCoordinate> zones, Func<float, float, float> height)
     {
         var nav = new NavSystem(install, db, levels, height);
         nav.Walkability.Roads = data.Roads;
-        foreach (var zone in ZoneActivation.ZonesAround(SavedStart(save), 1)) nav.LoadZone(zone).Wait();
+        foreach (var zone in zones) nav.LoadZone(zone).Wait();
 
         data.Layouts = layouts;
         data.Sight = new Meitou.Simulation.Perception.BuildingSight(install, db, levels, layouts);
@@ -133,9 +143,10 @@ sealed class ProbeWorld : IDisposable
     }
 
     /// <summary>
-    /// The world on one thread with paths found at once, the save loaded into it and the camera focus on the player's squad leader.
+    /// The world on one thread with paths found at once, the save loaded into it and the camera focus on the player's squad leader;
+    /// <paramref name="streamer"/> gates its population's zones before the load.
     /// </summary>
-    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed)
+    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed, ProbeZoneStreamer? streamer)
     {
         var options = new StandardSystemOptions
         {
@@ -145,6 +156,7 @@ sealed class ProbeWorld : IDisposable
         };
         var world = new World(new WorldSettings { Seed = seed, Threads = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
         if (walk is Meitou.Simulation.Locks.IDoorGate doors) world.Fixtures.Doors = doors;
+        streamer?.Attach(world);
 
         var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });
         if (LeaderSlot(world) is null) WarnNoLeader(loaded);
@@ -191,11 +203,15 @@ sealed class ProbeWorld : IDisposable
     }
 
     /// <summary>
-    /// Runs <paramref name="ticks"/> ticks.
+    /// Runs <paramref name="ticks"/> ticks, streaming zones before each with <c>--stream</c>.
     /// </summary>
     public void Tick(int ticks)
     {
-        for (int k = 0; k < ticks; k++) World.RunTick();
+        for (int k = 0; k < ticks; k++)
+        {
+            Streamer?.BeforeTick(World);
+            World.RunTick();
+        }
     }
 
     /// <summary>

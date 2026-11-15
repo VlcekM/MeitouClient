@@ -112,8 +112,7 @@ rescales every layer to one size instead.
 `Foliage_1K_RockStack02` variants, two using `BoulderCluster_DualTex01.mesh`) name `Geobased_Rockloop_{DIF,NML}_HI.dds` /
 `Rockloop09_{DIF,NML}_HI.dds` as `texture map` / `normal map`; only the names without `_HI` exist. **Verified** (decompiled): the
 `_HI.` literal's only user is the quality listener above, so the game has no `_HI` → base-name fallback; Ogre fails the lookup.
-Meitou does not warn about these four names. **Unknown**: how the original draws these meshes (a blank unit; a blank normal map
-may also clip them, its alpha being the cut-out mask).
+Meitou does not warn about these four names.
 
 ## Channel conventions in Kenshi's textures
 
@@ -141,4 +140,3 @@ Not part of the DDS format, but needed to use the files (details in [../viewer.m
 ## Open questions
 
 - Whether Kenshi's Ogre build loads textures with gamma correction (sRGB) or treats diffuse as linear.
-

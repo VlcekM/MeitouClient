@@ -311,8 +311,30 @@ public sealed class NavWorld
     /// </summary>
     public bool TryEdgePoint(float x, float z, float nearY, float edge, out Vector3 point)
     {
+        var own = WorldLayout.ZoneOf(x, z);
+        if (TryEdgePoint(own, x, z, nearY, edge, out point)) return true;
+
+        // A polygon of the next zone within reach across the border (#774: a walker in a hole of the mesh that ends at the zone line, its path's first
+        // point on the line, found no surface there and stood for good).
+        for (int dz = -1; dz <= 1; dz++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                var zone = WorldLayout.ZoneOf(x + dx * edge, z + dz * edge);
+                if (zone != own && TryEdgePoint(zone, x, z, nearY, edge, out point)) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="TryEdgePoint(float, float, float, float, out Vector3)"/> in one zone's mesh.
+    /// </summary>
+    bool TryEdgePoint(ZoneCoordinate zone, float x, float z, float nearY, float edge, out Vector3 point)
+    {
         point = default;
-        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
+        if (!_slots.TryGetValue(zone, out int slot)) return false;
 
         var m = _meshes[slot];
         if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0)) return false;

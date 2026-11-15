@@ -22,7 +22,7 @@ forward, `mid blow drop` 6.57 s ~4 back, `back blow high` has no clip. When they
 
 ### Clips a body lacks
 
-**Verified** (layer manager update `@ 1405b5c30`, with `FUN_1405b3090` / `FUN_14051caa0`): a layer whose animation the character's entity does not have (`hasAnimationState` false) is deleted before the weights are summed or scaled, so it takes no weight from the other layers. **Observed** (the base game plus a large mod list, rigs of the humanoid races): ~8 ANIMATION records resolve on no humanoid skeleton, e.g. `Block pole bottom` and `GROUNDED_BlowBack_Chest low`, whose clips only a mod's female animation file holds, and `stand 1 sword lefty`. Meitou: the renderer finds no layer for them, so before this a wanted one took the whole body half's weight (`Publish`) and the body stood in the binding pose until it ended. `AnimationSystem.Plays` (`CharacterRigs.Plays`, cached per appearance) drops such wanted layers, and a technique or hit reaction the body cannot play is not started (it stays in its stance; the combat system still holds it for the clip's length). **Unknown**: what the original picks when its hit reaction clip is missing.
+**Verified** (layer manager update `@ 1405b5c30`, with `FUN_1405b3090` / `FUN_14051caa0`): a layer whose animation the character's entity does not have (`hasAnimationState` false) is deleted before the weights are summed or scaled, so it takes no weight from the other layers. **Observed** (the base game plus a large mod list, rigs of the humanoid races): ~8 ANIMATION records resolve on no humanoid skeleton, e.g. `Block pole bottom` and `GROUNDED_BlowBack_Chest low`, whose clips only a mod's female animation file holds, and `stand 1 sword lefty`. Meitou: the renderer finds no layer for them, so before this a wanted one took the whole body half's weight (`Publish`) and the body stood in the binding pose until it ended. `AnimationSystem.Plays` (`CharacterRigs.Plays`, cached per appearance) drops such wanted layers, and a technique or hit reaction the body cannot play is not started (it stays in its stance; the combat system still holds it for the clip's length).
 
 **Observed** (static reading of the swing update `FUN_14060a590`, not run in the original): an attack whose clip the entity lacks still lands. The technique layer's progress (`FUN_1405b4bb0`) reads 1.01 (`DAT_1416c114c`) once no layer of that name is left, so the blow count (`FUN_140666520`) passes every blow, the impact check runs on that update, and the clip-done test (`FUN_1405b4c00`: no layer is done) ends the swing: no motion and the blows at once. Meitou holds the swing for the clip's length (1 s for a clip no skeleton has, `AnimationLengths.Of`) and lands the blows inside it (engine difference).
 
@@ -85,8 +85,7 @@ directly (engine choice). The movement's own turn rate stays an engine choice (`
 **Verified** (`FUN_140520000`, `AnimationClassHuman` vtable `+0xf0`, run every frame right after the normal update `FUN_1405b4770` -> `FUN_140520500`): a character whose carrying-left state byte (`+0x21e`) is set plays the record
 named **`carrying left arm only`** (`carrying right arm only` for `+0x21f`), looked up by name (vtable `+0x18`) and played on its own layer (`FUN_1405b7ac0`), and marks that arm busy (`+0x301` left, `+0x300` right). Nothing in the
 function tests combat or a technique, so a carrier has the arm-only overlay on the body in the stance, walking, under an attack, and the overlay is the one the idle pool never needs to draw. Meitou: `AnimationSystem.CarryArmClip`, added for
-every carrier that is not down. `stand carrying left` is only a candidate of the random idle pool (`FUN_14051f230` returns the character's own stance first; its draw `FUN_14051ec80` passes flag 1 and skips the carrying test, the revalidation
-`FUN_14051d310` / `FUN_14051ca10` then drops an upper or overlay pick whose carrying flags differ): **Unknown** whether it ever plays; Meitou does not play it. The idle update `FUN_14051d3b0` returns at once while a technique runs. The
+every carrier that is not down. Meitou does not play it. The idle update `FUN_14051d3b0` returns at once while a technique runs. The
 combat guard pick `FUN_14051da80` removes overlay candidates; its upper candidates must carry the carrying flags (`sword ready (carry)` in rebirth.mod). A carrier fights with the right hand (the carrying records need `has weapon L` NO).
 
 ### Injury holds
@@ -97,9 +96,8 @@ threshold in per cent (60; stomach 65). Each medical tick every part with the re
 by fraction ascending, one entry per distinct fraction. `FUN_140520000`, for a character that carries nothing, in the normal animation category (no crawl, no swimming) and moves at 50 or less (constant `141683170`), walks that set
 in order and plays the first record `FUN_14051fe60` accepts: a record that uses the right arm needs it free and working; a record that uses the left plays as is when the left arm is free and working, else as its **`-R` mirror**
 (record name + `-R`, e.g. `hand2head-R`) when the right is. An arm is busy while its hand holds a weapon (`+0x18d` / `+0x18e`) or an active upper-manager layer uses it (`FUN_1405b2e10` / `FUN_1405b2db0`). No test of combat
-or technique. Animals have no pain animations (`FUN_140646bb0` returns none when the slot `0x248` is set; the hit stores the part's name at character `+0x288`, purpose **Unknown**).
-Meitou: `AnimationSystem.PainHold`, `BodyPartTemplate.PainAnim/PainThreshold`, `AnimationDefinition.UsesLeftArm/UsesRightArm`. **Unknown**: the keyed record list at `+0x198`
-(`FUN_140520000` step before the set) and the byte `+0x302/+0x303` (forced arm busy).
+or technique. Animals have no pain animations (`FUN_140646bb0` returns none when the slot `0x248` is set; the hit stores the part's name at character `+0x288`).
+Meitou: `AnimationSystem.PainHold`, `BodyPartTemplate.PainAnim/PainThreshold`, `AnimationDefinition.UsesLeftArm/UsesRightArm`.
 
 ### Combat upper body
 
@@ -165,7 +163,7 @@ of definitions and gives each a weight; zero-weight ones are dropped:
 - **Leg weight**: the same ramp (without the sigmoid) over the health of the *more hurt* leg against
   `L/R leg damage min / ideal / max` of that side (left values if the left leg is worse). The loader forces
   min < 1 to −101 and max > 99 to 101, so a healthy-leg clip covers the whole range; a minimum under 1 makes the ramp flat 1 below the ideal (no rise), and a value and a minimum both under −40 give 1 outright (`FUN_14051cd10`, **Verified**). Idle picks (`@ 14051ec80`, `FUN_14051d180`) weigh each candidate `idle chance` x this ramp (a pass/fail range would not; the stance flag +0x9f gives 1 instead), keeping weights above 0. Meitou: `AnimationDefinition.LegWeight` and `AnimationLibrary.LegWeighted` (the idle caches hold the clips that fit apart from the legs).
-  The idle draw `FUN_14051ec80` never comes back empty (**Verified**): with no record fitting it returns the first record of the idle list it was given (`+0x2c0`; which record that is in the base data is **Unknown**). The crawl idles' `-999` leg minimum is read as -101, so a leg past -101 % (a severed one; `HealthPart.Fraction` is unbounded) fits neither `crawl idle` and the pick was empty, leaving a stopped crawler in the bind pose (**Verified**: probe of the base data, no crawl idle fits a leg under -101 in any combat or stealth state). Meitou: `AnimationLibrary.CrawlIdles` then ignores the leg ranges and takes the first grounded idle that fits the rest, in data order.
+  The idle draw `FUN_14051ec80` never comes back empty (**Verified**): with no record fitting it returns the first record of the idle list it was given (`+0x2c0`). The crawl idles' `-999` leg minimum is read as -101, so a leg past -101 % (a severed one; `HealthPart.Fraction` is unbounded) fits neither `crawl idle` and the pick was empty, leaving a stopped crawler in the bind pose (**Verified**: probe of the base data, no crawl idle fits a leg under -101 in any combat or stealth state). Meitou: `AnimationLibrary.CrawlIdles` then ignores the leg ranges and takes the first grounded idle that fits the rest, in data order.
 - Only for idle picks (layer upper or overlay): `being carried` / `carrying left` / `carrying right` must
   match the character, and the weapon-type flags must include the equipped weapon's type; for unarmed (type 5)
   a clip that `has weapon L` or `R` YES gets weight 0.1 instead.
@@ -204,8 +202,20 @@ and `stealth mode` are EITHER or equal to the character's, and the arm check `@ 
 stand in the stances of the empty-handed, all `has weapon L/R` 0, but draws `stand 1 sword`); otherwise it draws from the idle list (`@ 14051ec80`, `@ 140523450`). The standing update
 `@ 14051d3b0` re-picks when the timer (`idle time` seconds) runs out, so a fitting stance is held. Weapon kinds are not tested.
 Base data (**Verified** by probe): the 8 stances are layer `all`, combat and stealth mode 0, `play speed` 0 (`squat` 0.01), clips 0.033 s:
-characters stand still in their stance out of combat and not sneaking. Meitou: `AnimationDefinition.FitsAsStance`,
-`AnimationSystem.OwnStance`; a clip that never advances starts at its first frame (engine choice; the original's start time is **Unknown**).
+the stance is a still pose, with [breathing](#breathing) over it. Meitou: `AnimationDefinition.FitsAsStance`,
+`AnimationSystem.OwnStance`; a clip that never advances starts at its first frame (engine choice).
+
+### Breathing
+
+**Verified** (decompile and disassembly of `AnimationClassHuman` slot 32 `FUN_14051e150`, constants read from the binary): the out-of-combat pick
+`FUN_140520500` calls it on its standing path (filtered speed exactly 0, no action, not in the combat stance, bed, cage or deep water; the combat pick
+`FUN_14051d660` never calls it). It plays the record named `breathing noarms` (layer `overlay`, loop; `delete below waist`, `delete L/R arm`: spine,
+neck, head, jaw and breasts only, clip 7.37 s) on the overlay manager at target weight 0.5 (a global initialised to 1.0, × 0.5) and play rate
+0.35 + 0.1 × a random draw made once per process, not the record's `play speed`; `" noarms"` is appended unconditionally (`breathing` itself is
+never played). The layer's `+0x58` is 0.95 where other callers pass 1.0. Further gates: animation
+class byte `+0x191` clear (only ever cleared in the code found), character `FUN_1405c9750` false, character vfunc `0x360` (the leg-collapse test of
+the cage pick) false, and vfunc `0x368` not 1. Meitou: `AnimationSystem.AddBreathing` on the standing idle path
+out of the combat stance; the rate is drawn once per world from its seed (engine choice).
 
 ### In a bed or a cage
 
@@ -231,7 +241,7 @@ Meitou: `AnimationSystem.OperateRateOf` (`CharacterCold.OperateStat`); a seated 
 **Verified** (`AnimationClass::isCurrentlyIncapableOfWaypointMovemode` `@ 14051c870`, from `CharMovement::update`): while the current action clip has ANIMATION `disables movement`
 (`AnimationData+0x89`; 11 base clips, **Verified** by a probe of the base data: the hit reactions `back blow high/light/low`, `mid blow`, `mid blow drop`, `mid blow light`,
 `standing up 3`, `bowing`, `reload 1/2/3 phase`) the character cannot move along waypoints. Meitou: any wanted clip with the flag sets `CharacterAnimation.HoldsStill`, and
-`MovementSystem` then stops a character with a path, keeping it, except in the Attack task (as a stagger in a fight, whose clip moves the character itself). `normalise` (layer flag `+0x5f`) is read by the original, its effect **Unknown**; not used.
+`MovementSystem` then stops a character with a path, keeping it, except in the Attack task (as a stagger in a fight, whose clip moves the character itself). not used.
 
 ## Shape notation and factors
 
@@ -272,15 +282,14 @@ characters/root collision and leg-health/lying/care selection belong in [simulat
 - **Bulk M** = map(max(strength, weapon smith, armour smith) × 0.01, 0.2 → 0, 0.99 → 1), not clamped. Strength is read through the stats object's slot-2
   accessor; Meitou takes the stat itself.
 - **Definition D** = map((swimming + athletics + 3 × max(dexterity × x, martial arts) − cooking − science) × 0.01 / 5, 0.2 → 0, 0.9 men / 0.99 women → 1),
-  clamped 0..1. x is the float at `CharStats +0x34` (**Unknown**; Meitou 1).
+  clamped 0..1. x is the float at `CharStats +0x34` (Meitou 1).
 - **Starvation S** = clamp((1 − clamp(hunger − 1, 0, 1)) × 1.5, 0, 1).
 
 `FUN_140531820` (not for robot races) then sets the body material's `normalMap` and `bodyBlendNormal` and its `muscleBlend` (`character.hlsl`:
 `bodyN = lerp(bodyN, blendNormalMap, muscleBlend)`, before the head's normal is added), and, for a character with stats, rebuilds the bone shape
 (`FUN_14052e6c0`, M and S above). The maps: base `nm <g>` blended to `nm <g> strong` by D; when S > 0.25 or S > D, blended to `nm <g> skinny`
 by S, the base being `nm <g> strong` when D > 0.33 (RACE fields; humans and Shek have their own `_muscular` / `_skinny` files, robots and hive
-one file for all). What calls it, and how often, is **Unknown** (it is a virtual of `AppearanceHuman`, slots 6 and 13).
-**The bone shape is rebuilt only for the player's faction** (**Verified**, `FUN_140531820`: `FUN_14052e6c0` runs only when the character's faction has `+0x250` set, the test of `declareDead`); any other character keeps the shape made at its creation (`FUN_1405338f0` calls `FUN_14052bc70` then `FUN_14052e6c0`), while its normal maps and `muscleBlend` follow the live values. Meitou: `BodyBuild.ShapeMuscle`/`ShapeStarvation`, `WorldPublish.ShapedBuild` (the shape input is stored at the first publish, refreshed while the faction is the player's; not saved, so a load re-makes it from the saved stats, as the original does). Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,
+one file for all). **The bone shape is rebuilt only for the player's faction** (**Verified**, `FUN_140531820`: `FUN_14052e6c0` runs only when the character's faction has `+0x250` set, the test of `declareDead`); any other character keeps the shape made at its creation (`FUN_1405338f0` calls `FUN_14052bc70` then `FUN_14052e6c0`), while its normal maps and `muscleBlend` follow the live values. Meitou: `BodyBuild.ShapeMuscle`/`ShapeStarvation`, `WorldPublish.ShapedBuild` (the shape input is stored at the first publish, refreshed while the faction is the player's; not saved, so a load re-makes it from the saved stats, as the original does). Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,Meitou (`CharacterShape.BuildFromStats`, `CharacterSnapshot.Build`, `CharacterRenderer.ApplyBuild`): published every tick from the live stats,
 applied when a value moves by more than 0.01, the normal maps once both are resident (engine choices).
 
 ### Startup preprocessing
@@ -338,26 +347,15 @@ The renderer samples at `clip length × slider / 100`; generated NPC posture fol
 
 ## Open questions
 
-- The order the game's `qsort` leaves ANIMATION_FILE records created by the same file in ([Animation files](#animation-files));
-  it decides only clips two such files both define (3 names in a large modded install).
-- Which COMBAT_TECHNIQUE `animal` values exist (block clones: `<anim name> override`, [combat](game/combat.md#hit-reactions)).
-- What managers 3 and 4 hold, the play rate of a synched clip, and whether an attack technique's layer (started by `FUN_1405b7800` through `FUN_1405b6410`, whose stack arguments the
-  decompile does not show) loops while it fades (Meitou freezes it as a one-shot).
 - ~~Which record field turns on root-motion extraction~~: `relocates` for ANIMATION records; combat techniques
   by their own rule ([Root motion](#clips-and-layers)). Still open: the time divisor of the root-motion velocity,
   and how combat footwork moves the body while combat sets animation-driven movement.
-- Per-bone call in `@ 140539020`: Kenshi calls one virtual method on every bone with false, and on the
-  children of `Bip01 Head` except `Bip01 Jaw` with true. What it is (scale inheritance? manual control?) is
-  Unknown.
 - How characters choose between candidate animations: largely answered ([Choosing candidates](#choosing-candidates--14051d660),
   [Movement](#clips-and-layers), [Hit reactions](#clips-and-layers)). Still open: the
   non-combat lower-body update (slot 28 runs only in combat; the out-of-combat path, probably the same
   movement blend, was not traced), how the idle timer's units work,
   the get-up clip's playback rate, how fast the movement direction turns, and which of `foetal` /
   `sitting dazed` / `knockout training` play when. Our engine's rules are in [simulation.md](simulation.md#animation).
-- Body shape: the two
-  movement-scale exceptions, the stats field x in the muscle definition, what reads (`Height` − 80) × 0.025,
-  and what the game does when a body file lacks a slider (the viewer uses 100).
 
 ## Expression reference
 

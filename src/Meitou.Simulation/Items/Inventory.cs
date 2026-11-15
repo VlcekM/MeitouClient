@@ -251,6 +251,22 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
+    /// The items a search of the carrier finds: this inventory's own and the worn backpack's contents, with <paramref name="carriedBags"/> also the
+    /// contents of bags carried in the grid (<see cref="All"/>; the game's searches miss those, Meitou fix <see cref="World.BagSearchFix"/>).
+    /// </summary>
+    public IEnumerable<ItemInstance> Searched(bool carriedBags) => carriedBags ? All() : Items.Concat(Backpack?.Contents?.All() ?? []);
+
+    /// <summary>
+    /// The bags carried in the grid (containers other than the worn backpack).
+    /// </summary>
+    public IEnumerable<Inventory> CarriedBags()
+    {
+        var worn = Backpack;
+        foreach (var i in Items)
+            if (i.Contents is { } bag && !ReferenceEquals(i, worn)) yield return bag;
+    }
+
+    /// <summary>
     /// The items the windows list, each with its index in <see cref="All"/> (the number the drag tokens carry): this inventory's own and the worn
     /// backpack's contents. The contents of a container carried in the grid are not listed (their cells would draw over the worn bag's in its window;
     /// the original opens only the worn backpack's grid).

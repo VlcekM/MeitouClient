@@ -12,11 +12,16 @@
 #define CHARACTER_MEDICAL 0x458
 #define RECORD_NAME 0x28
 
-// itemType CHARACTER.
+// itemType BUILDING and CHARACTER.
+#define TYPE_BUILDING 0
 #define TYPE_CHARACTER 1
 
-// RootObjectBase's virtual slots.
-enum { OBJECT_NAME = 1, OBJECT_POSITION = 8, OBJECT_FACTION = 11 };
+// Inventory::_allItems and Item::quantity.
+#define INVENTORY_ITEMS 0x10
+#define ITEM_QUANTITY 0x12C
+
+// RootObjectBase's virtual slots, and RootObject's getInventory (vtable offset 0x160).
+enum { OBJECT_NAME = 1, OBJECT_POSITION = 8, OBJECT_FACTION = 11, OBJECT_INVENTORY = 0x160 / 8 };
 
 // ---- Exports ------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +93,18 @@ const Lektor* game_characters_near(V3 centre, float radius, int limit)
     found.unused = squad->unused;
     found.count = 0;
     getObjectsNear(game_world(), &found, &centre, radius, TYPE_CHARACTER, limit, NULL);
+    return &found;
+}
+
+const Lektor* game_buildings_near(V3 centre, float radius, int limit)
+{
+    static Lektor found;
+    const Lektor* squad = game_squad();
+    if (!squad) return NULL;
+
+    found.unused = squad->unused;
+    found.count = 0;
+    getObjectsNear(game_world(), &found, &centre, radius, TYPE_BUILDING, limit, NULL);
     return &found;
 }
 
@@ -217,3 +234,14 @@ void record_name(const void* record, char* out, size_t size)
     out[0] = 0;
     if (record) copy_string((const GameString*)((const char*)record + RECORD_NAME), out, size);
 }
+
+// ---- An object's inventory ----------------------------------------------------------------------------------------------
+
+const Lektor* object_items(void* object)
+{
+    void* (*getInventory)(void*) = VIRTUAL(object, OBJECT_INVENTORY);
+    char* inventory = getInventory(object);
+    return inventory ? (const Lektor*)(inventory + INVENTORY_ITEMS) : NULL;
+}
+
+int item_quantity(void* item) { return *(int*)((char*)item + ITEM_QUANTITY); }

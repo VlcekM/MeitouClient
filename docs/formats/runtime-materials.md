@@ -52,7 +52,7 @@ The Metal colour pass also needs the [discard/depth workaround](../metal-backend
    | fragment | `glossMult` | `specular mult` |
    | fragment, EMISSIVE | `brightness` | auto constant, type 87 = `ACT_CUSTOM` index 0 (per-renderable custom parameter; **Observed (source)** for the enum value) |
    | fragment, CLIP_INTERIOR | `viewport` | auto constant, type 110 = `ACT_VIEWPORT_SIZE` (**Observed (source)**) |
-   | fragment, DUST | `dustColour` | `ground colour` (ARGB int) of the `BIOMES` record at the object's position (**Observed**: biome lookup through the terrain object). The shader reads the dust noise from the `dust` unit (`Turbulent.dds`) and uses the colour as the dust's albedo ([weather.md](weather.md)); only `objects.hlsl` and `triplanar.hlsl` have a DUST branch (**Verified** by searching `data/materials`), so a material built without the DUST flag never gets dust: by the caller table below that is every map feature (**Unknown** whether the Triplanar template turns DUST on some other way; nothing in the scripts does), item and character |
+   | fragment, DUST | `dustColour` | `ground colour` (ARGB int) of the `BIOMES` record at the object's position (**Observed**: biome lookup through the terrain object). The shader reads the dust noise from the `dust` unit (`Turbulent.dds`) and uses the colour as the dust's albedo ([weather.md](weather.md)); only `objects.hlsl` and `triplanar.hlsl` have a DUST branch (**Verified** by searching `data/materials`), so a material built without the DUST flag never gets dust: by the caller table below that is every map feature (nothing in the scripts does), item and character |
 
 ### Flag word
 

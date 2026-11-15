@@ -78,6 +78,10 @@ public sealed partial class NavmeshWalkability
         float r2 = radius * radius;
         foreach (var wall in walls)
         {
+            // Behind the wall (off the mesh across it: in a hole, over the zone line) it never stops the body, so a move back onto the mesh is free:
+            // the original's sweep counts only walls the move closes on from the walkable side.
+            if (Vector2.Dot(from - wall.A, wall.Inward) < 0) continue;
+
             var ab = wall.B - wall.A;
             float ab2 = ab.LengthSquared();
             // Already touching: stopped at once when it moves closer, free otherwise.
@@ -172,7 +176,7 @@ public sealed partial class NavmeshWalkability
                                 || from.Z > ix.Max[p].Y + reach)
                                 continue;
 
-                            AddWalls(m, p, from, reach, doors, walls);
+                            AddWalls(w, slot, p, from, reach, doors, walls);
                         }
                     }
                 }
@@ -184,12 +188,13 @@ public sealed partial class NavmeshWalkability
     /// Adds to <paramref name="walls"/> the edges of polygon <paramref name="p"/> a walker cannot cross (<see cref="Open"/>) that pass within
     /// <paramref name="reach"/> of <paramref name="from"/> in plan and within <see cref="WallHeightWindow"/> of its height there.
     /// </summary>
-    static void AddWalls(ZoneNavMesh m, int p, Vector3 from, float reach, NavDoors doors, List<Wall> walls)
+    static void AddWalls(NavWorld w, int slot, int p, Vector3 from, float reach, NavDoors doors, List<Wall> walls)
     {
+        var m = w.Mesh(slot);
         var poly = m.Polygons[p];
         for (int k = 0; k < poly.Length; k++)
         {
-            if (Open(m, p, k, doors)) continue;
+            if (Open(w, slot, p, k, doors)) continue;
 
             var a = m.Vertices[poly[k]];
             var b = m.Vertices[poly[(k + 1) % poly.Length]];
@@ -209,20 +214,43 @@ public sealed partial class NavmeshWalkability
     }
 
     /// <summary>
-    /// Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/>: into a kept polygon that is not a closed door, over a
-    /// tile link, or over the zone's border.
+    /// Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/> in the zone of <paramref name="slot"/>: into a kept
+    /// polygon that is not a closed door, over a tile link, or over the zone's border where the next zone is not loaded or links the edge.
     /// </summary>
-    static bool Open(ZoneNavMesh m, int p, int k, NavDoors doors)
+    static bool Open(NavWorld w, int slot, int p, int k, NavDoors doors)
     {
+        var m = w.Mesh(slot);
         int q = m.Neighbours[p][k];
         if (q >= 0) return m.Kept[q] && !ClosedDoor(m, q, doors);
         if (m.HasLink(p, k)) return true;
+
         var poly = m.Polygons[p];
         var a = m.Vertices[poly[k]];
         var b = m.Vertices[poly[(k + 1) % poly.Length]];
-        // The next zone continues there (linked when loaded; where it is not, the open-ground stand-in answers).
-        return NavGeometry.OnLine(a.X, b.X, m.BoundsMin.X) || NavGeometry.OnLine(a.X, b.X, m.BoundsMax.X)
-            || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMin.Y) || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMax.Y);
+        if (Across(m, a, b) is not { } across) return false;
+
+        // Where the next zone is not loaded the open-ground stand-in answers. Loaded, only a linked edge goes on: one with nothing behind it is a
+        // wall (#774: root motion carried fighters over the zone line into a hole the next zone's mesh has there, and they stood in it for good).
+        if (!w.Contains(WorldLayout.ZoneOf(across.X, across.Y))) return true;
+
+        foreach (var link in w.LinksOf(new NavRef(slot, p)))
+            if (link.Edge == k) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// A point 1 unit past the middle of edge <paramref name="a"/>-<paramref name="b"/> into the next zone when the edge lies on the zone's
+    /// border; null otherwise.
+    /// </summary>
+    static Vector2? Across(ZoneNavMesh m, Vector3 a, Vector3 b)
+    {
+        var mid = new Vector2((a.X + b.X) / 2, (a.Z + b.Z) / 2);
+        if (NavGeometry.OnLine(a.X, b.X, m.BoundsMin.X)) return mid with { X = m.BoundsMin.X - 1 };
+        if (NavGeometry.OnLine(a.X, b.X, m.BoundsMax.X)) return mid with { X = m.BoundsMax.X + 1 };
+        if (NavGeometry.OnLine(a.Z, b.Z, m.BoundsMin.Y)) return mid with { Y = m.BoundsMin.Y - 1 };
+        if (NavGeometry.OnLine(a.Z, b.Z, m.BoundsMax.Y)) return mid with { Y = m.BoundsMax.Y + 1 };
+        return null;
     }
 
     /// <summary>

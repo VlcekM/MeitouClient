@@ -213,7 +213,7 @@ public sealed partial class CarrySystem
         if (police && !animal)
         {
             if (cold.LiftTime <= ConfiscateSeconds) return;
-            moved = Confiscate(cold, victim);
+            moved = Confiscate(cold, victim, world.BagSearchFix);
             Looted(world, table, i, t, moved, 0, crime: false);
 
             // Tagged only when it found nothing to take.
@@ -224,7 +224,7 @@ public sealed partial class CarrySystem
         if (!foodOnly && !notPlayerSide && !animal && cold.LiftTime > NpcWeaponGrabSeconds && (flags & LootStart.WantsWeapon) != 0)
             moved = Take(cold, victim,
                 victim.Inventory!.Items.Where(x => x.Type == FcsRecordType.Weapon && x.Section is "hip" or "back").Take(1).ToList());
-        else if (cold.LiftTime > (animal ? NpcLootAnimalSeconds : NpcLootSeconds)) moved = NpcTake(cold, victim, notPlayerSide && !foodOnly);
+        else if (cold.LiftTime > (animal ? NpcLootAnimalSeconds : NpcLootSeconds)) moved = NpcTake(cold, victim, notPlayerSide && !foodOnly, world.BagSearchFix);
         else return;
         Butcher(world, i, t, death);
         Looted(world, table, i, t, moved, 0, crime: false);   // the crime was set at the start (CrimeSystem.NpcLooting)
@@ -253,19 +253,20 @@ public sealed partial class CarrySystem
     /// <summary>
     /// A law-enforcement looter's take (<c>Task_Loot_AI</c> update with the confiscate flag, <c>Inventory::getAllStolenItems(inventory, false)</c>;
     /// <b>Observed</b>): one unit of each item of the victim's own inventory (worn gear included, not what is inside its backpack) that is stolen for
-    /// it, in list order, into the looter's inventory; the first that does not fit stays and ends the take. Returns the items moved.
+    /// it, in list order, into the looter's inventory, with <paramref name="carriedBags"/> then those inside its worn backpack and the bags carried in
+    /// its grid (Meitou fix, <see cref="World.BagSearchFix"/>); the first that does not fit stays and ends the take. Returns the items moved.
     /// </summary>
-    public int Confiscate(CharacterCold looter, CharacterCold victim)
+    public int Confiscate(CharacterCold looter, CharacterCold victim, bool carriedBags)
     {
         var from = victim.Inventory!;
         var into = looter.Inventory!;
         int moved = 0;
         bool worn = false, wear = false;
-        foreach (var item in from.Items.Where(x => x.IsStolenFor(victim.Faction, Data)).ToList())
+        foreach (var (owner, item) in StolenOn(victim, carriedBags))
         {
             if (item.LockedOn || !InventoryCommands.IsMovableSection(item.Section)) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
-            if (InventoryCommands.MoveInto(from, item, 1, into, bagFirst: false, out bool equipped, looter) == 0) break;
+            if (InventoryCommands.MoveInto(owner, item, 1, into, bagFirst: false, out bool equipped, looter) == 0) break;
             moved++;
             worn |= gear;
             wear |= equipped;
@@ -276,12 +277,25 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
+    /// The items stolen for <paramref name="victim"/> that a confiscation takes, each with the inventory holding it: its own inventory's, then with
+    /// <paramref name="carriedBags"/> those of its worn backpack and of the bags carried in its grid.
+    /// </summary>
+    List<(Inventory Owner, ItemInstance Item)> StolenOn(CharacterCold victim, bool carriedBags)
+    {
+        var from = victim.Inventory!;
+        var worn = from.Backpack?.Contents is { } bag ? [bag] : Array.Empty<Inventory>();
+        var bags = carriedBags ? worn.Concat(from.CarriedBags()) : [];
+        return [.. new[] { from }.Concat(bags).SelectMany(b => b.Items.Where(x => x.IsStolenFor(victim.Faction, Data)).Select(x => (b, x)))];
+    }
+
+    /// <summary>
     /// The take (<c>FUN_14034d930</c> / <c>FUN_140342de0</c>): the body's weapons when the looter has none equipped, each only while a weapon section
     /// of the looter is empty (the original also from an imprisoned body, which the finder never picks here); its food (<c>item function</c> 3, then
-    /// 15), then its backpack's food; with <paramref name="everything"/> also every item and armour of it and every item of its backpack. Returns the
-    /// items moved.
+    /// 15), then its backpack's food, with <paramref name="carriedBags"/> also the food in bags carried in its grid (Meitou fix,
+    /// <see cref="World.BagSearchFix"/>); with <paramref name="everything"/> also every item and armour of it and every item of its backpack (and of
+    /// its carried bags with the fix). Returns the items moved.
     /// </summary>
-    int NpcTake(CharacterCold looter, CharacterCold victim, bool everything)
+    int NpcTake(CharacterCold looter, CharacterCold victim, bool everything, bool carriedBags)
     {
         var from = victim.Inventory!;
         var bag = from.Backpack?.Contents;
@@ -295,18 +309,25 @@ public sealed partial class CarrySystem
                 if (WeaponSectionFree(looter)) moved += Take(looter, victim, [weapon]);
         foreach (int function in (ReadOnlySpan<int>)[FeedSystem.FoodFunction, FeedSystem.RawFoodFunction])
             items.AddRange(from.Items.Where(x => x.Type == FcsRecordType.Item && x.ItemFunction == function));
-        if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.Item && x.ItemFunction == FeedSystem.FoodFunction));
+        if (bag is not null) items.AddRange(bag.Items.Where(IsBagFood));
+        if (carriedBags) items.AddRange(from.CarriedBags().SelectMany(b => b.Items.Where(IsBagFood)));
         if (everything)
         {
             // a uniform piece is skipped outright (FUN_140342de0 mode 3)
             items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.Item or FcsRecordType.Armour && !items.Contains(x)
                 && !(x.Type == FcsRecordType.Armour && x.Uniform.Length > 0)));
             if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.Item && !items.Contains(x)));
+            if (carriedBags) items.AddRange(from.CarriedBags().SelectMany(b => b.Items.Where(x => x.Type == FcsRecordType.Item && !items.Contains(x))));
         }
         moved += Take(looter, victim, items);
         if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.Armour)) WearIfBetter(looter, piece);
         return moved;
     }
+
+    /// <summary>
+    /// Food the take finds in a bag: items of <c>item function</c> 3 only (the original's backpack pass).
+    /// </summary>
+    static bool IsBagFood(ItemInstance x) => x.Type == FcsRecordType.Item && x.ItemFunction == FeedSystem.FoodFunction;
 
     /// <summary>
     /// A taken armour piece that was not worn replaces a worn non-uniform piece of its section with a lower level (<c>FUN_140342de0</c> mode 3,
@@ -353,8 +374,7 @@ public sealed partial class CarrySystem
         foreach (var item in items)
         {
             if (item.LockedOn || !InventoryCommands.IsMovableSection(item.Section)) continue;
-            var owner = from.Items.Contains(item) ? from : from.Backpack?.Contents;
-            if (owner is null || !owner.Items.Contains(item)) continue;
+            if (OwnerOf(from, item) is not { } owner) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
             int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, looter);
             bool alsoWorn = false;
@@ -367,6 +387,16 @@ public sealed partial class CarrySystem
         if (worn) Assembly?.RefreshEquipment(victim);
         if (wear) Assembly?.RefreshEquipment(looter);
         return moved;
+    }
+
+    /// <summary>
+    /// The inventory that holds <paramref name="item"/>: the victim's own, its worn backpack's or a carried bag's; null when none does any more.
+    /// </summary>
+    static Inventory? OwnerOf(Inventory from, ItemInstance item)
+    {
+        if (from.Items.Contains(item)) return from;
+        if (from.Backpack?.Contents is { } bag && bag.Items.Contains(item)) return bag;
+        return from.CarriedBags().FirstOrDefault(b => b.Items.Contains(item));
     }
 
     /// <summary>

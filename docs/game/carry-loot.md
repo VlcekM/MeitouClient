@@ -19,7 +19,7 @@ are different: the menu offers Pick Up on a standing own character ([ui-input](u
 `boneWorldRot · q(w .70710677, x .70710677) · q(w .99254614, z .121869296)` (90° about x, ~14° about z); the `carry me` clip plays inside
 it. Bone = `AnimationClass+0x1b0` (`attachRootToMastersBone`, KenshiLib 1ce4a16), set by the attach `FUN_1405ced90`. `O` lerps by
 `t = 2·characterHeight_0to1` from (-1.4,0,1) to (-1.9,-1,2.6) (t<1), then to (-3,-0.4,5); `characterHeight_0to1 = (Height − 80)·0.025`,
-0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` (meaning **Unknown**) and vfunc 0x248
+0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` and vfunc 0x248
 (`asAnimal`) = 0 (**Verified**: `CharacterAnimal` `FUN_1405e1f50` returns `this`, `Character`/`CharacterHuman` `FUN_1405e5950` 0); otherwise the body is just put at the
 carrier's position. So a carried **animal** gets neither the offset, the twist nor `carry me` here: its ragdoll's pinned carry bone holds it on the shoulder
 ([ragdolls](ragdolls.md#bodies-kinematic-or-simulated), issue #307: the human rule stood a carried dog upright above its carrier's head).
@@ -100,7 +100,7 @@ put-down tasks, the FIND_BED desire and the Watching-slaves desire. **Verified**
 | any other | `Q` | 0 |
 
 `U(a, b)` is `FUN_1409b1c80`, a uniform random float. Their body is static (the 4th argument of the body builder is `+0x1da == 0`), a weapon's from its `physics file` `.xml` when it names one, else a box of the mesh bounds; the weapon's ray mask leaves out groups 28 to 31 (`0x7f9e04`), the others' includes them (`0xf07f9e04`). Severed limbs set `+0x1d9` and `+0x1da` and keep the bone's pose with a dynamic body ([collision](../formats/collision.md#item-physics)). Why a weapon sticks in the ground (**Verified**, probe over the base game's records and their meshes): weapon meshes run along +Y with the grip near the origin (e.g. Mercenary Club Y -2.5 to 8.6, Polearm -5.9 to 14.8), so the turned mesh's blade end lies about 0.7 to 0.8 of its length below the origin, which the raise of 0.5 to 0.7 leaves 0 to 0.3 of the length below the ground; 283 of 309 ITEM meshes are thinnest in Y with the origin on their base, 120 of 142 ARMOUR and 14 of 16 CONTAINER meshes thinnest in Z.
-**Unknown**: whether a save load keeps the saved orientation (its call to the in-world setter, `FUN_14036f950`, shows only four arguments); Meitou draws the saved one. Meitou: `GameHost.PlacedPose` (a limb keeps `GameHost.LaidFlat`, engine choice); the random draws come from the item's id.
+Meitou: `GameHost.PlacedPose` (a limb keeps `GameHost.LaidFlat`, engine choice); the random draws come from the item's id.
 
 ## Theft and witnesses
 
@@ -197,13 +197,13 @@ finders resolved from the thunks in the exe's bytes):
 | `FIND_AND_KIDNAP` 132 | - | `FUN_1408cd5c0` (the character finder below, masks 0x4008 / 0x811, beds allowed) | - |
 | `FIND_A_DEAD_GUY` 138 / 230 | - | `FUN_1408cfb00` / `FUN_1408ce170` (the nearest dead, ragdolled, uncarried body; `carriable` when asked) | - |
 | `LOOT_THE_DEAD` 177 | AI slot 62: 1, 0 while character vfunc `0x368` (crawling or ragdolled) | `FUN_14099e680` (`FUN_14099ae10(ai, 0)`, [NPC looting](#33-npc-looting)) | - |
-| `LOOT_FOOD_AND_STUFF` 131, `AQUIRE_FOOD_AT_HOMEBASE` 243 | - | `FUN_1408cb650`: a building, `BuildingFinder_LootFoodAndStuff` over a town (from the AI's +0xf0, else +0x18 → +0x88, **Unknown**; no characters): buildings with an inventory holding food (filter partly read, **Observed**) | 243's effect `gotAFoodItem` comes from 244 `Task_grabOneFood`, which takes one food item of the building's inventory |
+| `LOOT_FOOD_AND_STUFF` 131, `AQUIRE_FOOD_AT_HOMEBASE` 243 | - | `FUN_1408cb650`: a building, `BuildingFinder_LootFoodAndStuff` over a town (from the AI's +0xf0, else +0x18 → +0x88; no characters): buildings with an inventory holding food (filter partly read, **Observed**) | 243's effect `gotAFoodItem` comes from 244 `Task_grabOneFood`, which takes one food item of the building's inventory |
 | `LOOT_STOLEN_GOODS` 212 | - | `FUN_1408cf6a0` (calls the stolen predicate) | - |
 | `PICKUP_INTRUDERS` 223 / 273 | - | `FUN_14099c110` / `FUN_14099c250` | - |
 
 **Character finder** (`FUN_1408cd2d0(task, out, include, exclude, allowBed)`, **Verified** by decompile; rescue 105/148 call it with masks 1 / 0x4010 and `allowBed` 0,
 kidnap 132 with 0x4008 / 0x811 and `allowBed` 1): walks the owner's sensed list, keeping entries whose category word has a bit of `include` and none of `exclude`
-(bit 0 = SENSE_ALLY = not the owner's enemy and slot 126 `FUN_1407923d0` friendly, bit 4 dead, bit 14 crawling, [sense tags](perception.md#sense-tags-who-is-an-enemy); other bits **Unknown**); the nearest (squared XZ distance) passing all of these wins: the target is down (ragdolled or carried, `FUN_1407d1440`, or the byte
+(bit 0 = SENSE_ALLY = not the owner's enemy and slot 126 `FUN_1407923d0` friendly, bit 4 dead, bit 14 crawling, [sense tags](perception.md#sense-tags-who-is-an-enemy)); the nearest (squared XZ distance) passing all of these wins: the target is down (ragdolled or carried, `FUN_1407d1440`, or the byte
 `+0x5b8`) or, only when `allowBed`, in a bed (`+0x2f8 == 1`); not carried (`+0x3d4`), not dead, special state 0 (not caged; bed 1 when allowed), not an animal
 (slot `0x248` is `asAnimal`), and not worked by a squad mate (`FUN_1402690e0`, `Blackboard::howManyGuysWorkingOnThisSubTarget`: the squad blackboard's entries whose worker is neither the asker nor the target and whose sub-target is the target; **Verified**, a count every finder tests, not a give-up list). Rescue (`include` 1) also requires
 the target to share the owner's faction (vfunc `0x58`), tested only when the global `+0x112` (Rescue Allies, [squad AI options](ai-tasks.md#squad-ai-options)) is clear **and** the owner's
@@ -222,18 +222,17 @@ carried one in (the candidate cages are the current town's, else the faction's n
 - **Finder** (`FUN_14099ae10(ai, animalsOnly)`; 177 passes 0). Two passes over the sensed list, each target within 100 units (Ogre squaredDistance, full 3D, <= 10000; **Verified**; Meitou `LootTarget` measures it in 3D), not carried (`+0x3d4`), Neither pass tests imprisoned (**Verified**, `FUN_14099ae10`; `FUN_140597030` is true for a caged occupant), so a downed prisoner in a cage is a target.
   reachable (both passes, **Verified**: `FUN_140597160` = DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS, [locks](locks.md): the gate codes match, either is -1, or the route between is open; and
   `FUN_140597030` = `AI::isDestinationAccessible`: true with no building around the body, when the looter is in it, or for a caged occupant; for a plain building (no parent) the
-  looter may use (`CharacterHuman` slot `0x328` is always true; the animal's is **Unknown**) it needs `Building::hasAnOpenDoor` `FUN_1405499a0`: no doors, or one open, opening or broken; Meitou `CarrySystem.Reachable`), not in the squad's give-up list, and not short-term tagged 6 by the looter's squad
-  (`FUN_140678960(c, target, 6)`, [squad memory](dialogue.md#squad-memory)); the first match wins (sensed-list order, **Unknown**). Pass 1: mask 0x10 / 0 (read as the dead). Pass 2: masks 0x4008 / 0x11 (the kidnap finder's,
+  looter may use (`CharacterHuman` slot `0x328` is always true) it needs `Building::hasAnOpenDoor` `FUN_1405499a0`: no doors, or one open, opening or broken; Meitou `CarrySystem.Reachable`), not in the squad's give-up list, and not short-term tagged 6 by the looter's squad
+  (`FUN_140678960(c, target, 6)`, [squad memory](dialogue.md#squad-memory)); the first match wins (sensed-list order). Pass 1: mask 0x10 / 0 (read as the dead). Pass 2: masks 0x4008 / 0x11 (the kidnap finder's,
   read as other factions' downed) and also: the target's faction is not the player's (`FACTION +0x250`) unless the global **Bandits loot the player** (`142133598`) is set, and
   `shouldIScrewThisGuyOver(looter, target)` (`FUN_14059a7b0`), with no friendliness filter before it (**Verified**, `FUN_14099ae10`). Pass 1 has no faction test either (**Verified**): the dead of the looter's own faction are looted too (Meitou `CarrySystem.LootTarget`).
 - **shouldIScrewThisGuyOver** (= dialogue condition 54, [dialogue](dialogue.md#conditions); **Verified**), in order (later lines override): true when either is of NPC class 8
   (Bandit; status `+0xdc`); false when both have the same class; true when the looter's personality (status `+0xd8`, not the class) is 2 traitorous; false when looter vfunc
   `0x3f0`(target, 1), "regards as friendly", holds; false when the personality is 1 honourable; true when the looter's status
   `+0xe0` (a slave's owner faction) is the target's faction; false when the looter's squad has a love tag on it (long & 0xc), true with a hate tag (& 0x2b0); true when the target is dead.
-- **Start**: flags `animal` (target vfunc `0x248`), `notPlayerSide` (target's faction is not the player's, or the target is dead; cleared when looter vfunc `0x68` `+0x90` > 0,
-  **Unknown**), `foodOnly` (looter of NPC class 8, or its hunger floor, slot 0x348 ([free food](character-stats.md#free-food)), below 2.8), `wantsWeapon` (the looter has no weapon,
+- **Start**: flags `animal` (target vfunc `0x248`), `notPlayerSide` (target's faction is not the player's, or the target is dead; cleared when looter vfunc `0x68` `+0x90` > 0), `foodOnly` (looter of NPC class 8, or its hunger floor, slot 0x348 ([free food](character-stats.md#free-food)), below 2.8), `wantsWeapon` (the looter has no weapon,
   `AI::hasWeapon`, and the target has one). A law-enforcement looter (`Character::isLawEnforcement` `FUN_140599600`: not of a bandit faction, and NPC class 1, or class 2 whose
-  status `+0x88` is set and equals `Character::getOwnerships` `+0x30`, meaning **Unknown**; Meitou: `CrimeSystem.IsPoliceLike`) sets a confiscate flag (`+0x82`) and clears `notPlayerSide` and `foodOnly` instead, then skips the crime part (**Confiscation** below). An animal target posts
+  status `+0x88` is set and equals `Character::getOwnerships` `+0x30`; Meitou: `CrimeSystem.IsPoliceLike`) sets a confiscate flag (`+0x82`) and clears `notPlayerSide` and `foodOnly` instead, then skips the crime part (**Confiscation** below). An animal target posts
   "{1} is butchering {2} for meat!!" when the target's faction is the player's. The flags (task `+0x80..+0x84`) are written only here and only read by the update (**Verified**,
   `FUN_14034d930` has no write to them), so they hold for the whole task: a victim dying or a looter turning hungry mid-loot changes nothing. Meitou: `CharacterCold.LootFlags`
   (`LootStart`, set at the start, runtime only, hashed with the task; the senses `+0x90` clearing is not modelled).
@@ -249,11 +248,13 @@ carried one in (the candidate cages are the current town's, else the faction's n
      slot-type sections of the looter all hold something (none counts as all) is left, unless the looter is police or the target imprisoned; checked
      per weapon after each move (**Verified**, `FUN_140342de0` mode 2; Meitou: back and hip).
   2. Food: items of type 4 with `item function` 3, then 15, repeated until none moves; then the same from the target's worn backpack (function 3).
+     A bag carried in the grid is not searched (**Observed**, player report 2026-11-15); Meitou fix "Bags in the inventory" (on by default,
+     `World.BagSearchFix`) also takes the function 3 food of carried bags, and in step 3 their items.
   3. With `notPlayerSide` and not `foodOnly`: every item (type 4) and armour (type 3), and every item of the backpack. An armour piece with the uniform field set (`+0x1e8`) is skipped outright; one taken and not worn replaces a worn non-uniform piece of its section when the worn level is lower (the worn piece's unknown `+0x2c8` term taken as false), the old one going into the inventory (**Verified** `FUN_140342de0`:128-157; Meitou `CarrySystem.WearIfBetter`).
   An item goes into the looter's inventory, else its worn backpack, else back. Then the looter's squad tags the target short-term 6 (`FUN_1406744a0`) and the task ends.
 - **Confiscation** (the update with the confiscate flag, **Observed**): an animal target waits the 20 s and gets the take above (weapons, food); otherwise past 0.8 s
   `Inventory::getAllStolenItems(target's inventory, includeUnknown 0)` (`FUN_140748bc0`: the inventory's whole item list, then its equipped weapons and armour, each passing
-  `InventoryItemBase::isStolen(item, 0)`; the target's own inventory, `Character::getInventory` slot 44 = `+0x2e8`, so not its backpack's contents) and each in turn:
+  `InventoryItemBase::isStolen(item, 0)`; the target's own inventory, `Character::getInventory` slot 44 = `+0x2e8`, so not its backpack's contents; Meitou fix "Bags in the inventory", `World.BagSearchFix`: also the stolen items inside the worn backpack and the bags carried in the grid) and each in turn:
   `removeItemDontDestroy_returnsItem(item, 1, true)` (Inventory slot 5: one unit split off a stack, the whole item when it is the last), `addItem` into the looter's
   inventory; a unit that does not fit goes back and ends the loop. Taken items get `Item::notifyTheftFrom(target)` (slot 106, `FUN_140792800`: calls slot `0x2b0` only when the
   item's owner handle `+0x140` is of type 11 NULL_ITEM, read as "no owner"; a stolen item has one, so nothing changes). Nothing found: the short-term tag 6; something found: no tag. It acts out goal 212 Confiscating goods ([ai-tasks](ai-tasks.md#arrest-and-prison-rows)) and goal 177 for a
@@ -266,7 +267,7 @@ carried one in (the candidate cages are the current town's, else the faction's n
 
 **Verified** (decompile of `Task_Loot_ResourcesWeHaveStorageFor`, vtable `1416be550`: start `FUN_14034e140`, update `FUN_14034e2a0`, pick `FUN_140998950` over `FUN_14059acd0`). The task
 is row 241 "Looting resources", the effect 148 (`LOOTED_STORABLE_ITEMS`) of goal 238 Foraging animals ([ai-tasks](ai-tasks.md#perma-jobs)). It does not take everything:
-- **Start**: timer 0, plays `squat T`, `medic`; the target handle must be a character (type 1) or a squad (0x5b, what a squad target would loot is **Unknown**; the 238 finder returns characters only), else the task fails.
+- **Start**: timer 0, plays `squat T`, `medic`; the target handle must be a character (type 1) or a squad (the 238 finder returns characters only), else the task fails.
 - **Update**: plays `medic`; past **3.0 s** (`DAT_14168a254`) it takes once and ends. The pick (`FUN_140998950`): the first item of the target's inventory list, then of its backpack's, for which a
   storage of the looter's faction exists (`FUN_14059acd0`, the same test as the 238 finder). Then, one unit at a time (`FUN_14074ab30` splits a unit off the first stack of that item
   kind in the target's **own** inventory list, not its backpack's; a death item leaving butchers the body), each goes to the looter's worn backpack if that inventory takes the kind
@@ -291,8 +292,7 @@ arrival (vfunc 1, `FUN_14034ffa0`) first rolls:
   kidnapper TEMP ENEMY and long-term 1 (intruder) and says event 8 to it; assassination XP 300; the task ends; a sleeper wakes (state 0).
 - **What the victim does** (**Verified**, `FUN_14034ffa0`): every victim gets the forced sense of the kidnapper (`FUN_140858f40`, seen). A sleeper gets order 116 through `FUN_1405d20d0` with
   its clear flag set (`FUN_1405074a0` empties the order queue and the second list, a replan follows), then `FUN_1405cb0a0` (the kidnapper into its engaged list, forced sense, TEMP ENEMY,
-  a replan request): no `Character::attackTarget` and no task push. The fight is the chooser's (**Observed**): no order can win, the queue is gone; whether the kidnapper then counts as a
-  threat for Self preservation (it reads the attacker's intended target) is **Unknown**; an awake victim gets the forced sense and tags only.
+  a replan request): no `Character::attackTarget` and no task push. The fight is the chooser's (**Observed**): no order can win, the queue is gone; an awake victim gets the forced sense and tags only.
 
 ### The kidnap victim flag
 
@@ -336,7 +336,7 @@ A per-character status update lets a state above 1 run down from that stamp. Wit
 - **State 3 and elapsed / 24 above 4.0:** the state becomes 0 and the owner is cleared.
 - **State 2 and elapsed above 12.0:** the state becomes 3 and `+0x8` is stamped again.
 
-These writes are direct, not through the setter. State 1 never takes this path. The update's cadence is **Unknown**.
+These writes are direct, not through the setter. State 1 never takes this path.
 
 **Verified** by disassembly of a Kenshi 1.0.65 `kenshi_x64.exe`, sha256 `504b362c…cd3e`. In that build, the setter is `FUN_1405a3eb0`, the rule is `FUN_1405a44c0`, and its only caller is the vtable-reached `FUN_1405a4750`. Its constants are 24.0, 4.0 and 12.0. The other addresses in this file come from another build.
 
@@ -361,11 +361,11 @@ times a factor, and a nest marker never holds anyone (`FUN_140926d50`). In order
 1. the nearest town of the player's faction, within 1.25 x radius (`DAT_14168ba14`);
 2. the current town when there is one, within **1.5 x** radius (`DAT_14168ad18`), else the nearest town, within 1 x (`DAT_14167c308`): entering takes the radius,
    leaving takes half again;
-3. for a town whose vfunc `0x230` and `0x2f0` hold (meaning **Unknown**, likely walls), a point it gives for the position (vfunc `0x308`) within 300;
+3. for a town whose vfunc `0x230` and `0x2f0` hold (likely walls), a point it gives for the position (vfunc `0x308`) within 300;
 4. the nearest entry of the world's second town list (`FUN_140927ad0`; **Observed** to be the player towns), with step 2's factor;
 5. the town of the building the character stands in (Character vfunc `0x1d8`).
 
-How often it runs is **Unknown** (each AI update). **Observed** (Rebirth hold, radius 2 875): slaves working 2 350-2 590 from the centre and 3 600-3 950 from their
+**Observed** (Rebirth hold, radius 2 875): slaves working 2 350-2 590 from the centre and 3 600-3 950 from their
 owners stayed slaves all hour; one that walked past about 4 100 escaped. Meitou: `CharacterCold.StatusTown`, `AiSystem.StatusTownAt`, kept up by `ArrestSystem` on the
 spotting cadence; steps 3 and 5 are not modelled, step 1 reads the placed towns of the player's faction and step 4 the player towns.
 
@@ -387,20 +387,9 @@ Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and a
    Row 106 does have a finder: its registration stores the bed search `FUN_1408cfe00` at +0x160 (**Verified**, `FUN_140319a60`); `BedSystem` already uses that search.
 2. The **sensed-list category bits** (`FUN_140853960` masks 1, 0x4010, 0x20, 0x210, 0x4008, 0x811, 0x10): which bit is ally, enemy, dead, slave;
    and the size of the sensed list, which is the search range of every finder.
-3. The **status object at `Character+0x1a0`** (int at +0, saved as `slavestate`: 1 slave, 2 escaped slave, 3 ex-slave; `+0x8` the [lie-low stamp](#escaped-slaves-lie-low); the setter `FUN_1405a4940` posts "{1} has been enslaved" for a free player-faction character and sets `+0x110` to 250 on 2; its callers: caging, the squad factory's `slaves`, slave processing (task 182), escapes, release and bail); its `+0x88`, `+0xe0` (a slave's owner faction); its class name (`+0xe9`: the [kidnap victim flag](#the-kidnap-victim-flag)).
-   Partly known (**Observed**, [economy 11.4-11.8](economy.md#115-bail-and-sentence)): `+0xe8` escaped-prisoner flag, `+0xea` freed flag ([perception](perception.md#sense-tags-who-is-an-enemy): set on release, bail and slave buy; cleared outside towns and by a wrapper-set pending crime, saved as `tn`), `+0x110` the "recently wanted" marker (250.0).
-4. The **writer of `+0x5b9`**, read as "unconscious" from its readers only.
-5. **Which inventory transfer the player's usual loot takes** (drag and drop gives Theft for a down owner, the right-click transfer Looting): both
-   are real, the UI events behind `FUN_140713d20` and `FUN_140715560` were not mapped.
 6. **Witness timing**: how often `FUN_1408580d0` runs per sensed character, with what range and line of sight, and how the pending timer `+0x90`
    counts down (`FUN_140851f40` sets it; the decrement was not found).
-7. (Settled, **Observed**) Character flag `+0x5b8` (vslot `0x360`, read by goal 169's desire, the stealth/flee rows and the leg-down term): the only writes of an `+0x5b8` byte in the exe (whole-program scan) are the constructor `FUN_1405ebd50`'s 0, so it is always 0; reads of it change nothing and Meitou treats it as 0. (Kind 4 of `FUN_14038ab50` is the bed's nearest type-4 node the body is placed at, [locks](locks.md#beds).)
-8. Bed rent: decoded ([locks](locks.md#beds)); allied factions' beds are free. The town-type and `FUN_140621230` tests in it are **Unknown**.
 9. A **despawn timer** for ground items.
-10. The steal order type 0x1d of the ALT path (`FUN_1407fc440`): the taskType table says 29 is `MOVE_CUS_ORDERED`.
-11. The **speed caps** of the `carrying left/right` movement clips (RACE `male/female carry ragdoll` are unused: [ragdolls](ragdolls.md)).
-12. `FUN_14079c600`, called when the player picks up a non-player character, and **`CharStats+0x12b`** (set by slot 97 order kind 0xc), which turns
-    both rescue goals off.
 13. The put-down KO time: `FUN_140644980` has no roll and only the blood term (**Verified**, [character-stats](character-stats.md#cut-off-and-leg-loss)); Meitou's `PutDownKoSeconds` follows it (`MedicalState.KoBlood`). The relation test `FUN_1406b27b0` of "friendly".
 
 ## Expression reference
@@ -425,4 +414,4 @@ Evidence scopes below apply only to their named sources/checks.
 - 4.4 The stolen flag (`FUN_14079e550(item, strict)`, **Observed**; answers part of the economy.md Unknown)
 - 4.6 Carrying people past witnesses (`FUN_1408549f0`, **Observed**)
 
-**Loot order window** (26, `Task_Loot_Order`, **Verified**, decompile): the start `FUN_140354dc0` opens the loot window (`FUN_140791830`, mode 3) and plays Character_Loot (Character_Inspect for a non-character); the update `FUN_140354ef0` counts updates and, after 5, ends the task once the window is closed (`FUN_1406e2df0` == 0); every update (from the first) aborts it while the looter's `+0x2b0` is set (a melee threat within 40, [combat](combat.md#fight-lifecycle-and-orders)); the end `FUN_1403466a0` plays 'squat T', sets the Hold point (CharStats +0x130) and has the interface close both windows (`FUN_140791890` sets interface `+0x5c`, on which the per-frame `FUN_1406ea070` closes the pair with `FUN_1406e53d0`). So the looter stays in the task, with no other task, while the window is open, and any end of the task closes it. Row 26 needs `isAtLocation` and lists no threat state, and the abort is in the task's update, which starts only at the body (**Verified**, row lists and the update); whether the plan's move provider tests a threat is **Unknown** ([ai-tasks](ai-tasks.md)); that the looter walks to the body through a fight is **Observed** (reporter, #372). That a character beside the body opens the window while paused (the task start runs from the order at once) is **Observed** only (reporter, #372). Meitou: the order's start beside the body opens the window at once, paused too (`CarrySystem.OpenAtBody`); farther away `CarrySystem.Loot` opens it on arrival; the looter then holds it (`LootStart.WindowHeld`, `CarrySystem.HoldWindow`) and ends the task when the window closes or `CombatSystem.ImmediateThreat` holds (ticks only, so never while paused); the task's end closes the window (`CloseHeldWindow`). The 5-update minimum and the squat clip are not modelled; whether the abort keeps the order queued is **Unknown** (Meitou drops it).
+**Loot order window** (26, `Task_Loot_Order`, **Verified**, decompile): the start `FUN_140354dc0` opens the loot window (`FUN_140791830`, mode 3) and plays Character_Loot (Character_Inspect for a non-character); the update `FUN_140354ef0` counts updates and, after 5, ends the task once the window is closed (`FUN_1406e2df0` == 0); every update (from the first) aborts it while the looter's `+0x2b0` is set (a melee threat within 40, [combat](combat.md#fight-lifecycle-and-orders)); the end `FUN_1403466a0` plays 'squat T', sets the Hold point (CharStats +0x130) and has the interface close both windows (`FUN_140791890` sets interface `+0x5c`, on which the per-frame `FUN_1406ea070` closes the pair with `FUN_1406e53d0`). So the looter stays in the task, with no other task, while the window is open, and any end of the task closes it. Row 26 needs `isAtLocation` and lists no threat state, and the abort is in the task's update, which starts only at the body (**Verified**, row lists and the update); that the looter walks to the body through a fight is **Observed** (reporter, #372). That a character beside the body opens the window while paused (the task start runs from the order at once) is **Observed** only (reporter, #372). Meitou: the order's start beside the body opens the window at once, paused too (`CarrySystem.OpenAtBody`); farther away `CarrySystem.Loot` opens it on arrival; the looter then holds it (`LootStart.WindowHeld`, `CarrySystem.HoldWindow`) and ends the task when the window closes or `CombatSystem.ImmediateThreat` holds (ticks only, so never while paused); the task's end closes the window (`CloseHeldWindow`). The 5-update minimum and the squat clip are not modelled.

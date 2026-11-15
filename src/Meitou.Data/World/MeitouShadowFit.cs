@@ -80,7 +80,12 @@ public static class MeitouShadowFit
         if (count > BaseCascades) return Subdivided(Splits(near, far, BaseCascades, focus), count);
         var plain = Splits(near, far, count);
         if (focus <= 0 || count < 2) return plain;
-        float first = Math.Clamp(QuantizedNear(FocusSplit * focus), near * 2, plain[1]);
+
+        // A long shadow distance can put twice the near plane past the practical first split (the clamp's bounds would cross, #745).
+        float low = near * 2;
+        if (low >= plain[1]) return plain;
+
+        float first = Math.Clamp(QuantizedNear(FocusSplit * focus), low, plain[1]);
         if (first >= plain[1]) return plain;
         var rest = Splits(first, far, count - 1);
         return [near, .. rest];

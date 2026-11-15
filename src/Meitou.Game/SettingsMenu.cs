@@ -429,6 +429,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? BenchFacingChanged { get; init; }
 
     /// <summary>
+    /// Applies the bag search fix (<see cref="UserConfig.FixBagSearch"/>).
+    /// </summary>
+    public Action<bool>? BagSearchChanged { get; init; }
+
+    /// <summary>
     /// Called when an off-screen switch changes (the config holds the new values).
     /// </summary>
     public Action? OffscreenChanged { get; init; }
@@ -1513,6 +1518,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         PunchReachChanged?.Invoke(true);
         Config.FixBenchFacing = true;
         BenchFacingChanged?.Invoke(true);
+        Config.FixBagSearch = true;
+        BagSearchChanged?.Invoke(true);
         OffscreenChanged?.Invoke();
         Config.Audio = new();
         AudioChanged?.Invoke();

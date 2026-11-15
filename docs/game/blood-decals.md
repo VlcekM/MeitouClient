@@ -13,7 +13,7 @@ save layout: [save.md](../formats/save.md#folder-and-state-mapping).
 A type's variants are every texture in its folders (install: line 3 at 1024×512, splash 7 at 512² +
 1 at 1024², pool 5 at 512², smear 1 at 512×256). Each variant keeps its full-size texel dimensions
 (the loader shifts them back up by the texture-quality level for names ending `.dds`). Type 0 has
-no caller found (**Unknown** whether anything makes `line` decals).
+no caller found.
 
 ## Cells
 
@@ -27,7 +27,7 @@ their cells and local places).
 
 **Verified** (`FUN_1408dce50`, `FUN_1408dc6b0`): random variant; angle = atan2(dir.x, dir.z), the
 texture's width axis along (sin, cos) and its height axis along (cos, −sin); half extents in world
-units = size × texels × 288 / 4096 (**Verified**: `FUN_1408dfaf0` sets the factor at `+0x1c0` to cell 288 × 0.5 × 1/2048 = 288/4096; the draw agrees, below). Life starts at 99 (seconds; the medical and hit callers pass 99.0; the bleed pool's value is lost in the decompile, **Unknown**, we use 99).
+units = size × texels × 288 / 4096 (**Verified**: `FUN_1408dfaf0` sets the factor at `+0x1c0` to cell 288 × 0.5 × 1/2048 = 288/4096; the draw agrees, below). Life starts at 99 (seconds; the medical and hit callers pass 99.0; the bleed pool's value is lost in the decompile, we use 99).
 
 Sources (`FUN_140652000` medical update, `FUN_140793b20` hit), all only with `Blood` on and the
 character out of the water (`FUN_1405c7fd0` = water state 0); colour = race `blood colour` (FCS
@@ -40,11 +40,7 @@ default #800000), alpha 1 unless stated:
 | bleeding > 0.01, otherwise (carried) | pool, size min(0.5, bleeding × 0.1) | build-up += rand × bleeding × dt × 10; past 1: a drop if more than 1 unit from the last place, then build-up 0 |
 | a hit (`FUN_1406508d0`), a severed limb (`FUN_14064edc0`) | splash, size clamp(min(1, (cut + blunt + pierce) / 100), 0.05, 0.5) | a direction (a character vector at `+0x640`, `+0xd0`), flipped or turned ±90° by a hit-side flag (2, 4, 8), turned by a random ±50°; placed up to 20 units along it |
 
-**Unknown**: the second condition of the first two rows (`FUN_14028ddc0`, a flag or count on the
-character; taken as true), the medical dt's unit in the drip row (taken as game seconds), the
-splash's direction vector and side flag (we use attacker → victim, bolt flight), whether the 20 is
-a random distance (we roll 0..20), and the race check of the hit row's `vfunc 0x330` (we skip
-bloodless races, `bleed rate` 0). We emit no limb-sever splash.
+We emit no limb-sever splash.
 
 **Pool growth** (**Verified**, `FUN_1408dcfa0`): per character a token (place, size). Increment =
 bleeding × scaled frame dt × 0.2. No token: size = increment. Within √10 units (X/Z) of the token:
@@ -103,7 +99,6 @@ characters carry blood on their skin, not only on the ground.
   normal.z < 0) × `blood horizontal` (human: 0.15 and 1). `amount` is per body part, `bloodAmount[8]` (the first 8 parts), written by
   `FUN_140530b30` as 1 − clamp((flesh − stun + bandage) / (base × mult × scale − wear), 0, 1) (the +0x48 field is the bandage, not the rig): a damaged part is bloodier, a part far below zero is
   fully covered. Only `Character_VP` (bodies) defines `BLOOD` among the people's programs; worn clothing (`skin.program`) has none, animals have their own (`creature.hlsl`).
-  **Unknown**: the part index a stump mesh's vertices carry, the exact `bloodColour` alpha, the animals' mapping.
 - A severed limb item draws with the `SeveredLimb` material (`FUN_1400cf490`, cloned as `Limb_<name>`): textures from the item's MATERIAL record
   (`texture map`, `normal map`, `color map` = skin-tone mask; the human's are the female body's), shader `severed_limb_fs`: skin-tone mask tint
   (a vec4 stored on the item), then blood with the same texture, `bloodColour` (a vec4 on the item) and an extra alpha of
@@ -111,10 +106,8 @@ characters carry blood on their skin, not only on the ground.
   **Verified** (`FUN_1400ced10`, the item's setup from the cut character, called by `FUN_14064edc0`; `FUN_1400cf490` hands the values to the entity): the item keeps a vec4 skin tone at
   `+0x1f4` (shader `skinTone`, custom parameter 2) = 1 − the character's appearance `Skin Tone` colour per channel, i.e. the body shader's `skintone` (our `SkinToneParameter`); a vec4
   blood colour at `+0x204` (custom 3) = the race's `blood colour` as ARGB, alpha 1.0; and at `+0x1e8` the size of the character's forearm (arm slots) or calf (leg slots) bone, which
-  `FUN_1400cf490` sets as the item node's scale (**Unknown** whether that follows the body shape in play; we draw the limb at scale 1). The fragment is `albedo × (1 − skinTone × colourMap.r)`,
-  then the blood, × 0.7, with the normal map on the frame (tangent, cross(tangent, normal) × tangent.w, normal) (DXT5, x in alpha, z rebuilt). The `1-itemlist` save keeps no state for an
-  item (save.md), so the tint is not saved: **Unknown** what a limb loaded from a save shows (we apply none).
-
+  `FUN_1400cf490` sets as the item node's scale (we draw the limb at scale 1). The fragment is `albedo × (1 − skinTone × colourMap.r)`,
+  then the blood, × 0.7, with the normal map on the frame (tangent, cross(tangent, normal) × tangent.w, normal) (DXT5, x in alpha, z rebuilt).
 
 **Meitou**
 - Body: `CharacterContent.BodyBlood` gives a person's body material the race's blood colour (`blood colour`), scales (`blood horizontal`, `blood vertical`) and `bloody.png`
@@ -147,7 +140,7 @@ The `bloodsurfaces` switch (Meitou, default; Faithful: terrain only, as the game
 - Debug command `bloodmark <splash|pool|smear|drip> <x> <y> <z> [size] [RRGGBB] [dirx dirz] [--count n]` puts a mark (n spread over 60 x 60 units) for controlled repros.
 - Cost, **Observed** (Hub battle with about 100 surface decals in view, 2560x1440, Vulkan, wall-clock per frame): +0.35 ms (6.88 to 7.24 ms), two extra depth copies and pass splits plus the pass, made only while a kept mark is within `Decal Range` (`SurfacesNear`). Low impact.
 - **Observed** (owner, in play): works inside buildings and on their floors.
-- Depth convention: each scene texel's view depth comes from `depthViewZ` (`DepthConvention.Glsl`): Vulkan's scene depth is reversed, `z = n f / (n + d (f - n))`. **Unknown** for this pass on real data: the earlier **Verified** probe (flat sandbox floor, stored depth 0.9377 at three camera distances) checked the former 0.5..1 storage and has not been rerun. The camera's near plane is a quarter of its distance, so a wrong mapping rebuilt positions far off at play distance and showed blood only in close-ups. The texel's ray is rebuilt from the jittered projection (the upscaler's jitter moved out of the texel centre).
+- Depth convention: each scene texel's view depth comes from `depthViewZ` (`DepthConvention.Glsl`): Vulkan's scene depth is reversed, `z = n f / (n + d (f - n))`. The camera's near plane is a quarter of its distance, so a wrong mapping rebuilt positions far off at play distance and showed blood only in close-ups. The texel's ray is rebuilt from the jittered projection (the upscaler's jitter moved out of the texel centre).
 
 ## On weapons and gear (Meitou)
 

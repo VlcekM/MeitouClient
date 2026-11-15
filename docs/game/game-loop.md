@@ -9,7 +9,7 @@ original thread races. Tables preserve callback/time/control/constants mappings.
 **Verified** (`FUN_14082ac70`, constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5 from `re/data_values.txt`): the real frame time is
 replaced by 0.05 s when above it (the `min(dt, 0.5)` in the other branch never binds), so a frame longer than 0.05 s contributes at most 0.05 x speed and the game slows
 below 20 fps at every speed; the cap comes before the speed multiplier. The capped value is then pushed into a 20-entry history (`FUN_1402b2640`, the 0.5 is its
-weight base) that writes back the weighted average of the entries so far (weights 0.5^i; which end is newest is **Unknown**), and that smoothed value is what
+weight base) that writes back the weighted average of the entries so far (weights 0.5^i), and that smoothed value is what
 `FUN_14082b6e0` passes to `FUN_140788a00`. Meitou applies the same 0.05 s cap before the speed (`SimulationClock.MaxFrameSeconds`) and no smoothing (**engine choice**, [simulation](../simulation.md#time-model)).
 Twenty-entry zero-initialized history exponentially weights0.5^i. **Verified** callee/history
 layout. **Verified** FUN_140788a00 clocks: real smoothed dt; dt*speed zeroed by paused flag;
@@ -79,7 +79,7 @@ slots 0 to 3 = `frameStarted`, `frameRenderingQueued`, `framePostAnimationUpdate
 |---|---|---|---|---|
 | main | | | | Ogre loop, all of the above |
 | "AI Rendertime Backthread" | `RenderTimeBackthread` (derived from `ThreadWannabe_HavokCompatible`), `world +0x790` | `frameStarted` (`FUN_1403beeb0(thread, dt)`) | the global `DAT_142133794` | `FUN_140787940`, below |
-| physics | `PhysicsActual`, `world +0x18` | `GameWorld::vfunc_0` | real `dt` | `FUN_1407dd060`: dt = 0 if paused, capped at **0.04 s**, a virtual call on the scene object with `dt` (presumably PhysX `simulate`, **Unknown**: not checked against the PhysX DLL), a flush, then a blocking `fetchResults`-like call with an error log "Failed to fetch results" |
+| physics | `PhysicsActual`, `world +0x18` | `GameWorld::vfunc_0` | real `dt` | `FUN_1407dd060`: dt = 0 if paused, capped at **0.04 s**, a virtual call on the scene object with `dt` , a flush, then a blocking `fetchResults`-like call with an error log "Failed to fetch results" |
 | helper | `world +0x8c0` | `GameWorld::vfunc_0` | real `dt` | **Unknown** |
 | worker | `DAT_1421349d0` (started at start-up with the lowest priority) | its `+0x20` virtual is called every `frameEnded` | | **Unknown** role |
 | navmesh zone queue | `FUN_1403af0f0` (a loop with `Sleep`, calls `FUN_1403ae490`) | message queue | | zone load/unload requests for the AI navmesh (below); the function is `NavMesh` slot 1 and registers the thread name "NavMeshMain" with the Havok thread layer before looping, so a separate thread is **Observed** (the `_beginthreadex` call that starts it was not traced) |
@@ -106,9 +106,9 @@ characters near the head get more (m = 5: three every frame, two every other). A
 ([character-stats](character-stats.md#time)).
 
 The flag (KenshiLib `isVisibleUpdateMode`; **Verified** decompile of the visibility pass `FUN_1405c9f60`): set with `+0xe5` whenever `FUN_1405c79c0` holds: the
-character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0x250` (`_isEngagedWithAPlayer`) is set, or a zone test of `FUN_1409c4b10`
-(**Unknown**). Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
-visible-area and frustum tests) and its platoon tests pass (**Unknown** in detail). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
+character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0x250` (`_isEngagedWithAPlayer`) is set, or a zone test of `FUN_1409c4b10`.
+Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
+visible-area and frustum tests) and its platoon tests pass. Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
 ### Update time off screen
 
@@ -117,8 +117,7 @@ visible-area and frustum tests) and its platoon tests pass (**Unknown** in detai
   character's `+0xc4` as its time. Slot 0xe0 `update` (`FUN_1405cf130`) writes `+0xc4` = `DAT_142133794` + `+0xc0` (0.01 when not above 0). `+0xc0` is the time
   gathered since the character's last turn.
 - `+0xc0` gets the frame time in the character loop on a frame without a turn (budget B above), and **again** in the visibility pass `FUN_1405c9f60`
-  (called each frame by the job runner `FUN_140787940`) while the character is not in view (`+0x1a9` clear), unless the global `DAT_1421349c9` is set
-  (meaning **Unknown**).
+  (called each frame by the job runner `FUN_140787940`) while the character is not in view (`+0x1a9` clear), unless the global `DAT_1421349c9` is set.
 - So a character out of view moves, and runs every consumer of `+0xc4`, on twice the time.
   - Observed: over 7.5 real seconds, the sum of `+0xc4` was 2.00 x the real time for the 121 characters out of view and 1.00 x for the 7 in view.
   - The game clock ran 33 game seconds a real second, as above.
@@ -139,7 +138,7 @@ A zone's loaded flags are set only when the zone manager goes from state 4 to 5,
 
 Values from the install through the repo's readers (**Verified**, `GameDatabase.Load(LoadOrder.FromInstall)`, one `GLOBAL CONSTANTS` record, `110-gamedata.quack`, modified by `Newwworld.mod` and `rebirth.mod`; `LoadOrder.BaseGame` gives the same numbers, but note that it still includes those two mods, which are part of the core file list; the `fcs.def` defaults differ, e.g. `max faction size` 100, `starvation time` 24, `build speed` 1):
 
-| Field | Value | Meaning (`fcs.def` text; use in the exe **Unknown** unless noted) |
+| Field | Value | Meaning (`fcs.def` text) |
 |---|---|---|
 | `days per year` | 100 | days in a year (season lengths, weather.md) |
 | `sunrise` / `sunset` / `latitude` | 5 / 23 / 54 | the sun path and day/night |
@@ -159,22 +158,17 @@ Values from the install through the repo's readers (**Verified**, `GameDatabase.
 | `max squads` / `max squad size` / `max faction size` | 10 / 20 / 30 | |
 
 ### World per-frame helpers (a3-krest, decompile)
-- `FUN_1403beeb0(thread, dt)` is the generic worker-thread kick used by the world's helper threads (`+0x18`, `+0x8c0`) and several managers: with the thread running it stores `dt`, sets a flag and signals; without one (`+0x45` set) it stores `dt` and runs the work (vfunc 1) inline. Which work the `+0x8c0` thread does is **Unknown** (**Verified**: only the kick).
+- `FUN_1403beeb0(thread, dt)` is the generic worker-thread kick used by the world's helper threads (`+0x18`, `+0x8c0`) and several managers: with the thread running it stores `dt`, sets a flag and signals; without one (`+0x45` set) it stores `dt` and runs the work (vfunc 1) inline.
 - Deferred removal list (world `+0x890`, filled when a character is destroyed): flushed by `FUN_1405429a0`, a hash-set erase of the character handle in the set at `+0x750`. Meitou's registry is live, so it has no counterpart (no behavioural effect).
 - `FUN_1403ac3f0` drains one queued building per call and, for each of its door parts with a non-empty box, calls `FUN_1403a6070`: it logs "Door <name> open|closed at <pos>" and registers a pathfinder obstacle record (type 3 open, 4 closed) holding the door box (its size, the base lowered by a constant) in the list at `+0x138`. The open test is the door's open state (`vfunc 0x308`) or state field 1. Meitou's navmesh door areas follow the same open/closed rule ([locks](locks.md)); the obstacle box and the one-building-per-call latency are not modelled (**Observed**: no gameplay rule depends on them).
-- Character `+0x88`..`+0x98` is a handle (type, four ints); `FUN_140792310` (virtual, only a type 0 building or the null type is accepted) copies it in (`FUN_140594290`) and sets the byte at `+0x69c` to 4; `FUN_1405c7bf0` (from `FUN_1407869e0`, once per update while unpaused) counts that byte down and resets the handle to null at 0. The reader of `+0x88` was not found (**Unknown**).
-- `FUN_1407875c0` pops one record (type, four ints) from the queue at `+0x190` per call, finds the object in the thing registry (type 1: `DAT_142133f98`/`DAT_142133f90`; type 0x5b: `FUN_140791600`), takes it out of the pending list at `DAT_1421348a0+0x1d8`, and calls its virtual `+0x280` (**Verified**); it is the main-thread hand-over of objects a loader made. The producer and what `+0x280` does are **Unknown**.
+- Character `+0x88`..`+0x98` is a handle (type, four ints); `FUN_140792310` (virtual, only a type 0 building or the null type is accepted) copies it in (`FUN_140594290`) and sets the byte at `+0x69c` to 4; `FUN_1405c7bf0` (from `FUN_1407869e0`, once per update while unpaused) counts that byte down and resets the handle to null at 0. The reader of `+0x88` was not found.
+- `FUN_1407875c0` pops one record (type, four ints) from the queue at `+0x190` per call, finds the object in the thing registry (type 1: `DAT_142133f98`/`DAT_142133f90`; type 0x5b: `FUN_140791600`), takes it out of the pending list at `DAT_1421348a0+0x1d8`, and calls its virtual `+0x280` (**Verified**); it is the main-thread hand-over of objects a loader made.
 
 ## Unknowns
 
 - The start-of-new-game time of day. The saves in the install are empty; the sample save of [../formats/save.md](../formats/save.md#camera-type-56-id-1051-the-world-record) (a new game, saved at in-game day 1, 13:39) holds the `time day` / `time hour` / `time minute` and sky keys described above (**Observed** there), but the starting time itself is not traced.
-- Whether the float timestamp in the frame timer is audible after hours of play.
-- The platoon tests behind `+0xe4` for an NPC in view and the zone test `FUN_1409c4b10`; `npc range` is a 3D squared distance from the camera's node (`FUN_1407f2a20`).
-- What the heavier per-faction step `FUN_1406b97c0` does with the accumulated time, the other speed-scaled timers (`FUN_140792500`, `FUN_1409a7930`; `FUN_140857500` is the hearing cooldown, [perception](perception.md#hearing)), and which function starts a loaded save at speed 1 (only the character-creation window's destructor `FUN_1405f5d10` was seen to set it).
-- Character slots 79 and 80, the second helper thread (`world +0x8c0`), the pending-event list at `+0x608`, `FUN_140671f50`, `FUN_1407869e0` and several smaller steps of `FUN_140788a00`.
 - Whether physics substeps or fixed-step settings are used (the PhysX scene desc has `timeStepMethod`/`maxTimestep` fields; where the game sets them was not found).
 - Whether character movement compensates for the non-scaled physics step at 2x and 5x.
-- Which parts of the world use hours vs days for their own timers (about 50 readers of the clock).
 
 ## Expression reference
 
