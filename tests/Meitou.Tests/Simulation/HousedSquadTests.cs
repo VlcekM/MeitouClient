@@ -98,12 +98,16 @@ public class HousedSquadTests(ITestOutputHelper output)
             Assert.Equal(s.HomeBuilding!.Key, s.Shop!.Building);
             Assert.Empty(template.Prisoners);
 
-            int cells = s.HomeBuilding.Fixtures.Where(f => f.HoldsShopStock).Sum(f => f.StorageWidth * f.StorageHeight);
+            var boxes = s.HomeBuilding.Fixtures.Where(f => f.HoldsShopStock).ToList();
+            int cells = boxes.Sum(f => f.StorageWidth * f.StorageHeight);
+            int width = s.Shop.Stock.Width;
 
-            Assert.Equal(Math.Max(18, s.HomeBuilding.Fixtures.Where(f => f.HoldsShopStock).Max(f => f.StorageWidth)), s.Shop.Stock.Width);
+            Assert.Equal(Math.Max(18, boxes.Max(f => f.StorageWidth)), width);
 
-            // the original's merged section; each container's own rectangle takes a few rows more
-            int packed = (cells + s.Shop.Stock.Width - 1) / s.Shop.Stock.Width;
+            // the original's merged section; each container's own rectangle takes a few rows more. Containers wider than half the stock never
+            // share a row, so they stack (L-House's four 10 x 10 barrels in an 18-wide stock).
+            int wideRows = boxes.Where(f => f.StorageWidth * 2 > width).Sum(f => f.StorageHeight);
+            int packed = Math.Max((cells + width - 1) / width, wideRows);
 
             Assert.InRange(s.Shop.Stock.Height, packed, packed * 11 / 10 + 3);
             Assert.NotEmpty(s.Shop.Stock.Items);
