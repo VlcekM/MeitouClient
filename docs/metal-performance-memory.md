@@ -146,7 +146,6 @@ device's recommended working set (5376 on 16 GB, 8192 on 24 GB). It used to be 5
 24 GB M6 made the guard clamp the ranges to x0.15 and skip the terrain material cache. The launcher's **Auto** budget passes nothing so
 the game's default applies; its fixed Safe, Balanced and High sizes are unchanged. **Unknown:** how it behaves on a 16 GB Mac.
 
-
 ### A2. Port the GPU-side draw path
 
 The mesh/rock cull is ported but opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`; status in

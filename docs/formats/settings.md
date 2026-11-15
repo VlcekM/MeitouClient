@@ -144,7 +144,7 @@ into bus gains ([audio.md](../audio.md#volumes)). Meitou applies them at once fr
 | `raidFrequencyMult` | float; slider 0.25 … 3 | 1 | Town raid events: frequency | same (FUN_1409c5740) |
 | `attacks` | int 0 … 5 | 2 | Town attacks frequency: Bombardment = 0, High = 1, Normal = 2, Fewer = 3, Rare = 4, Never = 5 | A faction's wait between passing-by assaults on the player's towns, uniform, in game hours (**Observed**: the elapsed-time helper `FUN_140791bf0` read as hours): 0, [6, 48), [32, 96), [72, 144), [130, 188); 5 stops them (`FUN_140286a70`, `FUN_140290450`; [ai.md](../game/ai.md#package-classes)) |
 | `Dismemberment` | int 0 … 2 | 1 | Dismemberment: Never = 0, Rare = 1, Frequent = 2 | The options page binds the drop-down to the global `DAT_142133504` (`FUN_1403f0260`), which the hit, degeneration and eaten code read when a part is damaged (`FUN_14064f300`, `FUN_14064f5c0`, `FUN_140650370`, `FUN_14029af90`), so a change applies at once (**Verified**, decompile). [combat.md](../game/combat.md), [character-stats.md](../game/character-stats.md) |
-| `civilians` | bool | 1 | none | Loaded and saved; **no reader found** (no instruction addresses its global other than the writer; an access through the block's base pointer would not show up, so **Unknown**) |
+| `civilians` | bool | 1 | none | Loaded and saved; **no reader found** (no instruction addresses its global other than the writer; an access through the block's base pointer would not show up) |
 | `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded (Meitou: Gameplay page, applies to the running world)  so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
 | `Auto save` | bool | 1 | Auto save | [save.md](save.md#autosave-fun_14047be70) |
 | `Auto save time (minutes)` | float; slider 1 … 30 | 10 | Auto save time (minutes) | same |
@@ -201,18 +201,8 @@ the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use th
 | 0 | no pass; water shaders built with `NO_REFLECTION` | no pass; the water's `uReflect = 0` path: the sky colour is reflected unattenuated (**Observed** to be the counterpart of the game's reflection factor 1; the viewer's shader is not the game's, so the look is not compared) |
 | 1 | queues 5-8, 25 | sky and terrain |
 | 2 | + queue 50 | + characters (**Observed** from the label) |
-| 3 | + queue 20 | + every placed object (buildings and map features are not told apart: **Unknown** which queue the features use) |
+| 3 | + queue 20 | + every placed object  |
 | 4 | no list: everything | + foliage (trees, bushes, rocks; no grass, as before). Which queue the game's foliage is in is **Unknown**; "everything" is assumed to be the only level that includes it |
-
-## Unknowns
-
-- (Resolved 2026-10-06: K in the terrain LOD metric is the viewport height and the node error a height in world units, see
-  "Graphics: terrain".) Still open there: which way round the terrain vertex shader applies the per-patch morph factor.
-- What town display state 4 is (set for reflections at levels 3 and 4), and when the water programs are rebuilt after
-  `water reflection` changes to or from 0.
-- The reflection camera's far clip before FUN_1403e7490 first runs (Ogre's default assumed).
-- Whether anything reads `civilians`.
-- In-session effect of `feature range` 7 or 8 (above the loader's clamp).
 
 ## Expression reference
 

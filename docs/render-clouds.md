@@ -35,7 +35,7 @@ chain only). Weighting by the pixel's own opacity left thin edges and pixels a c
 last frame's cloud in place: rows of streaks behind drifting edges with the camera still (DLSS only; TAA clamps its history). With the
 neighbourhood the streaks fall to TAA's level (**Observed**, the live title scene, 2560x1440, DLSS, a streak count over sky blocks).
 Round the sun (the velocity pass's sun term) only the pixel's own opacity counts, so the sun keeps its motion; stars and planets
-within the reach move with the cloud (**Unknown** how visible).
+within the reach move with the cloud.
 Fog-hidden rays can skip marching; full-sky skip requires every direction conservatively hidden.
 Clock rewind/weather changes must refresh sky/fog histories and not retain stale colour.
 
@@ -45,7 +45,7 @@ outside map uses overcast approximation; above-base points/night receive no shad
 scales by the eye's distance outside the nearest placed fog block /2000 (0 inside; largest
 plane distance, spheres/beams ignored; Meitou `cloudfog` switch), else the swamp/Deadlands get too dark. Prepare
 map before world/reflection shading. GI hits and shaft samples read this map only with `gihybrid`'s `clouds` part
-([GI](render-gi.md) "Hybrid GI"; `AtmosphereShaders.CloudShadow`, the same function; look and cost **Unknown**).
+([GI](render-gi.md) "Hybrid GI"; `AtmosphereShaders.CloudShadow`, the same function).
 
 Row order: the march image, the history and the shadow map are looked up by clip position (`vNdc * 0.5 + 0.5`, the history's reprojection) and by world
 position (`(hit - origin) / span`), so their rows must run with `vUv`. Vulkan's targets do (row 0 at NDC -1); Metal's row 0 is NDC +1, so on Metal the

@@ -11,7 +11,7 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
 - Legacy Mac builds (`-p:MeitouLegacyMac=true`) use .NET 10 for the launcher, game and tools; standard builds use .NET 11.
   Legacy packages have a `-legacy` suffix and target macOS 13 Ventura and later,
   including Ventura-only Intel Macs (#555). **Observed** (launcher 1.10.0 Intel release, Mach-O `LC_BUILD_VERSION`): its .NET 11
-  executable requires macOS 14. **Unknown**: execution of the .NET 10 compatibility build on Ventura and Intel GPU support.
+  executable requires macOS 14.
 - `package-release.ps1 -Rid osx-x64 -LegacyMac` (or `osx-arm64`) produces the legacy game zip on a Mac.
   `build-native-macos.sh` rebuilds OpenAL Soft 1.23.1 and GLFW 3.4 for Ventura, replacing their NuGet binaries in legacy publishes
   (including the launcher's embedded OpenAL). **Observed**: both NuGet libraries declare macOS 14 in `LC_BUILD_VERSION`;
@@ -23,7 +23,7 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
 - The launcher's Play sets both for **Vulkan** and searches the existing `DYLD_LIBRARY_PATH` plus Homebrew for the loader;
   it then symlinks `libvulkan.1.dylib` and `libMoltenVK.dylib` into `~/Library/Application Support/Meitou/vulkan` and points
   the game's `DYLD_LIBRARY_PATH` at that narrow folder, not at all of `/opt/homebrew/lib` (an existing MVK value is kept):
-  a Finder-started launcher has neither (#20). **Unknown**: not yet confirmed on a Mac. A `~/lib` symlink does not help
+  a Finder-started launcher has neither (#20). A `~/lib` symlink does not help
   (**Observed**, #20). The launcher's **Metal** choice starts the game with `--renderer metal` and removes
   `DYLD_LIBRARY_PATH`; it needs neither the loader nor MoltenVK. **Auto** uses Vulkan when the loader exists and Metal otherwise,
   so a new Apple-silicon user does not need Homebrew. Metal is offered on Apple silicon only in the launcher for now.

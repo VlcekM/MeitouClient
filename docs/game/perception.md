@@ -52,7 +52,7 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
 **Verified** literals, flow **Observed**:
 
 - In view with line of sight: the meter fills by dt / T, T = lerp(v, 0.5 + 5 s, 0.5) x lerp(f, 4, 1). f is the looker's
-  alertness: 0.5 without a current goal, else a goal float (+0x3c, meaning **Unknown**); 0 when it is KO'd, busy
+  alertness: 0.5 without a current goal, else a goal float (+0x3c); 0 when it is KO'd, busy
   (+0x2f8 count > 0) or in state 1, and then the meter does not fill and the target is not seen.
 - Seen (result 1) when the meter was above 1 before this check; else result 2 (noticing). No line of sight: result 0.
 - Not in view: the meter empties by dt / 260 (`FUN_140853aa0`) and is dropped at 0.
@@ -67,7 +67,7 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   queue 0x57): dir = looker - sneaker (3D), tail at sneaker + (0, 12, 0) + dir x min(|dir| - 7, 15) (no skip when negative),
   turned from -X onto dir, then the node is scaled (0.5, 0.35, 0.35) in its own frame (**Verified**: `Node::setScale` with `DAT_14167e8d8` 0.5 and `DAT_141695190` 0.35).
   The mesh runs from its origin (shaft radius 0.5) to the tip at -X 10, head ±1.2 (**Verified**, read with `OgreMeshReader`), so the drawn arrow is 5 long, shaft radius 0.175, head ±0.42. Colour red 0xdd0000 detected, yellow 0xffdd00 noticing, green 0x00ff00 when a
-  looker test (vtable +0x3f0, **Unknown**) passes. Material (`FUN_1409b7830`): `debug_marker` cloned as `debug_#rrggbb`,
+  looker test (vtable +0x3f0) passes. Material (`FUN_1409b7830`): `debug_marker` cloned as `debug_#rrggbb`,
   pass 0 `colour` = (rgb, 1); with its last argument set (this call) pass 1 is kept as (rgb, 0.2), else removed. The
   sneaker's state +0xe8 (`stealthUnseen`, **Observed** `FUN_1408586d0`) becomes 0 when it is fighting or a looker's meter is red, 2 when only yellow, else 1 (unseen).
 - Name tag (`FUN_1406e8100`, colours loaded in `FUN_1406eb3a0`): shown within 10954 of the camera (1.2e8
@@ -76,27 +76,25 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   override). A second icon's frame is round((1 - x) x (frames - 1)), x = clamp(character +0xd8, 0, 1): the
   `LightLevel` image of `Kenshi_CharacterNameTags` (7 frames, frame 0 full light; **Verified**, kenshi_images.xml), on the
   panel's right in colour (0.942, 0.806, 0.341) (**Verified**, `Kenshi_CharacterNamePanel.layout`). The tag state is set alongside: 3 seen, 2 almost seen, 1 hidden.
-  A name longer than the layout's text box shows whole, "[Drifter-cannibal escapee]" for one (**Observed**). Whether the panel widens to fit
-  it or the text overflows its box, and whether a short name narrows the panel, is **Unknown**; Meitou widens it, the text box stretching and
+  A name longer than the layout's text box shows whole, "[Drifter-cannibal escapee]" for one (**Observed**). Meitou widens it, the text box stretching and
   the icons keeping its edges by the layout's aligns (`Stretch`, `Left`, `Right`).
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
 looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), f = 0.5,
-dt = the scan interval; a meter decays also when the target is out of range (the original's rule there is **Unknown**). Crime
+dt = the scan interval; a meter decays also when the target is out of range. Crime
 witnesses and the stealth knock-out read the same meters. Line of sight (`AggroSystem.ClearSight`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
 looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
 furniture 19..22, unwalkable roofs 27; not doors 5 or passable parts 23..26), with foliage 6 and 14 added (`0x87fde44`) when the looker is inside a building. Meitou tests the terrain and
-the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty (the original erases the entry). **Unknown**: the ray's early
-"not seen" under 40 units when the looker's `+0x260` type is not 0xb, the offset it adds from the looker's movement, and the exception for a hit on the handle at target `+0x300`. The plain (non-sneaking) sight test still has no ray. A sneaking player
+the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty (the original erases the entry). The plain (non-sneaking) sight test still has no ray. A sneaking player
 character gets the arrows (`MarkerRenderer`, both passes like the movement marker, lit by the sun; no green) and the original's stealth icon left of its name in the tag
 colours: seen if any watcher detects, almost seen if any notices, else hidden, and the light-level icon from its `SightMap` light.
 The list (`CharacterCold.Watchers`, 4 s, a carried looker left out) is fed by the spot meter (`AggroSystem.Visit`, sight only, as in the original) and by the forced
 sense `AggroSystem.Notice` (level seen, for a player-side target of another faction): a massive alarm, dialogue attacks 6 / 55 / 57, and a melee blow or bolt that lands on a
 conscious victim (engine choice: not when it goes down). Not wired: the forced sense of the AI tasks, the body drop and dialogue events 0x21 / 0x37, and a hit's `param_4`
-gate. Whether the arrows read well in game (the mesh is 10 units long) was not checked with a run (**Unknown**).
+gate. Whether the arrows read well in game (the mesh is 10 units long) was not checked with a run.
 Every player character within the 1.2e8 range gets the `Kenshi_CharacterNamePanel` over its head (name in `Kenshi_StandardFont_Large` with shadow, selected: white in [brackets], else #b3b3b3 (**Observed**); the icon only while sneaking); NPCs get none
-(**Observed** in the original). **Verified** (`FUN_1406e8100`, `FUN_1406e2fd0`, `FUN_1406e2900`, `FUN_1405cc310`, `FUN_1403eca90`): a tag is made when a character with a faction whose `+0x250` is set (and a relation test against the player's faction object, **Unknown**) enters the world; the `Show names` option (`DAT_142133508`, saved by `FUN_1403eca90`) is copied into each tag (`+0x20`), and off hides the name text and sizes the panel to the two icons (Meitou: `PlayerInterface.ShowNames`, Interface settings "Show names", default on); a carried character's tag is lifted by the name's height (Meitou draws none for a carried one). Where the tag stands is **Unknown**; Meitou puts it 22 over the feet, moving it over the drawn head as the head drops from 12 to 8 above them (crouching, sitting on the ground, a sleeper laid onto the mattress away from its feet; `PlayerInterface.TagAnchor`, also for task bars and speech).
+(**Observed** in the original). **Verified** (`FUN_1406e8100`, `FUN_1406e2fd0`, `FUN_1406e2900`, `FUN_1405cc310`, `FUN_1403eca90`): a tag is made when a character with a faction whose `+0x250` is set (and a relation test against the player's faction object) enters the world; the `Show names` option (`DAT_142133508`, saved by `FUN_1403eca90`) is copied into each tag (`+0x20`), and off hides the name text and sizes the panel to the two icons (Meitou: `PlayerInterface.ShowNames`, Interface settings "Show names", default on); a carried character's tag is lifted by the name's height (Meitou draws none for a carried one). Meitou puts it 22 over the feet, moving it over the drawn head as the head drops from 12 to 8 above them (crouching, sitting on the ground, a sleeper laid onto the mattress away from its feet; `PlayerInterface.TagAnchor`, also for task bars and speech).
 
 ## Disguise
 
@@ -108,7 +106,7 @@ State on the character's status object (Character `+0x1a0`): level `+0x100`, uni
   hat (or none) or legs of another uniform: the level x 0.1. So a full set is 1.0, hat and body 0.8.
 - **Works** (`FUN_1407c0520`, **Verified**): level > 0.6 and cooldown <= 0; then the sense tags take the uniform faction for the character's ([sense tags](#sense-tags-who-is-an-enemy)).
 - **Seeing through** (`SensoryData::disguiseMods` `FUN_140856f00`, **Observed**; literals **Verified**): per looker and frame, nothing when the looker is asleep, the target is
-  farther than 400, or two flags (looker slot `0x248`, target `+0x3d4`) or target `+0x2f8` = 2 are set (**Unknown** meanings). A working disguise starts the check with m = level and
+  farther than 400, or two flags (looker slot `0x248`, target `+0x3d4`) or target `+0x2f8` = 2 are set. A working disguise starts the check with m = level and
   b = 5 (two other branches: an escaped / ex-slave with m = 1 - looks-like-slave and b = 1, and an undisguised character the looker's faction has crimes on with m = 1, b = 5;
   [economy](economy.md) 11.8). Then x 0.5 when the looker's squad has a grudge on it (long tag & 0x2b0, mark 2), x 0.6 when the uniform is the looker's faction's (mark 0), x 0.5
   when the looker's faction owns it as a slave (mark 1), x 0.75 inside the walls of a town that is not public, x 2 unless the looker stands in a town (no nest) of a real faction other
@@ -204,13 +202,12 @@ records, and the `delivery AI package` / `AI contract` of five dialogue lines. S
 when broken; only a campaign's retreat phase or those fallbacks walk a broken squad home (Meitou: `PackageClass.Retreat`). The FACTION run-away ratios stay unread.
 Where a vanilla NPC does run (**Observed**, base data and decompile, 2026-10):
 - *Crippled or armless*: goal 32 plans 35 (desire `FUN_1405a34e0`: 1.0 crippled, else a flat 0.001 when 60 holds, 0 for a player-faction one with an arm; no read of outnumbered, injury, the intact flag or the faction ratios). Meitou: `SelfPreservation`.
-- *Dialogue DA 34 RUN_AWAY* (`FUN_140680560`, a target-needing effect: the branch sits under the target-resolved test, so an event with no target runs nothing). 186 records carry it, 156 reachable from a `DIALOGUE_PACKAGE`; nearly all are not fights (witnessing crimes: 43, 41; talks: 1, 3; slave escapes: 54, 55; 13). The combat-flavoured ones: 4 lines of events 5 and 66 (`Swamper Gang Bad Relations`: a stronger enemy, a squad-size and a relation condition; their `chance` fields are 0 too) and 2 get-up lines (event 24, `Get up fight bandit`: outnumbered and a stronger enemy, or a squad down). All four have `chance permanent` and `chance temporary` 0 (a roll that never passes under the line check, **Observed**), and event 24 has no target. Meitou has the effect (`DialogueSystem.RunAway`) and events 3, 66, 24; event 5 (unnamed in the editor) has no known source (**Unknown**).
+- *Dialogue DA 34 RUN_AWAY* (`FUN_140680560`, a target-needing effect: the branch sits under the target-resolved test, so an event with no target runs nothing). 186 records carry it, 156 reachable from a `DIALOGUE_PACKAGE`; nearly all are not fights (witnessing crimes: 43, 41; talks: 1, 3; slave escapes: 54, 55; 13). The combat-flavoured ones: 4 lines of events 5 and 66 (`Swamper Gang Bad Relations`: a stronger enemy, a squad-size and a relation condition; their `chance` fields are 0 too) and 2 get-up lines (event 24, `Get up fight bandit`: outnumbered and a stronger enemy, or a squad down). All four have `chance permanent` and `chance temporary` 0 (a roll that never passes under the line check, **Observed**), and event 24 has no target. Meitou has the effect (`DialogueSystem.RunAway`) and events 3, 66, 24; event 5 (unnamed in the editor) has no known source.
 - *Event 50 SQUAD_BROKEN*: `FUN_1407a5be0` (the platoon's intact refresh) fires it at each member that is not down, at the member's own attack target, on the tick the flag goes from intact to not. Base data binds it once: the `Dust bandit base` package (3 templates), root `defeated in player town- mark for raid` (taunt bubbles, no effect). Not built in Meitou.
 - *Packages*: the retreat package above.
-Nothing else issues `Task_Runaway` for a fighting NPC that I could find; a scan for `FUN_1405d20d0` calls with task 0x23 found only `FUN_140353c50` (a follow-type task update on a target flagged at `+0x278`, **Unknown** purpose). Meitou's `FleeSystem` squad break (everyone standing runs) is therefore off by default (`FleeSystem.SquadBreak`, **Unknown** whether the game ever shows
-one); the AI's own requests (a lone crippled runner, a goal 35) run regardless. Leash/home/running state must
+Nothing else issues `Task_Runaway` for a fighting NPC that I could find; a scan for `FUN_1405d20d0` calls with task 0x23 found only `FUN_140353c50`. Meitou's `FleeSystem` squad break (everyone standing runs) is therefore off by default; the AI's own requests (a lone crippled runner, a goal 35) run regardless. Leash/home/running state must
 not be equated with the attack planner or discarded immediately after a lost sighting.
-- `Task_Runaway`'s centre (`FUN_14034b440`, **Verified**): the mean position of the runner's sense entries tagged NEUTRAL or ENEMY (include 6) and not KO, bit 4 or bit 9 (exclude 0x218; `FUN_140853960` keeps an entry when `(tag & include) != 0 && (tag & exclude) == 0`), neutrals included, but an entry counts only when its status float `+0xac` (intended aggression of its current goal) is above 0; the original adds the running task's `+0xa0` when a status handle (`+0x18`, set from the target's `vfunc 0x58`) equals one of the sense record, which handle is **Unknown**, not modelled. With none counted it uses its own position. Meitou: `FleeSystem.Centre` (`TaskAggression.OfGoal`; no senses: the enemies in sight range).
+- `Task_Runaway`'s centre (`FUN_14034b440`, **Verified**): the mean position of the runner's sense entries tagged NEUTRAL or ENEMY (include 6) and not KO, bit 4 or bit 9 (exclude 0x218; `FUN_140853960` keeps an entry when `(tag & include) != 0 && (tag & exclude) == 0`), neutrals included, but an entry counts only when its status float `+0xac` (intended aggression of its current goal) is above 0. With none counted it uses its own position. Meitou: `FleeSystem.Centre` (`TaskAggression.OfGoal`; no senses: the enemies in sight range).
 
 ### Sense tags: who is an enemy
 
@@ -227,7 +224,7 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   is the looker's, and only when the looker is hostile to the owner's faction; it then still takes the faction test below on its own faction,
   so hostility to the slavers alone does not make their slaves enemies (#694: a raid on Slave Traders turned the squad on their Outlaw slaves,
   default relation 0, which the report's save then held at -100, **Observed**). A slave looker: never its owner's faction. A target of the
-  faction the looker's platoon object +0x80 names (**Unknown** role) is an enemy. Otherwise hostile(looker faction → target faction),
+  faction the looker's platoon object +0x80 names is an enemy. Otherwise hostile(looker faction → target faction),
   relation <= -30, when `FUN_1408569a0` fails and the looker's +0xea flag is clear (and the target's is clear, or the looker's faction is
   not real or its default relation, relations `+0x60`, is strictly below -30; **Verified** `FUN_14079c950`). +0xea is "freed": set by a release
   (`Task_ReleasePrisoner` `FUN_1403570a0`), a paid bail (`FUN_1406ae170`) and a slave bought free (`FUN_1406add20`; **Verified**). Cleared by the status update
@@ -236,7 +233,7 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   succeeds (callers: police hit, caught stealing, fencing, kidnapping seen, uniform theft, body put-down; not through the direct setter `FUN_140852c80`, e.g. attack orders and
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
   a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
-  `FUN_1408569a0` is left out. Whether the original's status `+0x88` is already set when a loaded character first updates (else a loaded flag dies at once) is **Unknown**.
+  `FUN_1408569a0` is left out.
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
@@ -281,7 +278,6 @@ is not the looker's ally becomes a target only when both tests pass:
 - So there is no give-up distance measured from where a fight began: an attack starts inside the AI's area, and a
   chase ends by time and lost senses ([Leaving a fight](combat.md#leaving-a-fight)).
 
-
 ### Summary
 
 | Figure | Value | Label | Where |
@@ -300,7 +296,7 @@ is not the looker's ally becomes a target only when both tests pass:
 | Gather per update | every character of the character grid (the dead, the down and animals too) within R on the ground plane, R taking 500 inside town walls instead of inside a building: a value above 0 the character keeps, set from the building it is in, else stands on (a gate: its [gate code](pathfinding.md#gate-codes) at the character's position; a wall: unchanged; another building: its own); at 40 or more, everyone within 250 too. No cap: `FUN_1409ff210` ignores the limits 40 and 20 it is passed | **Verified** (literals; decompile: `FUN_1407866d0` adds the 250 lookup at 40 or more, `FUN_1409ff210` never reads its limit); who the grid holds, the ground-plane test and R's town-walls rule **Observed** | `FUN_14085a8d0`, `FUN_1407866d0`, `FUN_1409ff210`, `FUN_1409fb450`, `FUN_140792200`; Meitou caps the new characters of a look ([senses](#senses)), which the original does not |
 | Update rate | with the AI, in the logic tick: 8 characters per frame in turn | **Observed** | [game-loop.md](game-loop.md#the-character-update-budget) |
 | Run away (Task_Runaway) | 2000 + 400 r away from the threats' centre, then hops of 1000 + 400 r; until no enemy is sensed (state 6) and no threat attacks within 40 (state 39), 35's list A; under goal 32 until the threat level is 0 | **Verified** (literals), flow **Observed** | `FUN_14034b440`, `FUN_140336820` |
-| Squad not intact (retreat package) | Never while a member is imprisoned (`+0x2f8` 2) or carried by a non-ally (`FUN_14079ab40`); else not intact without a squad leader (platoon `+0xa0`) or with no able member; 4+ members (platoon `+0xa4`): fewer than 20% (40% with the leader down; 0 with squad byte `+0x70`, writer **Unknown**) able; under 4: a persistent platoon (`+0x115`) with a home holder is intact while anyone is able, any other while the leader is up. No retreat-package exception, no enemy counted. Able: not dead and either not down, or down with the organic first-aid need (`+0x504` = Character `+0x458` medical `+0xac`, **Verified**: `FUN_140644e60` writes it, [character-stats](character-stats.md#first-aid-need-score)) under 0.8 (persistent with home) / 0.2, so a knocked-out member that is barely hurt still counts. Leader down: the generic down test (out, carried, limb-held, playing dead; not crawling). Meitou: `Ai.SquadIntact` (`Able`, `Decide`), used by `AiSystem.IsIntact`, the campaign platoon flag and the optional `FleeSystem` squad break, passing `SquadIntact.PersistentHome` (a town squad with its own building). The same rule is a platoon's intact flag (`FUN_1407ac7b0`), cached at unload: what campaigns count | **Verified** (decompile `FUN_14079acf0`, `FUN_14079ab40`, `FUN_1407a5be0`) | `FUN_14079acf0` |
+| Squad not intact (retreat package) | Never while a member is imprisoned (`+0x2f8` 2) or carried by a non-ally (`FUN_14079ab40`); else not intact without a squad leader (platoon `+0xa0`) or with no able member; 4+ members (platoon `+0xa4`): fewer than 20% (40% with the leader down; 0 with squad byte `+0x70`) able; under 4: a persistent platoon (`+0x115`) with a home holder is intact while anyone is able, any other while the leader is up. No retreat-package exception, no enemy counted. Able: not dead and either not down, or down with the organic first-aid need (`+0x504` = Character `+0x458` medical `+0xac`, **Verified**: `FUN_140644e60` writes it, [character-stats](character-stats.md#first-aid-need-score)) under 0.8 (persistent with home) / 0.2, so a knocked-out member that is barely hurt still counts. Leader down: the generic down test (out, carried, limb-held, playing dead; not crawling). Meitou: `Ai.SquadIntact` (`Able`, `Decide`), used by `AiSystem.IsIntact`, the campaign platoon flag and the optional `FleeSystem` squad break, passing `SquadIntact.PersistentHome` (a town squad with its own building). The same rule is a platoon's intact flag (`FUN_1407ac7b0`), cached at unload: what campaigns count | **Verified** (decompile `FUN_14079acf0`, `FUN_14079ab40`, `FUN_1407a5be0`) | `FUN_14079acf0` |
 | FACTION `run away ratio of squad size` / `relative to enemy` | loaded into Faction +0xc / +0x10 (base data: 92 factions 0, others 0.2 to 0.5); not read: a scan of the game logic (0x140200000-0x140a00000) for float loads at those offsets found none | **Observed** (negative) | `FUN_1407fe270` |
 | A lone character running away | Goal 32 (every character's) plans row 35 when a crippled character (the medical crippled flag, Character `+0x5b8`) or one with no working arm is threatened; anyone else fights through 13/4. Desire AI slot 55 `FUN_1405a34e0` (1.0 crippled, else 0.001, player-faction veto), set out with the planner's choice in [ai-tasks](ai-tasks.md#combat-goals). Meitou: `SelfPreservation`, run by `FleeSystem` | **Verified** (slot 55 literals, flag, state 26), the planner's choice **Observed** | `FUN_1405a34e0`, `FUN_1405a4260`, `FUN_140599e90`, `FUN_140649320` |
 | Attack-on-sight area / post | ROAM_FAR: 6517 around the looker; HOLD_GROUND / STAY_CLOSE: R + 40 / R + 200 + R' around the centre of movement; Hold: 80 (140) / 60 / 40 | **Verified** (literals), flow **Observed** | `FUN_140597790`, `FUN_140598630` |
@@ -316,12 +312,11 @@ until the value falls below its threshold). A zone record is freed when its zone
 Cadence (`FUN_1408f85f0`, **Verified**): a timer collects the speed-scaled frame time until 10 s; each kick then steps ONE zone record (cursor `DAT_1421352f8`) with dt = the frozen timer (10 s plus the overshoot), and when the cursor passes the last record timer and cursor reset. So a zone steps about once per cycle with dt >= 10 game seconds, in lumps of 10 s x rate, and the posted-entry map is cleared after each step. Meitou (`SmellSystem`): all zones step together every 10 game seconds with the time gathered since the last step.
 ANIMAL_CHARACTER `smell blood` (`smell eggs` is the eggs threshold); else the best of its zone and its active island's, x0.8 for a neighbour, x0.5 otherwise, above the threshold;
 desire 1 with one. The task runs (movement mode 2) to the smell's position; no end of its own. Data: "Smell Hunter" in the two Blood Hunter packages. SQUAD_TEMPLATE `blood smell mult`
-is read into the platoon's patrol settings; its consumer was not traced (**Unknown**).
+is read into the platoon's patrol settings; its consumer was not traced.
 
 ## Unknowns
 
 - Slot 14 `+0xb4`, slot 60's `+0xd5`, the hearing re-roll factor.
-- The update cadence of the squad-intact test; what Character vfunc 0x240 (an entry dropped at once) and tag bit 8 (cleared when seen) are. (Character `+0x5b8` is the medical crippled flag, [combat](combat.md#crippled-flag).)
 - The writer of a character's location handle `+0x80`; when can-see casts its physics ray; the building rules of can-hear;
   the alertness goal float and the +0x3f0 (green pointer) test of spotting.
 

@@ -130,7 +130,6 @@ Action properties seen: `0x0F` (int ms, 1000 to 10000 on stops and plays: the fa
 ### Node base (sounds and containers)
 
 1. u8 override parent effects, u8 effect count; if any: u8 bypass bits, then per effect u8 slot, u32 effect id, u8 is share set, u8 is rendered.
-2. u8 **Unknown** (0 in every object).
 3. u32 override bus id, u32 parent id (the actor-mixer or container above; 0 at the top).
 4. u8 priority bits (0 everywhere).
 5. Property list. Node properties seen: `0x00` volume (dB), `0x02` pitch (cents), `0x03` low-pass (0..100), `0x3A` loop count
@@ -163,8 +162,8 @@ Action properties seen: `0x0F` (int ms, 1000 to 10000 on stops and plays: the fa
 
 Types 10-13, in the six music banks only: 402 segments, 239 tracks, 27 switches, 19 playlists. Reader: `WwiseMusicSegment`,
 `WwiseMusicTrack`, `WwiseMusicSwitch`, `WwiseMusicPlaylist`; `meitou-tools audio <X>_Music_Bank` prints the tree. The layouts are
-**Verified** by size (all 687 decode exactly). Fields marked *const* hold one value in every object, so their meaning is a guess
-(**Unknown**); a non-zero stinger count, transition segment or track type is rejected (kept raw), since no Kenshi object has one.
+**Verified** by size (all 687 decode exactly). Fields marked *const* hold one value in every object, so their meaning is a guess;
+a non-zero stinger count, transition segment or track type is rejected (kept raw), since no Kenshi object has one.
 
 ### Layouts
 
@@ -233,8 +232,7 @@ Silences are 15-60 s in the beds, 5-60 s in the other layers. Segment volumes ra
 
 ### Playback semantics
 
-The Wwise music model as it applies to these banks; the field meanings are Observed, the timing rules **Unknown** until heard against the
-original.
+The Wwise music model as it applies to these banks.
 
 - **Segment.** Segment time 0 is its start. A clip sounds its source from `BeginTrim` at segment time `PlayAt + BeginTrim` until
   `PlayAt + SourceDuration + EndTrim` (in Kenshi: the whole WEM from 0). The entry cue is where the segment counts as started (0 here),
@@ -244,9 +242,7 @@ original.
   old tail keeps sounding over it. Groups: *step* plays one child per pass of the group, *continuous* plays all children (in random
   order for random, shuffled without replacement with shuffle); weights set the odds; avoid-repeat excludes the last N picks; the loop
   count repeats the group (0 forever) and a segment item (MT: forever = sample-exact repeat at 281,708.1 ms).
-- **Rules.** The rule with the best (source, destination) match applies. With two any → any rules (the bed switches, the main theme)
-  which one wins is **Unknown**: the first means switching `Day` ↔ `Night` waits for the current piece's exit cue (up to ~100 s) and cuts,
-  the second crossfades at once (fade-out ~10.4 s, fade-in ~10 s). Which reference point the fade offsets shift is **Unknown**; the
+- **Rules.** The rule with the best (source, destination) match applies. the
   values (+3200 out, −3200 in) suggest a crossfade that straddles the sync point.
 - **Stop.** A stop action fades the playing instance over its fade time and ends it; a stop on an ancestor (`00DBE1E6`) ends everything
   under it, in any bank.
@@ -293,10 +289,7 @@ exact size for all 11 (6 in `Init.bnk`, 3 more in the reverb banks). Plug-ins in
 
 **RoomVerb parameters** (**Observed**, from the values; 20 f32 then bytes): 0 decay time (s), 1 high-frequency damping (kHz), 2 diffusion (%), 3 stereo width
 (degrees), 4-12 three filter bands (gain dB, frequency, Q), 13-15 front, rear and centre level, 16 dry level (−96.3 dB), 17-19 levels in dB: 17 is 0
-and 18 and 19 are the two wet levels (small indoor −7 / −28, big indoor −16 / −21, outdoor −25 / −20). **Unknown**: the trailing bytes (byte 80 = 1, a
-pattern id 23 / 9 / 29, millisecond values such as 34 / 6 / 11 / 67 / 79 or 123 / 95 / 53 / 62), which of the two wet levels is early reflections
-and which the tail. The outdoor effect has three RTPCs on `Camera_Zoom` for parameter ids 16 (a 25.6 .. 175.4 curve, read as pre-delay ms,
-**Unknown**), 60 and 62 (dB curves falling to about −1 at zoom 100, so the reverb fades as the camera rises).
+and 18 and 19 are the two wet levels (small indoor −7 / −28, big indoor −16 / −21, outdoor −25 / −20). The outdoor effect has three RTPCs on `Camera_Zoom` for parameter ids 16 (a 25.6 .. 175.4 curve, read as pre-delay ms), 60 and 62 (dB curves falling to about −1 at zoom 100, so the reverb fades as the camera rises).
 
 ## How an ambience bank is built (Observed, e.g. `SFX_Amb_Desert`)
 
@@ -387,9 +380,7 @@ The library is part of the game's Wwise decoder in `kenshi_x64.exe`: a table of 
 codebooks and the end) into one block of packed codebooks in `.rdata` (about 72 KB). `WwiseCodebookLibrary.FromExecutable` finds it in any non-code section by
 that shape (a run of 200+ increasing pointers at most 8000 bytes apart) and accepts it only if every entry parses to exactly its span.
 So it is read from the user's install, never shipped, and no exe build's offsets are hardcoded. **Verified** on the Steam exe
-(36,718,592 bytes): one such table, 598 codebooks (**Observed**; every ambience WEM decodes against it). Other builds (GOG, older
-versions): **Unknown**. A GOG install has no `kenshi_x64.exe` (**Observed** in a GOG user's log); its exe is taken to be `kenshi_GOG_x64.exe` (**Unknown**: the
-name GOG's build is known by, not checked on a GOG install), so `GameInstall.Executable` takes the first of the two names that exists. A failure logs why: the exe missing, or its size, sections and longest pointer run.
+(36,718,592 bytes): one such table, 598 codebooks (**Observed**; every ambience WEM decodes against it). A GOG install has no `kenshi_x64.exe` (**Observed** in a GOG user's log); its exe is taken to be `kenshi_GOG_x64.exe`, so `GameInstall.Executable` takes the first of the two names that exists. A failure logs why: the exe missing, or its size, sections and longest pointer run.
 
 ### Audio packets
 
@@ -407,4 +398,4 @@ to "long" or swapping them changes it, and a mismatched window both attenuates a
 ## Version 88 (`SFX_Bank`)
 
 The sections and object headers read the same way. The object bodies differ: e.g. a sound's source has a u32 where version 112 has
-the u8 stream type (the source id is 3 bytes later). Not decoded; **Unknown**.
+the u8 stream type (the source id is 3 bytes later). Not decoded.

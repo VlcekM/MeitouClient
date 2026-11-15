@@ -336,37 +336,12 @@ enabled while nothing changes.
 
 ## Item 8: Renderer-only content-check gaps
 
-### Why
-
-These do not block gameplay, but they make Metal/Vulkan content comparison incomplete. Keep them
-out of the P0 content-testing gate.
-
 ### Known gaps
 
-- The shared water reflection pass now runs on Metal; the scene is mirrored into the water.
-- Meitou water (FFT/shore/foam/reflection/refraction) now runs on Metal. Metal omits water foam sun
-  shadows to fit its 16-sampler stage.
 - Low-resolution particle targets are shared; the Metal near-plane close pass is still skipped.
 - No fog-rate (fog shading-rate) target.
-- Object motion (grass/characters) is shared; MetalFX gets the water reactive mask, while particle coverage remains absent.
 - No HDR/EDR output.
-- The Meitou cloud renderer is seam-neutral; compare its parity views with Vulkan.
 - Metal GI remains experimental and opt-in; do not make it part of content testability.
-
-### Work order
-
-1. Water reflection only if a content pass genuinely needs mirrored scenery.
-2. Meitou water and cloud/fog parity once the content gate is closed.
-3. Fog rate as performance/visual parity work.
-4. Particle coverage in the upscaler's reactive mask.
-5. HDR/EDR at presentation time.
-
-### Acceptance
-
-- A fixed camera/time/weather comparison against Vulkan has no unexplained content difference
-  (objects, foliage, characters, buildings, water surface) beyond the known renderer list.
-- Any remaining difference is documented here or in [metal-backend](metal-backend.md).
-- None of these changes alter Vulkan output.
 
 ## Execution order
 

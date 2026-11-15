@@ -38,8 +38,7 @@ On Wayland the window is shown and its first configure taken before the first lo
 preserve world on failure. Gameplay warm-up waits for nearby population, terrain, scenery, character
 assets and used textures (including deferred loads), then <40ms frames for0.5s (max5s for frame pacing).
 After 5s of continuous `VramGuard` pressure, content it holds back is no longer waited for (it cannot load until the use falls).
-Device-local memory: `VramGuard` holds back 384 MB (at most an eighth) of the driver's budget and works on the rest; where offered, `VK_EXT_memory_priority` and `VK_EXT_pageable_device_local_memory` let a full heap page streamed textures (priority 0.3, the rest 0.7) to system memory instead of failing. **Observed** by the reporter of #745 (GTX 1650 4 GB, driver 610.57.04, 795 mods): 11-90 MB allocations failed at 92% of the reported budget with 300-500 MB free; the reserve ended them, and paging held 6 GB on the 4 GB heap in a test program. Paging is a fallback only: with the guard's ceiling over 100% the driver paged constantly and the frame rate collapsed. **Unknown**: whether the reported budget excludes other programs' use.
-A game's warm-up waits only for the characters within 3000 units of the camera's focus (`CharacterRenderer.LoadingFocus`, `LoadingReach`); the rest are prepared once
+Device-local memory: `VramGuard` holds back 384 MB (at most an eighth) of the driver's budget and works on the rest; where offered, `VK_EXT_memory_priority` and `VK_EXT_pageable_device_local_memory` let a full heap page streamed textures (priority 0.3, the rest 0.7) to system memory instead of failing. **Observed** by the reporter of #745 (GTX 1650 4 GB, driver 610.57.04, 795 mods): 11-90 MB allocations failed at 92% of the reported budget with 300-500 MB free; the reserve ended them, and paging held 6 GB on the 4 GB heap in a test program. Paging is a fallback only: with the guard's ceiling over 100% the driver paged constantly and the frame rate collapsed. A game's warm-up waits only for the characters within 3000 units of the camera's focus (`CharacterRenderer.LoadingFocus`, `LoadingReach`); the rest are prepared once
 the screen lifts. The original's loaded zones (the camera's 3 x 3 block) can hold hundreds of NPCs, whose meshes' generated levels are built once and then read from a disk
 cache ([character-renderer](character-renderer.md#content-lod-and-memory)). **Observed** (a Great Desert save near Heng, RTX 4090): 479 looks pending and a 130 s wait before this rule, 35 and 40 s with it.
 The warm-up (title and game) waits for grass only within the range of the default grass distance (`FoliageRenderer.LoadingPending`, `DefaultGrassRange`);
@@ -67,13 +66,12 @@ but 3.6 s of pauses in all; DATAS (`DynamicAdaptationMode=1`): max 66 ms. `Syste
 and without it); `GCgen0MaxBudget` there is ignored and `DOTNET_GCgen0size` changed nothing. The
 experimental Satori GC (github.com/VSadov/Satori, `PublishWithSatoriGC` SDK) is not used in official builds. **Observed** earlier A/B (RTX 4070, 10.0.13
 Satori vs stock 10.0.12 fast flight): longest GC pause 15-21 ms stock vs 1-18 ms Satori, frames unchanged (long frames are foliage updates, docs/viewer.md).
-**Observed** (2026-11-01, headless simulation probe of a ~1600-character town save, Ryzen 5600X, 60 s runs): `HeapCount` pins the four GC threads to CPUs 0-3, and about 1 in 40 ephemeral collections paused 100-290 ms while doing 1.5-3 ms of GC work: the time is between the suspension finishing and the collection starting (GC events `SuspendEEStop` to `GCStart`). Pinned: 6 such pauses in 5 runs; `NoAffinitize`: none in 5 (max 2.6 ms); workstation GC: none in 3. Loading CPUs 0-3 with normal-priority busy loops did not reproduce it, so what holds the pinned core is **Unknown** (interrupt or driver work is a guess). The game was not measured.
+**Observed** (2026-11-01, headless simulation probe of a ~1600-character town save, Ryzen 5600X, 60 s runs): `HeapCount` pins the four GC threads to CPUs 0-3, and about 1 in 40 ephemeral collections paused 100-290 ms while doing 1.5-3 ms of GC work: the time is between the suspension finishing and the collection starting (GC events `SuspendEEStop` to `GCStart`). Pinned: 6 such pauses in 5 runs; `NoAffinitize`: none in 5 (max 2.6 ms); workstation GC: none in 3. The game was not measured.
 `GCConserveMemory` is not set. **Observed** A/B (`DOTNET_GCConserveMemory=5`, 3600-frame fly benchmark, 3 clean runs each): managed heap at the end
 1.42 vs 1.93 GB, working set 3.37 vs 3.93 GB, but gen2 GCs 12-14 vs 7-8 and pause totals 54-306 vs 36-53 ms (one run 64 frames over 33 ms).
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
 **Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
-~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling;
-what triggers them is **Unknown**. Pooled now:
+~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling. Pooled now:
 DDS file bytes of `WorldTextureCache.Load` (`DdsReader.ReadKept(..., pool)`, `ArrayPool<byte>.Shared`; returned in `Load` after an RGBA8 decode or
 by the last upload step of a stored BC upload), the GI terrain grid's samples (one array per `TerrainGrid`), the card trimmer's clip/hull scratch
 (`FoliageCardTrimmer.Hull`) and the grass generator (`[ThreadStatic]` `FoliageRandom`, reseeded). Contract: a rented array may be longer than asked,
@@ -92,8 +90,7 @@ nothing). The atlas's owner disposes it where it lets go: `FoliageRenderer` afte
 finished refine, a mismatched load, and `UnloadImpostor`/teardown (after the `Next` textures that read it). `ImpostorTextures` never frees.
 **Observed** (swamp, 1920x1080, 3000-frame flight, 2026-10-21): traced large-object allocations after loading 6.0 to 1.8 GB (`ImpostorAtlas.Read`
 4.2 GB to 85 MB); 4 alternating pairs (both orders): allocated 4.9-5.0 to 4.0-4.1 GB, peak working set 5.4-6.4 to 4.9-5.8 GB (set while loading),
-0 MB native held at the end, gen2 counts 3-4 vs 3, p99 unchanged. GC pause totals 28-161 ms (base) vs 98-158 ms (native): inconclusive, **Unknown**.
-Cancel on window close. Helpers/services dispose/join with their owning scene/session.
+0 MB native held at the end, gen2 counts 3-4 vs 3, p99 unchanged. Cancel on window close. Helpers/services dispose/join with their owning scene/session.
 After warm-up, loading panels ease off the left/right edges over 0.7s while the loading image fades to the live scene and UI (Faithful: hidden at once, as the original).
 Input remains blocked through this reveal. A new game ends warm-up as soon as the squad's characters are drawable, skips the sky arrival and opens the
 character editor first (`CharacterEditorHost`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.

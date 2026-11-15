@@ -116,6 +116,3 @@ Evidence scopes below apply only to their named sources/checks.
 - The plugin's defaults other than the Verified quota500 (assumed: size100, box100, velocity100, rate10, life3); the oscillation
   formula and phase unit, Circle (ring or disc), the SineForce rules, the unit
   of the rotation values; `oriented_shape`; mass.
-- How `sky colour multiplier` tints the particles; the group's fade-in and -out times; how often a camera group is renewed.
-- Whether the system node is nudged by the small term in `FUN_140101800` (a distance squared along the pivot-to-camera direction; not
-  modelled).

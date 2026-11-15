@@ -20,7 +20,7 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   placed there override the base. `en_GB` adds nothing.
 - **Verified** (`Mods_LocateModTranslation` `14086f240`): per loaded mod, the first sorted sub-folder X of `<mod>/locale` that holds
   `LC_MESSAGES/main.mo` or `X.translation`. The first mod in load order that has one replaces the active language with X
-  (messages from that mod's folder; the user's core translation is not applied). The check of a flag on the mod entry at the start is **Unknown**.
+  (messages from that mod's folder; the user's core translation is not applied).
 - **Verified** (`Fcs_GameLoadSequence` `140870ae0`, `Fcs_LoadTranslationFile` `1406c29a0`): `.translation` files load with the mod loader.
   Order: core files, the user's `locale/<code>/<code>.translation`, mods, then the translation of the **first** mod that has one (not all
   mods' translations). **Observed** (en_GB vs de/ja/ru dumps): a translation record changes the name (and text fields) of the record with
@@ -41,7 +41,7 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   (Meitou-only), returns unchanged, so lookups are exact and English stays English.
 - **Record names**: a translation changes `GameRecord.Name`; logic that matched English names uses `GameRecord.BaseName` (the name before
   translation): GLOBAL CONSTANTS, the money item, "Nameless", the blank squad, default empire, faction/start/appearance finds.
-  Translation records that match nothing are dropped after loading (the original may keep them: **Unknown**).
+  Translation records that match nothing are dropped after loading.
 - **UI strings**: strings that exist as msgids in `main.pot` go through the catalog at central sinks: UI bindings (`UiBindings.Coded`, captions and
   combo items), HUD `AddLines`, context-menu verbs, `Notice`, `Confirm`/`UpperTr`, `PlaceTooltip` (keys and values; bracketed headings by their
   inside), stat help (`StatHelpCatalog`), the loading tip, the day text, and the interpolated simulation messages (relations, bounties, research,
@@ -68,7 +68,4 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 ## Unknown / not done
 
 - Steam-language override while Meitou itself is running.
-- The mod-entry flag gate of `Mods_LocateModTranslation`.
-- The exact lookup behaviour of `FUN_14017c3f0` (**Observed** only).
-- Whether ghost records from translations of unloaded mods persist in the original.
 - Meitou texts in other languages than `pt_BR` (a `locale/<code>.po` each); `meitou.po` from mods (only the Kenshi folder is read).

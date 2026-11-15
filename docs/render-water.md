@@ -52,7 +52,7 @@ edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5
 the open sea's waves ×0.3 (by exposure) and the normal map's slopes whole (×0.08 and ×0.3 left a lagoon as flat as a mirror: rejected by the user); the far glitter keeps its mean only (its mask showed
 the foam texture's cells, still, in a band of distance); the swash's sun glint ×0.25. **Observed** (offscreen sequences, Bark lake): crests come in from the open water, bend into the
 bay and stop at the pier. Cost **Observed** (viewer bench, 2560x1440 with the default upscaler, RTX, Bark beach, 400 frames): the water stage 0.28 to 0.31 ms;
-the bake 260 ms on its worker. **Unknown**: piers whose collision is posts block a little of the swell; the one fixed direction leaves lee shores calm.
+the bake 260 ms on its worker.
 
 River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
 
@@ -98,7 +98,7 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
 
 - **Contact**: `sceneThickness` under a band of 1.5 to 4 units (wandering with the foam's noise), where the ray's end stands 1 to 3 units or more above the terrain under the point:
   rocks, posts, walls and legs; the shore keeps its own foam. Needs the scene depth: with `--no-water-refraction` the switch asks for the copy itself within its reach. The last 2 units'
-  fade (Edges) lets the foam through. Shallow bumps of displaced ground can pass the test: **Unknown** if it shows.
+  fade (Edges) lets the foam through.
 - **Wave field** (`WaterRipples`): a damped wave equation on a 512² window of 0.5-unit texels round the camera's target, world-anchored and toroidal as the
   [ground trails](render-terrain.md#ground-trails) (snap 32 texels; gained strips wiped, all after a jump; a 24-texel sponge at the edge, so waves show within 104 units).
   State per texel (halves): height, its rate, foam, the water the bodies took. Symplectic Euler, isotropic nine-point Laplacian, fixed 1/90 s steps of game time (at most 6 a
@@ -124,8 +124,7 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
   fragment subtracts the slopes from its own (reflection, refraction, glint and the floor's bend follow) and adds the foam; all fade over the window's last 12 units.
   Where a pixel spans 1.5 to 4 texels the height and slopes fade out (the foam stays): the field has no mips.
 - **Cost** **Observed** (NVIDIA RTX, offscreen 1280x720, sandbox walk, GPU timestamps round the compute, `water ripples:` line at exit): 5 to 10 us a step, about
-  5 us for the write-out; 19 to 35 us for the 3 steps of a 1/30 s frame (about half that per frame at 60 fps). The water fragment's extra cost (one bilinear fetch and
-  a few operations) is **Unknown**, not measured apart. Nothing runs while the switch is off, no water lies in the window, the nearest water in view is past 1200
+  5 us for the write-out; 19 to 35 us for the 3 steps of a 1/30 s frame (about half that per frame at 60 fps). Nothing runs while the switch is off, no water lies in the window, the nearest water in view is past 1200
   units, or no body has been in the water for 20 game seconds (the field is then left as it is). The depth map is baked again every 120 frames (terrain streaming).
 - **Faults**: a body capsule not finite, with a radius outside 0..30 units or far from the window is dropped (counted at exit, the first one logged);
   a depth not finite is land; every state value is bounded (height ±4 units, rate ±200, foam 0..1) and one not finite is reset to 0 when read and

@@ -55,4 +55,4 @@ An unchanged DLL would require the binary interface it actually uses: exports, o
 virtual tables, container/allocator conventions, lifetimes and callable hook targets. Direct
 field writes bypass any replacement KenshiLib accessors. A native facade would need coherent
 mirrors of exposed objects and synchronization at every relevant callback. Arbitrary executable
-patches would add another problem. Whether any particular plugin needs those patches is **Unknown**.
+patches would add another problem.

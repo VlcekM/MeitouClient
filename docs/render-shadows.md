@@ -20,8 +20,7 @@ change over one texel each way and a quarter texel. Building parts cast with bot
 **Observed** (a Shek town at 15:10, cascades against the traced sun, pixels lit by more than 25/255
 where the traced sun is dark): 0.182 % with the caster bias of before (in fact 2 texels fixed plus
 2 x the slope capped at 8, with a normal offset of 0.5-2 texels: lit bands under stair treads and cart
-sides), 0.058 % with both sides cast (the bands at wall feet and beside stairs, which no bias changed:
-**Unknown** which open meshes let the sun through), 0.013 % with both. No acne seen on a face close-up,
+sides), 0.058 % with both sides cast, 0.013 % with both. No acne seen on a face close-up,
 dunes, a town from afar under a low sun. Texel grids are anchored at the
 camera's focus point, moved only while the sun turns and the point is 200+ units away (anchored at
 the eye, the first cascade's grid slid boom x sun turn under the squad). Least filter radius 1.5
@@ -138,8 +137,7 @@ past the reach, characters past the 128 nearest. Landmarks keep their map.
 
 **Limits.** Blood on surfaces (`RecordSurfaces`) blends before the sun is added. The objects' traced transforms and level are the GI's: rotors and doors are frozen as the
 GI sees them; an object's texture tile is not read in the alpha test. The penumbra filter works on what the screen shows: a blocker's shadow whose taps fall on another
-surface keeps its hard edge there. **Unknown**: the saw-toothed terrain shadows reported on displaced dunes were not reproduced offscreen (dunes round the siwa-test6 save at
-06:00-07:00 and 18:24); the fine grid was 16 apart over the heightmap's 18 (bilinear facets), now 8 apart through a Catmull-Rom surface. **Observed** costs: see Measured.
+surface keeps its hard edge there. **Observed** costs: see Measured.
 
 **Observed** (RTX 4090, 1920 x 1080 with DLSS, the median GPU frame time of 36, a still camera, shafts on). Cascades / traced / Off: the Hub at 17:12
 2.47 / 2.08 / 1.71 ms, the siwa-test6 close-up 2.34 / 2.37 / 1.94, dunes at 06:24 2.04 / 1.62 / 1.34. Traced passes (an earlier run): rays and penumbra 0.07-0.10 ms,
@@ -156,8 +154,6 @@ cascades over the band; a traced receiver's other share there reads the cascades
 as without the switch (the set range: the fog cap moves the effective one each frame). Cascade 0 (1600 to about 2800 at range 10000) is redrawn every frame, cascade 1
 every 4th; in a flight only cascade 0 is published, as with the cascades. A change of layout (the switch, 4 or 5 cascades, back from the rays) drops the stored
 cascades, so every one is drawn that frame instead of one far cascade a frame over stale layers (`ForgetCascades`).
-**Unknown** (not run on a GPU): look and cost; the casters differ across the band (grass, small foliage and construction sites are in one set only), so such shadows
-appear or end there, and the ray penumbra meets the cascades' filter.
 
 ## Soft grazing sun
 

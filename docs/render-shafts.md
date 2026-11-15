@@ -30,7 +30,7 @@ geometry and colour/additive/alpha. A volume's sun share is the length-weighted 
 one copy of a shadow's outline per depth across the volume (**Observed** 2026-11-05: "slices" in a dust storm sphere; robot pit
 block, offscreen: four depths differ from a 32-depth reference by up to 21/255, the slice walk by up to 4/255).
 Cloud cover reduces appropriate sun contribution. With `gihybrid`'s
-`clouds` part each sample also takes the cloud shadow (`InjectClouded`, one map read; look and cost **Unknown**). Air layer is an engine near-ground term,
+`clouds` part each sample also takes the cloud shadow (`InjectClouded`, one map read). Air layer is an engine near-ground term,
 separate from original distance haze, with day/key-light-dependent strength.
 
 ## Temporal

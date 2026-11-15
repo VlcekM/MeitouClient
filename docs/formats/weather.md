@@ -95,14 +95,14 @@ character update `FUN_1405d00b0` with the character's dt, seconds of character t
 calls it every 5th tick per character, on its slot's turn, with 5 ticks of time. Each call, in order:
 
 1. Clear the character's weather (animation holder `+0x198` kind, `+0x1a0` strength, `+0x190` overlay flag). Skip all while
-   `DAT_142134690+0x2f0` is set (**Unknown** switch); stop (also skipping step 5's smoke) when the position has no BIOME_GROUP.
+   `DAT_142134690+0x2f0` is set; stop (also skipping step 5's smoke) when the position has no BIOME_GROUP.
 2. Acid, unless the RACE `weather immunity` lists WA_ACID: water state 3 (swimming, `FUN_1405c7fd0`; a bed/cage gives 0, a carried
    body its carrier's) → acid water with dose dt x `acidic water`; else outdoors (location 0xb, not on a roof), not down
    (slot 6), not carried, special state 0 (no bed/cage) and boots section (9) present and empty → acid ground, dose dt x `acidic ground`.
 3. Local effects: each listed (kind, strength) pair not immune: BURNING → fire, GAS → gas, with dose dt x strength; the list
    is then emptied. Other kinds in it (dust units) do nothing.
 4. Region weather: needs the weather's `affect type` ≠ NONE, the character outdoors or on top (perception slot 60), not
-   immune. Sets the holder to (kind, region strength s, overlay on). DUST: unless vfunc +0x358 (**Unknown**), dust update with s;
+   immune. Sets the holder to (kind, region strength s, overlay on). DUST: unless vfunc +0x358, dust update with s;
    the overlay (shield-eyes animation) plays only without protection and when the view does not point along the wind
    (dot ≤ 0). ACID: a ray down from 1000 above; a hit more than 10 over the feet on a building with `is shelter` protects;
    else acid rain with dose dt (s is **not** used). RAIN/BURNING/GAS weathers only set the holder.
@@ -119,7 +119,7 @@ limb state is not original (stump, prosthetic, crushed). P = protection, below.
 | acid ground | `FUN_140647010` | none for `is robot`; each original leg with flesh > 50: blunt dose x 0.2 |
 | acid rain | `FUN_1406472c0` | every burning part blunt 0.08 dt (1 − P) |
 | fire | `FUN_140648460` | every burning part flesh −= 10 dose (1 − P) |
-| gas | `FUN_140647e30` | dose x 4, x 0.5 unconscious (medical +0x161), x (1 − P); first torso part without side (part-map order, **Unknown**) blunt |
+| gas | `FUN_140647e30` | dose x 4, x 0.5 unconscious (medical +0x161), x (1 − P); first torso part without side (part-map order) blunt |
 | dust | `FUN_140648ef0` | medical +0x14c = s; if s > 0: flag +0x148 = 1, value = clamp(s − sP, 0, 1) |
 
 Dust consumers: attack and martial-arts skill getters (`FUN_1408844c0`, `FUN_140884580`; the stats panel's "Weather penalty") subtract
@@ -145,8 +145,7 @@ tooltip's kind name (`FUN_140796480`) takes its fallback string (Meitou: "None")
 **Local units** (`EffectHandler` slot 7 `FUN_1401020e0`, every frame, or once after a delay for one-shot handlers `FUN_140102310`):
 characters within radius R of the unit and outdoors (location 0xb) get (affect type, strength) put in their list (`FUN_1405cbcc0`:
 a later unit of the same kind replaces the strength). R = `effect radius`, else 0.375 x the particle bounds' xz diagonal.
-Strength (`FUN_140100cb0`): the unit's +0x48 inside R (its falloff to 2R is unreachable, the query radius being R); where +0x48 comes
-from between `effect strength min/max` is **Unknown** (equal for the base burning and gas effects).
+Strength (`FUN_140100cb0`): the unit's +0x48 inside R (its falloff to 2R is unreachable, the query radius being R).
 
 **Meitou** (`WeatherSystem`, `MedicalState.Weather.cs`, host `WeatherFeed`): runs every tick in the slow-world phase;
 the host gives the scheduler's region at each place (the schedule, not a viewer-forced weather) and the live affecting units of the
@@ -203,7 +202,7 @@ counts when it meets the collision of groups 23..26 more than 10 over the feet (
 ### SEASON (type 81; Verified: fcs.def, FUN_1409df240)
 
 `weathers` → WEATHER with val0 = **weight** ("probability"), val1/val2 = **min/max duration in game minutes**; `weather strength
-limit min/max` (0..1); `sunlight color` (loaded, its use was not traced: **Unknown**). A season without weathers gets the
+limit min/max` (0..1); `sunlight color`. A season without weathers gets the
 "Default" weather (`5460-weather.mod`, clear) with limits 0..1 and logs "Warning: Season ... has no weather". If any of its
 weathers has a time window (`start time` ≠ `end time`), the "Default" weather is appended with weight 0 as the fallback.
 **Verified** against the merged records (`WeatherTests.Base_game_records_follow_the_loader_rules`): every
@@ -235,13 +234,6 @@ colour`, offsets, `ground movement`.
 
 - The areas map's own origin and size fields in the terrain object (the placement itself is **Verified**, see "Where"); whether a
   cell reads its centre pixel or another of its 16 (they differ on 1045 border blocks).
-- The season order for equal order values; the new-game start of the first season; the special case for a season with one
-  weather in the SEASON loader (a ceiling of a scaled value, not decoded).
-- `sunlight color` of SEASON and `sky colour multiplier` / `colour multiplier` of EFFECT: loaded, their use not traced.
-- How effect groups use `maximum view distance`, `sky colour multiplier` and the strength (the wind fields and the emission-rate scaling are used as
-  [particle-universe.md](particle-universe.md#simulation-and-rendering) says, **Observed**).
-- `ground movement` of EFFECT_FOG_VOLUME (read by the game into the volume's holder; its use was not traced).
-- Whether the game's ash is denser than the data says (see "Density"); the lights of effects (the plugin quota is Verified above).
 - The wandering units' exact walk and turn rules, and where the game places lightning (it snaps to metal objects).
 - Gameplay: the switch `DAT_142134690+0x2f0`, character vfunc +0x358 (dust gate), a unit's strength between min and max,
   the gas part's map order, and whether WEATHER `affect strength` is read at all (the character update never reads it).
@@ -301,5 +293,5 @@ The optional row "Rain drops and puddles" (`WeatherSurfaces.WetWorld`, `uWetWorl
 - Feet in puddles (`GameHost.PuddleSplash`, from the clips' ground events as the water's splashes, `GameHost.Splashes`): a foot bone's event on ground that `WetPuddles.Under` finds under water (the shader's rule on the CPU: same hash and noises, the terrain's normal from four heights, a fixed absorbance of 0.6 for the layers' the CPU does not have) bursts the biome's shallowest `water effects` system at the ground and adds a step to `uWetSplash[8]` (`WeatherSurfaces.AddSplash`: x, z, the wet clock, strength by speed); `wetSteps` draws a train of ripples running out from it at 0.5 m/s for 3 s. **Observed** (hidden run, t_flats_shore, wetness 1, the squad ordered across the puddle it stood in): droplets at a foot and rings round it.
 - Real relief: `wetGround` takes `hollow`, how far the ground lies under what is round it (`TerrainShaders` `wetHollow`: the mean height of six points 1.2 m and six 4 m away less the height here; 12 cm and 40 cm count as full, 0.25 each), plus, where the ground is displaced, the depth of the relief's trough (the height map less the fragment's height, / 1.5, within 0.3); "low" is the noises less it, so dips fill first and rises stay dry. `WetPuddles.Hollow` is the same on the CPU (without the displaced relief). **Observed** (same run): the sand ripples' crests stand out of the water as islands.
 - `wetFoliage` (grass, foliage meshes): the game's wetness is left as it is (darkening, gloss to 0.3 on grass and 0.5 on leaves) and glints of drops are added in cells of the leaf's own texture coordinates (40 across, a fifth filled when wet through, gloss 0.95, the normal leaning a way of its own), gone where a pixel covers over a cell. **Observed** (hidden runs, mean colour of a grass patch, dry 118 84 68): under rain the game's wetness alone 103 76 68 (a slight greying); an added film of gloss 0.62 looked frosted and one of 0.36 gave 104 79 74, both dropped on the user's report; the dry gloss kept instead gave 97 70 61, dropped too (the game's look is to stay).
-- Footsteps: a character standing in a puddle (`GameHost.InPuddle`, `CharacterSounds.Puddle`) walks on the Water surface (`Surface_Material`), as under the water line. **Unknown**: not listened to.
+- Footsteps: a character standing in a puddle (`GameHost.InPuddle`, `CharacterSounds.Puddle`) walks on the Water surface (`Surface_Material`), as under the water line.
 - **Unknown**: the look on metal buildings, at night, and on other biomes than sand.

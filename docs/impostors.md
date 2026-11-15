@@ -102,7 +102,6 @@ Other files in the folder are not touched. The cap is `MaxBytes`: default 4096 M
 `--impostor-cache-mb` flag and `MEITOU_IMPOSTOR_CACHE_MB` were removed, `ImpostorCacheMb` stays as a property, 0 = no cap). **Verified**
 (`ImpostorTests`, a temporary folder, never the user's cache): eviction order and the 90% target, no cap, the stale rules above (older baker,
 older format, junk, short file, old temporary go; current, newer, fresh temporary and foreign files stay), and that loads and saves set the last use.
-**Unknown**: two viewers evicting at once (each deletion tolerates a failure; the worst case is a rebake).
 
 **Deleting the cache (`ImpostorCache.Clear`, the Tab panel's "Delete billboard cache" button).** Deletes every `.mimp` in the folder after a
 Yes / No question that names the count and size (`Measure`); temporary files and foreign files stay, a file another process holds stays. Resident

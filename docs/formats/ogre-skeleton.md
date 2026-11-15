@@ -64,17 +64,6 @@ retain source scope; [animation](../animation.md) supplies slider/factor definit
 | 0, attach to bone | everything else (weapons etc.) | `Entity::attachObjectToBone(body, boneName, entity, orientation, position)`; the node under it gets scale `1 / body node scale` so the item isn't scaled with the character. The bone's own scale (body-shape bone size, scale keys) doesn't reach it either: **Verified** (OgreMain `TagPoint::updateFromParentImpl`, the same modified rule as `OldBone`) a tag point's derived scale is its own size × own scale, not inherited, and `TagPoint::updateNode` copies only its derived position and orientation to the item's node. A bone name the skeleton lacks falls back to the root bone (`@ 1406466a0`). |
 | 2 | ARMOUR/CONTAINER/ATTACHMENT records with neither `mesh` nor `mesh female` | No visible entity; only a physics attachment (CHARACTER_PHYSICS_ATTACHMENT `bone name`, `file male`/`file female`, `@ 140535f20`). |
 
-## Open questions
-
-- Whether an entity whose own skeleton failed to load (`Human_Skin_Suit.mesh`, `Iron Clad Jacket_F.mesh`)
-  still deforms after sharing the body's instance: Kenshi's Ogre compiles bone assignments in
-  `Entity::_initialise` (`OgreMain_x64.dll @ 1800bfac0`), but whether that happens without a mesh
-  skeleton wasn't traced. Unknown.
-- `whistler.mesh` (bone indices up to 54): no data references it, so its behaviour is untested. Unknown.
-- ~~Where the bone name for mode-0 attachments (weapons) comes from~~: answered in
-  [../characters.md](../characters.md#assembly-and-generation): `hands` is `Bip01 Prop2`, the rest
-  come from the RACE `attachment points` file ([phs.md](phs.md)).
-
 ## Expression reference
 
 - Chunks: ` 0x1000 HEADER ushort id + version string (no length) 0x1010 BLENDMODE ushort mode: 0 average, 1 cumulative (optional; 1.80 only in practice) 0x2000 BONE string name, ushort handle, Vector3 position, Quaternion orientation, [Vector3 scale] (repeats) 0x3000 BONE_PARENT ushort child handle, ushort parent handle (repeats) 0x4000 ANIMATION string name, float length (seconds) (repeats) 0x4010 BASEINFO string base animation name (empty = this one), float base keyframe time (optional, only as the first child) 0x4100 TRACK ushort bone handle (repeats) 0x4110 KEYFRAME float time, Quaternion rotation, Vector3 translation, [Vector3 scale] (repeats) 0x5000 ANIMATION_LINK string skeleton file name, float scale (repeats) `

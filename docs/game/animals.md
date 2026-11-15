@@ -101,9 +101,7 @@ from the start.
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
   set (**Observed**, decompile). An emptied inventory loads empty (**Observed**, original: a player's Bonedog saved with an empty INVENTORY_STATE was
   loaded and saved again with nothing; Meitou `SavedCharacters`, an empty state is the whole kit). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
-  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is is
-  **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the character is made from (**Inferred**).
-  The player's own animals have them too (**Observed**: a new game's start squad, Bonedog, Pack Beast and Iron Spider, saved by the original holds them,
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). The player's own animals have them too (**Observed**: a new game's start squad, Bonedog, Pack Beast and Iron Spider, saved by the original holds them,
   flagged; out of sight in the window, below).
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
@@ -119,8 +117,7 @@ from the start.
   original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
   window keeps the grid).
 - Death items weigh nothing for a living owner (**Observed**, original: a Garru pup with a 6 kg backpack and 14 flagged 1 kg meat/skin items
-  shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. A dead owner's are **Unknown**.
-  Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
+  shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 
 Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to every new character, stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
@@ -162,16 +159,14 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
   homeless trader squad, whose squad stock stands in for its bags.
 - The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
   shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
-  and `athletics mult` are not separately verified, **Unknown**). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.
+  and `athletics mult` are not separately verified). Meitou applies the shared refresh through `CharacterAssembly.PackOf`.
 - An animal with no backpack gets the naked bonus as a person with no armour and no backpack does (**Observed** for dexterity: at age 0.5 an Iron Spider with
   Dexterity 40 shows 22 (+2) and a Bonedog with 23.3 shows 12 (+1), 1.1 times the aged value, while a Pack Beast wearing its backpack shows the plain value; the
-  dodge and stealth factors are not separately verified, **Unknown**). Meitou uses the shared refresh's 1.1 dodge and 1.2 stealth factors
+  dodge and stealth factors are not separately verified). Meitou uses the shared refresh's 1.1 dodge and 1.2 stealth factors
   (`Fighter.Naked`).
 - The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
-  or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
-  **Unknown**. Nothing given or bought goes in either: food dropped on the player's bonedog with no bag is "No room for that item." and stays with the giver,
-  and stock right-clicked while a trade shows the dog's window is refused the same way and stays in stock, nothing paid (**Observed**, original; whether a
-  worn bag then takes either is **Unknown**). Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it (but for
+  or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. Nothing given or bought goes in either: food dropped on the player's bonedog with no bag is "No room for that item." and stays with the giver,
+  and stock right-clicked while a trade shows the dog's window is refused the same way and stays in stock, nothing paid (**Observed**, original). Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it (but for
   food it fetches to eat: [Eating](character-stats.md#eating)), and gives, trade buys and a held item's return past its old cell put grid items into the
   worn bag only (`Inventory.Add` with the main grid shut; the return into the bag is **Observed** in the original,
   [holding an item](ui-screens.md#6-inventory-trade-dialogue-build)); what is in it can still be taken out.

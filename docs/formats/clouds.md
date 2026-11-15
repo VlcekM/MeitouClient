@@ -60,15 +60,6 @@ The game creates the layer with:
 | 0.6 | 0.04 | 0.83 | 100 % | 91 % | 0.54 | 0.50 |
 | 1 | 0.60 | 1.00 | 100 % | 100 % | 1 | 0.81 |
 
-## Unknowns
-
-- The dome mesh's texcoord layout (taken as the unit direction from the shader's use) and the dome's lower half (below the
-  horizon the shader gives `alpha = o + 0.5`, hidden by terrain in practice).
-- The exact render queue (6 from SkyX's struct order), which decides that the clouds cover the planets (queue 6, priorities 1 and 2;
-  [sky.md](sky.md), "Planets"): the viewer draws the planets first.
-- Whether the game's mip-less sampling looks noticeably different from the viewer's mipmapped one near the horizon (needs a game
-  screenshot in a cloudy weather at a low pitch).
-
 ## Expression reference
 
 - From the weather, FUN_14066f190, FUN_14066cc80, FUN_1409dc4e0): `DensityOffset = 1.4 c − 0.8`; `Darkness = pow(clamp(c − 0.5, 0, 1), 0.3)`

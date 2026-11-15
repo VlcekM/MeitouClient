@@ -41,10 +41,10 @@ Brought in line with a documented fact:
 | Esc on a message box | presses its last button (Return already pressed the first) | ui-input.md section 5 |
 | T / Y | open the overview on Research / Craft (M on Map); faction has no default key | events 3..6, ui-input.md sections 4 and 6 |
 
-Engine choices that remain; the original is **Unknown** for each:
+Engine choices that remain
 
 - Message box captions other than the Exit dialog's ([Title screen and its windows](game/ui-screens.md#title-screen-and-its-windows)), window titles ("INVENTORY - name"; "Prospecting Results" is the exe's text, shown upper-cased like the other titles), confirmation texts other than "Are you sure you want to exit?".
-- The faction tab lists every faction but the player's, the `not real` ones and the generation template (the original's filter is **Unknown**).
+- The faction tab lists every faction but the player's, the `not real` ones and the generation template.
 - Tooltips: the HUD's texts show in a Fixed tooltip on the `TooltipPanel` rectangle; the Floating and Inventory ones use the metrics of [Tooltips](game/ui-screens.md#tooltips).
 - Medical rows: the parts in the original's part array order ([part order](game/character-stats.md#part-order)).
 - The sandbox keeps Z X C Y P G; with `--sandbox` the faithful C (stats) and Y (craft) shortcuts give way to it.

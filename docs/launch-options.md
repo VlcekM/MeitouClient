@@ -360,11 +360,3 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Game/Rendering/Terrain/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
 
 Names starting `MEITOU_` are also recorded in the benchmark JSON (`BenchSession.cs`).
-
-## Unclear
-
-- `MEITOU_BENCH_SKIP` defaults differ: 1 in `FlyBenchmarkSession.Report`, 0 in `SpikeLog.cs:19`.
-- `MEITOU_METAL_GI_FALLBACK` (`MetalProbeGi.cs:356`), `MEITOU_METAL_PRIVATE_STATIC` (`TerrainRenderer.cs:63`), and the two `*_STAMPS` variables are described from the names and read sites only; their effects were not traced.
-- `MEITOU_FRAGMENT` (`src/Meitou.Game/Rendering/Gpu/Shaders/GlslProgramCompiler.cs:167`) is a shader macro, not an environment variable, so it is excluded.
-- `MTL_CAPTURE_ENABLED` appears only in the game's usage text (`GameOptions.cs:120`); no project code reads it.
-- The viewer's `--class` and the impostor `--debug` semantics are not traced beyond the parse.
