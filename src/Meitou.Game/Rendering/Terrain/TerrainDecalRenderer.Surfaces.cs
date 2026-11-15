@@ -573,9 +573,9 @@ public sealed unsafe partial class TerrainDecalRenderer
     internal void ClearFootprints() => _footprints.Clear();
 
     /// <summary>
-    /// Starts preparing the equipped sole mask while the foot is still inside the pool.
+    /// Starts preparing the sole mask (the equipped footwear's, or a <paramref name="bare"/> body's feet) while the foot is still inside the pool.
     /// </summary>
-    internal void PrepareFootprint(string mesh) => _soles.Prepare(mesh);
+    internal void PrepareFootprint(string mesh, bool bare = false) => _soles.Prepare(mesh, bare);
 
     /// <summary>
     /// Records a ground imprint at the terrain's height with an individual pressure pattern.
@@ -584,7 +584,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     {
         if (_footprints.Count >= MaxFootprints) return;
 
-        var sole = mesh is null ? null : _soles.For(mesh, (variant & 1) != 0);
+        var sole = mesh is null ? null : _soles.For(mesh, (variant & 1) != 0, bare: (variant & 2) != 0);
         if (sole is null) EnsureGenericFootprints();
 
         uint sample = unchecked(++_footprintSerial * 2654435761u);

@@ -180,7 +180,7 @@ sealed class BloodFootprints(GameHost host)
         }
 
         var across = new Vector2(step.Along.Y, -step.Along.X);
-        Deposit(store, trail, step.Right, step.At, across, Boot(look), _now);
+        Deposit(store, trail, step.Right, step.At, across, Boot(look), look.BodyMesh, _now);
     }
 
     /// <summary>
@@ -282,7 +282,7 @@ sealed class BloodFootprints(GameHost host)
         for (; travel <= length; travel += StepLength)
         {
             var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Stride(store, trail, actor.Id, at, across, boot, now);
+            if (HasFoot(actor, trail.Right)) Stride(store, trail, actor.Id, at, across, boot, look.BodyMesh, now);
             trail.Right = !trail.Right;
         }
         trail.Distance = length - travel + StepLength;
@@ -291,20 +291,20 @@ sealed class BloodFootprints(GameHost host)
     /// <summary>
     /// A stride's footfall for a body with no pose: beside the path, or on the posed foot when it is down.
     /// </summary>
-    void Stride(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, double now)
+    void Stride(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
     {
         bool right = trail.Right;
         var point = Xz(at) + across * (right ? -1 : 1);
         (point, across) = FootPlacement(actor, right, point, across);
         at.X = point.X;
         at.Z = point.Y;
-        Deposit(store, trail, right, at, across, boot, now);
+        Deposit(store, trail, right, at, across, boot, body, now);
     }
 
     /// <summary>
     /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
     /// </summary>
-    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, double now)
+    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
     {
         ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
         var point = Xz(at);
@@ -317,11 +317,11 @@ sealed class BloodFootprints(GameHost host)
         if (source is null && !Wet(sole, now)) return;
 
         bool bootOnThisFoot = boot is not null && boot.HideSide != (right ? 2 : 1);
-        string? mesh = bootOnThisFoot ? host.Assets.FindMesh(boot!.Mesh) : null;
+        string? mesh = bootOnThisFoot ? host.Assets.FindMesh(boot!.Mesh) : host.Assets.FindMesh(body);
         if (source is { } colour)
         {
             sole = Sole.Wet(colour, now);
-            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh);
+            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: !bootOnThisFoot);
             return;
         }
 
