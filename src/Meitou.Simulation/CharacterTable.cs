@@ -794,6 +794,12 @@ public sealed class CharacterCold
     public DrawAnchor? DrawAnchor { get; set; }
 
     /// <summary>
+    /// The code mods' medical-panel readings by <see cref="Bodies.ModMeter.Index"/> (null: none), set through <see cref="Bodies.ModMeter.Set"/>
+    /// (docs/modding.md "Medical meters"): published for a selected or inspected character, not saved, not hashed and read by no system.
+    /// </summary>
+    public Bodies.MeterReading?[]? Meters { get; internal set; }
+
+    /// <summary>
     /// Whom the <see cref="CharacterTask.PickUp"/>, <see cref="CharacterTask.Loot"/> or <see cref="CharacterTask.StealthKo"/> task is for; meaningful
     /// only while one of those tasks is set.
     /// </summary>

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Items;
 
@@ -50,6 +51,10 @@ sealed class ModRegistrations
     /// The equipment slots, in registration order.
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
+    /// <summary>
+    /// The medical meters, in registration order.
+    /// </summary>
+    public List<ModMeter> Meters { get; } = [];
     /// <summary>
     /// The player interface extensions.
     /// </summary>
@@ -163,6 +168,7 @@ sealed class ModRegistry
             Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
         foreach (var slot in r.Slots) ModSlots.Add(slot);
+        foreach (var meter in r.Meters) ModMeters.Add(meter);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);

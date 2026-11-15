@@ -219,6 +219,23 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A bar on the medical panel after Hunger (docs/modding.md "Medical meters") labelled <paramref name="label"/>: the mod's systems set each
+    /// character's reading in the tick with <see cref="Simulation.Bodies.ModMeter.Set"/>, and the panel shows it for the selected or inspected
+    /// character. A label another meter has, or a fifth meter of all mods together, refuses it.
+    /// </summary>
+    public Simulation.Bodies.ModMeter AddMedicalMeter(string label)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(label);
+        if (Simulation.Bodies.ModMeters.Refusal(label, Pending.Meters.Select(m => m.Label)) is { } refusal)
+            throw new ArgumentException(refusal, nameof(label));
+
+        var meter = new Simulation.Bodies.ModMeter(label);
+        Pending.Meters.Add(meter);
+        return meter;
+    }
+
+    /// <summary>
     /// The merged records of a type, in string id order.
     /// </summary>
     public IEnumerable<GameRecord> Records(int type) =>

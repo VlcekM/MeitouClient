@@ -558,6 +558,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public HudView? Hud { get; internal set; }
     /// <summary>
+    /// The code mods' medical-panel readings of a selected or inspected character (<see cref="CharacterCold.Meters"/>, copied); empty otherwise.
+    /// </summary>
+    public IReadOnlyList<Bodies.MeterReading?> Meters { get; internal set; } = [];
+    /// <summary>
     /// The inventory of a selected character, of the one whose loot window is open, or of a player character whose inventory is shown (null for
     /// the others).
     /// </summary>
