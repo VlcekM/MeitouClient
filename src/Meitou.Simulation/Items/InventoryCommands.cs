@@ -9,7 +9,21 @@ namespace Meitou.Simulation.Items;
 /// <summary>
 /// Snapshot identity prevents a drag started before eating/looting from moving a different item.
 /// </summary>
-public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality);
+public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality)
+{
+    /// <summary>
+    /// The item's code-mod tag as the window showed it (<see cref="ItemInstance.ModTag"/>; "" none): a right click (a mod's item use or a quick
+    /// move) acts only on an item that still carries it, so a stale click never reaches a differently tagged item in the same cell. Two items with
+    /// the same tag and token fields are not told apart.
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
+    /// The token of an item a window shows.
+    /// </summary>
+    public static InventoryItemToken Of(InventoryItemView item) =>
+        new(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality) { ModTag = item.ModTag };
+}
 /// <summary>
 /// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange(Inventory, bool)"/> on the grid of the window
 /// pressed: the character's main grid, or the worn bag's when <paramref name="Bag"/>.

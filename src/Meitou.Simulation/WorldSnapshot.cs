@@ -301,6 +301,10 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public string Crafter { get; init; } = "";
     /// <summary>
+    /// The item's code-mod tag (<see cref="Items.ItemInstance.ModTag"/>; "" none), carried into the window's click tokens.
+    /// </summary>
+    public string ModTag { get; init; } = "";
+    /// <summary>
     /// The item's model level (see <see cref="Company"/>).
     /// </summary>
     public int Level { get; init; }

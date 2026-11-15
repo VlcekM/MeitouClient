@@ -425,7 +425,7 @@ sealed class InventoryWindows(PlayerInterface player)
         if (grid.Items.FirstOrDefault(i => i.Index == code) is not { } item) return false;
         if (!InventoryCommands.IsGridSection(item.Section) || item.Width == item.Height) return false;
 
-        var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
+        var token = InventoryItemToken.Of(item);
         player.Say(new RotateItem(owner.Id, token) { Tick = player.Session.World.Tick });
         return true;
     }
@@ -543,7 +543,7 @@ sealed class InventoryWindows(PlayerInterface player)
         }
 
         var (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
-        var (token, whole) = (new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality),
+        var (token, whole) = (InventoryItemToken.Of(item),
             PressShift || PressCtrl || item.Quantity <= 1);
         var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole, item.Rotated);
         return new(code, window, actor, token, whole, view);
