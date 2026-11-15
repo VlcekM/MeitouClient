@@ -116,15 +116,13 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
             var mesh = OgreMeshReader.ReadFile(path);
             if (bare)
             {
+                // A body whose feet give no skin sole (a skeleton's frame) prints their outline as footwear does, never the drawn bare mask.
                 var triangles = Triangles(mesh);
-                return [BakeBare(triangles, false), BakeBare(triangles, true)];
+                var all = Positions(mesh);
+                return [BakeBare(triangles, false) ?? Bake(all, false), BakeBare(triangles, true) ?? Bake(all, true)];
             }
 
-            var positions = mesh.SubMeshes
-                .Select(part => part.UseSharedVertices ? mesh.SharedVertexData : part.VertexData)
-                .Distinct()
-                .SelectMany(data => data?.ReadPositions() ?? [])
-                .ToArray();
+            var positions = Positions(mesh);
             return [Bake(positions, false), Bake(positions, true)];
         }
         catch (Exception error) when (error is IOException or InvalidDataException or NotSupportedException or ArgumentException
@@ -133,6 +131,15 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
             return [null, null];
         }
     }
+
+    /// <summary>
+    /// Every vertex position of the mesh's own and shared vertex data.
+    /// </summary>
+    static Vector3[] Positions(OgreMesh mesh) =>
+        [.. mesh.SubMeshes
+            .Select(part => part.UseSharedVertices ? mesh.SharedVertexData : part.VertexData)
+            .Distinct()
+            .SelectMany(data => data?.ReadPositions() ?? [])];
 
     /// <summary>
     /// Uses the shoe's bottom band in model space, where positive X is the left side and the toes point towards positive Z.
