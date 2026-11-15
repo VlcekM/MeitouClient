@@ -6,7 +6,7 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 ## v0.20.0
 
 - See-through items: a clothing or armour material's opacity map makes it see-through, blended cleanly over the scene with no dithering or ghosts under DLSS (#562)
-- Glass bottles (Meitou, on): sake and rum bottles are see-through glass; Faithful draws them solid (#562)
+- Glass bottles (Meitou, on): sake and rum bottles are real glass, refracting the scene behind them with reflections, highlights and the drink inside; Faithful draws them solid (#562)
 - Lamp warmth (Advanced page, Meitou default): yellow-green ceiling lamps, spotlights and searchlights are drawn amber
 - Fight crowds as in the original: fighters no longer pile onto one target, waiting fighters hold their ring, and fighters either side of a doorway swing at each other (#632, #705)
 - A player character leaves a fight once nothing threatens it or an ally (#695); a noticed incoming swing clears the repeat penalty, as in the original
