@@ -1335,9 +1335,9 @@ Damage: melee blows on walls and doors (`CombatSystem.ApplyZoneBuildings`, the o
 **Simulation state.** `World.Buildings` (`Construction.BuildingRegistry`, sites as `BuildSite`): player-built sites in
 creation order, by id, holding the snapshot's fields plus rate, builder counter and the destroyed flags. Owned town houses needing repair also register, with `LevelPlacement` and a zone-qualified id; completed restored houses stay registered for their scene overlay. Ids `<n>-zone<X>.<Y>-INGAME`, n from a per-zone counter (hashed) that starts above every such id
 in the loaded save (generated interiors share the pattern; `Reserve(id)`); a number whose id a site holds or the zone's level building list
-holds with a target (`LevelBuildingIds`, asked live so level-editor buildings count; 106 such level ids) is skipped, as the original's
-[id rule](formats/zones.md#containers-and-ids). Engine choice: the counter numbers player sites only and starts above the save's ids, where the
-original's also numbers the zone's records. `World.Research` (`Construction.ResearchState`): completed RESEARCH ids and the
+holds with a target (`LevelBuildingIds`, asked live so level-editor buildings count; 106 such level ids) is skipped. Engine choice: the id is
+issued at placement from a counter of player sites, where the original issues it at the zone's next save from the zone container's counter, which
+every record of every zone save and unload advances ([id rule](formats/zones.md#containers-and-ids)). `World.Research` (`Construction.ResearchState`): completed RESEARCH ids and the
 `Unlocked` set (replaced, never changed in place). A new game completes the start-off's `research`, or the default start research
 (`ResearchGate.DefaultStartId`, [build menu](game/buildings-production.md#build-menu)) when it lists none
 (`PopulationSystem.StartPlayer`); a load takes the save's. Research benches change it ([Production](#production), which says when it is hashed).
