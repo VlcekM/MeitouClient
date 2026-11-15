@@ -509,32 +509,63 @@ public sealed partial class NavmeshWalkability : IWalkability
 
     /// <summary>
     /// The navmesh path from <paramref name="from"/> to <paramref name="to"/> on the real ground; for a walker off the mesh whose path begins with a
-    /// step it cannot take, up to <see cref="OffMeshStarts"/> other start polygons are tried, skipping the regions failed searches reached.
+    /// step it cannot take, up to <see cref="OffMeshStarts"/> other start polygons are tried, skipping the regions failed searches reached, then the
+    /// nearest start at the walker's own height.
     /// </summary>
     PathResult Exact(NavWorld w, Vector3 from, Vector3 to, NavAgent agent)
     {
         var query = new NavQuery(w, Doors);
         var path = OnGround(query.FindPath(from, to, agent, null, out var start));
+
         // A walker off the mesh (pushed beside a stair) can be nearest to a polygon it cannot step onto: the corner of the stair over it, whose
         // simplified height snaps to the walker's own ground. Its path then begins with a wall, so the next nearest starts are tried, the first whose
         // way the walker can step along taken (docs/game/pathfinding.md "Own builder").
         if (start.Zone < 0 || IsOnMesh(w, from) || path.Found && Steppable(from, path.Points)) return path;
+        if (NextStart(query, from, to, agent, start) is { } next) return next;
+
+        // In a hole under a raised floor (inside a hut's base, #780) every next start can be on the floor over it, out of its reach: the nearest
+        // start at its own height is taken, which it walks out of the hole to (MovementSystem.EscapesToward).
+        var level = OnGround(query.FindPath(from, to, agent, at => !AtHeight(w, at, from), out var levelStart));
+        return levelStart.Zone >= 0 && level.Found ? level : path;
+
+        PathResult OnGround(PathResult found) => found.Found ? FromWalker(from, found) : found;
+    }
+
+    /// <summary>
+    /// The path from the first of up to <see cref="OffMeshStarts"/> next-nearest start polygons after <paramref name="start"/> whose way the walker can
+    /// step along; null when none is.
+    /// </summary>
+    PathResult? NextStart(NavQuery query, Vector3 from, Vector3 to, NavAgent agent, NavRef start)
+    {
         var tried = new HashSet<NavRef> { start };
+
         // The polygons a failed search reached are one region with its start: a search from any of them fails too, so they are not tried.
         var failed = s_failedRegions ??= [];
         failed.Clear();
         NavQuery.AddReachedByFailed(failed);
         for (int k = 0; k < OffMeshStarts; k++)
         {
-            var other = OnGround(query.FindPath(from, to, agent, at => tried.Contains(at) || failed.Contains(at.Key), out start));
+            var other = query.FindPath(from, to, agent, at => tried.Contains(at) || failed.Contains(at.Key), out start);
             if (start.Zone < 0) break;
+
             tried.Add(start);
             NavQuery.AddReachedByFailed(failed);
-            if (other.Found && Steppable(from, other.Points)) return other;
-        }
-        return path;
+            if (!other.Found) continue;
 
-        PathResult OnGround(PathResult found) => found.Found ? FromWalker(from, found) : found;
+            var points = FromWalker(from, other);
+            if (Steppable(from, points.Points)) return points;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the point of <paramref name="polygon"/> nearest <paramref name="p"/> is within the stand limits of its height.
+    /// </summary>
+    static bool AtHeight(NavWorld w, NavRef polygon, Vector3 p)
+    {
+        float y = NavWorld.ClosestPoint(w.Mesh(polygon.Zone), polygon.Polygon, p).Y;
+        return y - p.Y <= StandRise && p.Y - y <= StandDrop;
     }
 
     /// <summary>

@@ -238,7 +238,11 @@ in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points 
 (Y-House `16-` 35046..35064,−71590..−71582, 4..6 wide, one 6-unit wall-ended exit; Y-House `18-`; Old Storm House `20-`) held
 8 of 1999 starts with no path at all, so a walker stopped or pushed there stayed stuck at the door; with the rule all 1999 path.
 A walker off the mesh (engine choices): its path starts at its own position, then the nearest mesh point, which it walks to; if the nearest start polygon gives no path, or
-one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried. Movement turns early for the next waypoint (within 5) only where it can stand along
+one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried, then the nearest start within `StandRise`/`StandDrop` of its height,
+which it walks out of the hole to (start polygons score 4 × plan distance + height gap). **Observed** (#780, the issue's save, a Scrawny Cannibal at
+-96855,138,-52580 inside the base of Hive Village's Hive Commune Hut, carver y 95..219, no ground in our mesh or the original's tile, `meitou-tools probe --nav`):
+the nearest starts were all on the hut's ramp and floor 32 above (score 52 against the ground edge's ~80, 20 away); it stood for good and its attackers on the floor
+over it never reached it. Now it walks out to the ground and the fight goes on. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
 stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
 asks again every 5 s, [walls](#blocked-walkers)); a block while a request is in flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
