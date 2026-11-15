@@ -3,6 +3,36 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.20.1
+
+- Sight: NPCs, witnesses and guards no longer see player characters or sneakers through floors and walls; building collision blocks sight and line of fire (#781)
+- Fights in water: no melee on a target in deep water, a running fight ends when its target swims, an attack order waits until the target is out, and a threatened swimmer runs (#778)
+- Fights: chasers no longer take a target's engaged slots (#776); town guards man turrets while they sense an enemy, as the original
+- Walkers stuck in mesh holes at zone lines or under raised floors walk out, and root motion no longer carries bodies into them (#774, #780)
+- Walkers slow into their stop as in the original (#742); standing characters breathe (#742)
+- Nest squads patrol round their nest instead of scattering kilometres from camp (#771); town squatters stay at their homes
+- The Hub's squatters no longer block the Bar thugs and Pacifier
+- Shop stock is spread over all a trader's containers (#768); the Lost Armoury's vendor stock is no longer wiped (#758)
+- Automatic town machines (Well II/III) run on their own and can be looted (#763)
+- Crafted items are hauled from full benches to storage, and food runs use storages in a bought house (#762)
+- Bags in the inventory: confiscation, smuggling searches, looters and starving looters' food runs reach bags carried in the inventory
+- Putting a worn weapon or armour into storage takes it off the character (#761); downed and carried characters put their weapon away (#760)
+- Ragdolls: carried and limb ragdolls keep their root; races without a Bip01 skeleton ragdoll correctly
+- Stealth KO is offered on another faction's prisoners, Rebirth's pole slaves included (#757); slave watchers no longer catch a sneaking slave they never sensed (#759)
+- Guards no longer throw knocked-out patients out of town from a bed (#751)
+- A stolen item's tooltip names the person it was stolen from; a wanted diplomat's bounty tooltip lists no bounty rows, as the original
+- Conversation choices wrap and the player panel grows upward to fit them (#775)
+- Edit boxes: a double click selects a word
+- The load window's Hide Kenshi saves tick is remembered between restarts
+- Camera leash (Advanced, on by default): the camera and free camera stay within 2250 of your characters, as in the game
+- Movement marker hides along with the interface (F7)
+- Traced sun shadows: a new "traced near, cascades far" choice, on in the Ultra and Extreme presets
+- Graphics settings: an unchanged Faithful look no longer shows the "As the game ships" label
+- VRAM on small cards: more memory held in reserve and safer memory growth, against out-of-memory failures (#745)
+- Less Buggy Bughouse's collision boxes no longer bury the Bughouse floor (#766)
+- Debug menu: categories, mouse support, more cheats, a recruit action and a Faction relations view; drawn on top on Metal
+- Code mods: mod settings get subgroups and visibility conditions
+
 ## v0.20.0
 
 - See-through items: a clothing or armour material's opacity map makes it see-through, blended cleanly over the scene with no dithering or ghosts under DLSS (#562)

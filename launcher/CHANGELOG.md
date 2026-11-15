@@ -2,6 +2,10 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.12.1
+
+- Graphics page: an unchanged Faithful look no longer shows the "As the game ships" label.
+
 ## v1.12.0
 
 - Mods page: Ctrl+click and Shift+click select several mods; dragging them or Alt+arrows moves them together.
