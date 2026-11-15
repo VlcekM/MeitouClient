@@ -39,9 +39,16 @@ public sealed class VramGuard
     public const long ReserveBytes = 384L << 20;
 
     /// <summary>
-    /// The largest share of the driver's budget <see cref="ReserveBytes"/> may take (a small budget keeps most of itself).
+    /// The largest share of the driver's budget <see cref="ReserveBytes"/> may take (a small budget keeps most of itself), and the smaller share
+    /// below <see cref="SmallBudget"/>: on a 2 GB card an eighth put the guard into pressure all the time (short ranges, coarse buildings).
     /// </summary>
-    public const long ReserveShare = 8;
+    public const long ReserveShare = 8, SmallReserveShare = 16;
+
+    /// <summary>
+    /// The reported budget under which <see cref="SmallReserveShare"/> applies: cards under 4 GB (a 4 GB card reports more, and keeps the
+    /// reserve that ended the failures of #745).
+    /// </summary>
+    public const long SmallBudget = 3L << 30;
 
     /// <summary>
     /// Seconds between samples, between two steps down, and between two steps up; and the calm needed before the ranges return.
@@ -244,9 +251,14 @@ public sealed class VramGuard
     }
 
     /// <summary>
-    /// The driver's budget less what is held back for the other programs (<see cref="ReserveBytes"/>, at most a <see cref="ReserveShare"/>th).
+    /// The driver's budget less what is held back for the other programs (<see cref="ReserveBytes"/>, at most a <see cref="ReserveShare"/>th,
+    /// or a <see cref="SmallReserveShare"/>th under <see cref="SmallBudget"/>).
     /// </summary>
-    static long Usable(long budget) => budget - Math.Min(ReserveBytes, budget / ReserveShare);
+    static long Usable(long budget)
+    {
+        long share = budget < SmallBudget ? SmallReserveShare : ReserveShare;
+        return budget - Math.Min(ReserveBytes, budget / share);
+    }
 
     /// <summary>
     /// Whether <paramref name="bytes"/> more device-local memory may be taken: the use (freshly sampled, plus what earlier calls reserved since)
