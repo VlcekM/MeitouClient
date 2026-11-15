@@ -54,9 +54,10 @@ sealed class ProbeWorld : IDisposable
 
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
-    /// <paramref name="at"/> moves the player's characters there (X, Z) before the load, to look at another place with the same save.
+    /// <paramref name="at"/> moves the player's characters there (X, Z) before the load, to look at another place with the same save; <paramref name="seed"/>
+    /// is the world seed (the game's default is 0).
     /// </summary>
-    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null)
+    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null, ulong seed = 1)
     {
         var db = GameDatabase.Load(order);
         var levels = WorldLevelData.Load(install, order, includeInteriors: true);
@@ -74,7 +75,7 @@ sealed class ProbeWorld : IDisposable
 
         NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, save, height) : null;
         IWalkability walk = nav is null ? new OpenGroundWalkability(height) : new NavAdapter(nav.Walkability);
-        var world = MakeWorld(data, walk, save);
+        var world = MakeWorld(data, walk, save, seed);
         if (nav is not null) GiveGateCodes(world, nav);
         return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav };
     }
@@ -129,7 +130,7 @@ sealed class ProbeWorld : IDisposable
     /// <summary>
     /// The world on one thread with paths found at once, the save loaded into it and the camera focus on the player's squad leader.
     /// </summary>
-    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save)
+    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed)
     {
         var options = new StandardSystemOptions
         {
@@ -137,7 +138,7 @@ sealed class ProbeWorld : IDisposable
             Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true },
             Population = new PopulationSettings { Background = false },
         };
-        var world = new World(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
+        var world = new World(new WorldSettings { Seed = seed, Threads = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
         if (walk is Meitou.Simulation.Locks.IDoorGate doors) world.Fixtures.Doors = doors;
 
         var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });

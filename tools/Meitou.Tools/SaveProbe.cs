@@ -28,7 +28,7 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--at x,z] [--load-order file] [--mod-dir folder]...</c>. Returns 0, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
@@ -37,10 +37,11 @@ static class SaveProbe
         bool nav = rest.Remove("--nav");
         int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
         Vector2? at = ProbeLoadOrder.TakeOption(rest, "--at") is { } spot ? Spot(spot) : null;
+        ulong seed = ProbeLoadOrder.TakeOption(rest, "--seed") is { } s ? ulong.Parse(s) : 1;
         var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
-        using var probe = ProbeWorld.Load(install, order, rest[0], nav, at);
+        using var probe = ProbeWorld.Load(install, order, rest[0], nav, at, seed);
         probe.Tick(ticks);
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
     }
@@ -1100,7 +1101,7 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--load-order <file>] [--mod-dir <folder>]...
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
