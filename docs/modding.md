@@ -148,8 +148,9 @@ holds refuses the second mod.
 - **Item use:** `AddItemUse(record, handler)`, one mod per item record string id. A right click on such an item in a player character's own
   inventory window (or its bag), with no other character's window open and no trade, runs `handler(ItemUse)` (world, user, item, that
   character's inventory) in the player system's serial step, before the click would equip or move it (`ItemUses`, `src/Meitou.Simulation/Player`),
-  for an item a quick move could act on (movable or limb section, not locked on) that still carries the tag the window showed (the click's
-  token holds it, so a stale click never reaches another note in the same cell).
+  for an item a quick move could act on (movable or limb section, not locked on). The click's token holds the tag the window showed, and
+  neither the handler nor the quick move acts on an item that no longer carries it: a stale click never reaches a differently tagged item in
+  the same cell (two items alike in record, cell, quantity, quality and tag are not told apart).
   True: the click is used (the handler removes a used-up item, `Inventory.RemoveOne`); false: the click equips or moves as usual. A throw is
   logged and counts as used. `ItemInstance.ModTag` is a free string a mod sets on an item (the character a note names); it is copied with the
   item, keeps differently tagged items out of one stack, is hashed when set, and is saved as `meitou mod tag`

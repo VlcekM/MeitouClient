@@ -32,13 +32,13 @@ sealed class ItemUses
     }
 
     /// <summary>
-    /// Whether the click may reach the mod: the item a quick move could act on (<see cref="QuickMoves.Clickable"/>), not locked on, and still
-    /// carrying the tag the window showed. Otherwise the click goes on as a quick move, which refuses it as it refuses any.
+    /// Whether the click may reach the mod: the item a quick move could act on (<see cref="QuickMoves.Clickable"/>, which also checks the tag the
+    /// window showed) and not locked on. Otherwise the click goes on as a quick move, which refuses it on the same checks.
     /// </summary>
     static bool Eligible(Inventory root, ItemInstance? item, InventoryItemToken token)
     {
         if (!QuickMoves.Clickable(root, item, token, out _)) return false;
 
-        return !item!.LockedOn && item.ModTag == token.ModTag;
+        return !item!.LockedOn;
     }
 }
