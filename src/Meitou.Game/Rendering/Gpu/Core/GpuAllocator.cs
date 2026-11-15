@@ -780,7 +780,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             }
 
             // No room: a new block, made outside the lock so a slow vkAllocateMemory does not hold up the other threads' allocations.
-            fresh = CreateBlock(type, optimal, dedicated ? size : slot > 0 ? slot * Math.Max(SlotBlockBytes / slot, 1) : _blockSize, dedicated, slot);
+            ulong blockSize = dedicated ? size : slot > 0 ? slot * Math.Max(SlotBlockBytes / slot, 1) : _blockSize;
+            fresh = CreateBlock(type, optimal, blockSize, dedicated, slot, streamed);
         }
     }
 
@@ -864,7 +865,7 @@ public sealed unsafe class GpuAllocator : IDisposable
 
             try
             {
-                block = CreateBlock(key.Type, key.Optimal, _blockSize, false, key.Slot);
+                block = CreateBlock(key.Type, key.Optimal, _blockSize, false, key.Slot, key.Slot > 0);
             }
             catch (VulkanException)
             {
@@ -958,18 +959,34 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     /// <summary>
-    /// Allocates and maps a block (no bookkeeping, no lock: the caller counts it once it is in a pool). Any thread.
+    /// The residency priorities of streamed texture memory and of everything else (VK_EXT_memory_priority): with pageable device-local memory a full
+    /// heap pages the streamed textures out to system memory first, which draws them slower instead of failing the allocation (#745).
     /// </summary>
-    MemoryBlock CreateBlock(uint type, bool optimal, ulong size, bool dedicated, ulong slot)
+    const float StreamedPriority = 0.3f, ResidentPriority = 0.7f;
+
+    /// <summary>
+    /// Allocates and maps a block (no bookkeeping, no lock: the caller counts it once it is in a pool); <paramref name="streamed"/>: it holds
+    /// streamed textures (<see cref="StreamedPriority"/>). Any thread.
+    /// </summary>
+    MemoryBlock CreateBlock(uint type, bool optimal, ulong size, bool dedicated, ulong slot, bool streamed)
     {
         long profileStart = UploadProfile.Begin();
 
         // With ray queries every block may hold acceleration structures, their build inputs or scratch, which are reached by device address.
         var addressFlags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
+        void* next = _dev.HasRayQuery && !optimal ? &addressFlags : null;
+        var priority = new MemoryPriorityAllocateInfoEXT
+        {
+            SType = StructureType.MemoryPriorityAllocateInfoExt,
+            PNext = next,
+            Priority = streamed ? StreamedPriority : ResidentPriority,
+        };
+        if (_dev.HasMemoryPriority) next = &priority;
+
         var info = new MemoryAllocateInfo
         {
             SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type,
-            PNext = _dev.HasRayQuery && !optimal ? &addressFlags : null,
+            PNext = next,
         };
         var r = _vk.AllocateMemory(_dev.Device, in info, null, out var mem);
 

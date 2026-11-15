@@ -32,6 +32,18 @@ public sealed class VramGuard
     public const double High = 0.90, Low = 0.80, Recover = 0.74, Ceiling = 0.92;
 
     /// <summary>
+    /// The most of the driver's budget the guard holds back for the other programs on the card (bytes), and the largest share of the budget that
+    /// may be (<see cref="ReserveShare"/>). Observed on a 4 GB GTX 1650 (#745): allocations of 11 to 90 MB failed at 92% of the reported budget
+    /// with 300 to 500 MB free; 384 MB held back ended them. Every fraction (<see cref="High"/>, <see cref="Ceiling"/>, ...) is of what is left.
+    /// </summary>
+    public const long ReserveBytes = 384L << 20;
+
+    /// <summary>
+    /// The largest share of the driver's budget <see cref="ReserveBytes"/> may take (a small budget keeps most of itself).
+    /// </summary>
+    public const long ReserveShare = 8;
+
+    /// <summary>
     /// Seconds between samples, between two steps down, and between two steps up; and the calm needed before the ranges return.
     /// </summary>
     public const double SampleSeconds = 0.25, StepDownSeconds = 0.75, StepUpSeconds = 1.0, CalmSeconds = 4.0;
@@ -160,7 +172,7 @@ public sealed class VramGuard
     public double Fraction => _budget == 0 ? 0 : (double)_used / _budget;
 
     /// <summary>
-    /// The driver's device-local budget at the last sample (0 until one is taken, or when unknown).
+    /// The driver's device-local budget at the last sample less <see cref="ReserveBytes"/> (0 until one is taken, or when unknown).
     /// </summary>
     public long BudgetBytes => _budget;
 
@@ -225,11 +237,16 @@ public sealed class VramGuard
     {
         _lastSample = now;
         var (u, b) = _sample();
-        (_used, _budget, _reserved) = ((long)u, (long)b, 0);
+        (_used, _budget, _reserved) = ((long)u, Usable((long)b), 0);
         if (_budget > 0)
             (LowestBudget, HighestBudget) = (LowestBudget == 0 ? _budget : Math.Min(LowestBudget, _budget), Math.Max(HighestBudget, _budget));
         Step(now);
     }
+
+    /// <summary>
+    /// The driver's budget less what is held back for the other programs (<see cref="ReserveBytes"/>, at most a <see cref="ReserveShare"/>th).
+    /// </summary>
+    static long Usable(long budget) => budget - Math.Min(ReserveBytes, budget / ReserveShare);
 
     /// <summary>
     /// Whether <paramref name="bytes"/> more device-local memory may be taken: the use (freshly sampled, plus what earlier calls reserved since)

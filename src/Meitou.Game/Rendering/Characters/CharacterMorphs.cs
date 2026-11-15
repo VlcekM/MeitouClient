@@ -183,20 +183,30 @@ internal sealed class MorphArena : IDisposable
 
     /// <summary>
     /// Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set
-    /// from the host copy.
+    /// from the host copy. The new buffer is made before anything changes, so a refused allocation leaves the arena as it was.
     /// </summary>
     int Reserve(int count)
     {
         int first = _used;
-        _used += count;
-        if (_used > _host.Length)
-        {
-            Array.Resize(ref _host, Math.Max(_host.Length * 2, _used));
-            _buffer.Dispose();
-            _buffer = DeviceBuffer.Create(_gpu, (ulong)_host.Length * 16, BufferUse.Storage, "character morphs");
-            Upload(0, MemoryMarshal.AsBytes(_host.AsSpan(0, first)));
-        }
+        int used = first + count;
+        if (used > _host.Length) Grow(first, used);
+        _used = used;
         return first;
+    }
+
+    /// <summary>
+    /// Replaces the buffer with one of half as many entries again (at least <paramref name="needed"/>) holding the <paramref name="kept"/> written:
+    /// half, not double, because a 4 GB card refused the doubling's 47 MB block where smaller steps fit (#745).
+    /// </summary>
+    void Grow(int kept, int needed)
+    {
+        int length = Math.Max(_host.Length + _host.Length / 2, needed);
+        var buffer = DeviceBuffer.Create(_gpu, (ulong)length * 16, BufferUse.Storage, "character morphs");
+
+        Array.Resize(ref _host, length);
+        _buffer.Dispose();
+        _buffer = buffer;
+        Upload(0, MemoryMarshal.AsBytes(_host.AsSpan(0, kept)));
     }
 
     /// <summary>

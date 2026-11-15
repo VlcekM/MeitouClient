@@ -8,7 +8,10 @@ namespace Meitou.Tests.Rendering;
 /// </summary>
 public class VramGuardTests
 {
-    const ulong Budget = 10_000;
+    /// <summary>
+    /// The budget the guard works on: the rig's driver reports it plus what the guard holds back (<see cref="VramGuard.ReserveBytes"/>).
+    /// </summary>
+    const ulong Budget = 10_000UL << 20;
 
     sealed class Rig
     {
@@ -16,7 +19,7 @@ public class VramGuardTests
         public readonly List<string> Log = [];
         public readonly VramGuard Guard;
 
-        public Rig() => Guard = new VramGuard(() => ((ulong)(Fraction * Budget), Budget), () => Now, Log.Add);
+        public Rig() => Guard = new VramGuard(() => ((ulong)(Fraction * Budget), Budget + VramGuard.ReserveBytes), () => Now, Log.Add);
 
         /// <summary>
         /// Runs <paramref name="seconds"/> of frames (60 a second) at the given use.
@@ -39,7 +42,7 @@ public class VramGuardTests
         Assert.False(r.Guard.Streaming);
         Assert.Equal(1, r.Guard.Activations);
         Assert.Equal(VramGuard.StepDown, r.Guard.RangeScale, 4);   // the first step at once
-        Assert.InRange(r.Guard.ExcessBytes, 1190, 1210);   // 92% less the low mark's 80% of 10,000
+        Assert.InRange(r.Guard.ExcessBytes, 1190L << 20, 1210L << 20);   // 92% less the low mark's 80% of the budget
 
         r.Run(3, 0.92);
 
