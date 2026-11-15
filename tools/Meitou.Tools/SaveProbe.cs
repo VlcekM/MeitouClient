@@ -83,7 +83,8 @@ static class SaveProbe
             case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
             case ("recruit", >= 1): Recruit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
-            case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : DialogueEvents.PlayerTalkToMe); return true;
+            case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : null); return true;
+            case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
@@ -771,9 +772,9 @@ static class SaveProbe
 
     /// <summary>
     /// Whether the characters named like <paramref name="name"/> can be talked to (by anyone, and by the nearest player character) and the roots
-    /// of their talk event; for another event <paramref name="ev"/>, its roots with every line's conditions and effects.
+    /// of their talk event; with an event <paramref name="ev"/> (the talk event too), its roots with every line's conditions and effects.
     /// </summary>
-    static void Talk(ProbeWorld probe, string name, int ev)
+    static void Talk(ProbeWorld probe, string name, int? ev)
     {
         var t = probe.Characters;
         var dialogue = probe.World.Systems.OfType<DialogueSystem>().First();
@@ -785,11 +786,45 @@ static class SaveProbe
             Console.WriteLine($"{probe.Who(i)} record={t.Cold(i)!.RecordId} canTalk={dialogue.CanTalk(probe.World, i)} "
                 + $"withTalker={dialogue.CanTalk(probe.World, i, t.IdOf(talker))} talker={t.Cold(talker)!.Name}");
             Console.WriteLine("  talk roots: " + string.Join(", ", dialogue.SetOf(probe.World, i).For(1).Select(r => r.ToString())));
-            if (ev == DialogueEvents.PlayerTalkToMe) continue;
+            if (ev is not { } shown) continue;
 
             var seen = new HashSet<DialogueNode>();
-            foreach (var root in dialogue.SetOf(probe.World, i).For(ev)) PrintLines(root, 1, seen);
+            foreach (var root in dialogue.SetOf(probe.World, i).For(shown)) PrintLines(root, 1, seen);
         }
+    }
+
+    /// <summary>
+    /// The player character nearest a character named like <paramref name="name"/> is ordered to talk to it; up to 60 s for the conversation
+    /// to open, then each line said with its choices, clicking <paramref name="choices"/> in turn (#737: a caged prisoner's talk).
+    /// </summary>
+    static void Converse(ProbeWorld probe, string name, List<int> choices)
+    {
+        var t = probe.Characters;
+        var players = Enumerable.Range(0, t.HighWater).Where(j => t.Next[j].Alive && t.Cold(j) is { IsPlayer: true }).ToList();
+        var (talker, npc) = probe.Named(name)
+            .SelectMany(n => players.Select(p => (p, n)))
+            .MinBy(pair => Vector3.Distance(t.Next[pair.p].Position, t.Next[pair.n].Position));
+        Console.WriteLine($"{probe.Who(talker)} talks to {probe.Who(npc)}");
+        probe.World.Commands.Enqueue(new TalkOrder(t.IdOf(talker), t.IdOf(npc)) { Tick = probe.World.Tick });
+
+        var dialogue = probe.World.Systems.OfType<DialogueSystem>().First();
+        for (int waited = 0; dialogue.PublishConversation() is null && waited < 60 * 40; waited += 20) probe.Tick(20);
+        foreach (int choice in choices.Prepend(-1))
+        {
+            if (choice >= 0)
+            {
+                probe.World.Commands.Enqueue(new DialogueChoice(choice) { Tick = probe.World.Tick });
+                probe.Tick(1);
+            }
+            if (dialogue.PublishConversation() is not { } view) break;
+
+            Console.WriteLine($"tick {probe.World.Tick} {view.SpeakerName}: {view.Text}");
+            Console.WriteLine("  choices: " + string.Join(" | ", view.Choices.Select((text, i) => $"{i} {text}")));
+        }
+
+        Console.WriteLine($"open={dialogue.PublishConversation() is not null} gap={Vector3.Distance(t.Next[talker].Position, t.Next[npc].Position):F0} "
+            + $"{probe.Who(npc)} player={t.Cold(npc)!.IsPlayer}");
+        probe.PrintMessages();
     }
 
     /// <summary>
@@ -1064,6 +1099,7 @@ static class SaveProbe
               recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
+              converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               sites <radius>           the player's buildings near the leader with floor and parent
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators

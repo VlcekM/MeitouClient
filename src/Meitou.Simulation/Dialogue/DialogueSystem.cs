@@ -405,7 +405,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (!_talker.IsNone && _open is null)
         {
             var table = world.Characters;
-            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Awake(table, n))
+            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Talkable(table, n))
                 CancelApproach(world);
             else if (InTalkRange(table, p, n))
             {
@@ -438,10 +438,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             world.Post(Loc.Tr("{1} can't talk to people", pc.Name));
             return;
         }
-        if (!Awake(table, n) || SleepsThrough(table, n, DialogueEvents.PlayerTalkToMe)) return;
+        if (!Talkable(table, n) || SleepsThrough(table, n, DialogueEvents.PlayerTalkToMe)) return;
         // A campaign member with a pending interrupt (its negotiation) talks even when its faction is hostile (docs/game/factions-squads-towns.md
-        // "Campaigns", announcement).
-        if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target))
+        // "Campaigns", announcement), and so does a caged one (its menu's Talk To, #737).
+        if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target) && !nc.IsImprisoned)
         {
             world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1 });
             return;
@@ -490,6 +490,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
+    /// Whether a Talk order's target can be talked to: alive and not incapacitated, a caged one too (the order check <c>FUN_1405d1940</c> and the
+    /// conversation start <c>FUN_140684320</c> test no imprisonment; Recruitable Prisoners' cage dialogue, #737).
+    /// </summary>
+    static bool Talkable(CharacterTable table, int slot) =>
+        table.Next[slot].Alive && table.Cold(slot) is { } c && c.Medical?.Incapacitated != true;
+
+    /// <summary>
     /// The events an asleep owner still fires, by bit (the mask <c>DAT_141eeaecc</c> of <c>FUN_140684990</c>, which shifts by the event's low five
     /// bits): 11, 23, 24, 25 and those 32 above them.
     /// </summary>
@@ -504,12 +511,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         (AsleepEvents >> (ev & 31) & 1) == 0 && Carrying.CarrySystem.Asleep(table, slot);
 
     /// <summary>
-    /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
+    /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends. A caged NPC is left on its task.
     /// </summary>
     static void Hold(World world, int slot)
     {
         var table = world.Characters;
         table.Cold(slot)!.Engaged = true;
+        if (table.Cold(slot)!.IsImprisoned) return;
         if (table.Next[slot].Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle) TaskStart.Stand(table, slot);
     }
 
