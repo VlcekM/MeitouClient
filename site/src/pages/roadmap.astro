@@ -252,6 +252,9 @@ const summary = (features: Feature[]) => {
   .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .12em; font-size: .85rem; color: var(--muted); font-weight: 600; }
   .meta { color: var(--muted); font-size: .9rem; }
   header { display: grid; gap: 10px; }
+  /* The introduction is centred over the roadmap. */
+  .rd > header { text-align: center; text-wrap: balance; }
+  .rd > header p { margin-inline: auto; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .tile { font: inherit; color: inherit; text-align: left; cursor: pointer; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-plate); padding: 12px 14px 12px 16px; display: grid; gap: 2px; position: relative; overflow: hidden; }
