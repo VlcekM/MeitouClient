@@ -105,10 +105,12 @@ static class LightShaftShaders
             int count = int(uShadowForward.w);
             if (!meitou || depth < uMsParams.y)
             {
-                if (meitou && msVolumeOn()) lit = msVolumeAt(world);   // the traced sun's volume (no cascades)
+                // The traced sun's map where it serves (no cascades, or nearer than they start), else the cascades.
+                bool sunMap = meitou && msVolumeServes(world);
+                if (sunMap) lit = msVolumeAt(world);
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {
-                    if (c >= count) break;
+                    if (sunMap || c >= count) break;
                     if (depth > (meitou ? uMsSlice[c].y : uShadowCascade[c].x)) continue;
                     vec3 t = (uShadowTile[c] * vec4(world - uShadowOrigin.xyz, 1.0)).xyz;
                     if (any(lessThan(t.xy, vec2(0.0))) || any(greaterThan(t.xy, vec2(1.0))) || t.z >= 1.0) continue;

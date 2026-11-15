@@ -343,6 +343,11 @@ static partial class WorldFrame
     public const string TracedGrassSwitch = "Traced grass shadows";
 
     /// <summary>
+    /// The traced sun shadows near, cascades far (<see cref="PostOptions.TracedFarCascades"/>), a plain on / off row under them.
+    /// </summary>
+    public const string TracedFarCascadesSwitch = "Cascades past traced shadows";
+
+    /// <summary>
     /// The hybrid GI's parts as switches (<see cref="PostOptions.GiRelocate"/>, <see cref="PostOptions.GiCloudShadows"/>,
     /// <see cref="PostOptions.GiCache"/>).
     /// </summary>
@@ -1071,8 +1076,9 @@ static partial class WorldFrame
         toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
         toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
 
-        // The traced sun shadows' grass, a plain on / off row; it acts while the sun's shadows are traced.
+        // The traced sun shadows' grass and their far cascades, plain on / off rows; they act while the sun's shadows are traced.
         toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));
+        toggles.Add(new Toggle(TracedFarCascadesSwitch, () => post.Options.TracedFarCascades, v => post.Options.TracedFarCascades = v));
     }
 
     /// <summary>
@@ -1339,7 +1345,8 @@ static partial class WorldFrame
                 (_, worldToClip, planes, lodEye) => lo.DrawLandmarksDepth(worldToClip, lodEye, planes, render, gpu.Terrain))
             : (ShadowPass.LandmarkCasters?)null;
         shadow.CameraFlying = gpu.CameraFlying;
-        shadow.TracedWhole = gpu.Traced;   // the rays take the sun at every depth, characters included (Gi.TracedCharacters)
+        shadow.Traced = gpu.Traced;   // the rays take the sun, characters included (Gi.TracedCharacters)
+        shadow.FarCascades = gpu.Post is { Options.TracedFarCascades: true };   // ... as far as the handoff, the cascades past it
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }
