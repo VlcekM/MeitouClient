@@ -155,6 +155,7 @@ holds refuses the second mod.
   logged and counts as used. `ItemInstance.ModTag` is a free string a mod sets on an item (the character a note names); it is copied with the
   item, keeps differently tagged items out of one stack, is hashed when set, and is saved as `meitou mod tag`
   ([save](formats/save.md#zone-files); a retagged ground item rewrites its zone). A tooltip hint is the item's own description.
+  **Verified** by `ModHookTests` (synthetic world): the click and its guards (stale tag, locked on), fall-through, tag stacking, hash and save key.
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact.
@@ -197,7 +198,8 @@ holds refuses the second mod.
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
   keeps the original: NPCs never pay). `PopulationSystem.SpawnAnimal(world, record, squad, at, age)` adds
   one ANIMAL_CHARACTER to an existing squad at a walkable point (else the squad's first member's spot), aged 0 to 1.1, idle, with its species'
-  look and its record's kit (a player squad's animal is a player character; none at the faction's head cap): a mod's newborn. Non-finite delays, hours, points and radii are refused.
+  look and its record's kit (a player squad's animal is a player character; none at the faction's head cap): a mod's newborn. Non-finite delays, hours, points and radii are refused. **Verified** by `ModHookTests` (synthetic
+  world): the spawn ring, purse and refusals, a never-loaded spawn kept and reloaded with its tag, and the campaign queue.
 - **Mod jobs** (engine API, not in the original; untested in play): `AddJob(new ModJobKind(id, building, caption, text, takers))`. The context
   menu of a finished player building whose record is `building` offers `caption` to a selection holding a character `takers` allows (people,
   animals or both); each such player character then holds the job on that building (`CharacterCold.ModJobs`, one per kind, a new building
@@ -212,7 +214,8 @@ holds refuses the second mod.
   walks its members. The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
   same package after it starts it afresh; the game ignores a start of the contract already running), and `StartContract { AnyRange = true }`
   lets the contract's assault take its target wherever it is, not only within the manoeuvre mode's reach (about 6517 units for ROAM_FAR;
-  saved with the contract). `CharacterCold.Engaged` keeps the AI
+  saved with the contract). **Verified** by `ModHookTests` (synthetic world): a held stand-in, travel to a point, the contract's end and restart,
+  and an any-range target taken past the reach. `CharacterCold.Engaged` keeps the AI
   off one member (self-preservation still answers an attack); the mod then drives it with what the engine's own duties use: `TaskStart.Walk`,
   `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
   a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
