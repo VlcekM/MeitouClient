@@ -131,10 +131,10 @@ read with `FcsReader`): multi-race animation patches hold stub records under oth
 editor default: RACE stubs (1883 and 1267) with empty mesh, texture and ragdoll paths plus the `animation files` references, and in the
 first 186 ANIMATION_FILE stubs with empty `male animation` / `female animation`. Their pages require them above the race and animation
 mods: the later full records overwrite the defaults and the references stay ([merging](formats/fcs-mod.md#merging)). Loaded below, the
-blank values win in the original and in Meitou: the packs' files are no longer linked, so their techniques have no clip
-([Clips a body lacks](#clips-a-body-lacks)), and the races draw `human_male.mesh`. Measured in Meitou (#650's load order plus More
-Combat Animation, Military Craft and Great Anims above the first patch): 268 of 446 enabled techniques resolve on a Greenlander's rig,
-445 with both patches loaded first.
+blank values win, in the original (an empty string or filename is stored like any other, `FUN_1406c9ce0`) and in Meitou: the packs'
+files are no longer linked, so their techniques have no clip ([Clips a body lacks](#clips-a-body-lacks)), and the races draw
+`human_male.mesh`. Measured in Meitou (the 102 files on hand of #650's 819, with More Combat Animation, Military Craft and Great Anims
+added above the first patch): 268 of 446 enabled techniques resolve on a Greenlander's rig, 445 with both patches loaded first.
 
 ### Choosing candidates (`@ 14051d660`)
 

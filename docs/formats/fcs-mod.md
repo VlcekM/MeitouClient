@@ -11,7 +11,8 @@ saves opt into lossless bytes ([save](save.md)). Layouts retained below, [load o
 Bit0 only controls missing-base warning; both new/modifying records merge or create. Retain
 first definition's type even if later record differs. New takes name; existing renames when bit1,
 independent of bit0. Each key merges within its own bool/float/int/vec3/vec4/string/filename table;
-same spelling in other kinds remains distinct. Missing fields remain. REMOVED=true in merged
+same spelling in other kinds remains distinct. Missing fields remain; an empty string/filename overwrites like any value
+(**Observed** `FUN_1406c9ce0`: no empty test; its per-key filter is filled only for types 11, 13, 14). REMOVED=true in merged
 bool table removes every index; later same ID creates fresh record, no old fields.
 
 References merge by(list,target), append new at end, replace existing in place. Remove only when

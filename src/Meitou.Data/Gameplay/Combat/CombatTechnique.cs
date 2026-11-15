@@ -83,9 +83,10 @@ public sealed record CombatTechnique
 
     /// <summary>
     /// <c>num techniques</c>: the number of blows, any count (the reader <c>FUN_1406684c0</c> loops index 1, 2, ... while it is above the index,
-    /// <b>Verified</b>); 0 when the record says 0 (no blow is stored, so the limb factor is 0 and the technique is never chosen), 1 when the field is
-    /// absent (the editor's default; whether the loaded record carries it is <b>Unknown</b>). Blows 1 and 2 are the paired fields below, blows 3 and
-    /// up are <see cref="MoreBlows"/>.
+    /// <b>Verified</b>); 0 when the record says 0 or lacks the field (no blow is stored, so the limb factor is 0 and the technique is never chosen:
+    /// the reader takes the number with the table's <c>operator[]</c>, <c>FUN_14006cf30</c>, which makes a missing key 0). A record the editor saved
+    /// whole carries the field; a partial one (made from a change whose base is not loaded, or again after REMOVED) does not. Blows 1 and 2 are the
+    /// paired fields below, blows 3 and up are <see cref="MoreBlows"/>.
     /// </summary>
     public int Blows { get; init; } = 1;
 
@@ -265,7 +266,7 @@ public sealed record CombatTechnique
         Flag("sabre", WeaponKinds.Sabre);
         Flag("unarmed", WeaponKinds.Unarmed);
 
-        int blowCount = RecordReading.Int(r, "num techniques", 1);
+        int blowCount = RecordReading.Int(r, "num techniques", 0);
         return new CombatTechnique
         {
             StringId = r.StringId,
