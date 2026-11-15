@@ -693,7 +693,7 @@ static partial class WorldFrame
                 Text: v => v <= 0 ? "stopped" : $"{v:0.#} game h / min"));
         }
 
-        // The window's vsync (off: MAILBOX, else IMMEDIATE; the frame rate is uncapped).
+        // The window's vsync (off: IMMEDIATE, else MAILBOX; the frame rate is uncapped).
         if (getVSync is not null && setVSync is not null)
         {
             sliders.Add(new Slider("VSync", 0, 1, () => getVSync() ? 1 : 0, v => setVSync(v >= 0.5f),

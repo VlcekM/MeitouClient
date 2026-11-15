@@ -11,7 +11,7 @@ namespace Meitou.Game.Rendering.Gpu;
 /// <summary>
 /// Shows <see cref="Backbuffer"/> in a window: a swapchain on the device's surface, and at the end of each frame a blit of the backbuffer
 /// into the acquired image, flipped vertically (the one flip of the GL convention the renderers draw with: row 0 is the bottom of the
-/// picture, the swapchain's row 0 the top). Vsync picks FIFO, otherwise MAILBOX (else IMMEDIATE). Native since phase 8 stage 3
+/// picture, the swapchain's row 0 the top). Vsync picks FIFO, otherwise IMMEDIATE (else MAILBOX). Native since phase 8 stage 3
 /// (docs/renderer-native.md 8.9): the backbuffer is a <see cref="Texture"/> of its own and the frames are <see cref="GpuContext"/>'s.
 /// </summary>
 public sealed unsafe class VulkanPresenter : IDisposable
@@ -458,7 +458,8 @@ public sealed unsafe class VulkanPresenter : IDisposable
         f.ColorSpace == ColorSpaceKHR.SpaceHdr10ST2084Ext && f.Format is Format.A2B10G10R10UnormPack32 or Format.A2R10G10B10UnormPack32;
 
     /// <summary>
-    /// FIFO with vsync, else MAILBOX, else IMMEDIATE when the surface has them.
+    /// FIFO with vsync, else IMMEDIATE, else MAILBOX when the surface has them. IMMEDIATE first: MAILBOX never shows more than the refresh rate,
+    /// and under it DLSS frame generation held the render loop at half the refresh (observed: 144 fps, 72 rendered, RTX 4070 at 144 Hz).
     /// </summary>
     PresentModeKHR ChoosePresentMode()
     {
@@ -470,8 +471,8 @@ public sealed unsafe class VulkanPresenter : IDisposable
         var modes = new PresentModeKHR[n];
         fixed (PresentModeKHR* pm = modes) surfaceExt.GetPhysicalDeviceSurfacePresentModes(pd, surface, ref n, pm);
         return _vsync ? PresentModeKHR.FifoKhr
-            : modes.Contains(PresentModeKHR.MailboxKhr) ? PresentModeKHR.MailboxKhr
-            : modes.Contains(PresentModeKHR.ImmediateKhr) ? PresentModeKHR.ImmediateKhr : PresentModeKHR.FifoKhr;
+            : modes.Contains(PresentModeKHR.ImmediateKhr) ? PresentModeKHR.ImmediateKhr
+            : modes.Contains(PresentModeKHR.MailboxKhr) ? PresentModeKHR.MailboxKhr : PresentModeKHR.FifoKhr;
     }
 
     /// <summary>
