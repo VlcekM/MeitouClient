@@ -242,7 +242,7 @@ public sealed class LevelFile
         }
 
         /// <summary>
-        /// Reads a length-prefixed string.
+        /// Reads a length-prefixed string of any bytes (<see cref="LosslessUtf8"/>, as <see cref="FcsReader"/>).
         /// </summary>
         static string Str(BinaryReader r)
         {
@@ -250,7 +250,7 @@ public sealed class LevelFile
             if (length == 0) return "";
             var bytes = r.ReadBytes(length);
             if (bytes.Length != length) throw new EndOfStreamException();
-            return FcsReader.Encoding.GetString(bytes);
+            return LosslessUtf8.GetString(bytes);
         }
     }
 }

@@ -2,8 +2,8 @@
 
 **Verified** FcsRoundTripTests: four base files read/write byte-identically. FCS GameData/Item
 load/save supplies editor format facts; native Kenshi loader is authoritative where behaviour
-differs. Little-endian; strings=int32 UTF-8 byte count+bytes. Strict reader rejects invalid UTF-8;
-saves opt into lossless bytes ([save](save.md)). Layouts retained below, [load order](overview.md).
+differs. Little-endian; strings=int32 byte count+bytes, any bytes ([Strings](#strings)). Layouts retained below,
+[load order](overview.md).
 
 ## Merging
 
@@ -40,6 +40,21 @@ each BUILDING with `link type` != 3 sets-or-appends on every loaded record of it
 ref (0,0,0) back to itself; missing subsections are skipped. Translation files are ordinary record layers;
 language selection: [localisation](localisation.md). Game skips editor merge/delete bookkeeping; provenance file
 indices track creation/last update but their full uses unknown.
+
+## Strings
+
+- **Verified** (`FUN_1406c0b50`, `FUN_1406bc480`): the game copies a string's bytes into its `std::string` as they are, with no
+  encoding check, so a mod saved in another encoding (Latin-1, Windows-1252) loads. Record tables and lookups compare those bytes exactly.
+- **Verified** (`kenshi_x64.exe`'s byte-string to `MyGUI::UString` imports are the `std::string` and `const char*` constructors and
+  `assign(std::string)`): text reaches the UI through MyGUI's UTF-8 reading, which shows a byte that does not start a well-formed sequence
+  as the code point of its value ([mygui](mygui.md#text-of-game-strings)). A Latin-1 name therefore shows as Latin-1; Windows-1252 bytes 0x80 to 0x9F become C1 controls.
+- Meitou (`FcsReader`, `FcsWriter`, `LosslessUtf8`): every string is decoded as UTF-8, a byte outside a valid sequence kept as the lone
+  surrogate U+DC00 + byte, and encoded back to the same bytes. The mapping is one-to-one, so ordinal comparison is the game's byte comparison;
+  `boost::hash` orders (`BoostHashOrder.StringHash`) hash the stored bytes. Text is drawn through `MyGuiText.Runes`, MyGUI's reading.
+  **Observed** (scratch program, synthetic strings: Latin-1, lone continuation bytes, overlong, CESU surrogate, 5-byte form, truncated
+  sequence): a file read and written again is byte-identical, and `MyGuiText` gives the code points of a byte-level model of the
+  disassembled MyGUI routines; `GameDatabase.Apply` keeps names and string values byte-exact. No installed mod has such a string (77 mod
+  and translation files scanned).
 
 ## Record types and schema
 
@@ -186,6 +201,3 @@ CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugG
 ## Open questions
 
 - The game's behaviour on a truncated or corrupt file, and the exact layouts of file types 8–14.
-- Non-UTF-8 strings in third-party mods: currently rejected. The game doesn't care: it copies string
-  bytes as they are (Verified, `FUN_1406c0b50`, `FUN_1406bc480`), so lossless handling means keeping
-  the raw bytes.

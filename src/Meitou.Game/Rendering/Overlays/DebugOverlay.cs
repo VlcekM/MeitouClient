@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Ui;
@@ -295,7 +296,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     {
         float width = 0;
         int previous = -1;
-        foreach (var rune in text.EnumerateRunes()) width += Step(rune.Value, ref previous, scale);
+        foreach (var rune in MyGuiText.Runes(text)) width += Step(rune.Value, ref previous, scale);
         return width;
     }
 
@@ -310,7 +311,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         float available = width - MeasureText(suffix, scale), used = 0;
         if (available <= 0) return "";
         int count = 0, previous = -1;
-        foreach (var rune in text.EnumerateRunes())
+        foreach (var rune in MyGuiText.Runes(text))
         {
             used += Step(rune.Value, ref previous, scale);
             if (used > available) break;
@@ -356,7 +357,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     static IEnumerable<string> Pieces(string word)
     {
         bool wide = false;
-        foreach (var rune in word.EnumerateRunes())
+        foreach (var rune in MyGuiText.Runes(word))
         {
             if (IsBreakable(rune.Value))
             {
@@ -373,7 +374,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         int start = 0, previous = -1;
         for (int i = 0; i < word.Length;)
         {
-            var rune = Rune.GetRuneAt(word, i);
+            var rune = MyGuiText.RuneAt(word, i);
             if (previous >= 0 && BreaksBetween(previous, rune.Value))
             {
                 yield return word[start..i];
@@ -585,7 +586,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         }
         int first = _batch.Count;
         float start = x, baseline = top + _pixelHeight * scale;
-        foreach (var rune in s.EnumerateRunes())
+        foreach (var rune in MyGuiText.Runes(s))
         {
             int index = rune.Value - FirstChar;
             if (index < 0 || index >= CharCount) index = '?' - FirstChar;
@@ -643,7 +644,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         int first = _batch.Count, generation = ui.Generation;
         float start = x, baseline = top + ui.Baseline * scale, side = ui.Side;
         int previous = -1;
-        foreach (var rune in s.EnumerateRunes())
+        foreach (var rune in MyGuiText.Runes(s))
         {
             int codePoint = rune.Value;
             if (previous >= 0) x += ui.Kern(previous, codePoint) * scale;

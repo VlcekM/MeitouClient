@@ -316,7 +316,7 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     public void Ensure(string text)
     {
-        foreach (var rune in text.EnumerateRunes()) Lookup(rune.Value);
+        foreach (var rune in MyGuiText.Runes(text)) Lookup(rune.Value);
         Prepare();
     }
 

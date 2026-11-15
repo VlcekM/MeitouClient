@@ -9,8 +9,8 @@ namespace Meitou.Data.Fcs;
 public static class FcsReader
 {
     /// <summary>
-    /// Text encoding of FCS strings: UTF-8 (every non-ASCII string in the base game is valid UTF-8). Strict, so
-    /// invalid bytes fail loudly instead of decoding to U+FFFD and silently changing on write.
+    /// Strict UTF-8, for the binary readers and writers of the FCS containers' own numbers. FCS strings themselves are any bytes (the game copies
+    /// them as they are, docs/formats/fcs-mod.md "Strings") and go through <see cref="LosslessUtf8"/>.
     /// </summary>
     public static readonly Encoding Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -20,7 +20,7 @@ public static class FcsReader
     const int MaxCount = 64 * 1024 * 1024;
 
     /// <summary>
-    /// Reads the file at <paramref name="path"/> strictly (a string that is not UTF-8 throws).
+    /// Reads the file at <paramref name="path"/>.
     /// </summary>
     public static FcsFile ReadFile(string path)
     {
@@ -30,18 +30,12 @@ public static class FcsReader
     }
 
     /// <summary>
-    /// Reads a whole file from <paramref name="stream"/> strictly (a string that is not UTF-8 throws).
+    /// Reads a whole file from <paramref name="stream"/>, which is left open. Strings are decoded with <see cref="LosslessUtf8"/>: bytes that are
+    /// not UTF-8 are kept and written back unchanged.
     /// </summary>
-    public static FcsFile Read(Stream stream) => Read(stream, lossless: false);
-
-    /// <summary>
-    /// Reads a whole file from <paramref name="stream"/>, which is left open.
-    /// </summary>
-    /// <param name="lossless">Decode strings with <see cref="LosslessUtf8"/> (bytes that are not UTF-8 are kept) instead of failing on them; save
-    /// files need it.</param>
-    public static FcsFile Read(Stream stream, bool lossless)
+    public static FcsFile Read(Stream stream)
     {
-        using var r = new FcsBinaryReader(stream, lossless);
+        using var r = new BinaryReader(stream, Encoding, leaveOpen: true);
         try
         {
             var file = new FcsFile();
@@ -193,7 +187,7 @@ public static class FcsReader
     }
 
     /// <summary>
-    /// Reads a length-prefixed string: strict UTF-8, or <see cref="LosslessUtf8"/> when the reader is lossless.
+    /// Reads a length-prefixed string of any bytes (<see cref="LosslessUtf8"/>).
     /// </summary>
     static string ReadString(BinaryReader r)
     {
@@ -204,15 +198,7 @@ public static class FcsReader
         // where it left off).
         Span<byte> bytes = length <= 1024 ? stackalloc byte[length] : new byte[length];
         r.BaseStream.ReadExactly(bytes);
-        if (r is FcsBinaryReader { Lossless: true }) return LosslessUtf8.GetString(bytes);
-        try
-        {
-            return Encoding.GetString(bytes);
-        }
-        catch (DecoderFallbackException e)
-        {
-            throw new FcsFormatException("String is not valid UTF-8.", r.BaseStream.Position - length, e);
-        }
+        return LosslessUtf8.GetString(bytes);
     }
 
     /// <summary>
@@ -230,17 +216,6 @@ public static class FcsReader
     /// Splits a comma-separated header list (dependencies, references), dropping empty entries.
     /// </summary>
     static IEnumerable<string> SplitList(string s) => s.Split(',', StringSplitOptions.RemoveEmptyEntries);
-}
-
-/// <summary>
-/// A binary reader that also tells <see cref="FcsReader"/> how to decode strings.
-/// </summary>
-sealed class FcsBinaryReader(Stream stream, bool lossless) : BinaryReader(stream, FcsReader.Encoding, leaveOpen: true)
-{
-    /// <summary>
-    /// True when strings are decoded with <see cref="LosslessUtf8"/> (save files) rather than strict UTF-8.
-    /// </summary>
-    public bool Lossless { get; } = lossless;
 }
 
 /// <summary>

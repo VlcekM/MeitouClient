@@ -4,8 +4,9 @@ namespace Meitou.Localisation;
 
 /// <summary>
 /// Meitou's own texts (launcher, title menu, settings menu) in a language (docs/formats/localisation.md): a gettext <c>.po</c> per locale
-/// code built into Meitou.Core (<c>Localisation/locale/&lt;code&gt;.po</c>), with <c>locale/&lt;code&gt;/meitou.po</c> in the Kenshi folder read
-/// over it, so a language can be added or a string changed without a rebuild. The game's own texts come from Kenshi's catalog; this one is
+/// code built into Meitou.Core (<c>Localisation/locale/&lt;code&gt;.po</c>), with <c>locale/&lt;code&gt;/meitou.po</c> of the Kenshi folder and then
+/// of each loaded mod read over it (<see cref="GameLanguage.MeitouFiles"/>), so a language can be added or a string changed without a rebuild. The
+/// game's own texts come from Kenshi's catalog; this one is
 /// consulted after it (<see cref="Loc.Tr(string)"/>). Keys are the English source strings, lookups exact.
 /// </summary>
 public static class MeitouTranslations
@@ -42,26 +43,45 @@ public static class MeitouTranslations
     /// The catalog of <paramref name="code"/>: the built-in one with the messages of <paramref name="localeFolder"/>'s <see cref="OverrideFile"/>
     /// over it; <see cref="GettextCatalog.Empty"/> when neither exists. An unreadable override is reported and skipped.
     /// </summary>
-    public static GettextCatalog Load(string code, string? localeFolder)
+    public static GettextCatalog Load(string code, string? localeFolder) =>
+        Load(code, localeFolder is null ? Enumerable.Empty<string>() : [Path.Combine(localeFolder, OverrideFile)]);
+
+    /// <summary>
+    /// The catalog of <paramref name="code"/>: the built-in one with the messages of each of <paramref name="files"/> (<see cref="OverrideFile"/>s)
+    /// over it in order, a later file winning a message; <see cref="GettextCatalog.Empty"/> when none exists. An unreadable file is reported and
+    /// skipped.
+    /// </summary>
+    public static GettextCatalog Load(string code, IEnumerable<string>? files)
     {
-        var result = GettextCatalog.Empty;
-        if (Embedded(code) is { } name)
-            using (var stream = typeof(MeitouTranslations).Assembly.GetManifestResourceStream(Prefix + name + Suffix))
-                if (stream is not null)
-                    using (var reader = new StreamReader(stream, Encoding.UTF8)) result = GettextCatalog.ReadPo(reader.ReadToEnd());
-        if (localeFolder is null || Path.Combine(localeFolder, OverrideFile) is not { } file || !File.Exists(file))
-            return result;
-        try
+        var result = LoadEmbedded(code);
+        foreach (var file in files ?? [])
         {
-            var over = GettextCatalog.ReadPo(File.ReadAllText(file, Encoding.UTF8));
-            if (result.Count == 0) return over;
-            result.Add(over);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
-        {
-            Console.Error.WriteLine($"locale    {file}: {e.Message}; ignored");
+            if (!File.Exists(file)) continue;
+            try
+            {
+                var over = GettextCatalog.ReadPo(File.ReadAllText(file, Encoding.UTF8));
+                if (ReferenceEquals(result, GettextCatalog.Empty)) result = over;
+                else result.Add(over);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                Console.Error.WriteLine($"locale    {file}: {e.Message}; ignored");
+            }
         }
         return result;
+    }
+
+    /// <summary>
+    /// The built-in catalog of <paramref name="code"/>, or <see cref="GettextCatalog.Empty"/> when none is built in.
+    /// </summary>
+    static GettextCatalog LoadEmbedded(string code)
+    {
+        if (Embedded(code) is not { } name) return GettextCatalog.Empty;
+
+        using var stream = typeof(MeitouTranslations).Assembly.GetManifestResourceStream(Prefix + name + Suffix);
+        if (stream is null) return GettextCatalog.Empty;
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return GettextCatalog.ReadPo(reader.ReadToEnd());
     }
 
     /// <summary>

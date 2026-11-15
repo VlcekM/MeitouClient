@@ -39,7 +39,7 @@ public sealed class SaveFile
     public static SaveFile Read(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var data = FcsReader.Read(stream, lossless: true);
+        var data = FcsReader.Read(stream);
         var file = new SaveFile { Data = data };
         long at = stream.Position;
         while (at < bytes.Length)
@@ -63,7 +63,7 @@ public sealed class SaveFile
     public void Write(Stream stream)
     {
         // Record sizes are written as held: the game's own files hold the child count there (docs/formats/save.md "byteSize").
-        FcsWriter.Write(Data, stream, keepByteSizes: true, lossless: true);
+        FcsWriter.Write(Data, stream, keepByteSizes: true);
         using var w = new BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true);
         foreach (var list in SlotLists)
         {
