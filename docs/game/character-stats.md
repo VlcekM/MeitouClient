@@ -468,6 +468,10 @@ panel `FUN_14088a8f0`, the hunger term of the stat multiplier `FUN_1406457e0` an
 | below 2, at or above 1 | stat penalty and up to half movement speed; the panel says "Hungry" when the stomach buffer is empty and "Malnourished" ("fed and slowly recovering") when there is food in it (**Observed**; the panel also needs `worstDamage` of at least 0.7) |
 | below 1 | "Starving": the character passes out below a toughness-dependent point; dies at 0 |
 
+**Verified** (decompile of `FUN_14088a8f0` and `FUN_14064da70`): the HUD word reads the live hunger with a strict `< 1`, no margin or
+hysteresis, and a slave's [free food](#free-food) floor is the same 1, so a slave starving and wounded hovers across it: the word alternates
+"Starving" / "Wounded" as in Meitou (#756). Whether the original's panel refresh hides that is **Unknown**.
+
 ### Eating
 
 **Verified** (decompile of `FUN_1405d29c0`, `FUN_1405d0780`, `FUN_140748d70`, `FUN_1405c7f70`, `FUN_1405c9d90`,
