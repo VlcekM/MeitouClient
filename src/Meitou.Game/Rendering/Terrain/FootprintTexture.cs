@@ -43,12 +43,15 @@ static class FootprintTexture
     internal static byte[] BakeBoot(Vector2[] outline, bool flat) => Bake(true, false, outline, flat);
 
     /// <summary>
-    /// Bakes a bare foot's mask from the body's normalized sole triangles (<see cref="FootprintSoles"/>): their union, softened at its rim.
+    /// Bakes a bare foot's mask from the body's normalized sole triangles (<see cref="FootprintSoles"/>): their union, softened at its rim. A union
+    /// covering under <see cref="MinBareFill"/> of its convex <paramref name="hull"/> (a robot's foot frame, open between its struts) prints the
+    /// hull, flat, instead.
     /// </summary>
-    internal static byte[] BakeBare((Vector2 A, Vector2 B, Vector2 C)[] triangles)
+    internal static byte[] BakeBare((Vector2 A, Vector2 B, Vector2 C)[] triangles, Vector2[] hull)
     {
         float[] ink = new float[Width * Height];
         foreach (var t in triangles) Fill(ink, t.A, t.B, t.C);
+        if (hull.Length >= 3 && Fill(ink) < MinBareFill * HullTexels(hull)) return Bake(true, false, hull, flat: true);
 
         byte[] rgba = new byte[Width * Height * 4];
         for (int y = 0; y < Height; y++)
@@ -82,6 +85,28 @@ static class FootprintTexture
             float w0 = Cross(b - a, p - a) / area, w1 = Cross(c - b, p - b) / area, w2 = Cross(a - c, p - c) / area;
             if (w0 >= 0 && w1 >= 0 && w2 >= 0) ink[y * Width + x] = 1;
         }
+    }
+
+    /// <summary>
+    /// The share of its convex hull a bare sole's triangles must cover to print as modelled.
+    /// </summary>
+    const float MinBareFill = .75f;
+
+    /// <summary>
+    /// The texels filled.
+    /// </summary>
+    static int Fill(float[] ink) => ink.Count(static i => i > 0);
+
+    /// <summary>
+    /// The texels inside a convex outline in the mask's normalized space.
+    /// </summary>
+    static int HullTexels(Vector2[] hull)
+    {
+        int count = 0;
+        for (int y = 0; y < Height; y++)
+        for (int x = 0; x < Width; x++)
+            if (Inside(hull, new Vector2((x + .5f) / Width * 2 - 1, (y + .5f) / Height * 2 - 1)) > 0) count++;
+        return count;
     }
 
     /// <summary>

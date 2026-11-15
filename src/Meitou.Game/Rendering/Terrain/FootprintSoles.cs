@@ -166,6 +166,11 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
     const float BareBand = .45f;
 
     /// <summary>
+    /// A bare sole at least this many times as long as wide; a squatter one (a band catching part of a skeleton's foot) takes the generic mask.
+    /// </summary>
+    const float MinBareAspect = 1.6f;
+
+    /// <summary>
     /// Every triangle of the mesh in model space.
     /// </summary>
     static List<(Vector3 A, Vector3 B, Vector3 C)> Triangles(OgreMesh mesh)
@@ -205,12 +210,13 @@ sealed class FootprintSoles(IGpuContext gpu) : IDisposable
         var min = new Vector2(points.Min(p => p.X), points.Min(p => p.Y));
         var max = new Vector2(points.Max(p => p.X), points.Max(p => p.Y));
         var size = max - min;
-        if (size.X is < .4f or > 4 || size.Y is < 1.2f or > 7) return null;
+        if (size.X is < .4f or > 4 || size.Y is < 1.2f or > 7 || size.Y < MinBareAspect * size.X) return null;
 
         var half = size * .54f;
         var centre = (min + max) * .5f;
         var normalized = sole.Select(t => ((t.A - centre) / half, (t.B - centre) / half, (t.C - centre) / half)).ToArray();
-        return new Baked(FootprintTexture.BakeBare(normalized), half.X, half.Y);
+        var hull = InteriorVolume.ConvexHull2([.. normalized.SelectMany(t => new[] { t.Item1, t.Item2, t.Item3 })]);
+        return new Baked(FootprintTexture.BakeBare(normalized, hull), half.X, half.Y);
     }
 
     /// <summary>
