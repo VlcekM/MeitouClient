@@ -159,7 +159,8 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   closed shape would show nearly twice the opacity.
   - Ground items (`WorldObjectRenderer`, `AlphaSource.Opacity`, the map in the second diffuse slot: an item's material is never dual; it replaces
     the ALPHA type's cut-out): `HoldSeeThrough` takes their draws out of the main pass, `DrawSeeThrough` records them farthest first with the
-    `objects see-through` program, which reads the GI's probes itself.
+    `objects see-through` program, which reads the GI's probes itself. Premultiplied (`One, SrcAlpha`): an item writes its colour times the
+    opacity and one less the opacity, the same result as blending by alpha; glass bottles (below) use the same state.
   - Worn and held items (`CharacterShaders.SeeThrough`, the map in `SlotOpacity`): the colour program's push `seeThrough` is 1 in the main pass
     (the item's fragments dropped) and 2 in the blended pass, which draws again only the batches that have held such a part and drops everything
     else in them. The worn cut-out on normal alpha stays.
@@ -169,13 +170,26 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   into alpha) and portraits. Hover and pick are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
 - Drawn solid until the opacity map is resident.
 - **Glass bottles** (`glass` switch, Meitou, on; `GlassBottles`): Sake (`Item_Alcohol1.mesh`) and Cactus Rum / Empty Rum Bottle (`rumjug.mesh`),
-  on the ground or placed in buildings, get an opacity map Meitou makes from the mesh at first use (its triangles drawn at their UVs by height
-  share; `%LOCALAPPDATA%\Meitou\glass`): Sake 45 % up to 55 % of its height, solid from 63 % (neck, stopper); rum 60 %, solid from 94 % (cork).
-  Only while the mesh's vertex count, the diffuse and the material are the game's and the material has no alpha of its own: a mod's own
-  `opacity map` wins and is not switched. Faithful draws them solid, at once (`Material` reads the switch per frame). Icons stay solid (drawn
-  once and saved). Grog (a can) and the Water Jug stay solid. **Observed** (the user's save, hidden frames, no mods): see-through on, solid with
-  `--faithful glass`; the rum map lies on the texture's body and base, the neck and cork solid. Cost (play bench idle, Sake in view, 2
-  interleaved pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
+  on the ground or placed in buildings, get a map Meitou makes from the mesh at first use (its triangles drawn at their UVs by height share;
+  `%LOCALAPPDATA%\Meitou\glass`, one file per mesh and fill). Red is the opacity the dithered views draw: Sake 45 % up to 55 % of its height,
+  solid from 63 % (neck, stopper); rum 60 %, solid from 94 % (cork). Green is the drink, 1 under its level and 0 over a 3 % band (Sake 42 %,
+  rum 70 %, the Empty Rum Bottle `44428-rebirth.mod` none; a bottle placed by another record is full); blue how solid it is. The drink's
+  colour rides in the material's tint (unused without a grey channel). Only while the mesh's vertex count, the diffuse and the material are
+  the game's and the material has no alpha or grey channel of its own: a mod's own `opacity map` wins and is not switched. Faithful draws
+  them solid, at once (`Material` reads the switch per frame). Icons stay solid (drawn once and saved). Grog (a can) and the Water Jug stay
+  solid. **Observed** (the user's save, hidden frames, no mods, the opacity-only version): see-through on, solid with `--faithful glass`; the
+  rum map lies on the texture's body and base, the neck and cork solid. Cost of that version (play bench idle, Sake in view, 2 interleaved
+  pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
+  - **The main view draws them as glass** (Vulkan; elsewhere ordinary see-through items): `MeshSurface.Glass` (bit 128 of the push spare)
+    marks the draws, `PrepareSeeThrough` blits the scene's colour at the render size into `GlassScene` before the blended pass (only with a
+    bottle held), and `AddBlended` draws each bottle's front faces, then its back faces, the copy's bindless index in the second normal slot.
+    A front face replaces the scene: the copy seen through both walls (the texture's hue mostly washed out, darker towards the silhouette)
+    and the drink (its surface a darker line), times one less Schlick's Fresnel, plus the game lighting's specular of a smooth dielectric
+    (`kenshiLight` with no albedo, gloss 0.96: sun, sky and lamps) and 6 % of the lit texture; where the map is solid the lit texture. A back
+    face adds its reflection, dimmed by the near wall and the drink. The copy's lookup is bent along the refracted view ray, at most 6 pixels.
+  - Limits: no depth copy, so the bend can pull in what stands just in front of the bottle; a bottle seen through another shows the scene
+    behind both (the copy is taken once); no motion vectors of their own, as the other see-through items. **Unknown**: the look in play
+    (unseen; the glass program compiles, glslang), and its cost.
 - **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
   frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
   **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):

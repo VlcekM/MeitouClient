@@ -5,9 +5,9 @@ using Meitou.Data.World;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// The <c>glass</c> switch (Meitou, on): the game's glass bottles on the ground (Sake; Cactus Rum and Empty Rum Bottle) are drawn see-through, as
-/// a mod's opacity map draws an item (docs/render-objects.md "See-through items"), with a map Meitou makes from the bottle's own mesh: the body
-/// glass, the neck or cork solid. The game draws them solid.
+/// The <c>glass</c> switch (Meitou, on): the game's glass bottles (Sake; Cactus Rum and Empty Rum Bottle) are drawn as glass (docs/render-objects.md
+/// "Glass bottles"), with a map Meitou makes from the bottle's own mesh: the body glass, the neck or cork solid, the drink inside up to its level.
+/// The game draws them solid.
 /// </summary>
 static class GlassBottles
 {
@@ -15,19 +15,24 @@ static class GlassBottles
 
     /// <summary>
     /// One bottle: its mesh and diffuse (file names) and the mesh's vertex count, which a mod's own model or texture changes; how opaque its glass
-    /// is; and the share of its height from which it turns solid, reached at <see cref="SolidAt"/>.
+    /// is; the share of its height from which it turns solid, reached at <see cref="SolidAt"/>; the share its drink fills and the drink's colour.
     /// </summary>
-    readonly record struct Bottle(string Mesh, string Diffuse, int Vertices, float Glass, float SolidFrom, float SolidAt);
+    readonly record struct Bottle(string Mesh, string Diffuse, int Vertices, float Glass, float SolidFrom, float SolidAt, float Fill, Vector3 Drink);
 
     /// <summary>
-    /// The bottles (both stand on Y): Sake's round body is glass, its neck (from 55 % of the height) and cross stopper solid; the rum bottle's
-    /// body and shoulder are glass, its neck and cork (from 88 %) solid.
+    /// The bottles (both stand on Y): Sake's round body is glass, its neck (from 55 % of the height) and cross stopper solid, pale rice wine to
+    /// 42 %; the rum bottle's body and shoulder are glass, its neck and cork (from 88 %) solid, amber rum to 70 %.
     /// </summary>
     static readonly Bottle[] Known =
     [
-        new("item_alcohol1.mesh", "props_atlas_regular_diffuse.dds", 558, 0.45f, 0.55f, 0.63f),
-        new("rumjug.mesh", "rumjug.dds", 828, 0.6f, 0.88f, 0.94f),
+        new("item_alcohol1.mesh", "props_atlas_regular_diffuse.dds", 558, 0.45f, 0.55f, 0.63f, 0.42f, new Vector3(0.95f, 0.88f, 0.66f)),
+        new("rumjug.mesh", "rumjug.dds", 828, 0.6f, 0.88f, 0.94f, 0.7f, new Vector3(0.78f, 0.42f, 0.14f)),
     ];
+
+    /// <summary>
+    /// The Empty Rum Bottle's record (rebirth.mod, an artifact item; Cactus Rum shares its mesh and diffuse): its bottle holds nothing.
+    /// </summary>
+    const string EmptyRumBottle = "44428-rebirth.mod";
 
     /// <summary>
     /// Whether the switch is on: read as each frame's draws are made, so turning it shows at once.
@@ -35,15 +40,19 @@ static class GlassBottles
     public static bool Enabled { get; set; } = true;
 
     /// <summary>
-    /// <paramref name="m"/>, the material of mesh <paramref name="meshField"/> (a record's path), with a made opacity map when the mesh is one of
-    /// the bottles as the game ships it (its mesh, diffuse and vertex count) and the material has no alpha of its own; else
-    /// <paramref name="m"/> itself (a mod's own opacity map wins).
+    /// <paramref name="m"/>, the material of mesh <paramref name="meshField"/> (a record's path) placed by the records <paramref name="placers"/>
+    /// (string ids), with a made map when the mesh is one of the bottles as the game ships it (its mesh, diffuse and vertex count) and the material
+    /// has no alpha or grey channel of its own; else <paramref name="m"/> itself (a mod's own opacity map wins). The tint, unused without a grey
+    /// channel, carries the drink's colour to the glass program.
     /// </summary>
-    internal static SurfaceMaterial? Apply(SurfaceMaterial? m, string meshField, AssetLocator assets)
+    internal static SurfaceMaterial? Apply(SurfaceMaterial? m, string meshField, IEnumerable<string> placers, AssetLocator assets)
     {
-        if (m is null || m.Alpha != AlphaSource.None || Match(meshField, m.Diffuse) is not { } bottle) return m;
+        if (m is null || m.Alpha != AlphaSource.None || m.GreyChannel >= 0 || Match(meshField, m.Diffuse) is not { } bottle) return m;
+        if (placers.Contains(EmptyRumBottle, StringComparer.Ordinal)) bottle = bottle with { Fill = 0 };
 
-        return MapOf(bottle, assets) is { } map ? m with { Alpha = AlphaSource.Opacity, Opacity = map, BuiltInGlass = true } : m;
+        return MapOf(bottle, assets) is { } map
+            ? m with { Alpha = AlphaSource.Opacity, Opacity = map, BuiltInGlass = true, Tint = bottle.Drink }
+            : m;
     }
 
     /// <summary>
@@ -77,10 +86,15 @@ static class GlassBottles
     /// <summary>
     /// Goes up when the maps are made differently: a file of another version is not read.
     /// </summary>
-    const int MapVersion = 1;
+    const int MapVersion = 2;
 
     /// <summary>
-    /// Each bottle's map file by mesh (null: it could not be made), made once a run.
+    /// The share of the bottle's height over which the drink's surface fades out (the band the glass program draws the meniscus in).
+    /// </summary>
+    const float Meniscus = 0.03f;
+
+    /// <summary>
+    /// Each bottle's map file by its name (mesh and fill; null: it could not be made), made once a run.
     /// </summary>
     static readonly Dictionary<string, string?> Maps = [];
 
@@ -91,16 +105,22 @@ static class GlassBottles
     {
         lock (Maps)
         {
-            if (!Maps.TryGetValue(b.Mesh, out var map)) Maps[b.Mesh] = map = Make(b, assets);
+            string name = MapName(b);
+            if (!Maps.TryGetValue(name, out var map)) Maps[name] = map = Make(b, name, assets);
             return map;
         }
     }
 
     /// <summary>
-    /// Makes <paramref name="b"/>'s map under the derived-data caches (<c>glass</c>) from its mesh; null when the mesh is missing, unreadable or
-    /// not the game's (another vertex count), or the file cannot be written.
+    /// The map's file name: the mesh's, the fill in percent and the version.
     /// </summary>
-    static string? Make(Bottle b, AssetLocator assets)
+    static string MapName(Bottle b) => $"{Path.GetFileNameWithoutExtension(b.Mesh)}-{(int)MathF.Round(b.Fill * 100)}-v{MapVersion}.dds";
+
+    /// <summary>
+    /// Makes <paramref name="b"/>'s map (file <paramref name="name"/>) under the derived-data caches (<c>glass</c>) from its mesh; null when the
+    /// mesh is missing, unreadable or not the game's (another vertex count), or the file cannot be written.
+    /// </summary>
+    static string? Make(Bottle b, string name, AssetLocator assets)
     {
         if (assets.FindMesh(b.Mesh) is not { } path) return null;
 
@@ -115,7 +135,7 @@ static class GlassBottles
         }
         if (VertexCount(mesh) != b.Vertices) return null;
 
-        string file = LoadCaches.Folder("glass", $"{Path.GetFileNameWithoutExtension(b.Mesh)}-v{MapVersion}.dds");
+        string file = LoadCaches.Folder("glass", name);
         if (File.Exists(file) && !LoadCaches.Disabled) return file;
 
         return Write(file, Draw(b, mesh)) ? file : null;
@@ -131,12 +151,13 @@ static class GlassBottles
     }
 
     /// <summary>
-    /// The map: every texel the mesh covers takes the opacity of the height it is at (the lowest where faces overlap), the rest solid.
+    /// The map, three bytes a texel (<see cref="Texel"/>): every texel the mesh covers takes the values of the height it is at (the least glass
+    /// and the most drink where faces overlap), the rest solid and dry.
     /// </summary>
     static byte[] Draw(Bottle b, OgreMesh mesh)
     {
-        var map = new byte[MapSize * MapSize];
-        Array.Fill(map, (byte)255);
+        var map = new byte[MapSize * MapSize * 3];
+        for (int i = 0; i < map.Length; i += 3) (map[i], map[i + 1], map[i + 2]) = (255, 0, 255);
 
         var heights = mesh.SubMeshes.SelectMany(s => Data(mesh, s).ReadPositions() ?? []).Select(p => p.Y).ToArray();
         float bottom = heights.Min();
@@ -191,8 +212,11 @@ static class GlassBottles
                 w.Z = 1 - w.X - w.Y;
                 if (w.X < -slack || w.Y < -slack || w.Z < -slack) continue;
 
-                int texel = Wrap(y) * MapSize + Wrap(x);
-                map[texel] = Math.Min(map[texel], Opacity(b, Math.Clamp(Vector3.Dot(w, heights), 0, 1)));
+                int texel = (Wrap(y) * MapSize + Wrap(x)) * 3;
+                var (opacity, drink, solid) = Texel(b, Math.Clamp(Vector3.Dot(w, heights), 0, 1));
+                map[texel] = Math.Min(map[texel], opacity);
+                map[texel + 1] = Math.Max(map[texel + 1], drink);
+                map[texel + 2] = Math.Min(map[texel + 2], solid);
             }
         }
     }
@@ -208,26 +232,33 @@ static class GlassBottles
     static int Wrap(int i) => (i % MapSize + MapSize) % MapSize;
 
     /// <summary>
-    /// The opacity at <paramref name="height"/> (a share of the bottle's): the glass's, rising to solid between <see cref="Bottle.SolidFrom"/> and
-    /// <see cref="Bottle.SolidAt"/>.
+    /// The map's values at <paramref name="height"/> (a share of the bottle's): red the opacity the dithered views draw, the glass's rising to
+    /// solid between <see cref="Bottle.SolidFrom"/> and <see cref="Bottle.SolidAt"/>; green the drink, 1 under its level, falling to 0 across
+    /// <see cref="Meniscus"/>; blue how solid it is (the same rise).
     /// </summary>
-    static byte Opacity(Bottle b, float height)
+    static (byte Opacity, byte Drink, byte Solid) Texel(Bottle b, float height)
     {
         float solid = Math.Clamp((height - b.SolidFrom) / (b.SolidAt - b.SolidFrom), 0, 1);
-        return (byte)MathF.Round(255 * (b.Glass + (1 - b.Glass) * solid));
+        float drink = b.Fill <= 0 ? 0 : Math.Clamp((b.Fill - height) / Meniscus + 0.5f, 0, 1);
+        return (Byte(b.Glass + (1 - b.Glass) * solid), Byte(drink), Byte(solid));
     }
 
     /// <summary>
-    /// Writes <paramref name="opacity"/> (one byte a texel) as an uncompressed BGRA DDS, grey with the opacity in every colour channel, through a
-    /// temporary file; false when it cannot be written.
+    /// A share (0 to 1) as a byte.
     /// </summary>
-    static bool Write(string file, byte[] opacity)
+    static byte Byte(float share) => (byte)MathF.Round(255 * share);
+
+    /// <summary>
+    /// Writes <paramref name="map"/> (red, green and blue bytes a texel) as an uncompressed BGRA DDS through a temporary file; false when it cannot
+    /// be written.
+    /// </summary>
+    static bool Write(string file, byte[] map)
     {
         string temporary = $"{file}.{Environment.ProcessId}.tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            using (var w = new BinaryWriter(File.Create(temporary))) WriteDds(w, opacity);
+            using (var w = new BinaryWriter(File.Create(temporary))) WriteDds(w, map);
             File.Move(temporary, file, overwrite: true);
             return true;
         }
@@ -240,7 +271,7 @@ static class GlassBottles
     /// <summary>
     /// The DDS header (32-bit RGB with alpha, no mips: the texture cache makes them) and the texels.
     /// </summary>
-    static void WriteDds(BinaryWriter w, byte[] opacity)
+    static void WriteDds(BinaryWriter w, byte[] map)
     {
         // DDS_HEADER: size, flags (caps, height, width, pitch, pixel format), height, width, pitch, depth, mips, 11 reserved.
         uint[] header = [0x20534444u, 124, 0x100F, MapSize, MapSize, MapSize * 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -249,12 +280,10 @@ static class GlassBottles
         uint[] format = [32, 0x41, 0, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000, 0x1000, 0, 0, 0, 0];
         foreach (uint v in header.Concat(format)) w.Write(v);
 
-        var texels = new byte[opacity.Length * 4];
-        for (int i = 0; i < opacity.Length; i++)
-        {
-            texels.AsSpan(i * 4, 3).Fill(opacity[i]);
-            texels[i * 4 + 3] = 255;
-        }
+        // BGRA in memory: the masks above put red in the third byte.
+        var texels = new byte[map.Length / 3 * 4];
+        for (int i = 0; i < map.Length / 3; i++)
+            (texels[i * 4], texels[i * 4 + 1], texels[i * 4 + 2], texels[i * 4 + 3]) = (map[i * 3 + 2], map[i * 3 + 1], map[i * 3], 255);
         w.Write(texels);
     }
 

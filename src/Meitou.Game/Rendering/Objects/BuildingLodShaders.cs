@@ -81,8 +81,8 @@ static class BuildingLodShaders
     /// </summary>
     /// <param name="solid">The variant for fully visible instances of a material without a cut-out: no <c>discard</c> anywhere, so the GPU
     /// tests depth before the fragment shader runs (a shader that may discard gets its depth test late). The same maths otherwise.</param>
-    /// <param name="blended">The variant of the see-through items' blended pass (<see cref="OpacityDither"/>): the opacity goes out as the
-    /// fragment's alpha and is not dithered.</param>
+    /// <param name="blended">The variant of the see-through items' blended pass (<see cref="OpacityDither"/>): premultiplied by the opacity, not
+    /// dithered, and the glass bottles' glass (<see cref="WithGlass"/>).</param>
     public static string Fragment(bool solid = false, bool blended = false)
     {
         string f = Shaders.MeshFragment;
@@ -92,9 +92,77 @@ static class BuildingLodShaders
         f = WithWetWorld(f);
         f = WithGameLighting(f);
         f = WithEmissiveAndGhost(f);
-        if (blended) f = Literal(f, "fragColour = vec4(colour, 1.0);", "fragColour = vec4(colour, uAlphaSource == 4 ? texture(uDiffuse2, uv).r : 1.0);");
+        if (blended) f = WithGlass(f);
         return f;
     }
+
+    /// <summary>
+    /// The blended pass's output (WorldObjectRenderer.Premultiplied): an item's colour times its opacity map's red and one less it; a glass bottle
+    /// (<see cref="Sky.MeshSurface.Glass"/>) as glass, its map's green the drink and blue how solid it is (GlassBottles), the drink's colour in the
+    /// tint and the scene's copy in the second normal slot (WorldObjectRenderer.AddBlended).
+    /// </summary>
+    static string WithGlass(string f)
+    {
+        f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", GlassFunctions + "\nvoid main()\n{");
+        return Literal(f, "fragColour = vec4(colour, 1.0);", """
+            float opacity = uAlphaSource == 4 ? texture(uDiffuse2, uv).r : 1.0;
+            fragColour = vec4(colour * opacity, 1.0 - opacity);
+            if ((uSurface & 128u) != 0u) fragColour = glassColour(colour, n, v, albedo, uv);
+            """);
+    }
+
+    /// <summary>
+    /// <c>glassColour</c>: a glass bottle's fragment in the blended pass (docs/render-objects.md "Glass bottles"). The reflection is the game
+    /// lighting's specular of a smooth dielectric (kenshiLight with no albedo: the sun's, the sky's and the lamps', Fresnel in its terms). A front
+    /// face replaces the scene with the scene's copy seen through both walls and the drink, bent as a thick lens bends it, plus its reflection;
+    /// a back face (drawn after) adds its reflection, dimmed by the near wall and the drink. Where the map is solid (the neck, the cork) the lit
+    /// texture.
+    /// </summary>
+    const string GlassFunctions = """
+        uniform sampler2D uGlassScene;
+        uniform mat4 uViewProjection;
+        // A world point's place in the scene's copy (0 to 1; gl_FragCoord's, as the Vulkan viewport is not flipped, GlConventions.VkViewport).
+        vec2 glassScreen(vec3 world)
+        {
+            vec4 c = uViewProjection * vec4(world - uEye, 1.0);
+            return c.xy / c.w * 0.5 + 0.5;
+        }
+        // Where the scene's copy shows what the bent view ray from this fragment meets: the bend measured by projecting both rays a unit (10 cm) on,
+        // at most 6 pixels (no depth keeps it off what stands in front of the bottle).
+        vec2 glassBent(vec3 n, vec3 v, vec2 size)
+        {
+            vec2 here = gl_FragCoord.xy / size;
+            vec2 bend = glassScreen(vWorld + refract(-v, n, 1.0 / 1.5)) - glassScreen(vWorld);
+            float pixels = length(bend * size);
+            return here + bend * min(1.0, 6.0 / max(pixels, 1e-4));
+        }
+        vec4 glassColour(vec3 lit, vec3 n, vec3 v, vec3 albedo, vec2 uv)
+        {
+            vec4 map = texture(uDiffuse2, uv);
+            float solid = map.b;
+            float drink = map.g;
+            float nv = clamp(dot(n, v), 0.02, 1.0);
+            atmoMetalness = 0.0;
+            atmoMetalDiffuse = 0.0;
+            vec3 reflection = kenshiLight(vec3(0.0), n, v, 0.96, vWorld);
+            if (uFogDistance > 0.0) reflection = atmoApply(reflection, uEye, vWorld) - atmoApply(vec3(0.0), uEye, vWorld);
+
+            // The glass: the texture's hue mostly washed out, darker the denser the bottle's glass (the map's red) and the longer the path through
+            // the wall (towards the silhouette, which draws the outline); the drink's colour under its level, its surface a darker line.
+            float top = max(albedo.r, max(albedo.g, albedo.b));
+            vec3 tint = mix(vec3(1.0), albedo / max(top, 1e-3), 0.55) * (1.0 - 0.3 * map.r);
+            vec3 wall = pow(tint, vec3(min(1.0 / nv, 3.0)));
+            vec3 drinkColour = mix(vec3(1.0), uTint, drink * 0.85) * (1.0 - 1.8 * drink * (1.0 - drink));
+            if (!gl_FrontFacing) return vec4(reflection * wall * drinkColour * (1.0 - solid) * 0.6, 1.0);
+
+            float fresnel = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
+            vec2 size = vec2(textureSize(uGlassScene, 0));
+            vec3 behind = textureLod(uGlassScene, glassBent(n, v, size), 0.0).rgb;
+            vec3 glass = behind * wall * wall * drinkColour * (1.0 - fresnel) + reflection + lit * 0.06;
+            return vec4(mix(glass, lit, solid), 0.0);
+        }
+
+        """;
 
     /// <summary>
     /// The instances' inputs and helpers, the vertex colour, a farm plant's tint and a site's grid, and the scaffold functions.
@@ -420,6 +488,8 @@ static class BuildingLodShaders
         ["uFadeMode"] = "pc.fadeMode",
         ["uFadeEye"] = "view.eye",
         ["uFadeRange"] = "pc.fadeRange",
+        // A glass bottle's scene copy rides in the second normal slot of its blended draws (WorldObjectRenderer.AddBlended); read only for those.
+        ["uGlassScene"] = "textures2D[pc.normal2]",
         // The interior cut: the view's mask, for the draws of map features over it (fadeMode bit 2, WorldObjectRenderer.Batch.Cut).
         ["uInteriorCut"] = "(view.interiorCut != 0u && (pc.fadeMode & 2) != 0)",
         ["uCutVolumes"] = "view.cutVolumes",

@@ -479,7 +479,8 @@ public static class Enhancements
                 + "torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"),
         new("glass", "Glass bottles", "solid", "see-through",
             () => Objects.GlassBottles.Enabled, v => Objects.GlassBottles.Enabled = v,
-            "the game draws its sake and rum bottles solid; Meitou draws them on the ground as glass you see through, the neck or cork solid "
+            "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, "
+                + "reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid "
                 + "(docs/render-objects.md \"See-through items\")"),
     ];
 

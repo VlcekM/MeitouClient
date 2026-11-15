@@ -1395,7 +1395,7 @@ static partial class WorldFrame
     /// resolve, the lamps' shadows, the characters' occlusion and the reflections, which read the opaque scene's colour, albedo and traced term,
     /// and before the shafts and fog, which then lie over them. Into the scene's colour and depth alone (the albedo and traced targets keep what
     /// the opaque scene wrote); they write no depth, so what comes later (fog, occlusion, motion) sees what is behind them. The objects', then
-    /// the characters'.
+    /// the characters'. The glass bottles first get their copy of the scene (<see cref="WorldObjectRenderer.PrepareSeeThrough"/>), with no pass open.
     /// </summary>
     static void DrawSeeThrough(ref FrameState f)
     {
@@ -1404,6 +1404,7 @@ static partial class WorldFrame
         bool characters = gpu.Characters is { HasSeeThrough: true };
         if (!objects && !characters) return;
 
+        if (objects) gpu.Objects!.PrepareSeeThrough(f.Post.SceneColour);
         f.Host.Open(7, PassTargets.Of(f.Post.SceneColour, f.Post.SceneDepth));
         if (objects) gpu.Objects!.DrawSeeThrough();
         if (characters) gpu.Characters!.DrawSeeThrough();

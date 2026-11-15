@@ -163,7 +163,7 @@ static class SettingHints
         WorldFrame.TracedGrassSwitch => "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
-        "Glass bottles" => "Sake and rum bottles on the ground are see-through glass; the neck or cork stays solid.",
+        "Glass bottles" => "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside.",
         "Blood on weapons and gear" => "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them.",
         "Soft grazing sun" => "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches.",
         "Reflections" => "Glossy and wet surfaces mirror their surroundings instead of one sky picture.",
