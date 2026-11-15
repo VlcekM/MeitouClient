@@ -247,7 +247,11 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   event 3 / 66 lines ([dialogue](dialogue.md)); `Bandit mugging one liner`, `bandit fight picking new target in wilds` and `Bandit Revenge` need
   the speaker outside a non-player town (DC 31 false), `Give us your stuff!` the target, so inside a town's radius (the Hub: 2500) only
   `Bandit hold up 1` can fire (20 % a check, 50 % permanent; **Verified** by probe of the merged data; Meitou headless on a save at the Hub's
-  edge: no attack until the boss's patrol left the circle, then the one liner and the fight). The only BANDIT-type target rule found is the player's Shoot first gunners
+  edge: no attack until the boss's patrol left the circle, then the one liner and the fight). The demand itself (**Verified** by a dump of
+  the merged base records): `Bandit hold up 1` (`14603-Dialogue (4).mod`, event 3) has repetition limit 3 (48 game hours, shared by every
+  speaker); its "Get over here!" (`14605`) unlocks-but-keeps `Bandit hold up` (`14011-Escapes.mod`, event 1, `locked` by default, limit 2 h),
+  stores it as the interrupt and runs DA 2, the only line that unlocks it. Most of its endings lock it again (DA 36); "Go ahead, check my
+  stuff" → 300 taken (`15319`) and "... No!" (`14591`) leave it unlocked, so talking to that boss again asks again. The only BANDIT-type target rule found is the player's Shoot first gunners
   ([squad AI options](ai-tasks.md#squad-ai-options)).
 
 ### The attack-on-sight tests
