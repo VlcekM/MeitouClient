@@ -83,7 +83,21 @@ public sealed class AiSettings
 /// Starts a contract package on a squad for some game hours, aimed at <see cref="Target"/> (docs/game/ai.md "Dialogue and AI": dialogue's <c>AI
 /// contract</c>, the target the conversation's partner).
 /// </summary>
-public sealed record StartContract(int SquadId, string PackageId, float Hours, CharacterId? Target = null) : SimCommand;
+public sealed record StartContract(int SquadId, string PackageId, float Hours, CharacterId? Target = null) : SimCommand
+{
+    /// <summary>
+    /// The contract's assault takes <see cref="Target"/> wherever it is, not only within the manoeuvre mode's reach (engine API for code mods, not
+    /// in the original; <see cref="Blackboard.MissionAnyRange"/>).
+    /// </summary>
+    public bool AnyRange { get; init; }
+}
+
+/// <summary>
+/// Ends a squad's running contract now, as its hours running out would (engine API for code mods, not in the original;
+/// <see cref="Blackboard.EndContract"/>): the slots choose again, and a <see cref="StartContract"/> after it in the same tick starts the same
+/// contract afresh. Ignored for a squad without one.
+/// </summary>
+public sealed record EndContract(int SquadId) : SimCommand;
 
 /// <summary>
 /// Replaces a squad's packages with one (dialogue's <c>change AI</c>).
@@ -2323,8 +2337,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     public void RegisterSources(DecisionSystem decisions) => decisions.Register(new SquadAutonomy.PackageGoals());
 
     /// <summary>
-    /// The commands: an autonomous squad's switch and home (<see cref="SquadAutonomy.Apply"/>; a home in a town not looked at yet has its places
-    /// found), then the contract and AI change commands (<see cref="TakePackage"/>).
+    /// The commands: a trader's visit and a contract's end, an autonomous squad's switch and home (<see cref="SquadAutonomy.Apply"/>; a home in a
+    /// town not looked at yet has its places found), then the contract and AI change commands (<see cref="TakePackage"/>).
     /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
@@ -2333,6 +2347,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (command is VisitTown visit)
             {
                 Visit(world, visit);
+                continue;
+            }
+
+            if (command is EndContract end)
+            {
+                world.Squads.Find(end.SquadId)?.Ai?.EndContract();
                 continue;
             }
 
@@ -2364,7 +2384,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         _rules.Bind(this, world, squad);
-        if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target);
+        if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
         else squad.Ai!.Replace(package, _rules);
     }
 
