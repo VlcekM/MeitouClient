@@ -1,7 +1,5 @@
 # Launch options and environment variables
 
-Every command-line option and environment variable read by the project's executables. The parsing code named in each section is the authority; help text was cross-checked against it (gaps are listed under "Unclear").
-
 Settings persist in `meitou.user.json`. The install is found in this order: `KENSHI_PATH`; `meitou.local.json` in the current folder, the executable's folder, and their parents; on Linux and macOS `XDG_CONFIG_HOME/meitou/config.json` (`kenshiPath`); then auto-detection. If none finds it, the game asks and writes `meitou.local.json`. Source: `src/Meitou.Core/Content/GameInstall.cs`, `GameInstallSources.cs`.
 
 An option that belongs to another executable is rejected as unknown (exit 2).
@@ -360,11 +358,3 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Game/Rendering/Terrain/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
 
 Names starting `MEITOU_` are also recorded in the benchmark JSON (`BenchSession.cs`).
-
-## Unclear
-
-- `MEITOU_BENCH_SKIP` defaults differ: 1 in `FlyBenchmarkSession.Report`, 0 in `SpikeLog.cs:19`.
-- `MEITOU_METAL_GI_FALLBACK` (`MetalProbeGi.cs:356`), `MEITOU_METAL_PRIVATE_STATIC` (`TerrainRenderer.cs:63`), and the two `*_STAMPS` variables are described from the names and read sites only; their effects were not traced.
-- `MEITOU_FRAGMENT` (`src/Meitou.Game/Rendering/Gpu/Shaders/GlslProgramCompiler.cs:167`) is a shader macro, not an environment variable, so it is excluded.
-- `MTL_CAPTURE_ENABLED` appears only in the game's usage text (`GameOptions.cs:120`); no project code reads it.
-- The viewer's `--class` and the impostor `--debug` semantics are not traced beyond the parse.

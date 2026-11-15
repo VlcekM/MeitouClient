@@ -27,16 +27,6 @@ A picture of the sky alone, without the world, has the raw linear colours: the p
 path's picture goes through) is a later pass, so the two windows compare **structure** here — the gradient's shape, the sun's
 place, the clouds — not the tone. The pixel diff against Vulkan becomes the check when both draw the same passes.
 
-## Tessellation (evaluated, not shipped)
-
-Metal has no tessellation control stage, so a 2026-10-24 MEP-4 prototype wrote explicit triangle factors and used
-post-tessellation vertex stages. CPU factor generation cost ~103 ms/frame for terrain and ~25 ms/frame for rocks (3 fps
-at the Hub); a GPU compute pre-pass got the same view to ~35 fps against the ~54 fps MEP-3 baseline. The deferred-colour
-path also exposed `NotSupportedException: no Metal primitive for PatchList` when factor allocation failed and the job
-fell back to an indexed draw under a patch-topology pipeline. The prototype was removed: `HasTessellation` is false,
-terrain keeps the flat/parallax path, and the tessellation toggles stay hidden. Revisiting it needs a hard performance
-budget, near-range/quality caps, a per-patch flat fallback and full visual/soak validation.
-
 ## The shader chain
 
 The engine's own `GlslProgramCompiler` produces the SPIR-V; `Silk.NET.SPIRV.Cross` 2.23.0 (with
@@ -66,11 +56,6 @@ On Metal the stages have their own binding tables, so the Vulkan scheme (the fra
 bindings at 32, to keep them apart from the vertex stage's) is not needed: the fragment stage's
 bindings start at 0.
 
-**Observed**, macOS Metal with `Haircut08-hobo`: the shaded, depth-tested editor loses hair layers while an unlit mask agrees with native Kenshi 1.0.68 D3D11.
-Writing the unchanged `gl_FragCoord.z` to `gl_FragDepth` restores 98.9% mask overlap at matched cameras, with depth testing and writes enabled;
-the source alpha in mip levels 0–3, channel selection, threshold and bone transforms agree. `MetalShaders.DiscardNeedsLateDepth` requests this output
-from the character colour shader; the interface default is false. **Unknown**: the exact compiler/driver optimization responsible. Disabling fast math alone does not fix it.
-
 **The one binding table per stage.** Metal maps a resource to its MSL index by the binding
 decoration alone, set ignored, so two sets with the same binding number would land on one
 `[[buffer(n)]]` (the terrain's set 0 and set 2 both have a binding-0 block; the default block sits
@@ -84,11 +69,6 @@ assigns; the block is found by the engine's name for it, `Push`). Both stages' t
 entries, so the scheme fits the engine's sets (bindings within a set stay under 8).
 
 ## The bindless table
-
-`BindlessTable` declares seven **combined** image samplers. Metal has no combined sampler, and
-spirv-cross refuses the case outright ("Argument buffer runtime array currently not supported for
-combined image sampler"). The way through is **separate textures and separate samplers**, which the
-backend rewrites into the GLSL before compiling (the engine's compiler already rewrites sources).
 
 The verified model (the MSL that spirv-cross makes, the pipeline reflection, and the host's
 `--table` draw), on Metal 3:
@@ -158,10 +138,6 @@ Two sharp edges:
   the window's size times the scale factor. Without it the drawable is 1x1 and the window shows
   one magnified pixel.
 
-**No LOD bias in the table** (**Code reading**, not on a GPU): a Metal sampler has no LOD bias, and `MetalBindless` stores only the sampler's resource id, so the
-upscaler's `LodBias` (`SamplerDesc.LodBias`) reaches only the legacy samplers bound through the encoder (`MetalCommandList`, which passes it as the LOD clamps). Textures read through the
-table (terrain layers, objects, foliage, characters) sample at the unbiased level under MetalFX or TAA; Vulkan's sampler adds the bias there. **Unknown**: how much sharper they look with it.
-
 ## The backend so far
 
 - `src/Meitou.Game/Rendering/Metal/` - the backend (macOS only, outside the solution so the Windows build never
@@ -190,14 +166,6 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   set's slots bind straight onto the encoder at the SPIR-V binding numbers (the MSL is compiled
   with `MslEnableDecorationBinding`), so no argument buffer exists yet and none is needed - a
   texture at [[texture(n)]], its sampler at [[sampler(n)]], a block at [[buffer(n)]] per stage.
-- The services: `MetalShaders` (the engine's compiler, fragment bindings at 0; the MSL per stage),
-  `MetalPipelines` (an `MTLRenderPipelineState` per description; depth clip mode is the *encoder's*
-  on Metal, set when the pipeline binds), `MetalSamplers` (Metal's sampler has no LOD bias; the
-  description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
-  blit copies from a shared staging ring, committed in order before the frame's own; `IGpuUploads.Scope` lets the render thread's batches
-  share one command buffer, which `WorldTextureCache.Pump` uses: a queue holds 64 command buffers and `commandBuffer` blocks while it is full, so
-  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). Encoders are labelled with the
-  innermost `BeginLabel` (else the list's name), for Metal System Trace.
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
   the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or
   `pixelFormatView` usage, so Metal may compress it losslessly: its views are the base image), views (`NewTextureView`),
@@ -315,10 +283,6 @@ bindless table. Three facts this step settled:
 - **The terrain quadtree is in world coordinates.** The Metal host placed its camera at
   `(o.X ?? 0, o.Z ?? 0)` and looked at the world origin, not at `scene.Focus` where the region is
   loaded; it now uses the focus (or `--at`), as the Vulkan camera rig does.
-- **The diffuse layer array is BC3 (DXT5), the normal array BC1.** `MetalConventions` mapped only
-  BC1, so the diffuse array's allocation threw, `TerrainTextures` fell back to no array, and the
-  terrain sampled the stand-in (black albedo — the picture was dark blue from the sky's ambient).
-  DXT5 now maps to `BC3RGBA` and DXT3 to `BC2RGBA`, both as 4x4 blocks of 16 bytes.
 - **The frame inputs are the Vulkan path's.** The host runs the weather scheduler
   (`WorldWeather`) and `WeatherSurfaces`, passes the sky `fogDistance + 3*max(eyeY, 0)`, sets
   `camera.ViewDistance` from the light's fog distance, `render.TerrainPixelScale` from the render
@@ -447,10 +411,6 @@ the large per-pixel differences left are the missing shadows and GI (steps 4 and
 research. Each step ends with the same gates: build 0/0, tests 424 pass / 1 known fail, the Vulkan
 screenshot unchanged, and a Metal shot compared with the Vulkan one at the same view.
 
-1. **The frame's inputs (small).** Give the Metal path the real `WorldFrame`/`FrameGlobals`: the
-   atmosphere LUTs and textures, the sun and light, fog, and the camera's world framing. Today the
-   terrain's frame textures are stand-ins, so it is dark. Ends when the terrain's colours and relief
-   match Vulkan's at the same hour and camera.
 2. **Compute (large).** `MTLComputePipelineState` and `MTLComputeCommandEncoder`, dispatches, compute
    sets as argument buffers, storage images/textures, then the post chain's passes: tone mapping,
    TAA, fog volumes, the HiZ pyramid, the GPU culls. `MetalCommandList.Dispatch` and the compute
@@ -492,35 +452,6 @@ pixels by one level (the TAA's history), so a step's picture is compared against
 the baseline, not one.
 
 ## Where the port stands (resume here)
-
-**Drawing on Metal today:** the sky, weather and atmosphere; the terrain (heights, biomes, the streamer); the
-objects and buildings; the sun's shadows (terrain, objects, foliage and character casters); foliage meshes, grass
-and the terrain-shader rocks (the CPU cull and CPU grass, not the compute ones); the foliage meshes and grass (the
-impostor bakes and far billboards are disabled until their atlas is fixed); the scene's HDR target, the game's tone map,
-auto exposure and a seam-only TAA; the faithful water;
-skinned characters (the `--crowd` harness, the `--new-game` player squad and the population draw list; the town
-population and navmesh now run in the live loop); the world's lamps and room lights; the weather's and map placers'
-particles (the low-resolution targets are shared; the near-plane close pass is still Vulkan-only); the HUD and the faithful panels
-(inventory, stats, overview/map, menu), with portraits, item icons and the panels' own pointer/keyboard controls;
-the hover outline, move marker and navmesh debug overlay (Shift+F11).
-`MetalGameLoop` (`Host/MetalGameLoop.cs`) is now a playable loop: WASD/arrows, Q/E, wheel and middle-drag
-move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
-F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter toggles full screen. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
-has `FullScreenPrimary`): a Space of its own, so Cmd+Tab and Ctrl+Left/Right switch away, and AppKit hides the menu bar and Dock
-(**Observed** working, 2026-11-12, Apple M6, macOS 27.2).
-**Start (Observed 2026-11-12, Apple M6, macOS 27.2, from the run's log):** as on Vulkan, the world is read on a worker
-and the boot draws the Kenshi loading screen between its steps (`MetalLoadingCanvas`, docs/engine.md "Host and loading"); the
-window is made hidden and shown with the loading screen. A hidden window's `CAMetalLayer` gives no drawable, nor does the first `nextDrawable` right after it shows, so the window
-background is black for that moment. Full screen is asked for once the window is shown (AppKit ignores it for a hidden one), and loading
-frames are drawn until `NSWindowDidEnterFullScreenNotification` (`FullScreenTransitions`, ~0.6 s): AppKit animates into the Space only
-while events are handled, and a load step holding the thread earlier left the Space showing the empty window. Stills draw no
-loading frames.
-The shared settings menu is now wired on Metal too (F10; Display, Graphics, Interface, Controls, Advanced and Audio),
-including the MetalFX preset (which owns the render scale), VSync, frame limit and full screen, persisted in
-`meitou.user.json`. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
-start chooser, save/load slots and confirmations, the in-game Esc menu, the loading screen and sky transitions, and the
-audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
-Still missing: the pointer sprite, the free camera and the cinema camera.
 
 **Current Metal mode (2026-10-22).** Terrain textures, water, foliage, terrain shadows and cloud shadows are on.
 Turn any of them off for diagnosis with `MEITOU_METAL_FOLIAGE=0`, `_WATER=0`, `_SHADOWS=0`, `_CLOUD_SHADOWS=0` or
@@ -566,9 +497,6 @@ and the shared trade/dialogue/build/editor interaction layer are wired. The rema
 1. **Runtime acceptance for the shared screens.** Open a trade, a dialogue, the build menu and the character editor
    on Metal; check their state, pointer actions and layout against Vulkan. The host callbacks (build services,
    rocks, factions, tooltips, editor previews) now come from `ConfigurePlayerInterface`.
-2. **Full UI input.** The panel keys (I/C, M/T/Y, Esc, F7) and pointer hover/clicks/scroll work; the loop now also
-   feeds the camera, selection, box select, move orders, F8/F11/F12, F10 settings and Alt+Enter. The highlight key
-   labels ground items and lights the signs. Still missing: the pointer sprite and the cinema camera.
 3. **Still acceptance.** `--ui-panel <name>` and the full `--ui-showcase` panel set now go through the shared still
    preparation and Metal's frozen warm-up loop; verify the pictures and the `--ticks`/`--move-to` state.
 4. Acceptance for the UI slice: the Hub's HUD and panels match Vulkan at the same size; every panel that does not
@@ -578,19 +506,12 @@ and the shared trade/dialogue/build/editor interaction layer are wired. The rema
 resize and HDR/EDR; then the GI decision, parity, memory/tone and the macOS default. The Meitou water (waves,
 shore, foam, reflection, refraction) and clouds are in.
 
-**What 100% still needs.** Assuming 100% means the full game is playable through `--renderer metal` and matches
-Vulkan at default settings, the remaining scope is:
-
 1. **The rest of the real game loop (largest).** The first playable slice is in: camera bindings, edge/turn/zoom,
    left click and box select, right-click move orders, the HUD keys, F7/F8/F11/F12 and Alt+Enter. Still to do:
    the loop uses `WorldFrame.CreateGpu`, `SceneHost` and `WorldFrame.Draw` through `IWorldPostChain`; the host keeps
    the title staging and interface. Also warm-up, resize/fullscreen, HDR/EDR and the remaining present details.
    Title -> new game -> play, save/load/quickload, options, `ScreenAction`, the new-world rebuild, the loading
    screen, audio/UI sounds, the sky transitions, mesh/building/surface hits and floor stepping are wired.
-2. **UI actions and screens.** HUD, inventory, stats, overview/map, menu, title, New Game, save/load and the
-   in-game menu render and act; the shared trade/dialogue/build/editor screens and their host callbacks are wired.
-   Still missing: the pointer sprite and a runtime pass over the shared screens (including the deterministic
-   `--ticks`/`--move-to` stills).
 3. **Rendering parity.** The Meitou volumetric fog; post (`FogRate`, full TAA with character/grass motion, MetalFX
    reactive mask); and the character motion/stage/hover passes.
 4. **GI decision.** On this Mac Vulkan also reports `gi off: the device has no ray queries (VK_KHR_ray_query)`,
@@ -721,11 +642,6 @@ shared still preparation as Vulkan. Runtime images (portraits, icons, editor sta
 because both draw them with the engine's y-up clip space. Metal uses the shared character draw list, so the editor
 stage applies race, gender, slider and clothes changes instead of the interface-less world list.
 
-**What is not wired:** the pointer sprite and the cinema camera. The shared trade/dialogue/build/editor screens use the
-host callbacks `ConfigurePlayerInterface` supplies (build services, rocks, factions, tooltips, editor previews); the
-character editor opens on a new game. The settings panel, title, New Game, save/load and audio are wired; the panel
-keys and pointer hover/clicks/scroll work, and camera movement, selection and orders belong to the interactive loop.
-
 ### 6. The remaining effects
 
 `VolumetricCloudRenderer` is seam-neutral and runs through `SkyRenderer` on both backends. `ParticleRenderer`
@@ -751,15 +667,6 @@ default.
 
 ### Decisions still open
 
-- **GI**: the probe GI needs ray queries; Metal's ray tracing is a different model. Vulkan on this Mac reports GI
-  off (MoltenVK exposes no `VK_KHR_ray_query`), so local parity is no-GI; on a machine where Vulkan has ray
-  queries the target includes GI. Either port `GiScene`/`GiProbes` to Metal ray queries (a project of its own) or
-  accept the no-GI look as the macOS baseline. **Observed** (the Metal spike's `--rt-bench`, since removed; M1 Pro): one
-  524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), while
-  the 131k-ray probe batch took about 0.25–0.31 ms. That is traversal only; real scene builds, object/foliage
-  structures, refit and resolve are still unmeasured. The trace cost looks promising; memory and scene-build
-  cadence are the constraints to check in a port. The in-game Metal path is **experimental and opt-in**
-  (`MEITOU_METAL_GI=1`): a save load with it enabled froze the test M1 Pro, so normal launches leave it off.
 - **Volumetric clouds and fog**: parity shots use `--faithful clouds,cloudshadows`; the Meitou cloud/fog path is
   step 6.
 - **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`, default on) splits the Display settings into two trees: on, the
@@ -804,9 +711,6 @@ other composite passes stay as the options set them. Where the picture is as lar
   launcher's (schema keys `metalUseUpscaling`, `metalUpscaler`, `metalRenderScale`, `metalRetinaResolution`, `metalRenderDivisor`,
   `metalUiAtScreenResolution`, [launcher](launcher.md)); `metalUpscaler` and `metalRenderScale` shown with the switch on, the last three with it off.
 
-**Unknown** (no run on the target Mac yet): the GPU cost of the stretch pass and the frame rate gain against the 1080p baseline in
-METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run.
-
 ### Resume notes (facts already established)
 
 - Binding: one table per stage at `(kind base) + set*8 + binding`; the bindless table at `buffer(28)` both stages;
@@ -828,15 +732,6 @@ METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run
   clip space top-down). `RenderTargetsBottomUp` still selects the depth/post convention. UI scissor rectangles are
   top-left on Metal and bottom-up on Vulkan; using Vulkan's flip on Metal shifted clipped controls (the trader stock
   grid and HUD name plates) down by the panel height.
-- **Encoders and program state.** A render or compute encoder starts with no bindings, so `MetalCommandList.BeginRendering` advances the list's epoch
-  (`Invalidate`): `LegacyProgram.Flush` pushes its sets again once per epoch. Before, two passes of one program with the same bindings in one native
-  segment (the low-resolution particles' two depth passes) left the second encoder with no scene depth bound: the far depth stayed 0, the far draw
-  rejected every sprite, and dust was missing beside thin silhouettes (blue fringes in fog). **Observed** (owner, quarter and half size,
-  false-colour views of the upsample: the far depth was the reject value at every block, also at silhouettes); the fringes are gone after the change
-  (**Observed**, owner, in play at quarter and half size).
-- **Cube stand-ins.** A dummy cube's `TextureDesc.Layers` is 1: its six faces are the cube type's slices, not array
-  layers. Passing 6 made `GpuTexture.View` ask for 36 slices and `MTL_DEBUG_LAYER=1` abort at the first cube
-  sampler (the UI's first frame after the painter was added). `MetalContext.Dummy` now passes 1.
 - **Live performance and memory (Apple M1 Pro, Release).** The view cache and the impostor CPU release changed the
   picture: at 0.50 render scale, **30-32 fps**, CPU 32-35 ms and GPU 19-22 ms; at 0.83, 21-27 fps and GPU 30-36 ms.
   Under Debug the same views read about 20 fps. The macOS Vulkan report is 36-40 fps at 0.50. The remaining CPU cost is
@@ -880,11 +775,6 @@ METAL-IMPROVEMENTS.md; the full-screen path has not been exercised by a live run
   `StoreAction = MultisampleResolve`. A clear pipeline must name every attachment of the pass (the GI mask is slot 1).
   The reflection uses this path at 4x by default (`--reflection-samples 1` disables it), with private MSAA colour/depth
   and the multisample depth read at sample 0 by the reflection fog.
-- Texture views: the textures carry `PixelFormatView`; a non-identity `GpuSwizzle` is
-  `newTextureViewWithPixelFormat:textureType:levels:slices:swizzle:` (the BC4 masks' `RrrOne`). Metal's blit cannot
-  scale: `BlitLevel` copies equal-sized levels and renders a sampling pass over level views when they differ.
-  `Blit` copies matching single-sample 2D depth textures with a native blit; scaled or mismatched depth copies are unsupported.
-  **Observed** (macOS, surface-blood save): a depth target in the sampling pass aborts pipeline creation.
 - Partial clears: a fullscreen triangle under the rect's scissor (colour and/or depth outputs), then the previous
   viewport/scissor are restored and the pipeline filter reset. Sets the depth-stencil state for the clear.
 - A Metal `drawPrimitives…indirectBuffer` is one command; `DrawIndexedIndirect` loops, and the count variants issue
@@ -981,12 +871,8 @@ plumbing, profiling, docs) need no Vulkan run.
 
 ## Open questions
 
-- Metal's GPU timestamps (MTLCounterSampleBuffer), when the pass timings matter on Metal.
 - Scene depth: Metal stays conventional (`MetalContext` sets `DepthConvention.Reversed = false`; its compilers add no
   `MEITOU_DEPTH_REVERSED`). The chain's edits for the one-depth interface (`MetalPostChain.BeginScene`, `PostTaa`/`PostComposite`
   without far-depth or clip-convention uniforms) are **Unknown**: `MetalPostChain.cs` is compiled only on macOS, so they are
   unverified until a macOS build runs the Metal screenshot checks. Going reversed later: `Reversed = true`, the define in
   `MetalShaders`/`MetalSky`, the chain's depth clears ([renderer-native](renderer-native.md) "Depth").
-
-(Resolved in the plan: per-entry sampler state — sized sampler arrays in the argument buffer.
-Resolved: the vertex-stage binding table — the kind-aware flatten, in the road table.)

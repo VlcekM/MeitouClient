@@ -38,5 +38,3 @@ parse to the end with the rules below.
   48.13 (`110371`, `150371`); paired edges' midpoints lie within 2 in height for 21 of 21 connections in 18.35, 47 of 51 in 43.11 and
   49 of 51 in 47.16 (the rest 7..24, not examined).
 - Exterior vertices: world = zone origin + 10 × (x, y, z). **Verified**: median height off the heightmap 0.0 in 5 zones; swapped axes do not fit.
-- Interior vertices: world = Info position + 10 × (x, y, z). **Observed** (tile20.32: `600815` lands on the Storm House `4933-Newwworld-INGAME`
-  floor and upper storey, `190815` on Storm House `32-`'s floor; both Infos lie about (−155, −67, −153) from their Storm House's origin).

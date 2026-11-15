@@ -32,15 +32,12 @@ load once at their first position. Merge rules: [fcs-mod.md](fcs-mod.md#merging)
 
 Discovery (`FUN_14086f7a0`, launcher `FUN_140127890`) uses one name-keyed table:
 
-- Steam running: subscribed items via `ISteamUGC` install info; first sorted file ending exactly
-  `.mod` supplies its filename stem as name. **Observed** location:
-  `steamapps/workshop/content/233860/<item id>/`; item folder name is irrelevant.
 - Local sorted subfolders D containing `mods/D/D.mod`, replacing workshop entries of the same
   name. Other `.mod` files in `data/` are not discovered.
 
 **Meitou difference:** `LoadOrder` cannot query subscriptions; it scans every downloaded item
 in `GameInstall.WorkshopDirectory`, in folder-name order. Each loaded mod retains its folder
-for art, translations and its world layer ([zones](zones.md#mods)). A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
+for art, translations and its world layer (zones). A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
 local; `CollisionPaths.Resolve`), used for collision, interiors, body files, attachment points and race `editor limits` (#93).
 
 **Verified** launcher (`FUN_140125df0`, save `FUN_140120bd0`): active entries first in cfg order,
@@ -87,8 +84,6 @@ holding files to matching base resource group, default General. Skip `leveldata`
 `.mod`, `.translation`, `_`-prefixed metadata/images.
 
 ## Format inventory
-
-**Observed** counts under `data/`; confidence and detailed verification live in each reference.
 
 | Files | Reference / known boundary |
 |---|---|

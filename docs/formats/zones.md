@@ -19,17 +19,10 @@ files; 957 in `rebirth/interiors.level`) and nothing else; that is how layers re
 
 ## Interior masks
 
-**Observed** Hub `Storm_House_01_Interior.mesh` wall triangle centres can lie about0.09 units
-outside the building's convex interior-mask hull (OgreMeshReader positions transformed into
-world space and compared with InteriorVolume footprint planes). A mask is not an exact visible-surface boundary.
-
 **Verified** (probe of the `interior mask` parts' `xml collision` files): 17 of the trigger files hold more than one shape (boxes, capsules,
 convex meshes), among them the L-House, Y-House, Longhouse, Saloon, Snailhouse and Watchtower ones. The Watchtower's
 (`Storm_House_09_Interior_TRIGGER.xml`) is the tower body (a convex mesh) and a capsule at the roof, about 284 up. Along the building's X axis
 on one side the body reaches about 96 from the center and the outer wall (`Storm09-WallCOL.xml`) about 101, while the capsule reaches about 144.
-
-**Observed** (original 1.0.68, plain game): a player character on the sand at the Sho-Battai Watchtower's outer foot, below the capsule and
-outside the body, leaves the tower closed.
 
 Meitou: `InteriorVolume.Contains` tests each shape's own footprint and height range, so ground between shapes, or below a roof shape, is not
 indoors; the volume's `Footprint` stays the convex hull of all of them. `ContainsGround` ignores height and holds a point under any shape's
@@ -59,10 +52,6 @@ is skipped while global `DAT_142134690+0x298` is set, which then draws `athene.m
 (decompiled), FUN_14039c7e0); that this flag is editor mode is **Observed** (inferred, not traced). Nest debris is population state ([nest debris](#nest-debris-and-loot)).
 Materials select local town/biome/climate inputs; do not substitute a material solely by mesh name.
 
-Original part view distances differ from whole-object reach. Distant towns use stand-ins/LOD and
-separate fade; Meitou extended reach is a selectable engine choice. Source/table expressions
-retain decoded part/layout/placement values and unknowns, not a blanket visual parity claim.
-
 ## Placement keys
 
 **Verified** `LevelFileTests.Base_game_heights_match_the_heightmap`: zone indices X/Y map to
@@ -91,8 +80,6 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `residents` handle, `residents template` | handle, string | the platoon whose home it is and that platoon's SQUAD_TEMPLATE ([which](../game/factions-squads-towns.md#whose-template-a-home-carries)); null / empty with no residents. The reader `FUN_140552b70` drops a non-empty `residents template` (level data's is never used) |
 | `floornum` | int | floor |
 | `destroyed` | bool | +0x1a1 |
-| `town` | handle | its town (outpost), only when the building is not inside another one (**Observed** condition) |
-| `flags` | int | bit0 is outside (+0x240), bit1 foliage, bit2 +0x241 (**Unknown**); old saves use bools `is outside` / `foliage` |
 | `serialised interior` | int 1 | when not in interior edit mode, followed by the interior layout records; on load 1 keeps the saved furniture, anything else makes the building generate its interior (**Verified** by code, [zone files](save.md#zone-files)) |
 | `construction progress` | float | progress in material units |
 | `is complete` | bool | absent means complete |
@@ -106,7 +93,6 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `version` | int | |
 | `world Y pos` | float | absolute height the building stood at; written, never read ([placement height](#placement-height)) |
 | `foliage` | bool | |
-| `squad template` | string | the same id as `residents template` (**Observed**, every saved state) |
 | `isInsideBuilding` | handle | parent building |
 | `internalbuildings-<i>` | handle | buildings inside it |
 | `is inside building` | bool | |
@@ -139,22 +125,9 @@ zone file ([player outposts](save.md#player-outposts)); the buildings' `town` ha
   `world Y pos` = that height within 0.05, none off; the four mounted lights of 22.26 moved with their wall. Stale level values are written back at that height
   (46.16 `677-Newwworld-INGAME` 23.6 higher, 24.40 `901`/`903-rebirth-INGAME`). Pontoon Bridges 27.40 `6`/`10-Newwworld-INGAME` (instance Y -92726,
   -86557) are missing from METARU's zone file, which keeps the zone's other three.
-- **Observed**: 1904 outdoor placements of the base load order have a `world Y pos` more than 0.05 off building ground + instance Y, many from rebirth.mod: the Cannibal
-  Village (16.8, 17.10) and Cannibal Capital (18.7) about 25 lower, the 24 Spiked Cages of 16.8 18-28 lower. The original's baked navmesh on the six
-  Cannibal Shacks of 16.8 lies 52-54 above building ground + instance Y and 72-78 above `world Y pos`.
 - Meitou: `WorldLevelData.Load(install)` stands each outdoor level building at `TerrainHeightmap.BuildingGroundAt` + its height above, one inside or
   mounted on another of its zone at that one's height + its height above (`PlacementHeights`); the height above is a nonzero `player furniture Y offset`,
   else the instance Y. A child whose parent is in another zone keeps its state's height; one under -1000 is left out.
-
-`0-townlist` GAMESTATE_TOWN_INSTANCE_LIST: target TOWN, absolute XYZ, unused zero quaternion,
-GAMESTATE_TOWN state `-S5e`. **Verified**304 targets resolve;224 town states listing zones contain
-their town,80 list none. Keys `zones_count`, `zone_x_<i>`, `zone_y_<i>`, handle `hand*`, string
-`instance`=list entry ID. ROAD keys: `hidden`, `width`46..200, `length`, `weight`, `start`, `end`
-(junction numbers, [roads](../game/factions-squads-towns.md#off-screen-world)); ordered instances target `-`, absolute positions, rotation w1/y0/z0,
-x0..1 (**Observed**, purpose Unknown). `5-roadfoliage` target- points use quaternion w as
-size0.1..3590 (**Observed**, likely clearing radius). Furnished interiors use GAMESTATE_BUILDING,
-ITEM_PLACEMENT_GROUP, inventory states and collections, often `<n>-[basedata]-INGAME` IDs;
-`WorldLevelData.Load(includeInteriors:true)` merges them. Item groups: [loose items](../game/factions-squads-towns.md#loose-items-in-buildings); inventory semantics Unknown.
 
 ### Files
 
@@ -173,16 +146,6 @@ files are rewritten byte for byte (`LevelFileTests.Every_base_game_level_file_pa
 | `leveldata/shader_ball.mod/` | 2 | 15 | Test scene |
 | `leveldata.level`, `roads.level` | 2 | 15, 13 | Legacy: a 20-entry town list; an empty file |
 
-### Mods
-
-A mod's world edits are a flat `leveldata/` folder beside its `.mod` file (Workshop or `mods/<name>/`): zone files, `leveldata.level`,
-`interiors.level`. **Observed**: all 179 such folders in a 1368-mod install are flat and lower-case; the exe holds `/leveldata/` beside
-`./data/newland/leveldata/`; the original game showed one install's mod-expanded Hub from them (path rule not traced in code). Meitou
-(`WorldLevelData.Load`): after the core files' layers, one layer per enabled mod that has the folder, in `mods.cfg` order, merged as the
-core layers are. A file the reader refuses is left out with a `LevelFileNotLoaded` issue (**Observed**: Great Frontiers - World
-Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174
-mods enabled): 54 473 placed buildings in 1222 zones against 11 714 in 913 without the mod layers.
-
 ### `data/newland/land/features.dat` (`MapFeatureFile`) — layout/example
 
 ```
@@ -198,62 +161,18 @@ block:  int32 count, count ×
 
 ## Town membership
 
-**Observed** (building import `FUN_14057cc70`, position lookup `FUN_140928890`, `Town::vfunc_78` / `vfunc_84`; Meitou `TownBuildings.MemberOf`):
 - The state's `town*` handle is kept only for a player town; for any other town it is dropped and the building is placed by position.
-- By position: the nearest town whose radius holds it (X/Z), searching the 3 x 3 area sectors round it, nest markers left out. The radius is
-  [the type table](../game/buildings-production.md#placement) (town 2500, village 937.5, ruins 875, POI 437.5, others 1250, x `town radius mult`); `size radius`
-  is read only by the nest debris scatter (`FUN_140938440`). Meitou does not model the sector window.
 - Else, a record with `interior` references and no parent building takes the nearest non-player town within 10000 (any type); else no town.
 - Meitou with this rule (probe over the level data, 2026-10-20): Sho-Battai claims 169 buildings, The Hub 128, Squin 45, Stack 137, all inside each town's
   GAMESTATE_TOWN zones; 261 towns hold 9766 buildings. Residents: Squin 37 (save 36), Stack 94 (save 93-95).
 
 ## Nest debris and loot
 
-A TOWN with `debris`, `debris building` or `loot spawn` lists lays them out when its zone is populated: the TOWN virtual +0x388 (`FUN_140938440`; reached by the vtable of
-TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` from the town's position xor `0xdeadbeef` (a layout fixed by the place). **Verified** (decompile):
-- `debris` (NEST_ITEM link, v0..v1 the count, v2 the scale per cent, 0 = 1): `FUN_140937510`. An item **with a `physics file`** is a real item (3 records in the base game: Beak Thing
-  Egg, Crab Egg, Gurgler Egg, each `trade item`, values 7000 / 400 / 400): for each of the count, `cluster min`..`cluster max` copies, each at the centre plus a random direction
-  times 0..`cluster range`, on the ground; only when the flag byte +0xa8 of the object the zone's slot 25 returns allows it (meaning **Unknown**; Meitou: always). Any other (13 records:
-  bones, dung, trash, carpets, awnings; `trade item` mostly set, value 0..25) is a mesh node from `ground mesh` (else `mesh`; with `number of meshes` above 1 a numbered
-  variant) at a random yaw within `size radius` of the centre, plus cluster copies; the item's own `cluster` links then repeat this with their v0..v1 and v2. Meitou does not draw these.
-- `loot spawn` (63 links in the base game, all VENDOR_LIST): v0..v1 times a point of the nest where the height is at least 1, an item rolled from the list as an interior layout's slot rolls
-  ([loose items](../game/factions-squads-towns.md#loose-items-in-buildings), `FUN_1409540d0`), put there as a real item, only with the same flag. The reach of the point is **Unknown**
-  (the call passes none that the decompile shows); Meitou uses `size radius`.
-- `debris building` (BUILDING link: Prisoner Pole, Camp Bed, Torch Post, Campfire, Sitting spot, Trophy ...): for each of `num centrepoints` a point round the centre
-  (`FUN_140927600`), pushed away from earlier points, then per entry a count (v0; v0 = 0 gives one on a chance; above 1 it varies by +-0.5 x v0) of buildings
-  at the point plus a random direction times v1..v2 (**Observed**: the data reads as a distance range), kept off earlier ones by a spacing, on valid ground, laid to the ground's
-  slope up to the record's `max slope`, at a random yaw, made by the building factory (`FUN_140930120`, `FUN_14057cc70`) with their +0x241 flag set. **Not modelled**: a nest's
-  Prisoner Poles (cages) are what the Fog Islands' fogmen carry their victims to ([#132](https://github.com/VlcekM/MeitouClient/issues/132)).
 - Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
-- A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
-  Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
-  match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). How the exe reaches the field is **Unknown**: the string "nest" does
-  not appear in the decompile. Its `debris building` and `debris` meshes stand round each home too (**Observed**, 1.0.65 through KenshiHarness, a Wanderer save at The
-  Hub, 2026-11-15: the four `hub squatters` ruins, Bughouse, Old Storm House, Stationhouse and Snailhouse, hold `nest housecamp`'s campfire, stools, camp beds and trash
-  after a load, and their squatters stand at the campfire or stools for three game hours in three runs). Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
-  the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
-  - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, on its floor or the ground
-    beside it; none round the town's centre unless a home stands there. One roll per home is Meitou's reading (the totals fit: 7 Hub homes x 0..7). The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
-    1630 from the centre; The Old Prison's 16 within 349 of the Broken Watchtower (`nest armoury ruin`, 350). Measured against Meitou's boot housing; 5 items of 403 lie further.
-Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
-items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town stands its residents' nests round each home whose template
-names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
-no file of. The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
-the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre (**engine choice**, the original's place **Unknown**).
 
 ## Open questions
 
-- Meaning of the trailer ints and of the stored record sizes.
 - The game's layer merge rules, and where mods put level data.
-- The five-part handle fields (`C`, `CS`, `I`, `S`, `TYPE`): serialized object references (Observed: a
-  building's `town*` handle matches a town state's `hand*` by `C` and `CS`, see "Materials" above; the game gives
-  a new handle a random serial from `rand()`, FUN_1400d1c20). Why most town handles match no town state.
-- What the INVENTORY_STATE entries in the building list are for; INVENTORY_*
-  contents; the caller and the flag of the nest scatter.
-- ROAD `start`/`end`, the road point x parameter, road foliage w.
-- `fogfeatures.dat`, `globalPathing.path` layouts (`blendinfo.dat`: see terrain.md).
-- Building assembly leftovers: rolls drawn by part-material collections inside the seeded sequence (EFFECT
-  instances draw none, lights.md "Effects on buildings"); which foliage mesh stands at an Iron/Copper Resource placement; door open state; turret aiming.
 
 ## Expression reference
 
@@ -264,6 +183,4 @@ the town houses (5 base sites: 4 one-building Lost Library placements, Police Ba
 
 Evidence scopes below apply only to their named sources/checks.
 
-- `data/newland/land/fogfeatures.dat` (Observed, not decoded)
-- `data/globalPathing.path` (Observed, not decoded)
 - Legacy world: `data/leveldata/` (Observed)

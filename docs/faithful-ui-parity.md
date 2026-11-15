@@ -1,11 +1,5 @@
 # Faithful UI parity
 
-Scope: reproduce original screens and interactions using available game systems.
-Missing gameplay systems are tracked independently. Loading a layout alone is
-not feature parity. This ledger describes the implementation, not verified claims
-about undocumented original behaviour. Original-file facts are in
-[MyGUI](formats/mygui.md) and [UI screens](game/ui-screens.md).
-
 Both UI modes share this in-game HUD, windows, Escape menu and input. Meitou keeps
 its custom title, transitions and settings ([native-ui](native-ui.md)); sharing
 the implementation does not resolve the fidelity gaps below.
@@ -19,7 +13,7 @@ the implementation does not resolve the fidelity gaps below.
 | HUD | Clock, money, speed/pause, selection, squad bar portraits (still picture, name, selection frame; click selects, double click centres; the wheel scrolls their rows), a squad tab per squad with members (click or Tab switches the bar), medic/rescue with the jobs list (rows with X to remove, dragged to reorder; Shift + right click on a machine, storage, turret, training dummy or site, or Shift on a menu verb that has a job, adds the job), order toggles (Block, Hold, Jobs on `OrdersChaseButton`, Passive, Ranged, Taunt, Sneak; checked state), the Prospect button and move speed arrows with the speed icon (the original's only speed caption), inventory/stats/map/tech/squad shortcuts; the tutorial panel and the Tutorials window (F1, HLP; [Tutorials](game/ui-screens.md#7-tutorials)); the game view's hotkeys through the rebinding table (orders on NUM0..NUM8, `[` `]`, the window keys; [ui-input](game/ui-input.md#4-action-table)); name and faction, State (Dead, the cage lock, Unconscious, Sleeping, Defensive, Normal, the weather notice) / Goal / Encumbrance, the stats lines, the extended lines, the health word by the original's choice (Dying, BEING EATEN ALIVE!!, Recovery coma, Bleeding out, Crippled, Critical, Limb trauma...), medical rows in the original order with their numbers, layers (splints, crushed and lost limbs) and arrows; the information panel collapsed with its ^ toggle; the floor caption with PageUp/PageDown floor stepping and the build button; the biome banner ([Biome banner](game/ui-screens.md#biome-banner)); the floating progress bar (`Kenshi_ProgressBarPanel`); tooltips of the orders, shortcut, build and floor widgets, the medical rows, the health word and the KO point line, door and building status words; a selected building's lines, condition rows, For sale line, public toggle and the player's Dismantle / pause / door buttons; the town panel ([Town panel](game/ui-screens.md#town-panel)) (the layout's behaviour slider is dead in the original: [orders panel](game/ui-screens.md#4-hud-mainbargui)) | The ranged State line's progress fill, Throw out of town (273, **Unknown** test); the context menu has only the verbs Meitou can give (see ui-input.md section 7) |
 | Inventory | Original equipment/pocket, bag and limb windows in both UI modes; square cells, equipment footprints, pale empty cells and translucent black item backings, name captions and weight rows; bags sized to their contents; item icons in the instance's colour (static files, the game's `data/icons` cache, else drawn from the item's mesh; the name box while loading); the held item (lift one unit or the stack, place, merge, swap; a prosthetic onto its stump), paused moves and Arrange commands; item tooltips with the armour, prosthetic and food rows ([Tooltips](game/ui-screens.md#tooltips)) | The tooltip rows listed as not shown under Tooltips (grade-scaled skill lines...); exact original resizing |
 | Stats | Original frame/panels sized to the supplied reference; category headings, ordered rows, separate values, painted attributes; installed descriptions, affected-stat and training text; fractional-level progress and racial XP bonus | Stats Affected numbers of the skills (the attributes', Dodge's, Athletics' and Swimming's are shown; [ui-screens](game/ui-screens.md#character-stats-runtime-layout)), exact row skins and help spacing |
-| Overview | All original tabs; live messages and the said dialogue lines ([Dialogue log](game/ui-screens.md#dialogue-log)); the Faction tab's name and relation lines ([Faction tab](game/ui-screens.md#faction-tab)); the Squads tab (squad boxes, add, rename, delete, reorder, move/swap and dismiss members; [Squads tab](game/ui-screens.md#squads-tab)); the AI tab's nine option ticks and the Follow Formation combo box, with tooltips ([Squad AI options](game/ai-tasks.md#squad-ai-options)); the Research and Craft tabs ([Production](simulation.md#production) UI); installed map image, pan/zoom/centre, player/camera markers, discovered towns, camps and nests ([Map](game/ui-screens.md#map)), the player's outposts and right-click move orders; the projection and zoom of [Map](game/ui-screens.md#map), faction renaming, contracts and upcoming events ([Faction tab](game/ui-screens.md#faction-tab)) | none known |
+| Overview | All original tabs; live messages and the said dialogue lines (Dialogue log); the Faction tab's name and relation lines ([Faction tab](game/ui-screens.md#faction-tab)); the Squads tab (squad boxes, add, rename, delete, reorder, move/swap and dismiss members; [Squads tab](game/ui-screens.md#squads-tab)); the AI tab's nine option ticks and the Follow Formation combo box, with tooltips ([Squad AI options](game/ai-tasks.md#squad-ai-options)); the Research and Craft tabs ([Production](simulation.md#production) UI); installed map image, pan/zoom/centre, player/camera markers, discovered towns, camps and nests ([Map](game/ui-screens.md#map)), the player's outposts and right-click move orders; the projection and zoom of [Map](game/ui-screens.md#map), faction renaming, contracts and upcoming events ([Faction tab](game/ui-screens.md#faction-tab)) | none known |
 | Escape menu | Original layout, pause/resume, Options via Tab settings, exit confirmation, new game, original named save/load dialogs | Menu and dialog keyboard shortcuts beyond defaults (the options are Meitou's own Tab settings, by design) |
 | Frontend | Original splash ([Splash](game/ui-screens.md#splash), Interface setting), title image/buttons and credits; the original loading screen ([Loading screen](game/ui-screens.md#loading-screen)) and the background loading bar ([Background loading bar](game/ui-screens.md#background-loading-bar)); start selection and Begin using existing spawn backend; the advanced options panel with seven numeric options ([New-game difficulty](simulation.md#new-game-difficulty)); save metadata/slot selection/name editing and overwrite confirmation; load confirmation; the character editor after a new game ([characters](characters.md#character-editor)) | Continue-slot persistence (currently newest listed slot, hidden if unreadable) |
 | Trade | Both modes: `Kenshi_InventoryTraderWindow` (**Verified** as the trader layout) sized by the original's growth rule, character and trader windows side by side from the top-left margin, the scroll view's frame and template scrollbar (arrows, page clicks, thumb drag, wheel), money line, 18 x 18 stock, ARRANGE for the stock; hold stock onto the pocket or bag grid to buy, own items onto stock to sell; right click buys or sells one unit (Shift the stack); tooltips with Value, Sell value (mark-up %), weight, quality and the item rows; the fencing prompt while holding a stolen item over the stock ([ui-screens](game/ui-screens.md#6-inventory-trade-dialogue-build)) | Disabled (red) slot states, a Meitou-styled variant (in-game windows use the original layouts in both modes) |
@@ -41,12 +35,9 @@ Brought in line with a documented fact:
 | Esc on a message box | presses its last button (Return already pressed the first) | ui-input.md section 5 |
 | T / Y | open the overview on Research / Craft (M on Map); faction has no default key | events 3..6, ui-input.md sections 4 and 6 |
 
-Engine choices that remain; the original is **Unknown** for each:
-
 - Message box captions other than the Exit dialog's ([Title screen and its windows](game/ui-screens.md#title-screen-and-its-windows)), window titles ("INVENTORY - name"; "Prospecting Results" is the exe's text, shown upper-cased like the other titles), confirmation texts other than "Are you sure you want to exit?".
-- The faction tab lists every faction but the player's, the `not real` ones and the generation template (the original's filter is **Unknown**).
 - Tooltips: the HUD's texts show in a Fixed tooltip on the `TooltipPanel` rectangle; the Floating and Inventory ones use the metrics of [Tooltips](game/ui-screens.md#tooltips).
-- Medical rows: the parts in the original's part array order ([part order](game/character-stats.md#part-order)).
+- Medical rows: the parts in the original's part array order (part order).
 - The sandbox keeps Z X C Y P G; with `--sandbox` the faithful C (stats) and Y (craft) shortcuts give way to it.
 
 Deliberate differences from the original:
@@ -62,14 +53,9 @@ empty (the outpost panel, the biome, dialogue names, the character trade window)
 
 ## Gameplay backends
 
-Each screen above is only as complete as the system behind it. Backend state is described once, in
-[simulation.md](simulation.md); its gaps are listed in [Open questions and known gaps](simulation.md#open-questions-and-known-gaps).
-The ones that limit these screens:
-
 | Screen | Backend gaps |
 | --- | --- |
 | Trade | Smuggling ([Trade](simulation.md#trade)) |
-| Dialogue | Conditions on state Meitou lacks answer "no" ([Dialogue](simulation.md#dialogue)) |
 | New game | The seven numeric options are Meitou-encoded ([New-game difficulty](simulation.md#new-game-difficulty)) |
 | Import | The salvage of a save without a squad, the "town too close" removal, the old-save tick disabling ([rules](formats/save.md#importing-a-game-savemanagerimportgame-fun_140378a30)) |
 

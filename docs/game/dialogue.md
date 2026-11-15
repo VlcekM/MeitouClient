@@ -1,10 +1,5 @@
 # Dialogue
 
-How the original picks, says and acts on dialogue. Sources: the FCS editor's enums (decompile, outside the repo), the install's
-`fcs.def` / `fcs_enums.def` / `data/gui/layout`, the kenshi_x64.exe decompile (functions cited), and a probe over the merged base
-load order (`gamedata.base`, `Newwworld.mod`, `Dialogue.mod`, `rebirth.mod`; 2026-10-17). Claims are **Observed** (decompile reading)
-unless marked. Engine: [Meitou design](#meitou-design).
-
 ## Data
 
 **Verified** by probe: 293 DIALOGUE_PACKAGE, 1890 DIALOGUE, 22783 DIALOGUE_LINE, 21135 DIALOG_ACTION, 289 WORD_SWAPS records.
@@ -16,7 +11,6 @@ unless marked. Engine: [Meitou design](#meitou-design).
 | Character | Packages |
 |---|---|
 | any | CHARACTER `dialogue` (161 uses): each DIALOGUE goes straight to event 1 (fcs.def says the same, **Verified** text) |
-| NPC squad leader (member 0) | SQUAD_TEMPLATE `dialog leader` (157), else CHARACTER `dialogue package` (793), else `dialog squad` (**Observed**, decompile) |
 | other NPC members (and a leader with neither) | SQUAD_TEMPLATE `dialog squad` (216), else CHARACTER `dialogue package` |
 | animal | SQUAD_TEMPLATE `dialog animal` (4) |
 | player character, not an animal | CHARACTER `dialogue package player` (179), else the player faction's FACTION `dialog default` (25 records have one), else the package `5369-gamedata.base` ("player character default", **Verified** by probe) |
@@ -153,42 +147,6 @@ shopkeeper in bed neither greets a customer nor trades (#582).
 Event 1 starts a [player conversation](#player-conversation), using a stored `interrupt` DIALOGUE instead of the event-1 list when one
 is pending. Every other event starts an [ambient conversation](#ambient-conversations).
 
-Sources (call sites): 1 the player's Talk order (task 12, after reaching the NPC; also tasks 102/159/161 when the plan's event is
-0); 3, 27, 34, 59, 66, 67 perception (`FUN_140859680`); 10 `FUN_1408d0d90`; 11 torture; 15 `CharacterAnimal::vfunc_62`; 18-21 first
-aid (start: the medic 18 at the patient, the patient 19 back unless down; finish: 20 / 21 likewise; none when treating oneself);
-22 empty kit (`Task_FirstAidRig`, the medic at the patient); 23-25 getting up (`Task_GetUp`, no target: 24, or 23 when the character's two
-enemy counters (+0x94, +0x98) sum below 1; a variant `FUN_1408c6780` fires 25 on further counters, **Unknown** which); 26 harassment; 30 contract end (target = employer); 32/33 AI looting; 37 recapture; 47 almost
-woke; 49 entering a town (no target); 50 squad broken (`FUN_1407a5be0`, on the platoon's intact to not-intact change, each member vs its attack target: [perception](perception.md#retreat-and-memory)); 51 slave bought; 52 eating a prisoner; 53 worship; 60 giving up a chase ([attack](combat.md#leaving-a-fight))
-(move, follow, attack, talk tasks); 61-63 acid; 66 also from DA 56; 68 illegal player building; 73 town taken over; others from
-lock and prison code: 13 from `Task_PickLock`, `Task_CutShackles` and `Task_BruteForceShackles` (the freed character at the
-worker, when they differ); 31 `Contract_HiredAlly::vfunc_8` (betrayal); 36 the witness function and perception; 44 `FUN_140856f00`;
-70 / 71 losing a leg (limb slots 2, 3) / an arm (`FUN_14064edc0`, no target).
-
-**Witnesses** (`FUN_140854d10`, **Observed**): a witness reacting to a crime fires an event at the criminal by the crime code
-(economy.md 11.2): Burglary 2 and Terrorism 7 → 43; Theft 3, Looting 10, Fencing 13 → 42, or 8 when the victim is in the witness's
-platoon; Trespassing 11 → 17 (also fired by perception when it sets the crime, economy.md 11.2); Crop theft 14 → 57; Enslaving 1, Kidnapping 15 → 58; Uniform theft 16 → 34; the rest 41. Each case has
-further tests that return without firing (partly read).
-Event 17's guard dialogue `intruder law` (64870-rebirth.mod: monologue, no conditions, repetition limit 0; "Intruder!", "Infiltration!",
-...) has one line whose effect is DA 6 ATTACK_CHASE_FOREVER; packages `Npc MILITARY Law 3` and `Empire Noble Bodyguard` (inherited) and the
-Samurai Sergeant / Elite, Traders Guard and Fark Guard characters carry it (**Verified** by probe against the base data).
-Event 44's guard root for a bounty under 1050 (44146-Dialogue.mod; DA 2 on "I knew it, you're a convict!") goes on, while the target runs
-(DC 32), to "/SEIZE/ /HIM/!" with DA 29 and DA 6 on the one line, so a runner with a small bounty is chased with no leash (#666;
-**Verified** by `probe talk <name> 44` on a Samurai Gate Sergeant). In which order the original applies the two is **Unknown** (DA 6
-clears the speaker's queue, so after DA 29 it would drop the capture tasks).
-
-### Choosing a line
-
-`FUN_14067a0c0` (**Verified**). Candidate lists are sorted by [score](#score), highest first, without duplicates. Each node's score here is its
-static score plus 2 when the target's race is in its `target race` (`FUN_140671bb0`); the walk stops at the first entry whose score is below the best so
-far (roots excepted; an interjection node always stops it). For each node the [speaker](#speakers) is resolved and the
-[line check](#line-check) runs with that speaker as "me"; a passing root descends into its children, its total being its score plus the chosen leaf's
-(also with the leaf's race bonus). An interjection node first finds and stores an interjector, then descends the same way. A passing leaf, or a root or
-interjection total at least the best so far, is appended to the candidate list and becomes the best; **the list is never cleared**, so earlier lower
-candidates stay in it and the final pick is **uniform over every appended candidate**. The checks and bonuses use the target the walk started with
-([retargeting](#retargeting)). The root test is virtual (`FUN_1406a6050`): true for a DIALOGUE, for an interjection node and for a line with no text
-(**Observed**; Meitou treats only a DIALOGUE as a root, and says a textless line itself, which 884 of the 22,783 base lines are; whether the original
-descends into such a line's children instead is **Unknown**).
-
 ### Score
 
 Computed at load: +1 speaker not T_ME, + `score bonus`, +2 `locked`, +2 for each non-empty `in town of` / `my faction` /
@@ -200,11 +158,6 @@ child's (`FUN_1406ad9d0`).
 ### Line check
 
 `FUN_140678f30`, all must pass, in order:
-1. Tag masks (DC 23 / 26 are folded at load into required and forbidden bitmasks by the DIALOG_ACTION's `tag`, val0 1 = required).
-   PERSONALITY_TAG tests the speaker's personality (status `+0xd8`); HAS_TAG (`FUN_140674c50`) tests the speaker squad's long-term
-   [memory](#squad-memory) tags on the target: all required set, no forbidden; never noted: passes only when nothing is required; no
-   target: not tested.
-2. A squad test for flagged lines and a per-character line flag (purposes **Unknown**).
 3. `unique` (no current field sets it). **Verified** meaning (`FUN_1400cd0b0` is the hand's `operator!=`): a node with `unique` set and a stored speaker hand (`+0x248`, type not none) fails the line when the current speaker's hand differs from the stored one; the hand is filled from the speaker after the chance-permanent roll succeeds, for unique nodes only. So a unique line sticks to the first speaker that used it. No base DIALOGUE_LINE sets it (the field exists only on CHARACTER and ANIMAL_CHARACTER records), so there is no vanilla effect; Meitou's `DialogueNode` has no such rule.
 4. `chance temporary` below 99: a fresh 0-100 roll every check.
 5. `in town of` (the speaker's current town's faction), `my faction`, `target faction`, `has package` (any of the speaker's
@@ -252,12 +205,6 @@ that is the walk's target becomes it; flagged, T_TARGET becomes it only when the
 (`FUN_140684990`, `FUN_140683f90`), and is `FUN_1406717c0`'s fallback when the target is the owner; what it holds is **Unknown**. Meitou models no
 `+0x2a0`, so its speakers are the flagged path in every walk.
 
-Interjectors (`FUN_140679bc0`): members of the **owner's own squad**, awake, not the owner, not an animal, not talking, not already an
-interjector, passing the node's check as speaker. A `dumb` character qualifies only when the node's `is character` lists it, an empty list failing (fcs.def
-`dumb` "prevents them becoming interjectors or talking to NPCs", **Verified** text; `FUN_140679bc0`, **Verified**: the other members need no list test of their own, the line check applies a non-empty list to them). The line check itself (`FUN_140678f30`) has no dumb rule, so a dumb
-NPC answers an event's lines like any other; the rule is also in [Arrival banter](#arrival-banter) and in the Talk To order, which a dumb player character refuses ([ui-input](ui-input.md)). Weight = clamp((d² − 202800) / (900 − 202800), 0,
-1): 1 within 30 units, 0 beyond about 450; ×0.1 for a different race (inferred). The weighted pick rule is **Unknown**.
-
 ### Player conversation
 
 `FUN_140684320`:
@@ -265,25 +212,12 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
 - Plays Wwise `Initiate_Conversation`. Chooses the root and its best child, says it.
 - Opens the DialogueWindow when the said line has passing children; **the window pauses the game** (clock speed 0, the previous speed
   restored on close, `FUN_140787fb0`).
-- **A caged target** (**Observed**: neither the order check `FUN_1405d1940` nor `FUN_140684320` tests the target's imprisonment; the caged-occupant
-  menu offers Talk To, order 12; mods such as Recruitable Prisoners hold their dialogue on DC 14 / 63 and recruit from the cage, #737): a prisoner
-  is talked to, hostile or not.
 - The talking player character is the one given the Talk order; walking there is that task's precondition. AI-to-AI talk range is
   260 units (DC 16).
-- **Talk distance** (**Observed**, task 12's `isAtLocation` → `AI::isWithinChoppingRange` `FUN_14059c6d0`, character branch; constant
-  `DAT_141e3c5d0` = 7.0 read from the exe): X/Z distance < the target's radius (`Character::getRadius`: its movement's footprint
-  radius +0x364 x a scale) + 7 x 3 (7 x 2 when the target is a ragdoll), that reach **doubled when the talker is not moving**, and
-  |dy| < 10 (< 35 on the same floor); else within 7 x 1.6 = 11.2 on the same floor or |dy| < 35. Meitou (`DialogueSystem.InTalkRange`):
-  the target's scaled radius (`CombatSteering.Radius`: footprint x body scale) + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice).
-- **Walking to a moving NPC** (**Observed**: the player-reported vanilla behaviour of issue #136, the chase of a moving pick-up target; the task-12 walk's own re-aim code is not read): the talker follows the NPC's current position until in range. Meitou (`WalkUp`, shared by the Talk and Trade walks): every 0.5 s the Move order is renewed when the NPC is over 12 from the walk's goal or the walk has ended short of it; the NPC is kept still only when idle or wandering (`Hold`), so a walking NPC is chased; a talker found on any other task (another order, a fight) drops the approach (engine choice). Once the conversation opens, an NPC on its AI's walk stops and walks on after (`TaskStart.OnAiWalk`; engine choice, whether the original stops it is **Unknown**). The give-up after `ApproachSeconds` (60 s) without the talker moving on its walk (a long walk is not cut short, one stuck in place or re-aimed in vain is) is an engine choice.
-
-**Saying a line** (`FUN_1406839a0`): in a player conversation a line with **no children ends the conversation at once** without being
-shown (whether the original shows such closing lines elsewhere is **Unknown**). Otherwise: pick a text and mark the line and its parent chain
-used, expand [tokens](#tokens), **run its effects at once**, log the text and put it in the NPC panel, then build the choices.
 
 **Last use** (**Verified**, `FUN_140671770`; said line `FUN_140675320`, clicked reply `FUN_140683c00`): the stamp is each node's `repetition limit` clock.
 A line's parent (`+0x230`) is set by the builder (`FUN_14067d260` via `FUN_1406ad9d0`) only when the line's owner is root-like (a DIALOGUE, an interjection
-node or a textless line, see [Choosing a line](#choosing-a-line)), so a line under a text line has none, and a line shared by several roots keeps the last
+node or a textless line, see Choosing a line), so a line under a text line has none, and a line shared by several roots keeps the last
 one built. Meitou stamps the line and the conversation's root (`MarkUsed`): the same except for a shared line, or a deep line restamping its root, which
 costs no game time while the window pauses the game. No parent link is kept, since the original's depends on load order.
 
@@ -295,51 +229,11 @@ reply used, **runs its effects**, then chooses and says the reply's best child.
 ### Ambient conversations
 
 `FUN_140683f90(dialogue, target, line, event, force)`: a monologue root outside event 1 shows a **speech bubble**, no window; a root
-says its best child (as in [Choosing a line](#choosing-a-line)), any other line is said as given. Large font for events 2, 11, 17, 26,
+says its best child (as in Choosing a line), any other line is said as given. Large font for events 2, 11, 17, 26,
 31, 34, 36, 40, 45, 74 (`FUN_1406713a0`, **Verified**), medium for the others.
-
-**Chain** (`FUN_140684720`, **Observed**): when a bubble ends, the owner's state picks the best child of the said line with full
-speaker resolution (owner, target, interjector), copies its target to that speaker's state, and that speaker says it; a line said by
-someone else hands back to the owner's state, so the tree stays rooted at the owner. This is how two NPCs talk: the target says the
-T_TARGET lines. A non-monologue root in bubble mode ends after its first line (root flag `+0x1e1`, `FUN_140685090`). **Verified** (base
-data probe): every root used for events 2, 3, 13, 18 and 66, every campaign announcement and every crowd trigger is a monologue.
-**Effects of a chained line run on its speaker** (**Verified**): the chain calls `FUN_1406839a0(speaker's state, line)` → `FUN_140680560`
-with that state, and the lock/unlock/interrupt writes go to the state passed in (`+0x30` lock map, `+0xc8` interrupt); the first line of
-a bubble runs on the owner's (`FUN_140683f90` → `FUN_1406839a0(owner's state)`). Meitou: `Bubble.Chained`. **Observed**: the first line is
-not given a speaker of its own in `FUN_140683f90`; Meitou says it as its resolved speaker (**Unknown** whether base data has a first line
-that is not the owner's).
-
-**Sight** (`FUN_140859680`, **Observed**, partly read): event 3 fires for a seen character outside the player's faction too (an NPC of
-another squad); 66 and 67 need a player-faction target. **Looker gates** (**Verified**, `FUN_1408529c0`, `FUN_140859680` :52-72, 106-115): a slave (state 1) says nothing; 66 and the non-friend 3 also need slave state 0 and no escape; 67 stays open to state 2 and escaped lookers. For a non-ally target (**Verified**, the peaceful branch of `FUN_140859680`: neither side in combat mode, the target without a pending crime) event 59 USING_MY_TRAINING_EQUIPMENT replaces 66 / 3 when the target's Character `+0x158` equals the looker's faction and the looker senses no enemy: `+0x158` is the faction of the training dummy the target is using, written by the update of `Task_UseTrainingDummy` (`FUN_14035c1e0`, the dummy building's faction) and cleared by its end (`FUN_140345570`) and at the start of every character tick (`FUN_1405d00b0`); Meitou `DialogueSystem.SightEvent` (the Training fixture the target operates). When either side is in combat mode (or the target has a pending crime) the branch instead ends in `FUN_1406744a0(looker, target, 4)`, the squad-memory tag TEMP_ENEMY (not a dialogue event), when the target has no status town (its status `+0x88` null, read through vfunc 0x70: the [status town](carry-loot.md#the-status-town), which keeps a town out to 1.5 x its radius once entered, not the town radius itself; **Verified**, 1.0.68 disassembly) and the looker or the target is a bandit (NPC class 8), for a looker that is free (slave state 0), not an escaped prisoner (status `+0xe8`) and without a pending crime (Character `+0x148`): Meitou `AggroSystem.BanditFightTag`, which also skips a target inside a town's radius (its status town is set there, and the radius covers the arrest system's first pass after a load or spawn). An awake animal the looker sees gets event 27 (I_SEE_ANIMAL_SQUAD) first (Meitou `DialogueSystem.SeeAnimals`; two flags of the original gate, target vfunc 0x240 and +0x1a9, are not decoded and left out). It runs only for a sensed-list entry with its seen or heard flag (`+0x38` / `+0x39`,
-`FUN_140855710`), and only when Dialogue `+0x28` is set: `FUN_14067e220` sets it when a line for 3, 4, 17, 27, 34, 36, 40, 66 or 67 is added
-whose name does not contain `Unfinished` (**Verified**, 1.0.68 disassembly: the flag is the sight pass's third argument, read from the looker's
-Dialogue by `FUN_1405c7d40`, and `FUN_140859680` returns before every reaction past the animal one, the TEMP_ENEMY tag included, while it is
-clear). The package loader `FUN_14067fab0` is the only caller that adds those events, and no clear was found outside the Dialogue constructor
-(**Observed**, a scan of direct writes), so a character seems to keep it after a package swap. Meitou: `DialogueSystem.HasSightLines` (the character's dialogue set for its current role has a root for one of those events), read by
-the bandit fight tag. A fired event is refused while its timer in Dialogue `+0xd0` is above 0; firing sets it to 1.0 (`FUN_140684990`,
-**Observed**). No start-of-game delay was found. **Observed** (user, vanilla): a new game in the Hub, the barman greets the player character
-only after it walks into the bar. Meitou (`DialogueSystem.quiet`): pairs noticed at the world's first look (new game or load) get no sight line
-until the player character has been out of notice.
-
-**Camera range** (`FUN_140684990` routes event 1 to `FUN_140684320`, **Verified**): a player conversation starts only when the talking player character is within 9216 of the camera object's scene node (constant at 0x141700514); other events take the bubble path with no such test. Meitou: `DialogueSystem.TooFarFromCamera`, distance to the camera focus (`FocusCommand`), no test without one.
-**Censorship** (settings.cfg `censorship`, bool, default off: `DAT_142133575`, written `FUN_1403eca90`; **Verified**, decompile and the exe's data): `FUN_14067e8b0` (run after `FUN_14067e660`, called from the line builders `FUN_14062b210`, `FUN_14067fd80`, `FUN_140680130`, `FUN_1406839a0`) replaces every occurrence, case-sensitively and in this order: shitting to crapping, Shitting to Crapping, shitty to crappy, Shitty to Crappy, shit/Shit/SHIT to crap/Crap/CRAP, fuck/FUCK/Fuck to bugger/BUGGER/Bugger, Bollocks/bollocks/BOLLOCKS to Damn/damn/DAMN, asshole/Asshole/ASSHOLE to idiot/Idiot/IDIOT, asswipe to idiot (no UPPER entries for shitting, shitty, asswipe). Meitou: `Censorship.Apply` on every dialogue line, choice and bubble text built by `DialogueSystem` (Interface setting; other text paths, journal and log lines, are not routed through it).
-**Overlap** (`FUN_140671f50`, once a frame after the GUI update when 2 or more bubbles exist; **Verified**): for every pair with non-zero alpha whose absolute rectangles intersect (edges included) the axis of the smaller overlap is pushed (horizontal when the width overlap is smaller), each bubble by overlap / 2 + 1 integer pixels in opposite directions, the smaller coordinate toward smaller; passes repeat while any pair moved, at most 10; positions are recomputed from the heads each frame so nothing persists. Meitou: `PlayerInterface.SeparateBubbles`.
-**Timing** (`FUN_140685090`, `FUN_14067fd80`): showing a bubble sets timer `+0x230` = 2.0 + 0.12 × text length (both constants **Verified**,
-read from the exe); DA 12 sets the second timer `+0x234` (val0). Both lose the frame dt each update, only while the pause flag
-`DAT_1421349c9` is clear, and the next line starts once both are below 0 (**Verified**; the dt unit is **Unknown**). Updates do nothing
-while a state test on the owner (`FUN_1407d1440`) holds, unless the event is in the `DAT_141eeaecc` mask (11, 23, 24, 25; **Observed**; Meitou drops a
-bubble whose speaker is not awake). No test of whether the speaker is drawn: a bubble shows over a character hidden inside a building (**Observed**, `FUN_140672320`). The `repetition limit` check passes when the cooldown is 0, the line was never used (stored time
-−99.0, **Verified** constant) or now − last use ≥ the cooldown (`FUN_140678f30`).
 
 **End** (`FUN_140674830`): bubble and window closed, the per-event counter +1 with its time (read by DC 13), the event's last target
 stored, the squad blackboard notified for player conversations.
-
-**Chain and conversation**: a bubble chain the NPC was saying does not go on after a player conversation with it (**Observed**, 1.0.68
-with Universal Wasteland Expansion: a Shek gate guard's `Bag check (Shek)` chain, whose first line stores the `Bag search (Shek)`
-interrupt, says nothing more once that search ends; inferred: both run on the NPC's one dialogue state, and the end step closes bubble and
-window together). Meitou drops the chain and its shown bubble when the conversation opens, without the end step. Left running, the chain
-went on after the window closed: its later lines walked the guard back to the player (DA 2), each walk ending in an empty event 1, until
-its last line started an attack (#707).
 
 **AI tasks 102/159/161** (`Task_TalktoPlayer`, **Verified** decompile): fire `AITaskSytem+0x264` at the target (0 means 1), which the planner sets from the TaskData event of any
 row on the chosen plan (188: 38, 194 / 218: 39, 158 / 283: 9); event 9 repeats every update (17 at an enemy, or with blackboard `+0xe8` at a non-ally); walks at the target;
@@ -400,34 +294,10 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
 - **Short-term write** (`FUN_140674300`): never TEMP ENEMY on the squad's own faction; a TEMP ALLY on a player character sets the bool;
   for a player character the squad's player entry takes the time. The character-level wrapper `FUN_1406744a0` also skips TEMP ENEMY on
   an allied faction or one the character regards as friendly. Cleared by `FUN_1406788d0` (contract code clears 4, 7, 2).
-- **Attack effects 6, 55, 57** (`FUN_140680560`, **Verified**): forced sense of the target, the speaker's queue cleared, the squad TEMP ENEMY tag, then only for a speaker whose faction is not the player's (or whose AI's `+0x20` object `+0x60` is 0) `FUN_1405d20d0(speaker, 0, 0x65 | 0xf8, target)`: an Assault order, goal 101 (248 for 55: list B `!159`, a 0.3 + 2r h commitment). Its finder `FUN_140793eb0` takes the best known, in-area, standing, not imprisoned member of the target's squad. Meitou: `AiSystem.OrderAssault` (`AiMind.ForcedAssault`, re-picked by `SendAssaults` while free); a player-faction speaker gets no order; 248's extras are not modelled.
-- **Attacks write TEMP ENEMY** (**Observed**, decompile; names KenshiLib 1ce4a16): the attacked character's squad tags its attacker 4
-  through the wrapper in `AI::underMeleeAttack` (also reached from being targeted, [combat](combat.md#fight-lifecycle-and-orders)),
-  `AI::underRangedAttack`, `Character::hitByMeleeAttack`, `CombatClass::_iHitYouAreYouHit` and `Character::iShotYou`. So an assault on one
-  member makes the attacker an enemy of the whole squad (slot 125 below) at any relation, and its attack-on-sight members (goal 16) join.
-  `Character::attackTarget(self, target)` (gives the AI the target, perceives it, tags it 4 on self's squad, replans) is called only by:
-  a missed stealth KO (`Task_StealthKO`: both squads tag each other 4, then the victim goes for the attacker), a failed kidnap
-  (`Task_Kidnapping`: the victim tags the kidnapper 4 and long-term 1, then goes for it), alarm investigators (`Task_InvestigateAlarms`:
-  sensed characters of a faction hostile to theirs), DA 56 MASSIVE_ALARM, and the witness function `SensoryData::assessCrimes`: every
-  reacting crime case ends by tagging the culprit short-term 7 criminal, setting its crime timer to 20 and, when the witness is the crime's
-  victim (a trespass's victim is the witness that called it), `attackTarget` on the culprit. The player's attack orders do not call it.
-  Short tags fade (**Verified**, `FUN_1406724e0` from the platoon slow step `FUN_1404ff060`, threshold 6.0 read from the exe): an entry
-  whose game hours since its last write, truncated, exceed 6 (so 7 h) loses all its short tags; the entry stays unless the memory holds more than 40 entries and it is older than 48 h and its character is not a resolving player-faction one (then it is erased, `SquadMemory.Forget`, **Verified**); long tags, time and the player TEMP ALLY bool
-  stay (Meitou: `SquadMemory.Age`). Besides that, the perception update (`SensoryData::add`) clears it once the tagged enemy is a slave of the looker's
-  faction (or its state +0x2f8 is 2, **Unknown**). Meitou (`DialogueSystem.TagEnemy`): the alert in `RetaliationSystem`, the stealth-KO
-  miss, the crime victim (`CrimeSystem.Witnesses`, an attack order unless it already fights the culprit, and the criminal tag 7), DA 56, the
-  failed kidnap ([carry-loot](carry-loot.md#kidnapping)) and the alarm investigators ([economy](economy.md#town-alarms)).
 - **Readers**: DC 18 (`FUN_140673290`: hours since the time, **9999.99** when never noted), DC 20 (an entry exists), DC 23, DC 52
   (long & 0xc), DC 53 (long & 0x2b0), "regards as friendly" (`FUN_1407923d0`, Character slot 126: same faction; not with TEMP ENEMY;
   yes with TEMP ALLY or love; else faction ally) and "regards as enemy" (`FUN_14079c950`, slot 125): TEMP ENEMY makes, and TEMP ALLY
   unmakes, an enemy across faction relations; `FUN_140599390` (a grudge: long & 0x7b2 or short & 0xb6).
-- **"Regards as enemy" in order** (`FUN_14079c950(A, B)`, **Observed**): the same faction: no. Otherwise: A's squad holds TEMP ENEMY on B, or A's
-  faction is the player's and B's squad holds TEMP ENEMY on A: yes; A's squad holds TEMP ALLY on B: no; else the faction relation test (hostile
-  A -> B plus extra gates for disguise, coexistence and a flag at faction `+0x1d0`).
-- **Save** (platoon, **Observed**: writer `FUN_1406789e0`, reader `FUN_140678cb0`): per entry `i` from 0 the entry's character handle under
-  `tags<i>`, ints `taglong<i>` and `tagshort<i>`, float `tagtime<i>` (the double time cast to float); the reader stops at the first missing
-  `taglong<i>`. The TEMP ALLY bool (`memory +0x28`) is not written, and where the shared player entry goes is **Unknown**. Meitou's own keys:
-  [save](../formats/save.md#squad-memory).
 
 ## Conditions
 
@@ -455,7 +325,6 @@ Talk menu's dry run is picking.
 | 9 IS_A_TRADER | S's SQUAD_TEMPLATE has `is trader`, whatever the squad stocks (`FUN_1405cff70`, [who trades](economy.md#who-trades)) | Bool |
 | 10 FACTION_RANK | the player's rank in Me's faction ([faction rank](factions-squads-towns.md#32-faction-rank)), any `who` | Num3 |
 | 11 BUILDING_IS_CLOSED_AND_SECURED | Me's squad's "house locked" flag (`homelok`, platoon AI object `+0xe8` via `FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`), the byte state 87 reads and Task_LockDoor sets ([locks](locks.md#doors); **Verified**: case 0xb of `FUN_140676950`, setter `FUN_1407933a0`), whatever `who` says; Meitou reads its home's flag, `LockSystem.IsHouseLocked` | Bool |
-| 12 PLAYER_TECH_LEVEL | the research manager's tech level, `*(*(game + 0x38) + 8)` (**Observed**; the manager's level is the one [research](buildings-production.md#research) raises, 1 at the start), any `who` | Num3 |
 | 13 NUM_DIALOG_EVENT_REPEATS | Me's counter for the current event | Num3 |
 | 14 IS_IMPRISONED | S is caged | Bool |
 | 16 TARGET_IN_TALKING_RANGE | same area as Me and within 260 | Bool |
@@ -463,7 +332,6 @@ Talk menu's dry run is picking.
 | 18 TARGET_LAST_SEEN_X_HOURS_AGO | hours since Me's squad last noted S ([memory](#squad-memory)), 9999.99 never; `who` 0 asks about Me itself | Num2 |
 | 19 IS_LEADER | S leads its squad | Bool |
 | 20 MET_TARGET_BEFORE | Me's squad memory has an entry for S | Bool |
-| 21 / 22 WEAKER / STRONGER_THAN_ME | status float `+0x90` (Character `+0x1a0`): 21 is Me's > S's × 1.5, 22 is S's > Me's × 1.5, strict (**Observed**, re-read in `FUN_140676950`). The float is written every update by `FUN_140852a30`: (strength x stat scale + melee attack rating `FUN_140884ee0` + defence rating `FUN_140886290`) / 3, x 0.1 for a non-animal with no weapon equipped (**Observed**; Meitou `CombatSystem.Rating`, computed when asked) | Bool |
 | 24 IS_ALLY / 25 IS_ENEMY | relation ≥ 50 (or allied, or own) / ≤ −30 and not own | Bool |
 | 27 BROKEN_LEG, 28 BROKEN_ARM, 29 DAMAGED_HEAD (< 0.2), 30/42 NEARLY_KO (< 0.1), 41 IS_KO, 44 IS_DEAD | S's body | Bool |
 | 31 IN_A_NON_PLAYER_TOWN | S in a town not owned by the player | Bool |
@@ -472,12 +340,10 @@ Talk menu's dry run is picking.
 | 35 SQUAD_SIZE, 37 NUM_BACKPACKS | S's squad: members / members with a backpack in the backpack slot (`FUN_1405cb320`) | Num3 |
 | 36 IS_PLAYER | S's faction is the player's | Bool |
 | 38 SQUAD_ONLY_ANIMALS, 43 SQUAD_IS_DOWN, 72 MIXED_GENDER_GROUP | S's squad | Bool |
-| 39 IS_OUTNUMBERED | S's counters (the object at S's `+0x650` + 0x28, Character slot 13 `FUN_1405c8700`): `+0x94` > `+0x4c` × 1.3, strict (**Observed**; the counts are `SensoryData` numEnemies and numConsciousAllies, [ragdolls](ragdolls.md); Meitou: `BodySystem.Senses`) | Bool |
 | 40 / 47 BOUNTY_AMOUNT_PERCEIVED / ACTUAL | S's bounty with Me's faction (perceived: only while recognised) | Num2 |
 | 45 IS_FEMALE | S's race is female | Bool |
 | 46 CARRYING_SOMEONE_TO_ENSLAVE | S carries a living adventurer, bandit, slave or civilian. Carrying nobody, the result is `!(value > 0)`; carrying anyone, value 0 is always false (**Verified**, `FUN_140676950` case 0x2e; the slavers' "A new slave?" line needs the speaker at value 0, carrying nobody) | asymmetric |
 | 48 IM_UNARMED | S has no weapon | Bool |
-| 49 TOWN_HAS_FORTIFICATIONS_WALLS, 58 TOWN_WALLS_LOCKED_UP | S's current town (Character slot 14 `FUN_1405e1ed0` -> `+0x88`) has a building of the gate class near Me: town slot 97 `FUN_140929910` returns the nearest member of the town's building set with a non-null Building slot 123 (49 is true when any exists, wherever it is) / town slot 96 `FUN_140929820`: true when the town has at least one such building and none of them (gates without a first door, or failing `FUN_140547930`, are skipped) has a first door in state `+0x380` 1 (slot 123 is the gate-class test, state 1 is an open door `+0x380`, **Verified** `FUN_140929820`, `FUN_1409c70f0`; the extra door test `FUN_140547930` is **Unknown**). 49 has no use in the data; neither is built (**Observed**) | Bool |
 | 57 WITHIN_TOWN_WALLS | S's gate code > 0 (Character slot 35 `FUN_140792200`, `amInsideTownWalls`, [gate codes](pathfinding.md#gate-codes)): refreshed from S's building (a gateway gives the code of the side S stands on) and cached at `+0xA0`, else the code the gate pass gave S (**Verified**, decompile `FUN_140676950`). Meitou reads the gate region at S's position; no gate pass yet counts as outside | Bool |
 | 50 TARGET_IS_MY_MISSION_TARGET | S is Me's squad's mission target (`FUN_140792e00`) | Bool |
 | 52 / 53 I_LOVE / I_HATE_THIS_GUY | Me's squad's long-term tags on S & 0xc / & 0x2b0 (`FUN_140599590`, `FUN_1405995d0`) | Bool |
@@ -490,12 +356,9 @@ Talk menu's dry run is picking.
 | 65 IS_SAME_RACE_AS_ME | S's RACE_GROUP = Me's (race +0x120; two races in no group compare equal, **Verified** `FUN_140676950`) | Bool |
 | 66 CAN_AFFORD_BOUNTY | S is a player character and the player's money ≥ its bounty | Bool |
 | 68 IS_INDOORS | S's building handle is set (slot 59 `FUN_1405ce020`: its carrier's, its bed's or cage's building, else the one it stands in) | Bool |
-| 69 HAS_ILLEGAL_ITEM | members of S's squad that are S or that Me perceives (`FUN_140855960`) carry an item of the set at `+0x100` of Me's town's faction (else Me's faction) (`FUN_140745f70`, any quantity, one scan of the item list of the carrier's inventory `+0x2e8`; **Observed** by a player report 2026-11-15: the worn backpack's contents are found, a bag carried in the grid is not, so contraband in one is never found; Meitou fix "Bags in the inventory", on by default, also searches carried bags, `World.BagSearchFix`); each carrier found (its first such item) posts "{1} has been discovered smuggling {2}" and becomes the dialogue's target (`FUN_140671930`, [retargeting](#retargeting); Meitou: not yet); the result is the 0/1 found. **Observed** (KenshiLib 1ce4a16: Faction +0x90 `tradeCulture`, its `illegalItems` set at +0x68, the tree head 8 further): the set is the faction culture's `illegal goods`; base data: Holy Nation lists Hashish and the forbidden books its gate guards' lines name (DIALOGUE 52700, event 1; Shek gate guard 9553, event 1; Empire gate guard 9521, event 3) | Num2 on 0/1 |
-| 70 USING_MY_TRAINING_EQUIPMENT | S's `+0x158` (a faction handle) is Me's faction; who sets it is **Unknown**, not built | Bool |
 | 73 TOWN_LEVEL_CURRENT_LOCATION / 74 PLAYERS_BEST_TOWN_LEVEL | Me's current building (Character slot 15 `+0x78`) has a town (Building slot 77) whose faction is the player's: its `+0x388` ([plevel](factions-squads-towns.md)); otherwise false whatever the value (73) / the highest `+0x388` over the player faction's towns (`FUN_140928cc0`), −1 with none (74) | Num3 |
 | 75 IN_A_PLAYER_TOWN | S in a player-owned town | Bool |
 | 76 TARGET_CHARACTER_EXISTS | there is a subject | Bool |
-| 77 IS_RECRUITABLE | false at a player head cap (**Unknown**), for a quantity ≥ 25 (**Unknown**), for law, trader, diplomat; military → !B; others B | Bool |
 | 78 HAS_AI_CONTRACT | Me's AI's contract slot (`FUN_140507070` `+0x210`) is set | Bool |
 
 ## Effects
@@ -506,17 +369,6 @@ Talk menu's dry run is picking.
 2. `interrupt` stored as the pending event-1 dialogue.
 3. `change relations`: each listed faction's relation **toward the player faction** += val0 ("Relations with {1} improved by {2}" /
    "decreased by {2}").
-4. `crowd trigger`: runs when the line has one and not (event 74 and the line's parent has no parent of its own: the line `+0x230` is
-   its parent, **Observed** from `FUN_140683f90`'s walk to the root; so only a direct child of a root is skipped in event 74, Meitou
-   skips every event-74 line). Every member of the squad of the state's owner (`FUN_140791b10`: the speaker, [chain](#ambient-conversations))
-   is started with `FUN_140683f90(member's state, target, root, 74, force 1)` unless it is down (vfunc `0x30`, `FUN_1405c9e10`: dead,
-   unconscious, playing dead, ragdolled or carried), an animal (vfunc `0x248`) or in a bed (`+0x2f8` 1); **Verified** in `FUN_140680560`.
-   No test for combat, being held, or a cage (`+0x2f8` 2): those members are started too. `force` (`FUN_140683f90`) skips the refusal for
-   a member whose dialogue state is busy (idle byte `+0x148` 0): the state is reset without `FUN_140674830` (no counter) and the new
-   root's first line replaces what it was saying. Whether the owner is skipped is not visible in the decompile (the member list is the
-   whole squad); Meitou leaves out the owner and the speaker, and a player character (engine choices, with the per-member val0 %, not
-   read here: **Unknown** where). **Verified** (probe): 93 uses, all val0 100 but two (50, 60).
-   Meitou (`StartBubbles(force)`): a crowd member in the open player conversation is still refused; a caged speaker's bubble goes on.
 5. `give item` to the target (val0 2..49 = stack count; "Received" + the item's name). **Verified** (probe): 45 uses, food, kits, notes.
 6. `trigger campaign` (if the speaker's squad is not in one) at the target's home town or the player town nearest the speaker
    ([campaigns](factions-squads-towns.md)).
@@ -532,8 +384,6 @@ A recruit into a full player squad ends the conversation with "It looks like you
 
 ### Recruiting
 
-DA 3 / 18 with a player-faction target (**Observed**, `FUN_140680560` → `FUN_140692820` → `FUN_1407ff8b0`; a non-player target's
-squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 - **Cap**: refused (the "little full" line) when the player faction already has CONSTANTS `max faction size` characters (30 in the base
   data). The three CONSTANTS limits sit side by side: `max squad size` (20), `max squads` (10), `max faction size`; the HUD's
   "{1,num}/{2,num}" counters show the faction and squad counts against the first and last.
@@ -571,7 +421,6 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 | 11 CHARACTER_EDITOR | ends the conversation, opens the editor on the target |
 | 12 FORCE_SPEECH_TIMER | the second speech timer (`+0x234`) = val0 ([Timing](#ambient-conversations)) |
 | 13 DECLARE_WAR, 14 END_WAR | the speaker's faction's table, slots 8 / 7, about the target's ([factions 3.4](factions-squads-towns.md#34-changing-relations-observed-the-event-table-cross-checked-with-the-dialogue-action-numbers)) |
-| 15 CLEAR_AI | the speaker platoon's AI object: `+0x130` = 1 and four lists emptied (what they hold **Unknown**) |
 | 16 FOLLOW_WHILE_TALKING, 17 THUG_HUNTER | orders 164 ("Following and talking": `Task_FollowAndTalk` only changes the vtable of the shared follow task `FUN_140333400`, so it follows with the stand-off 20 to 40 on the follower's side and the follow speed profile, [pathfinding](pathfinding.md#following), **Verified**; Meitou starts the movement follow task, `TalkFollowers.StartFollowing`, and stands the speaker when the conversation ends), 165 ("Stalking", `Task_TownStalker`) given to the speaker on the target. 165 (**Verified**): in a town it waits 300 outside the town's first gate (gateway or wall with gate, outside gate code not > 0) on the line from the centre, facing the target, while the target is no farther from the centre; then (or outside any town) follows it and once sends event 26; done when both dialogues are free after that. Meitou: `TownStalkers.StepStalkers` |
 | 34 RUN_AWAY | its tasks cleared, task 280 from the target, the squad tags the target AGGRESSOR |
 | 52 SUMMON_MY_SQUAD | every other member of the speaker's squad gets task 67 |
@@ -591,7 +440,6 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 | 41, 42, 43, 48 CHOOSE_* | the character trading window (slaves sold / bought, bail, animals; val0 price override), the speaker as the slaver; 41 / 42 do nothing when the target is the speaker ([economy 12](economy.md#12-slaves-prisoners-animals)). Base data: "trade slaves" (slaver bosses) and "Wandering slave trader" carry 41 and 42, Rebirth's boss 41, "Empire pro-slave" 42 with val0 1000 (**Verified** by probe) |
 | 54 OPEN_NEAREST_GATE | the speaker's current town's gate nearest it (town slot 97) has its door opened (`FUN_140297040`) |
 | 56 MASSIVE_ALARM | in a town: every member of every active squad of the speaker's faction perceives the target, tags it TEMP ENEMY (`FUN_1405cb0a0`), fires event 66 at it and gets task 29 to its position |
-| 58 KNOCKOUT | speaker `+0x4f8` = val0 (meaning **Unknown**; 1 use) |
 | 22 (empty), 26, 27, 31, 44, 45, 46, 50, 51, 59 | nothing in this executor |
 
 ## UI
@@ -604,30 +452,8 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 - `Kenshi_SpeechPanel.layout` (layer Dialog, no input): Kenshi_SpeechPanelSkin (0.2344 x 0.0222) with `SpeechText` (Kenshi_WordWrapEmpty,
   centred, black shadow).
 
-Code (**Observed**): the window (`FUN_140725740`, opened by `FUN_140727820`) names the speaker and the player character and renders
-both portraits; choices use the MyGUI colours `DialogueTextOption` / `DialogueTextOptionHover`; the NPC frame grows to its text (Meitou keeps the layout's frame and scrolls a longer line under the EditBox's bar). The
-bubble (`FUN_140725f30`) uses Kenshi_StandardFont_Large or _Medium, sits 4 units above the "Bip01 Head" bone, and fades from opaque at
-1000 to gone at 2500 units from the camera, the distance ×0.5 for large-font events, ×0.75 for the rest of the
-[interrupting set](#firing-an-event), ×1 for the others; an interrupting bubble is clamped inside the screen, left and top edges winning (`FUN_140672320`,
-`FUN_1407221c0`, flags `+0x149` / `+0x14a` set by `FUN_140683f90`; constants **Verified** from the exe). Meitou draws it as that layout
-(`PlayerInterface.AddSpeech`): the skin and `DialogueBubbleText` #e6e6e6 with a black 1 px shadow, fitted to the wrapped text (the original's sizing is **Unknown**).
-
 ## Unknowns
 
 T_WHOLE_SQUAD fan-out; how a childless closing line is shown in a player conversation; `isDialogDelivered`; where `crowd trigger`'s %
 is read; DA 44-46; the KO event mask; the interjector pick rule; DC 77's cap and quantity; what DC 21/22's rating and DC 39's
 counters hold; DA 15's lists, 58's field; the speech timer's unit; the unnamed short-term tags 1 and 5 (in the grudge mask).
-
-## Meitou design
-
-As built: [simulation](../simulation.md#dialogue). Speech bubbles (`DialogueSystem.Ambient`, `SpeechBubbles`): ambient lines are said as bubbles over the speaker's head, 2 + 0.12 x length seconds apart, the chain passing between speakers as in the original (the target's lines said by the target, interjectors by interjectors; a non-monologue root stops after one line). Started by the campaign announcement (event 2), crowd triggers (event 74), a contract's end talk (event 30), `DialogueEvent` commands from other systems, and a sight stand-in (`DialogueSettings.AmbientEvents`, on in the game, which also gates the commands' event lines): every 30 ticks an awake, free NPC says event 66 (its faction hostile to the player's), 67 (ally) or 3 (else) to the nearest player character it sees by the [sight test](perception.md#sight) (`SightMap`; a sneaker with its stealth but no spot meter) or that a squad mate sees within 2 R ([shared sightings](perception.md#sight)), so a squad notices the player at sight range (1500 in daylight) and a leader holding the hold-up lines speaks when any member sees them; the nearest NPCs look first; or, when it said a line to it in the last half game hour or none passes now, event 3 to the nearest NPC of another squad within 260 (DC 16's talking range), only within 600 of a player character; at most 2 per look; a squad's half-hour cooldown per target starts only once a line is said, so a failed `chance temporary` roll is tried again next look, as the original's perception fires the event on every update (the Red Sabres' attack root is 20%) (engine choices: the original's perception tests are only partly read, and NPCs talk to each other only near a player character, where they can be heard). **Observed** (headless probe, base data, idle squads facing a standing player in daylight): Dust Bandits, Red Sabres, Swamp Ninjas and Starving Bandits start their hold-up or attack lines at 1000 and 1400 units.
-
-Engine choices: a crowd trigger leaves out the owner, the speaker and player characters and rolls its val0 % per member; items that do not fit are dropped at the target's feet; contracts and `change AI` start on the next tick, and a contract's goals aimed at the squad mission follow the employer as squadmates follow a leader (row 44 needs a target and has no finder: its target is the goal's own, so the planner takes the goal as its own plan while the mission target lives); DA 29 is an arrest without a fine in the speaker's town and an attack elsewhere (`ArrestSystem`); DA 53's "Free!" is a bark, not a green float. Events fired from other systems: 18-22 (first aid), 13 (shackles freed, a cage's lock picked), 41-43, 8, 17, 34, 57, 58 (the first witness of a pending crime, `CrimeSystem`), 70 / 71 (a severed limb), 23 / 24 (seen on the ambient cadence: a character down at the last look and up now; 24 when fighting or a hostile awake character is within sight), 60 (an NPC gives up a chase, at its target, [combat](combat.md#leaving-a-fight)), 46 (a jailer's release round), 44 / 45 (the police's spotting; the fine, the bail list and the surgeon's editor are the data's lines, [simulation](../simulation.md#arrest-and-jail)); DA 33 CRIME_ALARM raises the town alarm, which the investigators answer ([economy](economy.md#town-alarms)). DA 2: the leader walks up (`ApproachQueue`) and opens the event-1 conversation within talk range, quietly when it has nothing to say; after 25 game minutes it gives up with event 60. DA 47 compares RACE records only (sub-races not read). DA 24's slave list is the speaker squad's members in slave state; they keep it, owned by the target's faction. DA 41 / 42 end the conversation and open the slave window as it closes ([simulation](../simulation.md#arrest-and-jail), which also fires event 51); DA 48 opens the animal-buying window ([animals](animals.md#buying-animals)). Contracts and `change AI` are saved on the PLATOON (`AiSave`, [save](../formats/save.md#npc-platoons-meitou-mapping)); a wild platoon's are not. Squad memory (`SquadMemory`, hashed, saved on the platoon, kept by a platoon whose squad leaves the world; [Squad memory](#squad-memory)): written by event-1 ends, DA 19-21, 6/55/57, 7, 29, 34, 47
-(each enslaved one's squad remembers the speaker, tag 0: the decompile hides the tag), read by DC 18, 20, 23, 52-55; `AggroSystem` reads TEMP ENEMY / ALLY as `FUN_14079c950` does (a squad with a TEMP ENEMY tag scans even when its faction has no enemy present, so a tagged character of a friendly or neutral faction is attacked, and a TEMP ALLY one is spared),
-and the deeds and witnesses of factions 3.5 do not write tags yet. DA 34 is one run of 2000 + 400 x random units from the target at full speed, DA 7 a walk to the squad's
-home building, else its town, else its home centre, DA 52 a run to the speaker, DA 16 a walk after the target re-aimed every 15 ticks beyond 40 units while the speaker's
-conversation lasts; then the AI takes over (engine readings of tasks 280, 19, 67, 164). DA 28: a new NPC squad keeps the old one's template and home radius, no town, and gets a
-fresh AI mind. DA 56: loaded squads only, an attack order instead of task 29. DA 54 opens every door of the nearest gate
-building. DA 13 / 14 use `PlayerRelations.DeclareWar` / `EndWar`. "Regards as friendly" leaves out the uniform disguise. DA 5 / DC 3 use the faction global trust (`FactionRelations.GlobalTrust`, saved as `meitou global trust`); DC 12 reads `ResearchState.TechLevel`, DC 74 the highest `PopulationSystem.TownLevel` over the player's outposts, DC 73 that of the outpost within the player-town extent of the speaker (engine reading of "current town"). Not built: DA 15, 17,
-39, 58; DC 21/22, 39, 49, 57, 58, 70 (inputs Meitou lacks: the strength float, perception counters, wall tests, training equipment; the decompile facts are in the table above);
-event 25, 31 (betrayal), 36 from the witness function, the witness cases' extra tests.

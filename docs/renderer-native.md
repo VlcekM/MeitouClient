@@ -13,18 +13,6 @@ FrameLoop: two default slots, pre-frame primary (uploads/culls/bakes) then draw 
 barriers around pre-frame. Reuse/retire only after GPU completion. Updating uploads while
 recording affects the whole submitted frame; never overwrite a used DeviceBuffer range.
 
-Buffers/Textures/Samplers define owned/borrowed resource bindings. FrameScratch per-slot bump
-allocation tracks120-frame maximum+25%headroom, shrinks at>2x need; Cap overflow fails and caller
-handles it. Staging can shed unused chunks; descriptor-referenced constants retain storage.
-GpuAllocator carves 64 MB blocks; a block goes back to the driver only when empty. Streamed textures (`TextureDesc.Streamed`: world
-textures, impostor atlases) never share blocks with long-lived images: each is made on a worker (`CreateTextureOffThread`: the world texture
-caches' decode, `ImpostorTextures.MakeOffThread`), so new memory costs no frame; one of 4 MB or more gets memory of its own, freed the moment it is unloaded; the rest take slots in pools of one size each
-(rounded to 64 KB, blocks of about 16 MB, filled fullest first, given back once empty), so a freed slot fits the next texture of its size.
-Texture sizes cluster (2026-11-01 town: 541 world textures in 15 sizes, 216 atlas maps in 8). **Observed** (VRAM dump, 2026-11-01, ~40 min
-of play): with variable-size carving in shared 64 MB blocks, 1286 MB was free but scattered over 64 blocks that long-lived images pinned.
-PipelineLibrary caches explicit descriptions and records late creation (LatePipelines). `Prepare` has no caller: the loading warm-up draws what makes them, with the reflection and cloud passes forced on ([bench](bench.md) "Play benchmark").
-CommandList records bindings/draw/dispatch/transfer/dynamic rendering, preserving host pass order.
-
 Lost device: submissions, fence waits, acquire and present go through `VulkanDevice.Check`, which writes `DeviceFault`'s report to the log once
 before the call throws (`vulkan    device lost at ...`: frames, video memory, then VK_EXT_device_fault's description, fault addresses and vendor
 codes where the device has the extension). `MEITOU_DIAG_FAULT=1` adds what the addresses need to be read: `GpuAddressLog` (the ranges the driver
@@ -44,12 +32,6 @@ requires visibility, read→write execution ordering; `GpuPass` applies the merg
 label immediately, no pass reordering). Repeated upload writes require transfer ordering;
 draw-buffer blits/mips/readback follow command order.
 
-Own GLSL through bundled shaderc; GlslProgramCompiler legacy cache3/native4, stage interface
-locations and SPIR-V binding shifts. LegacyProgram set0 named blocks/samplers pushed, set1 dynamic
-loose uniforms; resolve handles ahead. Native program layouts come from reflection, not one
-assumed global set scheme. FrameGlobals publishes render-thread getters, Version invalidates
-resolution, ApplyCount permits within-application caching; jobs consume prepared values.
-
 A fragment stage's `discard` is compiled as a demote on Vulkan (`ShaderCompileOptions.DemoteDiscard`, set where the device has
 `shaderDemoteToHelperInvocation`, core in 1.3; `GlslProgramCompiler.OptionLines` adds the extension and `#define discard demote`): the
 fragment is dropped and its invocation runs on as a helper, so derivatives and implicit-LOD lookups after it stay defined in the 2x2 quad.
@@ -61,11 +43,6 @@ Metal keeps `discard`.
   without it, 0 errors with it). The `StorageImageExtendedFormats` capability needs no enabled feature.
 - **Verified** (`--screenshot --new-game --ticks 60`, RTX 4070): demote against terminate differs in 102 of 1228800 pixels (largest step
   32/255), at dithered objects' edges; two runs of one build are identical.
-- **Observed** (RX 580, AMD driver 25.8.1, release 0.19.0, two screenshots): with terminate, dark pixels along the triangle edges of
-  characters and cut-out cloth in both shadow modes, and of opaque objects (a barrel, a pole's straps) with the Meitou shadows, whose
-  receiver plane (`cross(dFdx(world), dFdy(world))`) is taken after the `discard`; terrain, whose shaders have no `discard`, is clean.
-  With FSR every edge kept its render-resolution steps; with TAA edges were smooth.
-- **Unknown**: whether that driver renders the demote build correctly (no AMD hardware to test on), and why FSR did not accumulate there.
 
 ### Vertex bindings
 
@@ -80,10 +57,6 @@ has less than a whole stride left for the buffer's last vertex. Every buffer wit
   the picture has the report's dark, texture-smeared triangles in the same places (the half of each `carpet1.mesh` quad that uses its last
   vertex). With the tail and without the zeroing the picture is pixel-identical to the one before, and the
   validation layer reports 0 errors.
-- **Observed** (#661, GPU not reported, `f2601d8aa`): such triangles in almost every building; not reproduced on the RTX 4070 from the
-  report's save, a new game or the low-end, Medium and Faithful settings.
-- **Unknown**: whether the reporter's driver bounds the bindings that way, so whether the tail removes #661; whether the RX 580's dark edge
-  pixels above are the same last-vertex reads (zero normal and colour).
 
 The renderers state their draw state, their formats and their resources in the GL vocabulary, not
 in Vulkan's: DepthFunction, BlendingFactor, FrontFaceDirection, CullMode, PolygonKind,
@@ -104,19 +77,6 @@ master against the branch, mean difference 4.0 -> 0.04) that the former -1..1 cl
 near chimney vanished when the reversed scene clipped at `Near`. Metal (always 0..1) keeps `Near`. `Near` stays the rule for the shadows'
 fit and the close particles.
 The resources and the commands below them are the same question: [resource-layer](resource-layer.md).
-
-BindlessTable has seven typed sampler arrays (BindlessKind bindings0..6). Per-slot descriptor
-journal replays at begin/before submission; freed indices wait for consumers. Updating an index
-changes every submitted draw using it, including already-recorded draws. Use new indices for
-mid-frame binding changes. At a slot's next begin a freed 2D, 2D-array or cube index points at the
-stand-in, so a reader holding a stale index samples (0,0,0,1) instead of a destroyed view (issue #319:
-AMD lost the device on such a read). **Observed** in the three #319 fault reports (nightly 20261110): a character texture's
-index freed in frame N (its image destroyed at frame N+2's begin) was read by a draw of frame N+1; the reader is not known yet.
-With `MEITOU_DIAG_FAULT=1` the table keeps each freed index's frame (`FreedIndices`) and the character draws log records that name
-one (`StaleMaterialCheck`). Tables/views/globals are render-thread state.
-`ScalarOf` lists the integer `InternalFormat`s (unsigned or signed samplers); all others sample as
-float. Verified by `BindlessTests.Integer_textures_read_back_exact_values_through_the_bindless_arrays`
-(integer routing and texels).
 
 ### Shader overrides
 

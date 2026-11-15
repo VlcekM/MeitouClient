@@ -50,7 +50,6 @@ mod registration and uncertain visibility flags remain scoped in source evidence
 | magic | 4 | `FF01` (version 1) or `FF02` (version 2); anything else is read as version 0 |
 | count | int32 | number of volumes |
 | per volume: name length, name | u8 + bytes | version 2 only. The editor's label, by default the type name and the position, e.g. `Block  (7522, -10611)` |
-| type | u8 | 2 sphere, 3 beam (cylinder), 4 block (`FogPlaneVolume`, "Block" in the editor). Other values are not handled by the loader |
 | colour | 4 × float | RGBA. Only RGB is used: the colour setter copies three components and the alpha stays the constructor's 1 (Verified (decompiled), FUN_14010b100, FUN_14010ac90) |
 | distance | float | the density distance: the shader gets `density = 1 / distance` (1 when the distance is not positive; FUN_14010aea0) |
 | sphere (2) | 3 floats + float | centre, radius |
@@ -112,4 +111,3 @@ Evidence scopes below apply only to their named sources/checks.
 
 - The camera value used for the inside test (above).
 - Version 1 files (no names) were not seen.
-- Where the level editor saves the file (above). Meitou has no level or fog editor (`FUN_14010d8d0` FogEditor window; **Verified** it exists, not ported).

@@ -43,9 +43,6 @@ facts only; own rendering compiles own GLSL. Unsupported script/resource feature
   `lighting` with three values (which the translator then rejects). Base-game files keep one property per
   line.
 - At the start of a line, quotes, variables, `{` and `:` are ignored silently.
-- `import <target> from <file>`: the word in the middle is not checked. A quoted target is unquoted with
-  the wrong length (the `import` token's), so `import "Foo" from ...` asks for `Foo"`; only the file name
-  is unquoted correctly. Malformed `import` / `set` / `:` lines stop the file.
 - `set $name value`: a variable assignment (value: one word or quoted phrase).
 - `name : Base1 Base2`: the words after `:` are bases. **Base names keep their quotes**, so a quoted base
   is never found.
@@ -125,13 +122,6 @@ use **no** variables and **no** `abstract` (Verified by search); both are implem
 
 - Whether Kenshi's Ogre build matches the v2-0 lexer/parser quirks above (the DLL is 2.0 "Tindalos", but the
   quirks themselves are untested; test with a mod).
-- Whether the SkyX plugin registers resource locations of its own.
-- The terrain and character-body material builders (see [runtime-materials.md](runtime-materials.md)).
-
-Answered (see the sections above): which duplicate definition wins (the first parsed; Kenshi's collision
-listener returns false), recursion (none for `resources.cfg`; mod folders are scanned and every sub-folder
-added), `OgreCore.zip` (registered) and Caelum (not registered), group initialisation order (`GUI`, then
-ordinal name order), and how records map onto materials.
 
 ## Expression reference
 

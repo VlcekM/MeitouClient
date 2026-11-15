@@ -1,10 +1,5 @@
 # Foliage placement and materials
 
-Original-game research from placer binary/disassembly, FCS records, overlays and shipped assets.
-Rendering/streaming choices: [render-foliage](../render-foliage.md), [impostors](../impostors.md).
-**Unknown:** reproducing actual original placement locations; the game does not save foliage.
-Algorithm verification does not establish screenshot parity for complete generated layouts.
-
 ## Records
 
 - **BIOMES** `foliage` → FOLIAGE_LAYER list (in list order). A biome is keyed by its `index` colour
@@ -14,9 +9,6 @@ Algorithm verification does not establish screenshot parity for complete generat
   - `grass` → GRASS, where value 0 is the coverage channel: 0 reads overlay R, anything else overlay G.
   - `visibility range`: FoliageVisibilityRange, 0 CLOSE, 1 MEDIUM, 2 FAR, 3 FEATURE.
   - `wind`: a wind page, see below.
-  - `lod range`: × 10, stored per mesh (FUN_1406ce160). **Observed**: no instruction in the foliage system
-    (0x1406c0000–0x1406e8000) or the PagedGeometry code (0x140a28000–0x140a50000) reads that slot back, so it
-    probably has no effect; a reader elsewhere is not ruled out.
   - `uses foliage system`, `lod levels`, `page size` (on some layers, e.g. SageBrush: lod range 150, page size 50;
     LandTrumpets: lod range 50, page size 50, lod levels 1): **Verified (string search of kenshi_x64.exe)**: none
     of the three names occurs in the exe, while every field it reads is there as a literal (`lod range` once).
@@ -28,24 +20,6 @@ Algorithm verification does not establish screenshot parity for complete generat
   - `building type` makes the rock a production building: Iron/Copper Resource, mines (**Verified**).
 - **GRASS**: sprite, colour map, size, density, slope, altitude, wind, and the coverage noise (`noise scale`,
   `zero cutoff`, `brightness boost`, `cap`, `blackout*`).
-- **TOWN** `no-foliage range` (default 2000): meshes with `avoid towns` are rejected within it, measured to the
-  nearest town that is not a nest marker (type 8). **Verified (decompiled)**.
-  Exception (**Verified**, `FUN_1406d2410` at the town test, `FUN_140927f10` the nearest town): a mesh with a non-empty `building type` list (the resource rocks) is **not**
-  rejected when the nearest town's owner faction is the player's (faction `+0x250`, see factions-squads-towns.md); every other mesh, and rocks near any other town, are rejected on
-  distance alone. The town list is the live one, so it includes towns the player founded or took, and the test runs when the zone is paged.
-  **Player outposts** (**Verified** for the rule, parity round 9: Goonrock's three `avoid towns` boulders, 235-630 from its centre, are absent from the original's runtime tile; **Observed** in
-  Meitou, round 10): the navmesh's foliage (`FoliageObstacles`) places with the level's towns plus the player's outposts at their current centre, each with the template's range
-  (`player_town_template`, 1000; `FoliageWorld.ExtraTowns`, fed by `NavSystem.SetPlayerTowns` from the snapshot's outposts, owned flag = the player's faction). A town founded, moved or gone drops the
-  kept obstacles of the zones it can change (within the larger of its range and the level's largest range, since it can become the nearest town for points a level town covered)
-  and builds the loaded zones again, and the navmesh cache key (`BuildingHash`) carries the towns near the zone. Timing differs from the original, which re-places a zone's foliage only when
-  it pages in: Meitou builds again at once, the nearest approximation (the original's exact trigger is **Unknown**).
-  The drawn foliage uses the same list (round 11, **Observed**: the three Goonrock boulder spots draw empty ground): `FoliageRenderer.SetPlayerTowns`, fed from `BuildingSync` with
-  `NavRuntimeBuildings.FoliageTowns`, sets `FoliageWorld.ExtraTowns` on each worker's layout and drops the laid-out zones a changed town can reach (a layout already running keeps what it started
-  with). A zone a town reaches is neither read from nor saved to the layout cache (`FoliageWorld.ExtraTownsReach`: the cache key knows only the level's towns).
-  A town with range 0 keeps nothing away (**Observed**: Newwworld's The Hub `18919-Newwworld.mod`, so its trees grow among the buildings, issue #522).
-- **No building test** (**Verified (decompiled)**, `FUN_1406d2410`): the mesh placer rejects by slope, zone, town range, altitude and the overlay's road
-  channel only (the grid test there is the overlay A byte, `FUN_1406d82d0`); nothing checks buildings, so a tree can stand in a building's yard or room.
-  Whether anything removes foliage under buildings after placement is **Unknown** (no such caller found).
 
 ## Randomness, noise and ground
 
@@ -57,12 +31,6 @@ layer using leading numeric StringId minus zone-noise transform; layers are inde
 Value1-h/2^30; smoothing sides/8,corners/16,centre/4, cosine interpolation pi3.1415927.
 Grass five octaves scale=noise-scale*72, amplitudes0.5^o; remap0.5+0.5sum, cutoff/rescale,
 brightness/cap; blackout multiplies shifted(50007,50007) noise.
-
-**Verified decompiled** ground129² float grid,36-unit spacing, bilinear clamped height. Slope
-is height difference per36, not degrees. Overlay RGBA: R coverage,G grass spots,B dirt,A road.
-Clear129² R/G; grass biome/layer order regenerates R by max, altitude fades300, B>70 gives0,
-A>10 skips, byte conversion wraps. Channels0→R, nonzero→G. **Observed** regenerated overlay
-footprint supports the model but value matches are incomplete; biome list comes from blend masks.
 
 ## Mesh placement
 
@@ -100,11 +68,6 @@ generated LOD, Hi-Z/fog culls and atlas residency live in the renderer reference
 - Noise: `n = x + 57 z`; `n ^= n << 13`
 - Materials: `windFactorX/Z = wind factor × 0.25`
 - TERRAIN-mode meshes: `slope = min(1, 1 − normal.y)`
-- TERRAIN-mode rock normals (**Observed**, 40 meshes of `foliage/rocks` and `newland/Assets/Rocks` read with `OgreMeshReader`): most
-  store unindexed triangles (vertices = 3 × triangles). The `newland` rocks give every copy of a position the same normal
-  (authored smooth); `formation03x`, `rockformation`, `rockformation02`, `rock_M_round`, `roborock`, `hatrock`, `rock03`,
-  `AirRock01`, `AshlandRibTEST` have hard edges (a position's copies differ by 19° to 102° on average). `Barkworm_Pillar01` has zero-length
-  normals.
 
 ## Not verifiable
 

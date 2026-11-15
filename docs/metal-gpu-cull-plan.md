@@ -81,9 +81,6 @@ Metal has no `DrawIndexedIndirectCount` or `MultiDrawIndirect`, so the renderer 
 This means the CPU still issues one loop iteration per candidate draw. The win is that the CPU no longer culls
 instances or builds matrices; the number of loop iterations must stay bounded by the existing scratch caps.
 
-Verify whether Metal's indirect arguments preserve `baseInstance`. `FoliageGrassGpu` uses the first blade
-(`firstInstance`) per page. If `baseInstance` is not supported or is unreliable, either:
-
 - encode the blade offset into the vertex/index data for the Metal grass path, or
 - keep CPU grass submission until the grass-specific indirect path is ready, while porting mesh/rock culling
   first.
@@ -131,8 +128,6 @@ These are deliberately **not** part of the first port.
 - **Half precision:** Apple GPUs run 16-bit ALU faster, but the engine compiles GLSL to SPIR-V/MSL as float.
   A Metal-specific `half` variant for colours/normals/UVs/lighting (not world positions, depth or large
   coordinates) could reduce ALU and bandwidth. It needs a separate pipeline variant and a visual/perf A/B.
-- **Scene shader specialization:** compile out branches for features that are off (GI on this Mac, unused
-  atmosphere/specular paths). This is likely more valuable than half precision if the ALU limiter stays high.
 - **Post shafts:** 11.27% of a recent save-start frame. Check resolution/step count and whether the title's
   29% case is representative; do not lower quality blindly.
 - **Shadow cascades:** already have cadence and cached far cascades. A static/dynamic split is only worth it if

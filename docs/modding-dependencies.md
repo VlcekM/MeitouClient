@@ -151,7 +151,7 @@ static void UseVisitors(ModContext c) => c.Dependency<VisitorsMod>("settlement.v
 
 ## Saves
 
-- A save made with code mods records them in `meitou-mods/environment.json` ([save format](formats/save.md#mod-data)): the Meitou tag
+- A save made with code mods records them in `meitou-mods/environment.json` (save format): the Meitou tag
   and the loaded code mods in load order (id, `version`, name). A game without code mods writes it only over a save that had one.
 - On load the record is compared with the running mods; each change is a log line and a notice: a mod gone (its sidecar is kept unused),
   a version changed (a downgrade or a major update called out), a different order, a new mod. The save always loads. A record that cannot
@@ -166,9 +166,3 @@ static void UseVisitors(ModContext c) => c.Dependency<VisitorsMod>("settlement.v
   (`Arrange_moves_a_dependency_up_and_reports_a_cycle`); `gameVersion` taking a nightly as its release and refusing a pre-release range
   (`Game_version_takes_a_nightly_as_its_release`); a refused mod blocking no later one, launcher and loader alike
   (`A_refused_mod_blocks_no_later_one_in_the_launcher_or_the_loader`).
-- **Observed** (2026-11-06, scratch runs, not in the repo): a library compiled against master's `Meitou.Core` that calls the API 1
-  constructor and `Deconstruct` ran against this build; a dependent naming an absent optional assembly's type directly fails with
-  `FileNotFoundException` when called, while the `HasDependency` + `NoInlining` pattern runs (win-x64, .NET 10, tiered compilation on and
-  off).
-- **Unknown**: a real framework-plus-dependent game run (shared state, diamond, failed initialization, save and reload) and the launcher's
-  rows as drawn.

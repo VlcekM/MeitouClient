@@ -33,11 +33,6 @@ translucency, not ambient/environment.
 
 ## RTW and engine differences
 
-RTW mode2 uses separate warp/receiver pipeline; not reproduced as CSM. Settings mode/quality/
-range and original restart semantics are in tables/[settings](settings.md). Meitou soft shadows,
-minimum-radius impostor filtering, fifth cascade, fog cap and terrain-horizon sweep are engine
-features; preserve Faithful formulas and independent switches. [Lighting](lighting.md).
-
 ### Settings (Verified: exe settings loader, writer and options screen; `settings.cfg`)
 
 | `settings.cfg` key | Values | Meaning |
@@ -68,8 +63,4 @@ Evidence scopes below apply only to their named sources/checks.
 - Settings (Verified: exe settings loader, writer and options screen; `settings.cfg`)
 - The map (Verified: exe CSM creation)
 - Splits (Verified: exe CSM split set-up)
-- Cascade fitting (Verified: exe per-cascade fit, disassembly where the decompiler was unclear)
 - Casters (Verified: `shadowcaster.hlsl`, `shadows.material`, `terrain.hlsl`, the `.material` files; Observed where noted)
-- Receiver (Verified: `deferred.hlsl` `main_fs` with `CSM`, `shadowFunctions.hlsl` `computeShadowMultiplier`)
-- How the term enters the lighting (Verified: `deferred.hlsl`)
-- The RTW mode (mode 2; Verified from the shaders and the exe RTW class unless noted; not reproduced yet)

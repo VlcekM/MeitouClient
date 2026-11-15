@@ -1,9 +1,5 @@
 # Camera
 
-How the game's camera moves and how far and how high it can go: what the haze and lighting (which assume an eye near the ground, see
-[sky.md](sky.md#haze-and-weather)) can be relied on for, and where the viewer's own choices begin.
-Labels as in [../README.md](../README.md).
-
 Sources: `kenshi_x64.exe` (the camera rig's set-up, its input, zoom, pitch, pan and ground-clearance steps, the settings loader;
 decompiled outside the repository on 2026-10-05 and 2026-10-17), the install's `settings.cfg` and `controls.cfg`, `fcs.def`.
 Implemented as facts in `Meitou.Data.World.KenshiCamera` and `Meitou.Game.Host.Cameras.StrategyCamera`. Nothing here was compared
@@ -11,9 +7,6 @@ against the running game; the signs and rates come from reading the code.
 
 ## The strategy camera (Verified: `kenshi_x64.exe`)
 
-- **A pivot and a boom.** The camera hangs off two scene nodes: `camera_center` (the pivot, which yaws and pitches) and its child
-  `camera_node` (the camera itself), placed on the pivot's local Z axis at a distance, looking at the pivot. On creation and on
-  reset the boom is **150** units and the pivot is pitched **30°** about X (a virtual call on the camera with 5.0 follows, presumably its near clip: **Observed**).
 - **Zoom limits: 10 to 2000.** Each zoom step takes the boom's length, subtracts `zoom speed · input · min(length / 600, 0.75)` and
   clamps the result to **[10, 2000]**. Both limits are literals in read-only data: the 2000 is read by the zoom step and by the
   sound update (which normalises the `Camera_Zoom` RTPC by it, height above ground / 2000 × 100) and nothing writes it; no
@@ -24,10 +17,6 @@ against the running game; the signs and rates come from reading the code.
 - **So the eye is at most 2000 × 0.92 = 1840 above the pivot** (`KenshiCamera.MaxHeightAbovePivot`).
 - **The pivot rides on the ground** (next section). In normal play the eye is at most ~1840 above the ground (or roof) within 2000
   units of it; over a cliff edge the ground straight below the eye can be lower than the pivot's.
-- **Free camera** (`toggle_fps_camera`, `;` in `controls.cfg`, "Free camera mode"): flies with a velocity and is only kept a
-  little above the ground; no ceiling was found in its update (**Observed**; a debug-style mode, not the normal camera), but it moves the
-  pivot node, so the [leash](#leash) holds it too (**Observed** by code, not tried in the game). It reads the
-  mouse movement always (the pointer is pinned), the wheel scales its speed, and the rotate keys roll it.
 - The game's `view distance` setting (5000 in the install's `settings.cfg`, slider given 1500 to 12000) sets the far distance and
   the haze (D = view distance × 10), not the camera.
 
@@ -49,11 +38,6 @@ not the game speed, so the camera works while the game is paused. Several inputs
   | `Edge scrolling` | 1 | on/off | pointer at the edge pans |
   | `Rotation marker` | 1 | on/off | the green marker while rotating |
 
-- **Zoom.** Input per frame = wheel + keys. The wheel gives its raw step / 100, so **1.2 per notch** for the frame it comes (nothing
-  accumulates; a mouse-move event after it in the same frame resets it to 0, **Observed**), zeroed while the pointer is over an
-  interface widget. `camera_zoom_in` / `camera_zoom_out` (Home / End) add **5 per second** (×3 with Shift), not while placing a
-  building or character. The step above gives the new length and the boom closes on it by `min(70 · dt, 1)` of the gap per frame
-  (all of it below 70 fps). Zooming never moves the pivot.
 - **Pan.** Keys `camera_forward/back/left/right` (W/S/A/D and the arrows) give a vector of ±1 per axis; with edge scrolling on, a
   pointer within **1 %** of an edge (position / viewport size below 0.01 or above 0.99) adds ±1 for that edge, with no check of the
   interface. The vector is turned by the pivot's orientation (yaw and pitch), its height dropped and the rest normalised, so every
@@ -72,58 +56,12 @@ not the game speed, so the camera works while the game is paused. Several inputs
   `mouse speed tilt · input · dt · invertY` degrees (12° per second from a key at 6); with invert Y on (the default) `,` and mouse
   down both make the view steeper (the camera rises). The limits are the pitch limits above, checked before each step.
 - **Rotating** pins the pointer where the drag began (restored each frame) and shows the marker, scaled `min(0.06 · boom, 3)`.
-- **Height** (mode "free", no tracked character): the pivot's ground is the terrain raised by a ray from 3000 above the pivot straight
-  down with mask `0x200`, plus `0x400`/`0x800`/`0x1000` when the viewed floor is ≥ 1/2/3 (**Verified**, bits counted in
-  `FUN_1406aecc0`): collision groups 9..9+viewed floor, every loaded building's ordinary parts (wall tops, gate decks and roofs of
-  floor-0 parts included), no stairs, doors, furniture or unwalkable roofs. When the hit object answers a virtual check (vtable
-  +0x330, unknown) the ray is cast again with `0x200` only; the hit building is remembered and, when the ray misses, a radius-40 sweep
-  keeps the pivot on it; a second ray, 100 above, mask `0x4000` (group 14), also raises it (all **Observed**). The eye's ground is
-  the terrain and group 14 only: its building ray (`0x200`.., from 1000 above) can only lower it, gated by `FUN_1409b6d00`
-  (**Unknown**). The water surface (a node at the sea height) is the lowest ground of both. The pivot's
-  goal is its height after coming down to the ground under the eye if that is lower (never below the ground at the pivot), then
-  **raised by the shortfall until the eye is `min(0.2 · boom, 20) + 10` above the ground under it**: the pivot rises, the view
-  direction is not touched. The pivot then closes on its goal: a gap of 0.1 or less at once, else at **10 × the gap per second**, the
-  speed taken when the goal changes (a moving goal is followed with a lag of about 0.1 s). A pivot or eye starting inside geometry
-  leaves the height alone (**Observed**). Placing the camera finds the goal at once. Engine: every building's floor-0 ordinary parts
-  whose collision can reach the point (its record's farthest floor-part vertex from the origin, at the placement's scale; base game up to 2003 for
-  Large Dock Wreck02, 1193 for Flats Lagoon's Lagoon Platform, 216 of 7819 floor buildings past 400, **Verified** by making every placement's floors;
-  zones searched within 2100) are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
-  without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
-  floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
-  ray or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
-  added or removed (a building; not a ground item's drop or pick-up, which leaves the lists alone, issue #204, **Observed** by code, not measured) lists the zone's buildings again while the known floors keep answering
-  (the pivot does not drop to the terrain meanwhile), and an unchanged building keeps its collision.
-- **Default keys** (`controls.cfg`): `camera_forward` W, Up; `camera_back` S, Down; `camera_left` A, Left; `camera_right` D, Right;
-  `camera_rotate_left` Q; `camera_rotate_right` E; `camera_tilt+` `,`; `camera_tilt-` `.`; `camera_zoom_in` Home; `camera_zoom_out`
-  End; `mouse_rotate` Left Control or Mouse3; `toggle_fps_camera` `;`; `focus_char` F (held flags and events:
-  [../game/ui-input.md](../game/ui-input.md#4-action-table)). While a text field has the keyboard the whole step is skipped (**Observed**).
 
 ## Focus and tracking (Verified unless marked)
 
 - **`focus_char` (F, event 0x11)** puts the pivot on the first selected character's position (its floor becomes the viewed floor),
   settles the pivot's height at once and clears any tracking. Boom, yaw and pitch stay. It does not follow.
-- **Tracking** (a double click on a character's portrait, per the tutorial text): the camera holds the character's handle. Every
-  frame the pivot is set to the character's position + 10 up (more inside a building, by the building's per-floor value, **Observed**),
-  with no ground smoothing; the eye clearance still lifts it. Panning, `focus_char` and the free camera clear it; zoom and turn keep it.
-  While tracking, the pointer at an edge turns the camera instead of panning (**Observed**: x edge ∓3 yaw input, y edge ∓1 tilt input
-  per frame). Edge scrolling is also suppressed after some events until the pointer moves right (a quirk, **Observed**).
-- **Whom the camera tracks** (**Verified**, `FUN_1406b0f90` mode 1 asks the handle's object for its position through vtable `+0x40`, which for a character is `FUN_1405ce680`): a character in a bed or cage (`+0x2f8` set) answers its bed's or cage's position, a **carried** one (`+0x3d4`) answers its **carrier's** position (the carrier handle at `+0x388`, resolved and asked the same way, so a chain of carriers ends at the first one carried by no one), and only otherwise its own (the ragdoll root body's or `+0x48`). So following or centring on a knocked-out character that someone carries keeps the camera on the carrier, at the carrier's position + 10, never on the body on the shoulder (its drawn offset is not used). Meitou: `GameHost.Tracked` / `PlayerInterface.Carrier` for follow, centre (F, portrait), flights and the followed floor; the bed and cage case is not modelled (the body keeps its own place there).
 - The save's `CAMERA` record keeps the pivot position and orientation, the boom and the tracked handle ([saved camera](#saved-camera)).
-
-## Leash
-
-**Verified** (`FUN_1406ae990`, called every frame by the interface update `FUN_1407f7ee0` from `FUN_140788a00`): the pivot node (`camera_center`)
-is kept within **2250** of the player's characters (`KenshiCamera.LeashRadius`). The nearest of a handle list (interface `+0x2b0`), by full 3D
-distance from the pivot to each object's position (vtable `+0x40`, so a carried character counts at its carrier), is found; when it is farther
-than 2250 (the compared square, 5062500, sits in writable data but no writer was found) the pivot is set to that character's position + 2250
-along the line towards the pivot (the decompile garbles the direction's operand; that reading is **Observed**). A hard set, no easing; it runs on any mode (free, tracking, the `;` camera). Skipped when the list is empty,
-while `DAT_142134690+0x298` or `+0x2f0` is set (**Unknown**), and while the caller's check `FUN_14025c6d0` holds (**Unknown**).
-**Observed**: the list holds the player's characters (the next step, `FUN_1407f7230`, walks it for the zones around them); whether it holds dead or
-unconscious ones too is **Unknown**. Meitou: `CameraLeash`, inside `CameraRig.Update` before the tick's state is kept, on every character with
-`IsPlayer`; the strategy pivot is placed on the sphere's point (its height then found as usual), the free camera's eye is pulled the same way
-and loses its outward speed (engine choice). Advanced **Camera stays near your squads** (`UserConfig.CameraLeash`, default on, in neither
-side of the gameplay switch) turns it off. Engine choices: off on the title, in photo mode, during squad tours, character flights and the
-cinematic camera, and under `--play-bench`.
 
 ## Saved camera
 
@@ -147,32 +85,3 @@ draws the game's haze unchanged; above them it is the viewer's own choice what t
 at the eye and on two rings round it out to 2000 (the longest boom): in-game that stays under ~1840 (plus a roof under the
 pivot). The viewer's altitude band starts at 5100 above that and ends at 18700 (a viewer choice; the user's reference view
 `--town "The Hub" --distance 40000 --pitch 3` is 3302 above it and stays exactly the game's).
-
-## In the game (Meitou)
-
-`StrategyCamera` implements the step above in frames of 1/60 s (a 30 Hz control tick runs two), including edge scrolling (the
-host passes the pointer's place in the window, from Windows, only while the window is in front and nothing else uses the pointer;
-the Controls settings toggle, first taken from the install's `Edge scrolling`, turns it off).
-The turn and tilt averaging counts its 20 frames in drawn frames, as the game's does, while the step stays 1/60 s (so the mouse's turn per
-pixel does not change with the frame rate): a step spanning n drawn frames weighs its samples 1, aⁿ, a²ⁿ, ... over 20 / n samples
-(`StrategyCamera.FramesPerStep`, the host's smoothed frame time). Engine choices: a frame rate under 60 averages as 60 does, and the
-Controls settings' **Camera smoothing** (`UserConfig.CameraSmoothing`, default on; the game has no such option) turns the averaging off.
-Controls settings' **Shift pan boost** (`UserConfig.ShiftPanBoost`, a Faithful / Meitou switch, default on; the game has none) multiplies
-the key pan by **Shift pan speed** (`ShiftPanMultiplier`, 125% to 500%, default 200%) while Shift is held; edge scrolling alone is not boosted.
-Differences, all engine choices: a pitch step is cut into pieces of at most 0.02 rad, each checked against the limits (the game
-overshoots by up to one step); the eye is never left below the clearance by the height lag; tracking is the host's (the pivot
-follows the character; the host draws the character's smoothed position + 10 as the target and then lifts it until the eye clears the
-ground by the same clearance, as it does for the squad tour's arcs, [viewer.md](../viewer.md#squad-tour)); rotating pins the pointer as the game does (put back after every move, no
-marker drawn); `mouse_rotate` is the middle button or Ctrl (Ctrl+right click is also Meitou's carry binding); the free camera keeps its own
-engine feel (the mouse turns the view without a button held, the pointer pinned; photo mode keeps the drag; its Q/E turn the view left/right as named, not as the strategy camera's; each wheel notch scales its speed by 2^(1/4), 1/16 to
-16 times, so scrolling back always reaches 100%; a label shows the speed for 3 s after a change; Shift does not boost it). The sea height clamps the camera's ground
-(**Observed**: the water node's height is the water height, 100). The settings above are constants of `CameraSettings`, not read
-from `settings.cfg`; `.`/`,` are no longer the time-step keys (they tilt, as in the game).
-**Follow camera offset** (Meitou, optional: Advanced → Follow camera offset, `UserConfig.FollowCameraOffset`, default off; the game has none;
-after ErasmianFolly's Camera Tweaks mod; `FollowFocus`): while the strategy camera follows a character the target is moved from the game's
-position + 10: up by Follow camera height (-10 to 30, default 17, about a person's head), or with Follow camera head lock to the height of the
-tracked character's `Bip01 Head` as last drawn (its last height over the target while it is not drawn), then sideways along the camera's right
-by Follow camera side (-40 to 40; positive puts the character left of the middle). The pivot stays on the character.
-The free camera more than 3000 above the ground under its eye stops moving the world's focus (`KenshiCamera.FlightHeight`, engine choice; the
-strategy camera never gets that high): the loaded zones, their squads and navmesh stay where the flight left the ground and load round the
-focus again once it comes down, so a high flight spawns and builds nothing.

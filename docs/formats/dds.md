@@ -80,9 +80,6 @@ DDS codec, Observed (source)).
 | uncompressed 16-bit X1R5G5B5 (`meshes/sky0026.dds`) | 1 |
 | **total** | **1,907** |
 
-- BC3 alpha is almost always used (**Observed** 2026-10-31, scratch survey of level 0 of every 2D BC3 file): only 23 of
-  1,157 files (63 of 5,842 MB) are alpha 255 throughout, none are 250–254. So re-encoding "opaque" BC3 as BC1 would save
-  about 1 % of BC3 memory; the rest carries gloss (diffuse) or cut-out/emissive (normal maps).
 - No DX10 headers, no volume textures, no BC4/BC5, no 24/32-bit uncompressed files.
 - 64 files have a single level (no mip chain); 64 have a non-power-of-two side. All sides are multiples of 4
   (Observed in a scratch survey, not in the test).
@@ -95,8 +92,6 @@ DDS codec, Observed (source)).
 
 ## Terrain layer textures (Verified 2026-10-05, `data/newland/land/textures` by header survey)
 
-The 193 files the biomes use: 188 diffuse BC3 + 2 BC1 at 2048² with 12 mips, 2 diffuse at 1024² BC3, 1 at 512² BC1; normal maps 153 BC1 + 12 BC3 at 2048² with 12 mips and 1 at 512². (`data/land/textures` has 16 older ones: 2048² and one 2048x1532, also one 1024² BC1 without mips.) Normal maps' alpha is unused by the terrain shader (**Observed**: only `.rgb` of the blended normal is read), so the viewer keeps them as BC1. BC1 to BC3 and back is a block rewrite: BC3 always has four colours, BC1 falls back to three colours plus transparent when the first endpoint is not above the second (Verified by `BlockCompressionTests`).
-
 How the game loads them (**Verified**, decompiled): the biome material (FUN_140a14c90) builds `diffuseMaps` and `normalMaps` as
 texture arrays of a biome's six layers in resource group `Landscape` (**Observed**: the string is built at the call, the
 decompile drops the argument); the array loader (FUN_140448990,
@@ -105,15 +100,6 @@ logging "sizes mismatch", when a slice's width, height or format differs from sl
 listener (FUN_14082ddc0), so every layer loses `level` top mips (`Landscape` gets no `_HI.` exemption): 2048² becomes 1024² at
 High. **Observed** (not run): a biome mixing the 1024²/512² files above with 2048² ones would fail that check in the game; Meitou
 rescales every layer to one size instead.
-
-## Dead references
-
-**Verified** (1.0.68 gamedata dump vs `data/newland/land/textures`): six `Newwworld.mod` FOLIAGE_MESH records (four
-`Foliage_1K_RockStack02` variants, two using `BoulderCluster_DualTex01.mesh`) name `Geobased_Rockloop_{DIF,NML}_HI.dds` /
-`Rockloop09_{DIF,NML}_HI.dds` as `texture map` / `normal map`; only the names without `_HI` exist. **Verified** (decompiled): the
-`_HI.` literal's only user is the quality listener above, so the game has no `_HI` → base-name fallback; Ogre fails the lookup.
-Meitou does not warn about these four names. **Unknown**: how the original draws these meshes (a blank unit; a blank normal map
-may also clip them, its alpha being the cut-out mask).
 
 ## Channel conventions in Kenshi's textures
 
@@ -134,11 +120,7 @@ Not part of the DDS format, but needed to use the files (details in [../viewer.m
   textures from 4096 to 2048. This is preprocessing of replacement assets; the description does
   not describe a runtime encoder. The author claims reduced loading time, stuttering and VRAM use;
   those performance claims have not been measured here.
-- **Unknown**: exact file coverage, original-to-replacement format changes, mip generation and
-  resampling filters. The base-game DDS survey above already contains mostly BC1/BC3 textures,
-  so the name alone does not establish additional compression at unchanged resolution.
 
 ## Open questions
 
 - Whether Kenshi's Ogre build loads textures with gamma correction (sRGB) or treats diffuse as linear.
-

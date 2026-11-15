@@ -13,13 +13,6 @@ interpret an unknown field from its label. settings.cfg user options and kenshi.
 terrain/chunk configuration are separate stores. meitou.user.json is the engine's own config;
 its graphics/bindings must not be confused with original files.
 
-Terrain detail/chunk size/LOD test, texture quality (mip skipping), water reflection level/range,
-shadows, decals, distance controls, audio and gameplay keys drive different subsystems. A lower
-texture quality changes loaded mips, not anisotropic filtering or screen resolution. Reflection
-levels determine included classes, not just target size. Shadow mode and quality choose different
-pipelines/map dimensions. Meitou honors documented keys where implemented; unsupported settings
-remain unsupported rather than guessed from UI wording.
-
 ### Graphics: view and window
 
 | Key | Type, range | Missing → | Options label | What it does | Restart |
@@ -81,7 +74,6 @@ i.e. everything).
 | `grass density` | float; slider 0 … 2 | 1 | Grass Density | Multiplies grass candidates per page (FUN_1406d0340) | Zones loaded afterwards |
 | `foliage range` | float; slider 0.1 … 4 | 1; **≤ 0 → 0.1** | Foliage View Range | Mesh foliage page range multiplier (FUN_1406d3e30); a zone gets foliage only when it is above 0 (FUN_1409f9560), which the clamp always makes true | Zones loaded afterwards |
 | `objects view range` | float; slider 1000 … 8000 | 3000; **< 1000 → 1000** | Objects View Range | Rendering distance of building parts ([zones.md](zones.md#placement-files-and-assembly); FUN_140558b40, FUN_14055f6e0) | Objects created afterwards |
-| `npc range` | float; slider 1000 … 8000 | 3250; **< 1000 → 3000** | NPC View Range | Character relevance radius ([game-loop.md](../game/game-loop.md)) | Yes: the character draw distance (`GameplaySettings.NpcRange`, from the eye; the in-view flag and the race `+0x78` factor are not modelled). The start value; the Graphics > Characters slider `Character draw distance` (the game's range, steps of 50, saved in `meitou.user.json`) overrides it, also for the simulation's on-screen test |
 | `feature range` | int, stored as float; slider 0 … 8 | 2; **clamped 0 … 6** | Terrain Feature Range | Square of ±N zones (64 × 64 zone grid) around the camera's zone that map features load for (FUN_140a098e0) | No |
 | `distant town range` | int, stored as float; slider 0 … 8 | 6; **clamped 0 … 10** | Distant Towns Range | Square of ±N zones around the camera's zone that distant towns show for (FUN_140a0b340) | No |
 | `generate distant towns` | bool | 0 | Generate Distant Towns | Build distant meshes for towns without a baked one ([zones.md](zones.md#placement-files-and-assembly); FUN_1400d8350) | Towns loaded afterwards |
@@ -142,9 +134,7 @@ into bus gains ([audio.md](../audio.md#volumes)). Meitou applies them at once fr
 | `Global population multiplier` | float; slider 0.5 … 4 | 1 | Global population multiplier (num NPC squads) | same |
 | `raidSizeMult` | float; slider 0.25 … 4 | 1 | Town raid events: size | same (FUN_1409c5ad0) |
 | `raidFrequencyMult` | float; slider 0.25 … 3 | 1 | Town raid events: frequency | same (FUN_1409c5740) |
-| `attacks` | int 0 … 5 | 2 | Town attacks frequency: Bombardment = 0, High = 1, Normal = 2, Fewer = 3, Rare = 4, Never = 5 | A faction's wait between passing-by assaults on the player's towns, uniform, in game hours (**Observed**: the elapsed-time helper `FUN_140791bf0` read as hours): 0, [6, 48), [32, 96), [72, 144), [130, 188); 5 stops them (`FUN_140286a70`, `FUN_140290450`; [ai.md](../game/ai.md#package-classes)) |
 | `Dismemberment` | int 0 … 2 | 1 | Dismemberment: Never = 0, Rare = 1, Frequent = 2 | The options page binds the drop-down to the global `DAT_142133504` (`FUN_1403f0260`), which the hit, degeneration and eaten code read when a part is damaged (`FUN_14064f300`, `FUN_14064f5c0`, `FUN_140650370`, `FUN_14029af90`), so a change applies at once (**Verified**, decompile). [combat.md](../game/combat.md), [character-stats.md](../game/character-stats.md) |
-| `civilians` | bool | 1 | none | Loaded and saved; **no reader found** (no instruction addresses its global other than the writer; an access through the block's base pointer would not show up, so **Unknown**) |
 | `Fast zone hopping` | bool | 0 | Fast zone hopping | Keeps a larger area loaded (Meitou: Gameplay page, applies to the running world)  so switching between distant characters skips loading: a ring of one more zone round the box of each player character ([character-stats](../game/character-stats.md#corpses), FUN_140a0f640; storage `DAT_142133518`, **Verified**) |
 | `Auto save` | bool | 1 | Auto save | [save.md](save.md#autosave-fun_14047be70) |
 | `Auto save time (minutes)` | float; slider 1 … 30 | 10 | Auto save time (minutes) | same |
@@ -169,9 +159,7 @@ the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use th
 | `Full Screen` | No | launcher; options "Full screen (need restart)" (Yes / No) |
 | `Border` | None | launcher "Borderless"; options "Borderless (need restart)" (None = borderless, otherwise Default) |
 | `VSync` | No | launcher |
-| `VSync Interval` | 1 | Ogre's option, not touched by Kenshi's code (**Observed**: no string reference) |
 | `FSAA` | 1 | Ogre's option; 1 = no multisampling ([post-processing.md](post-processing.md)) |
-| `Floating-point mode`, `Backbuffer Count`, `Driver type`, `Allow NVPerfHUD`, `Information Queue Exceptions Bottom Level`, `Min/Max Requested Feature Levels`, `sRGB Gamma Conversion` | as shipped | Ogre's D3D11 render-system options; Kenshi's code does not reference them (**Observed**: none of the names is a string in the exe) |
 
 ### What the Meitou viewer does with these
 
@@ -192,27 +180,12 @@ the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use th
 | `generate distant towns` | Not honoured: towns without a baked mesh are drawn from their buildings' distant meshes |
 | `mouse speed pan`, `mouse speed tilt` | The game's Controls page has one "Camera rotation speed" slider (2 … 50, default 6) setting both; kept in `meitou.user.json`, `settings.cfg` not read |
 | `Squad size multiplier`, `Global population multiplier`, `raidSizeMult`, `raidFrequencyMult`, `attacks`, `Dismemberment` | The game's Gameplay settings page, same ranges and defaults; kept in `meitou.user.json` (first run: this file). All reach the running world at once (the population ones act on squads, raids and assaults made afterwards; `Dismemberment` on the next part damaged, through the world's `BodyOptions`) |
-| `npc range`, `mouse speed horizontal` / `vertical`, `invert *`, UI, audio, other gameplay keys | Not applicable / not implemented |
 
 ### Viewer: water reflection
 
 | Level | Game | Viewer |
 | --- | --- | --- |
-| 0 | no pass; water shaders built with `NO_REFLECTION` | no pass; the water's `uReflect = 0` path: the sky colour is reflected unattenuated (**Observed** to be the counterpart of the game's reflection factor 1; the viewer's shader is not the game's, so the look is not compared) |
 | 1 | queues 5-8, 25 | sky and terrain |
-| 2 | + queue 50 | + characters (**Observed** from the label) |
-| 3 | + queue 20 | + every placed object (buildings and map features are not told apart: **Unknown** which queue the features use) |
-| 4 | no list: everything | + foliage (trees, bushes, rocks; no grass, as before). Which queue the game's foliage is in is **Unknown**; "everything" is assumed to be the only level that includes it |
-
-## Unknowns
-
-- (Resolved 2026-10-06: K in the terrain LOD metric is the viewport height and the node error a height in world units, see
-  "Graphics: terrain".) Still open there: which way round the terrain vertex shader applies the per-patch morph factor.
-- What town display state 4 is (set for reflections at levels 3 and 4), and when the water programs are rebuilt after
-  `water reflection` changes to or from 0.
-- The reflection camera's far clip before FUN_1403e7490 first runs (Ogre's default assumed).
-- Whether anything reads `civilians`.
-- In-session effect of `feature range` 7 or 8 (above the loader's clamp).
 
 ## Expression reference
 

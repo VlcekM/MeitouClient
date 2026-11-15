@@ -13,12 +13,6 @@ by parent length: exporter bugs exist. Byte-swapped endian header is detected bu
 Keep shared versus submesh-local vertices, index width, declaration source/offset/type/semantic
 and bone assignments distinct. Bounds/mesh/skeleton links and manual/generated LOD are separate.
 
-Pose chunks map affected vertices, optional normal deltas and target submesh; LOD can store linked
-manual meshes or reduced indices. Some formats/versions alter these layouts; use the retained
-version/chunk tables, not one guessed body size. Character morph, hidden-part and mesh-specific
-LOD rules are data/research, not arbitrary importer conventions. Unknown chunk/unsupported
-construct must fail clearly rather than silently reinterpret vertex bytes.
-
 **Verified** base-file reader checks cover named versions/chunks/poses; that does not establish
 support for every exporter or mod. Preserve contradictory stored lengths and documented parse
 exceptions where structure is known. Current render conversion does not define the source format.
@@ -101,11 +95,6 @@ Averaging the tangents of vertices equal in all else (same handedness) moves the
 and w lie in [-1, 1], weights and colours in [0, 1]. `OgreMeshWeld` (key also includes bone assignments, pose offsets and
 handedness) takes all 3277 files from 22.7M to 9.2M vertices (40.5%) and pose entries from 160,616 to 34,212, with every submesh, LOD,
 bone-assignment and pose index in range afterwards (scratch check over the install). CPU renders of six normal-mapped building meshes: mean pixel change 0.0–0.3/255.
-
-## Open questions
-
-- How pose weights are derived from appearance values. Observed: body files store values under the pose
-  names themselves ([../characters.md](../characters.md#shading-poses-and-lod)); whether Kenshi scales them is Unknown.
 
 ## Expression reference
 
