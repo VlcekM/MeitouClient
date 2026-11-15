@@ -32,12 +32,15 @@ public class ModHookTests
     /// <summary>
     /// A world of the roaming synthetic towns with population and movement, the camera on the first town.
     /// </summary>
-    static (SimWorld World, PopulationSystem Population) Start(IReadOnlyList<FcsRecord>? extra = null)
+    static (SimWorld World, PopulationSystem Population) Start(IReadOnlyList<FcsRecord>? extra = null, bool keepRoamers = true)
     {
         var db = SyntheticTown.Database(roaming: true, extra: extra);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var population = new PopulationSystem(SyntheticTown.Data(db),
-                new PopulationSettings { CheckEveryTicks = 15, UnloadGraceSeconds = 600, RoamUnloadGraceSeconds = 5 });
+        var settings = new PopulationSettings
+        {
+            CheckEveryTicks = 15, UnloadGraceSeconds = 600, RoamUnloadGraceSeconds = 5, KeepRoamers = keepRoamers,
+        };
+        var population = new PopulationSystem(SyntheticTown.Data(db), settings);
         var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 1, PublishSnapshots = false }, walk,
             [population, new MovementSystem(new PathService(walk, true))]);
         world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
@@ -155,6 +158,146 @@ public class ModHookTests
         cold.FedTo = float.NaN;
 
         Assert.Equal(MedicalContext.NoHungerFloor, bodies.HungerFloor(world, cold, medical));
+    }
+
+    /// <summary>
+    /// A spawned platoon that never loads is kept off screen with the keep switch off, and a save writes it, with its mod marks and no one else's;
+    /// loaded again it is the same roaming platoon with its tag, though its template is a bar squad's (which a save's platoon would be pinned by).
+    /// Catches the save dropping a spawn that never loaded, the orphan timer despawning
+    /// it, or the tag lost (a mod could not find its squad after a load, when platoon ids are given anew).
+    /// </summary>
+    [Fact]
+    public void A_spawned_platoon_that_never_loads_is_kept_and_reloads_with_its_tag()
+    {
+        var (w, population) = Start(keepRoamers: false);
+        using var world = w;
+        int faction = population.Data.FactionIndex(Faction);
+        int id = population.SpawnPlatoon(w, faction, "10-t", 0, new Vector2(20000, 20000), 100, 200, money: 750);   // a bar squad's template
+        var p = w.Platoons.Find(id)!;
+        p.ModTag = "crew|7";
+        w.RunTicks(2400);   // past the 60 s orphan limit that drops a stand-in nobody keeps
+
+        Assert.Same(p, w.Platoons.Find(id));
+        Assert.Equal(PlatoonState.Unloaded, p.State);
+
+        var game = SaveCapture.Capture(w, population.Data, new SaveClock(1, 13, 0));
+        var record = game.Platoons.Single(x => x.Record.Strings.GetValueOrDefault(ModPlatoonSave.TagKey) == "crew|7").Record;
+
+        Assert.True(record.Bools[ModPlatoonSave.SpawnKey]);
+        Assert.All(game.Platoons.Where(x => x.Record != record), x => Assert.False(x.Record.Bools.ContainsKey(ModPlatoonSave.SpawnKey)));
+
+        var (w2, population2) = Start();
+        using var back = w2;
+        SaveLoader.Load(w2, game, population2.Data, new SaveLoadOptions { ApplyRelations = false });
+        var again = Assert.Single(w2.Platoons.All, x => x.ModTag == "crew|7");
+
+        Assert.Equal((true, "10-t", faction, p.Size, 750L, false), (again.ModSpawned, again.TemplateId, again.Faction, again.Size, again.Money, again.Pinned));
+        Assert.Equal(p.Key, again.Key);   // planned again as the same squad
+        Assert.InRange(Vector2.Distance(p.Position, again.Position), 0, 1);
+    }
+
+    /// <summary>
+    /// <c>SendPlatoon</c> is refused for a platoon not held, a point that is not finite and a character not alive; a held one's stand-in then
+    /// travels to the point and stops there, and giving the platoon back clears the goal. Catches a held stand-in that never moves for its mod, one
+    /// that overshoots, or a goal that outlives the hold.
+    /// </summary>
+    [Fact]
+    public void A_held_platoon_sent_to_a_point_travels_there_and_stops()
+    {
+        var (w, population) = Start();
+        using var world = w;
+        int faction = population.Data.FactionIndex(Faction);
+        int id = population.SpawnPlatoon(w, faction, "12-t", 0, new Vector2(20000, 20000), 100, 200);
+        var p = w.Platoons.Find(id)!;
+        var goal = p.Position + new Vector2(1500, 0);
+
+        Assert.False(PopulationSystem.SendPlatoon(w, id, goal));
+        Assert.True(PopulationSystem.HoldPlatoon(w, id, true));
+        Assert.False(PopulationSystem.SendPlatoon(w, id, new Vector2(float.NaN, 0)));
+        Assert.False(PopulationSystem.SendPlatoon(w, id, CharacterId.None));
+        Assert.True(PopulationSystem.SendPlatoon(w, id, goal));
+
+        for (int i = 0; i < 40 && Vector2.Distance(p.Position, goal) > 60; i++) w.RunTicks(300);
+        var arrived = p.Position;
+        w.RunTicks(150);
+
+        Assert.InRange(Vector2.Distance(arrived, goal), 0, 60.01f);
+        Assert.Equal(arrived, p.Position);
+        Assert.True(PopulationSystem.HoldPlatoon(w, id, false));
+        Assert.Null(p.ModGoal);
+    }
+
+    /// <summary>
+    /// <c>EndContract</c> ends the running contract (its end talk kept for its target), so the same contract starts afresh, which the game's own
+    /// start ignores while it runs; an any-range contract is saved with its flag and a plain one writes no key. Catches a contract a mod can give
+    /// only once, or an any-range assault lost on a save.
+    /// </summary>
+    [Fact]
+    public void EndContract_lets_the_same_contract_start_again_and_any_range_is_saved_with_it()
+    {
+        var guard = new Meitou.Data.Gameplay.Ai.AiPackage { Id = "guard", Name = "guard", Roles = [[], [], [], [], []] };
+        var board = new Meitou.Simulation.Ai.Blackboard([]);
+        var target = new CharacterId(5, 1);
+        var record = new FcsRecord { StringId = "p", Name = "p", RecordType = FcsRecordType.Platoon };
+
+        Assert.False(board.EndContract());
+
+        board.StartContract(guard, 0, 8, target: target, anyRange: true);
+        board.StartContract(guard, 4, 8, target: target);
+        AiSave.Write(record, AiSave.Of(board));
+
+        Assert.Equal((8.0, true), (board.ContractEnd, board.MissionAnyRange));
+        Assert.True(AiSave.Read(record)!.AnyRange);
+        Assert.True(board.EndContract());
+        Assert.Equal((null, CharacterId.None, false), (board.Contract, board.MissionTarget, board.MissionAnyRange));
+        Assert.Equal((guard, target), board.TakeEnded());
+
+        board.StartContract(guard, 10, 8, target: target);
+        AiSave.Write(record, AiSave.Of(board));
+
+        Assert.Equal((18.0, false), (board.ContractEnd, board.MissionAnyRange));
+        Assert.False(record.Bools.ContainsKey(AiSave.AnyRangeKey));
+    }
+
+    /// <summary>
+    /// A contract's assault takes its target beyond the ROAM_FAR reach only with <c>AnyRange</c>; <c>EndContract</c> then lets the same contract
+    /// start again with the flag (the game ignores a start of the contract already running). Catches a mod's assault that never reaches its
+    /// named target, or a flag that leaks to targets the mod did not name.
+    /// </summary>
+    [Fact]
+    public void An_any_range_contract_assaults_its_named_target_beyond_the_roam_reach()
+    {
+        var db = SyntheticTown.Database(anatomy: true, extra: Simulation.AiTests.Records(),
+            changePatrol: p => p.References["AI packages"] = [SyntheticTown.Ref("111-t", 0), SyntheticTown.Ref("112-t", 1)]);
+        var data = SyntheticTown.Data(db);
+        var walk = new OpenGroundWalkability(SyntheticTown.Ground);
+        var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
+        {
+            Parts = StandardParts.Population | StandardParts.Movement | StandardParts.Ai | StandardParts.Body, SynchronousPaths = true,
+        }).Systems;
+        using var world = new SimWorld(new WorldSettings { Seed = 5, Threads = 1, StartHours = 24 + 13, PublishSnapshots = false }, walk, systems);
+        world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
+        world.RunTicks(50);
+        var ai = world.Systems.OfType<Meitou.Simulation.Ai.AiSystem>().Single();
+        var squads = world.Squads.All.Where(s => s.Ai is not null).Take(2).ToList();
+        var (me, target) = (squads[0].Members[0], squads[1].Members[0]);
+
+        // The target, of another faction, stands well past the 6517-unit reach.
+        world.Characters.Cold(target.Slot)!.Faction = data.PlayerFaction;
+        var here = world.Characters.Previous[me.Slot].Position;
+        world.Characters.Place(target.Slot, here + new Vector3(8000, 0, 0), 0);
+        world.Commands.Enqueue(new Meitou.Simulation.Ai.StartContract(squads[0].Id, "115-t", 8, target) { Tick = world.Tick });
+        world.RunTick();
+
+        Assert.Equal(target, squads[0].Ai!.MissionTarget);
+        Assert.True(ai.AssaultTargetFor(world, me.Slot, squads[0].Ai).IsNone);
+
+        world.Commands.Enqueue(new Meitou.Simulation.Ai.EndContract(squads[0].Id) { Tick = world.Tick });
+        world.Commands.Enqueue(new Meitou.Simulation.Ai.StartContract(squads[0].Id, "115-t", 8, target) { AnyRange = true, Tick = world.Tick });
+        world.RunTick();
+
+        Assert.True(squads[0].Ai!.MissionAnyRange);
+        Assert.Equal(target, ai.AssaultTargetFor(world, me.Slot, squads[0].Ai));
     }
 
     #endregion
