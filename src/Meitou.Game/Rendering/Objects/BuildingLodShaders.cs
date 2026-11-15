@@ -81,15 +81,18 @@ static class BuildingLodShaders
     /// </summary>
     /// <param name="solid">The variant for fully visible instances of a material without a cut-out: no <c>discard</c> anywhere, so the GPU
     /// tests depth before the fragment shader runs (a shader that may discard gets its depth test late). The same maths otherwise.</param>
-    public static string Fragment(bool solid = false)
+    /// <param name="blended">The variant of the see-through items' blended pass (<see cref="OpacityDither"/>): the opacity goes out as the
+    /// fragment's alpha and is not dithered.</param>
+    public static string Fragment(bool solid = false, bool blended = false)
     {
         string f = Shaders.MeshFragment;
         f = WithInstanceInputs(f);
         f = WithStudio(f);
-        f = WithDitherAndCut(f, solid);
+        f = WithDitherAndCut(f, solid, blended);
         f = WithWetWorld(f);
         f = WithGameLighting(f);
         f = WithEmissiveAndGhost(f);
+        if (blended) f = Literal(f, "fragColour = vec4(colour, 1.0);", "fragColour = vec4(colour, uAlphaSource == 4 ? texture(uDiffuse2, uv).r : 1.0);");
         return f;
     }
 
@@ -106,8 +109,7 @@ static class BuildingLodShaders
             in vec3 vWetPos;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             float ditherValue() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
-            uniform vec2 uJitterNdc;
-            """ + OpacityDither.Function("uJitterNdc") + """
+            """ + OpacityDither.Function + """
             vec3 instanceTint(float v) { float p = -v - 1.0; return vec3(mod(p, 256.0), mod(floor(p / 256.0), 256.0), floor(p / 65536.0)) * (1.275 / 255.0); }
             """);
         // A negative spare M44 is a tint (a farm plant's, FarmPlants.PackTint).
@@ -163,14 +165,18 @@ static class BuildingLodShaders
     /// <summary>
     /// The dither range and the cut volumes' test (none of it in the <paramref name="solid"/> variant, which never discards).
     /// </summary>
-    static string WithDitherAndCut(string f, bool solid)
+    static string WithDitherAndCut(string f, bool solid, bool blended)
     {
         const string alphaDiscard = @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;";
         if (solid) return Replace(f, alphaDiscard, "");
 
-        // A see-through item (uAlphaSource 4, AlphaSource.Opacity): its opacity map, in the second diffuse slot, against the frame's dither.
-        f = Replace(f, alphaDiscard, "if (uAlphaThreshold > 0.0 && alpha < uAlphaThreshold) discard;\n"
-            + "            if (uAlphaSource == 4 && opacityDither() >= texture(uDiffuse2, uv).r) discard;");
+        // A see-through item (uAlphaSource 4, AlphaSource.Opacity) where it is not blended: its opacity map, in the second diffuse slot, against
+        // the dither.
+        if (!blended)
+        {
+            f = Replace(f, alphaDiscard, "if (uAlphaThreshold > 0.0 && alpha < uAlphaThreshold) discard;\n"
+                + "            if (uAlphaSource == 4 && opacityDither() >= texture(uDiffuse2, uv).r) discard;");
+        }
 
         return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", CutVolumes + """
 
@@ -362,10 +368,9 @@ static class BuildingLodShaders
             flat in float vScaffold;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             uniform sampler2D uDiffuse2;
-            uniform vec2 uJitterNdc;
-            """ + OpacityDither.Function("uJitterNdc"));
+            """ + OpacityDither.Function);
 
-        // A see-through item casts through the same dither (a caster's view has no jitter: a still pattern, which the shadow's filter blurs).
+        // A see-through item casts through the dither (a still pattern, which the shadow's filter blurs).
         return Replace(f, @"void\s+main\s*\(\s*\)\s*\{",
             "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes
             + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
@@ -445,6 +450,13 @@ static class BuildingLodShaders
     public static string FragmentNative(bool solid = false) =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment()), NativeShaders.Map(Own),
                 PushMembers));
+
+    /// <summary>
+    /// The see-through items' blended program (<see cref="Fragment"/> <c>blended</c>): drawn after the GI's resolve, so it reads the probes itself.
+    /// </summary>
+    public static string BlendedNative() =>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(Fragment(blended: true)), NativeShaders.Map(Own), PushMembers),
+            inShader: true);
 
     /// <summary>
     /// <see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.

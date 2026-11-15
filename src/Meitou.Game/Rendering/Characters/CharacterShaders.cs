@@ -113,6 +113,7 @@ static class CharacterShaders
             uint depthIndex;
             vec4 fill;          // rgb; a: the chars2 switch's parts (CharacterSurface: 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads; 0 off)
             uint skinLut;       // the skin scattering table's bindless index (SkinScattering), 0: the switch is off
+            uint seeThrough;    // the see-through items (OpacityDither): 0 dithered here, 1 left to the blended pass, 2 that pass (nothing else drawn)
         """;
 
     /// <summary>
@@ -303,8 +304,8 @@ static class CharacterShaders
     static readonly string Lookup = """
         vec4 tex(uint i, vec2 uv) { return texture(textures2D[nonuniformEXT(i)], uv); }
         vec4 hairTex(CharMaterial m, vec2 uv) { return texture(textures2D[nonuniformEXT(m.tex[0])], uv, m.hairColour.w); }
-        """ + OpacityDither.Function("view.jitterNdc") + $$"""
-        // A see-through item (flag SeeThrough): whether the frame's dither drops the fragment, by its opacity map's red.
+        """ + OpacityDither.Function + $$"""
+        // A see-through item (flag SeeThrough): whether the dither drops the fragment, by its opacity map's red.
         bool seeThroughCut(CharMaterial m, vec2 uv)
         {
             return m.shading == 0u && (m.flags & {{SeeThrough}}u) != 0u && opacityDither() >= tex(m.tex[{{SlotOpacity}}], uv).r;
@@ -422,6 +423,9 @@ static class CharacterShaders
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             if (flag(f, 32768u)) discard;   // its cut-out is still streaming in: a solid card would show
+            bool glass = m.shading == 0u && flag(f, {{SeeThrough}}u);
+            if (pc.seeThrough == 2u && !glass) discard;
+            float opacity = 1.0;
             vec3 n = geometric;
             if (m.shading != 2u && !gl_FrontFacing) n = -n;
             bool icon = view.fogDistance < 0.0 && view.fogDistance > -1.5;   // an inventory icon (CharacterRenderer.DrawIcon)
@@ -495,7 +499,11 @@ static class CharacterShaders
                 vec3 cm = flag(f, 1024u) ? tex(m.tex[2], uv).rgb : vec3(0.0);
                 // Inventory RTT materials reject at 0.5; worn clothing retains its separate 0.6 threshold.
                 cut = clip && nm.a < (view.fogDistance < 0.0 ? 0.5 : 0.6);
-                if (seeThroughCut(m, uv)) cut = true;
+                if (glass)
+                {
+                    opacity = tex(m.tex[{{SlotOpacity}}], uv).r;
+                    if (pc.seeThrough == 1u || (pc.seeThrough == 0u && opacityDither() >= opacity)) cut = true;
+                }
                 if (flag(f, 1024u))
                 {
                     float intensity = dot(d.rgb, vec3(1.0 / 3.0));
@@ -766,7 +774,7 @@ static class CharacterShaders
             // A presentation fill (CharacterRenderer.Fill, 0 in play): ambient light, stronger towards the silhouette as a back light rims it.
             if (view.fogDistance > 0.0) colour += albedo * pc.fill.rgb * (1.0 + 2.0 * pow(1.0 - max(dot(n, v), 0.0), 3.0));
             if (view.fogDistance > 0.0) colour = atmoApply(colour, view.eye, vWorld);
-            fragColour = vec4(colour, 1.0);
+            fragColour = vec4(colour, pc.seeThrough == 2u ? opacity : 1.0);
         }
         """;
 
@@ -827,8 +835,7 @@ static class CharacterShaders
             if ((f & 32768u) != 0u) discard;
             if (m.shading == 2u && (f & 1u) != 0u) { if (dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold) discard; }
             else if (m.shading == 0u && (f & 512u) != 0u) { if (tex(m.tex[1], vUv).a < 0.6) discard; }
-            // A see-through item needs no dither here: where the colour pass dropped its fragment the stored depth is what lies behind,
-            // which the test below rejects.
+            // A see-through item writes no depth where it is blended, so the stored depth is what lies behind it, which the test below rejects.
             float stored = texelFetch(textures2D[nonuniformEXT(pc.depthIndex)], ivec2(gl_FragCoord.xy), 0).r;
             if (depthIsSky(stored)) discard;
             float zs = depthViewZ(stored, view.nearPlanes), zf = depthViewZ(gl_FragCoord.z, view.nearPlanes);
@@ -905,6 +912,11 @@ struct CharacterPush
     /// The skin scattering table's bindless index (<see cref="SkinScattering"/>), 0 while the <c>skin</c> switch is Faithful.
     /// </summary>
     public uint SkinLut;
+    /// <summary>
+    /// How the colour program treats see-through items (<see cref="OpacityDither"/>): 0 dithered, 1 left out for the blended pass, 2 the blended
+    /// pass, which draws nothing else.
+    /// </summary>
+    public uint SeeThrough;
 }
 
 /// <summary>

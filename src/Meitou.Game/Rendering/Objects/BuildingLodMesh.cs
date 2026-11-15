@@ -165,7 +165,7 @@ sealed class GpuObjectPart
     /// <summary>
     /// What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).
     /// </summary>
-    public ObjectNativeMesh ColourNative, DepthNative, ColourSolidNative;
+    public ObjectNativeMesh ColourNative, DepthNative, ColourSolidNative, BlendedNative;
 }
 
 /// <summary>

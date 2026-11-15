@@ -252,11 +252,6 @@ static partial class WorldFrame
         f.Render.TerrainPixelScale = TerrainLod.ProjectionScale(f.RenderHeight, f.Camera.FieldOfView);
         if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = f.Render.TerrainPixelScale;   // the terrain layers' near ranges
         f.Jitter = post.JitterPixels;
-
-        // The see-through items' dither moves with the jitter (OpacityDither).
-        var ditherJitter = OpacityDither.JitterNdc(f.Jitter, f.RenderWidth, f.RenderHeight);
-        if (gpu.Objects is { } ditherObjects) ditherObjects.DitherJitter = ditherJitter;
-        if (gpu.Characters is { } ditherCharacters) ditherCharacters.DitherJitter = ditherJitter;
         f.Eye = f.Camera.Eye;
         f.EyeResidual = f.Camera.EyeResidual;
         gpu.Guard?.Tick();
@@ -1157,8 +1152,11 @@ static partial class WorldFrame
             objects.Selected = gpu.HoverOutline is null ? [] : gpu.OutlinedBuildings;   // their draws kept for the outline's masks
             if (f.Render.Objects)
             {
+                // The main view blends the see-through items after the scene (DrawSeeThrough) instead of dithering them.
+                objects.BlendSeeThrough = true;
                 objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain,
                     f.RelativeRotation * s.Jittered);
+                objects.BlendSeeThrough = false;
             }
             objects.FogCull = null;
             objects.InteriorCut = null;
@@ -1256,7 +1254,9 @@ static partial class WorldFrame
         f.Post.CharactersDrawn = false;   // none this frame unless some are drawn below
         if (gpu.Characters is not { } characters) return;
         f.Host.Stage(StageClock.Characters);
+        characters.BlendSeeThrough = true;
         characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.RelativeRotation * s.Jittered);
+        characters.BlendSeeThrough = false;
         f.Post.CharactersDrawn = characters.DrawnCharacters > 0;
         StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
     }
@@ -1360,6 +1360,7 @@ static partial class WorldFrame
 
         post.RunGiResolve();
         StageClock.Lap(14, "gi resolve");
+        DrawSeeThrough(ref f);
 
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         gpu.Post?.RunCharacterOcclusion(gpu.GiActive ? gpu.Gi : null);
@@ -1387,6 +1388,25 @@ static partial class WorldFrame
         // The SSAO onto the scene before the particles: they are not occluded by the surfaces behind them (the post chain leaves it out of its
         // composite).
         post.ApplySsao();
+    }
+
+    /// <summary>
+    /// The see-through items (a mod's opacity map, docs/render-objects.md "See-through items") blended over the finished opaque scene, after the
+    /// GI's resolve so that it does not light them as the surface behind: the objects', then the characters'. They write no depth, so everything
+    /// later (occlusion, reflections, fog, motion) sees what is behind them.
+    /// </summary>
+    static void DrawSeeThrough(ref FrameState f)
+    {
+        var gpu = f.Gpu;
+        bool objects = gpu.Objects is { HasSeeThrough: true };
+        bool characters = gpu.Characters is { HasSeeThrough: true };
+        if (!objects && !characters) return;
+
+        f.Host.Open(7, f.Post.WithShadingRate(f.Post.SceneTargets));
+        if (objects) gpu.Objects!.DrawSeeThrough();
+        if (characters) gpu.Characters!.DrawSeeThrough();
+        f.Host.Close();
+        StageClock.Lap(7, "see-through");
     }
 
     /// <summary>

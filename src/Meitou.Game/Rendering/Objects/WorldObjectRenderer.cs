@@ -46,7 +46,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// The colour program, the colour program without a discard (<see cref="EarlyDepth"/>: fully visible batches) and the depth (shadow caster)
     /// program, all native.
     /// </summary>
-    readonly ObjProg _colourProg, _solidProg, _depthProg;
+    readonly ObjProg _colourProg, _solidProg, _depthProg, _blendedProg;
 
     /// <summary>
     /// The objects' texture cache (decoded on workers, mip-streamed; <see cref="Textures"/>).
@@ -116,6 +116,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _solidProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(),
             BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         _depthProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
+        _blendedProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.BlendedNative(), "objects see-through");
         _textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
         var library = assets.Materials;
         _resolver = new MaterialResolver(objects.Database, library, assets);
@@ -194,6 +195,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _colourProg.Dispose();
         _solidProg.Dispose();
         _depthProg.Dispose();
+        _blendedProg.Dispose();
         _nativeFrame.Dispose();
         _streamer.Dispose();
         _meshes.Dispose();
@@ -1828,12 +1830,6 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal Func<Vector3, float, bool>? MirrorCull { get; set; }
 
     /// <summary>
-    /// The frame's jitter in NDC (0 without a temporal method), set by the world frame: it moves the see-through items' dither each frame
-    /// (<see cref="OpacityDither"/>). The shadow passes take none, so a cascade kept over several frames holds a still pattern.
-    /// </summary>
-    public Vector2 DitherJitter { get; set; }
-
-    /// <summary>
     /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>. The vertices are projected relative to the eye
     /// (BuildingLodShaders.Vertex): <paramref name="relative"/> is the view-projection without the eye's translation when the caller has it
     /// formed precisely (the scene's, WorldFrame), else translation(eye) x <paramref name="viewProjection"/>.
@@ -1893,7 +1889,6 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 LightDir = light,
                 FogColour = fogColour,
                 FogDistance = fogDistance,
-                JitterNdc = _depthPass ? default : DitherJitter,
             };
             if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
@@ -1901,6 +1896,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             if (wireMode != 2)
             {
                 PrepareDraws(options, wire: false);
+                if (BlendSeeThrough && !_depthPass) HoldSeeThrough(in view, fadeRange);
                 RecordDraws(prog, wire: false, in view, fadeRange);
             }
             if (wireMode != 0)
@@ -2447,14 +2443,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
 
     /// <summary>
-    /// The last state per segment kind (0 colour, 1 depth, 2 colour wireframe, 3 depth wireframe, 4 solid colour), for the quick compare.
+    /// The last state per segment kind (0 colour, 1 depth, 2 colour wireframe, 3 depth wireframe, 4 solid colour, 5 see-through), for the quick
+    /// compare.
     /// </summary>
-    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[5];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[6];
 
     /// <summary>
     /// The id of <see cref="_lastSegment"/> per kind (0: none yet).
     /// </summary>
-    readonly int[] _segmentIds = new int[5];
+    readonly int[] _segmentIds = new int[6];
 
     /// <summary>
     /// The segment ids handed out so far.
@@ -2995,6 +2992,114 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             Count = 0;
             Owner._drawJobs.Return(this);
         }
+    }
+
+    #endregion
+
+    #region See-through items (the blended pass)
+
+    /// <summary>
+    /// The see-through draws the last main colour pass held back (<see cref="BlendSeeThrough"/>), nearest first.
+    /// </summary>
+    readonly List<ObjDraw> _blended = [];
+
+    /// <summary>
+    /// The held draws' view, fade range and instance rows: those of the pass that held them.
+    /// </summary>
+    ViewConstants _blendedView;
+
+    /// <summary>
+    /// The dither fades' distances of the pass that held the draws.
+    /// </summary>
+    Vector4 _blendedFade;
+
+    /// <summary>
+    /// The instance constants of the pass that held the draws (the frame's own allocation, alive until the frame's jobs have run).
+    /// </summary>
+    GpuBufferBinding _blendedRows;
+
+    /// <summary>
+    /// Set by the world frame around the main view's <see cref="Draw"/>: the see-through items' draws (<see cref="AlphaSource.Opacity"/>) are held
+    /// back for <see cref="DrawSeeThrough"/> instead of being dithered into the opaque scene (docs/render-objects.md "See-through items").
+    /// </summary>
+    public bool BlendSeeThrough { get; set; }
+
+    /// <summary>
+    /// Whether the main view held see-through draws back this frame.
+    /// </summary>
+    public bool HasSeeThrough => _blended.Count > 0;
+
+    /// <summary>
+    /// Takes the see-through draws out of the prepared list into <see cref="_blended"/>, the others keeping their order.
+    /// </summary>
+    void HoldSeeThrough(in ViewConstants view, Vector4 fadeRange)
+    {
+        _blended.Clear();
+        int kept = 0;
+        for (int i = 0; i < _drawCount; i++)
+        {
+            if (_draws[i].Push.AlphaSource == (int)AlphaSource.Opacity) _blended.Add(_draws[i]);
+            else _draws[kept++] = _draws[i];
+        }
+        _drawCount = kept;
+        if (_blended.Count == 0) return;
+
+        (_blendedView, _blendedFade) = (view, fadeRange);
+        _blendedRows = new GpuBufferBinding(_instances.Handle, _instances.Offset);
+    }
+
+    /// <summary>
+    /// Draws the held see-through items into the open scene pass, blended over it by their opacity, farthest first, tested against the scene's
+    /// depth and writing none. After the opaque scene and the GI's resolve: the program reads the probes itself.
+    /// </summary>
+    public void DrawSeeThrough()
+    {
+        if (_blended.Count == 0) return;
+
+        var targets = Gpu.CurrentTargets();
+        var state = Gpu.CurrentState() with { Cull = CullMode.None, DepthWrite = false, Blend = OpacityDither.Blend, ColourMask = DrawState.Rgb };
+        int segment = SegmentId(5, _blendedProg.P, targets, state);
+        var job = _drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, _blendedProg.P, 0);
+        job.Frame = _nativeFrame.Prepare(in _blendedView);
+        for (int a = 0; a < 4; a++) job.Rows[a] = new GpuBufferBinding(_blendedRows.Buffer, _blendedRows.Offset + (ulong)(16 * a));
+        NewTextureSegment();
+        if (job.Draws.Length < _blended.Count) job.Draws = new DrawJob.Draw[Math.Max(_blended.Count, job.Draws.Length * 2)];
+
+        for (int i = _blended.Count - 1; i >= 0; i--)
+            job.Draws[job.Count++] = BlendedDraw(_blended[i], segment, state, targets.Formats);
+        Gpu.Record("objects see-through", job);
+        _blended.Clear();
+    }
+
+    /// <summary>
+    /// One held draw resolved for the blended segment: its pipeline, buffers and push block with the textures' bindless indices.
+    /// </summary>
+    DrawJob.Draw BlendedDraw(ObjDraw d, int segment, DrawState state, AttachmentFormats formats)
+    {
+        ref var pc = ref d.Push;
+        pc.FadeRange = _blendedFade;
+        pc.Diffuse = Texture(d.Diffuse);
+        pc.Normal = Texture(d.Normal);
+        pc.Diffuse2 = Texture(d.Diffuse2);
+        pc.Normal2 = Texture(d.Normal2);
+        pc.MetalMap = d.Metal == 0 ? 0 : Texture(d.Metal) + 1;
+        pc.Spare &= 0xFFu;
+
+        var part = d.Part;
+        ref var n = ref part.BlendedNative;
+        Current(ref n, part, _blendedProg);
+        return new DrawJob.Draw
+        {
+            Pipeline = n.SegA == segment ? n.PipeA!.Value : PipelineFor(ref n, _blendedProg, segment, state, formats, "objects see-through"),
+            Vertices = n.Vertices,
+            Elements = new GpuBufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
+            Push = pc,
+            IndexCount = (uint)part.Count[d.Level],
+            Instances = d.Instances,
+            FirstInstance = d.FirstInstance,
+            Cull = d.BackCull ? CullMode.Back : state.Cull,
+        };
     }
 
     #endregion

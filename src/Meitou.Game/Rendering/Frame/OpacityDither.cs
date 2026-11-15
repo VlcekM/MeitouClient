@@ -1,12 +1,13 @@
-using System.Numerics;
+using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
-/// The see-through materials' dither (Meitou, issue #562; docs/render-objects.md "See-through items"): a fragment is kept where the pattern's
-/// value is under the material's opacity, in the colour and shadow passes alike, so the surface keeps its depth and a temporal method averages
-/// the kept and dropped pixels into glass. The pattern is the LOD cross-fade's interleaved gradient noise, moved each frame by the view's jitter:
-/// a view without one (no temporal method, a shadow cascade, an icon) keeps a still pattern.
+/// The see-through materials' opacity map and dither (Meitou, issue #562; docs/render-objects.md "See-through items"). The main view blends such
+/// a surface over the finished opaque scene; where there is no blended pass (the shadow casters, the water reflection, icons, portraits) a
+/// fragment is kept where the pattern's value is under the opacity. The pattern is the LOD cross-fade's interleaved gradient noise and never
+/// moves: one that changed each frame made every pixel's depth flip between the surface and what is behind it, which DLSS and frame generation
+/// drew as ghosts (Observed, a see-through bottle indoors).
 /// </summary>
 static class OpacityDither
 {
@@ -17,21 +18,19 @@ static class OpacityDither
     public const string MapField = "opacity map";
 
     /// <summary>
-    /// The GLSL function <c>opacityDither()</c>, 0 to 1: a fragment is dropped where it is not under the opacity. <paramref name="jitterNdc"/>
-    /// is the expression of the view's jitter in NDC. Starts on a line of its own, whatever text it is appended to.
+    /// The GLSL function <c>opacityDither()</c>, 0 to 1: a fragment is dropped where it is not under the opacity. Starts on a line of its own,
+    /// whatever text it is appended to.
     /// </summary>
-    public static string Function(string jitterNdc) => "\n" + $$"""
-        float opacityDither()
-        {
-            float cell = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-            return fract(cell + fract(dot({{jitterNdc}}, vec2(29173.0, 47119.0))));
-        }
+    public const string Function = """
+
+        float opacityDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
 
         """;
 
     /// <summary>
-    /// The upscaler's subpixel jitter in NDC, as the view constants carry it (<see cref="ViewConstants.JitterNdc"/>).
+    /// The blended pass's state changes: over the scene by the fragment's alpha, the destination's alpha kept (the scene's is the character
+    /// mask).
     /// </summary>
-    public static Vector2 JitterNdc(Vector2 jitterPixels, int width, int height) =>
-        new(2 * jitterPixels.X / Math.Max(width, 1), 2 * jitterPixels.Y / Math.Max(height, 1));
+    public static readonly BlendState Blend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.Zero,
+        AlphaDst: BlendingFactor.One);
 }

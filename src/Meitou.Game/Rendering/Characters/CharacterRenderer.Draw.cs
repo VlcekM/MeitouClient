@@ -39,6 +39,10 @@ internal sealed unsafe partial class CharacterRenderer
         /// </summary>
         public bool DoubleSided;
         /// <summary>
+        /// The batch's id (<see cref="_batchIds"/>).
+        /// </summary>
+        public int Id;
+        /// <summary>
         /// The instances gathered this frame (the first <see cref="Count"/>), grown as needed.
         /// </summary>
         public CharInstance[] Data = new CharInstance[16];
@@ -129,7 +133,7 @@ internal sealed unsafe partial class CharacterRenderer
         lock (_batchIds)
         {
             var (part, level, twoSided) = _batchKeys[id];
-            return new Batch { Part = part, Level = level, DoubleSided = twoSided };
+            return new Batch { Part = part, Level = level, DoubleSided = twoSided, Id = id };
         }
     }
 
@@ -182,12 +186,6 @@ internal sealed unsafe partial class CharacterRenderer
     internal FogVolumes? FogCull { get; set; }
 
     /// <summary>
-    /// The frame's jitter in NDC (0 without a temporal method), set by the world frame: it moves the see-through items' dither each frame
-    /// (<see cref="OpacityDither"/>). The shadow, icon and portrait views take none: a still pattern.
-    /// </summary>
-    public Vector2 DitherJitter { get; set; }
-
-    /// <summary>
     /// Room masks used to give indoor characters the same indirect-light gain as their surroundings.
     /// </summary>
     internal WorldObjectRenderer? InteriorObjects { get; set; }
@@ -208,10 +206,118 @@ internal sealed unsafe partial class CharacterRenderer
             LightDir = light,
             FogColour = fogColour,
             FogDistance = fogDistance,
-            JitterNdc = DitherJitter,
         };
-        DrawView(view, eye, frustum, relative: relative);
+        _seeThroughMode = BlendSeeThrough ? 1u : 0u;
+        try
+        {
+            DrawView(view, eye, frustum, relative: relative);
+        }
+        finally
+        {
+            _seeThroughMode = 0;
+        }
     }
+
+    #region See-through items (the blended pass)
+
+    /// <summary>
+    /// The batch ids that have held a see-through item's part (<see cref="PartMaterial.SeeThrough"/>): the blended pass draws these batches of the
+    /// main view again. Locked: the gathering's workers add to it.
+    /// </summary>
+    readonly HashSet<int> _seeThroughBatches = [];
+
+    /// <summary>
+    /// The blended pass's job, made with the main colour pass's batches and waiting for <see cref="DrawSeeThrough"/> (null: nothing to blend).
+    /// </summary>
+    DrawJob? _blendedJob;
+
+    /// <summary>
+    /// The colour program's mode for the view being drawn (<see cref="CharacterPush.SeeThrough"/>).
+    /// </summary>
+    uint _seeThroughMode;
+
+    /// <summary>
+    /// Set by the world frame around the main view's <see cref="Draw"/>: see-through items are left out of it and drawn by
+    /// <see cref="DrawSeeThrough"/>, blended, instead of being dithered (docs/render-objects.md "See-through items").
+    /// </summary>
+    public bool BlendSeeThrough { get; set; }
+
+    /// <summary>
+    /// Whether the main view left see-through items for <see cref="DrawSeeThrough"/> this frame.
+    /// </summary>
+    public bool HasSeeThrough => _blendedJob is not null;
+
+    /// <summary>
+    /// Notes that batch <paramref name="id"/> holds a see-through item's part (any thread).
+    /// </summary>
+    void NoteSeeThrough(int id)
+    {
+        lock (_seeThroughBatches) _seeThroughBatches.Add(id);
+    }
+
+    /// <summary>
+    /// Makes the blended pass's job from the colour job just filled: the same frame sets, instances and push block in mode 2, the batches that hold
+    /// see-through parts, blended over the scene and writing neither depth nor the character mask.
+    /// </summary>
+    void HoldSeeThrough(DrawJob colour, ViewBatches vb)
+    {
+        _blendedJob?.Release();
+        _blendedJob = null;
+        lock (_seeThroughBatches)
+        {
+            if (_seeThroughBatches.Count == 0) return;
+        }
+
+        var state = colour.State with { DepthWrite = false, Blend = OpacityDither.Blend, ColourMask = DrawState.Rgb };
+        var job = _drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, colour.Targets, state, colour.Program, 0);
+        (job.Frame, job.Cull, job.RowCount) = (colour.Frame, CullMode.None, colour.RowCount);
+        colour.Rows.CopyTo(job.Rows, 0);
+        job.Push = colour.Push with { SeeThrough = 2 };
+        if (job.Draws.Length < vb.Active.Count) job.Draws = new DrawJob.Draw[Math.Max(vb.Active.Count, job.Draws.Length * 2)];
+
+        lock (_seeThroughBatches)
+        {
+            foreach (var b in vb.Active)
+                if (_seeThroughBatches.Contains(b.Id)) job.Draws[job.Count++] = BlendedDraw(b, state, colour.Targets.Formats);
+        }
+        if (job.Count == 0) job.Release();
+        else _blendedJob = job;
+    }
+
+    /// <summary>
+    /// One batch's draw in the blended pass: the colour program's buffers with the blended state's pipeline.
+    /// </summary>
+    DrawJob.Draw BlendedDraw(Batch b, DrawState state, AttachmentFormats formats)
+    {
+        var part = b.Part;
+        ref var native = ref part.ColourNative;
+        Current(ref native, part, _colourProg);
+        return new DrawJob.Draw
+        {
+            Pipeline = Gpu.Pipelines.Get(state.Pipeline(_colourProg.P, native.Layout!, PrimitiveType.Triangles, formats, "characters see-through")),
+            Vertices = native.Vertices,
+            Elements = new GpuBufferBinding(native.Elements.Buffer, native.Elements.Offset + (ulong)part.Offset[b.Level] * 4),
+            IndexCount = (uint)part.Count[b.Level],
+            Instances = (uint)b.Count,
+            FirstInstance = (uint)b.Offset,
+            TwoSided = true,
+        };
+    }
+
+    /// <summary>
+    /// Draws the see-through items the main view left out into the open scene pass, blended over it by their opacity (both faces, tested against
+    /// the scene's depth). After the opaque scene.
+    /// </summary>
+    public void DrawSeeThrough()
+    {
+        if (_blendedJob is not { } job) return;
+
+        _blendedJob = null;
+        Gpu.Record("characters see-through", job);
+    }
+
+    #endregion
 
     /// <summary>
     /// Draws the characters' depth for a shadow cascade (<see cref="CharacterShaders.DepthFragment"/>); levels chosen from <paramref name="lodEye"/>,
@@ -328,7 +434,7 @@ internal sealed unsafe partial class CharacterRenderer
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
-            SkinLut = SkinShading ? _skinScattering.Index : 0 };
+            SkinLut = SkinShading ? _skinScattering.Index : 0, SeeThrough = _seeThroughMode };
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
 
@@ -351,6 +457,7 @@ internal sealed unsafe partial class CharacterRenderer
             CountDraw(part.Count[b.Level], b.Level, b.Count);
         }
         job.Count = n;
+        if (_seeThroughMode == 1) HoldSeeThrough(job, vb);
 
         var timer = _depthPass ? _depthTimer : _colourTimer;
         if (_portraitLive < 0) timer.Begin();
@@ -471,7 +578,9 @@ internal sealed unsafe partial class CharacterRenderer
             for (int g = 0; g < gps.Count; g++)
             {
                 if (GroupLevel(gps[g], level) is not int lv) continue;
-                var batch = vb.Get(BatchId(part, g, gps[g], lv, part.Material.DoubleSided), this);
+                int id = BatchId(part, g, gps[g], lv, part.Material.DoubleSided);
+                if (part.Material.SeeThrough) NoteSeeThrough(id);
+                var batch = vb.Get(id, this);
                 if (batch.Count == 0) vb.Active.Add(batch);
                 batch.Add(in instance);
             }
@@ -757,7 +866,13 @@ internal sealed unsafe partial class CharacterRenderer
             var chunk = v.Batches.Chunks[c];
             chunk.Parts++;
             for (int g = 0; g < gps.Count; g++)
-                if (GroupLevel(gps[g], level) is int lv) chunk.Add(BatchId(part, g, gps[g], lv, twoSided), in instance);
+            {
+                if (GroupLevel(gps[g], level) is not int lv) continue;
+
+                int id = BatchId(part, g, gps[g], lv, twoSided);
+                if (part.Material.SeeThrough) NoteSeeThrough(id);
+                chunk.Add(id, in instance);
+            }
         }
     }
 
