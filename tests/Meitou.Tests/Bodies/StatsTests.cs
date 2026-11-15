@@ -142,4 +142,30 @@ public class StatsTests
         a.Modifiers.RemoveAll("drug");
         Assert.Equal(none, Hash(a));
     }
+
+    /// <summary>
+    /// A code mod's skill level is saved under its own STATS key and read back; a level of a mod not loaded now is saved again; no mod level, no key.
+    /// </summary>
+    [Fact]
+    public void Mod_skill_levels_round_trip_a_save_and_keep_an_unloaded_mods_level()
+    {
+        const string gone = ModSkillLevels.SaveKeyPrefix + "gone.tailoring";
+        var herbalism = new ModSkill("herbs.herbalism", "Herbalism", SkillColumn.Sciences);
+        var plain = new Dictionary<string, float>();
+        new CharacterStats().WriteSave(plain);
+
+        var stats = new CharacterStats();
+        float level = herbalism.Gain(stats, 5);
+        var floats = new Dictionary<string, float> { [gone] = 33 };
+        stats.WriteSave(floats);
+        var loaded = CharacterStats.ReadSave(floats);
+        var again = new Dictionary<string, float>();
+        loaded.WriteSave(again);
+
+        Assert.DoesNotContain(plain.Keys, k => k.StartsWith(ModSkillLevels.SaveKeyPrefix, StringComparison.Ordinal));
+        Assert.Equal(CharacterStats.CoreGain(1, 5), level);
+        Assert.Equal(level, herbalism.Level(loaded));
+        Assert.Equal(level, again[ModSkillLevels.SaveKeyPrefix + "herbs.herbalism"]);
+        Assert.Equal(33, again[gone]);
+    }
 }
