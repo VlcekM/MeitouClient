@@ -1663,10 +1663,10 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   sights a player turret gunner also takes dangerous neutrals at weight 0.6); Meitou-only Heal Neutrals and Heal All (player medics also treat downed non-hostile
   strangers, or any downed character; [squad AI options](game/ai-tasks.md#squad-ai-options)).
 - **Saves** (`Saving/MachineSave`, `ResearchSave`). Each building's production and farm keys go into its
-  GAMESTATE_BUILDING. Items go into an INVENTORY_STATE `<site>-inventory`, listed first by the building, with sections
-  `in<k>`, `out` and `main` (a furnace's grid `in1`).
+  GAMESTATE_BUILDING. Items go into an INVENTORY_STATE `<site>-inventory`, listed first by the building, in the original's
+  [sections](formats/save.md#folder-and-state-mapping) `in<k + 1>`, `out` and `backpack_content` (a furnace's grid `in1`); older Meitou
+  inventories (`in0`, `main`) migrate on load.
   - A loaded farm's plants all take its growth (**not modelled**: the game adds 0.2 x U[0, 1) to each, [save](game/buildings-production.md#farming)).
-  - The original's reading of these inventories is unverified: no sample holds a working player building.
 - **UI** (Faithful, `ProductionWindows`).
   - Selecting a machine opens its window at the screen's left edge, vertically centred, an open inventory moved right of it (**Observed**, original screenshot 2026-10-26, mined iron rock): `Kenshi_GenericBuildingWindow`, or for a bench
     `Kenshi_InventoryResearchWindow`. Items are held in and out with the mouse (an input takes its record up to its capacity; `out` takes nothing).

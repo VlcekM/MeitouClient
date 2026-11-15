@@ -575,8 +575,8 @@ rock) makes output only while someone operates it.
   `power increase`, `power capacity increase`) answers only for the player's buildings (owner with the player pointer +0x250, `FUN_140546dd0`);
   any other gets the default 1, 0, 0 (**Verified**, `FUN_14082ec70`).
 
-**Recipes** (**Observed**, loader `FUN_14029e7b0`). Each `consumes` entry (item, v0, v1) is an input: section `in<k>`
-of the building's inventory limited to v0, a level float (starts 0) and a rate v1/100. Each cycle the inputs lose
+**Recipes** (**Observed**, loader `FUN_14029e7b0`). Each `consumes` entry k (item, v0, v1) is an input: section `in<k + 1>`
+(**Verified**, [section names](../formats/save.md#folder-and-state-mapping)) of the building's inventory limited to v0, a level float (starts 0) and a rate v1/100. Each cycle the inputs lose
 `amount x rate` from their level, refilled by taking one item of the section (+1 level each, slot 180). The `produces`
 first entry is the output: section `out` of the item's footprint, capacity v0 items, a progress float. `vfunc_185`
 clamps amount to what the inputs hold and to `capacity - held - progress`; nothing left: status 1 (output full) or 0.
@@ -1088,7 +1088,7 @@ Meitou (`RotorSpec`, `RotatingParts.Advance`): the renderer turns the parts it d
 wind; a level building's mult comes from its data as its sound emitter's efficiency does (generator output x 0.01, batteries and machines
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
-**Storage** (**Verified**, 603 buildings): 87 have `has inventory`; default 18 x 18, `itemtype limit` 4; `stackable bonus
+**Storage** (**Verified**, 603 buildings): 87 have `has inventory` (a grid section `backpack_content`, [section names](../formats/save.md#folder-and-state-mapping)); default 18 x 18, `itemtype limit` 4; `stackable bonus
 mult` 1 to 100000; `limit inventory` restricts the items. Loader note (`FUN_14057cc70`:192-202, 555-567, **Verified**): when the functionality record's int `flags` has bit 4 set the loader only prints the log line 'Warning: Nest building loaded <name>' and goes on, no state changes. Grid (**Observed**, the `StorageBuilding` constructor `FUN_1402a30d0`): a function 2 building whose `limit inventory`
 names exactly one item is that item's `inventory footprint` (Iron Plates 4 x 3, Building Materials 6 x 3, steel bars 6 x 1), else
 `storage size`, for built and town-placed storages alike (`MachineData.StorageGrid`). Only function 2 BF_RESOURCE_STORAGE makes a `StorageBuilding`
