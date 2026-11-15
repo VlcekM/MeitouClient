@@ -25,6 +25,11 @@ public sealed class CharacterStats
     StatModifiers? _modifiers;
 
     /// <summary>
+    /// The levels in code mods' skills, made on first use (<see cref="ModSkills"/>).
+    /// </summary>
+    ModSkillLevels? _modSkills;
+
+    /// <summary>
     /// Stats that read as 1 for a character built without data (the editor's default of a STATS field).
     /// </summary>
     public CharacterStats()
@@ -58,6 +63,16 @@ public sealed class CharacterStats
     /// The modifiers if any were ever made (state hash only).
     /// </summary>
     internal StatModifiers? ModifiersOrNull => _modifiers;
+
+    /// <summary>
+    /// The levels in code mods' skills (docs/modding.md "Skills"), made on first use; read and train them through <see cref="ModSkill"/>.
+    /// </summary>
+    public ModSkillLevels ModSkills => _modSkills ??= new();
+
+    /// <summary>
+    /// The mod skill levels if any were ever made.
+    /// </summary>
+    internal ModSkillLevels? ModSkillsOrNull => _modSkills;
 
     /// <summary>
     /// A storage's value with its modifiers.
@@ -253,19 +268,21 @@ public sealed class CharacterStats
     /// <summary>
     /// Writes the saved STATS floats (docs/formats/save.md): the stat's field name (<c>strength</c>, <c>attack</c>, <c>toughness2</c>, <c>mass
     /// combat</c>...) to its value. The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not
-    /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value.
+    /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value. The code mods'
+    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, none without them.
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
         var written = _godOriginal ?? _values;   // a boosted character is saved with the values it had before
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = written[i];
+        _modSkills?.WriteSave(floats);
     }
 
     /// <summary>
     /// Reads the saved STATS floats written by <see cref="WriteSave"/> (a missing key keeps the default), except that a save without
     /// <c>lockpicking</c> gets half the character's thievery and one without <c>toughness2</c> its defence as toughness (<c>FUN_14064b6a0</c>,
-    /// docs/game/character-stats.md).
+    /// docs/game/character-stats.md). Every mod skill level is kept, registered or not.
     /// </summary>
     public static CharacterStats ReadSave(IReadOnlyDictionary<string, float> floats)
     {
@@ -275,6 +292,7 @@ public sealed class CharacterStats
         if (!floats.ContainsKey("lockpicking")) stats._values[(int)StatsEnumerated.Lockpicking] = stats._values[(int)StatsEnumerated.Thieving] * 0.5f;
         // FUN_14064b6a0: toughness = defence
         if (!floats.ContainsKey("toughness2")) stats._values[(int)StatsEnumerated.Toughness] = stats._values[(int)StatsEnumerated.MeleeDefence];
+        stats._modSkills = ModSkillLevels.ReadSave(floats);
         return stats;
     }
 }

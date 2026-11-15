@@ -236,6 +236,23 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A skill (docs/modding.md "Skills") listed at the foot of its <see cref="Simulation.Bodies.ModSkill.Column"/> on the stats window, with its
+    /// own description pane; the mod's systems read, set and train each character's level through it, and saves keep the levels. An id another
+    /// skill has, or a column without room, refuses it.
+    /// </summary>
+    public Simulation.Bodies.ModSkill AddSkill(Simulation.Bodies.ModSkill skill)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(skill);
+        if (Simulation.Bodies.ModSkills.Refusal(skill, Pending.Skills) is { } refusal) throw new ArgumentException(refusal, nameof(skill));
+        if (Game.Ui.StatsWindow.ModRoom(skill.Column, Pending.Skills.Count(s => s.Column == skill.Column)) <= 0)
+            throw new ArgumentException($"The stats window's {skill.Column} column has no room for skill '{skill.Id}'.", nameof(skill));
+
+        Pending.Skills.Add(skill);
+        return skill;
+    }
+
+    /// <summary>
     /// The merged records of a type, in string id order.
     /// </summary>
     public IEnumerable<GameRecord> Records(int type) =>

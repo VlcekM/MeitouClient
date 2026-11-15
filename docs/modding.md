@@ -146,6 +146,15 @@ holds refuses the second mod.
   which a human fills; each meter adds a copy of the ninth, and more than nine rows share the nine rows' height. A label another meter has
   (case-insensitive), one over 32 characters or a fifth meter of all mods together refuses the mod. A building's rows never show meters.
   Drawing **Unknown** (not yet run in game).
+- **Skills:** `AddSkill(new ModSkill(id, label, column) { Description, Affects, Training, Start })` (`ModSkills`, `src/Meitou.Simulation/Bodies`)
+  lists the skill at the foot of a stats-window column (`SkillColumn`: Weapons, Combat, Thievery, Sciences, under that column's last heading)
+  with its whole level, and a click shows the description pane with the mod's lines and the next-level bar. The mod's systems read
+  `skill.Level(stats)` (`Start`, default 1, until set), `Set` it, or `Gain(stats, amount)` on the game's curve (`CharacterStats.CoreGain`, no
+  race multiplier) in the tick (the character's own partition in a parallel phase); the game's own actions never train it. Levels live in
+  `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
+  ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
+  mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
+  full column refuses the mod. Not shown in the HUD's stat lines or the debug character editor. Drawing **Unknown** (not yet run in game).
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own

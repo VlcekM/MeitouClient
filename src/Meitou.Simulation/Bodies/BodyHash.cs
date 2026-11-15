@@ -31,6 +31,13 @@ static class BodyHash
                 h.Add(0x5374614D);
                 modifiers.AddTo(ref h);
             }
+
+            // Code mods' skill levels, only once one was set, so hashes without them are unchanged.
+            if (stats.ModSkillsOrNull is { Count: > 0 } modSkills)
+            {
+                h.Add(0x536B6C4D);
+                modSkills.AddTo(ref h);
+            }
         }
         if (medical is null)
         {

@@ -473,6 +473,9 @@ public sealed partial class World
             ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db)
             : null;
         s.Meters = detailed && cold!.Meters is { } meters ? Array.AsReadOnly((Bodies.MeterReading?[])meters.Clone()) : [];
+        s.ModSkills = detailed && Bodies.ModSkills.All.Count > 0 && cold!.Stats is { } modStats
+            ? Array.AsReadOnly(Bodies.ModSkills.Levels(modStats))
+            : [];
         s.LimbBits = cold?.Medical?.LimbBits ?? 0;
         s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
         s.Knockdown = cold?.Knockdown ?? default;

@@ -56,6 +56,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModMeter> Meters { get; } = [];
     /// <summary>
+    /// The skills, in registration order.
+    /// </summary>
+    public List<ModSkill> Skills { get; } = [];
+    /// <summary>
     /// The player interface extensions.
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
@@ -169,6 +173,7 @@ sealed class ModRegistry
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
         foreach (var slot in r.Slots) ModSlots.Add(slot);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
+        foreach (var skill in r.Skills) ModSkills.Add(skill);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);

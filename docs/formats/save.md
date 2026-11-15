@@ -112,6 +112,10 @@ An item worn in a code mod's [equipment slot](../modding.md#registration-surface
 without that mod, a character's item in a section it has no slot for is auto-added to its grids (`SavedKit.Fits`); how the original game
 loads such an item is **Unknown**.
 
+A code mod's [skill](../modding.md#registration-surface) level is a float `meitou skill <id>` in the character's STATS record, written only
+once a level was set. Every such key is read back and saved again, so a save keeps the levels of mods not loaded now. **Observed**
+(2026-11-15, a scratch `WriteSave` / `ReadSave` round trip); how the original game loads the extra keys is **Unknown**.
+
 ### Where saves live
 
 | Setting / path | Meaning |

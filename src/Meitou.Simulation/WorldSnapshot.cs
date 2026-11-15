@@ -562,6 +562,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public IReadOnlyList<Bodies.MeterReading?> Meters { get; internal set; } = [];
     /// <summary>
+    /// A selected or inspected character's levels in the code mods' skills, by <see cref="Bodies.ModSkills.All"/> order; empty otherwise.
+    /// </summary>
+    public IReadOnlyList<float> ModSkills { get; internal set; } = [];
+    /// <summary>
     /// The inventory of a selected character, of the one whose loot window is open, or of a player character whose inventory is shown (null for
     /// the others).
     /// </summary>
