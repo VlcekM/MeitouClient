@@ -43,10 +43,24 @@ public readonly record struct AmbienceInput
 
 /// <summary>
 /// The game's ambience rules (docs/audio.md, from the exe's camera update and audio manager): the biome of the region under the pivot, day or
-/// night by the hour, the <c>Camera_Zoom</c> and <c>Time_in_Game</c> game parameters, and the weather's rain and wind beds.
+/// night by the hour, the <c>Camera_Zoom</c> and <c>Time_in_Game</c> game parameters, the weather's rain and wind beds, and the unloading of the
+/// banks of biomes left behind.
 /// </summary>
 public sealed class AmbienceDirector(WwisePlayer player)
 {
+    /// <summary>
+    /// Real seconds after a biome's bank was last the current one that it is unloaded (<c>DAT_141689854</c>, 60).
+    /// </summary>
+    const double UnloadAfter = 60;
+
+    /// <summary>
+    /// The biomes whose bank was asked for, with the clock (<see cref="_clock"/>) at which each was last the current one.
+    /// </summary>
+    readonly Dictionary<Ambience, double> _lastCurrent = [];
+    /// <summary>
+    /// The load of the current biome's bank, asked for on entering it; a failed one is no longer pending (the exe clears its bit either way).
+    /// </summary>
+    Task? _load;
     /// <summary>
     /// The state the game compares each frame: the biome index, with bit 8 set at night; -1 before the first.
     /// </summary>
@@ -72,6 +86,11 @@ public sealed class AmbienceDirector(WwisePlayer player)
     /// Whether the last entered state is the night one (bit 8 of the state).
     /// </summary>
     public bool Night => (_state & 0x100) != 0;
+    /// <summary>
+    /// Whether the current biome's bank was asked for and has not loaded yet (the exe's pending-load bits, which hold back every unload).
+    /// </summary>
+    public bool LoadPending =>
+        _state >= 0 && _load is { IsFaulted: false, IsCanceled: false } && !player.IsBankLoaded(BankOf((Ambience)(_state & 0xFF)));
     /// <summary>
     /// Whether the rain bed is playing.
     /// </summary>
@@ -145,8 +164,8 @@ public sealed class AmbienceDirector(WwisePlayer player)
                 _state = next;
                 // The game posts Enter at once when the bank is loaded, otherwise after loading it (and then, by a bug, with the opposite
                 // suffix); the player keeps the event until its bank arrives, so with the fix the suffix here is always the right one.
-                bool suffixDay = FixDelayedSuffix || player.IsBankLoaded($"SFX_Amb_{biome}") ? isDay : !isDay;
-                player.LoadBank($"SFX_Amb_{biome}");
+                bool suffixDay = FixDelayedSuffix || player.IsBankLoaded(BankOf(biome)) ? isDay : !isDay;
+                _load = player.LoadBank(BankOf(biome));
                 player.Post($"Enter_{biome}_{(suffixDay ? "Day" : "Night")}", AudioSystem.MusicObject);
             }
         }
@@ -164,5 +183,29 @@ public sealed class AmbienceDirector(WwisePlayer player)
         }
         player.SetParameter("Rain_Intensity", input.Rain);
         player.SetParameter("Intensity", input.Wind);
+
+        if (_state >= 0) _lastCurrent[(Ambience)(_state & 0xFF)] = _clock;
     }
+
+    /// <summary>
+    /// The audio manager's tick (<c>FUN_140258e30</c>): a biome bank that is loaded and was last current more than 60 s ago is unloaded, which cuts
+    /// what still plays from it. Nothing is unloaded while a bank load is pending, this director's or <paramref name="otherLoadPending"/> (the
+    /// music's): the exe keeps one pending-load word for both.
+    /// </summary>
+    public void UnloadStale(bool otherLoadPending)
+    {
+        if (otherLoadPending || LoadPending) return;
+
+        foreach (var (biome, last) in _lastCurrent)
+        {
+            if (_clock - last <= UnloadAfter || !player.IsBankLoaded(BankOf(biome))) continue;
+            _lastCurrent.Remove(biome);
+            player.UnloadBank(BankOf(biome));
+        }
+    }
+
+    /// <summary>
+    /// A biome's ambience bank, <c>SFX_Amb_&lt;Name&gt;</c>.
+    /// </summary>
+    static string BankOf(Ambience biome) => $"SFX_Amb_{biome}";
 }

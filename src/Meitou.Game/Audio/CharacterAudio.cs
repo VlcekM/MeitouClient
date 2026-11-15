@@ -530,7 +530,29 @@ sealed class CharacterAudio(GameHost host)
             case SoundKind.DismantleDone:
                 host.Sound.Ui.Sounds?.Play(new UiSoundEvent("Notifications", "Notifications", "Thing_Complete"));
                 break;
+            case SoundKind.Inspected:
+                sounds.Job(subject, "Character_Inspect");
+                break;
+            case SoundKind.NpcBought:
+                sounds.Job(subject, "Sell_Item", CharacterSounds.FootstepLimit);
+                break;
+            case SoundKind.ReleasedFromPrison:
+                host.Sound.Ui.Sounds?.Play(new UiSoundEvent("Create_Character"));
+                break;
+            case SoundKind.FedToMachine:
+                sounds.FedToMachine(e.Position, ArmourOf(e.Subject));
+                break;
         }
+    }
+
+    /// <summary>
+    /// The <c>material type</c> of a character's body armour (<see cref="CharacterSoundProfile.ArmourMaterial"/>) from the previous snapshot, for one
+    /// already gone from the current one; 0 (Cloth) when it is in neither.
+    /// </summary>
+    int ArmourOf(CharacterId id)
+    {
+        if (!host.PreviousById.TryGetValue(id, out var c) || c.Appearance is not { } look) return 0;
+        return _soundProfiles.TryGetValue(look, out var profile) ? profile.ArmourMaterial : 0;
     }
 
     #endregion

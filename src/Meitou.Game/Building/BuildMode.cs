@@ -1398,9 +1398,11 @@ sealed class BuildMode(PlayerInterface player)
         }
 
         var at = new Vector2(pending.Position.X, pending.Position.Z);
-        if (selected.Any(c => Vector2.Distance(new(c.Position.X, c.Position.Z), at) <= StorageArrive))
+        if (selected.FirstOrDefault(c => Vector2.Distance(new(c.Position.X, c.Position.Z), at) <= StorageArrive) is { } arrived)
         {
             _storageOpening = null;
+            // The original opens a storage by the loot order (26), whose start posts Character_Inspect on the looter (FUN_140354dc0).
+            player.Session.World.Sounds?.Enqueue(new SoundEvent(SoundKind.Inspected, arrived.Id, CharacterId.None, arrived.Position));
             // A window shown alone (a left click) or closed by the player opens again through SyncMachineScreens, with the inventory beside it,
             // as when the order opens both.
             bool docked = StorageWithInventory == pending.Id && player.FaithfulScreens?.IsOpen("inventory") == true;

@@ -76,6 +76,25 @@ public enum SoundKind : byte
     /// (<c>WallBuilding::vfunc_62</c>).
     /// </summary>
     WallBroken,
+    /// <summary>
+    /// The subject opened a container's window (the start of <c>Task_Loot_Order</c> on a target that is no character, <c>FUN_140354dc0</c>):
+    /// <c>Character_Inspect</c> on it.
+    /// </summary>
+    Inspected,
+    /// <summary>
+    /// A shopper bought a unit for more than nothing (<c>FUN_1409a14b0</c>): <c>Sell_Item</c> on the shopper, 200 units.
+    /// </summary>
+    NpcBought,
+    /// <summary>
+    /// A jailer's release freed a prisoner of the player's faction who is no slave (<c>Task_ReleasePrisoner</c>, <c>FUN_1403570a0</c>): the
+    /// interface's <c>Create_Character</c>.
+    /// </summary>
+    ReleasedFromPrison,
+    /// <summary>
+    /// A carried body was fed into a machine (<c>Task_FeedCorpseIntoMachine</c>, <c>FUN_1403567a0</c>; the subject is the body, gone from the world
+    /// by the time it is played): <c>Character_Drop_Person</c> on the body with its <c>Armor_Worn</c>.
+    /// </summary>
+    FedToMachine,
 }
 
 /// <summary>

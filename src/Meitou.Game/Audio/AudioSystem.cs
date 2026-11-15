@@ -212,7 +212,8 @@ public sealed class AudioSystem : IDisposable
             Wind = weather is null ? 0 : weather.Weather.WindIntensity * weather.WindSpeed * 0.01f,
             RealSeconds = realSeconds,
         });
-        Music.Update(region?.Def.Music);
+        Music.Update(region?.Def.Music, Ambience.LoadPending);
+        Ambience.UnloadStale(Music.LoadPending);
     }
 
     /// <summary>
