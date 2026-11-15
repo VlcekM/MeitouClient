@@ -55,9 +55,9 @@ sealed class ProbeWorld : IDisposable
     /// <summary>
     /// Loads <paramref name="saveFolder"/> under <paramref name="order"/>; <paramref name="navmesh"/> builds the zones round the player's squad (slow) instead of walking the terrain.
     /// <paramref name="at"/> moves the player's characters there (X, Z) before the load, to look at another place with the same save; <paramref name="seed"/>
-    /// is the world seed (the game's default is 0).
+    /// is the world seed (the game's default is 0). Null, with the reason on stderr, when the save has no character of the player's faction.
     /// </summary>
-    public static ProbeWorld Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null, ulong seed = 1)
+    public static ProbeWorld? Load(GameInstall install, LoadOrder order, string saveFolder, bool navmesh, Vector2? at = null, ulong seed = 1)
     {
         var db = GameDatabase.Load(order);
         var levels = WorldLevelData.Load(install, order, includeInteriors: true);
@@ -71,6 +71,11 @@ sealed class ProbeWorld : IDisposable
         ResidentRuins.Apply(db, levels, layouts);   // the homes' ruins and layouts before anything reads the levels, as the game's boot
         var data = PopulationData(install, db, levels, layouts, height);
         var save = SaveGame.Load(SaveFolder.Open(saveFolder));
+        if (!HasPlayerCharacter(save))
+        {
+            WarnNoPlayerCharacter(save);
+            return null;
+        }
         if (at is { } spot) MovePlayer(save, spot, height);
 
         NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, save, height) : null;
@@ -158,6 +163,23 @@ sealed class ProbeWorld : IDisposable
     /// Where the save put the player's first character.
     /// </summary>
     static Vector3 SavedStart(SaveGame save) => save.Characters.First(c => c.Platoon.FactionId == save.PlayerFaction!.Id).Position;
+
+    /// <summary>
+    /// Whether the save has a character of the player's faction (<see cref="SavedStart"/> needs one).
+    /// </summary>
+    static bool HasPlayerCharacter(SaveGame save) =>
+        save.PlayerFaction is { } player && save.Characters.Any(c => c.Platoon.FactionId == player.Id);
+
+    /// <summary>
+    /// Says the save has no player character. A zip unpacked without its UTF-8 names (Git Bash's unzip mangles a Cyrillic platoon file name)
+    /// reads every platoon without its characters (#761's save).
+    /// </summary>
+    static void WarnNoPlayerCharacter(SaveGame save)
+    {
+        Console.Error.WriteLine($"probe     the save has no character of the player's faction ({save.Characters.Count()} characters in "
+            + $"{save.Platoons.Count} platoons read)");
+        Console.Error.WriteLine("  A zip unpacked without its UTF-8 names loses the platoons' characters: unpack it with .NET's ZipFile or Explorer.");
+    }
 
     /// <summary>
     /// Says the player's squad has no characters and why: the load's notes name the ones it left out.
