@@ -6,6 +6,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
@@ -45,6 +46,12 @@ public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : Deb
 /// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit character sub-view).
 /// </summary>
 public sealed record DebugSetStats(IReadOnlyList<CharacterId> Characters, IReadOnlyList<StatsEnumerated> Stats, float Value) : DebugCommand;
+
+/// <summary>
+/// Recruits the character into the player's faction and active squad (the debug menu's Recruit row): refused when it has no dialogue line that makes
+/// it join (DA 3 / 18) or the active squad is full (<see cref="DialogueSystem.RecruitRefusal"/>).
+/// </summary>
+public sealed record DebugRecruit(CharacterId Character) : DebugCommand;
 
 /// <summary>
 /// Turns the debug "Set stats to 1000" on or off (<see cref="PlayerState.StatsTo1000"/>). While on, every player character (also one recruited later)
@@ -718,6 +725,9 @@ static class DebugCheats
             case DebugSetStats set:
                 SetStats(world, set);
                 break;
+            case DebugRecruit recruit when data is not null:
+                Recruit(world, data, recruit);
+                break;
             case DebugDamage damage when data is not null:
                 foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
                 break;
@@ -755,6 +765,24 @@ static class DebugCheats
                 Give(world, data, assembly, give);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/> allows
+    /// it, and the result reaches the message log.
+    /// </summary>
+    static void Recruit(World world, PopulationData data, DebugRecruit recruit)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(recruit.Character, out int slot)) return;
+        if (DialogueSystem.RecruitRefusal(world, data, recruit.Character) is { } refusal)
+        {
+            world.Post(refusal);
+            return;
+        }
+
+        if (DialogueSystem.JoinPlayer(world, data, slot))
+            world.Post($"{table.Cold(slot)!.Name} joined your squad.");
     }
 
     /// <summary>

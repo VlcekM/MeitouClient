@@ -10,6 +10,8 @@ using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Ui;
 using Meitou.Modding;
 using Meitou.Simulation;
+using Meitou.Simulation.Dialogue;
+using Meitou.Simulation.Editing;
 using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game.DevTools;
@@ -21,9 +23,12 @@ namespace Meitou.Game.DevTools;
 /// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
 /// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
 /// (the middle of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
-/// gives them back. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move instantly, One-punch man mode, No
-/// stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard (<see cref="DebugGuard"/>: kills hostiles
-/// within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too:
+/// gives them back. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's
+/// selection), else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the
+/// squad has room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move
+/// instantly, One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
+/// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
+/// "Teleport on map" is a switch too:
 /// while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player
 /// character's), all or one faction's.
 /// </summary>
@@ -143,6 +148,11 @@ sealed class DebugMenu(GameHost host)
         /// Opens the item picker; Enter on its last step drops the chosen item at the camera's target.
         /// </summary>
         DropItem,
+
+        /// <summary>
+        /// Recruits the first target into the player's faction and active squad, then opens the character editor on it.
+        /// </summary>
+        Recruit,
     }
 
     /// <summary>
@@ -154,7 +164,7 @@ sealed class DebugMenu(GameHost host)
         "Edit character", "Damage (cut)",
         "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Set stats to 1000", "Auto heal", "Move instantly",
             "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
-            "Drop item",
+            "Drop item", "Recruit",
     ];
 
     /// <summary>
@@ -188,7 +198,7 @@ sealed class DebugMenu(GameHost host)
         {
             new("Character", [(int)DebugRow.EditCharacter, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
                 (int)DebugRow.GiveItem]),
-            new("Squad / Faction", [(int)DebugRow.Money, (int)DebugRow.UnlockResearch]),
+            new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.UnlockResearch]),
             new("World / Spawn", [.. worldRows]),
             new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
                 (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
@@ -642,7 +652,7 @@ sealed class DebugMenu(GameHost host)
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacter or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
             or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
-            or DebugRow.DropItem));
+            or DebugRow.DropItem or DebugRow.Recruit));
 
     /// <summary>
     /// The rows that open the body part list.
@@ -833,6 +843,9 @@ sealed class DebugMenu(GameHost host)
                 break;
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacter:
                 _characterEditor.Begin();
+                break;
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.Recruit:
+                RecruitAndEdit();
                 break;
             case EngineKey.Enter or EngineKey.Right when DebugPicksPart(_debugRow):
                 DebugParts = (DebugRow)_debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
@@ -1115,6 +1128,14 @@ sealed class DebugMenu(GameHost host)
                     return DebugFail("money: a whole number, e.g. 500 or -500");
                 world.Commands.Enqueue(new DebugMoney(delta) { Tick = tick });
                 return $"money {delta.ToString("+#;-#;0", CultureInfo.InvariantCulture)}";
+            case DebugRow.Recruit:
+                var recruitTarget = RecruitTarget(host);
+                if (recruitTarget.IsNone) return DebugFail("select or inspect a character first");
+                if (host.PopData is not { } data) return DebugFail("no game data");
+                if (!world.Characters.TryResolveNext(recruitTarget, out int recruitSlot)) return DebugFail("that character is gone");
+                if (DialogueSystem.RecruitRefusal(world, data, recruitTarget) is { } refusal) return DebugFail(refusal);
+                world.Commands.Enqueue(new DebugRecruit(recruitTarget) { Tick = tick });
+                return $"{world.Characters.Cold(recruitSlot)!.Name} joins your squad";
             case DebugRow.Heal or DebugRow.HealFully:
                 if (targets.Length == 0) return DebugFail("select or inspect a character first");
                 bool limbs = row == DebugRow.HealFully;
@@ -1185,6 +1206,42 @@ sealed class DebugMenu(GameHost host)
         string status = DebugApply(row, field, part, at);
         if (host.Session.World.Commands.Count > queued) ApplyWhilePaused();
         return status;
+    }
+
+    /// <summary>
+    /// The Recruit row's target: the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's
+    /// selection), else the first selected.
+    /// </summary>
+    static CharacterId RecruitTarget(GameHost host)
+    {
+        var player = host.Session.World.Player;
+        if (!player.Inspected.IsNone) return player.Inspected;
+        var selected = host.Player.AgentOrders.ControlOrderers();
+        return selected.Count > 0 ? selected[0] : CharacterId.None;
+    }
+
+    /// <summary>
+    /// The Recruit row: the target joins the player's faction and active squad, then the debug menu closes and the character editor opens on it
+    /// (name and appearance), as a recruit's would.
+    /// </summary>
+    void RecruitAndEdit()
+    {
+        var target = RecruitTarget(host);
+        if (target.IsNone)
+        {
+            _debugStatus = "select or inspect a character first";
+            return;
+        }
+
+        _debugStatus = DebugApplyNow(DebugRow.Recruit, "");
+        if (DebugFailed) return;
+        if (!host.Player.CharacterEditor.OpenEditor(EditKind.Recruit, [target]))
+        {
+            _debugStatus = "the character editor did not open";
+            return;
+        }
+
+        DebugMenuOpen = false;
     }
 
     /// <summary>
@@ -1616,6 +1673,9 @@ sealed class DebugMenu(GameHost host)
                     break;
                 case DebugRow.EditCharacter:
                     value = "Enter: edit the character";
+                    break;
+                case DebugRow.Recruit:
+                    value = "Enter: recruit and edit";
                     break;
                 case DebugRow.ExplodeClick:
                     rowOn = ExplodeClickOn;
