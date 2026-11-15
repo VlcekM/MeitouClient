@@ -36,6 +36,24 @@ static class BuildingMaterial
     }
 
     /// <summary>
+    /// The material of a farm's plants (docs/game/buildings-production.md "Farm plants": the <c>FarmPlants</c> template, flags 0, fragment program
+    /// with TRANSPARENCY and COLOURING): the spec's three maps, cut out at <c>alpha threshold</c> / 255 by the normal map's alpha and drawn from both
+    /// sides, whatever its <c>material type</c>; no second set, tiling, dust or emission. COLOURING takes the plant's tint, not the mesh's vertex
+    /// colours. The dust is left out by <c>WorldObjectRenderer.MakeMaterials</c>.
+    /// </summary>
+    public static SurfaceMaterial FromFarmSpec(GameRecord spec) => new()
+    {
+        Description = $"{spec.Type} '{spec.Name}' (farm plants)",
+        Diffuse = Tex(spec, "texture map") ?? "white.dds",
+        Normal = Tex(spec, "normal map"),
+        Metal = Tex(spec, "metalness map"),
+        Alpha = AlphaSource.NormalAlpha,
+        AlphaThreshold = spec.GetInt("alpha threshold", 128) / 255f,
+        DoubleSided = true,
+        SpecularMult = spec.GetFloat("specular mult", 1),
+    };
+
+    /// <summary>
     /// A record's path field, or null when empty.
     /// </summary>
     static string? Tex(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;

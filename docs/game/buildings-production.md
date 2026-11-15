@@ -782,7 +782,11 @@ the [layout's plant count](#farm-plants), not `amount`.
 - **Status** (`+0x468`): 3 growing with water, 0 no water, 2 harvestable or dead, 1 output full.
 - **Save** (GAMESTATE_BUILDING, after the [production keys](#production)): floats `plant growth` (farm growth), `plant death` (d),
   `plant start`, `save time` (game hours); int `plants harvested`. A load with more than an hour since `save time`
-  simulates the gap (`FUN_1400df6e0`); with no farm keys, the farm growth (not the plants) is `rand() / 32768` (`FUN_1409b1c10`, **Verified**, `FUN_1400e3de0`), which the first tick that grows the plants takes back to the lowest of them, so such a farm is in effect freshly planted. The base game's level files carry no farm keys for town farms (**Verified**: none in `rebirth/zone.21.42.zone`, Shark). The live tick tests no owner (**Verified**, `FUN_1400e5580`): a town farm grows, draws water and is rained on as the player's; only the catch-up ignores water for it.
+  simulates the gap (`FUN_1400df6e0`); with no farm keys, the farm growth is `rand() / 32768` (`FUN_1409b1c10`, **Verified**, `FUN_1400e3de0`).
+  The building factory (`FUN_140581770`) loads (slot +0x90, `FUN_1400e3de0`) before the farm's setup (slot +0x200, `FUN_1400e8ef0`), which
+  replants at farm growth 0 and otherwise gives each plant g = farm growth + 0.2 x U[0, 1) (the 0.2 at `14168a4a8`), then -10 to the first
+  `plants harvested` ones (**Verified** by decompile). So a farm with no keys starts at a random growth below 1, its plants spread over
+  0.2 above it; the first growing tick sets the farm growth to the lowest plant. The base game's level files carry no farm keys for town farms (**Verified**: none in `rebirth/zone.21.42.zone`, Shark). The live tick tests no owner (**Verified**, `FUN_1400e5580`): a town farm grows, draws water and is rained on as the player's; only the catch-up ignores water for it.
 
 ### Farm plants
 
@@ -813,6 +817,17 @@ harvest look `FUN_1400e4800`, replant `FUN_1400e48e0`, geometry `FUN_1400e4a20`,
   yaw basis dx = (sin, 0, cos), dz = dx x up; colour = lerp(white, `death colour`, saturate(death)) + 0.1 r, `death` =
   d / `death threshold` x 0.8; a static part has -0.1 r (darker) and no death tint. The mesh merges every plant's part mesh with its
   slot index (`BLENDINDICES`); slots are cumulative per part, capped at 127.
+- **Material**: one per farm, from the `material` of the first plant's first mesh's part (`FUN_1400e70a0`), through the `FarmPlants`
+  template with flags 0, so whatever the spec's `material type` the plants are alpha-tested on the normal map's alpha at `alpha threshold`
+  / 255, drawn from both sides, coloured by the shader's colour (not vertex colours), with no dust or tiling
+  ([runtime materials](../formats/runtime-materials.md)). **Verified** (probe): every vanilla farm's parts share one spec,
+  `Crops_material` (type 0 DEFAULT) or `hempfarm` (type 2 FOLIAGE); the crop meshes have one submesh, no vertex colours and two generated
+  LOD levels (user values 4000, 8000).
+- **Mesh and entity**: the farm batch (`FUN_1400e4a20`, one per building record, shared by its farms) copies submesh 0's vertices and base
+  indices of each part mesh `count` times, so it has no LOD levels; its bounds merge the part meshes'. Each farm's entity
+  (`FUN_1400df140`) is static, visibility flag 1, the farm's material, attached to the building's node and shown by the
+  building's own visible test; it gets no rendering distance (the part distance is set per part entity at creation in `FUN_14055f6e0`),
+  and casts shadows (Ogre's default) through `FarmShadowCaster`. Its bounds are the batch's merged with every plant position.
 
 ### Unloaded zones
 

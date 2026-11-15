@@ -4,8 +4,8 @@ using Meitou.Data.World;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// The crops of the player's farms (docs/render-objects.md "Farm plants"): one loose instance per plant mesh, drawn like the building's parts by
-/// <see cref="WorldObjectRenderer"/>, shadows included.
+/// The crops of the farms (docs/render-objects.md "Farm plants"): one loose instance per plant mesh, drawn as real objects by
+/// <see cref="WorldObjectRenderer"/> with the farm's plant material, at full detail, shadows included.
 /// </summary>
 sealed class FarmPlants(ObjectStreamer streamer)
 {
@@ -49,7 +49,7 @@ sealed class FarmPlants(ObjectStreamer streamer)
     /// A farm's plants (docs/game/buildings-production.md "Farm plants"): <paramref name="meshes"/> are its plant meshes (the same list keeps its
     /// instances),
     /// <paramref name="transforms"/> where each is drawn now, null for one not drawn (harvested), <paramref name="tints"/> each one's colour (death
-    /// tint and brightness). Drawn like the building's parts, shadows included.
+    /// tint and brightness). Drawn as real objects, shadows included.
     /// </summary>
     public void Set(string site, IReadOnlyList<PlacedMesh> meshes, IReadOnlyList<Matrix4x4?> transforms, IReadOnlyList<Vector3> tints)
     {
@@ -70,7 +70,14 @@ sealed class FarmPlants(ObjectStreamer streamer)
             inst.Placed = inst.Placed with { Transform = t };
             inst.Transform = t;
             inst.Tint = PackTint(tints[i]);
-            if (inst.Gpu is not { } gpu) continue;
+
+            // Until resolved the centre is where the loose scan measures the instance's distance from: the plant's spot, not the identity
+            // placement it was made with (the world origin, out of every reach).
+            if (inst.Gpu is not { } gpu)
+            {
+                inst.Centre = t.Translation;
+                continue;
+            }
 
             inst.Centre = Vector3.Transform(gpu.Centre, t);
             inst.Radius = gpu.Radius * new Vector3(t.M11, t.M12, t.M13).Length();

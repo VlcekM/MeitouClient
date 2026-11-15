@@ -15,9 +15,10 @@ namespace Meitou.Game.Host.WorldSync;
 sealed class FarmCrops(GameHost host)
 {
     /// <summary>
-    /// Where a farm's building stands: its site id, BUILDING record, position and rotation.
+    /// Where a farm's building stands: its site id, BUILDING record, position and rotation, and the building it was placed in (a player's
+    /// hydroponic farm indoors), null for none.
     /// </summary>
-    readonly record struct FarmPlace(string Id, string Record, Vector3 Position, Quaternion Rotation);
+    readonly record struct FarmPlace(string Id, string Record, Vector3 Position, Quaternion Rotation, string? Container = null);
 
     /// <summary>
     /// A farm's crops as laid out once for its building: the place, its farm data, the plant layout and meshes, and what was last handed to
@@ -123,7 +124,8 @@ sealed class FarmCrops(GameHost host)
     /// </summary>
     FarmPlace? PlaceOf(string id)
     {
-        if (host.BuildingSync.ShownBuildings.TryGetValue(id, out var site)) return new(site.Id, site.Record, site.Position, site.Rotation);
+        if (host.BuildingSync.ShownBuildings.TryGetValue(id, out var site))
+            return new(site.Id, site.Record, site.Position, site.Rotation, site.Parent);
         if (!ProductionSystem.IsTownWork(id) || TownBuildingOf(id[ProductionSystem.TownWorkPrefix.Length..]) is not { } b) return null;
 
         return new(id, b.BuildingId, b.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw));
@@ -154,13 +156,30 @@ sealed class FarmCrops(GameHost host)
         if (!_farmData.TryGetValue(site.Record, out var data))
             _farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;
         if (data is not { Parts.Count: > 0 } || db.Find(site.Record) is not { } building) return null;
+
         var plants = FarmLayout.Plant(data, site.Position, site.Rotation, host.ActiveGround, WorldObjectLayout.Seed(site.Id));
-        var meshes = plants.Meshes.Select(m => data.Parts[m.Part])
-            .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id, PlacedKind.BuildingPart) { Material = p.Material })
-                .ToArray();
+        if (plants.Meshes.Length == 0) return null;
+
+        // One material for the whole farm: the first plant's first mesh's part's (the game draws every plant as one mesh with it).
+        var material = data.Parts[plants.Meshes[0].Part].Material;
+        var meshes = plants.Meshes
+            .Select(m => PlantMesh(data.Parts[m.Part], building, site, material))
+            .ToArray();
         float height = data.Parts.Max(p => objects.MeshTop(p.Mesh));
         return new FarmLook(site, data, plants, meshes, height);
     }
+
+    /// <summary>
+    /// A plant's mesh as a part of its farm building, with the farm's material; inside another building it goes with that one's interior.
+    /// </summary>
+    static PlacedMesh PlantMesh(FarmPart part, Data.GameRecord building, FarmPlace site, Data.GameRecord? material) =>
+        new(part.Mesh, Matrix4x4.Identity, part.Record, building, site.Id, PlacedKind.BuildingPart)
+        {
+            Material = material,
+            FarmPlant = true,
+            Contained = site.Container is not null,
+            ContainerId = site.Container,
+        };
 
     /// <summary>
     /// Drops every farm's crops from the renderer (a new world).

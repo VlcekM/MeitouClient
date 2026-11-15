@@ -98,6 +98,12 @@ public sealed record PlacedMesh(
     public bool BlankXmlCollision { get; init; }
 
     /// <summary>
+    /// A farm's plant (docs/game/buildings-production.md "Farm plants"): drawn with the <c>FarmPlants</c> material whatever its MATERIAL_SPEC's type,
+    /// at full detail and with no draw distance of its own.
+    /// </summary>
+    public bool FarmPlant { get; init; }
+
+    /// <summary>
     /// The collision file the part has in this placement (<see cref="WorldObjectLayout.DestroyedCollision"/>); empty for none.
     /// </summary>
     public string CollisionPath(bool destroyed) => WorldObjectLayout.DestroyedCollision(Source, destroyed, BlankXmlCollision);
