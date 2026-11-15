@@ -1034,10 +1034,10 @@ public sealed class AnimationSystem(
         bool crawling = !carried && cold.Medical is { Prone: true };
         bool inBed = cold.InSomething == Locks.HeldState.Bed, inCage = cold.InSomething == Locks.HeldState.Imprisoned;
 
-        // One held in a cage or on a pole is posed by the fixture's clip, not by a ragdoll: the fixture refuses the whole-body ragdoll
+        // One held in a bed, a cage or on a pole is posed by the fixture's clip, not by a ragdoll: the fixture refuses the whole-body ragdoll
         // (RagdollSystem.Wanted), so holding the pose here would leave it flat in whatever pose the knockout left (docs/game/locks.md "Cages and
-        // beds").
-        if (!inCage && HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
+        // beds"; #733: a body put in a bed lay on the floor by it).
+        if (!inCage && !inBed && HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
 
         UpdateFallAndGetUp(a, cold, down, carried, crawling, inBed, inCage, ragdoll);
         int technique = TechniqueAndAction(a, cold, speed, dt, down, carried, fight);
