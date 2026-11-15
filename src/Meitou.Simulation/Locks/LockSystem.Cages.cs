@@ -276,7 +276,7 @@ public sealed partial class LockSystem
     bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
     {
         if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
-        if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
+        if (!world.Fixtures.Release(world, prisoner, faction, Crimes, jailer: true)) return false;
         var talk = world.SystemOf<Dialogue.DialogueSystem>();
         if (world.Characters.TryResolveNext(releaser, out int r) && talk is not null)
         {

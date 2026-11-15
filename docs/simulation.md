@@ -775,7 +775,10 @@ any two factions, weighted by the victim's `faction importance` and the town it 
 `Town`). Engine choices: every striker rates above the 0.1 / 0.15 thresholds; a death is credited only at the killing blow (a later
 bleed-out has no killer); first-aid gratitude on every bandaging update. The attack order and looting change no relation. A
 witness that regards the culprit as friendly takes 20 off on every sweep (`CrimeSystem.BetrayalDelta`). Wars:
-`PlayerRelations.DeclareWar` / `EndWar` (one direction, the speaker's table; the war flag is not saved). Original threshold/sense/retreat facts:
+`PlayerRelations.DeclareWar` / `EndWar` (one direction, the speaker's table; the war flag is not saved). Campaigns and diplomats in the aggro
+(`AggroSystem.Regards`, `FinderDrops`; [ai-tasks](game/ai-tasks.md#combat-goals)): an enemy Diplomat is tagged NEUTRAL by a player-side looker, and by others
+inside its faction's `biomes`; 16 skips members of a campaign in phase 0, 21 (and 144 with no home) leave alone a non-hostile Diplomat or phase-0 member
+its squad holds no TEMP_ENEMY on. Original threshold/sense/retreat facts:
 [perception.md](game/perception.md), [AI](game/ai.md), [factions](game/factions-squads-towns.md).
 
 ## Carrying, rescue and looting
@@ -878,7 +881,8 @@ animal's; the victim may be a player character), and an NPC looter its Looting (
 Every witness that sees the culprit reacts, not only the first after the booking (the witness function runs per looker, `FUN_1408580d0`): with a
 stop there, a police 1480 off in sight range booked a slave hunter's assault at Sho-Battai's gate and the gate guards 40 away never reacted
 (**Observed**, headless, a player quicksave).
-The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same. A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
+The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same.
+An Assault on a Diplomat standing in its faction's `biomes` is set as code 9, Terrorism ([economy 11.6](game/economy.md#116-booking-factions-and-police-hits-observed), `CrimeSystem.DiplomatVictim`). A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running; not a Trespassing
 (an NPC gets one from a DA 33 in a private home), whose event-17 line only restarts a chase forever (#519). So a town's
 guards turn on hungry bandits (Starving Bandits, -10 to all: not hostile, so no aggro target) attacking someone there.
@@ -1074,8 +1078,9 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   `item function` 9; the best is consumed when hardness reaches 0) or break (strength > 3 x hardness). Another character's shackles: a pending
   code 7 against the wearer's slave owner faction (none for a wearer without an owner). The lock is saved on the item (`lock lvl`, `locked`, `broken`, `hardness`). Shackled characters show the portrait Slave overlay.
 - **Spawn prisoners** (`PopulationSystem.MakePrisoners`; facts: [squad factory](game/factions-squads-towns.md#squad-factory)): a housed squad's `prisoners` templates are made
-  as squads of the template's faction (else the owner's) and each member is imprisoned in a random free cage of the home building. Engine choices: members beyond the free cages
-  are not made; they are held without a sentence (`Kidnapped`: no release round, no bail, getting out is no escape). Observed: Cat (`Dust King Prisoner`) caged in the Dust King
+  as squads of the template's faction (else the owner's) and each member is imprisoned in a random free cage of the home building with the factory's FOREVER sentence
+  (`SpawnSentence`, 9999999 h: never served, so no release round frees it; getting out is Escaping Prison). Engine choice: members beyond the free cages
+  are not made (the original destroys the first one left without a cage and leaves the rest free). Observed: Cat (`Dust King Prisoner`) caged in the Dust King
   Tower's watchtower; Tengu's Vault and the Tower of Abuse have no cages in their homes, so none are made. A caged prisoner is no aggro target (engine choice).
 - **Putting shackles on** (`PutShacklesOrder`, verb "Put on Shackles"; engine stand-in for dragging them onto the target's armour slot, which the held item does not do yet): a
   selected character carrying unworn, unbroken shackles walks to a live NPC that is down or caged and wears none, and within `ShackleReach` puts them on, locked again
@@ -1753,7 +1758,8 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
 
 `AiSystem`, blackboards/minds, package/task data: slot/class/time/weight selection, homes/beds/nodes,
 patrol/bar/shop/sleep/retreat/contracts, combat stances and off-screen roaming jobs. Data and
-TaskData semantics: [ai.md](game/ai.md), [ai-tasks.md](game/ai-tasks.md). Wars and prisoners are incomplete; residents
+TaskData semantics: [ai.md](game/ai.md), [ai-tasks.md](game/ai-tasks.md). Wars and prisoners: [campaigns](#off-screen-tier),
+[hostility](#hostility-and-relations), [kidnapping](#kidnapping), [captives](#captives) and [arrest and jail](#arrest-and-jail), each with its gaps; residents
 off screen only come back where their schedule puts them ([off-screen tier](#off-screen-tier)). Hash blackboards/minds/jobs when present.
 
 ### Package classes
@@ -2025,7 +2031,7 @@ the level data) stay.
 **Engine gaps** are listed where they apply, not here: [unique characters](#unique-characters) and [campaigns](#off-screen-tier),
 [ranged](#ranged) (bolts before a building's collision loads), [locks](#cages-beds-and-locks),
 [slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets,
-plants), [prospecting](#prospecting), [dialogue](#dialogue) (conditions on state Meitou lacks), [AI](#ai) (wars, prisoners, planner finders).
+plants), [prospecting](#prospecting), [dialogue](#dialogue) (conditions on state Meitou lacks), [AI](#ai) (planner finders).
 Smuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-parity.md).
 
 - Navmesh: the cache key does not see a changed collision file; a running build is not stopped on unload (it finishes into the cache).

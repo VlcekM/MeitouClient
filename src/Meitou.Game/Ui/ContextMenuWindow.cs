@@ -574,7 +574,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// <summary>
     /// The pick-up verb (<c>FUN_140796f80</c>, docs/game/ui-input.md "Context menu verbs"): Pick Up (225) unless every gate passes for Kidnap (246):
     /// the target is of another faction than the lead, stands in a town of a faction that is not the player's, is of a real faction, does not regard
-    /// the lead as friendly (or is a trader squad's member or in a campaign force), has no bounty with its town's law and is no Bandit, and is not
+    /// the lead as friendly (or is a trader squad's member or a Diplomat), has no bounty with its town's law and is no Bandit, and is not
     /// caged. Kidnap shows the chance column (<c>Character::getKidnappingChance</c>) and gives the kidnap order (a sleeper too; the roll on arrival,
     /// docs/game/carry-loot.md "Kidnapping").
     /// </summary>
@@ -598,7 +598,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         if (target.Faction == lead.Faction || player.Session.World.VerbFactsOf(lead.Id, target.Id) is not { } facts)
             return false;
         if (facts.Town != TownOwnership.Other || facts.NotReal) return false;
-        if (facts.RegardsLead && !facts.SquadTrader && !target.WarParty) return false;
+        if (facts.RegardsLead && !facts.SquadTrader && !target.IsDiplomat) return false;
 
         return facts.Bounty < 1 && !facts.Bandit;
     }

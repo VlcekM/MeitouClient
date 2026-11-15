@@ -1863,10 +1863,12 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Frees a prisoner (Task_ReleasePrisoner, economy.md 11.5, <b>Observed</b>): the cage is unlocked and emptied, the state and sentence cleared
     /// (not the slave state: a slave released by a faction other than the player's becomes that faction's slave); when the releaser's faction books
-    /// bounties its entry and the jail's (the cage owner's) are erased. A player-faction prisoner gets "{1} has been released from prison.". The
-    /// prisoner is put in front of the cage (<see cref="ExitSpot"/>). False when the character is not imprisoned.
+    /// bounties its entry and the jail's (the cage owner's) are erased. A <paramref name="jailer"/> release (Task_ReleasePrisoner and the engine's
+    /// stand-ins for it) of a player-faction prisoner that is no slave posts "{1} has been released from prison." (<c>FUN_1403570a0</c>, slave test
+    /// <c>FUN_1405c8aa0</c>, <b>Verified</b>); bail, trade, recruiting and liberators post nothing. The prisoner is put in front of the cage
+    /// (<see cref="ExitSpot"/>). False when the character is not imprisoned.
     /// </summary>
-    public bool Release(World world, CharacterId prisoner, int releaserFaction = -1, CrimeSystem? crimes = null)
+    public bool Release(World world, CharacterId prisoner, int releaserFaction = -1, CrimeSystem? crimes = null, bool jailer = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(prisoner, out int s) || table.Cold(s) is not { IsImprisoned: true } c) return false;
@@ -1898,7 +1900,7 @@ public sealed partial class FixtureRegistry
         if (releaserFaction >= 0 && releaserFaction != world.Player.Faction && c.SlaveState != 0)
             c.SlaveOwner = releaserFaction;
 
-        if (c.IsPlayer) world.Post(Loc.Tr("{1} has been released from prison.", c.Name));
+        if (jailer && c.IsPlayer && c.SlaveState == 0) world.Post(Loc.Tr("{1} has been released from prison.", c.Name));
         return true;
     }
 

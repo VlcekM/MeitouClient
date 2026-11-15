@@ -26,7 +26,7 @@ as recursive squads (**Verified** `FUN_140583a10`: after the recursive call ever
 type 4 through `FUN_1406215c0` (status `+0x25c`), whatever the slave template says, then its head is shaven, the owner set and `setChainedMode(true)` puts
 locked shackles on it; the squad's leader pointer is not touched), prisoners into available home cages. First member can become leader.
 **Prisoners** (`FUN_140583a10`, **Observed**): only with a home building; its cages (`BuildingFinder_CagesWithinBuilding`) are counted, then each `prisoners` entry makes a
-platoon of the entry's `faction` (else the owner's) whose members each go into a random remaining cage (`FUN_140330600`, lock set) with `Character+0x190 = 9999999`; with no cage left, one member is removed and placing stops. A housed trader that made prisoner or slave squads still stocks its home containers ([economy](economy.md#building-shops-observed-decompile)).
+platoon of the entry's `faction` (else the owner's) whose members each go into a random remaining cage (`FUN_140330600`, lock set) with a sentence length (`Character+0x190`) of 9999999 h, never served ([economy 11.5](economy.md#115-bail-and-sentence), **Verified**); with no cage left, that member is destroyed and placing stops, the squad's later members staying free (**Verified**, `FUN_140583a10`). A housed trader that made prisoner or slave squads still stocks its home containers ([economy](economy.md#building-shops-observed-decompile)).
 Offsets `(3*(i%8),3*floor(i/8)+(i%2))`, animals2 spacing5 (spawn places). Followers' slots by FACTION `squad formation`: [squads travelling together](pathfinding.md#squads-travelling-together); Meitou's: [simulation](../simulation.md#movement-and-paths). Animal age=max(0,r*R-0.1+v2/100) (**Verified** `FUN_140583a10` animals and animals2 loops: r uniform 0..1 per animal, R = the squad TEMPLATE's float `animal age random`, read once, not the animal record's, which has none; 888 of 961 base templates 0.1, the rest 0 to 0.5).
 Unique members go through one gate: [unique characters](#unique-characters).
 
@@ -304,6 +304,9 @@ included), else 0.025 (outside every town too).
 | dialogue | `FUN_140680560` | DA 4 slot 4, DA 5 slot 9, DA 13 slot 8, DA 14 slot 7, always the **speaker's** faction about the target's ([dialogue](dialogue.md#effects)) |
 
 - No other caller of slot 7 or 8 was found: wars start and end only by dialogue (`FactionWarMgr` campaigns do not call them).
+- A campaign changes how others treat its members only through its phase: attack on sight (16) skips a member of a campaign in phase 0, and the leave-alone test of 21
+  spares a non-hostile one ([ai-tasks](ai-tasks.md#combat-goals)); they are sensed like anyone. Diplomats (NPC class 5) are sensed NEUTRAL by enemies inside their faction's
+  `biomes` (by the player's side anywhere) and assaulting them there is code 9 ([perception](perception.md#sense-tags-who-is-an-enemy), [economy](economy.md)); **Verified** by disassembly of `FUN_140796240`.
 - Kind 8 is not a drift: nothing moves relations back over time.
 - Status `+0xac` (Character slot 61 `FUN_140598b90` returns it) is summed by the perception (`FUN_140854370`) as a threat value. Meitou rates every striker above both thresholds (kinds 1 and 3; engine choice).
 - `FUN_140673a20(self, other, tag)` (not a witness function) sets a long-term tag (`CharacterPerceptionTags_LongTerm`, read by DC 23) in

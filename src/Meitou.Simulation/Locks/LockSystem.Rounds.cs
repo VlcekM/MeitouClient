@@ -403,7 +403,7 @@ public sealed partial class LockSystem : IStateHashed
         {
             if (table.Next[s].Alive && Served(world, s) is { } cage && !holders.Contains(cage.Owner) && Crimes.Factions.Books(cage.Owner)
                     && !Busy(table.IdOf(s)))
-                world.Fixtures.Release(world, table.IdOf(s), cage.Owner, Crimes);   // nobody to do it: a booking jail's faction frees it (engine)
+                world.Fixtures.Release(world, table.IdOf(s), cage.Owner, Crimes, jailer: true);   // nobody to do it: the booking jail frees it (engine)
         }
     }
 
@@ -854,7 +854,7 @@ public sealed partial class LockSystem : IStateHashed
         if (fallback && r.Kind == RoundKind.Release && table.TryResolveNext(r.Prisoner, out int p) && table.Cold(p) is { IsImprisoned: true } pc
                 && pc.InWhat == r.Targets[0]
             && world.Fixtures.Find(r.Targets[0]) is { } cage && Crimes?.Factions.Books(cage.Owner) == true)
-            world.Fixtures.Release(world, r.Prisoner, cage.Owner, Crimes);
+            world.Fixtures.Release(world, r.Prisoner, cage.Owner, Crimes, jailer: true);
 
         if (done && r.Building is { } b)
         {

@@ -1017,9 +1017,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// A housed squad's <c>prisoners</c> (the squad factory <c>FUN_140583a10</c>, <b>Observed</b>; docs/simulation.md "Cages, beds and locks"): only
     /// with a home building, each entry a squad of its template's <c>faction</c> (else the owner squad's), each member imprisoned in a random free
-    /// cage of the home, its lock set. <b>Engine choices</b>: members beyond the free cages are not made (the original drops one and stops placing);
-    /// the prisoners are held without a sentence (<see cref="CharacterCold.Kidnapped"/>), so no release round frees them and no bail is offered (the
-    /// original's served test for them is <b>Unknown</b>).
+    /// cage of the home, its lock set, with a sentence of <see cref="SpawnSentence"/> hours (<b>Verified</b>: the factory writes the sentence length,
+    /// Character <c>+0x190</c>, which the served test <c>FUN_1405c9f00</c> reads), so it is never served and getting out is an escape.
+    /// <b>Engine choice</b>: members beyond the free cages are not made (the original destroys the first member left without a cage and leaves the
+    /// rest of that squad free).
     /// </summary>
     void MakePrisoners(World world, BuiltSquad owner, Squad squad, TownSite site, float radius, SiteState state)
     {
@@ -1044,10 +1045,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 int pick = Rng.Int(Rng.Hash(world.Seed, homeKey, RngPurpose.Spawn, SeedSalts.PrisonerCage + (ulong)picks++), cages.Count);
                 var cage = cages[pick];
                 cages.RemoveAt(pick);
-                if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.Kidnapped = true;
+                if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
             }
         }
     }
+
+    /// <summary>
+    /// The sentence length in game hours of a prisoner the squad factory cages (<c>FUN_140583a10</c> writes 9999999.0 to Character <c>+0x190</c>,
+    /// <b>Verified</b>); the start is left as it was. Shown as FOREVER.
+    /// </summary>
+    public const float SpawnSentence = 9999999f;
 
     /// <summary>
     /// A squad's <c>slaves</c> (the squad factory's recursive slave squads, role 4; docs/game/factions-squads-towns.md "Squad factory"): each planned
