@@ -282,20 +282,20 @@ sealed class BloodFootprints(GameHost host)
         for (; travel <= length; travel += StepLength)
         {
             var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Stride(store, trail, actor.Id, at, across, boot, look.BodyMesh, now);
+            if (HasFoot(actor, trail.Right)) Stride(store, trail, at, across, boot, look.BodyMesh, now);
             trail.Right = !trail.Right;
         }
         trail.Distance = length - travel + StepLength;
     }
 
     /// <summary>
-    /// A stride's footfall for a body with no pose: beside the path, or on the posed foot when it is down.
+    /// A stride's footfall for a body with no pose, beside the path. A drawn body is always within the trails' reach (240, more than
+    /// <see cref="Range"/>), so its steps come from <see cref="Footfall"/>.
     /// </summary>
-    void Stride(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
+    void Stride(TerrainDecalStore store, Trail trail, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
     {
         bool right = trail.Right;
         var point = Xz(at) + across * (right ? -1 : 1);
-        (point, across) = FootPlacement(actor, right, point, across);
         at.X = point.X;
         at.Z = point.Y;
         Deposit(store, trail, right, at, across, boot, body, now);
@@ -330,28 +330,6 @@ sealed class BloodFootprints(GameHost host)
         at.Y = host.Gpu.Terrain.HeightAt(point.X, point.Y);
         host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh);
         sole.Steps--;
-    }
-
-    /// <summary>
-    /// The current sole centre and heading from the last visible pose. While a foot is in the air or unposed, use the stride position.
-    /// </summary>
-    (Vector2 Point, Vector2 Across) FootPlacement(CharacterId actor, bool right, Vector2 point, Vector2 across)
-    {
-        if (host.Gpu.Characters is not { } characters) return (point, across);
-
-        long key = host.DrawKey(actor);
-        var foot = characters.BonePosition(key, right ? "Bip01 R Foot" : "Bip01 L Foot");
-        var toe = characters.BonePosition(key, right ? "Bip01 R Toe0" : "Bip01 L Toe0");
-        if (foot is not { } heel || toe is not { } tip) return (point, across);
-
-        var centre = Xz(Vector3.Lerp(heel, tip, .46f));
-        var forward = Xz(tip - heel);
-        float floor = host.Gpu.Terrain.HeightAt(centre.X, centre.Y);
-        bool grounded = Vector2.DistanceSquared(centre, point) <= 6.25f && forward.LengthSquared() >= .09f && MathF.Abs(tip.Y - floor) <= 1.15f;
-        if (!grounded) return (point, across);
-
-        forward = Vector2.Normalize(forward);
-        return (centre, new Vector2(forward.Y, -forward.X));
     }
 
     /// <summary>
