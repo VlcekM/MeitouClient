@@ -1919,8 +1919,9 @@ node, else a guard post, else any node; a home or seat given up
 after three failed walks is tried again when a new goal is taken up, and a member that gave its seat up
 leaves it to the next; a member keeps its seat while it still relaxes or sits (every squad's kept seats are reserved before any claims), so a
 patron coming or going does not move every later sitter to another chair. Headless Hub, Squin and Stack bars (2026-10-21): each patron sits once
-and stays for 12000 ticks, with or without that rule (the reported sit/stand churn is not reproduced). **Observed** (headless Hub, 2026-10-26): the
-Storm House's 5 tables go to `hub squatters` squads (package signal 17, STAY_IN_HOME only), so the visiting bar squads get none and shop at the counter.
+and stays for 12000 ticks, with or without that rule (the reported sit/stand churn is not reproduced). `hub squatters` squads (package `Squatters`,
+signal 17, goals Stay home and Patrol hometown, no Relaxing) reserve Storm House tables as any bar package does (**Observed**, headless Hub, 2026-10-26: visiting bar
+squads found none free), but never sit there: staying home takes the furniture of the squad's own home, not the package's bar ([ai-tasks](game/ai-tasks.md), 43).
 
 Turret goals (149, 222, 234, 146) man a turret of the squad's town: a placed BUILDING with a
 `BUILDING_FUNCTIONALITY` function 12 (`TownBuilding.Turret`: its `use range` and `gun turret`

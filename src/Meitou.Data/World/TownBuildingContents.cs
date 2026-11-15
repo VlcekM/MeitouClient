@@ -214,7 +214,7 @@ sealed class TownBuildingContents
     /// <c>animation</c> and <c>hunger rate</c>), BF_TRAINING is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of
     /// function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
     /// </summary>
-    static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
+    internal static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {
         var kind = function.GetInt("function") switch
         {

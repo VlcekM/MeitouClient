@@ -640,7 +640,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0)
             // returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1. Staying home needs
             // a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
-            AiBehaviour.Post when type == TaskType.StayInHome => TownPlaceClaims.HasStayingFurniture(board.Home) ? 1 : 0,
+            AiBehaviour.Post when type == TaskType.StayInHome => TownPlaceClaims.HasStayingFurniture(world, board.OwnHome) ? 1 : 0,
             AiBehaviour.Post when type is TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly =>
                 GuardFactor(world, self, board, mind),
             // A turret is only wanted by a member that found one (the nearest unused one to it in <see cref="TownPlaceClaims.ClaimTurrets"/>):
@@ -1870,7 +1870,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return (Flat(post.Position), true, post.Position.Y, post.Yaw);
 
         if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null);
-        if (board.Home is not { } home || mind.HomeUnreachable || type is TaskType.HoldPosition or TaskType.ManTheGate)
+
+        // Staying home is in the squad's own home, whatever building a bar package made its home (FUN_1408cbc00 lists the home building's furniture).
+        var at = type == TaskType.StayInHome ? board.OwnHome : board.Home;
+        if (at is not { } home || mind.HomeUnreachable || type is TaskType.HoldPosition or TaskType.ManTheGate)
             return (mind.Post, false, null, null);
 
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch

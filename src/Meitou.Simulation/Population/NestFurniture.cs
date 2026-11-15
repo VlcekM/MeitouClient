@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 
 namespace Meitou.Simulation.Population;
@@ -93,7 +94,8 @@ public static partial class NestFurniture
         float nestY = walk.GroundHeight(at.X, at.Y);
         for (int c = 0; c < nest.NumCentrepoints; c++)
         {
-            var centre = Spaced(at + Direction(ref rolls) * Between(ref rolls, 0, nest.SizeRadius), centres, CentreSpacing, CentrePush);
+            var centre = Snapped(walk, at + Direction(ref rolls) * Between(ref rolls, 0, nest.SizeRadius));
+            centre = Spaced(centre, centres, CentreSpacing, CentrePush);
             centres.Add(centre);
             float centreY = walk.GroundHeight(centre.X, centre.Y, nestY);
             foreach (var entry in nest.DebrisBuilding)
@@ -133,6 +135,12 @@ public static partial class NestFurniture
             pieces.Add(new NestPiece($"{idPrefix}{pieces.Count}", record.StringId, position, Stand(walk, position, yaw, maxSlope)));
         }
     }
+
+    /// <summary>
+    /// A centre snapped to the navmesh (<c>FUN_140927600</c>): the closest walkable point within <see cref="NavReach"/> (engine choice: the reach of
+    /// the original's snap is Unknown), else the point as it is.
+    /// </summary>
+    static Vector2 Snapped(IWalkability walk, Vector2 p) => WalkableSpots.Closest(walk, p, NavReach, out var spot) ? spot : p;
 
     /// <summary>
     /// The original's count: v0 0 is one piece on a coin flip, 1 is one, more is v0 plus an int in [-v0/2, v0/2].
@@ -215,9 +223,10 @@ public static partial class NestFurniture
 public sealed class NestBuildings
 {
     /// <summary>
-    /// A camp standing: its layout, owner faction, centre and the TOWN record it was stood up from.
+    /// A camp standing: its layout, owner faction, centre, the TOWN record it was stood up from, and the furniture its pieces give the homes they
+    /// stand round (by home building key).
     /// </summary>
-    sealed record Camp(NestLayout Layout, int Owner, Vector2 Centre, string Record);
+    sealed record Camp(NestLayout Layout, int Owner, Vector2 Centre, string Record, IReadOnlyDictionary<string, List<HomeSpot>> Furniture);
 
     /// <summary>
     /// The camps standing, by camp key.
@@ -227,6 +236,10 @@ public sealed class NestBuildings
     /// The camps that laid their items (see <see cref="Stock"/>).
     /// </summary>
     readonly HashSet<int> _stocked = [];
+    /// <summary>
+    /// The furniture the standing camps' pieces give homes, by home building key (see <see cref="FurnitureOf"/>).
+    /// </summary>
+    readonly Dictionary<string, List<HomeSpot>> _furniture = new(StringComparer.Ordinal);
     /// <summary>
     /// The cache of <see cref="Published"/> (null: made again on the next call).
     /// </summary>
@@ -262,11 +275,21 @@ public sealed class NestBuildings
     public IEnumerable<(int Site, Vector2 Centre)> Standing => _camps.Where(kv => kv.Key >= 0).Select(kv => (kv.Key, kv.Value.Centre));
 
     /// <summary>
-    /// Stands up a camp's layout for its owner at its centre, replacing what it stood before.
+    /// The pieces of furniture the standing camps stood round home <paramref name="homeKey"/> (a town's residents' nest, docs/formats/zones.md "Nest
+    /// debris and loot"): what staying home takes besides the home's own interior; none when nothing stands there.
     /// </summary>
-    public void Set(int camp, NestLayout layout, int owner, Vector2 centre, string record)
+    public IReadOnlyList<HomeSpot> FurnitureOf(string homeKey) => _furniture.TryGetValue(homeKey, out var spots) ? spots : [];
+
+    /// <summary>
+    /// Stands up a camp's layout for its owner at its centre, replacing what it stood before; <paramref name="furniture"/> is what its pieces give
+    /// the homes they stand round (by home building key).
+    /// </summary>
+    public void Set(int camp, NestLayout layout, int owner, Vector2 centre, string record,
+        IReadOnlyDictionary<string, List<HomeSpot>>? furniture = null)
     {
-        _camps[camp] = new Camp(layout, owner, centre, record);
+        Remove(camp);
+        _camps[camp] = new Camp(layout, owner, centre, record, furniture ?? new Dictionary<string, List<HomeSpot>>());
+        foreach (var (home, spots) in _camps[camp].Furniture) _furniture[home] = spots;
         Changed();
     }
 
@@ -275,8 +298,9 @@ public sealed class NestBuildings
     /// </summary>
     public bool Remove(int camp)
     {
-        if (!_camps.Remove(camp)) return false;
+        if (!_camps.Remove(camp, out var gone)) return false;
 
+        foreach (string home in gone.Furniture.Keys) _furniture.Remove(home);
         Changed();
         return true;
     }

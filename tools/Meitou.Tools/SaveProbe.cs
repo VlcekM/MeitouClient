@@ -475,8 +475,16 @@ static class SaveProbe
         return $"sq {squad.Id} '{squad.Name}' {probe.Faction(squad.Faction)} platoon={squad.PlatoonId} leader={(CharacterTask)t.Next[lead].Task} "
             + $"engine={c.Ai?.Engine} behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
             + $"target={Target(probe, lead)} package={squad.Ai?.Current?.Name} "
-            + $"home={squad.HomeCentre:F0}/{squad.HomeRadius:F0} pos={at:F0} [{string.Join(" ", members)}]";
+            + $"home={squad.HomeCentre:F0}/{squad.HomeRadius:F0} building={HomeName(probe, squad.Ai?.OwnHome ?? squad.HomeBuilding)} "
+            + $"ai-home={HomeName(probe, squad.Ai?.Home)} table={squad.Ai?.BarTable} pinned={squad.Pinned} pos={at:F0} "
+            + $"[{string.Join(" ", members)}]";
     }
+
+    /// <summary>
+    /// A squad's building as name and key, with the furniture its residents' nest stood round it ("+n"), "-" for none.
+    /// </summary>
+    static string HomeName(ProbeWorld probe, TownBuilding? home) =>
+        home is null ? "-" : $"'{home.Name}'({home.Key})+{probe.World.NestBuildings.FurnitureOf(home.Key).Count}";
 
     /// <summary>
     /// "/dead" or "/ko" for a character down, else empty.

@@ -228,16 +228,18 @@ TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` fro
 - A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
   Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
   match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). How the exe reaches the field is **Unknown**: the string "nest" does
-  not appear in the decompile. Whether such a nest's `debris building` and meshes are stood up is **Unknown**. Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
+  not appear in the decompile. Its `debris building` and `debris` meshes stand round each home too (**Observed**, 1.0.65 through KenshiHarness, a Wanderer save at The
+  Hub, 2026-11-15: the four `hub squatters` ruins, Bughouse, Old Storm House, Stationhouse and Snailhouse, hold `nest housecamp`'s campfire, stools, camp beds and trash
+  after a load, and their squatters stand at the campfire or stools for three game hours in three runs). Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
   the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
   - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, on its floor or the ground
     beside it; none round the town's centre unless a home stands there. One roll per home is Meitou's reading (the totals fit: 7 Hub homes x 0..7). The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
     1630 from the centre; The Old Prison's 16 within 349 of the Broken Watchtower (`nest armoury ruin`, 350). Measured against Meitou's boot housing; 5 items of 403 lie further.
 Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
-items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town lays its residents' nests' items once when first made, round
-each home whose template names the nest and whose zone the save has no file of, as its own camp's (`PopulationSystem.ResidentNestDrops`); a resident template no building of
-the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's round the centre (**engine choice**, the original's place **Unknown**).
-Their buildings and meshes are not stood up.
+items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town stands its residents' nests round each home whose template
+names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
+no file of. The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
+the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre (**engine choice**, the original's place **Unknown**).
 
 ## Open questions
 

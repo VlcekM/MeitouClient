@@ -865,7 +865,12 @@ public sealed partial class PopulationSystem
         bool found = b.Squads.Count > 0 || site.SaveInstance is not null || b.Layout is not null;
         if (site.Kind == WildKind.Nest && found) _wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
-        if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
+        if (b.Layout is { IsEmpty: false } layout)
+        {
+            bool fresh = !world.SavedZones.Contains(WorldLayout.ZoneOf(b.Centre.X, b.Centre.Y));
+            StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1, fresh);
+        }
+
         return true;
     }
 

@@ -1198,8 +1198,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,
   CRAFTING, CHAIR; reading the mask as bits is **Observed**). Both it and 275 lead to 221 (pretend operating).
   **Verified** (decompile 2026-11-03): with no target set the finder lists the home interior's buildings that pass the mask (`FUN_1408cbad0`), returns the factor 0 (goal not wanted) when none
-  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0. Meitou: `HomeSpotKind.Chair` (spots), `Training` and `Workstation`
-  (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`) are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
+  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0.
+  The home is the squad's own building, also under a bar package (**Observed**, 1.0.65, three runs of one Hub save, 10:20 to 13:20: the `hub squatters`, package
+  `Squatters` of signal 17, stay at their ruins' campfires and stools, within 120 of where they started), and the furniture its residents' nest stood round it counts
+  ([zones](../formats/zones.md#nest-debris-and-loot); a ruin has no interior of its own). Meitou: `HomeSpotKind.Chair` (spots), `Training` and `Workstation`
+  (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`), then the nest's pieces (`NestBuildings.FurnitureOf`), of `Blackboard.OwnHome`
+  are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
   piece at random (`FreeFurniture`; distinct pieces per member is the engine's claim, **Observed**), sit on a chair, stand at a dummy, or stand at a workstation facing it at the machine's work clip and
   hunger rate (`PretendOperate`: 221's look; no machine runs).
 - **275 Sitting around** (`FUN_1408caf00`; the registration's finder thunk `LAB_1400061db` is not in the RE files, so the row link is **Observed**; the rest **Verified** by decompile):

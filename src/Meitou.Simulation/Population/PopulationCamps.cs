@@ -15,15 +15,16 @@ public sealed partial class PopulationSystem
 {
     /// <summary>
     /// A camp's buildings and meshes go up (the old ones of the camp come down first), their cages and locks registered as its faction's, and its
-    /// items laid when due.
+    /// items laid when due: <paramref name="fresh"/> (laid only in a zone the save has no file of) and the camp's first time.
+    /// <paramref name="furniture"/> is what its pieces give the homes they stand round.
     /// </summary>
-    void StandCamp(World world, int camp, NestLayout layout, int owner, Vector2 centre, string record, int site)
+    void StandCamp(World world, int camp, NestLayout layout, int owner, Vector2 centre, string record, int site, bool fresh,
+        IReadOnlyDictionary<string, List<HomeSpot>>? furniture = null)
     {
         FoldCamp(world, camp);
-        world.NestBuildings.Set(camp, layout, owner, centre, record);
+        world.NestBuildings.Set(camp, layout, owner, centre, record, furniture);
         foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, _data, piece, owner, site);
-        if (layout.Drops.Count > 0 && !world.SavedZones.Contains(WorldLayout.ZoneOf(centre.X, centre.Y)) && world.NestBuildings.Stock(camp))
-            LayItems(world, camp, layout.Drops, owner, centre);
+        if (layout.Drops.Count > 0 && fresh && world.NestBuildings.Stock(camp)) LayItems(world, camp, layout.Drops, owner, centre);
     }
 
     /// <summary>
@@ -37,63 +38,82 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town with <c>spawn in town centre</c> scatters at its own position when made (<c>Town::setup</c> queues it), again only when its TOWN record
-    /// changed since. Any town also lays the items of its residents' nests (<see cref="ResidentNestDrops"/>) once, in a fresh zone.
+    /// A town's camp, stood up when the town is made and again only when its TOWN record changed since: a town with <c>spawn in town centre</c>
+    /// scatters at its own position (<c>Town::setup</c> queues it), and every town stands its residents' nests round their homes
+    /// (<see cref="ResidentNests"/>). The items go down once, in fresh zones only.
     /// </summary>
     void StandTownCamp(World world, TownSite site)
     {
         var town = site.Town;
         int camp = NestBuildings.TownCamp(site.Index);
-        var at = new Vector2(site.Position.X, site.Position.Z);
-        int owner = site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
-        if (!town.SpawnInTownCentre)
-        {
-            LayResidentNests(world, site, camp, owner, at);
-            return;
-        }
-
         if (world.NestBuildings.RecordOf(camp) == town.Id) return;
 
-        var layout = NestFurniture.Scatter(_data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:");
-        layout.Drops.AddRange(ResidentNestDrops(world, site));
-        StandCamp(world, camp, layout, owner, at, town.Id, site.Index);
+        var at = new Vector2(site.Position.X, site.Position.Z);
+        int owner = site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
+        var layout = town.SpawnInTownCentre
+            ? NestFurniture.Scatter(_data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:")
+            : new NestLayout([], [], []);
+        if (world.SavedZones.Contains(WorldLayout.ZoneOf(at.X, at.Y))) layout.Drops.Clear();
+
+        var furniture = ResidentNests(world, site, layout);
+        if (!layout.IsEmpty) StandCamp(world, camp, layout, owner, at, town.Id, site.Index, fresh: true, furniture);
     }
 
     /// <summary>
-    /// The residents' nest items of a town that stands no camp of its own, as the town's camp's items (kept past the dropped-item limit, saved with
-    /// the town's handle).
+    /// The TOWN each home's resident template names as its <c>nest</c>, scattered round that home, building by building, into the town's camp
+    /// <paramref name="layout"/> (docs/formats/zones.md "Nest debris and loot"): its buildings and meshes every time (<b>Observed</b>: the Hub
+    /// squatters' ruins hold a campfire, stools and a camp bed in the original after a load), its items (<c>loot spawn</c>, <c>debris</c> with
+    /// physics) only round a home in a zone the save has no file of (<b>Observed</b> in original saves: within the nest's <c>size radius</c> of a
+    /// home of the template, not round the town's centre). Returns the furniture the pieces give each home (staying home takes it).
     /// </summary>
-    void LayResidentNests(World world, TownSite site, int camp, int owner, Vector2 at)
+    Dictionary<string, List<HomeSpot>> ResidentNests(World world, TownSite site, NestLayout layout)
     {
-        var drops = ResidentNestDrops(world, site);
-        if (drops.Count > 0 && world.NestBuildings.Stock(camp)) LayItems(world, camp, drops, owner, at);
-    }
-
-    /// <summary>
-    /// The items (<c>loot spawn</c>, and <c>debris</c> with physics) of the TOWN each home's resident template names as its <c>nest</c>, rolled
-    /// round that home, building by building (docs/formats/zones.md "Nest debris and loot": <b>Observed</b> in original saves, whose items lie
-    /// within the nest's <c>size radius</c> of a home of the template and not round the town's centre; ruins such as the Old Empire Watchtowers'
-    /// have no lists of their own). A home in a zone the save has a file of lays nothing. The nest's buildings and meshes are not stood up
-    /// (<b>Unknown</b> whether the original does).
-    /// </summary>
-    List<NestDrop> ResidentNestDrops(World world, TownSite site)
-    {
-        var drops = new List<NestDrop>();
+        var furniture = new Dictionary<string, List<HomeSpot>>(StringComparer.Ordinal);
         var housed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var home in site.Buildings)
         {
             string templateId = world.Fixtures.ResidentsTemplate(home);
             housed.Add(templateId);
             housed.Add(home.ResidentsTemplate);
-            if (world.SavedZones.Contains(home.Zone) || _data.Db.Find(templateId) is not { } template) continue;
+            if (_data.Db.Find(templateId) is not { } template) continue;
 
             var at = new Vector2(home.Position.X, home.Position.Z);
+            bool fresh = !world.SavedZones.Contains(home.Zone);
             foreach (var link in template.GetReferences("nest"))
-                drops.AddRange(NestDropsAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:"));
+            {
+                var nest = NestAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:");
+                if (nest is not null) Merge(layout, nest, fresh, HomeFurniture(furniture, home.Key));
+            }
         }
 
-        drops.AddRange(HomelessNestDrops(world, site, housed));
-        return drops;
+        layout.Drops.AddRange(HomelessNestDrops(world, site, housed));
+        return furniture;
+    }
+
+    /// <summary>
+    /// The furniture list of home <paramref name="key"/> in <paramref name="furniture"/>, made when it has none yet.
+    /// </summary>
+    static List<HomeSpot> HomeFurniture(Dictionary<string, List<HomeSpot>> furniture, string key)
+    {
+        if (!furniture.TryGetValue(key, out var spots)) furniture[key] = spots = [];
+        return spots;
+    }
+
+    /// <summary>
+    /// Adds a home's nest scatter to the town's camp: its pieces and meshes, its items when <paramref name="fresh"/>, and each piece that is a seat
+    /// or a workstation to the home's <paramref name="furniture"/>.
+    /// </summary>
+    void Merge(NestLayout layout, NestLayout nest, bool fresh, List<HomeSpot> furniture)
+    {
+        layout.Pieces.AddRange(nest.Pieces);
+        layout.Meshes.AddRange(nest.Meshes);
+        if (fresh) layout.Drops.AddRange(nest.Drops);
+
+        foreach (var piece in nest.Pieces)
+        {
+            if (_data.Db.Find(piece.Record) is not { } record) continue;
+            if (TownBuildings.FurnitureSpot(_data.Db, record, piece.Position, TownBuildings.YawOf(piece.Rotation)) is { } spot) furniture.Add(spot);
+        }
     }
 
     /// <summary>
@@ -113,20 +133,20 @@ public sealed partial class PopulationSystem
             .SelectMany(t => t.GetReferences("nest"))
             .Select(n => n.TargetStringId)
             .Distinct(StringComparer.Ordinal);
-        foreach (string id in nests) drops.AddRange(NestDropsAt(world, at, id, $"town{site.Index}:{id}:"));
+        foreach (string id in nests) drops.AddRange(NestAt(world, at, id, $"town{site.Index}:{id}:")?.Drops ?? []);
 
         return drops;
     }
 
     /// <summary>
-    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>; none when it is no TOWN.
+    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>; null when it is no TOWN.
     /// </summary>
-    List<NestDrop> NestDropsAt(World world, Vector2 at, string nestId, string idPrefix)
+    NestLayout? NestAt(World world, Vector2 at, string nestId, string idPrefix)
     {
-        if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) return [];
+        if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) return null;
 
         ulong seed = world.Seed ^ Rng.StableHash(nestId);
-        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix).Drops;
+        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix);
     }
 
     /// <summary>
