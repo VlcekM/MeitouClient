@@ -349,6 +349,11 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
   Meitou (`RagdollBody.BoneInBody`): the bone sits at its actor's origin, so a parentless bone is drawn there and the other bones keep the skeleton's offsets; a pinned or new
   body puts its actor on the animated bone (engine choice for the pinned case: the same convention both ways, so no jump on entering a ragdoll). Where the file and skeleton
   differ (whale2: Bip01 actor 24 from the bone) the shapes keep their offsets from the actor, not from the skeleton's bone.
+- No `Bip01` actor (`hu_m_ragdoll.phs`, the Cannibal and Fishman races' ragdoll; most races use `hu_m_ragdoll_5.phs`, which has one. **Observed** with
+  `spawn-at ... "Cannibal" --dead`, `spawn-at ... --dead --race Fishman` and `ragdoll-dump`: bodies from `Bip01 L Thigh`, including `Bip01 Spine`, none on
+  `Bip01`): with the root bone unset, the drawn body hung at its animated standing offsets above its bodies on the
+  floor. Meitou (`RagdollSystem.PlaceRootWithoutBody`, engine choice): sets `Bip01` from the simulated spine or pelvis bone nearest it,
+  through their binding-pose offset, so the unsimulated pelvis lies with the trunk. A ragdoll with no trunk body (carried, a collapsed limb) keeps the animated root.
 - Carried animal: the carry-bone body is moved kinematically to the carrier's attach bone.
 - Partial (non-WHOLE) ragdolls are woken every frame (wake 20) and never freeze.
 - Water (only when byte `+0x79` of the character's race data is set): when the root is at or below

@@ -1560,7 +1560,72 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             pose.Position[h] = Vector3.Transform(bone.Position, toModel);
         }
 
+        PlaceRootWithoutBody(r.Setup.Rig, pose);
         return pose;
+    }
+
+    /// <summary>
+    /// A ragdoll file with no actor on <c>Bip01</c> (the Cannibals') leaves the skeleton root at the node with its animated offsets, so the
+    /// drawn body hangs above its bodies on the ground (docs/game/ragdolls.md "Per frame"). Sets the root from the simulated trunk bone nearest
+    /// it, through their offset in the binding pose. A root with a body keeps it, and so does a ragdoll with no trunk body (carried, a limb).
+    /// </summary>
+    static void PlaceRootWithoutBody(SkeletonRig rig, BonePose pose)
+    {
+        if (rig.Handle("Bip01") is not int root || pose.Set[root]) return;
+        if (NearestTrunkBone(rig, pose, root) is not int anchor) return;
+
+        var rootBind = Quaternion.Inverse(rig.BindRotationInverse[root]);
+        var anchorBind = Quaternion.Inverse(rig.BindRotationInverse[anchor]);
+        var relative = Quaternion.Normalize(Quaternion.Inverse(rootBind) * anchorBind);
+        var offset = Vector3.Transform(rig.BindPosition[anchor] - rig.BindPosition[root], Quaternion.Inverse(rootBind));
+        var rotation = Quaternion.Normalize(pose.Rotation[anchor] * Quaternion.Inverse(relative));
+        var position = pose.Position[anchor] - Vector3.Transform(offset, rotation);
+
+        if (!float.IsFinite(position.X + position.Y + position.Z) || !float.IsFinite(rotation.W)) return;
+
+        pose.Set[root] = true;
+        pose.Rotation[root] = rotation;
+        pose.Position[root] = position;
+    }
+
+    /// <summary>
+    /// The set spine or pelvis bone with the fewest links to <paramref name="root"/>; null when none descends from it (a carried or limb ragdoll
+    /// simulates no trunk bone, and its root stays animated).
+    /// </summary>
+    static int? NearestTrunkBone(SkeletonRig rig, BonePose pose, int root)
+    {
+        int? anchor = null;
+        int best = int.MaxValue;
+        for (int h = 0; h < pose.Set.Length; h++)
+        {
+            if (!pose.Set[h] || !IsTrunk(rig.ByHandle[h]?.Name)) continue;
+            if (LinksTo(rig, h, root) is not int depth || depth >= best) continue;
+
+            best = depth;
+            anchor = h;
+        }
+
+        return anchor;
+    }
+
+    /// <summary>
+    /// Whether a bone name is a spine or pelvis bone.
+    /// </summary>
+    static bool IsTrunk(string? name) =>
+        name is not null && (name.Contains("Spine", StringComparison.Ordinal) || name.Contains("Pelvis", StringComparison.Ordinal));
+
+    /// <summary>
+    /// How many parent links lead from <paramref name="bone"/> up to <paramref name="root"/>; null when it is not under it.
+    /// </summary>
+    static int? LinksTo(SkeletonRig rig, int bone, int root)
+    {
+        int depth = 0;
+        for (int at = bone; at >= 0 && depth <= rig.BoneCount; at = rig.Parent[at], depth++)
+        {
+            if (at == root) return depth;
+        }
+
+        return null;
     }
 
     #endregion
