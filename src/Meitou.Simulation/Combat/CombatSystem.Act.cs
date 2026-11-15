@@ -379,6 +379,7 @@ public sealed partial class CombatSystem
         ulong key = Rng.Key(world.Characters.IdOf(i));
 
         if (Helpless(world, i, ref s, cold, key, now, dt)) return;
+        if (SwimStopped(world, i, ref s, cold)) return;
 
         bool fighting = ReviewTarget(world, i, ref s, cold, now);
 
@@ -439,6 +440,42 @@ public sealed partial class CombatSystem
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The melee rows' swim tests (docs/game/ai-tasks.md "Melee row gates", <b>Verified</b>): rows 4, 5 and 61 need their target out of deep water
+    /// (state 140), row 4, a fight that is not the player's pick, also the fighter itself unless it is held in a bed or cage (state 139); an
+    /// animal's row 227 has neither. A <paramref name="target"/> that is none (gone) passes (state 140 is false for a hand that resolves to nothing).
+    /// </summary>
+    internal static bool SwimBarred(CharacterCold me, CharacterCold? target, bool focused)
+    {
+        if (me.Fighter?.IsAnimal == true) return false;
+        if (target is { WaterState: 3 }) return true;
+
+        return !focused && me is { WaterState: 3, InSomething: Simulation.Locks.HeldState.None };
+    }
+
+    /// <summary>
+    /// The plan step ends a fight whose row can no longer run (<c>FUN_14050d970</c> over <c>FUN_14060f940</c>; rows 4, 5 and 61 leave the hours
+    /// flag +0x16 clear), reading list B against the task's own target: <see cref="SwimBarred"/> with <see cref="CombatSlot.TaskSlot"/>. True when
+    /// it ended the fight.
+    /// </summary>
+    bool SwimStopped(World world, int i, ref CombatSlot s, CharacterCold cold)
+    {
+        var table = world.Characters;
+        if (!cold.InCombat) return false;
+
+        var target = s.TaskSlot >= 0 && table.TryResolveNext(new CharacterId(s.TaskSlot, s.TaskGeneration), out int t) ? table.Cold(t) : null;
+        if (!SwimBarred(cold, target, s.Picked)) return false;
+
+        s.AttackTech = -1;
+        s.NextBlow = 0;
+        s.ReactTech = -1;
+        s.TargetSlot = -1;
+        s.Engaged = false;
+        s.Picked = false;
+        EndFight(table, i, ref s);
+        return true;
     }
 
     /// <summary>

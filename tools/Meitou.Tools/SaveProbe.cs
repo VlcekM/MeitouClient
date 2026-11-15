@@ -118,7 +118,7 @@ static class SaveProbe
 
     /// <summary>
     /// Every character within <paramref name="radius"/> of the player's squad leader every <paramref name="interval"/> ticks,
-    /// <paramref name="rounds"/> times: whether it is down, its goal, what it carries and whom it fights.
+    /// <paramref name="rounds"/> times: whether it is down, its water state, its goal, what it carries and whom it fights.
     /// </summary>
     static void Crowd(ProbeWorld probe, float radius, int rounds, int interval)
     {
@@ -128,8 +128,8 @@ static class SaveProbe
             foreach (int i in probe.Near(probe.LeaderPosition, radius))
             {
                 var c = probe.Characters.Cold(i)!;
-                Console.WriteLine($"  {probe.Who(i)}{Down(c)} in={c.InSomething} carrying={c.Carrying} lifting={c.CarryTarget} behaviour={c.Ai?.Behaviour} "
-                    + $"goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} target={Target(probe, i)}");
+                Console.WriteLine($"  {probe.Who(i)}{Down(c)} in={c.InSomething} water={c.WaterState} carrying={c.Carrying} lifting={c.CarryTarget} "
+                    + $"behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} target={Target(probe, i)}");
             }
 
             probe.PrintMessages();
@@ -1280,7 +1280,7 @@ static class SaveProbe
         Console.Error.WriteLine("""
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
-              crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
+              crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, water state, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
               crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags
               nests                    the wild layout's nests whose first candidate spot the original would refuse

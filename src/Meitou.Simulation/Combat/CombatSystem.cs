@@ -436,6 +436,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // would otherwise stand at the nearest spot for ever.
         if (!order.Picked && PursuitSystem.PathImpossible(cold, target, now)) return false;
 
+        // No melee row runs on a target in deep water, nor row 4 for a fighter in it (SwimBarred).
+        if (SwimBarred(cold, tc, order.Picked)) return false;
+
         var (row, source) = order.Picked
             ? (order.Unprovoked ? TaskType.UnprovokedFocusedMeleeAttack : TaskType.FocusedMeleeAttack, TaskSource.Order)
             : order.Defensive
@@ -486,7 +489,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     /// <summary>
     /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a
-    /// fighter, awake, not carried (<see cref="Engage"/>).
+    /// fighter, awake, not carried (<see cref="Engage"/>), and a target out of deep water (row 5's list B, <see cref="SwimBarred"/>; the order
+    /// waits in the queue).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -495,7 +499,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             return OrderCheck.Gone;
 
         var cold = table.Cold(slot)!;
-        bool able = cold is { Fighter: not null, Stats: not null, Race: not null, Medical.Incapacitated: false } && cold.CarriedBy.IsNone;
+        bool able = cold is { Fighter: not null, Stats: not null, Race: not null, Medical.Incapacitated: false } && cold.CarriedBy.IsNone
+            && !SwimBarred(cold, table.Cold(t), focused: true);
 
         return able ? OrderCheck.Run : OrderCheck.Blocked();
     }
