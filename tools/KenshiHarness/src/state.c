@@ -302,3 +302,35 @@ int cmd_state(Command* c)
     text_add(out, "}");
     return 1;
 }
+
+// containers [radius] [--all]: every building within `radius` (default 300) of the camera's centre that has an inventory,
+// with its position and items (name x quantity); --all also lists the empty ones.
+int cmd_containers(Command* c)
+{
+    const Lektor* squad = game_squad();
+    if (!squad || squad->count == 0) return fail(c, "not in a game");
+
+    float radius = (float)atof(arg(c, 0, "300"));
+    int all = option(c, "--all");
+    const Lektor* nearby = game_buildings_near(game_camera_centre(), radius, 4096);
+    char name[128];
+
+    for (uint32_t i = 0; nearby && i < nearby->count; i++)
+    {
+        void* building = nearby->items[i];
+        const Lektor* items = object_items(building);
+        if (!items || (items->count == 0 && !all)) continue;
+
+        V3 at = character_position(building);
+        character_name(building, name, sizeof name);
+        text_add(&c->reply, "%s at %.0f, %.0f, %.0f: %u item(s)\n", name, at.x, at.y, at.z, items->count);
+
+        for (uint32_t k = 0; k < items->count; k++)
+        {
+            character_name(items->items[k], name, sizeof name);
+            text_add(&c->reply, "  %s x%d\n", name, item_quantity(items->items[k]));
+        }
+    }
+
+    return 1;
+}

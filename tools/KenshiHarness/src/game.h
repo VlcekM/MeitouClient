@@ -17,6 +17,8 @@ const Lektor* game_squad(void);
 // The characters within `radius` of `centre`, at most `limit`; the list is the harness's own and is reused by the next call.
 const Lektor* game_characters_near(V3 centre, float radius, int limit);
 
+// The buildings (furniture included) within `radius` of `centre`, at most `limit`; reused by the next call.
+const Lektor* game_buildings_near(V3 centre, float radius, int limit);
 // The character of that name (case ignored): the player's first, then anyone within `radius` of the camera's centre.
 void* game_find_character(const char* name, float radius);
 
@@ -45,3 +47,10 @@ char* character_medical(void* character);
 
 // A GameData record's name.
 void record_name(const void* record, char* out, size_t size);
+
+// ---- An object's inventory ----------------------------------------------------------------------------------------------
+
+// The items of an object's inventory (RootObject::getInventory, Inventory::_allItems), or null when it has none.
+const Lektor* object_items(void* object);
+// An item's stack size.
+int item_quantity(void* item);
