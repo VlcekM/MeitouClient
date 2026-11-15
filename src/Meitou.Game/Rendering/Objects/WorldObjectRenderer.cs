@@ -1222,6 +1222,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 .OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source,
                         StringComparison.Ordinal) ? 1 : 0))
                 .FirstOrDefault();
+            m = GlassBottles.Apply(m, placed.MeshPath, _assets);
             bool border = m?.BorderAddressing ?? false;
 
             // A map nothing can read is not loaded (<see cref="Material"/> never reads it): the normal map only with tangents, for an ALPHA
@@ -2562,8 +2563,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         uint diffuse2 = textured ? pm.Diffuse2 : 0;
         var alpha = m?.Alpha ?? AlphaSource.None;
 
-        // A see-through item: its opacity map is in the second diffuse slot (MakeMaterials); drawn solid until that map is resident.
-        bool seeThrough = alpha == AlphaSource.Opacity && textured && diffuse2 != 0;
+        // A see-through item: its opacity map is in the second diffuse slot (MakeMaterials); drawn solid until that map is resident, and a glass
+        // bottle's own (GlassBottles) with the glass switch off.
+        bool seeThrough = alpha == AlphaSource.Opacity && textured && diffuse2 != 0 && (GlassBottles.Enabled || m?.BuiltInGlass != true);
         bool dual = textured && diffuse2 != 0 && gp.HasColours && alpha != AlphaSource.Opacity;
         d.Diffuse = textured ? diffuse : 0;
         d.Normal = normalId;

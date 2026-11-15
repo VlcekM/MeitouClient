@@ -78,6 +78,11 @@ public sealed record SurfaceMaterial
     public string? Opacity { get; init; }
 
     /// <summary>
+    /// <see cref="Opacity"/> is Meitou's own map of a glass bottle (<see cref="GlassBottles"/>): drawn solid with the <c>glass</c> switch off.
+    /// </summary>
+    public bool BuiltInGlass { get; init; }
+
+    /// <summary>
     /// Where the surface's alpha comes from (<see cref="AlphaSource.None"/>: opaque).
     /// </summary>
     public AlphaSource Alpha { get; init; }

@@ -477,6 +477,10 @@ public static class Enhancements
             "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly "
                 + "yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; "
                 + "torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"),
+        new("glass", "Glass bottles", "solid", "see-through",
+            () => Objects.GlassBottles.Enabled, v => Objects.GlassBottles.Enabled = v,
+            "the game draws its sake and rum bottles solid; Meitou draws them on the ground as glass you see through, the neck or cork solid "
+                + "(docs/render-objects.md \"See-through items\")"),
     ];
 
     #endregion

@@ -75,6 +75,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
             "Object LOD distance x"]),
         new("Mesh welding", "Mesh welding", []),
         new("Metal on buildings", "Metal on buildings", []),
+        new("Glass bottles", "Glass bottles", []),
 
         // Characters: the skin switch, then one row per race (added by Entries)
         new(SkinGroup, "Skin", []),

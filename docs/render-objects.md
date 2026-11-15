@@ -144,7 +144,7 @@ whole-world transform. **Unknown** whether this was the z-fighting the user repo
 
 ## See-through items (Meitou, issue #562)
 
-For mods; no base-game record uses it. A `MATERIAL_SPECS_CLOTHING` record with the file field `opacity map` (`OpacityDither.MapField`) is partly
+For mods and Meitou's glass bottles (below); no base-game record has the field. A `MATERIAL_SPECS_CLOTHING` record with the file field `opacity map` (`OpacityDither.MapField`) is partly
 see-through: the map's red channel is the opacity (1 solid, 0 clear), on the item's own UVs. Without the field nothing changes.
 
 - **The original** shows such an item solid: **Verified** `fcs.def` (1.0.68) has no `opacity` key and the 1.0.68 decompile no `opacity map` string.
@@ -168,6 +168,14 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   filter blurs it into a lighter shadow), the water reflection, the objects' selection mask, icons (supersampled ones average 4 x 4 samples
   into alpha) and portraits. Hover and pick are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
 - Drawn solid until the opacity map is resident.
+- **Glass bottles** (`glass` switch, Meitou, on; `GlassBottles`): Sake (`Item_Alcohol1.mesh`) and Cactus Rum / Empty Rum Bottle (`rumjug.mesh`),
+  on the ground or placed in buildings, get an opacity map Meitou makes from the mesh at first use (its triangles drawn at their UVs by height
+  share; `%LOCALAPPDATA%\Meitou\glass`): Sake 45 % up to 55 % of its height, solid from 63 % (neck, stopper); rum 60 %, solid from 94 % (cork).
+  Only while the mesh's vertex count, the diffuse and the material are the game's and the material has no alpha of its own: a mod's own
+  `opacity map` wins and is not switched. Faithful draws them solid, at once (`Material` reads the switch per frame). Icons stay solid (drawn
+  once and saved). Grog (a can) and the Water Jug stay solid. **Observed** (the user's save, hidden frames, no mods): see-through on, solid with
+  `--faithful glass`; the rum map lies on the texture's body and base, the neck and cork solid. Cost (play bench idle, Sake in view, 2
+  interleaved pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
 - **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
   frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
   **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):

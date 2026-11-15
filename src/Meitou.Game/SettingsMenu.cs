@@ -629,7 +629,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or "Bolt tracers" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch
                 or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => "Characters",
             "Item icons" or "Portrait and editor sun" or "Character editor bar" => "Interface",
-            _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings
+            _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings, Glass bottles
         };
     }
 
