@@ -156,7 +156,7 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   over the scene by their opacity, into the scene's colour and depth alone (the GI's albedo and traced-sun targets keep the opaque scene),
   depth tested, writing neither depth nor the scene's alpha (the character mask). So occlusion, reflections, fog, motion vectors and the
   upscaler see what is behind them, as with the water and particles. Front faces only unless the material is double-sided: two layers of a
-  closed shape would show nearly twice the opacity.
+  closed shape would show nearly twice the opacity. Glass bottles (below) write depth and draw front faces only.
   - Ground items (`WorldObjectRenderer`, `AlphaSource.Opacity`, the map in the second diffuse slot: an item's material is never dual; it replaces
     the ALPHA type's cut-out): `HoldSeeThrough` takes their draws out of the main pass, `DrawSeeThrough` records them farthest first with the
     `objects see-through` program, which reads the GI's probes itself. Premultiplied (`One, SrcAlpha`): an item writes its colour times the
@@ -182,14 +182,17 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
   - **The main view draws them as glass** (Vulkan; elsewhere ordinary see-through items): `MeshSurface.Glass` (bit 128 of the push spare)
     marks the draws, `PrepareSeeThrough` blits the scene's colour at the render size into `GlassScene` before the blended pass (only with a
-    bottle held), and `AddBlended` draws each bottle's front faces, then its back faces, the copy's bindless index in the second normal slot.
-    A front face replaces the scene: the copy seen through both walls (the texture's hue mostly washed out, darker towards the silhouette)
-    and the drink (its surface a darker line), times one less Schlick's Fresnel, plus the game lighting's specular of a smooth dielectric
-    (`kenshiLight` with no albedo, gloss 0.96: sun, sky and lamps) and 6 % of the lit texture; where the map is solid the lit texture. A back
-    face adds its reflection, dimmed by the near wall and the drink. The copy's lookup is bent along the refracted view ray, at most 6 pixels.
+    bottle held), and `DrawSeeThrough` records the bottles first in a job of their own: front faces only, writing depth (each fragment
+    replaces the scene, so overlapping bottles and a neck over its shoulder keep their order whatever the triangles' order), the copy's
+    bindless index in the second normal slot. A fragment: the copy seen through both walls (the texture's hue mostly washed out, darker
+    towards the silhouette) and the drink (its surface a darker line), times one less Schlick's Fresnel, plus the near wall's and the far
+    wall's reflection (the far wall's normal the near one's mirrored across the plane facing the eye, as in a round bottle; dimmed by the
+    near wall and the drink), each the game lighting's specular of a smooth dielectric (`kenshiLight` with no albedo, gloss 0.96: sun, sky
+    and lamps; at most 16), and 6 % of the lit texture; where the map is solid the lit texture. The copy's lookup is bent along the refracted
+    view ray, at most 6 pixels. The other see-through items follow, writing no depth.
   - Limits: no depth copy, so the bend can pull in what stands just in front of the bottle; a bottle seen through another shows the scene
-    behind both (the copy is taken once); no motion vectors of their own, as the other see-through items. **Unknown**: the look in play
-    (unseen; the glass program compiles, glslang), and its cost.
+    behind both (the copy is taken once); what comes after the pass (fog volumes, particles, the upscaler) sees the bottle's depth, as an
+    opaque object's. **Unknown**: the look in play (unseen; the glass program compiles, glslang), and its cost.
 - **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
   frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
   **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):

@@ -99,11 +99,15 @@ static class BuildingLodShaders
     /// <summary>
     /// The blended pass's output (WorldObjectRenderer.Premultiplied): an item's colour times its opacity map's red and one less it; a glass bottle
     /// (<see cref="Sky.MeshSurface.Glass"/>) as glass, its map's green the drink and blue how solid it is (GlassBottles), the drink's colour in the
-    /// tint and the scene's copy in the second normal slot (WorldObjectRenderer.AddBlended).
+    /// tint and the scene's copy in the second normal slot (WorldObjectRenderer.BlendedDraw).
     /// </summary>
     static string WithGlass(string f)
     {
         f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", GlassFunctions + "\nvoid main()\n{");
+
+        // The wireframe (or LOD debug) colour replaces the scene: an alpha of 0 under the premultiplied blend.
+        f = Literal(f, "if (uWireframe) { fragColour = vec4(uFlatColour, 1.0); return; }",
+            "if (uWireframe) { fragColour = vec4(uFlatColour, 0.0); return; }");
         return Literal(f, "fragColour = vec4(colour, 1.0);", """
             float opacity = uAlphaSource == 4 ? texture(uDiffuse2, uv).r : 1.0;
             fragColour = vec4(colour * opacity, 1.0 - opacity);
@@ -112,11 +116,10 @@ static class BuildingLodShaders
     }
 
     /// <summary>
-    /// <c>glassColour</c>: a glass bottle's fragment in the blended pass (docs/render-objects.md "Glass bottles"). The reflection is the game
-    /// lighting's specular of a smooth dielectric (kenshiLight with no albedo: the sun's, the sky's and the lamps', Fresnel in its terms). A front
-    /// face replaces the scene with the scene's copy seen through both walls and the drink, bent as a thick lens bends it, plus its reflection;
-    /// a back face (drawn after) adds its reflection, dimmed by the near wall and the drink. Where the map is solid (the neck, the cork) the lit
-    /// texture.
+    /// <c>glassColour</c>: a glass bottle's front face in the blended pass (docs/render-objects.md "Glass bottles"), replacing the scene: the
+    /// scene's copy seen through both walls and the drink, bent as a thick lens bends it, plus the near wall's reflection and the far wall's,
+    /// dimmed by the near wall and the drink. A reflection is the game lighting's specular of a smooth dielectric (kenshiLight with no albedo:
+    /// the sun's, the sky's and the lamps', Fresnel in its terms). Where the map is solid (the neck, the cork) the lit texture.
     /// </summary>
     const string GlassFunctions = """
         uniform sampler2D uGlassScene;
@@ -136,6 +139,14 @@ static class BuildingLodShaders
             float pixels = length(bend * size);
             return here + bend * min(1.0, 6.0 / max(pixels, 1e-4));
         }
+        // A wall's reflection at normal n, dimmed by the haze (its own light is not added again: the copy already holds it), at most 16 so a
+        // lamp's or the sun's glint on the smooth glass is no single blinding pixel.
+        vec3 glassReflection(vec3 n, vec3 v)
+        {
+            vec3 r = kenshiLight(vec3(0.0), n, v, 0.96, vWorld);
+            if (uFogDistance > 0.0) r = atmoApply(r, uEye, vWorld) - atmoApply(vec3(0.0), uEye, vWorld);
+            return min(r, vec3(16.0));
+        }
         vec4 glassColour(vec3 lit, vec3 n, vec3 v, vec3 albedo, vec2 uv)
         {
             vec4 map = texture(uDiffuse2, uv);
@@ -144,8 +155,9 @@ static class BuildingLodShaders
             float nv = clamp(dot(n, v), 0.02, 1.0);
             atmoMetalness = 0.0;
             atmoMetalDiffuse = 0.0;
-            vec3 reflection = kenshiLight(vec3(0.0), n, v, 0.96, vWorld);
-            if (uFogDistance > 0.0) reflection = atmoApply(reflection, uEye, vWorld) - atmoApply(vec3(0.0), uEye, vWorld);
+            vec3 reflection = glassReflection(n, v);
+            // The far wall where the view ray leaves a round bottle: its inner normal is this one mirrored across the plane facing the eye.
+            vec3 far = glassReflection(normalize(2.0 * dot(n, v) * v - n), v);
 
             // The glass: the texture's hue mostly washed out, darker the denser the bottle's glass (the map's red) and the longer the path through
             // the wall (towards the silhouette, which draws the outline); the drink's colour under its level, its surface a darker line.
@@ -153,12 +165,11 @@ static class BuildingLodShaders
             vec3 tint = mix(vec3(1.0), albedo / max(top, 1e-3), 0.55) * (1.0 - 0.3 * map.r);
             vec3 wall = pow(tint, vec3(min(1.0 / nv, 3.0)));
             vec3 drinkColour = mix(vec3(1.0), uTint, drink * 0.85) * (1.0 - 1.8 * drink * (1.0 - drink));
-            if (!gl_FrontFacing) return vec4(reflection * wall * drinkColour * (1.0 - solid) * 0.6, 1.0);
-
             float fresnel = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
             vec2 size = vec2(textureSize(uGlassScene, 0));
             vec3 behind = textureLod(uGlassScene, glassBent(n, v, size), 0.0).rgb;
-            vec3 glass = behind * wall * wall * drinkColour * (1.0 - fresnel) + reflection + lit * 0.06;
+            vec3 through = (behind * wall + far * 0.6) * wall * drinkColour * (1.0 - fresnel);
+            vec3 glass = through + reflection + lit * 0.06;
             return vec4(mix(glass, lit, solid), 0.0);
         }
 
