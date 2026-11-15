@@ -227,9 +227,35 @@ internal sealed unsafe partial class CharacterRenderer
     readonly HashSet<int> _seeThroughBatches = [];
 
     /// <summary>
-    /// The blended pass's job, made with the main colour pass's batches and waiting for <see cref="DrawSeeThrough"/> (null: nothing to blend).
+    /// One held batch of the blended pass: the batch's part, level, sidedness and instance range as the main colour pass laid them out.
     /// </summary>
-    DrawJob? _blendedJob;
+    readonly record struct BlendedBatch(GpuObjectPart Part, int Level, bool TwoSided, int Offset, int Count);
+
+    /// <summary>
+    /// The main colour pass's batches that hold see-through parts, waiting for <see cref="DrawSeeThrough"/>.
+    /// </summary>
+    readonly List<BlendedBatch> _blended = [];
+
+    /// <summary>
+    /// The held batches' view, as the main colour pass drew it.
+    /// </summary>
+    ViewConstants _blendedView;
+
+    /// <summary>
+    /// The main colour pass's instance rows and storage bindings (bones, materials, morphs, previous bones), kept for the blended pass: the
+    /// frame's own allocations, alive until its jobs have run.
+    /// </summary>
+    readonly GpuBufferBinding[] _blendedRows = new GpuBufferBinding[9], _blendedStorage = new GpuBufferBinding[4];
+
+    /// <summary>
+    /// The main colour pass's push block and how many instance rows it bound.
+    /// </summary>
+    CharacterPush _blendedPush;
+
+    /// <summary>
+    /// How many of <see cref="_blendedRows"/> the main colour pass bound.
+    /// </summary>
+    int _blendedRowCount;
 
     /// <summary>
     /// The colour program's mode for the view being drawn (<see cref="CharacterPush.SeeThrough"/>).
@@ -245,7 +271,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>
     /// Whether the main view left see-through items for <see cref="DrawSeeThrough"/> this frame.
     /// </summary>
-    public bool HasSeeThrough => _blendedJob is not null;
+    public bool HasSeeThrough => _blended.Count > 0;
 
     /// <summary>
     /// Notes that batch <paramref name="id"/> holds a see-through item's part (any thread).
@@ -256,39 +282,53 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// Makes the blended pass's job from the colour job just filled: the same frame sets, instances and push block in mode 2, the batches that hold
-    /// see-through parts, blended over the scene and writing neither depth nor the character mask.
+    /// Keeps what the blended pass needs of the colour job just filled: the view, the instance rows, the storage bindings, the push block and the
+    /// batches that hold see-through parts.
     /// </summary>
-    void HoldSeeThrough(DrawJob colour, ViewBatches vb)
+    void HoldSeeThrough(DrawJob colour, ViewBatches vb, in ViewConstants view, ReadOnlySpan<GpuBufferBinding> storage)
     {
-        _blendedJob?.Release();
-        _blendedJob = null;
+        _blended.Clear();
         lock (_seeThroughBatches)
         {
             if (_seeThroughBatches.Count == 0) return;
-        }
 
-        var state = colour.State with { DepthWrite = false, Blend = OpacityDither.Blend, ColourMask = DrawState.Rgb };
-        var job = _drawJobs.Rent();
-        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, colour.Targets, state, colour.Program, 0);
-        (job.Frame, job.Cull, job.RowCount) = (colour.Frame, CullMode.None, colour.RowCount);
-        colour.Rows.CopyTo(job.Rows, 0);
-        job.Push = colour.Push with { SeeThrough = 2 };
-        if (job.Draws.Length < vb.Active.Count) job.Draws = new DrawJob.Draw[Math.Max(vb.Active.Count, job.Draws.Length * 2)];
-
-        lock (_seeThroughBatches)
-        {
             foreach (var b in vb.Active)
-                if (_seeThroughBatches.Contains(b.Id)) job.Draws[job.Count++] = BlendedDraw(b, state, colour.Targets.Formats);
+                if (_seeThroughBatches.Contains(b.Id)) _blended.Add(new BlendedBatch(b.Part, b.Level, b.DoubleSided, b.Offset, b.Count));
         }
-        if (job.Count == 0) job.Release();
-        else _blendedJob = job;
+        if (_blended.Count == 0) return;
+
+        (_blendedView, _blendedPush, _blendedRowCount) = (view, colour.Push with { SeeThrough = 2 }, colour.RowCount);
+        colour.Rows.CopyTo(_blendedRows, 0);
+        storage.CopyTo(_blendedStorage);
     }
 
     /// <summary>
-    /// One batch's draw in the blended pass: the colour program's buffers with the blended state's pipeline.
+    /// Draws the see-through items the main view left out into the open pass (the scene's colour and depth), blended over it by their opacity,
+    /// tested against the scene's depth and writing neither depth nor the character mask; front faces only unless the material is double-sided.
+    /// The frame constants are those of now: the sun the opaque scene left to a later pass is in the lighting again.
     /// </summary>
-    DrawJob.Draw BlendedDraw(Batch b, DrawState state, AttachmentFormats formats)
+    public void DrawSeeThrough()
+    {
+        if (_blended.Count == 0) return;
+
+        var targets = Gpu.CurrentTargets();
+        var state = Gpu.CurrentState() with { Cull = CullMode.None, DepthWrite = false, Blend = OpacityDither.Blend, ColourMask = DrawState.Rgb };
+        var job = _drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, _colourProg.P, 0);
+        job.Frame = _nativeFrame.Prepare(in _blendedView, _blendedStorage);
+        (job.Cull, job.RowCount, job.Push) = (CullMode.Back, _blendedRowCount, _blendedPush);
+        _blendedRows.CopyTo(job.Rows, 0);
+        if (job.Draws.Length < _blended.Count) job.Draws = new DrawJob.Draw[Math.Max(_blended.Count, job.Draws.Length * 2)];
+
+        foreach (var b in _blended) job.Draws[job.Count++] = BlendedDraw(b, state, targets.Formats);
+        Gpu.Record("characters see-through", job);
+        _blended.Clear();
+    }
+
+    /// <summary>
+    /// One held batch's draw: the colour program's buffers with the blended state's pipeline.
+    /// </summary>
+    DrawJob.Draw BlendedDraw(BlendedBatch b, DrawState state, AttachmentFormats formats)
     {
         var part = b.Part;
         ref var native = ref part.ColourNative;
@@ -301,20 +341,8 @@ internal sealed unsafe partial class CharacterRenderer
             IndexCount = (uint)part.Count[b.Level],
             Instances = (uint)b.Count,
             FirstInstance = (uint)b.Offset,
-            TwoSided = true,
+            TwoSided = b.TwoSided,
         };
-    }
-
-    /// <summary>
-    /// Draws the see-through items the main view left out into the open scene pass, blended over it by their opacity (both faces, tested against
-    /// the scene's depth). After the opaque scene.
-    /// </summary>
-    public void DrawSeeThrough()
-    {
-        if (_blendedJob is not { } job) return;
-
-        _blendedJob = null;
-        Gpu.Record("characters see-through", job);
     }
 
     #endregion
@@ -429,8 +457,9 @@ internal sealed unsafe partial class CharacterRenderer
 
         var job = _drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
-        job.Frame = _nativeFrame.Prepare(in view, [_bones.Binding, _content.Materials.Binding(Gpu.Frame), _content.Morphs.Binding(Gpu.Frame),
-            _previousBones.Binding]);
+        ReadOnlySpan<GpuBufferBinding> storage =
+            [_bones.Binding, _content.Materials.Binding(Gpu.Frame), _content.Morphs.Binding(Gpu.Frame), _previousBones.Binding];
+        job.Frame = _nativeFrame.Prepare(in view, storage);
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
@@ -457,7 +486,7 @@ internal sealed unsafe partial class CharacterRenderer
             CountDraw(part.Count[b.Level], b.Level, b.Count);
         }
         job.Count = n;
-        if (_seeThroughMode == 1) HoldSeeThrough(job, vb);
+        if (_seeThroughMode == 1) HoldSeeThrough(job, vb, in view, storage);
 
         var timer = _depthPass ? _depthTimer : _colourTimer;
         if (_portraitLive < 0) timer.Begin();

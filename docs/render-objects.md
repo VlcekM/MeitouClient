@@ -151,9 +151,12 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
   A separate map because the existing alphas are taken: diffuse alpha is gloss, and the original cuts worn items where normal alpha is under 0.6
   and drawn icons under 0.5 ([characters](characters.md), [ui-screens](game/ui-screens.md) "Item icons"), so opacity there would punch holes.
   **Unknown**: whether FCS shows the field once a modder adds `opacity map: TEXTURE_ANY` under `[MATERIAL_SPECS_CLOTHING]` in their `fcs.def`.
-- **Main view: a blended pass** (`WorldFrame.DrawSeeThrough`, in `FinishScene` after the GI's resolve). The colour passes leave the see-through
-  draws out and they are drawn afterwards over the scene by their opacity, depth tested, writing neither depth nor the scene's alpha (the
-  character mask). So occlusion, reflections, fog, motion vectors and the upscaler see what is behind them, as with the water and particles.
+- **Main view: a blended pass** (`WorldFrame.DrawSeeThrough`, in `FinishScene` after the GI's resolve, the lamps' shadows, the characters'
+  occlusion and the reflections, before the shafts and fog). The colour passes leave the see-through draws out and they are drawn afterwards
+  over the scene by their opacity, into the scene's colour and depth alone (the GI's albedo and traced-sun targets keep the opaque scene),
+  depth tested, writing neither depth nor the scene's alpha (the character mask). So occlusion, reflections, fog, motion vectors and the
+  upscaler see what is behind them, as with the water and particles. Front faces only unless the material is double-sided: two layers of a
+  closed shape would show nearly twice the opacity.
   - Ground items (`WorldObjectRenderer`, `AlphaSource.Opacity`, the map in the second diffuse slot: an item's material is never dual; it replaces
     the ALPHA type's cut-out): `HoldSeeThrough` takes their draws out of the main pass, `DrawSeeThrough` records them farthest first with the
     `objects see-through` program, which reads the GI's probes itself.
@@ -162,12 +165,13 @@ see-through: the map's red channel is the opacity (1 solid, 0 clear), on the ite
     else in them. The worn cut-out on normal alpha stays.
   - Not sorted within a mesh or between objects and characters (objects first). A see-through item under a water surface is drawn over it.
 - **Elsewhere: a dither** (`opacityDither()`, the LOD cross-fade's interleaved gradient noise, never moving): the shadow casters (the shadow's
-  filter blurs it into a lighter shadow), the water reflection, icons (supersampled ones average 4 x 4 samples into alpha) and portraits. Hover,
-  pick and selection masks are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
+  filter blurs it into a lighter shadow), the water reflection, the objects' selection mask, icons (supersampled ones average 4 x 4 samples
+  into alpha) and portraits. Hover and pick are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
 - Drawn solid until the opacity map is resident.
 - **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
   frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
-  **Unknown**: the blended pass has not been seen in the game yet (its programs compile; the icon dither was seen headlessly).
+  **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):
+  the body is evenly see-through with no pattern, the stopper solid. **Unknown**: a worn see-through item and frame generation, both unseen.
 - Cost without such a material: the solid (no-discard) object program is untouched; the others gain one constant or flag test. **Observed**
   (offscreen `--view hub`, 3 interleaved pairs of builds, RTX 4070, DLSS 0.667 at 720p, the dithered version): GPU total 2.62 against 2.63 ms,
   objects 0.205 against 0.205 ms, shadows 0.249 against 0.250 ms. **Unknown**: the character pass (the viewer draws none, `--crowd` included).

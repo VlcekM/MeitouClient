@@ -2523,6 +2523,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
                     bool dithered = d.Push.AlphaSource == (int)AlphaSource.Opacity;
+                    d.TwoSided = pm.Material is { DoubleSided: true };
                     d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f && !dithered;
                     d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true } && !(_depthPass && CastersBothSides);
                 }
@@ -2764,6 +2765,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         /// Drawn with the program without a discard (<see cref="EarlyDepth"/>): a batch of fully visible instances, a material without a cut-out.
         /// </summary>
         public bool Solid;
+
+        /// <summary>
+        /// The material is double-sided (the blended pass draws a see-through item's back faces only then).
+        /// </summary>
+        public bool TwoSided;
 
         /// <summary>
         /// Back faces culled (<see cref="Batch.BackCull"/>, not for a double-sided material).
@@ -3049,8 +3055,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// Draws the held see-through items into the open scene pass, blended over it by their opacity, farthest first, tested against the scene's
-    /// depth and writing none. After the opaque scene and the GI's resolve: the program reads the probes itself.
+    /// Draws the held see-through items into the open pass (the scene's colour and depth), blended over it by their opacity, farthest first,
+    /// tested against the scene's depth and writing none; front faces only unless the material is double-sided, as two layers of a closed shape
+    /// would show nearly twice the opacity. After the opaque scene and the GI's resolve: the program reads the probes itself.
     /// </summary>
     public void DrawSeeThrough()
     {
@@ -3098,7 +3105,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             IndexCount = (uint)part.Count[d.Level],
             Instances = d.Instances,
             FirstInstance = d.FirstInstance,
-            Cull = d.BackCull ? CullMode.Back : state.Cull,
+            Cull = d.TwoSided ? CullMode.None : CullMode.Back,
         };
     }
 

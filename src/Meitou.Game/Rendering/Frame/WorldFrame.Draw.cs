@@ -1360,7 +1360,6 @@ static partial class WorldFrame
 
         post.RunGiResolve();
         StageClock.Lap(14, "gi resolve");
-        DrawSeeThrough(ref f);
 
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         gpu.Post?.RunCharacterOcclusion(gpu.GiActive ? gpu.Gi : null);
@@ -1368,6 +1367,7 @@ static partial class WorldFrame
 
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");
+        DrawSeeThrough(ref f);
 
         if (gpu.Shadow is { Enabled: true })
         {
@@ -1391,9 +1391,11 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The see-through items (a mod's opacity map, docs/render-objects.md "See-through items") blended over the finished opaque scene, after the
-    /// GI's resolve so that it does not light them as the surface behind: the objects', then the characters'. They write no depth, so everything
-    /// later (occlusion, reflections, fog, motion) sees what is behind them.
+    /// The see-through items (a mod's opacity map, docs/render-objects.md "See-through items") blended over the lit opaque scene: after the GI's
+    /// resolve, the lamps' shadows, the characters' occlusion and the reflections, which read the opaque scene's colour, albedo and traced term,
+    /// and before the shafts and fog, which then lie over them. Into the scene's colour and depth alone (the albedo and traced targets keep what
+    /// the opaque scene wrote); they write no depth, so what comes later (fog, occlusion, motion) sees what is behind them. The objects', then
+    /// the characters'.
     /// </summary>
     static void DrawSeeThrough(ref FrameState f)
     {
@@ -1402,7 +1404,7 @@ static partial class WorldFrame
         bool characters = gpu.Characters is { HasSeeThrough: true };
         if (!objects && !characters) return;
 
-        f.Host.Open(7, f.Post.WithShadingRate(f.Post.SceneTargets));
+        f.Host.Open(7, PassTargets.Of(f.Post.SceneColour, f.Post.SceneDepth));
         if (objects) gpu.Objects!.DrawSeeThrough();
         if (characters) gpu.Characters!.DrawSeeThrough();
         f.Host.Close();
