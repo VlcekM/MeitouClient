@@ -46,7 +46,7 @@ public class HousedSquadTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_town_whose_home_squad_makes_prisoners_has_them_caged_in_that_home_without_a_sentence()
+    public void A_town_whose_home_squad_makes_prisoners_has_them_caged_in_that_home_for_life()
     {
         var data = Load();
         var db = data.Db;
@@ -68,9 +68,9 @@ public class HousedSquadTests(ITestOutputHelper output)
         {
             var c = table.Cold(f.Occupant.Slot)!;
 
-            Assert.True(c.IsImprisoned && c.Kidnapped);
+            Assert.True(c.IsImprisoned && !c.Kidnapped);
             Assert.Equal(f.Id, c.InWhat);
-            Assert.Equal(0, c.SentenceLength);
+            Assert.Equal(PopulationSystem.SpawnSentence, c.SentenceLength);
             Assert.True(f.Lock!.Locked);
         });
     }

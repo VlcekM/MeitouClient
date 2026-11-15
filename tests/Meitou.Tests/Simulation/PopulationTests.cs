@@ -149,7 +149,7 @@ public class PopulationTests
     }
 
     [Fact]
-    public void A_housed_squads_prisoners_are_made_caged_in_its_home_held_without_a_sentence_and_trimmed_to_its_free_cages()
+    public void A_housed_squads_prisoners_are_made_caged_in_its_home_held_for_life_and_trimmed_to_its_free_cages()
     {
         var function = SyntheticTown.Rec("53-t", Data.Fcs.FcsRecordType.BuildingFunctionality, "Cage");
         function.Ints["function"] = TownBuildings.CageFunction;
@@ -192,7 +192,7 @@ public class PopulationTests
         var table = world.Characters;
         var cages = held.Members.Select(m => table.Cold(m.Slot)!).Select(c => (c.IsImprisoned, c.Kidnapped, c.SentenceLength, c.InWhat)).ToList();
 
-        Assert.All(cages, c => Assert.Equal((true, true, 0f), (c.IsImprisoned, c.Kidnapped, c.SentenceLength)));
+        Assert.All(cages, c => Assert.Equal((true, false, PopulationSystem.SpawnSentence), (c.IsImprisoned, c.Kidnapped, c.SentenceLength)));
         Assert.Equal([$"{key}/0", $"{key}/1"], cages.Select(c => c.InWhat).Order());
         Assert.All(cages, c => Assert.True(world.Fixtures.Find(c.InWhat!)!.Lock!.Locked));
     }

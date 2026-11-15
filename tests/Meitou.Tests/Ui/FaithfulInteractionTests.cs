@@ -215,7 +215,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Equal("normal", ui.UiFrame.Single(c => c.Name == "shirt").Properties["State"]);
             Click(ui, "OpenBagButton");
             var bag = ui.UiFrame.Single(c => c.Name == "backpack_content");
-            Assert.Equal(bag.Bounds.Width / 10, bag.Bounds.Height / 14, 3);
+
+            // MyGUI truncates a widget's size to whole pixels, so the cells stay square to within a pixel over the bag.
+            Assert.Equal(bag.Bounds.Width / 10, bag.Bounds.Height / 14, 1f / 14);
             Assert.True(bag.Bounds.X + bag.Bounds.Width <= ui.UiFrame.Single(c => c.Name == "backpack_attach").Bounds.X);
             Assert.Contains(ui.UiFrame, c => c.Properties.ContainsKey("CaptionOwner") && c.Caption == "THIEVES BACKPACK");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name is "CapacityText" or "TypeText");

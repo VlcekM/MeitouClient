@@ -153,8 +153,10 @@ public class InventoryGeometryTests
         var button = controls.Single(c => c.Name == "ArrangeButton").Bounds;
         Assert.Equal(200 + Math.Max(0, width - 150), root.Width);
         Assert.Equal(240 + Math.Max(0, height - 100), root.Height);
-        Assert.Equal((content.Width - width) / 2, grid.X - content.X);
-        Assert.Equal(fixedTop ? 40 : (content.Height - height) / 2, grid.Y - content.Y);
+
+        // MyGUI centres an axis at (parent - size) / 2, truncated to whole pixels.
+        Assert.Equal(MathF.Truncate((content.Width - width) / 2), grid.X - content.X);
+        Assert.Equal(fixedTop ? 40 : MathF.Truncate((content.Height - height) / 2), grid.Y - content.Y);
         AssertWithin(grid, root);
         Assert.Equal(5, content.Y + content.Height - button.Y - button.Height, 0.01f);
     }
