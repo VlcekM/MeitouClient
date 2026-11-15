@@ -213,7 +213,7 @@ public sealed partial class CarrySystem
         if (police && !animal)
         {
             if (cold.LiftTime <= ConfiscateSeconds) return;
-            moved = Confiscate(cold, victim);
+            moved = Confiscate(cold, victim, world.BagSearchFix);
             Looted(world, table, i, t, moved, 0, crime: false);
 
             // Tagged only when it found nothing to take.
@@ -253,19 +253,20 @@ public sealed partial class CarrySystem
     /// <summary>
     /// A law-enforcement looter's take (<c>Task_Loot_AI</c> update with the confiscate flag, <c>Inventory::getAllStolenItems(inventory, false)</c>;
     /// <b>Observed</b>): one unit of each item of the victim's own inventory (worn gear included, not what is inside its backpack) that is stolen for
-    /// it, in list order, into the looter's inventory; the first that does not fit stays and ends the take. Returns the items moved.
+    /// it, in list order, into the looter's inventory, with <paramref name="carriedBags"/> then those inside bags carried in its grid (Meitou fix,
+    /// <see cref="World.BagSearchFix"/>); the first that does not fit stays and ends the take. Returns the items moved.
     /// </summary>
-    public int Confiscate(CharacterCold looter, CharacterCold victim)
+    public int Confiscate(CharacterCold looter, CharacterCold victim, bool carriedBags)
     {
         var from = victim.Inventory!;
         var into = looter.Inventory!;
         int moved = 0;
         bool worn = false, wear = false;
-        foreach (var item in from.Items.Where(x => x.IsStolenFor(victim.Faction, Data)).ToList())
+        foreach (var (owner, item) in StolenOn(victim, carriedBags))
         {
             if (item.LockedOn || !InventoryCommands.IsMovableSection(item.Section)) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
-            if (InventoryCommands.MoveInto(from, item, 1, into, bagFirst: false, out bool equipped, looter) == 0) break;
+            if (InventoryCommands.MoveInto(owner, item, 1, into, bagFirst: false, out bool equipped, looter) == 0) break;
             moved++;
             worn |= gear;
             wear |= equipped;
@@ -273,6 +274,17 @@ public sealed partial class CarrySystem
         if (worn) Assembly?.RefreshEquipment(victim);
         if (wear) Assembly?.RefreshEquipment(looter);
         return moved;
+    }
+
+    /// <summary>
+    /// The items stolen for <paramref name="victim"/> that a confiscation takes, each with the inventory holding it: its own inventory's, then with
+    /// <paramref name="carriedBags"/> those of bags carried in its grid.
+    /// </summary>
+    List<(Inventory Owner, ItemInstance Item)> StolenOn(CharacterCold victim, bool carriedBags)
+    {
+        var from = victim.Inventory!;
+        var bags = carriedBags ? from.CarriedBags() : [];
+        return [.. new[] { from }.Concat(bags).SelectMany(b => b.Items.Where(x => x.IsStolenFor(victim.Faction, Data)).Select(x => (b, x)))];
     }
 
     /// <summary>

@@ -255,7 +255,7 @@ carried one in (the candidate cages are the current town's, else the faction's n
   An item goes into the looter's inventory, else its worn backpack, else back. Then the looter's squad tags the target short-term 6 (`FUN_1406744a0`) and the task ends.
 - **Confiscation** (the update with the confiscate flag, **Observed**): an animal target waits the 20 s and gets the take above (weapons, food); otherwise past 0.8 s
   `Inventory::getAllStolenItems(target's inventory, includeUnknown 0)` (`FUN_140748bc0`: the inventory's whole item list, then its equipped weapons and armour, each passing
-  `InventoryItemBase::isStolen(item, 0)`; the target's own inventory, `Character::getInventory` slot 44 = `+0x2e8`, so not its backpack's contents) and each in turn:
+  `InventoryItemBase::isStolen(item, 0)`; the target's own inventory, `Character::getInventory` slot 44 = `+0x2e8`, so not its backpack's contents; Meitou fix "Bags in the inventory", `World.BagSearchFix`: also the stolen items inside bags carried in the grid) and each in turn:
   `removeItemDontDestroy_returnsItem(item, 1, true)` (Inventory slot 5: one unit split off a stack, the whole item when it is the last), `addItem` into the looter's
   inventory; a unit that does not fit goes back and ends the loop. Taken items get `Item::notifyTheftFrom(target)` (slot 106, `FUN_140792800`: calls slot `0x2b0` only when the
   item's owner handle `+0x140` is of type 11 NULL_ITEM, read as "no owner"; a stolen item has one, so nothing changes). Nothing found: the short-term tag 6; something found: no tag. It acts out goal 212 Confiscating goods ([ai-tasks](ai-tasks.md#arrest-and-prison-rows)) and goal 177 for a

@@ -1870,7 +1870,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             TaskStart.Stand(table, g);
             if ((d.Next += world.TickSeconds) <= CarrySystem.ConfiscateSeconds) return true;
-            carry.Confiscate(gc, table.Cold(p)!);
+            carry.Confiscate(gc, table.Cold(p)!, world.BagSearchFix);
             return End(world, d);
         }
 
