@@ -29,7 +29,7 @@ remove1406bf680, rename1406bfb70. These are facts, not translated binary logic.
 ## Game loader
 
 Native accepts8..17;17 skips declared header,16 reads version/skips4strings,8..15 headerless.
-Keep maximum nextId. byteSize ignored; flags from15,vec3/vec4 from9. Only flag0/1 affect merge.
+nextId: the data's counter restarts at 0 per file and ends at least at that file's nextId ([ids](zones.md#containers-and-ids)). byteSize ignored; flags from15,vec3/vec4 from9. Only flag0/1 affect merge.
 Silently truncate at NUL and byte limits: keys64, names/IDs/ref/instance identities512,
 string/filename4096. Prior types have integer IDs/extra tags and older refs; partial support is
 not a complete old-format specification. Error mid-record behaviour unverified.

@@ -113,11 +113,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         int cx1 = Cell(max.X - 1e-3f);
         int cz0 = Cell(min.Z);
         int cz1 = Cell(max.Z - 1e-3f);
-
-        // A building's triangles are kept with the zone it is placed in and may reach into the next one: the zones within a building's reach of the
-        // box.
-        var first = WorldLayout.ZoneOf(min.X - Reach, min.Z - Reach);
-        var last = WorldLayout.ZoneOf(max.X + Reach, max.Z + Reach);
+        var (first, last) = ZoneSpan(min, max);
         for (int zy = first.Y; zy <= last.Y; zy++)
         {
             for (int zx = first.X; zx <= last.X; zx++)
@@ -125,8 +121,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
                 var zone = new ZoneCoordinate(zx, zy);
                 if (!zone.IsInsideGrid) continue;
 
-                _used[(zone, roofs)] = Interlocked.Increment(ref _clock);
-                var task = _zones.GetOrAdd((zone, roofs), k => Task.Run(() => Gather(k.Zone, k.Roofs)));
+                var task = Ask(zone, roofs);
                 if (!task.IsCompletedSuccessfully)
                 {
                     ready &= !task.IsFaulted && task.IsCompleted;
@@ -139,6 +134,54 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
         Evict();
         return ready;
+    }
+
+    /// <summary>
+    /// Waits for the gathers of every zone <see cref="Buildings"/> or <see cref="Roofs"/> reads between the corners, starting those not asked for yet;
+    /// a failed gather is not waited for again.
+    /// </summary>
+    public void AwaitBuildings(Vector3 min, Vector3 max, bool roofs)
+    {
+        var (first, last) = ZoneSpan(min, max);
+        for (int zy = first.Y; zy <= last.Y; zy++)
+        {
+            for (int zx = first.X; zx <= last.X; zx++)
+            {
+                var zone = new ZoneCoordinate(zx, zy);
+                if (zone.IsInsideGrid) Await(Ask(zone, roofs));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Waits for one zone's gather; a failed one stays not ready and the caller goes on without it.
+    /// </summary>
+    static void Await(Task gather)
+    {
+        try
+        {
+            gather.Wait();
+        }
+        catch (AggregateException)
+        {
+            // Nothing to wait for: the zone answers not ready.
+        }
+    }
+
+    /// <summary>
+    /// The first and last zone whose buildings may reach the box: a building's triangles are kept with the zone it is placed in and may reach into
+    /// the next one, so the zones within <see cref="Reach"/> of it.
+    /// </summary>
+    static (ZoneCoordinate First, ZoneCoordinate Last) ZoneSpan(Vector3 min, Vector3 max) =>
+        (WorldLayout.ZoneOf(min.X - Reach, min.Z - Reach), WorldLayout.ZoneOf(max.X + Reach, max.Z + Reach));
+
+    /// <summary>
+    /// The zone's gather, started on a worker when it was not asked for yet, and marked as just used.
+    /// </summary>
+    Task<Dictionary<(int, int), List<Vector3>>> Ask(ZoneCoordinate zone, bool roofs)
+    {
+        _used[(zone, roofs)] = Interlocked.Increment(ref _clock);
+        return _zones.GetOrAdd((zone, roofs), k => Task.Run(() => Gather(k.Zone, k.Roofs)));
     }
 
     /// <summary>

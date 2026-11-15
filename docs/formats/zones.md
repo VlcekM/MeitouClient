@@ -113,7 +113,16 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `usagenode_<i>` | | usage node state |
 
 New instance ids are `<n>-<container name>-INGAME`, n from the container's id counter (**Verified**, `FUN_140386770`;
-e.g. `19765-zone39.16-INGAME`). Instance ids are unique only within one zone file: **Observed** (base load order, scratch probe over
+e.g. `19765-zone39.16-INGAME`). **Verified** (decompile): the counter is the zone data's own (`GameData +0x8`), shared with the int ids of its
+records: each step takes the next number not used as a record's int id (`FUN_1406bc560`), and every record a load adds takes one too (the
+loader makes it with int id -1, `FUN_14066a920`, and `FUN_1406bf780` numbers such a record; the file's own int ids are not kept). Loading a
+file restarts it at 0, numbers the file's new records, then raises it to the file's `nextId` (`FUN_1406c0b50`); a zone loads each layer's zone file
+in load order, then the save's (`FUN_1409ffad0`; a missing file changes nothing), so the last file read sets it. A new building's id is retried
+with the next number while `FUN_1406c2e40` refuses it (every caller of `FUN_140386770` loops so); it refuses an id the building list already holds
+when that entry's field +0x70 is non-zero (**Observed** reading: the entry's target length, so a cleared entry is taken over). **Observed**
+(merged base-game level data, probe of the `0-buildinglist` records): 107 building-list
+entries in 28 zones have `-zoneX.Y-INGAME` ids (one, `2-zone52.55-INGAME`, cleared); some lie above their zone's `nextId` (zone 14.56: `2459`,
+`nextId` 1949, rebirth's 1940). Instance ids are unique only within one zone file: **Observed** (base load order, scratch probe over
 `WorldLevelData.Buildings()`) 8,754 of 11,714 placements share their id with one in another zone, 580 ids within two zones of each other
 (`2-Newwworld-INGAME` is a Y-House in 19.29 and another house in 19.28). Meitou names a building at run time by `BuildingKey`
 `"<zone x>.<zone z>:<id>"` (doors, fixtures, renderer placements, saved-state lookup); the raw id stays in files and in the material seed. In saves the instance Y stays the height above ground ([placement height](#placement-height)). On import, non-player buildings are rebuilt complete

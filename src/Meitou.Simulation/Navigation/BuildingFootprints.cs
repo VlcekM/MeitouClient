@@ -85,9 +85,9 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 }
 
 /// <summary>
-/// A placed building's footprint in the world, and its BUILDING record.
+/// A placed building's footprint in the world, its BUILDING record and its placement (what a wall piece's snapped joint tests, PlacementCheck).
 /// </summary>
-public readonly record struct PlacedFootprint(string Id, Vector2[] Hull, string Record = "");
+public readonly record struct PlacedFootprint(string Id, Vector2[] Hull, string Record = "", Vector3 Position = default, Quaternion Rotation = default);
 
 /// <summary>
 /// A level-data building with the footprint of its record (in its own space), for picking; <paramref name="Plot"/> when it is the
@@ -617,7 +617,7 @@ public sealed class BuildingFootprints
                             || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach))
                         continue;
                     if (Of(b.BuildingId) is { } footprint)
-                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation), b.BuildingId);
+                        yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation), b.BuildingId, b.Position, b.Rotation);
                 }
             }
     }

@@ -266,8 +266,9 @@ sealed class ProjectileFlight
         float after = -1;
         for (int pass = 0; pass < 4; pass++)
         {
-            // The ground or a building first along the step, then the nearest body before it.
-            float ground = SolidHits.Hit(world.Walkability, combat.Buildings, p.Position, seg, RangedTuning.FlightTerrainStep, out bool building);
+            // The ground or a building first along the step (waiting for collision still being read), then the nearest body before it.
+            float ground = SolidHits.Hit(world.Walkability, combat.Buildings, p.Position, seg, RangedTuning.FlightTerrainStep, out bool building,
+                wait: true);
             int v = FirstBody(world, p, seg, step, after, ground, out float best);
             if (v >= 0)
             {

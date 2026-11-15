@@ -482,7 +482,7 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - **Validity**: every piece runs the ordinary checks (footprint, slope as its own pitch: `rot x Y` within `max slope` of
   up, `FUN_140429510`); one failure refuses the line, pieces are drawn by their own result. Near a snapped joint (pieces
   within the first/last 120 of the run) walls with a link point within 20 of it do not block; connectors and wedges
-  never block (`FUN_140427b00`, **Observed**).
+  never block (`FUN_140427b00`, **Observed**). Meitou: level town walls, sites and queued ghosts alike (`BuildMode.WallIgnore`, `PlacementCheck.Blocks`).
 - **Commit**: each piece is queued and becomes its own building and construction site from its own record (`is wall
   gate` -> gate building, else `WallBuilding`). On Confirm and zone load a short/connector/wedge without a parent
   attaches to a nearby wall (`FUN_14029ac50`, links not saved, **Observed**); a child forwards build work and deliveries

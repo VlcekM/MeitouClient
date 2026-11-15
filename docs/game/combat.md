@@ -951,8 +951,10 @@ Spring Bat (-1, 1.75, 0)). The direction is normalise(aim point - muzzle) (slot 
 plus a lead of target velocity x distance / `shot speed` (first order, **Verified**), tilted by `randomDeviant(random x deviation)`. Flight: each frame a ray from the bolt along its z on the physics
 thread (raycastClosestShape, group mask `0x087fde47`, read one frame late); a hit counts within 2 x the step. Groups tested: 0 and 1 (0: the characters' click hulls, below),
 2 terrain, 6 and 14 foliage, 9-12 building floors, 15-18 stairs, 19-22 furniture, 27 unwalkable roofs; not ragdolls, items, doors, interior hulls or
-passable parts. The shooter is skipped (`FUN_1400cd0b0`). Meitou: the simulation fires from a fixed point 15 up and 8 ahead (`RangedTuning.Barrel*`, measured
-from the posed muzzle) and tests the click hulls, the terrain and the buildings' collision (`SolidHits`; no foliage); the renderer draws a new bolt from the shooter's posed
+passable parts. The shooter is skipped (`FUN_1400cd0b0`). The flight tests only what the physics scene holds: `FUN_1404380e0` has no case for
+collision not there yet. Meitou: the simulation fires from a fixed point 15 up and 8 ahead (`RangedTuning.Barrel*`, measured
+from the posed muzzle) and tests the click hulls, the terrain and the buildings' collision (`SolidHits`; no foliage), waiting for a zone's collision still
+being read ([ranged](../simulation.md#ranged)); the renderer draws a new bolt from the shooter's posed
 muzzle and closes the gap to its simulated flight over 150 units (`GameHost.LaunchBlend`).
 
 ### Line of fire and the hit shape
