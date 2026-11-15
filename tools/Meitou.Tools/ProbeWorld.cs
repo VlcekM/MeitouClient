@@ -47,6 +47,21 @@ sealed class ProbeWorld : IDisposable
     public ProbeZoneStreamer? Streamer { get; init; }
 
     /// <summary>
+    /// The buildings' collision (sight rays, bolts, ragdolls), with the navmesh only.
+    /// </summary>
+    public RagdollGeometry? Buildings { get; init; }
+
+    /// <summary>
+    /// How far round the player's start the buildings' collision is gathered before the first tick (X and Z).
+    /// </summary>
+    const float CollisionReach = 800;
+
+    /// <summary>
+    /// How long the load waits for that gather (seconds).
+    /// </summary>
+    const double CollisionWaitSeconds = 120;
+
+    /// <summary>
     /// The characters of the world.
     /// </summary>
     public CharacterTable Characters => World.Characters;
@@ -90,9 +105,36 @@ sealed class ProbeWorld : IDisposable
         NavSystem? nav = navmesh ? LoadNavmesh(install, db, levels, layouts, data, zones, height) : null;
         IWalkability walk = nav is null ? new OpenGroundWalkability(height) : new NavAdapter(nav.Walkability);
         var streamer = stream && nav is not null ? new ProbeZoneStreamer(nav, zones) : null;
-        var world = MakeWorld(data, walk, save, seed, streamer);
+        var buildings = nav is null ? null : Collision(install, db, levels, height, nav, SavedStart(save));
+        var world = MakeWorld(data, walk, save, seed, streamer, buildings);
         if (nav is not null) GiveGateCodes(world, nav);
-        return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav, Streamer = streamer };
+        return new ProbeWorld { Db = db, Data = data, Save = save, World = world, Nav = nav, Streamer = streamer, Buildings = buildings };
+    }
+
+    /// <summary>
+    /// The buildings' collision the game's boot gives with a navmesh, gathered round <paramref name="start"/> before the first tick: the game
+    /// gathers a zone on a worker when first asked, and a probe's first ticks would otherwise see through walls for as long as that takes.
+    /// </summary>
+    static RagdollGeometry Collision(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> height, NavSystem nav,
+        Vector3 start)
+    {
+        var geometry = new RagdollGeometry(install, db, levels, height, nav.Runtime);
+        var reach = new Vector3(CollisionReach, 0, CollisionReach);
+        var triangles = new List<Vector3>();
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!geometry.Buildings(start - reach, start + reach, triangles))
+        {
+            // a zone whose gather failed never answers ready
+            if (waited.Elapsed.TotalSeconds > CollisionWaitSeconds)
+            {
+                Console.Error.WriteLine("The buildings' collision round the player is not all gathered: sight may pass through some walls.");
+                break;
+            }
+            triangles.Clear();
+            Thread.Sleep(50);
+        }
+
+        return geometry;
     }
 
     /// <summary>
@@ -144,15 +186,17 @@ sealed class ProbeWorld : IDisposable
 
     /// <summary>
     /// The world on one thread with paths found at once, the save loaded into it and the camera focus on the player's squad leader;
-    /// <paramref name="streamer"/> gates its population's zones before the load.
+    /// <paramref name="streamer"/> gates its population's zones before the load; <paramref name="buildings"/> is the buildings' collision (null: none).
     /// </summary>
-    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed, ProbeZoneStreamer? streamer)
+    static World MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed, ProbeZoneStreamer? streamer,
+        Meitou.Simulation.Ragdolls.IRagdollEnvironment? buildings)
     {
         var options = new StandardSystemOptions
         {
             SynchronousPaths = true,
             Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true },
             Population = new PopulationSettings { Background = false },
+            RagdollEnvironment = buildings,
         };
         var world = new World(new WorldSettings { Seed = seed, Threads = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
         if (walk is Meitou.Simulation.Locks.IDoorGate doors) world.Fixtures.Doors = doors;
@@ -256,7 +300,11 @@ sealed class ProbeWorld : IDisposable
     }
 
     /// <summary>
-    /// Disposes the world.
+    /// Disposes the world and the buildings' collision.
     /// </summary>
-    public void Dispose() => World.Dispose();
+    public void Dispose()
+    {
+        World.Dispose();
+        Buildings?.Dispose();
+    }
 }

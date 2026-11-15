@@ -635,12 +635,12 @@ public sealed partial class CombatSystem
         if (s.ReactTech < 0 && s.AttackTech < 0)
         {
             // Deciding, it first asks to be one of the fighters its target lets close in (FUN_140666e20); a fighter left out circles
-            // (PursuitSystem) and asks again each tick.
-            if (fighting && !s.Engaged)
+            // (PursuitSystem) and asks again each tick. A path chaser does not decide (states 10/11), so it neither joins nor is refused (#776).
+            if (fighting && !s.Engaged && !PathChasing(cold, s.TargetSlot))
             {
                 s.Engaged = MayJoin(world, i, s.TargetSlot, now);
                 if (s.Engaged) s.JoinedEpoch = _read[s.TargetSlot].ListEpoch;
-                else if (!PathChasing(cold, s.TargetSlot)) s.RefusedTick = now;
+                else s.RefusedTick = now;
             }
             bool yielded = fighting && _read[s.TargetSlot].YieldTo == i && now < _read[s.TargetSlot].YieldUntil;
             bool paused = now < s.PauseUntil;
@@ -993,8 +993,8 @@ public sealed partial class CombatSystem
     /// while the target swings itself or plays a hit reaction (<c>FUN_1406661d0</c>, <b>Verified</b>). A slot is held from the grant to the swing's
     /// last blow (<c>FUN_14060a590</c> gives it back), so the holders are the fighters at the target whose swing has a blow to come. The original
     /// grants in its update order; here the other fighters that may ask on the same tick and have a lower slot go first (engine choice). Their asks
-    /// are foreseen from the last tick's state only, as Act gates them (engaged, deciding now, out of the pause or attacked, within their reach),
-    /// erring towards counting one that then does not ask, so the count is never exceeded.
+    /// are foreseen from the last tick's state only, as Act gates them (engaged, deciding now, out of the pause or attacked, within their reach, not
+    /// on a path chase), erring towards counting one that then does not ask, so the count is never exceeded.
     /// </summary>
     bool HasSlot(World world, int i, int t, CharacterCold tc, int now)
     {
@@ -1022,8 +1022,9 @@ public sealed partial class CombatSystem
                 if (++holders + ahead >= slots) return false;
                 continue;
             }
+            // A path chaser does not ask (#776).
             if (other > i || now < o.StunUntil || now < o.PauseUntil && o.AttackTech < 0 && o.ReactTech < 0
-                || !Listed(in o, in _read[t]) && !MayJoin(world, other, t, now))
+                || !Listed(in o, in _read[t]) && !MayJoin(world, other, t, now) || ChasesOnPath(world, other, t))
                 continue;
 
             // It decides this tick when its swing or reaction ends now (Act's steps 4 and 5): a block's end and a swing's end start a pause (cut
@@ -1084,7 +1085,7 @@ public sealed partial class CombatSystem
     /// Whether <paramref name="i"/> may join the fighters its target lets close in (<see cref="MaxEngaged"/>, <c>FUN_140666e20</c>): it joins while
     /// fewer are in. The ones that are not in yet ask whenever they decide; those with a lower slot ask first (engine choice for the original's
     /// update order), counted only when they may decide this tick (not staggered, blocking or dodging, or swinging past the point where it could
-    /// still give the swing up), so a fighter is not left out for one that does not ask.
+    /// still give the swing up) and not on a path chase, so a fighter is not left out for one that does not ask.
     /// </summary>
     bool MayJoin(World world, int i, int t, int now)
     {
@@ -1096,11 +1097,16 @@ public sealed partial class CombatSystem
             if (other == i || !range.Holds((x, z))) continue;
             ref readonly var o = ref _read[other];
             if (o.TargetGeneration != generation || o.Down || o.Ranged) continue;
-            if (!Listed(in o, in _read[t]) && (other > i || !MayDecide(in o, now))) continue;
+            if (!Listed(in o, in _read[t]) && (other > i || !MayDecide(in o, now) || ChasesOnPath(world, other, t))) continue;
             if (++count >= MaxEngaged) return false;
         }
         return count < MaxEngaged;
     }
+
+    /// <summary>
+    /// Whether the fighter in slot <paramref name="other"/> is on a path chase after <paramref name="t"/> (<see cref="PathChasing"/>): it does not ask.
+    /// </summary>
+    static bool ChasesOnPath(World world, int other, int t) => world.Characters.Cold(other) is { } oc && PathChasing(oc, t);
 
     /// <summary>
     /// The room a fighter needs round it to ask: its race's <c>pathfind footprint radius</c> + 2.5 (CombatClass +0x280, <b>Observed</b>, constructor

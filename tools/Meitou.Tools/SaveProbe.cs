@@ -88,6 +88,10 @@ static class SaveProbe
             case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
             case ("recruit", >= 1): Recruit(probe, a[0]); return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
+            case ("escape", >= 1):
+                Vector3? walk = a.Count > 4 ? new(float.Parse(a[3]), 0, float.Parse(a[4])) : null;
+                Escape(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 20, a.Count > 2 ? int.Parse(a[2]) : 20, walk);
+                return true;
             case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : null); return true;
             case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
@@ -837,6 +841,88 @@ static class SaveProbe
             probe.PrintMessages();
             probe.Tick(20);
         }
+    }
+
+    /// <summary>
+    /// The player's squad leader is put in the cage <paramref name="cage"/>, sneaks and gets out, then walks to <paramref name="walk"/> (X, Z on
+    /// its floor) when given (#776: police at an unseen escapee); then every <paramref name="interval"/> ticks, <paramref name="rounds"/> times,
+    /// its crime line and each NPC within 600 that sees it, has spotted it or fights it (<see cref="EscapeWatcher"/>).
+    /// </summary>
+    static void Escape(ProbeWorld probe, string cage, int rounds, int interval, Vector3? walk)
+    {
+        var t = probe.Characters;
+        int leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader.Slot;
+        var id = t.IdOf(leader);
+        var fixture = probe.World.Fixtures.Find(cage)!;
+        bool caged = probe.World.Fixtures.Imprison(probe.World, id, fixture);
+        Console.WriteLine($"imprison={caged} {fixture.Id} owner={probe.Faction(fixture.Owner)} at {fixture.Position:F1}");
+        probe.Tick(100);
+
+        if (fixture.Lock is { } lockState) lockState.Locked = false;
+        t.Cold(leader)!.Orders |= Meitou.Simulation.Player.CharacterOrders.Sneak;
+        probe.World.Commands.Enqueue(new GetOutOrder([id]) { Tick = probe.World.Tick });
+        if (walk is { } to)
+        {
+            probe.Tick(20);
+            var onFloor = new Vector3(to.X, t.Next[leader].Position.Y, to.Z);
+            probe.World.Commands.Enqueue(new MoveOrder([id], onFloor) { Tick = probe.World.Tick });
+        }
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(interval);
+            EscapeRound(probe, leader);
+        }
+    }
+
+    /// <summary>
+    /// One round of <see cref="Escape"/>: the escapee's line, then its watchers'.
+    /// </summary>
+    static void EscapeRound(ProbeWorld probe, int leader)
+    {
+        var t = probe.Characters;
+        var sight = probe.World.Sight;
+        var memory = probe.World.Systems.OfType<DialogueSystem>().FirstOrDefault()?.Memory;
+        var at = t.Next[leader].Position;
+        var c = t.Cold(leader)!;
+        Console.WriteLine($"tick {probe.World.Tick} {probe.Who(leader)} {Held(c)} escaped={c.Escaped} place={sight.PlaceOf(leader)} "
+            + $"floor={sight.FloorOf(leader, at)} {CrimeLine(probe, memory, leader)}");
+
+        foreach (int i in probe.Near(at, 600))
+        {
+            if (i != leader && EscapeWatcher(probe, i, leader) is { } line) Console.WriteLine("  " + line);
+        }
+        probe.PrintMessages();
+    }
+
+    /// <summary>
+    /// An NPC in slot <paramref name="i"/> as it watches the escapee: its place, floor, plain sight factor, spot meter and goal, and when it fights
+    /// the escapee what may hold it in place and its fight state; null when it neither sees, has spotted nor fights it.
+    /// </summary>
+    static string? EscapeWatcher(ProbeWorld probe, int i, int leader)
+    {
+        var t = probe.Characters;
+        if (t.Cold(i) is not { IsPlayer: false } w) return null;
+        var sight = probe.World.Sight;
+        var aggro = probe.World.Systems.OfType<Meitou.Simulation.Aggro.AggroSystem>().First();
+        var state = probe.World.Systems.OfType<CombatSystem>().First().StateOf(t.IdOf(i));
+        float plain = sight.Sees(i, leader, t.Next[i].Position, t.Next[leader].Position, 600);
+        bool spotted = aggro.Spotted(i, t.IdOf(leader));
+        bool fights = state.Fighting && state.TargetSlot == leader;
+        if (plain <= 0 && !spotted && !fights) return null;
+
+        string fight = fights ? $" {Held(w)} {FightLine(state)}" : "";
+        return $"{probe.Who(i)} place={sight.PlaceOf(i)} floor={sight.FloorOf(i, t.Next[i].Position)} sees={plain:F2} spotted={spotted} "
+            + $"goal={w.Ai?.Goal?.Task.Type} row={w.Running?.Row}{fight}";
+    }
+
+    /// <summary>
+    /// What may hold a character in place: its held state, behaviour, seat clip and path (length and end).
+    /// </summary>
+    static string Held(CharacterCold c)
+    {
+        string end = c.Path.Length > 0 ? c.Path[^1].ToString("F0") : "-";
+        return $"held={c.InSomething} behaviour={c.Ai?.Behaviour} sit={c.Ai?.SitClip} path={c.Path.Length}->{end}";
     }
 
     /// <summary>
