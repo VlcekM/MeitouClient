@@ -458,15 +458,23 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The plan step ends a fight whose row can no longer run (<c>FUN_14050d970</c> over <c>FUN_14060f940</c>; rows 4, 5 and 61 leave the hours
     /// flag +0x16 clear), reading list B against the task's own target: <see cref="SwimBarred"/> with <see cref="CombatSlot.TaskSlot"/>. True when
-    /// it ended the fight.
+    /// it ended the fight. A player's attack order is only sent to the decision step, whose order queue ends it and keeps the order waiting
+    /// (<c>IOrderOwner.StillHolds</c>; the step does not re-check a fighter's order on its own).
     /// </summary>
     bool SwimStopped(World world, int i, ref CombatSlot s, CharacterCold cold)
     {
         var table = world.Characters;
         if (!cold.InCombat) return false;
 
+        bool order = cold.Running is { Source: Ai.TaskSource.Order };
         var target = s.TaskSlot >= 0 && table.TryResolveNext(new CharacterId(s.TaskSlot, s.TaskGeneration), out int t) ? table.Cold(t) : null;
-        if (!SwimBarred(cold, target, s.Picked)) return false;
+        if (!SwimBarred(cold, target, s.Picked || order)) return false;
+
+        if (order)
+        {
+            Ai.DecisionSystem.Request(cold);
+            return false;
+        }
 
         s.AttackTech = -1;
         s.NextBlow = 0;

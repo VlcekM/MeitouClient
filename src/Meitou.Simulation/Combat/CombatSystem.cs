@@ -505,6 +505,16 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         return able ? OrderCheck.Run : OrderCheck.Blocked();
     }
 
+    /// <summary>
+    /// A started attack order is planned again each update: its target gone into deep water ends the fight and the order waits queued until it is
+    /// out (row 5's list B, <see cref="SwimBarred"/>).
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order)
+    {
+        var table = world.Characters;
+        return !table.TryResolveNext(order.Target, out int t) || !SwimBarred(table.Cold(slot)!, table.Cold(t), focused: true);
+    }
+
     /// <inheritdoc/>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {

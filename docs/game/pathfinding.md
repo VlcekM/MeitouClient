@@ -242,7 +242,9 @@ one whose first 10 units it cannot stand along, up to 4 next-nearest starts are 
 which it walks out of the hole to (start polygons score 4 × plan distance + height gap). **Observed** (#780, the issue's save, a Scrawny Cannibal at
 -96855,138,-52580 inside the base of Hive Village's Hive Commune Hut, carver y 95..219, no ground in our mesh or the original's tile, `meitou-tools probe --nav`):
 the nearest starts were all on the hut's ramp and floor 32 above (score 52 against the ground edge's ~80, 20 away); it stood for good and its attackers on the floor
-over it never reached it. Now it walks out to the ground and the fight goes on. Movement turns early for the next waypoint (within 5) only where it can stand along
+over it never reached it. Now it walks out to the ground and the fight goes on. The original (**Observed**, Kenshi 1.0.65 through `kh`, the issue's save,
+2026-11-15): loaded, the cannibal already stood at -96838,138,-52567, on the ground at its own height 21 from its saved spot (not on the ramp), fought and was
+knocked out within 30 game seconds; the spot is inside the hut's rock (the camera's centre snaps to its top at 193), so a live teleport there could not be tried. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
 stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
 asks again every 5 s, [walls](#blocked-walkers)); a block while a request is in flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
