@@ -25,7 +25,8 @@ against the running game; the signs and rates come from reading the code.
 - **The pivot rides on the ground** (next section). In normal play the eye is at most ~1840 above the ground (or roof) within 2000
   units of it; over a cliff edge the ground straight below the eye can be lower than the pivot's.
 - **Free camera** (`toggle_fps_camera`, `;` in `controls.cfg`, "Free camera mode"): flies with a velocity and is only kept a
-  little above the ground; no ceiling was found in its update (**Observed**; a debug-style mode, not the normal camera). It reads the
+  little above the ground; no ceiling was found in its update (**Observed**; a debug-style mode, not the normal camera), but it moves the
+  pivot node, so the [leash](#leash) holds it too (**Observed** by code, not tried in the game). It reads the
   mouse movement always (the pointer is pinned), the wheel scales its speed, and the rotate keys roll it.
 - The game's `view distance` setting (5000 in the install's `settings.cfg`, slider given 1500 to 12000) sets the far distance and
   the haze (D = view distance × 10), not the camera.
@@ -108,6 +109,21 @@ not the game speed, so the camera works while the game is paused. Several inputs
   per frame). Edge scrolling is also suppressed after some events until the pointer moves right (a quirk, **Observed**).
 - **Whom the camera tracks** (**Verified**, `FUN_1406b0f90` mode 1 asks the handle's object for its position through vtable `+0x40`, which for a character is `FUN_1405ce680`): a character in a bed or cage (`+0x2f8` set) answers its bed's or cage's position, a **carried** one (`+0x3d4`) answers its **carrier's** position (the carrier handle at `+0x388`, resolved and asked the same way, so a chain of carriers ends at the first one carried by no one), and only otherwise its own (the ragdoll root body's or `+0x48`). So following or centring on a knocked-out character that someone carries keeps the camera on the carrier, at the carrier's position + 10, never on the body on the shoulder (its drawn offset is not used). Meitou: `GameHost.Tracked` / `PlayerInterface.Carrier` for follow, centre (F, portrait), flights and the followed floor; the bed and cage case is not modelled (the body keeps its own place there).
 - The save's `CAMERA` record keeps the pivot position and orientation, the boom and the tracked handle ([saved camera](#saved-camera)).
+
+## Leash
+
+**Verified** (`FUN_1406ae990`, called every frame by the interface update `FUN_1407f7ee0` from `FUN_140788a00`): the pivot node (`camera_center`)
+is kept within **2250** of the player's characters (`KenshiCamera.LeashRadius`). The nearest of a handle list (interface `+0x2b0`), by full 3D
+distance from the pivot to each object's position (vtable `+0x40`, so a carried character counts at its carrier), is found; when it is farther
+than 2250 (the compared square, 5062500, sits in writable data but no writer was found) the pivot is set to that character's position + 2250
+along the line towards the pivot (the decompile garbles the direction's operand; that reading is **Observed**). A hard set, no easing; it runs on any mode (free, tracking, the `;` camera). Skipped when the list is empty,
+while `DAT_142134690+0x298` or `+0x2f0` is set (**Unknown**), and while the caller's check `FUN_14025c6d0` holds (**Unknown**).
+**Observed**: the list holds the player's characters (the next step, `FUN_1407f7230`, walks it for the zones around them); whether it holds dead or
+unconscious ones too is **Unknown**. Meitou: `CameraLeash`, inside `CameraRig.Update` before the tick's state is kept, on every character with
+`IsPlayer`; the strategy pivot is placed on the sphere's point (its height then found as usual), the free camera's eye is pulled the same way
+and loses its outward speed (engine choice). Advanced **Camera stays near your squads** (`UserConfig.CameraLeash`, default on, in neither
+side of the gameplay switch) turns it off. Engine choices: off on the title, in photo mode, during squad tours, character flights and the
+cinematic camera, and under `--play-bench`.
 
 ## Saved camera
 

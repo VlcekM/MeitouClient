@@ -1428,6 +1428,7 @@ sealed class GameLoop(GameHost host)
         bool edgeOff = host.Covered || host.TitleScreen.TitleVisible || _panel?.Visible == true || host.AgentChannel.InterfaceHidden
             || _cinemaHolds || _cinema.EditorVisible;
         host.Session.Camera.Strategy.EdgePointer = edgeOff ? null : _window is null ? null : WindowPointer.InWindow(_window);
+        host.UpdateCameraLeash(_cinemaHolds || _tour.Active);
         host.Session.World.Profile.Enabled = host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off }
             || host.GameOptions.PlayBench is not null || SpikeLog.Enabled;
         if (!host.Covered) host.Session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time

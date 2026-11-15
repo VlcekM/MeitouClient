@@ -264,6 +264,24 @@ public sealed class FreeCamera
     }
 
     /// <summary>
+    /// Moves the eye to <paramref name="eye"/> (the camera leash's pull), keeping the view and the velocity along the leash and dropping the part
+    /// that flies on outward.
+    /// </summary>
+    internal void Leash(Vector3 eye)
+    {
+        var pulledBack = Position - eye;
+        Position = eye;
+        if (pulledBack.LengthSquared() > 1e-12f)
+        {
+            var outward = Vector3.Normalize(pulledBack);
+            float away = Vector3.Dot(Velocity, outward);
+            if (away > 0) Velocity -= outward * away;
+        }
+
+        KeepAboveGround();
+    }
+
+    /// <summary>
     /// Takes the whole wheel notches into <see cref="SpeedScale"/> (away from the user is faster) and counts down <see cref="SpeedShown"/>.
     /// </summary>
     void AdjustSpeed(float dt, float wheel)

@@ -1539,6 +1539,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.BuildingOutline = true;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
         Config.LuckyrenMode = false;
+        Config.CameraLeash = true;
         GamePages.ResetOptional();
         Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
         (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);

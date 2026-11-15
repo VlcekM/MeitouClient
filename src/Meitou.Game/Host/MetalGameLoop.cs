@@ -2574,6 +2574,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
         host.Session.Camera.Strategy.EdgePointer = host.Covered || _hud is not null && host.TitleScreen.TitleVisible || _settings?.Visible == true ||
             _hud is { UiVisible: false } or { UiCapturesPointer: true } ? null : WindowPointer.InWindow(_window);
+        host.UpdateCameraLeash(_tourHolds || _tour.Active);
 
         // The duel restarts between ticks when Backspace asks or its measured lap ends; its sun then holds at the lap's hour.
         if (_hud is not null) host.Duel.DuelFrame(false);

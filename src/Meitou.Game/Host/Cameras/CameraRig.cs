@@ -148,7 +148,12 @@ public sealed class CameraRig
     public void MovePivot(Vector2 pivotXz) => Strategy.Place(pivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance);
 
     /// <summary>
-    /// One simulation tick of <paramref name="dt"/> seconds.
+    /// Keeps the active camera near the player's characters (set up and switched by the host).
+    /// </summary>
+    public CameraLeash Leash { get; } = new();
+
+    /// <summary>
+    /// One simulation tick of <paramref name="dt"/> seconds; the leash pulls the camera back before the tick's state is kept.
     /// </summary>
     public void Update(float dt, ActionState actions)
     {
@@ -158,17 +163,13 @@ public sealed class CameraRig
             Toggle();
             cut = true;
         }
-        CameraState next;
         if (IsFree)
-        {
             Free.Update(dt, actions);
-            next = Free.State;
-        }
         else
-        {
             Strategy.Update(dt, actions);
-            next = Strategy.State;
-        }
+
+        Leash.Apply(this);
+        var next = IsFree ? Free.State : Strategy.State;
         if (cut) _states.Snap(next); else _states.Push(next);
     }
 
