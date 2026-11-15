@@ -1506,7 +1506,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             if (w == looter || w == victim || !next[w].Alive) continue;
             if (table.Cold(w) is not { Medical.Incapacitated: false } c || c.Faction != faction || !c.CarriedBy.IsNone) continue;
-            if (world.Sight.Sees(w, looter, next[w].Position, at, AggroSystem.RangeOf(c, Settings.Sight)) > 0) return true;
+            if (SightRay.Sees(world, w, looter, next[w].Position, at, AggroSystem.RangeOf(c, Settings.Sight)) > 0) return true;
         }
         return false;
     }

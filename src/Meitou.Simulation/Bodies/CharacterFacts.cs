@@ -174,7 +174,7 @@ public static class CharacterFacts
         if ((seen.Orders & Player.CharacterOrders.Sneak) != 0 && seen.Medical is not { Incapacitated: true }) return false;
 
         float outdoor = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight);
-        return world.Sight.Sees(looker, target, table.Next[looker].Position, table.Next[target].Position, outdoor) > 0;
+        return SightRay.Sees(world, looker, target, table.Next[looker].Position, table.Next[target].Position, outdoor) > 0;
     }
 
     /// <summary>

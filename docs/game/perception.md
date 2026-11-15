@@ -20,7 +20,11 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
   upward physics query (mask `0x8079e00`, in the character update) finding nothing over it, i.e. a roof or roofless part.
   A building whose BUILDING `enforce ceiling` is set (7) has nobody on top above floor 0 (`Character::threadedUpdatePeriodic` `FUN_1405d00b0`, **Verified**).
   The location compare (hand vfunc +0x10, `FUN_1400cd0b0`) is `!=`: true when the handles differ (**Verified**); town alarms store the culprit's location ([economy](economy.md#town-alarms)). A physics ray (`FUN_1408533a0`, start 18 above the looker,
-  blocked by anything more than 2 short of the target) runs in some branches.
+  blocked by anything more than 2 short of the target) ends the test (`FUN_140857b10` tail, **Observed**: control flow read in the decompile) once the
+  view and spot meter pass, unless looker and target are both the player's: seen without it when the looker's platoon blackboard has no current
+  town (`+0x138`) and the target's has one; else the ray decides when the target is the player's, the looker is with the player
+  (`FUN_140856bc0`), or the target is in a state (`FUN_1405c8aa0` != 0), sneaking (`FUN_1406643d0`), on screen (`+0x1a9`) or has `+0x320`, its
+  `+0x1a0` object's `+0x100` > 0 or `+0xe8` set; otherwise seen without it. It has no floor test: floors and walls block only through the ray.
 - **Light level** (`+0xd8`, `FUN_140a0af10`, `FUN_140a08da0`, **Verified** literals): set each update to the daylight factor;
   when requested by a sight test (`+0xdc`) and the character is the player's or daylight < 0.75, it is resampled: 1 above
   daylight 0.5, else 2 x daylight + per light within 500 of the zone search: 1.5 x power scale x (1 - d^2 / r^2) (x the spot
@@ -33,7 +37,8 @@ Meitou (`SightMap`): every sight test (aggro, dialogue sightings, crime witnesse
 rules. Rooms are the registered towns' buildings' `interior mask` volumes and lamps their lights, plus the lanterns characters carry
 (`CharacterAppearance.Lights` at the owner, its place and floor) and the lamps of completed player buildings (outdoor lights; ruins and the player's buildings have no room); a lit lamp of another building's interior is not counted indoors (floors are
 compared only within the character's building). With the `interiorlamps` switch on (Meitou, default) interior lamps count at
-any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. No physics ray, no weather, no posture factor; the 0.75 / 0.5 light gate is
+any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. The ray for a pair where the target or the looker is the player's (not both) or the target sneaks (`SightRay`; the town early return and
+the other target states are left out, and aggro's plain test of a non-sneaking target has none); no weather, no posture factor; the 0.75 / 0.5 light gate is
 evaluated every tick for everyone. The overhead and floor queries are redone only when a character moves (headless, Release:
 0.29 ms per tick for 840 characters, 540 indoors, standing). Observed in the data (headless probe of five big towns' 60
 lit rooms): standing under an interior lamp gives light 0.7-2.9, 444 of 462 lamps lighting the floor below them; the Hub's
@@ -86,7 +91,9 @@ dt = the scan interval; a meter decays also when the target is out of range. Cri
 witnesses and the stealth knock-out read the same meters. Line of sight (`AggroSystem.ClearSight`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
 looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
 furniture 19..22, unwalkable roofs 27; not doors 5 or passable parts 23..26), with foliage 6 and 14 added (`0x87fde44`) when the looker is inside a building. Meitou tests the terrain and
-the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty (the original erases the entry). The plain (non-sneaking) sight test still has no ray. A sneaking player
+the buildings' collision of `SolidHits` (map features included, foliage never) and, blocked, lets the meter empty: the original clears the entry's in-view
+flag (`FUN_140863520`, **Verified** decompile) and the meter drains by dt / 260 (`FUN_140853aa0`). The crime and bounty witnesses, disguise, loot witnesses
+and the sensed-list stand-ins take the same ray after the sight test (`SightRay.Sees`, #781). A sneaking player
 character gets the arrows (`MarkerRenderer`, both passes like the movement marker, lit by the sun; no green) and the original's stealth icon left of its name in the tag
 colours: seen if any watcher detects, almost seen if any notices, else hidden, and the light-level icon from its `SightMap` light.
 The list (`CharacterCold.Watchers`, 4 s, a carried looker left out) is fed by the spot meter (`AggroSystem.Visit`, sight only, as in the original) and by the forced
@@ -321,7 +328,7 @@ is read into the platoon's patrol settings; its consumer was not traced.
 ## Unknowns
 
 - Slot 14 `+0xb4`, slot 60's `+0xd5`, the hearing re-roll factor.
-- The writer of a character's location handle `+0x80`; when can-see casts its physics ray; the building rules of can-hear;
+- The writer of a character's location handle `+0x80`; the building rules of can-hear;
   the alertness goal float and the +0x3f0 (green pointer) test of spotting.
 
 ## Evidence index

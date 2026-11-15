@@ -8,6 +8,7 @@ using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 
@@ -681,7 +682,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     {
         var next = world.Characters.Next;
         bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-        float v = world.Sight.Sees(w, s, next[w].Position, next[s].Position, range, sneaking ? Orders.Stealth(c) : -1);
+        float v = SightRay.Sees(world, w, s, next[w].Position, next[s].Position, range, sneaking ? Orders.Stealth(c) : -1);
 
         return v > 0 && (!sneaking || Crimes.Spotted(world, w, world.Characters.IdOf(s)));
     }

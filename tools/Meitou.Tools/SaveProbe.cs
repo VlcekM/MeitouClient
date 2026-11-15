@@ -102,6 +102,11 @@ static class SaveProbe
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("ray", >= 6) when probe.Nav is not null: Ray(probe, Point(a, 0), Point(a, 3)); return true;
+            case ("sees", >= 1) when probe.Nav is not null: SeesLeader(probe, float.Parse(a[0])); return true;
+            case ("sightlines", >= 4) when probe.Nav is not null:
+                Sightlines(probe, Point(a, 0), float.Parse(a[3]), a.Count > 4 ? float.Parse(a[4]) : 4, a.Count > 5 ? float.Parse(a[5]) : 0);
+                return true;
             case ("places", >= 1) when probe.Nav is not null: Places(probe, float.Parse(a[0]), a.Count > 1 ? float.Parse(a[1]) : 4); return true;
             case ("layout", >= 1) when probe.Nav is not null: Layout(probe, a[0]); return true;
             default: return false;
@@ -1180,6 +1185,116 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The point given as three numbers from <paramref name="first"/> on.
+    /// </summary>
+    static Vector3 Point(List<string> a, int first) => new(float.Parse(a[first]), float.Parse(a[first + 1]), float.Parse(a[first + 2]));
+
+    /// <summary>
+    /// The solid parts (<see cref="SolidHits"/>: terrain and the buildings' collision) on the segment between two points, as the spot meter's sight
+    /// ray and bolts test them: where it first hits, terrain or building. Needs <c>--nav</c>, which gathers the buildings' collision.
+    /// </summary>
+    static void Ray(ProbeWorld probe, Vector3 from, Vector3 to)
+    {
+        var combat = probe.World.SystemOf<CombatSystem>();
+        var seg = to - from;
+        float hit = SolidHits.Hit(probe.World.Walkability, combat?.Buildings, from, seg, RangedTuning.TerrainStep, out bool building);
+        string what = hit < 0 ? "clear" : $"{(building ? "building" : "terrain")} at {from + seg * hit:F1}, {hit * seg.Length():F1} from the start";
+        Console.WriteLine($"{from:F1} -> {to:F1} ({seg.Length():F1}): {what}; buildings {(combat?.Buildings is null ? "not loaded" : "loaded")}");
+    }
+
+    /// <summary>
+    /// How each NPC within <paramref name="radius"/> of the player's squad leader sees it after a tick: its place, the sight range between them, the
+    /// plain sight test (<see cref="SightMap.Sees"/>), the sight ray and the test with the ray (<see cref="SightRay.Sees"/>). Needs <c>--nav</c>.
+    /// </summary>
+    static void SeesLeader(ProbeWorld probe, float radius)
+    {
+        probe.Tick(1);
+        var table = probe.Characters;
+        var combat = probe.World.SystemOf<CombatSystem>();
+        var sight = probe.World.Sight;
+        int leader = probe.Near(probe.LeaderPosition, 0.5f).First(i => table.Cold(i)!.IsPlayer);
+        var at = table.Next[leader].Position;
+        Console.WriteLine($"leader {at:F1} place {Place(sight, sight.LocationOf(leader))}");
+        foreach (int i in probe.Near(at, radius))
+        {
+            if (table.Cold(i) is not { IsPlayer: false } c) continue;
+
+            var eye = table.Next[i].Position;
+            float outdoor = Meitou.Simulation.Aggro.AggroSystem.RangeOf(c, Meitou.Simulation.Aggro.AggroSystem.OutdoorSight);
+            float plain = sight.Sees(i, leader, eye, at, outdoor);
+            bool clear = SightRay.Clear(probe.World.Walkability, combat?.Buildings, eye, at);
+            float rayed = SightRay.Sees(probe.World, i, leader, eye, at, outdoor);
+            Console.WriteLine($"  {probe.Who(i)} at {eye:F1} place {Place(sight, sight.LocationOf(i))} range {sight.Range(i, leader, outdoor):F0} "
+                + $"sees {plain:F2} ray {(clear ? "clear" : "blocked")} with ray {rayed:F2}");
+        }
+    }
+
+    /// <summary>
+    /// Every walkable point within <paramref name="radius"/> (every <paramref name="step"/>) from which a looker's spot-meter ray reaches a sneaker
+    /// standing at <paramref name="centre"/> (<see cref="SightRay.Clear"/>), or one within <paramref name="spread"/> of it (every 16), with the place each
+    /// point gets and whether it is the target's. Needs <c>--nav</c>.
+    /// </summary>
+    static void Sightlines(ProbeWorld probe, Vector3 centre, float radius, float step, float spread)
+    {
+        if (spread <= 0)
+        {
+            Sightlines(probe, centre, radius, step);
+            return;
+        }
+
+        var heights = new List<float>();
+        for (float x = centre.X - spread; x <= centre.X + spread; x += 16)
+        {
+            for (float z = centre.Z - spread; z <= centre.Z + spread; z += 16)
+            {
+                heights.Clear();
+                probe.Nav!.Walkability.World.HeightsAt(x, z, heights);
+                foreach (float h in heights) Sightlines(probe, new Vector3(x, h, z), radius, step);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Sightlines(ProbeWorld, Vector3, float, float, float)"/> for one target.
+    /// </summary>
+    static void Sightlines(ProbeWorld probe, Vector3 target, float radius, float step)
+    {
+        var world = probe.Nav!.Walkability.World;
+        var combat = probe.World.SystemOf<CombatSystem>();
+        var sight = probe.World.Sight;
+        int targetPlace = sight.PlaceAtPoint(target);
+        var heights = new List<float>();
+        Console.WriteLine($"target {target:F1} place {Place(sight, targetPlace)}");
+        for (float x = target.X - radius; x <= target.X + radius; x += step)
+        {
+            for (float z = target.Z - radius; z <= target.Z + radius; z += step)
+            {
+                heights.Clear();
+                world.HeightsAt(x, z, heights);
+                foreach (float h in heights) Sightline(probe, combat, new Vector3(x, h, z), target, targetPlace);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Prints one looker point of <see cref="Sightlines(ProbeWorld, Vector3, float, float)"/> when its ray to the target is clear.
+    /// </summary>
+    static void Sightline(ProbeWorld probe, CombatSystem? combat, Vector3 eye, Vector3 target, int targetPlace)
+    {
+        if (!SightRay.Clear(probe.World.Walkability, combat?.Buildings, eye, target)) return;
+
+        float d = Vector3.Distance(eye, target);
+        int place = probe.World.Sight.PlaceAtPoint(eye);
+        string nav = probe.World.Walkability.LineOfSight(eye, target) ? "" : " (navmesh line blocked)";
+        Console.WriteLine($"  clear from {eye:F1} d={d:F0} place {Place(probe.World.Sight, place)}{(place == targetPlace ? " same" : "")}{nav}");
+    }
+
+    /// <summary>
+    /// A place's building key, or "outdoors / on top".
+    /// </summary>
+    static string Place(SightMap sight, int place) => place >= 0 ? sight.PlaceKey(place) : "outdoors/on top";
+
+    /// <summary>
     /// The place test (<see cref="SightMap.PlaceAtPoint"/>, what <c>SteersAt</c> compares) over the walkable surface round the leader, every
     /// <paramref name="step"/> within <paramref name="radius"/>: the points each building's place takes, the outdoor-mesh points it counts as
     /// indoors and the indoor-mesh points it counts as outdoors, with a sample of each. Needs <c>--nav</c>.
@@ -1302,6 +1417,9 @@ static class SaveProbe
               uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
               recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
+              ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
+              sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places
+              sees <radius>            NPCs near the leader: place, sight range, the plain sight test and with the sight ray (needs --nav)
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted

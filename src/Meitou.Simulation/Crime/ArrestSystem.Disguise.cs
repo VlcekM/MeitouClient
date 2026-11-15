@@ -4,6 +4,7 @@ using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 
@@ -112,7 +113,7 @@ public sealed partial class ArrestSystem
                     continue;
                 }
                 if (Vector3.DistanceSquared(next[w].Position, at) > DisguiseRange * DisguiseRange) continue;
-                float v = world.Sight.Sees(w, s, next[w].Position, at, DisguiseRange);
+                float v = SightRay.Sees(world, w, s, next[w].Position, at, DisguiseRange);
                 if (v <= 0) continue;
                 var key = (table.IdOf(w), target);
                 seen.Add(key);

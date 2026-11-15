@@ -120,7 +120,7 @@ public sealed partial class AiSystem
 
             // A sneaker (not in a fight) counts only when sensed: the resident's sight test stands in for its sense entry.
             if ((c.Orders & CharacterOrders.Sneak) != 0 && !c.InCombat
-                && st.World.Sight.Sees(st.Self, other, prev[st.Self].Position, prev[other].Position, st.Outdoor, Orders.Stealth(c)) <= 0) return;
+                && SightRay.Sees(st.World, st.Self, other, prev[st.Self].Position, prev[other].Position, st.Outdoor, Orders.Stealth(c)) <= 0) return;
             st.Found = true;
         });
         return scan.Found;

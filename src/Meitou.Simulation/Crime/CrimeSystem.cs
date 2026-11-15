@@ -386,10 +386,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             float range = AggroSystem.RangeOf(wc, Settings.Sight);
             if (sneaking)
             {
-                float v = world.Sight.Sees(w, culprit, next[w].Position, at, range, stealth);
+                float v = SightRay.Sees(world, w, culprit, next[w].Position, at, range, stealth);
                 if (v <= 0 || !Spotted(world, w, culpritId)) continue;
             }
-            else if (world.Sight.Sees(w, culprit, next[w].Position, at, range) <= 0) continue;
+            else if (SightRay.Sees(world, w, culprit, next[w].Position, at, range) <= 0) continue;
             if (body is not null && !Friendly(wf, c.Faction) && MindsKidnapping(wf, c, body))
                 SetPending(world, culprit, CrimeCode.Kidnapping, body.Faction, c.Carrying, KidnapTimer, viaWrapper: true);
             if (premises is { } house && Trespasses(world, wc, c, house))
