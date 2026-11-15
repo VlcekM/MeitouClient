@@ -468,7 +468,8 @@ panel `FUN_14088a8f0`, the hunger term of the stat multiplier `FUN_1406457e0` an
 
 **Verified** (decompile of `FUN_14088a8f0` and `FUN_14064da70`): the HUD word reads the live hunger with a strict `< 1`, no margin or
 hysteresis, and a slave's [free food](#free-food) floor is the same 1, so a slave starving and wounded hovers across it: the word alternates
-"Starving" / "Wounded" as in Meitou (#756).
+"Starving" / "Wounded" as in Meitou (#756). **Verified** in game (1.0.65, harness, vanilla Slaves start at hunger 100, unwounded):
+the word read "Starving" in 63 of 120 frames and "Hungry" in 57, alternating frame to frame at 1x and 5x.
 
 ### Eating
 
