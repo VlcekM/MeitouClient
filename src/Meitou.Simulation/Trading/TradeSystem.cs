@@ -133,6 +133,11 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     /// </summary>
     public int StolenFrom { get; init; } = -1;
     /// <summary>
+    /// The name of the character a stolen item was taken from, "" when it is not stolen or that character is not in the world (as
+    /// <see cref="InventoryItemView.StolenOwner"/>).
+    /// </summary>
+    public string StolenOwner { get; init; } = "";
+    /// <summary>
     /// The item's <c>unique</c> flag (<see cref="Items.ItemInstance.Unique"/>): the tooltip's [Unique] row.
     /// </summary>
     public bool Unique { get; init; }
@@ -1475,6 +1480,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 Charges = item.Charges,
                 MaxCharges = item.MaxCharges,
                 StolenFrom = stolen ? item.StolenFrom : -1,
+                StolenOwner = stolen ? world.Characters.NameOf(item.Owner) : "",
                 Unique = item.Unique,
                 FenceChance = odds is { } shown ? Math.Clamp(shown, 0, 1) : null,
                 FenceOdds = odds is < 1 ? Math.Max(odds.Value, 0) : null,

@@ -1467,6 +1467,11 @@ public sealed class CharacterTable
     public CharacterId IdOf(int slot) => new(slot, _previous[slot].Generation);
 
     /// <summary>
+    /// The name of the character <paramref name="id"/> names, "" when it names none in the world (<see cref="TryResolveNext"/>).
+    /// </summary>
+    public string NameOf(CharacterId id) => TryResolveNext(id, out int slot) && Cold(slot) is { } cold ? cold.Name : "";
+
+    /// <summary>
     /// Whether <paramref name="id"/> names a character alive as of the last tick.
     /// </summary>
     public bool IsAlive(CharacterId id) =>

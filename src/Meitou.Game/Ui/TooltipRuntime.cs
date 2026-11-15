@@ -793,6 +793,11 @@ sealed class TooltipRuntime(PlayerInterface player)
         public float? StealChance { get; init; }
 
         /// <summary>
+        /// The name of the character a stolen item was taken from ("": none in the world; <see cref="InventoryItemView.StolenOwner"/>).
+        /// </summary>
+        public string StolenOwner { get; init; } = "";
+
+        /// <summary>
         /// A tooltip of the name only (<see cref="Brief"/>).
         /// </summary>
         public static ItemTip NameOnly(string record, string material, string name, int quantity) =>
@@ -810,6 +815,7 @@ sealed class TooltipRuntime(PlayerInterface player)
                 Unique = v.Unique,
                 BagItems = v.BagItems,
                 StealChance = v.StealChance,
+                StolenOwner = v.StolenOwner,
             };
 
         /// <summary>
@@ -820,6 +826,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             {
                 Unique = v.Unique,
                 BagItems = v.BagItems,
+                StolenOwner = v.StolenOwner,
             };
     }
 
@@ -1109,10 +1116,12 @@ sealed class TooltipRuntime(PlayerInterface player)
         // tooltip; #330).
         if (t.Goods && t.Trade is { FenceChance: { } fence })
             lines.Add(new("FENCING CHANCE:", $"{(int)(fence * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
+
+        // The robbed person by name ("Stolen from: Barman", Observed); with no such person in the world, "Stolen".
         if (t.StolenFrom >= 0)
         {
-            lines.Add(player.FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner
-                ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad)
+            lines.Add(t.StolenOwner.Length > 0
+                ? new("Stolen from:", t.StolenOwner, TooltipTone.Bad, TooltipTone.Bad)
                 : new("Stolen", "", TooltipTone.Bad));
         }
     }
