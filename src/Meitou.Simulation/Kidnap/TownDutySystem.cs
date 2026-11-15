@@ -190,7 +190,7 @@ public sealed class TownDuty
 /// <list type="bullet">
 /// <item><b>273 Remove Intruder</b> (finder <c>FUN_14099c250</c>, <b>Verified</b> by decompile): only while the member stands in a town that is its
 /// home town, the town its occupation holds, or a town of its faction (<c>Ownerships::isMyTown</c>, KenshiLib names); the intruder is knocked out, in
-/// that town, not carried or caged, and (an engine reading of the sensed-list classes) not of the member's faction or an ally. The original's last
+/// that town, not carried or caged (Meitou: nor in a bed), and (an engine reading of the sensed-list classes) not of the member's faction or an ally. The original's last
 /// test, <c>amInsideTownWalls</c>, is read as the town's built-up area (<see cref="BuiltUp"/>). The member lifts it, then</item>
 /// <item><b>112 Find and put in cage</b> (a living body) or <b>281</b> (any body), while the package lists it: the best free cage in the town (the
 /// original's finder; an occupier may use the occupied town's, its use test passing for that town, <c>FUN_140621230</c>), where the intruder is
@@ -1040,7 +1040,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The nearest downed intruder within the member's sight in its town's built-up area (-1: none).
+    /// The nearest downed intruder within the member's sight in its town's built-up area (-1: none). Meitou: one in a bed is left alone (the
+    /// original skips only the caged, so guards threw patients out of rented beds, issue 751).
     /// </summary>
     int Intruder(World world, int slot, CharacterCold cold, CampaignTown town)
     {
@@ -1050,7 +1051,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         int best = -1;
         foreach (int v in _downed)
         {
-            if (v == slot || _reserved.Contains(world.Characters.IdOf(v)) || carry.Friendly(cold, world.Characters.Cold(v)!))
+            var body = world.Characters.Cold(v)!;
+            if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(world.Characters.IdOf(v)) || carry.Friendly(cold, body))
                 continue;
 
             var p = next[v].Position;
