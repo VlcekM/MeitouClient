@@ -111,28 +111,38 @@ public sealed partial class CaptiveSystem
                 }
             case TaskType.SlaveGetInMyMastersCage:
                 {
-                    // FUN_1408caaf0 tests the owner handle only, not the slave state: an escaped or ex-slave that keeps its owner finds a cage too.
-                    if (cold.SlaveState == 0 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer)
-                        return null;
-                    // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town
-                    // argument is 0).
-                    var at = table.Next[slot].Position;
-                    Fixture? best = null;
-                    float bestD = float.MaxValue;
-                    foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
-                    {
-                        if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
-                        float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
-                        if (d < bestD) (best, bestD) = (f, d);
-                    }
-
-                    return best is null ? null
-                            : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id,
-                                    Faction = cold.Faction, Site = best.Site };
+                    // A player character's 172 is its Obedient Slave job's (ObedientSlave.cs).
+                    if (cold.IsPlayer || OwnCage(world, slot, cold) is not { } best) return null;
+                    return new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction,
+                            Site = best.Site };
                 }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The finder of 172 Getting in my cage (<c>FUN_1408caaf0</c>, <b>Verified</b>): for a character with an owner, whatever its slave state (the
+    /// finder tests the owner handle only, so an escaped or ex-slave that keeps its owner finds a cage too), not held in anything, the nearest free
+    /// cage of the owner's faction in the 3x3 zone cells round it, whatever the town (the finder's town argument is 0), that no job heads for; null:
+    /// none.
+    /// </summary>
+    internal Fixture? OwnCage(World world, int slot, CharacterCold cold)
+    {
+        if (cold.SlaveState == 0 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None) return null;
+
+        var table = world.Characters;
+        var at = table.Next[slot].Position;
+        Fixture? best = null;
+        float bestD = float.MaxValue;
+        foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
+        {
+            if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
+            float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
+            if (d < bestD) (best, bestD) = (f, d);
+        }
+
+        return best;
     }
 
     /// <summary>

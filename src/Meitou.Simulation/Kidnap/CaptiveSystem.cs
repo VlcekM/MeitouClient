@@ -470,7 +470,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     public void RegisterSources(DecisionSystem decisions)
     {
-        decisions.RegisterJob(TaskType.SlaveObedience, _obedient);
+        decisions.RegisterJob(TaskType.SlaveObedience, Obedient);
         decisions.Register(new RaceGoals(this, TaskPriority.Urgent));
         decisions.Register(new RaceGoals(this, TaskPriority.NonUrgent));
     }

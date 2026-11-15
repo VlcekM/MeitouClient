@@ -677,7 +677,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 ? SelfPreservation.RunDesire(runner, SelfPreservation.Walled(world, self.Slot)) : 0,
             // A combat goal: its own desire's zeros and factors, times its finder's factor (an attack goal's 1 with a target, a protect goal's fight
             // threat; AiSystem.Fights.cs).
-            AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind) is var want and > 0 ? want * FightFactor(world, self.Slot, type, mind) : 0,
+            AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind.Squad) is var want and > 0
+                ? want * FightFactor(world, self.Slot, type, mind)
+                : 0,
             // The Medic goal: its desire times the finder's score from the serial sweep (the desire's carrying case is a gate of the finder).
             AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore * MedicDesire(world, self.Slot) : 0,
             // A captive goal: the desire its job start kept on the sweep turn of a seated character (0 for the rest, whose jobs the sweep starts

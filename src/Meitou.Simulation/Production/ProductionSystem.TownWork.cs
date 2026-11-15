@@ -288,6 +288,28 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// The obedient player slaves at their workplace on goal 189 (<see cref="CharacterCold.SlaveWork"/>; serial, after the AI's workers): as the
+    /// AI's plan for 189 (87 needs <c>!63</c> and <c>!62</c>; 92 provides <c>!63</c>), a full output is emptied into the inventory (row 92), else a
+    /// machine with its inputs is operated (row 87, <see cref="TownOperate"/>). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only
+    /// pretends.
+    /// </summary>
+    void ObedientWorkers(World world, float dt)
+    {
+        var table = world.Characters;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Operates: true, Place: var place } } cold) continue;
+            if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(table.Next[i], place.Building, place.Range)) continue;
+
+            var m = world.Machines.Find(TownWorkId(place.Building)) ?? TownWork(world, place.Building, place.Owner);
+            if (m is null || !Live(world, m)) continue;
+
+            if (m.OutputBlocked) TakeOutput(world, cold, m);
+            else if (!m.HasEmptyInputs) TownOperate(world, i, cold, m, dt);
+        }
+    }
+
+    /// <summary>
     /// Whether a worker stands at the town building within <paramref name="reach"/>, idle or resting.
     /// </summary>
     static bool AtTownWork(in CharacterHot n, TownBuilding building, float reach) =>

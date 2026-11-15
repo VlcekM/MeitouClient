@@ -112,6 +112,15 @@ public static class TargetScore
     };
 
     /// <summary>
+    /// A candidate <c>FUN_14059e300</c> never scores (<b>Verified</b>, decompile: the test gates the whole score of the candidate): an obedient slave
+    /// of the chooser's faction, in slave state 1, chained with the chooser's faction its owner (<c>FUN_14032e2a0</c>,
+    /// <see cref="FirstAid.FirstAidSystem.OwnedChained"/>) and holding job 187 (<c>FUN_140597380</c>; only a player character's list holds it in
+    /// Meitou, <see cref="Kidnap.ObedientSlave"/>).
+    /// </summary>
+    public static bool SparesSlave(CharacterCold chooser, CharacterCold candidate) =>
+        candidate.SlaveState == 1 && FirstAid.FirstAidSystem.OwnedChained(chooser, candidate) && Kidnap.ObedientSlave.HasJob(candidate);
+
+    /// <summary>
     /// The score of <paramref name="c"/> (higher is better), null when dropped. <paramref name="prone"/>: the chooser crawls (stubbornness x4, range
     /// term x20). The range term is the chooser's manoeuvre mode's (<see cref="RangeOf"/>).
     /// </summary>

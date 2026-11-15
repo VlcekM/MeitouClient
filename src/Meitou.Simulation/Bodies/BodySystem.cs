@@ -469,6 +469,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
         // An NPC worker at its town building (AiBehaviour.Work, at its work clip), which the original works through Task_OperateMachine.
         if (cold.Ai is { WorkActive: true, WorkClip: { } clip } worker && cold.ActionClip == clip) return worker.WorkHungerRate;
+
+        // An obedient player slave at its workplace (its job's 189 / 190, Task_OperateMachine in the original).
+        if (cold.SlaveWork is { } slave && cold.ActionClip == slave.Place.Clip) return slave.Place.HungerRate;
         return null;
     }
 

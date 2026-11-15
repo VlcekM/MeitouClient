@@ -48,7 +48,7 @@ public sealed partial class AiSystem
     /// Engine gates for all: a character that cannot fight (no working fighter, crawling, or one Self preservation runs away with,
     /// <see cref="SelfPreservation.Flees"/>) and a turret's gunner (it keeps to its turret) want none.
     /// </summary>
-    float FightDesire(World world, int slot, TaskType type, AiMind mind)
+    float FightDesire(World world, int slot, TaskType type, Squad squad)
     {
         if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { Crawling: false } medical, Gunning: null } cold)
             return 0;
@@ -60,7 +60,7 @@ public sealed partial class AiSystem
         return type switch
         {
             TaskType.AttackEnemies => passive || sneaking || medical.Prone ? 0 : 1,
-            TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown => ProtectGoalDesire(world, slot, type, mind, cold, passive || sneaking),
+            TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown => ProtectGoalDesire(world, slot, type, squad, cold, passive || sneaking),
             // 41's desire is the constant 2 (AI slot 0x178, FUN_1406415d0, Verified): the slave's Slave list weighs it above the other fighting goals.
             TaskType.AttackEnemiesOfMySlavemaster => MasterDesire,
             _ => 1,
@@ -71,11 +71,11 @@ public sealed partial class AiSystem
     /// The protect goals' desire: 0 for an idle character (passive or sneaking, or a slave holding a master's squad), else the finder's first ally
     /// value x0.5 while carrying (<see cref="FightDesire"/>).
     /// </summary>
-    float ProtectGoalDesire(World world, int slot, TaskType type, AiMind mind, CharacterCold cold, bool idle)
+    float ProtectGoalDesire(World world, int slot, TaskType type, Squad squad, CharacterCold cold, bool idle)
     {
         if (idle || cold.SlaveState == 1 && cold.SlaveMaster >= 0) return 0;
 
-        return ProtectScan(world, slot, type, mind).First * (cold.Carrying.IsNone ? 1 : 0.5f);
+        return ProtectScan(world, slot, type, squad).First * (cold.Carrying.IsNone ? 1 : 0.5f);
     }
 
     /// <summary>
@@ -106,14 +106,14 @@ public sealed partial class AiSystem
     /// <see cref="AggroSystem.FindFoe"/>, factor 1 with a pick. Protect goals: <see cref="ProtectPick"/>. <paramref name="pending"/>: the fights the
     /// serial step started this tick, by target (<see cref="SendFights"/>). Reads only the last tick's state (any thread in the think).
     /// </summary>
-    (float Factor, CharacterId Target) FightPick(World world, int slot, TaskType type, AiMind mind, IReadOnlyDictionary<int, int>? pending = null)
+    (float Factor, CharacterId Target) FightPick(World world, int slot, TaskType type, Squad squad, IReadOnlyDictionary<int, int>? pending = null)
     {
         // An animal in a bed cannot plan any fight: the melee rows need it ready for action and standing, and no row of its repertoire gets it out of
         // the bed (docs/game/ai-tasks.md "Animals in beds").
         if (world.Characters.Cold(slot) is { } lying && Repertoire.StuckInBed(world, lying))
             return (0, CharacterId.None);
 
-        if (Protects(type)) return ProtectPick(world, slot, type, mind, pending: pending);
+        if (Protects(type)) return ProtectPick(world, slot, type, squad, pending: pending);
         var foe = type switch
         {
             TaskType.SelfPreservation => SelfDefencePick(world, slot, pending),
@@ -150,11 +150,11 @@ public sealed partial class AiSystem
     {
         if (mind.Goal?.Task.Type == type && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind))
         {
-            if (Protects(type)) return ProtectPick(world, slot, type, mind, attacker: false).Factor;
+            if (Protects(type)) return ProtectPick(world, slot, type, mind.Squad, attacker: false).Factor;
             if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return 1;
         }
 
-        return FightPick(world, slot, type, mind).Factor;
+        return FightPick(world, slot, type, mind.Squad).Factor;
     }
 
     /// <summary>
@@ -185,7 +185,7 @@ public sealed partial class AiSystem
     /// </summary>
     void AskFight(World world, int slot, TaskType type, AiMind mind)
     {
-        mind.FightTarget = FightPick(world, slot, type, mind).Target;
+        mind.FightTarget = FightPick(world, slot, type, mind.Squad).Target;
         mind.FightGoal = type;
         if (!mind.FightTarget.IsNone) Interlocked.Exchange(ref _fighting, 1);
     }
@@ -280,7 +280,7 @@ public sealed partial class AiSystem
     /// not asked, the target none). The first entry above 0 comes back too: 15 / 288's desire (<c>FUN_140599b90</c> asks the finder to stop at it,
     /// uncapped). Reads only the last tick's state (any thread in the think).
     /// </summary>
-    internal (int Best, float Value, float First) ProtectScan(World world, int slot, TaskType type, AiMind mind)
+    internal (int Best, float Value, float First) ProtectScan(World world, int slot, TaskType type, Squad squad)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -291,7 +291,7 @@ public sealed partial class AiSystem
         float value = 0, first = 0;
         if (type == TaskType.ProtectOwnSquad)
         {
-            foreach (var m in mind.Squad.Members)
+            foreach (var m in squad.Members)
             {
                 if ((uint)m.Slot >= (uint)prev.Length || !prev[m.Slot].Alive || prev[m.Slot].Generation != m.Generation
                     || m.Slot != slot && !senses.Knows(m, now: true))
@@ -301,7 +301,7 @@ public sealed partial class AiSystem
                 if (v > value) (best, value) = (m.Slot, v);
             }
 
-            if (best < 0) (best, value, first) = OwnedFallback(world, slot, mind, fights, look, senses);
+            if (best < 0) (best, value, first) = OwnedFallback(world, slot, squad, fights, look, senses);
         }
         else
         {
@@ -310,7 +310,7 @@ public sealed partial class AiSystem
                 () => RetaliationSystem.SlaveHelpAllowed(world, data, look.Relations, me, world.Characters.Previous[slot].Position),
                 (_, threat) => threat);
             (best, value, first) = (scan.Best, scan.Value, scan.First);
-            if (best < 0) (best, value, first) = OwnedScan(world, slot, mind, fights, look, senses);
+            if (best < 0) (best, value, first) = OwnedScan(world, slot, squad, fights, look, senses);
         }
 
         return (best, value, first);
@@ -323,7 +323,7 @@ public sealed partial class AiSystem
     /// are not down and below slave state 2, valued at their fight threat x 0.1 (<c>DAT_14167fad0</c>), not those whose own target is an ally of the
     /// looker (<c>FUN_140998790</c>, relation 50). The best, the first above 0 for the desire's stop-at-first call.
     /// </summary>
-    (int Best, float Value, float First) OwnedScan(World world, int slot, AiMind mind, CombatSystem fights, AggroSystem look, SenseBlock senses)
+    (int Best, float Value, float First) OwnedScan(World world, int slot, Squad squad, CombatSystem fights, AggroSystem look, SenseBlock senses)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -332,7 +332,7 @@ public sealed partial class AiSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (s == slot || !prev[s].Alive) continue;
-            if (table.Cold(s) is not { SlaveState: < 2, SlaveMaster: >= 0 } owned || owned.SlaveMaster != mind.Squad.Id) continue;
+            if (table.Cold(s) is not { SlaveState: < 2, SlaveMaster: >= 0 } owned || owned.SlaveMaster != squad.Id) continue;
             var id = new CharacterId(s, prev[s].Generation);
             if (!senses.Knows(id, now: true) || CharacterFacts.Down(owned) || TargetsAnAlly(world, slot, s)) continue;
             float v = fights.FightThreat(world, s, look.SensesOf(s)) * OwnedFactor;
@@ -348,7 +348,7 @@ public sealed partial class AiSystem
     /// senses now (no state or down filter, unlike 15 / 288's <see cref="OwnedScan"/>), by their fight threat x 0.1 (<see cref="OwnedFactor"/>); the
     /// best (the first on a tie), the first above 0 for the stop-at-first call.
     /// </summary>
-    (int Best, float Value, float First) OwnedFallback(World world, int slot, AiMind mind, CombatSystem fights, AggroSystem look, SenseBlock senses)
+    (int Best, float Value, float First) OwnedFallback(World world, int slot, Squad squad, CombatSystem fights, AggroSystem look, SenseBlock senses)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -357,7 +357,7 @@ public sealed partial class AiSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (s == slot || !prev[s].Alive) continue;
-            if (table.Cold(s) is not { SlaveMaster: >= 0 } owned || owned.SlaveMaster != mind.Squad.Id) continue;
+            if (table.Cold(s) is not { SlaveMaster: >= 0 } owned || owned.SlaveMaster != squad.Id) continue;
             if (!senses.Knows(new CharacterId(s, prev[s].Generation), now: true)) continue;
             float v = fights.FightThreat(world, s, look.SensesOf(s)) * OwnedFactor;
             if (v > value) (best, value) = (s, v);
@@ -396,9 +396,9 @@ public sealed partial class AiSystem
     /// think).
     /// </summary>
     (float Factor, CharacterId Target) ProtectPick(
-        World world, int slot, TaskType type, AiMind mind, bool attacker = true, IReadOnlyDictionary<int, int>? pending = null)
+        World world, int slot, TaskType type, Squad squad, bool attacker = true, IReadOnlyDictionary<int, int>? pending = null)
     {
-        var (best, value, _) = ProtectScan(world, slot, type, mind);
+        var (best, value, _) = ProtectScan(world, slot, type, squad);
         var prev = world.Characters.Previous;
         if (best < 0 || _combat is not { } fights) return (0, CharacterId.None);
         if (!attacker) return (MathF.Min(value, CombatSystem.ProtectCap), CharacterId.None);
@@ -440,7 +440,7 @@ public sealed partial class AiSystem
             var goal = mind.FightGoal;
             mind.FightTarget = CharacterId.None;
             if (!table.Next[s].Alive || cold.InCombat) continue;
-            if (_pendingFights.Count > 0 && FightPick(world, s, goal, mind, _pendingFights).Target is { IsNone: false } again)
+            if (_pendingFights.Count > 0 && FightPick(world, s, goal, mind.Squad, _pendingFights).Target is { IsNone: false } again)
                 foe = again;
 
             if (!table.TryResolveNext(foe, out int f) || table.Cold(f) is not { Medical.Incapacitated: false }) continue;
