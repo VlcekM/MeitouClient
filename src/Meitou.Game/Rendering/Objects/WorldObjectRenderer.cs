@@ -1162,9 +1162,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float scale = MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(),
             Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
         float radius = gpu.Radius * scale;
-        if (!inst.Stand && gpu.MinLevel > 0 && inst.TerrainMode)
+        if (!inst.Stand && gpu.MinLevel > 0 && (inst.TerrainMode || inst.Placed.FarmPlant))
         {
-            _meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level
+            _meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level; a farm plant is drawn at its finest
             return false;
         }
         if (!inst.Stand && gpu.MinLevel > 0)
@@ -1182,7 +1182,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         inst.DoorOpen = -1;   // a door part is posed again from its placement (DoorPoses.Pose)
         inst.TurretStamp = -1;   // a turret part is posed again (JointPoses.Pose)
         inst.Radius = radius;
-        inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
+        // A farm's plants have no draw distance of their own (the game's farm batch entity is given none, docs/game/buildings-production.md).
+        inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart && !inst.Placed.FarmPlant
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange,
                 isWall: inst.Placed.Owner.GetBool("links together") && !inst.Placed.Owner.GetBool("is wall gate"))
             : float.MaxValue;
@@ -1195,7 +1196,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
         var key = inst.Placed.MeshPath;
         var mkey = inst.Placed.Material is { } spec
-            ? (key.ToLowerInvariant(), "spec", spec.StringId)
+            ? (key.ToLowerInvariant(), inst.Placed.FarmPlant ? "farm" : "spec", spec.StringId)
             : (key.ToLowerInvariant(), inst.Placed.Source.StringId, inst.Placed.Owner.StringId);
         bool made = !_materialSets.TryGetValue(mkey, out var set);
         if (made) _materialSets[mkey] = set = MakeMaterials(inst.Placed, gpu);
@@ -1217,7 +1218,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var result = new ObjectPartMaterial[gpu.Parts.Count];
         string source = $"'{placed.Source.Name}'", owner = $"'{placed.Owner.Name}'";
-        var chosen = placed.Material is { } spec ? BuildingMaterial.FromSpec(spec) : null;
+        var chosen = placed.Material is not { } spec
+            ? null
+            : placed.FarmPlant
+                ? BuildingMaterial.FromFarmSpec(spec)
+                : BuildingMaterial.FromSpec(spec);
         for (int i = 0; i < gpu.Parts.Count; i++)
         {
             var m = chosen ?? _resolver.Candidates(placed.MeshPath, new OgreSubMesh { MaterialName = gpu.Parts[i].MaterialName })
@@ -1253,7 +1258,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
             {
-                Dust = placed.Kind == PlacedKind.BuildingPart,
+                Dust = placed.Kind == PlacedKind.BuildingPart && !placed.FarmPlant,
                 MetalMap = m?.Metal is null ? null : _textureCache.Get(m.Metal, border, deferred: true),
             };
         }
@@ -2034,8 +2039,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
         float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
         if (w <= 0) return;
-        // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor
-        float lodValue = _shadowLodFloor > 0 ? Math.Max(value, _shadowLodFloor) : value;
+        // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor; a farm plant always at its finest (the game's farm batch has
+        // no levels)
+        float lodValue = inst.Placed.FarmPlant
+            ? 0
+            : _shadowLodFloor > 0
+                ? Math.Max(value, _shadowLodFloor)
+                : value;
         inst.Mesh.LastUsed = now;
         DrawnInstances++;
         if (Motion && !_depthPass && eye == _motionEye && (inst.Placed.DoorIndex >= 0 || inst.Placed.Joints is not null))

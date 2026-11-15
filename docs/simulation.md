@@ -1660,7 +1660,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
 - **Saves** (`Saving/MachineSave`, `ResearchSave`). Each building's production and farm keys go into its
   GAMESTATE_BUILDING. Items go into an INVENTORY_STATE `<site>-inventory`, listed first by the building, with sections
   `in<k>`, `out` and `main` (a furnace's grid `in1`).
-  - A loaded farm's plants all take its growth.
+  - A loaded farm's plants all take its growth (**not modelled**: the game adds 0.2 x U[0, 1) to each, [save](game/buildings-production.md#farming)).
   - The original's reading of these inventories is unverified: no sample holds a working player building.
 - **UI** (Faithful, `ProductionWindows`).
   - Selecting a machine opens its window at the screen's left edge, vertically centred, an open inventory moved right of it (**Observed**, original screenshot 2026-10-26, mined iron rock): `Kenshi_GenericBuildingWindow`, or for a bench
@@ -1679,7 +1679,6 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     walks to its gunner spot (as for town turrets below) and mans it from within the turret's `use range` of its position (doubled once stopped, at the
     spot's height; the original's arrival rule, [work distance](game/buildings-production.md), no settle slack), facing it holding `combatstance`, counts as its operator (so it draws power) and the
     combat system fires it ([Ranged](#ranged)); one gunner, engine choice; someone else at it: "is already in use".
-  - Plants are not drawn.
 
 ### Prospecting
 
@@ -2033,8 +2032,8 @@ the level data) stay.
 
 **Engine gaps** are listed where they apply, not here: [unique characters](#unique-characters) and [campaigns](#off-screen-tier),
 [ranged](#ranged) (bolts before a building's collision loads), [locks](#cages-beds-and-locks),
-[slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets,
-plants), [prospecting](#prospecting), [dialogue](#dialogue) (conditions on state Meitou lacks), [AI](#ai) (planner finders).
+[slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets),
+[prospecting](#prospecting), [AI](#ai) (planner finders).
 Smuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-parity.md).
 
 - Navmesh: the cache key does not see a changed collision file; a running build is not stopped on unload (it finishes into the cache).

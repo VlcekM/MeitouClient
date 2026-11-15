@@ -86,7 +86,7 @@ Bit meanings from the define names the code adds (FUN_140841a50, **Verified (dec
 | Items on the ground, weapons | FUN_140844030 (via FUN_140446e60) | `StaticObject` | `MATERIAL_SPECS_CLOTHING`: 0x18 if `material type` (ItemShader) > 0, plus COLOURING (0x1) when the mesh has vertex colours (the ground item, FUN_1407626e0, passes FUN_14083ff20; e.g. Building Material's `Item_Building_Materials.mesh` is tinted by them); `MATERIAL_SPECS_WEAPON`: 0; `ARMOUR`: a temporary record whose `texture map` / `normal map` are the armour's `vest texture` / `vest normalmap`, flags 0 |
 | Items worn on a character | FUN_140536210 (`AppearanceBase::setupItemMaterial`) | `Skinned` | 0x10 if ItemShader is DOUBLE_SIDED (2), else 0 (ALPHA gives no flag here) |
 | Clothing attachments with their own mesh | FUN_140535f20 | `StaticObject` | 0, record from the item's `material` reference |
-| Farm plants | FUN_1400e70a0 | `FarmPlants` | 0, plus shared parameters `FarmParams<n>` (`plantData`) |
+| Farm plants | FUN_1400e70a0 | `FarmPlants` | 0, plus shared parameters `FarmParams<n>` (`plantData`); the template's own fragment program stays (flags 0 replace nothing): `Object_DoubleSided_Coloured_FP`, TRANSPARENCY and COLOURING (DX11 `DOUBLESIDED2`, which `objects.hlsl` never tests; GLSL `DOUBLESIDED`), so any `material type` is cut out and two-sided; `threshold` is still set from `alpha threshold` (**Verified**, `foliage.material`, `objects.program`, FUN_140841a50) |
 | Inventory icons (render to texture) | FUN_140846060 | `RTTIcons_Base`, `RTTIcons_Coloured` (mesh with vertex colours) or `RTTIcons_DXT5N` (one item kind, 0x11) | 0x10 if ItemShader is DOUBLE_SIDED |
 
 ## Evidence index

@@ -231,9 +231,11 @@ materials): green valid, red invalid, blue queued. Not drawn in shadow or landma
 **Farm plants.** The host lays out each farm machine of the snapshot once (`FarmLayout.Plant`, seeded by the building id) and
 recomputes its plants' transforms (`FarmLayout.Transform`) when the farm's growth, death or harvest count changes
 ([farm plants](game/buildings-production.md#farm-plants)). `FarmPlants.Set` keeps one `Loose` instance per
-plant mesh (a `BuildingPart` of the farm building, its FARM_PART material) and draws the shown ones through `DrawReal`, shadows
-included. The original draws one merged mesh per farm with a `plantData` shader array; Meitou instances each plant (batched by
-mesh). Each plant's colour (`FarmLayout.Tint`, the death tint and brightness of
+plant mesh (a `BuildingPart` of the farm building flagged `PlacedMesh.FarmPlant`, `Contained` in a player's building it was placed in)
+and draws the shown ones through `DrawReal`, shadows included; an unresolved plant's centre is its spot, where the loose scan measures it. Every plant takes the farm's one material (the first plant's first part's),
+built by `BuildingMaterial.FromFarmSpec` (normal-alpha cut-out, two-sided, no vertex colours, no dust), at LOD 0 (`Resolve` asks for the finest
+levels, `DrawReal` picks level 0) and with no part distance (only the real-object range). The original draws one merged mesh per farm with
+a `plantData` shader array; Meitou instances each plant (batched by mesh). Its back faces flip their normal (the DX11 game's do not). Each plant's colour (`FarmLayout.Tint`, the death tint and brightness of
 [farm plants](game/buildings-production.md#farm-plants)) multiplies its albedo, packed into a negative spare `M44`
 (`FarmPlants.PackTint`: 8 bits per channel over [0, 1.275]).
 
