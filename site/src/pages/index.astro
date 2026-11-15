@@ -17,6 +17,31 @@ const platforms = [
   },
 ];
 
+const siteUrl = new URL('/', Astro.site).href;
+const applicationId = new URL('#application', siteUrl).href;
+const metadata = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': new URL('#website', siteUrl).href,
+      name: 'MeitouClient',
+      url: siteUrl,
+      about: { '@id': applicationId },
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': applicationId,
+      name: 'MeitouClient',
+      url: siteUrl,
+      description: 'An open-source reimplementation of the Kenshi engine.',
+      operatingSystem: platforms.map(({ name }) => name),
+      softwareRequirements: 'An installed copy of Kenshi.',
+      downloadUrl: releasesPage,
+    },
+  ],
+};
+
 const trailer = 'https://www.youtube.com/watch?v=qm722zwWnJU';
 
 // The performance video: 30 fps WebM, no audio.
@@ -30,6 +55,7 @@ const pairs = [
 ];
 ---
 <Base title="MeitouClient - Kenshi engine reimplementation" video>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(metadata)} />
   <section class="hero">
     <div class="stack">
       <h1>Run Kenshi on a new engine</h1>
@@ -94,7 +120,8 @@ const pairs = [
       <p class="lead">
         MeitouClient is an open-source reimplementation of the Kenshi engine in C# and .NET 11 with a Vulkan renderer. It is a
         drop-in replacement: the original game content, FCS mods and vanilla save games run unchanged. It needs your own copy
-        of Kenshi, and no game assets are distributed.
+        of Kenshi, and no game assets are distributed. For guides to the original game's mechanics, factions, and equipment,
+        visit the <a href="https://kenshi.wiki/">Kenshi Wiki</a>.
       </p>
       <div class="modes">
         <div class="mode">
