@@ -14,16 +14,11 @@ namespace Meitou.Game.Effects;
 readonly record struct Footfall(CharacterSnapshot Actor, bool Right, Vector3 At, Vector2 Along);
 
 /// <summary>
-/// Visual-only transfer from wet terrain blood to moving characters' feet (docs/game/blood-decals.md "Bloody footprints"). A drawn character's steps
-/// are the ground trails' footfalls (<see cref="Footfall"/>); one with no pose falls back to a stride counted along its path.
+/// Visual-only transfer from wet terrain blood to moving characters' feet (docs/game/blood-decals.md "Bloody footprints"). Every step is a ground
+/// trails' footfall (<see cref="Footfall"/>) of a drawn body; a body with no pose leaves none.
 /// </summary>
 sealed class BloodFootprints(GameHost host)
 {
-    /// <summary>
-    /// Distance between walking contacts, across the ground, for a body with no pose.
-    /// </summary>
-    const float StepLength = 4.2f;
-
     /// <summary>
     /// Seconds a print remains on the terrain, and seconds blood stays wet on a sole.
     /// </summary>
@@ -46,7 +41,7 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Last sampled position and the gait's progress for a single character.
+    /// A walker near blood: where it was last seen and the blood on its soles.
     /// </summary>
     sealed class Trail(Vector3 position)
     {
@@ -54,18 +49,6 @@ sealed class BloodFootprints(GameHost host)
         /// Last position of the character.
         /// </summary>
         public Vector3 Position = position;
-        /// <summary>
-        /// Ground distance travelled since the last stride footfall.
-        /// </summary>
-        public float Distance = StepLength / 2;
-        /// <summary>
-        /// Which foot takes the next stride step.
-        /// </summary>
-        public bool Right;
-        /// <summary>
-        /// Whether the last sample moved, used to wet the feet when starting from a pool.
-        /// </summary>
-        public bool Moving;
         /// <summary>
         /// Last shown tick in which the character was eligible.
         /// </summary>
@@ -144,7 +127,7 @@ sealed class BloodFootprints(GameHost host)
         double now = _now = _tick * (double)host.Session.World.TickSeconds;
         foreach (var actor in snapshot.Characters)
         {
-            if (!Walks(actor, out var look)) continue;
+            if (!Walks(actor, out _)) continue;
             var here = Xz(actor.Position);
             if (Vector2.DistanceSquared(focus, here) > Range * Range) continue;
 
@@ -157,7 +140,7 @@ sealed class BloodFootprints(GameHost host)
 
             if (!inDecalCell && !Wet(trail.Left, now) && !Wet(trail.RightSole, now)) continue;
             trail.Seen = _tick;
-            Advance(store, trail, actor, look, now);
+            Follow(trail, actor);
         }
 
         foreach (var (id, trail) in _trails)
@@ -226,88 +209,14 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Wets both feet where a walker with no pose begins moving out of a pool.
+    /// Follows the walker's position; a jump longer than <see cref="MaxMovement"/> is a relocation (a teleport, a load), which dries its soles.
     /// </summary>
-    void WetFeet(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, Vector3 at, Vector2 across, double now)
-    {
-        if (!OnTerrain(at)) return;
-
-        var point = Xz(at);
-        if (HasFoot(actor, false) && SourceColour(store, point + across) is { } left) trail.Left = Sole.Wet(left, now);
-        if (HasFoot(actor, true) && SourceColour(store, point - across) is { } right) trail.RightSole = Sole.Wet(right, now);
-    }
-
-    /// <summary>
-    /// Follows the walker's position. A drawn body's steps come from its feet (<see cref="Footfall"/>); for one with no pose, the distance along the
-    /// motion segment keeps stride steps spaced consistently at different frame rates.
-    /// </summary>
-    void Advance(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, CharacterAppearance look, double now)
+    static void Follow(Trail trail, CharacterSnapshot actor)
     {
         var from = trail.Position;
         trail.Position = actor.Position;
-        var movement = Xz(actor.Position - from);
-        float length = movement.Length();
-        if (length > MaxMovement || MathF.Abs(actor.Position.Y - from.Y) > MaxMovement)
-        {
+        if (Xz(actor.Position - from).Length() > MaxMovement || MathF.Abs(actor.Position.Y - from.Y) > MaxMovement)
             trail.Left = trail.RightSole = default;
-            trail.Distance = StepLength / 2;
-            trail.Moving = false;
-            return;
-        }
-        if (length <= .002f)
-        {
-            trail.Moving = false;
-            return;
-        }
-
-        if (host.FootfallsPosed(host.DrawKey(actor.Id)))
-        {
-            trail.Moving = true;
-            trail.Distance = StepLength / 2;
-            return;
-        }
-
-        var forward = movement / length;
-        var across = new Vector2(forward.Y, -forward.X);
-        if (!trail.Moving) WetFeet(store, trail, actor, from, across, now);
-        trail.Moving = true;
-        Strides(store, trail, actor, look, from, length, across, now);
-    }
-
-    /// <summary>
-    /// The stride footfalls along this snapshot's movement, every <see cref="StepLength"/>, alternating feet.
-    /// </summary>
-    void Strides(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, CharacterAppearance look, Vector3 from, float length, Vector2 across,
-        double now)
-    {
-        float travel = StepLength - trail.Distance;
-        if (travel > length)
-        {
-            trail.Distance += length;
-            return;
-        }
-
-        var boot = Boot(look);
-        for (; travel <= length; travel += StepLength)
-        {
-            var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Stride(store, trail, at, across, boot, look, now);
-            trail.Right = !trail.Right;
-        }
-        trail.Distance = length - travel + StepLength;
-    }
-
-    /// <summary>
-    /// A stride's footfall for a body with no pose, beside the path. A drawn body is always within the trails' reach (240, more than
-    /// <see cref="Range"/>), so its steps come from <see cref="Footfall"/>.
-    /// </summary>
-    void Stride(TerrainDecalStore store, Trail trail, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
-    {
-        bool right = trail.Right;
-        var point = Xz(at) + across * (right ? -1 : 1);
-        at.X = point.X;
-        at.Z = point.Y;
-        Deposit(store, trail, right, at, across, boot, look, now);
     }
 
     /// <summary>

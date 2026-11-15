@@ -115,11 +115,6 @@ sealed partial class GameHost
         /// The count of prints noted, whose remainder is the next slot of <see cref="Recent"/>.
         /// </summary>
         public int RecentNext;
-
-        /// <summary>
-        /// Whether its posed body was read this frame (<see cref="FootfallsPosed"/>).
-        /// </summary>
-        public bool Posed;
     }
 
     /// <summary>
@@ -159,13 +154,6 @@ sealed partial class GameHost
             foreach (var (key, w) in _walkers)
                 if (w.Frame != _trailFrame) _walkers.Remove(key);
     }
-
-    /// <summary>
-    /// Whether the character <paramref name="key"/>'s footfalls were found from its posed body in the last trail frame: then its blood prints come from
-    /// <see cref="Footfall"/>, not from its stride.
-    /// </summary>
-    internal bool FootfallsPosed(long key) =>
-        _walkers.TryGetValue(key, out var w) && w.Posed && w.Frame == _trailFrame;
 
     /// <summary>
     /// Counts the trail frame and measures <see cref="_trailDt"/>, clamped to 0.5 ms to 0.1 s.
@@ -217,8 +205,7 @@ sealed partial class GameHost
 
         var heading = stepped > 1e-4f && continues ? moved / stepped : Vector2.Zero;
         float speed = continues && _trailDt > 0 ? stepped / _trailDt : 0;
-        w.Posed = BodyContact(trails, ground, key, ref w, body, heading, animal, !lying, speed, continues);
-        if (w.Posed) return;
+        if (BodyContact(trails, ground, key, ref w, body, heading, animal, !lying, speed, continues)) return;
         if (!continues || stepped < 1e-4f) return;
 
         var along = moved / stepped;
