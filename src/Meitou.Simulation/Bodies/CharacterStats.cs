@@ -20,6 +20,11 @@ public sealed class CharacterStats
     readonly float[] _values = new float[StatsInfo.Count];
 
     /// <summary>
+    /// The code mods' modifiers, made on first use (<see cref="Modifiers"/>).
+    /// </summary>
+    StatModifiers? _modifiers;
+
+    /// <summary>
     /// Stats that read as 1 for a character built without data (the editor's default of a STATS field).
     /// </summary>
     public CharacterStats()
@@ -29,14 +34,35 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// The value of a stat (0 for a number without storage); <see cref="StatsEnumerated.HiveMedic"/> and <see cref="StatsEnumerated.Vet"/> read
-    /// <see cref="StatsEnumerated.Medic"/>. Setting a number without storage does nothing.
+    /// The value of a stat: the stored value plus the <see cref="Modifiers"/> (0 for a number without storage); <see cref="StatsEnumerated.HiveMedic"/>
+    /// and <see cref="StatsEnumerated.Vet"/> read <see cref="StatsEnumerated.Medic"/>. Setting writes the stored value; a number without storage does
+    /// nothing. Code that trains or keeps a stat reads <see cref="Stored"/>, so a modifier is never baked in.
     /// </summary>
     public float this[StatsEnumerated stat]
     {
-        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? Value(s) : 0;
         set { if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) _values[(int)s] = value; }
     }
+
+    /// <summary>
+    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage).
+    /// </summary>
+    public float Stored(StatsEnumerated stat) => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+
+    /// <summary>
+    /// The code mods' temporary amounts on this character's stats (docs/modding.md "Stat modifiers"), made on first use.
+    /// </summary>
+    public StatModifiers Modifiers => _modifiers ??= new();
+
+    /// <summary>
+    /// The modifiers if any were ever made (state hash only).
+    /// </summary>
+    internal StatModifiers? ModifiersOrNull => _modifiers;
+
+    /// <summary>
+    /// A storage's value with its modifiers.
+    /// </summary>
+    float Value(StatsEnumerated storage) => _values[(int)storage] + (_modifiers?[storage] ?? 0);
 
     /// <summary>
     /// The read-time stat multiplier (<c>CharStats</c> +0x34): 1 for people here; an animal's is its age (<c>CharStatsAnimal</c> sets it from the
@@ -46,26 +72,26 @@ public sealed class CharacterStats
     public float Scale { get; set; } = 1;
 
     /// <summary>
-    /// The stored strength.
+    /// The strength, with its modifiers.
     /// </summary>
-    public float Strength => _values[(int)StatsEnumerated.Strength];
+    public float Strength => Value(StatsEnumerated.Strength);
     /// <summary>
-    /// The stored dexterity.
+    /// The dexterity, with its modifiers.
     /// </summary>
-    public float Dexterity => _values[(int)StatsEnumerated.Dexterity];
+    public float Dexterity => Value(StatsEnumerated.Dexterity);
     /// <summary>
-    /// The stored toughness (unscaled; the formulas read <see cref="ScaledToughness"/>).
+    /// The toughness, with its modifiers (unscaled; the formulas read <see cref="ScaledToughness"/>).
     /// </summary>
-    public float Toughness => _values[(int)StatsEnumerated.Toughness];
+    public float Toughness => Value(StatsEnumerated.Toughness);
 
     /// <summary>
     /// The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.
     /// </summary>
     public float ScaledToughness => Toughness * Scale;
     /// <summary>
-    /// The stored athletics.
+    /// The athletics, with its modifiers.
     /// </summary>
-    public float Athletics => _values[(int)StatsEnumerated.Athletics];
+    public float Athletics => Value(StatsEnumerated.Athletics);
 
     /// <summary>
     /// The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach
@@ -107,9 +133,21 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// A copy of the values by stat number.
+    /// A copy of the stored values by stat number (no modifiers).
     /// </summary>
     public float[] ToArray() => (float[])_values.Clone();
+
+    /// <summary>
+    /// A copy of the values with their modifiers by stat number (what the stats window shows).
+    /// </summary>
+    public float[] ToEffectiveArray()
+    {
+        var values = ToArray();
+        if (_modifiers is null) return values;
+        for (int i = 1; i < values.Length; i++)
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) values[i] += _modifiers[(StatsEnumerated)i];
+        return values;
+    }
 
     /// <summary>
     /// The core gain (<c>FUN_1408c5df0</c>, <b>Observed</b>): f = ((cap - stat) / cap)^2; <c>amount * f</c> is added only when 0 &lt; amount &lt;= 20

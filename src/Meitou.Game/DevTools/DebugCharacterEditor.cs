@@ -456,7 +456,7 @@ sealed class DebugCharacterEditor(GameHost host)
     {
         var table = host.Session.World.Characters;
         if (DebugMenu.DebugTargets(host) is not [var first, ..] || !table.TryResolveNext(first, out int slot)) return 0;
-        return table.Cold(slot)?.Stats is { } stats ? stats[stat] : 0;
+        return table.Cold(slot)?.Stats is { } stats ? stats.Stored(stat) : 0;
     }
 
     /// <summary>

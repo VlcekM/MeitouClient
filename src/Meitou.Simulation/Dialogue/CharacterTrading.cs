@@ -440,7 +440,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         foreach (var (slot, c, _) in chosen)
         {
             c.Ai = null;
-            if (c.Stats is { } stats) foreach (var stat in TamedStats) stats[stat] *= 0.25f;
+            if (c.Stats is { } stats) foreach (var stat in TamedStats) stats[stat] = stats.Stored(stat) * 0.25f;
             var packed = c.Inventory?.Backpack?.Contents is { } bag ? bag.All().ToList() : [];
             foreach (var item in packed) c.Inventory!.Remove(item);
             if (!system.JoinPlayer(world, slot, buyer)) continue;

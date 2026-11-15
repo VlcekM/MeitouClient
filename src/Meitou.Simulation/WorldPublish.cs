@@ -467,7 +467,7 @@ public sealed partial class World
                 sk.Strength, sk.Athletics)
             : null;
         s.Inventory = selected && cold!.Inventory is { } carried ? Items.InventoryText.Lines(carried) : [];
-        s.AllSkills = detailed && cold!.Stats is { } allStats ? Array.AsReadOnly(allStats.ToArray()) : [];
+        s.AllSkills = detailed && cold!.Stats is { } allStats ? Array.AsReadOnly(allStats.ToEffectiveArray()) : [];
         s.SkillXpMultipliers = detailed && cold!.Race is { } skillRace ? Array.AsReadOnly((float[])skillRace.StatMultipliers.Clone()) : [];
         s.Hud = detailed && cold!.Medical is { } hudMed && cold.Race is { } hudRace && cold.Stats is { } hudStats
             ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db)
@@ -512,7 +512,7 @@ public sealed partial class World
 
         // The original skips robots' appearances (FUN_140531820) and animals have none.
         s.Build = cold is { Stats: { } buildStats, Medical: { } fed, Race.IsRobot: false, Appearance: { Animal: null } look }
-            ? ShapedBuild(cold, Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger))
+            ? ShapedBuild(cold, Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats.Stored(s), fed.Hunger))
             : null;
         bool pathed = detailed && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0;
         s.Path = pathed ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [];
