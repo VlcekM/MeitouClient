@@ -264,6 +264,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         ref var n = ref table.Next[i];
         if (medical.Dead && cold.DiedTick < 0) cold.DiedTick = world.Tick;   // also when something outside the tick killed it (a hit)
         StopIncapacitated(table, i, cold, medical, ref n);
+        SheatheRagdolled(cold);
         if (medical.Dead) return;
         if (!TryStartStep(world, i, cold, medical, out float dt)) return;
         if (cold.Animal is { } animal) Age(cold, animal, stats, medical, dt);
@@ -303,6 +304,15 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 n.Velocity = Vector3.Zero;
             }
         }
+    }
+
+    /// <summary>
+    /// A character that goes limp or is carried (the whole-body or carry ragdoll) puts its weapon away, as the original's ragdoll setter does
+    /// (docs/game/ragdolls.md "Triggers", slot 90).
+    /// </summary>
+    static void SheatheRagdolled(CharacterCold cold)
+    {
+        if (cold.DrawnWeapon != WeaponKinds.None && Ragdolls.RagdollSystem.IsRagdoll(cold)) cold.DrawnWeapon = WeaponKinds.None;
     }
 
     /// <summary>

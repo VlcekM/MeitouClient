@@ -86,7 +86,7 @@ also uses 0x8000 internally as "release all".
 - The queue is drained at the sync point `FUN_1407d2380` → `FUN_1405d2c30` → setter `FUN_1405d0db0`,
   which keeps a request queued while the skeleton is not ready or a get-up blend runs.
 - The setter, for WHOLE or CARRY_MODE: unlinks a carried body (also when the carrying arm goes limp),
-  stops movement, puts the weapon away (slot 90), loads RACE `male ragdoll` / `female ragdoll`, then
+  stops movement, puts the weapon away (slot 90; Meitou: the body tick, while `IsRagdoll`), loads RACE `male ragdoll` / `female ragdoll`, then
   AnimationClass slot 10 (`FUN_1405b9a10`; Human `FUN_1405ba050` also records the arm bits).
   Notify slot 132: humans holding a weapon in a limp arm put it away (`FUN_1405cc230`).
 - RACE `male carry ragdoll` / `female carry ragdoll` are **Verified** unused: no string reference in
