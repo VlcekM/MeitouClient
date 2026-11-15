@@ -1,6 +1,7 @@
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 
 namespace Meitou.Tests.Bodies;
@@ -90,5 +91,55 @@ public class StatsTests
         Assert.True(saved.ContainsKey("toughness2"));
         var back = CharacterStats.ReadSave(saved);
         Assert.Equal(stats.ToArray(), back.ToArray());
+    }
+
+    [Fact]
+    public void A_stat_modifier_is_read_but_never_trained_in_or_saved()
+    {
+        var plain = new CharacterStats();
+        var dosed = new CharacterStats();
+        foreach (var s in new[] { plain, dosed }) (s[StatsEnumerated.Strength], s[StatsEnumerated.Medic]) = (40, 20);
+
+        dosed.Modifiers.Set("drug", StatsEnumerated.Strength, 10);
+        dosed.Modifiers.Set("drug", StatsEnumerated.Vet, 5);   // Vet's storage is Medic's
+
+        Assert.Equal((50f, 50f, 40f), (dosed[StatsEnumerated.Strength], dosed.Strength, dosed.Stored(StatsEnumerated.Strength)));
+        Assert.Equal((25f, 25f), (dosed[StatsEnumerated.Medic], dosed[StatsEnumerated.HiveMedic]));
+        Assert.Equal(50f, dosed.ToEffectiveArray()[(int)StatsEnumerated.Strength]);
+
+        Assert.Equal(plain.Gain(StatsEnumerated.Strength, 1), dosed.Gain(StatsEnumerated.Strength, 1));
+        var saved = new Dictionary<string, float>();
+        dosed.WriteSave(saved);
+        Assert.Equal(plain.Stored(StatsEnumerated.Strength), saved["strength"]);
+        Assert.Equal(20, saved["medic"]);
+
+        Assert.Equal(2, dosed.Modifiers.RemoveAll("drug"));
+        Assert.Equal(plain.Strength, dosed.Strength);
+    }
+
+    [Fact]
+    public void Stat_modifiers_enter_the_state_hash_only_while_set_and_in_any_order()
+    {
+        static ulong Hash(CharacterStats s)
+        {
+            var h = new StateHasher();
+            BodyHash.Add(ref h, s, null);
+            return h.Value;
+        }
+
+        var a = new CharacterStats();
+        var b = new CharacterStats();
+        ulong none = Hash(a);
+
+        a.Modifiers.Set("perk", StatsEnumerated.Dexterity, 3);
+        a.Modifiers.Set("drug", StatsEnumerated.Strength, 10);
+        b.Modifiers.Set("drug", StatsEnumerated.Strength, 10);
+        b.Modifiers.Set("perk", StatsEnumerated.Dexterity, 3);
+        Assert.NotEqual(none, Hash(a));
+        Assert.Equal(Hash(a), Hash(b));
+
+        a.Modifiers.RemoveAll("perk");
+        a.Modifiers.RemoveAll("drug");
+        Assert.Equal(none, Hash(a));
     }
 }

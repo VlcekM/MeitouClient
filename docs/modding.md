@@ -194,8 +194,8 @@ holds refuses the second mod.
   training (`Gain`, the XP difference terms), saves, god mode, taming and the debug editor use `Stored(stat)`, so it is never trained in or
   saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
-  a new body (a race change at character creation) starts without modifiers. **Observed** (2026-11-15, a scratch harness): reads, save, gain
-  and hash as described; in play **Unknown**.
+  a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash); in play
+  **Unknown**.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
