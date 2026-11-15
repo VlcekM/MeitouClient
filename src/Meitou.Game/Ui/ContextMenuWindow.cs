@@ -273,7 +273,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// so the cage's own verbs come here (engine stand-ins for the original's cage menu beside the occupant's): Unlock or Lock the player's own cage
     /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, the
     /// same), and once it is open Escape (207, the selected prisoner), Set Free (110), or Pick Up (225, a mate lifts it out; out of another
-    /// faction's cage a crime, locks.md "Cages and beds").
+    /// faction's cage a crime, locks.md "Cages and beds"); Stealth KO (228) out of any cage but the player's.
     /// </summary>
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
     {
@@ -327,6 +327,21 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
             verbs.Add(PickUpVerb(target));
         }
+
+        // 228 when neither the prisoner nor its cage is the player's (FUN_1407a6bc0's imprisoned row), so a Rebirth pole's slave too (#757).
+        if (!ownCage) AddStealthKoVerb(verbs, target, selection);
+    }
+
+    /// <summary>
+    /// Stealth KO (228) with its chance, when the selection can knock the target out from behind (<see cref="CharacterSnapshot.StealthKoChance"/>:
+    /// a sneaking member, a target that is no animal and not the player's).
+    /// </summary>
+    void AddStealthKoVerb(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
+    {
+        if (target.StealthKoChance is not { } chance) return;
+
+        var id = target.Id;
+        verbs.Add((WithChance("Stealth KO", chance), () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
     }
 
     /// <summary>
@@ -437,11 +452,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         verbs.Add(PickUpVerb(target));
         // 228 on a down character too (FUN_1407a6bc0:583-594).
-        if (target.StealthKoChance is { } downChance)
-        {
-            verbs.Add((WithChance("Stealth KO", downChance),
-                () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
-        }
+        AddStealthKoVerb(verbs, target, selection);
 
         ThrowOutVerb(verbs, target, selection);
     }
@@ -457,11 +468,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         verbs.Add(PickUpVerb(target));
         ThrowOutVerb(verbs, target, selection);
-        if (target.StealthKoChance is { } koChance)
-        {
-            verbs.Add((WithChance("Stealth KO", koChance),
-                () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
-        }
+        AddStealthKoVerb(verbs, target, selection);
 
         if (player.PointerPanel.Hostile(target)) return;
 
@@ -496,8 +503,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
             return;
         }
 
-        if (target.StealthKoChance is { } chance)
-            verbs.Add((WithChance("Stealth KO", chance), () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
+        AddStealthKoVerb(verbs, target, selection);
 
         if (hostile)
         {
