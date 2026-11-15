@@ -368,7 +368,8 @@ sealed class WorldObjects : IDisposable
     /// The sound emitters of the level's buildings (docs/audio.md "Point emitters"): those whose record has <c>sounds</c>, that are not destroyed and
     /// whose state does not say
     /// <c>is complete</c> is false (a state without the key counts as complete), and those of the furniture in the state's interior and exterior
-    /// layouts (ovens, stoves). Positioned as <see cref="Lay"/> places the building and its layout objects. Safe from a worker thread.
+    /// layouts (ovens, stoves), then the map features' (<see cref="BuildingEmitters.ForFeature"/>). Positioned as <see cref="Lay"/> places the
+    /// building and its layout objects. Safe from a worker thread.
     /// </summary>
     public List<PlacedEmitter> Emitters()
     {
@@ -399,6 +400,11 @@ sealed class WorldObjects : IDisposable
                         result.Add(furniture);
                 }
         }
+
+        // The map features' emitters: every sounds entry, hidden features too (FUN_14039c070 checks neither).
+        foreach (var (zone, feature) in Features.All())
+            if (Database.Find(feature.StringId) is { Type: Data.Fcs.FcsRecordType.MapFeatures } record && record.GetReferences("sounds").Count > 0)
+                result.AddRange(BuildingEmitters.ForFeature(Database, record, $"feature {zone} {feature.Position}", feature));
         return result;
     }
 

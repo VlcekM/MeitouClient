@@ -76,6 +76,28 @@ public static class BuildingEmitters
     }
 
     /// <summary>
+    /// The emitters of a placed map feature (<c>FUN_14039c070</c>, docs/audio.md "Point emitters"): one for <b>every</b> entry of the MAP_FEATURES
+    /// record's <c>sounds</c>, each rolled by its own <c>chance</c>, at the feature's position + its rotation × the entry's three values, scaled per
+    /// axis by the feature's scale. Each has an object of its own, so, as for an effect's, <c>needs power</c> and <c>efficiency multiplier</c> are
+    /// forced to 0 (<c>FUN_140259a80</c> with no object): they play by distance alone. Keys are <paramref name="key"/> with the entry's index.
+    /// </summary>
+    public static IEnumerable<PlacedEmitter> ForFeature(GameDatabase db, GameRecord feature, string key, MapFeature placed)
+    {
+        var sounds = feature.GetReferences("sounds");
+        var q = placed.Rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(placed.Rotation);
+        for (int i = 0; i < sounds.Count; i++)
+        {
+            if (db.Find(sounds[i].TargetStringId) is not { } record || AmbientSound.From(record) is not { Emitter.Length: > 0 } sound) continue;
+
+            string id = $"{key}#{i}";
+            if (sound.Chance <= Roll(id)) continue;
+            var offset = new Vector3(sounds[i].Values.Value0, sounds[i].Values.Value1, sounds[i].Values.Value2);
+            var own = sound with { NeedsPower = false, EfficiencyMultiplier = 0 };
+            yield return new PlacedEmitter(id, own, placed.Position + Vector3.Transform(offset, q) * placed.Scale, feature.StringId, placed.Position);
+        }
+    }
+
+    /// <summary>
     /// A number in [0, 1) that depends only on the placement id (FNV-1a).
     /// </summary>
     static float Roll(string id)

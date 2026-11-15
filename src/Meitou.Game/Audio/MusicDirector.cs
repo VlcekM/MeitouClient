@@ -87,6 +87,11 @@ public sealed class MusicDirector
     public string? Remembered => _remembered;
 
     /// <summary>
+    /// Whether a biome music bank is loading for the current biome (it holds back every bank unload, the ambience's too).
+    /// </summary>
+    public bool LoadPending => _pendingBank is not null;
+
+    /// <summary>
     /// Real seconds until the timer next fires (negative once due, e.g. during the title screen).
     /// </summary>
     public double SecondsToNext => _deadline - _clock();
@@ -157,9 +162,10 @@ public sealed class MusicDirector
 
     /// <summary>
     /// Each frame: <paramref name="music"/> is the <c>music</c> of the region under the camera's pivot, null when no region was found (the game
-    /// then skips the biome step, not the timer). The timer is skipped while <see cref="TitleScreen"/>.
+    /// then skips the biome step, not the timer). The timer is skipped while <see cref="TitleScreen"/>. <paramref name="otherLoadPending"/>: an
+    /// ambience bank is loading, which holds back the unloads as the music's own pending load does (the exe's one pending-load word).
     /// </summary>
-    public void Update(BiomeMusic? music)
+    public void Update(BiomeMusic? music, bool otherLoadPending = false)
     {
         double now = _clock();
         if (music is { } m) ChangeBiome((int)m, now);
@@ -171,7 +177,7 @@ public sealed class MusicDirector
             if (_remembered is not null && Volume > 0) _player.Post(_remembered, AudioSystem.MusicObject);
         }
         if (_remembered is not null) _lastCurrent[BankOf(Biome!)] = now;
-        UnloadStale(now);
+        if (!otherLoadPending) UnloadStale(now);
     }
 
     /// <summary>

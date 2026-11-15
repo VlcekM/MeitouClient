@@ -134,6 +134,7 @@ public static class ContainerAccess
                 {
                     if (table.Next[s].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, s);
                     (player.OpenContainer, player.ContainerOpener, player.OpeningContainer) = (wanted, player.ContainerWalker, null);
+                    world.EmitSound(SoundKind.Inspected, s, table.Next[s].Position);
                 }
                 else if (table.Next[s].Task != (byte)CharacterTask.GoTo || Vector2.Distance(table.Next[s].Goal, at) > ContainerReach)
                     player.OpeningContainer = null;

@@ -98,8 +98,8 @@ public sealed partial class WwisePlayer : IDisposable
 
     /// <summary>
     /// Unloads a loaded bank (nothing for one that is not loaded or still loading): what is playing from it is cut, its recordings are
-    /// dropped and a later <see cref="LoadBank"/> reads it again. Objects of the same id in another loaded bank (the music banks' shared
-    /// upper switches) stay in use.
+    /// dropped and a later <see cref="LoadBank"/> reads it again. Objects and recordings of the same id in another loaded bank (the music banks'
+    /// shared upper switches, the ambience banks' shared actor-mixers and recordings) stay in use.
     /// </summary>
     public void UnloadBank(string name)
     {
@@ -117,7 +117,9 @@ public sealed partial class WwisePlayer : IDisposable
                 if (_objects.TryGetValue(o.Id, out var held) && own.Contains(held)) _objects.Remove(o.Id);
             foreach (var other in _bankContents.Values)
                 foreach (var o in other.Objects) _objects.TryAdd(o.Id, o);
-            foreach (var id in contents.Media) _media.Remove(id);
+            // A recording another loaded bank also lists stays (the Canyons, Forest and Plains ambience banks share some).
+            foreach (var id in contents.Media)
+                if (!_bankContents.Values.Any(other => other.Media.Contains(id))) _media.Remove(id);
         });
     }
 

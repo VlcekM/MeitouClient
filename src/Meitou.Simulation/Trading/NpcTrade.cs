@@ -92,6 +92,8 @@ public static class NpcTrade
             else if (purse is not null) purse.Money -= price;
             if (owner is not null) owner.Money += price;
 
+            // FUN_1409a14b0: a sale worth more than nothing floats the price over the shopper and posts Sell_Item on it.
+            if (price > 0) world.EmitSound(SoundKind.NpcBought, buyer, table.Next[buyer].Position);
             return NpcSale.Sold;
         }
 

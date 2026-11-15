@@ -138,7 +138,8 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
 - **The item** (**Verified** flow, **Observed** names): the stack of 2+ is split (a clone of quantity 1, the original -1), a single item is removed from its section. When the seller inventory's owner is not of
   the player's faction **and** `rand()/32768 > 0.2` (`DAT_1416885d8`), the add-to-buyer call is skipped: the unit is paid for and gone, the buyer gets nothing (80 %). Otherwise `Character` slot 45 `FUN_1405cb400`
   puts it into the buyer's inventory; it is never equipped or used here; without room: "No room for that item.", the unit goes back to the stock and nothing is paid.
-- Not modelled: the speech text on failure (slot 56 `FUN_1405c9950`), and the gold floater and "Sell_Item" sound that only show with the GUI option `DAT_142133ae0`. Engine choices: unique items are never sold; a house's
+- After a unit is bought for more than 0 (kept or not), with the GUI global `DAT_142133ae0` set, the price floats over the shopper and `Sell_Item` posts on it (**Verified**, `FUN_1409a14b0`; the sound in Meitou:
+  [audio](../audio.md#characters-footsteps-combat-voices)). Not modelled: the speech text on failure (slot 56 `FUN_1405c9950`) and that floater. Engine choices: unique items are never sold; a house's
   goods (`FillHome`) are sellers too.
 
 ### Building shops (**Observed**, decompile)

@@ -277,6 +277,10 @@ public sealed partial class LockSystem
     {
         if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
         if (!world.Fixtures.Release(world, prisoner, faction, Crimes)) return false;
+
+        // The release message goes with Create_Character on the interface, for a player-faction prisoner with no slave state.
+        if (world.Characters.Cold(p) is { IsPlayer: true, SlaveState: 0 })
+            world.EmitSound(SoundKind.ReleasedFromPrison, p, world.Characters.Next[p].Position);
         var talk = world.SystemOf<Dialogue.DialogueSystem>();
         if (world.Characters.TryResolveNext(releaser, out int r) && talk is not null)
         {
