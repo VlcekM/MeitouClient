@@ -53,7 +53,7 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     internal void HandleSaves(double realDt)
     {
-        while (_saveNotices.TryDequeue(out var notice)) host.Player.Notice(notice.Text, notice.Error);
+        TakeSaveNotices();
         host.FeedbackCapture.HandleFeedback();
         PrintSavedLog();
         Autosave(realDt);
@@ -142,9 +142,9 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     internal Task? SaveWrite;
     /// <summary>
-    /// Results of the write worker, shown on the next frame (the HUD is drawn by the main thread only).
+    /// Results of the write worker, shown on the next frame (the HUD is drawn by the main thread only); a written save names its folder.
     /// </summary>
-    readonly ConcurrentQueue<(string Text, bool Error)> _saveNotices = [];
+    readonly ConcurrentQueue<(string Text, bool Error, string? Written)> _saveNotices = [];
     /// <summary>
     /// The names of the load order's data files a capture records, read from the install once.
     /// </summary>
@@ -242,15 +242,31 @@ sealed class GameSaves(GameHost host)
                 game.Write(folder);
                 Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, "
                     + $"written in {written.ElapsedMilliseconds} ms");
-                if (!feedback) _saveNotices.Enqueue(("Saved", false));
+                if (!feedback) _saveNotices.Enqueue(("Saved", false, folder));
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine($"save      write failed: {e}");
                 if (feedback) throw;
-                _saveNotices.Enqueue((Loc.Tr("Save failed: {1}", e.Message), true));
+                _saveNotices.Enqueue((Loc.Tr("Save failed: {1}", e.Message), true, null));
             }
         });
+    }
+
+    /// <summary>
+    /// Shows the write worker's notices; a save written becomes the one Continue loads, as every save request that succeeds writes <c>continue=</c>
+    /// (<c>FUN_14047c310</c>: the Save window, the quicksave and the autosave alike).
+    /// </summary>
+    void TakeSaveNotices()
+    {
+        while (_saveNotices.TryDequeue(out var notice))
+        {
+            host.Player.Notice(notice.Text, notice.Error);
+            if (notice.Written is not { } folder) continue;
+
+            host.Config.ContinueSave = folder;
+            host.Config.Save();
+        }
     }
 
     /// <summary>

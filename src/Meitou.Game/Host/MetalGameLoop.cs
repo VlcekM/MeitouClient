@@ -1094,7 +1094,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.ItemIconFiles.ConnectItemIcons();
         hud.Frontend.ConfigureFrontend(host.Scene.Database,
             () => SaveCatalog.Scan(QuickSave.DefaultRoot, [host.Install.SaveDirectory, .. host.Install.UserSaveDirectories]),
-            host.Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
+            host.Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "",
+            () => host.Config.ContinueFolder(host.Install));
         // The picks the interface asks the host for: the drawn character meshes, the buildings' floors and their closed shells.
         hud.Picking.MeshHit = (id, origin, direction) => _characters?.RayHit(host.DrawKey(id), origin, direction);
         hud.Floor = (() => host.Interiors.ViewedFloorValue, host.Interiors.StepFloor);

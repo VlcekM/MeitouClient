@@ -34,6 +34,17 @@ sealed class FrontendScreens(PlayerInterface player)
     internal IReadOnlyList<SaveSlot> Slots = [];
 
     /// <summary>
+    /// The folder of the save Continue loads (the last one written, <see cref="ConfigureFrontend"/>); null for none.
+    /// </summary>
+    Func<string?> _continueFolder = () => null;
+
+    /// <summary>
+    /// The listed save Continue loads; null when its <c>quick.save</c> is missing, which hides the button (<c>FUN_14047af50</c>,
+    /// docs/formats/save.md).
+    /// </summary>
+    internal SaveSlot? ContinueSlot;
+
+    /// <summary>
     /// The save selected in the save, load or import window; null for none.
     /// </summary>
     internal SaveSlot? SelectedSlot;
@@ -127,14 +138,17 @@ sealed class FrontendScreens(PlayerInterface player)
     internal GameDatabase? GameData;
 
     /// <summary>
-    /// Takes the game data (and its new-game starts, the default one chosen), the save lister and the credits text as the title shows it.
+    /// Takes the game data (and its new-game starts, the default one chosen), the save lister, the credits text as the title shows it and the
+    /// Continue save's folder (none without it).
     /// </summary>
-    public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText)
+    public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText,
+        Func<string?>? continueFolder = null)
     {
         GameData = database;
         _starts = database is null ? [] : NewGameStart.LoadAll(database);
         _startIndex = Math.Max(0, _starts.ToList().FindIndex(s => s.Name == NewGameStart.DefaultName));
         _saveSlots = enumerate;
+        _continueFolder = continueFolder ?? (() => null);
 
         // As the title reads data/credits.txt (FUN_14013d680, docs/game/ui-screens.md "Credits"): empty lines dropped, a "-" line a blank one, each
         // line ended.
@@ -207,6 +221,19 @@ sealed class FrontendScreens(PlayerInterface player)
             SelectedSlot = null;
             _slotDetails = e.Message;
         }
+
+        ContinueSlot = FindContinueSlot();
+    }
+
+    /// <summary>
+    /// The listed save in the Continue folder (a listed save has its <c>quick.save</c>); null for none.
+    /// </summary>
+    SaveSlot? FindContinueSlot()
+    {
+        if (_continueFolder() is not { Length: > 0 } folder) return null;
+
+        string full = Path.GetFullPath(folder);
+        return Slots.FirstOrDefault(s => string.Equals(s.Folder, full, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -413,8 +440,7 @@ sealed class FrontendScreens(PlayerInterface player)
                 _creditsStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 break;
             case "ContinueButton":
-                if (Slots.FirstOrDefault() is { } last)
-                    player.RaiseScreenAction(new("load", "LoadButton", "load", last.Folder));
+                if (ContinueSlot is { } last) player.RaiseScreenAction(new("load", "LoadButton", "load", last.Folder));
                 break;
             case "ExitButton":
                 player.Confirm("EXIT", "Are you sure you want to exit?", () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit")));
@@ -648,7 +674,7 @@ sealed class FrontendScreens(PlayerInterface player)
     }
 
     /// <summary>
-    /// The title's buttons (with Continue only when a readable save exists) and its credits, or the Esc menu's.
+    /// The title's buttons (with Continue only while its save exists) and its credits, or the Esc menu's.
     /// </summary>
     void BindTitle(string id, UiBindings b)
     {
@@ -669,11 +695,11 @@ sealed class FrontendScreens(PlayerInterface player)
 
         if (player.MeitouMainMenu)
         {
-            foreach (var (widget, at) in player.TitleMenu.MenuLayout(card: Slots.Count > 0 && _slotReadable)) b.Positions[widget] = at;
+            foreach (var (widget, at) in player.TitleMenu.MenuLayout(card: ContinueSlot is not null)) b.Positions[widget] = at;
         }
 
-        // Continue is shown only when a save exists (docs/game/ui-screens.md section 3), not greyed out.
-        if (Slots.Count > 0 && _slotReadable) Enable(b, "ContinueButton");
+        // Continue is shown only while the last save written still exists (docs/game/ui-screens.md section 3), not greyed out.
+        if (ContinueSlot is not null) Enable(b, "ContinueButton");
         else b.Hidden.Add("ContinueButton");
 
         b.Properties["CreditsPanel"] = new Dictionary<string, string> { ["Visible"] = ShowCredits ? "true" : "false" };

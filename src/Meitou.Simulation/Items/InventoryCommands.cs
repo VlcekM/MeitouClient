@@ -29,7 +29,7 @@ public static class InventoryCommands
 
     /// <summary>
     /// An equipment section disabled for <paramref name="wearer"/> (<c>CharacterHuman::validateInventorySections</c> <c>FUN_1406218f0</c>,
-    /// <b>Observed</b>; drawn red, it takes nothing): <c>head</c> for a race with <c>no hats</c>, <c>shirt</c> with <c>no shirts</c>, <c>boots</c>
+    /// <b>Verified</b>; drawn red, it takes nothing): <c>head</c> for a race with <c>no hats</c>, <c>shirt</c> with <c>no shirts</c>, <c>boots</c>
     /// with <c>no shoes</c> or while neither leg is the original (both lost or replaced).
     /// </summary>
     public static bool SectionClosed(CharacterCold? wearer, string section) => wearer?.Race is { } race && section switch

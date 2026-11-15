@@ -141,7 +141,7 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
 - **Observed**: a Button whose ResourceSkin has no `SimpleText`/`EditText` part shows no caption (MyGUI draws text through that part):
   `MapCenterButton` has caption "O" on the image-only `Kenshi_CenterMapButtonSkin` and shows only its `> ● <` icon. Meitou skips such
   button captions; other widget types keep theirs (the new-game description needs it).
-- **Unknown**: exact native widget skin registration, integer rounding, text/font
+- **Unknown**: exact native widget skin registration, text/font
   sizing, inherited pick flags, localisation, tab button sizing and clipping
   equivalence with the original. No full MyGUI compatibility claim is made yet.
 
@@ -270,16 +270,30 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
   contract (a decorating control with the property `Slider`: its action with `Value` the pointer's share of the track, so the `Slider` UI sound keyed on `editor-slider:` still plays).
 - **ComboBox** (Verified, `ComboBox.cpp`): the arrow and the client toggle the popup (the template's `List`, hidden in the layout); it is as wide as the combo, `min(lines * HeightLine + frame, MaxListLength)` tall
   (Kenshi: 200, times the template scale), below the combo, above when it does not fit; a click on an item selects (`select`) and closes, a press elsewhere or Esc closes. Down opens a focused combo, the wheel over a
-  focused closed combo changes the selection one item. `ModeDrop`, `SmoothShow` (fade) and horizontal flows are not implemented. The install uses combos only in editor layouts (`Fog_Editor`, `Kenshi_LevelEditor`,
+  focused closed combo changes the selection one item; an empty list does not open. `SmoothShow` (`Kenshi_ComboBox` sets it; `ControllerFadeAlpha`, `COMBO_ALPHA_COEF` 4): the list
+  fades in from alpha 0 and out to 0 by 4 a second from the alpha it has; fading out it is disabled, so it takes no input and a press goes to what lies below (MyGUI picks no disabled widget), and at 0 it is hidden and enabled again. Opened again
+  during that fade, the fade-out's controller is replaced before its end handler runs, so the list stays disabled until a later fade-out ends (Meitou: `ComboListFade`).
+  `ModeDrop` and horizontal flows are not implemented. The install uses combos only in editor layouts (`Fog_Editor`, `Kenshi_LevelEditor`,
   `Kenshi_EffectsPanel`) and `Kenshi_OpenSaveFileDialog` (`CurrentFolder`), so this is widget support: items are `UiBindings.Lists[combo]`, the selection `SelectedItems[combo]`, the closed text the selected item (else `Text[combo]`).
 - **MultiListBox** (Verified, `MultiListBox.cpp`): per column a header button (`SkinButton`, in `HeaderPlace`, its `Image` child shows `Up` / `Down` on the sorted column, `None` on the others; the arrows are in `Kenshi_MiscImages`
   group `Arrows`) and a sub-list (`SkinList`, in `Client`); Fixed columns keep their width, Fill columns share the rest (last one the remainder; `ResizingPolicy` is `Auto, Fixed, Fill`); one selection and one scroll
   position for all; only the last sub-list shows its bar. A header click sorts ascending by that column, again reverses; MyGUI's default comparator is a plain string `<` of the cells (Meitou: ordinal). The image is "Up"
   when `mSortUp`. Binding: `UiBindings.Columns[name]` (captions, widths, Fill), `Lists[name]` items with `UiListItem.Cells`, `Sorts[name]` the start sort; the host keeps the
-  clicked sort. Header and sub-list skins are expanded once at load as hidden prototype children of the MultiListBox and cloned per column. Column resizing, separators (`SkinSeparator`, `WidthSeparator`) and Auto width are not done.
+  clicked sort. Header and sub-list skins are expanded once at load as hidden prototype children of the MultiListBox and cloned per column. Widths (`updateColumns`, integer pixels):
+  free = client width - (columns - 1) x `WidthSeparator` - the Fixed widths; each Fill column free / Fill count when free > 0 (else 0), the last Fill column also the remainder
+  (negative when free is). A `SkinSeparator` widget fills the gap after each column but the last; `Kenshi_MultiListBox` sets neither user string. The widths are recomputed
+  when the box is resized; MyGUI has no user column resizing (no separator or header drag). Auto width (header caption width) is not done: only `_addItem` (columns
+  given as `MultiListItem` children) sets it, which no installed layout has.
 - **Game's save list** (Observed, decompile of `FUN_140480100`, the load / save window): two columns, `addColumn(<text>, 170)` and `addColumn(<text>, 180)`, `sortByColumn(1, true)` (`mSortUp` starts true, so reversed:
   newest first, arrow "Down"), column 0 Fill, column 1 Fixed; rows are the save names with `{1,datetime}` of the modified time in column 1. The two captions are localised strings (the pot has "Name" and "Date" from
   `savemanager.cpp`). Meitou's `GamesList` (load and save) uses these columns, the name cell with the save's origin appended; `Kenshi_ImportGamePanel` is not registered.
+- **Align and pixel rounding** (Verified, `Widget.cpp`, `SubSkin.cpp`, `TileRect.cpp`, `EditText.cpp`, `MainSkin.cpp`, `Align.h`, `CoordConverter.h`, `ResourceLayout.cpp`,
+  `ResourceSkin.cpp`; a `MainSkin` piece always covers its whole widget): `align` words are ORed (`Align::parse`; no
+  attribute: `Default`, Left Top). An axis with both words stretches by the parent's growth, Right / Bottom move by it, Left / Top stay, and an axis with neither is centred
+  at (parent - size) / 2 (integer division), whatever its position was, so "Right" alone also centres vertically. Every `setSize` / `setCoord` of a parent re-aligns its children
+  and skin pieces this way, also at an unchanged size; a template's parts are made at its `Root` size, then the widget takes its own size. `position_real` becomes
+  `int(fraction x parent client size)` once, when the widget is made. Meitou: `UiRect.AlignTo` (template parts, skin pieces, text areas) and `UiRect.RelativeTo`, also at the
+  template scale, where the inputs are not whole pixels.
 - **Window** (Verified, `Window.cpp`; layouts): `Snap` (set by every Kenshi window template) snaps an edge to the viewport's within 10 px (`|left| <= 10`, `|right - width| < 10`, likewise top / bottom) while dragging,
   without clamping; Meitou lets a dragged window leave the screen but keeps its top edge and 48 px of it in view (`KeepVisible`), and places others fully on screen. `Movable` false (`Kenshi_MessageBox`, `Kenshi_AdvancedOptionsWindow`) stops the drag; `MinSize` / `MaxSize` (`Kenshi_OpenSaveFileDialog` 200 200) bound the
   size a resize gives. **Observed**: no Kenshi window template has a child with the user strings `Action` or `Scale` (MyGUI's resize / move markers), so the original has no user resizing; the generic grips (`Scale`

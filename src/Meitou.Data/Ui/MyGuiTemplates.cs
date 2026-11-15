@@ -45,10 +45,7 @@ public static partial class MyGuiTemplates
             if (node.UserStrings.TryGetValue("Event", out string? eventName)) properties["TemplateEvent"] = eventName;
             // MyGUI turns a part's position_real into pixels once, at the template's own size; its align then keeps those margins
             // (Kenshi_ListBoxEmpty's client sits 19 x 18 px in, whatever the list's size).
-            var position = node.RealPosition
-                ? new UiRect(node.Position.X * referenceWidth, node.Position.Y * referenceHeight, node.Position.Width * referenceWidth,
-                    node.Position.Height * referenceHeight)
-                : node.Position;
+            var position = node.RealPosition ? node.Position.RelativeTo(new(0, 0, referenceWidth, referenceHeight), true) : node.Position;
             var nested = node.Children.Select(c => Clone(c, position.Width, position.Height)).ToList();
             // The layout's children go into the template's Client only for the widgets that take one as their client (MyGUI's setWidgetClient:
             // windows, views, edit boxes, lists); a plain Widget, TextBox, ImageBox or Button keeps them itself (the title's CreditsPanel, a

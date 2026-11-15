@@ -629,6 +629,11 @@ sealed class UserConfig
     /// </summary>
     public int AutosaveIndex { get; set; }
     /// <summary>
+    /// The save folder the title's Continue loads: the last save written (the original's <c>settings.cfg</c> <c>continue</c>, docs/formats/save.md
+    /// "Where saves live"); null until Meitou writes one (<see cref="ContinueFolder"/> then picks one).
+    /// </summary>
+    public string? ContinueSave { get; set; }
+    /// <summary>
     /// The code mods' settings the player changed (docs/modding.md "Settings"): mod id to setting key to the value as text; a default is not kept.
     /// </summary>
     public Dictionary<string, Dictionary<string, string>> ModSettings { get; set; } = [];
@@ -682,6 +687,24 @@ sealed class UserConfig
             MinCameraMoveSpeed, MaxCameraMoveSpeed);
         CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Data.World.KenshiCamera.DefaultZoomSpeed,
             MinCameraZoomSpeed, MaxCameraZoomSpeed);
+    }
+
+    /// <summary>
+    /// The folder Continue loads: <see cref="ContinueSave"/>; for a config from before it was kept, the newest save in Meitou's own save folder (the
+    /// last one Meitou wrote); else the save the install's <c>settings.cfg</c> <c>continue</c> names in the original's save folders (the per-user
+    /// ones first, then the install's); null for none.
+    /// </summary>
+    public string? ContinueFolder(Content.GameInstall install)
+    {
+        if (ContinueSave is { Length: > 0 } saved) return saved;
+        if (Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot).FirstOrDefault() is { } own) return own.Folder;
+
+        var settings = Meitou.Localisation.GameLanguage.ReadSettings(System.IO.Path.Combine(install.Root, "settings.cfg"));
+        if (!settings.TryGetValue("continue", out var name) || name.Length == 0) return null;
+
+        return install.UserSaveDirectories.Append(install.SaveDirectory)
+            .Select(root => System.IO.Path.Combine(root, name))
+            .FirstOrDefault(folder => File.Exists(System.IO.Path.Combine(folder, Data.Save.SaveFolder.QuickSaveName)));
     }
 
     /// <summary>

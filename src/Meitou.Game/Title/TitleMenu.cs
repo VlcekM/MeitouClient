@@ -308,11 +308,11 @@ sealed class TitleMenu(PlayerInterface player)
     }
 
     /// <summary>
-    /// The save card's lines, from the newest save: "Save · Day N · Place" and "Squad · c.N · M members" (the squad when it is not the save's name).
+    /// The save card's lines, from the save Continue loads: "Save · Day N · Place" and "Squad · c.N · M members" (the squad when it is not the save's name).
     /// </summary>
     (string Line, string Meta) ContinueText()
     {
-        if (player.Frontend.Slots.FirstOrDefault() is not { } slot) return ("", "");
+        if (player.Frontend.ContinueSlot is not { } slot) return ("", "");
         if (_continueInfo.Folder != slot.Folder || _continueInfo.Modified != slot.ModifiedUtc)
         {
             SaveSlotInfo? info = null;

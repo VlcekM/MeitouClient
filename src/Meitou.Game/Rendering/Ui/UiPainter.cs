@@ -840,7 +840,8 @@ public sealed partial class UiPainter : IDisposable
                     && !part.States.TryGetValue("normal", out source))
                     continue;
 
-                var dest = Scaled(part.Offset, scale).AlignTo(b, skin.Width * scale, skin.Height * scale, part.Align);
+                // MyGUI's MainSkin always covers the whole widget (MainSkin::_setAlign sets Stretch over the parent's size).
+                var dest = part.Type == "MainSkin" ? b : Scaled(part.Offset, scale).AlignTo(b, skin.Width * scale, skin.Height * scale, part.Align);
                 var tint = Colour(c.Properties.GetValueOrDefault("Colour"), Vector4.One) * new Vector4(1, 1, 1, Alpha(c.Properties));
                 if (part.Type == "TileRect")
                     PaintTileRect(c, part, state, atlas, atlasMask, source, dest, clip, tint, scale);

@@ -6,14 +6,15 @@ namespace Meitou.Data.Ui;
 public static partial class MyGuiTemplates
 {
     /// <summary>
-    /// A MultiListBox makes its columns at run time from the user strings <c>SkinButton</c> (header) and <c>SkinList</c> (sub-list): the expanded
-    /// skins are kept as hidden prototype children (<c>ColumnPrototype</c> button / list) that <see cref="MyGuiPresentation"/> clones per bound
-    /// column.
+    /// A MultiListBox makes its columns at run time from the user strings <c>SkinButton</c> (header), <c>SkinList</c> (sub-list) and
+    /// <c>SkinSeparator</c> (the widget between two columns): the expanded skins are kept as hidden prototype children (<c>ColumnPrototype</c>
+    /// button / list / separator) that <see cref="MyGuiPresentation"/> clones per bound column.
     /// </summary>
     static IEnumerable<MyGuiWidget> ColumnPrototypes(string owner, IReadOnlyDictionary<string, string> strings, MyGuiResources resources,
         HashSet<string> chain)
     {
-        foreach (var (kind, key, type) in new[] { ("button", "SkinButton", "Button"), ("list", "SkinList", "ListBox") })
+        var parts = new[] { ("button", "SkinButton", "Button"), ("list", "SkinList", "ListBox"), ("separator", "SkinSeparator", "Widget") };
+        foreach (var (kind, key, type) in parts)
         {
             if (strings.TryGetValue(key, out string? skin) && skin.Length > 0)
             {

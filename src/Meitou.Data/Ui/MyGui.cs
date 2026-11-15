@@ -40,10 +40,13 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
     /// </summary>
     public bool Contains(float x, float y) => Width > 0 && Height > 0 && x >= X && y >= Y && x < X + Width && y < Y + Height;
     /// <summary>
-    /// This rectangle placed in <paramref name="parent"/>: offset by its corner, and with <paramref name="real"/> (fractions) scaled by its size.
+    /// This rectangle placed in <paramref name="parent"/>: offset by its corner, and with <paramref name="real"/> (fractions) scaled by its size,
+    /// each product truncated to whole pixels as MyGUI's <c>CoordConverter::convertFromRelative</c> does (<c>int(fraction * size)</c>).
     /// </summary>
-    public UiRect RelativeTo(UiRect parent, bool real) => new(parent.X + X * (real ? parent.Width : 1),
-        parent.Y + Y * (real ? parent.Height : 1), Width * (real ? parent.Width : 1), Height * (real ? parent.Height : 1));
+    public UiRect RelativeTo(UiRect parent, bool real) => real
+        ? new(parent.X + MathF.Truncate(X * parent.Width), parent.Y + MathF.Truncate(Y * parent.Height), MathF.Truncate(Width * parent.Width),
+            MathF.Truncate(Height * parent.Height))
+        : new(parent.X + X, parent.Y + Y, Width, Height);
 
     /// <summary>
     /// Four whitespace-separated numbers (x, y, width, height); the default for null. <see cref="InvalidDataException"/> for another count or a
@@ -60,73 +63,92 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
     }
 
     /// <summary>
-    /// Align a skin piece when its reference canvas is resized.
+    /// This rectangle (laid out in a parent <paramref name="referenceWidth"/> x <paramref name="referenceHeight"/>) aligned in
+    /// <paramref name="parent"/> as MyGUI 3.2.2 aligns a child when its parent is resized (<c>Widget::_setAlign</c>, <c>SubSkin::_setAlign</c>, the same
+    /// rule): a stretched axis grows by the parent's growth, Right / Bottom move by it, Left / Top stay, and a centred axis (neither of its two
+    /// words) is put in the middle of the parent, (parent - size) / 2 truncated toward zero, whatever its position was.
     /// </summary>
     public UiRect AlignTo(UiRect parent, float referenceWidth, float referenceHeight, string align)
     {
         var flags = Flags(align);
-        float dx = parent.Width - referenceWidth, dy = parent.Height - referenceHeight;
-        return new(parent.X + X + ((flags & Align.Right) != 0 ? dx : (flags & Align.HCenter) != 0 ? dx / 2 : 0),
-            parent.Y + Y + ((flags & Align.Bottom) != 0 ? dy : (flags & Align.VCenter) != 0 ? dy / 2 : 0),
-            Math.Max(0, Width + ((flags & Align.HStretch) != 0 ? dx : 0)),
-            Math.Max(0, Height + ((flags & Align.VStretch) != 0 ? dy : 0)));
+        var (x, width) = AlignAxis(X, Width, parent.Width, parent.Width - referenceWidth, flags & Align.HStretch, Align.Left, Align.Right);
+        var (y, height) = AlignAxis(Y, Height, parent.Height, parent.Height - referenceHeight, flags & Align.VStretch, Align.Top, Align.Bottom);
+        return new(parent.X + x, parent.Y + y, Math.Max(0, width), Math.Max(0, height));
     }
 
     /// <summary>
-    /// The words of a MyGUI <c>align</c> string; none of them keeps the piece at the top left at its size.
+    /// One axis of <see cref="AlignTo"/>: the start and length of a piece at <paramref name="start"/>, <paramref name="length"/> long, in a parent
+    /// <paramref name="parent"/> long that grew by <paramref name="growth"/>, by the axis' bits <paramref name="flags"/> (<paramref name="near"/>,
+    /// <paramref name="far"/>, both, or neither).
+    /// </summary>
+    static (float Start, float Length) AlignAxis(float start, float length, float parent, float growth, Align flags, Align near, Align far)
+    {
+        if (flags == (near | far)) return (start, length + growth);
+        if (flags == far) return (start + growth, length);
+        if (flags == near) return (start, length);
+
+        return (MathF.Truncate((parent - length) / 2), length);
+    }
+
+    /// <summary>
+    /// MyGUI's <c>Align</c> bits; an axis with neither of its two is centred.
     /// </summary>
     [Flags]
     enum Align
     {
         /// <summary>
-        /// Keeps the piece's distance to the right edge.
+        /// Keeps the piece's distance to the left edge (with <see cref="Right"/>: grows its width with the parent).
         /// </summary>
-        Right = 1,
+        Left = 1,
 
         /// <summary>
-        /// Keeps the piece centred horizontally.
+        /// Keeps the piece's distance to the right edge.
         /// </summary>
-        HCenter = 2,
+        Right = 2,
+
+        /// <summary>
+        /// Keeps the piece's distance to the top edge (with <see cref="Bottom"/>: grows its height with the parent).
+        /// </summary>
+        Top = 4,
 
         /// <summary>
         /// Keeps the piece's distance to the bottom edge.
         /// </summary>
-        Bottom = 4,
+        Bottom = 8,
 
         /// <summary>
-        /// Keeps the piece centred vertically.
+        /// Both horizontal bits.
         /// </summary>
-        VCenter = 8,
+        HStretch = Left | Right,
 
         /// <summary>
-        /// Grows the piece's width with the canvas.
+        /// Both vertical bits.
         /// </summary>
-        HStretch = 16,
-
-        /// <summary>
-        /// Grows the piece's height with the canvas.
-        /// </summary>
-        VStretch = 32
+        VStretch = Top | Bottom,
     }
 
     /// <summary>
-    /// The words of an Align string, read in place: splitting it allocated per control per frame (docs/bench.md "Play benchmark").
+    /// The bits of an align string as MyGUI's <c>Align::parse</c> reads it (the words ORed, unknown ones ignored, so "Right" alone centres
+    /// vertically), read in place: splitting it allocated per control per frame (docs/bench.md "Play benchmark"). An empty string is a missing
+    /// <c>align</c> attribute: <c>Default</c>, Left Top.
     /// </summary>
     static Align Flags(string align)
     {
+        if (align.Length == 0) return Align.Left | Align.Top;
+
         Align flags = 0;
         var text = align.AsSpan();
-        foreach (var range in text.Split(' '))
+        foreach (var range in text.SplitAny(" \t\r\n"))
             flags |= text[range] switch
             {
-                "Right" => Align.Right,
-                "HCenter" => Align.HCenter,
-                "Bottom" => Align.Bottom,
-                "VCenter" => Align.VCenter,
-                "Center" => Align.HCenter | Align.VCenter,
-                "HStretch" => Align.HStretch,
-                "VStretch" => Align.VStretch,
-                "Stretch" => Align.HStretch | Align.VStretch,
+                "Left" or "ALIGN_LEFT" => Align.Left,
+                "Right" or "ALIGN_RIGHT" => Align.Right,
+                "HStretch" or "ALIGN_HSTRETCH" => Align.HStretch,
+                "Top" or "ALIGN_TOP" => Align.Top,
+                "Bottom" or "ALIGN_BOTTOM" => Align.Bottom,
+                "VStretch" or "ALIGN_VSTRETCH" => Align.VStretch,
+                "Stretch" or "ALIGN_STRETCH" => Align.HStretch | Align.VStretch,
+                "Default" or "ALIGN_DEFAULT" => Align.Left | Align.Top,
                 _ => 0,
             };
         return flags;
