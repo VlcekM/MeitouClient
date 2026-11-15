@@ -268,6 +268,7 @@ public class DoorTests(ITestOutputHelper output)
         var leaf = SyntheticTown.Rec("62-g", Data.Fcs.FcsRecordType.Building, "Gate door");
         var gateRecord = SyntheticTown.Rec("63-g", Data.Fcs.FcsRecordType.Building, "Gate");
         gateRecord.Bools["is wall gate"] = true;
+        gateRecord.Bools["is gateway"] = true;
         gateRecord.References["doors"] = [SyntheticTown.Ref("62-g")];
         var town = SyntheticTown.Rec("64-g", Data.Fcs.FcsRecordType.Town, "Walled");
         town.References["faction"] = [SyntheticTown.Ref("60-g")];

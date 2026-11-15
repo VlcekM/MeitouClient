@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Locks;
@@ -176,27 +177,60 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Whether the town's walls are locked up (<c>Town</c> vfunc <c>0x300</c> = <c>FUN_140929820</c>, <b>Verified</b>): the town has at least one
-    /// gate (a gateway building with a door) and no gate door is open (door state 1; a broken one counts as open); closed, opening and closing doors
-    /// all count as locked.
+    /// Whether a building of the record joins its town's gate set and stays in Town slots 96 / 97's scans: <c>is gateway</c> adds it when it is
+    /// made (Building slot 138 <c>FUN_140551b20</c>, run from the constructor) and <c>is wall gate</c> makes it a GatewayBuilding (the factory
+    /// <c>FUN_14057cc70</c>), the class the scans keep (Building slot 123), <b>Verified</b> (docs/game/dialogue.md, DC 49 / 58).
     /// </summary>
-    public static bool TownLockedUp(World world, TownSite site) =>
-        GatesLockedUp(site.Buildings.Where(b => !b.Destroyed).SelectMany(b => world.Fixtures.OfBuilding(b.Key)));
+    public static bool InGateSet(GameRecord record) => record.GetBool("is gateway") && record.GetBool("is wall gate");
 
     /// <summary>
-    /// The rule of <see cref="TownLockedUp"/> over a town's door fixtures: shared with the campaign assault's breach test.
+    /// Whether the placed town's walls are locked up (Town slot 96, <see cref="GatesLockedUp"/>) over its buildings.
     /// </summary>
-    public static bool GatesLockedUp(IEnumerable<Fixture> doors)
+    public static bool TownLockedUp(World world, TownSite site) => GatesLockedUp(world, site.Buildings.Select(b => b.Key));
+
+    /// <summary>
+    /// Town slot 96 (<c>FUN_140929820</c>, <b>Verified</b>), shared by DC 58 and the campaign assault's breach test: over the town's buildings in
+    /// the gate set (<see cref="InGateSet"/>) that have a first door (Building slot 124; a ruin has none) whose gate splits two gate codes
+    /// (<see cref="SplitsCodes"/>), true when there is at least one and none of those first doors is open (state 1); closed, opening and closing
+    /// count as locked, and nothing else (a broken door, the lock) is read.
+    /// </summary>
+    public static bool GatesLockedUp(World world, IEnumerable<string> buildings)
     {
+        var regions = world.SystemOf<LockSystem>()?.Regions;
         bool any = false;
-        foreach (var gate in doors)
+        foreach (string building in buildings)
         {
-            if (gate.Kind != FixtureKind.Door || !gate.IsGate) continue;
-            if (gate.DoorBroken || gate.Motion == DoorMotion.Open) return false;
+            if (FirstDoor(world, building) is not { InGateSet: true } door || !SplitsCodes(regions, building)) continue;
+            if (door.Motion == DoorMotion.Open) return false;
             any = true;
         }
 
         return any;
+    }
+
+    /// <summary>
+    /// A building's first door (door index 0, Building slot 124), or null.
+    /// </summary>
+    static Fixture? FirstDoor(World world, string building)
+    {
+        foreach (var f in world.Fixtures.OfBuilding(building))
+            if (f.Kind == FixtureKind.Door && f.DoorIndex == 0) return f;
+
+        return null;
+    }
+
+    /// <summary>
+    /// <c>FUN_140547930</c>: the gate's door code (door <c>+0x378</c>, the gate-code pass's code of one side) differs from the gate building's own
+    /// code (slot 35, the pass's code of the other side). Meitou's gate codes keep no per-side code: true when they give the gate two or more codes;
+    /// also true with no gate codes yet (headless, before the first labelling) or for a gate they do not list (engine choice).
+    /// </summary>
+    static bool SplitsCodes(IGateRegions? regions, string building)
+    {
+        if (regions is null) return true;
+        foreach (var gate in regions.Gates)
+            if (gate.Building == building) return gate.Codes.Length >= 2;
+
+        return true;
     }
 
     /// <summary>

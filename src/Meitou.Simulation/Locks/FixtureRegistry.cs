@@ -649,6 +649,7 @@ public sealed partial class FixtureRegistry
     {
         var doorRefs = record.GetReferences("doors");
         bool gate = TownBuildings.IsGate(db, record, _functions);
+        bool inGateSet = LockSystem.InGateSet(record);
         for (int i = 0; i < doorRefs.Count; i++)
         {
             var door = db.Find(doorRefs[i].TargetStringId);
@@ -668,6 +669,7 @@ public sealed partial class FixtureRegistry
                 WantsLock = door?.GetBool("always locks") ?? false,
                 HostRecordId = record.StringId,
                 IsGate = gate,
+                InGateSet = inGateSet,
                 Leaf = door is null ? new DoorLeaf(0, 30, 1, 0) : DoorLeaf.Of(door),
                 Lock = new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(door, "lock level bonus"), door: true),
                         Hardness = FloatOf(record, "hardness") },

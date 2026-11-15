@@ -324,6 +324,11 @@ public sealed class Fixture
     /// </summary>
     public bool IsGate { get; init; }
     /// <summary>
+    /// Doors: its building is in its town's gate set and a GatewayBuilding (<see cref="LockSystem.InGateSet"/>), the gates Town slot 96 reads;
+    /// derived from the data, not hashed or saved.
+    /// </summary>
+    public bool InGateSet { get; init; }
+    /// <summary>
     /// Doors and beds standing on their own: the building's whole placement turn, tilt included, where it is known (null: a turn of
     /// <see cref="Yaw"/> about +Y); it places the leaf (<see cref="FixtureRegistry.DoorSpotOf"/>) and leans the sleeper
     /// (<see cref="FixtureRegistry.LeanOf"/>). Derived from the data, not hashed or saved.

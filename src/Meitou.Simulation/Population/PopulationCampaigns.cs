@@ -1762,8 +1762,8 @@ public sealed partial class PopulationSystem : IStateHashed
     bool PlayersStanding(World world, CampaignTown t) => PlayersIn(world, t).Up > 0;
 
     /// <summary>
-    /// The first door fixture of each of a town's buildings (a placed town's by site, a player town's by its buildings): the slots 92 and 96 read
-    /// only the building's first door (<c>Building</c> slot 124).
+    /// The first door fixture of each of a town's buildings (a placed town's by site, a player town's by its buildings): slot 92 reads only the
+    /// building's first door (<c>Building</c> slot 124).
     /// </summary>
     static IEnumerable<Locks.Fixture> TownDoors(World world, CampaignTown t) =>
         world.Fixtures.All.Where(f => f.Kind == Locks.FixtureKind.Door && f.DoorIndex == 0
@@ -1776,9 +1776,20 @@ public sealed partial class PopulationSystem : IStateHashed
         TownDoors(world, t).All(f => f.IsGate || f.DoorBroken || f.Motion != Locks.DoorMotion.Closed);
 
     /// <summary>
-    /// Town slot 96 (<c>FUN_140929820</c>): the town has a gate and none of its gates is open (a broken one counts as open).
+    /// Town slot 96 (<see cref="Locks.LockSystem.GatesLockedUp"/>, the rule DC 58 reads) over the town's buildings.
     /// </summary>
-    static bool WallsLockedUp(World world, CampaignTown t) => Locks.LockSystem.GatesLockedUp(TownDoors(world, t));
+    bool WallsLockedUp(World world, CampaignTown t) => Locks.LockSystem.GatesLockedUp(world, TownBuildingIds(world, t));
+
+    /// <summary>
+    /// The instance ids of a town's buildings: a placed town's by site, a player town's by its buildings.
+    /// </summary>
+    IEnumerable<string> TownBuildingIds(World world, CampaignTown t)
+    {
+        if (t.Site >= 0) return _data.Sites[t.Site].Buildings.Select(b => b.Key);
+        if (t.PlayerTown <= 0) return [];
+
+        return world.Buildings.All.Where(b => b.Town == t.PlayerTown).Select(b => b.Id);
+    }
 
     /// <summary>
     /// Some faction runs a hostile campaign against the player (a defence ends only when none does).

@@ -391,25 +391,22 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DC 58: the town at <paramref name="at"/> (as <see cref="HasGates"/>) has gates and none is open (Town slot 96 <c>FUN_140929820</c>); a
-    /// player outpost's gates are its buildings' first doors, as the campaign assault's breach test reads them.
+    /// DC 58: the town at <paramref name="at"/> (as <see cref="HasGates"/>) has its walls locked up (Town slot 96,
+    /// <see cref="Locks.LockSystem.GatesLockedUp"/>): a player outpost is a town like any other, over its buildings.
     /// </summary>
     bool WallsLockedUp(World world, Vector3 at)
     {
         if (TownAt(at) is >= 0 and var town) return Locks.LockSystem.TownLockedUp(world, _data.Sites[town]);
         if (PlayerTownAt(world, at) is not { } outpost) return false;
 
-        var doors = world.Fixtures.All.Where(f => f.Kind == Locks.FixtureKind.Door && f.DoorIndex == 0
-            && world.Buildings.Find(f.Building) is { } site && site.Town == outpost.Number);
-        return Locks.LockSystem.GatesLockedUp(doors);
+        var buildings = world.Buildings.All.Where(s => s.Town == outpost.Number).Select(s => s.Id);
+        return Locks.LockSystem.GatesLockedUp(world, buildings);
     }
 
     /// <summary>
-    /// Whether a building of the record counts for DC 49: <c>is gateway</c> puts it in its town's gate set when it is made (Building slot 138
-    /// <c>FUN_140551b20</c>, run from the constructor) and <c>is wall gate</c> makes it a GatewayBuilding (the factory <c>FUN_14057cc70</c>), the
-    /// class slot 97 keeps (Building slot 123).
+    /// Whether a building of the record counts for DC 49 (<see cref="Locks.LockSystem.InGateSet"/>).
     /// </summary>
-    bool IsGateway(string record) => _data.Db.Find(record) is { } r && r.GetBool("is gateway") && r.GetBool("is wall gate");
+    bool IsGateway(string record) => _data.Db.Find(record) is { } r && Locks.LockSystem.InGateSet(r);
 
     /// <summary>
     /// The player's nearest outpost whose radius holds <paramref name="at"/>, or null.
