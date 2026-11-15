@@ -135,7 +135,7 @@ public sealed record EffectRecord(
     /// <summary>
     /// <c>affect type</c>, <c>effect radius</c> and <c>effect strength min</c>: what a unit does to the outdoor characters within the radius
     /// (docs/formats/weather.md "Effects on characters"). The strength a unit gets between min and max was not traced; the base game's affecting
-    /// effects of the kinds that act (burning, gas) have min = max.
+    /// effects of the kinds that act (burning, gas) have min = max. An undefined number is kept, as the game keeps it.
     /// </summary>
     public World.WeatherAffecting AffectType { get; init; }
     /// <summary>
@@ -163,9 +163,7 @@ public sealed record EffectRecord(
         MaxSlope = r.GetFloat("max slope", 1),
         FogFadeIn = r.GetFloat("fog fade in duration"),
         FogFadeOut = r.GetFloat("fog fade out duration"),
-        AffectType = Enum.IsDefined((World.WeatherAffecting)r.GetInt("affect type"))
-            ? (World.WeatherAffecting)r.GetInt("affect type")
-            : World.WeatherAffecting.None,
+        AffectType = (World.WeatherAffecting)r.GetInt("affect type"),
         EffectRadius = r.GetFloat("effect radius"),
         EffectStrength = r.GetFloat("effect strength min"),
         FogVolumes = db is null

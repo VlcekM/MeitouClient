@@ -163,7 +163,7 @@ public static class WeatherDataReader
         Name = e.Name,
         Type = Enum.IsDefined((EffectType)e.GetInt("type")) ? (EffectType)e.GetInt("type") : EffectType.None,
         ParticleSystem = e.GetString("particle system"),
-        AffectType = Enum.IsDefined((WeatherAffecting)e.GetInt("affect type")) ? (WeatherAffecting)e.GetInt("affect type") : WeatherAffecting.None,
+        AffectType = (WeatherAffecting)e.GetInt("affect type"),
         EffectRadius = e.GetFloat("effect radius"),
         EffectStrengthMin = e.GetFloat("effect strength min"),
         EffectStrengthMax = e.GetFloat("effect strength max"),
@@ -217,8 +217,7 @@ public static class WeatherDataReader
             DustInside = w.GetFloat("dust inside"),
             DustSlope = w.GetFloat("dust slope"),
             HeatHaze = w.GetFloat("heat haze"),
-            AffectType = Enum.IsDefined((WeatherAffecting)w.GetInt("affect type")) ? (WeatherAffecting)w.GetInt("affect type")
-                    : WeatherAffecting.None,
+            AffectType = (WeatherAffecting)w.GetInt("affect type"),
             AffectStrength = w.GetFloat("affect strength"),
             EffectStrength = w.GetFloat("effect strength min", 1),
             StartTime = w.GetFloat("start time"),

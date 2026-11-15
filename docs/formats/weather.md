@@ -136,6 +136,12 @@ for an immune race). The numbered lists (`weather protection<N>`, RACE `weather 
 type (acid strength irrelevant, see above); affecting EFFECTs are dust, burning (beams, fire twister) and gas (WANDERING_GAS);
 robots and skeletons are immune to 1-4, Hive/cannibals/goats to acid, fishmen to acid and gas.
 
+**Undefined kinds** (**Verified (decompiled)**, the WEATHER and EFFECT readers `FUN_1409de7b0`, `FUN_1400fa0c0`): `affect type` is copied as
+the raw integer, with no range check, as are the armour and race lists above. **Observed** from the steps above: a kind outside 1-5 sets the
+holder (step 4, sight x lerp(s(1 − P), 1, 0.75), noise unchanged, corpses lose their flies) and is ignored in the local list (step 3); the item
+tooltip's kind name (`FUN_140796480`) takes its fallback string (Meitou: "None"). Meitou keeps the number too (`WeatherAffecting` cast), so a code mod reads its own kind from
+`World.Weather.At(..).Affect`, `IWeatherSource.Zones` and `CharacterCold.Weather` / `WeatherStrength` / `WeatherProtection`.
+
 **Local units** (`EffectHandler` slot 7 `FUN_1401020e0`, every frame, or once after a delay for one-shot handlers `FUN_140102310`):
 characters within radius R of the unit and outdoors (location 0xb) get (affect type, strength) put in their list (`FUN_1405cbcc0`:
 a later unit of the same kind replaces the strength). R = `effect radius`, else 0.375 x the particle bounds' xz diagonal.
