@@ -2975,7 +2975,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         if (host.DebugMenu.DebugMenuOpen && _hud is not null && !feedbackShot)
         {
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale);
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale,
+                pass: overlayPass);
             wrote = true;
         }
 

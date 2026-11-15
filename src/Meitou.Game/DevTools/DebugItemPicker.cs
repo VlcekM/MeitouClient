@@ -477,7 +477,8 @@ sealed class DebugItemPicker(GameHost host)
     /// scrolls with the highlight (and a scroll bar when the list is longer), the keys and the last drop. All sizes are multiplied by
     /// <paramref name="scale"/> (the framebuffer's pixels per point).
     /// </summary>
-    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight)
+    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight,
+        DebugOverlay.OverlayPass? pass = null)
     {
         float charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale, pad = 10 * scale, y0 = top + 16 * scale;
         string title = $"Drop item   ({close} closes)";
@@ -514,7 +515,7 @@ sealed class DebugItemPicker(GameHost host)
         y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, dim, scale);
         if (Status.Length > 0) o.TextScaled(Status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>

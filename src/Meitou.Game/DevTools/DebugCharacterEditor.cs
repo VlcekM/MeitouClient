@@ -538,7 +538,8 @@ sealed class DebugCharacterEditor(GameHost host)
     /// highlight (and a scroll bar when the list is longer), the keys and the last action. All sizes are multiplied by <paramref name="scale"/> (the
     /// framebuffer's pixels per point).
     /// </summary>
-    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight)
+    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight,
+        DebugOverlay.OverlayPass? pass = null)
     {
         float lineHeight = o.LineHeight * scale;
         float pad = 10 * scale;
@@ -574,7 +575,7 @@ sealed class DebugCharacterEditor(GameHost host)
         y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, Dim, scale);
         if (_status.Length > 0) o.TextScaled(_status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>

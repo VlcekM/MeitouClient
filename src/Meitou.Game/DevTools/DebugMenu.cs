@@ -1423,17 +1423,18 @@ sealed class DebugMenu(GameHost host)
     /// the hint with <paramref name="close"/> and the status. <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display):
     /// the text and every size in the menu grow with it. While the item picker or the Edit character sub-view is open it is drawn instead.
     /// </summary>
-    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1)
+    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1,
+        DebugOverlay.OverlayPass? pass = null)
     {
         if (_itemPicker.Open)
         {
-            _itemPicker.Draw(o, width, height, top, scale, close, atRight);
+            _itemPicker.Draw(o, width, height, top, scale, close, atRight, pass);
             return;
         }
 
         if (_characterEditor.Open)
         {
-            _characterEditor.Draw(o, width, height, top, scale, close, atRight);
+            _characterEditor.Draw(o, width, height, top, scale, close, atRight, pass);
             return;
         }
 
@@ -1498,7 +1499,7 @@ sealed class DebugMenu(GameHost host)
         o.TextScaled(hint, x0 + pad, y, dim, scale);
         for (int k = 0; k < status.Count; k++)
             o.TextScaled(status[k], x0 + pad, y + (1 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
