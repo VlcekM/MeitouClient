@@ -443,7 +443,8 @@ Implemented (`PopulationRoaming.cs`):
   200 random town pairs go by road at preference 0.6; about 10 % of roads have a `length` well under their drawn length (0.17-0.44 ×, median
   1.00), which the original's cost uses as is, so a faction with preference 0.3 still takes the Hub-Stack road (walked 34000 vs 16900 straight).
 - **Hand-off**: a stand-in that travelled comes back on the nearest walkable point (`WalkableSpots.Nearest`: rings of 4 to 128 units, eight
-  directions each); its kept characters keep their offsets round it, each moved to a walkable point within 32 if needed, else onto it. A town's
+  directions each); its kept characters keep their offsets round it, each moved to a walkable point within 32 if needed, else onto it, and each
+  stands on the surface at terrain level there, not a ruin's upper floor over it (`MovedSpot`, #731; engine choice). A town's
   own or wild platoon, or one that did not move, keeps its characters' exact places.
 - **Cost** (**Observed**, headless, save 2 with 2000 extra travelling stand-ins, warm): the step 0.08-0.1 ms per look at 1 or 8 threads (too little
   work for the threads to pay), pools and fights 0.23-0.26 ms per look (fights run every 4th look), about 0.03 ms a tick in all; save 2 alone
