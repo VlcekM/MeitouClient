@@ -28,20 +28,21 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--stream] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         var rest = new List<string>(args);
-        bool nav = rest.Remove("--nav");
+        bool stream = rest.Remove("--stream");
+        bool nav = rest.Remove("--nav") || stream;
         int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
         Vector2? at = ProbeLoadOrder.TakeOption(rest, "--at") is { } spot ? Spot(spot) : null;
         ulong seed = ProbeLoadOrder.TakeOption(rest, "--seed") is { } s ? ulong.Parse(s) : 1;
         var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
-        if (ProbeWorld.Load(install, order, rest[0], nav, at, seed) is not { } loaded) return 1;
+        if (ProbeWorld.Load(install, order, rest[0], nav, at, seed, stream) is not { } loaded) return 1;
         using var probe = loaded;
         probe.Tick(ticks);
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
@@ -1191,7 +1192,7 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
@@ -1224,6 +1225,7 @@ static class SaveProbe
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
               layout <building key>    a town building (zone:instance id): layout names now, ruin state and its interior layout's objects (needs --nav)
+            --stream: build only the player's box first and stream the other zones in as the game does, ticks at game speed (implies --nav)
             """);
         return 2;
     }
