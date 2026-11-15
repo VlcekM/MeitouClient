@@ -7,8 +7,9 @@ namespace Meitou.Simulation.Combat;
 /// Where a bolt or a line of fire meets the world's solid parts: the terrain (the walkability's <see cref="IWalkability.TerrainHeight"/>, not its
 /// walkable surfaces, which put a roof over whoever stands under one) and the buildings' collision (the ragdolls'
 /// <see cref="IRagdollEnvironment.Buildings"/>). Safe to call from the partitioned phases. A building whose collision is still being read is not
-/// there yet (it is gathered on a worker the first time it is asked for, about 0.1-0.2 s a zone): the hit says so (its
-/// <c>ready</c>), and the yes-or-no tests (sight, line of fire) take such a segment for blocked; a flying bolt waits for it (<c>wait</c>).
+/// there yet (it is gathered on a worker, about 0.1-0.2 s a zone; a zone loads only once its own buildings' collision is read): the hit says so
+/// (its <c>ready</c>), and the yes-or-no tests (sight, line of fire) take such a segment for blocked; a flying bolt passes it, as the original's
+/// flight ray meets only what its physics scene holds.
 /// </summary>
 static class SolidHits
 {
@@ -26,21 +27,20 @@ static class SolidHits
     /// <summary>
     /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.
     /// </summary>
-    /// <param name="wait">Blocks until the collision on the way is read (a flying bolt), so the answer does not depend on the workers' timing.</param>
     public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
-        out bool building, bool roofs = false, bool wait = false) => Hit(walk, buildings, from, seg, terrainStep, out building, out _, roofs, wait);
+        out bool building, bool roofs = false) => Hit(walk, buildings, from, seg, terrainStep, out building, out _, roofs);
 
     /// <summary>
-    /// <see cref="Hit(IWalkability, IRagdollEnvironment?, Vector3, Vector3, float, out bool, bool, bool)"/>, and whether all the buildings' collision
+    /// <see cref="Hit(IWalkability, IRagdollEnvironment?, Vector3, Vector3, float, out bool, bool)"/>, and whether all the buildings' collision
     /// before the hit (the whole segment for none) was known (<paramref name="ready"/> false: some of it is still being read, and a nearer hit may
     /// be missing).
     /// </summary>
     public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
-        out bool building, out bool ready, bool roofs = false, bool wait = false)
+        out bool building, out bool ready, bool roofs = false)
     {
         float ground = Terrain(walk, from, seg, terrainStep);
         ready = true;
-        float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs, wait, ref ready);
+        float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs, ref ready);
         building = wall >= 0;
 
         return building ? wall : ground;
@@ -70,10 +70,9 @@ static class SolidHits
 
     /// <summary>
     /// The fraction of the segment where it first crosses a building's collision triangle before <paramref name="limit"/>, -1 for none;
-    /// <paramref name="ready"/> turns false when a piece of it asked for collision still being read (with <paramref name="wait"/>, only when its
-    /// reading failed).
+    /// <paramref name="ready"/> turns false when a piece of it asked for collision still being read.
     /// </summary>
-    static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit, bool roofs, bool wait, ref bool ready)
+    static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit, bool roofs, ref bool ready)
     {
         var list = s_triangles ??= [];
         int pieces = Math.Max(1, (int)MathF.Ceiling(seg.Length() * limit / Chunk));
@@ -82,9 +81,10 @@ static class SolidHits
             float t0 = limit * k / pieces;
             float t1 = limit * (k + 1) / pieces;
             Vector3 a = from + seg * t0, b = from + seg * t1;
+            list.Clear();
             var lo = Vector3.Min(a, b) - Vector3.One;
             var hi = Vector3.Max(a, b) + Vector3.One;
-            ready &= Triangles(env, lo, hi, roofs, wait, list);
+            ready &= roofs ? env.Roofs(lo, hi, list) : env.Buildings(lo, hi, list);
 
             float best = float.PositiveInfinity;
             for (int i = 0; i + 2 < list.Count; i += 3)
@@ -94,21 +94,6 @@ static class SolidHits
         }
 
         return -1;
-    }
-
-    /// <summary>
-    /// Fills <paramref name="list"/> with the collision triangles between the corners; false when some are still being read. With
-    /// <paramref name="wait"/> it waits for those once and asks again, so only a failed reading stays missing.
-    /// </summary>
-    static bool Triangles(IRagdollEnvironment env, Vector3 lo, Vector3 hi, bool roofs, bool wait, List<Vector3> list)
-    {
-        list.Clear();
-        bool known = roofs ? env.Roofs(lo, hi, list) : env.Buildings(lo, hi, list);
-        if (known || !wait) return known;
-
-        env.AwaitBuildings(lo, hi, roofs);
-        list.Clear();
-        return roofs ? env.Roofs(lo, hi, list) : env.Buildings(lo, hi, list);
     }
 
     /// <summary>

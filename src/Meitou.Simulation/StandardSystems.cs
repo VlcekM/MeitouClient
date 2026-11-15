@@ -537,7 +537,7 @@ public static class StandardSystems
         void AddCore()
         {
             if (Has(StandardParts.Population))
-                _systems.Add(StandardParts.Population, _population = new PopulationSystem(_data, _o.Population));
+                _systems.Add(StandardParts.Population, _population = new PopulationSystem(_data, _o.Population) { Buildings = _o.RagdollEnvironment });
 
             if (Has(StandardParts.Player))
                 _systems.Add(StandardParts.Player, new PlayerSystem(_data) { AnimalsPickUp = _o.AnimalsPickUp });

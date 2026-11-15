@@ -9,13 +9,14 @@ namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// What ragdolls fall onto in the world: the terrain heightmap, and the collision of the buildings and map features
-/// (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a worker the first time a ragdoll moves near it and kept in 32-unit
-/// cells (<see cref="RagdollPhysics"/>' tiles). Until a zone is gathered its buildings are reported not ready, and the tile asks again.
+/// (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a worker the first time the zone is asked to load (<see cref="ZoneRead"/>)
+/// or a ragdoll moves near it and kept in 32-unit cells (<see cref="RagdollPhysics"/>' tiles). Until a zone is gathered its buildings are reported
+/// not ready, and the tile asks again.
 /// </summary>
 public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 {
     /// <summary>
-    /// Zones kept at most; the least recently asked for goes first (engine choice).
+    /// Zones kept at most besides the loaded ones (<see cref="HoldZones"/>); the least recently asked for goes first (engine choice).
     /// </summary>
     const int MaxZones = 24;
 
@@ -29,8 +30,8 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     readonly ZoneGeometryGatherer _gatherer;
     /// <summary>
-    /// Each zone's gathered triangles by 32-unit cell, buildings and roofs apart, as the task of a worker's gather; dropped by a run-time building
-    /// change and by <see cref="Evict"/>.
+    /// Each zone's gathered triangles by 32-unit cell, buildings and roofs apart, as the task of a worker's gather; replaced once a run-time building
+    /// change is gathered again (<see cref="Regather"/>), dropped by <see cref="Evict"/>.
     /// </summary>
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), Task<Dictionary<(int, int), List<Vector3>>>> _zones = new();
     /// <summary>
@@ -46,13 +47,21 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     long _clock;
     /// <summary>
-    /// The buildings placed at run time, whose changes drop the zones they touch; null: none.
+    /// The buildings placed at run time, whose changes gather the zones they touch again; null: none.
     /// </summary>
     readonly NavRuntimeBuildings? _runtime;
     /// <summary>
-    /// The counter behind <see cref="Generation"/>, bumped by every run-time building change.
+    /// The counter behind <see cref="Generation"/>, bumped each time a run-time building change's triangles are in.
     /// </summary>
     int _generation;
+    /// <summary>
+    /// The loaded zones (<see cref="HoldZones"/>), which <see cref="Evict"/> leaves; replaced whole, never changed in place.
+    /// </summary>
+    volatile HashSet<ZoneCoordinate> _held = [];
+    /// <summary>
+    /// Set by <see cref="Dispose"/> under <see cref="_gatherLock"/>: a gather again still queued then does nothing.
+    /// </summary>
+    bool _disposed;
 
     /// <summary>
     /// The terrain bodies land on.
@@ -80,13 +89,35 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     public int Generation => Volatile.Read(ref _generation);
 
     /// <summary>
-    /// Drops a changed zone's gathered triangles (both kinds) and bumps <see cref="Generation"/>.
+    /// Gathers a changed zone again (both kinds), its old triangles answering until the new ones are in: a loaded zone never loses its collision,
+    /// as the original's scene keeps a loaded zone's shapes while a new building's are made.
     /// </summary>
     void Changed(ZoneCoordinate zone)
     {
-        _zones.TryRemove((zone, false), out _);
-        _zones.TryRemove((zone, true), out _);
-        Interlocked.Increment(ref _generation);
+        Regather((zone, false));
+        Regather((zone, true));
+    }
+
+    /// <summary>
+    /// Gathers one kept zone's triangles again on a worker and puts them in place of the old ones, then bumps <see cref="Generation"/>; a zone not
+    /// asked for yet is left to its first gather. The swap is made under the gather lock, so after two quick changes the later gather, which saw
+    /// both, is the one kept.
+    /// </summary>
+    void Regather((ZoneCoordinate Zone, bool Roofs) key)
+    {
+        if (!_zones.ContainsKey(key)) return;
+
+        _ = Task.Run(() =>
+        {
+            lock (_gatherLock)
+            {
+                if (_disposed || !_zones.ContainsKey(key)) return;
+
+                _zones[key] = Task.FromResult(Gather(key.Zone, key.Roofs));
+            }
+
+            Interlocked.Increment(ref _generation);
+        });
     }
 
     /// <summary>
@@ -137,36 +168,14 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     }
 
     /// <summary>
-    /// Waits for the gathers of every zone <see cref="Buildings"/> or <see cref="Roofs"/> reads between the corners, starting those not asked for yet;
-    /// a failed gather is not waited for again.
+    /// Whether the zone's building triangles are gathered (a failed gather counts, with none), starting the gather when it was not asked for yet.
     /// </summary>
-    public void AwaitBuildings(Vector3 min, Vector3 max, bool roofs)
-    {
-        var (first, last) = ZoneSpan(min, max);
-        for (int zy = first.Y; zy <= last.Y; zy++)
-        {
-            for (int zx = first.X; zx <= last.X; zx++)
-            {
-                var zone = new ZoneCoordinate(zx, zy);
-                if (zone.IsInsideGrid) Await(Ask(zone, roofs));
-            }
-        }
-    }
+    public bool ZoneRead(ZoneCoordinate zone) => Ask(zone, roofs: false).IsCompleted;
 
     /// <summary>
-    /// Waits for one zone's gather; a failed one stays not ready and the caller goes on without it.
+    /// Keeps the loaded zones' gathered triangles from <see cref="Evict"/>.
     /// </summary>
-    static void Await(Task gather)
-    {
-        try
-        {
-            gather.Wait();
-        }
-        catch (AggregateException)
-        {
-            // Nothing to wait for: the zone answers not ready.
-        }
-    }
+    public void HoldZones(IReadOnlyCollection<ZoneCoordinate> zones) => _held = [.. zones];
 
     /// <summary>
     /// The first and last zone whose buildings may reach the box: a building's triangles are kept with the zone it is placed in and may reach into
@@ -243,13 +252,15 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     }
 
     /// <summary>
-    /// Drops the least recently asked for gathered zones past <see cref="MaxZones"/> (only finished ones).
+    /// Drops the least recently asked for gathered zones past <see cref="MaxZones"/> (only finished ones, never a loaded one).
     /// </summary>
     void Evict()
     {
-        if (_zones.Count <= MaxZones) return;
+        var held = _held;
+        int spare = _zones.Count - MaxZones - _zones.Keys.Count(k => held.Contains(k.Zone));
+        if (spare <= 0) return;
 
-        foreach (var (zone, _) in _used.OrderBy(u => u.Value).Take(_zones.Count - MaxZones).ToList())
+        foreach (var (zone, _) in _used.Where(u => !held.Contains(u.Key.Zone)).OrderBy(u => u.Value).Take(spare).ToList())
         {
             if (_zones.TryGetValue(zone, out var task) && task.IsCompleted && _zones.TryRemove(zone, out _))
                 _used.TryRemove(zone, out _);
@@ -277,6 +288,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
         _ground.Dispose();
         lock (_gatherLock)
+        {
+            _disposed = true;
             _gatherer.Dispose();
+        }
     }
 }

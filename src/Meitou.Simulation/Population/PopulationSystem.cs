@@ -589,17 +589,28 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         List<ZoneCoordinate>? gone = null;
         foreach (var (zone, t) in _loadedUntil) if (t < now) (gone ??= []).Add(zone);
         if (gone is not null) foreach (var zone in gone) _loadedUntil.Remove(zone);
-        world.LoadedZones = Ready(_loadedUntil.Keys);
+        world.LoadedZones = Ready(world, _loadedUntil.Keys);
+        Buildings?.HoldZones(world.LoadedZones);
     }
 
     /// <summary>
-    /// The requested zones that are also ready (<see cref="ZoneGate"/>: the host's navmesh for it exists; none set: all): the zones the original
-    /// flags loaded (<c>FUN_140a0f820</c>:66-96 sets the loaded flags only once every zone of the load list is accepted, state 4 to 5,
-    /// <b>Verified</b>). Characters, corpses and zone content follow this set; the squads' own relevance and the host's navmesh loading follow the
-    /// requested one.
+    /// The requested zones that are also ready (<see cref="Accepted"/>): the zones the original flags loaded (<c>FUN_140a0f820</c>:66-96 sets the
+    /// loaded flags only once every zone of the load list is accepted, state 4 to 5, <b>Verified</b>). Characters, corpses and zone content follow
+    /// this set; the squads' own relevance and the host's navmesh loading follow the requested one.
     /// </summary>
-    HashSet<ZoneCoordinate> Ready(IEnumerable<ZoneCoordinate> requested) =>
-        ZoneGate is { } gate ? [.. requested.Where(z => gate(z))] : [.. requested];
+    HashSet<ZoneCoordinate> Ready(World world, IEnumerable<ZoneCoordinate> requested) => [.. requested.Where(z => Accepted(world, z))];
+
+    /// <summary>
+    /// Whether a requested zone is ready: the host's navmesh for it exists (<see cref="ZoneGate"/>; none set: yes) and its buildings' collision is
+    /// read (<see cref="Buildings"/>), as the original builds a zone's building collision before it flags the zone loaded (docs/game/game-loop.md
+    /// "Zone loading and collision"); a zone loaded already stays so whatever its collision does.
+    /// </summary>
+    bool Accepted(World world, ZoneCoordinate zone)
+    {
+        // The collision first, so its reading starts while the navmesh is still building.
+        bool collision = Buildings is not { } env || world.LoadedZones?.Contains(zone) == true || env.ZoneRead(zone);
+        return collision && (ZoneGate is not { } gate || gate(zone));
+    }
 
     /// <summary>
     /// A loaded town asks for every zone of its list, its own and its coverage, with no ring and the largest timer among those already loaded
@@ -718,6 +729,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// open-ground stand-in (null: always).
     /// </summary>
     public Func<ZoneCoordinate, bool>? ZoneGate { get; set; }
+
+    /// <summary>
+    /// The buildings' collision a requested zone must have read before it loads (<see cref="Accepted"/>), told which zones are loaded so it keeps
+    /// theirs; null: none to wait for.
+    /// </summary>
+    public Ragdolls.IRagdollEnvironment? Buildings { get; set; }
 
     /// <summary>
     /// Starts loading a town: its replacement or held squads settled, its residents built (on the build thread when there is one, else made at once);

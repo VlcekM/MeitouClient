@@ -718,11 +718,11 @@ an NPC by its planner's UNEQUIP_WEAPON step (one without an AI at once).
 Crossbow reload/steady aim, skill spread, bolt flight, ammo, obstruction and friendly hits are
 simulation state; `Schedule` advances bolts. Targets without medical bodies do not stop bolts. Bolts and the line of fire stop at the
 terrain heightmap and the buildings' collision triangles (the ragdolls' environment, `SolidHits`), not the walkable surfaces (a roof over
-the shooter counted as ground). A building is there once its zone's collision has been read on a worker (about 0.1-0.2 s a zone, headless, Black Desert City);
-until then the line of fire holds the shot and the closing ray, the melee alert line and the sight ray (`SightRay`) count as blocked. A flying
-bolt whose step meets collision still being read waits for it (`SolidHits` `wait`, `IRagdollEnvironment.AwaitBuildings`: the serial bolt step
-blocks on the zone's gather), so it never passes a building whose collision was not there yet; only a failed read is passed. The original's
-flight ray has no such case ([flight collision](game/combat.md#shot-origin-and-flight-collision)).
+the shooter counted as ground). A building is there once its zone's collision has been read on a worker (about 0.1-0.2 s a zone, headless, Black Desert City),
+and a zone loads only after that, as in the original ([zone loading](game/game-loop.md#zone-loading-and-collision)), so the loaded zones'
+buildings are always there. Collision still being read (a zone not loaded) holds the line of fire's shot, and the closing ray, the melee alert
+line and the sight ray (`SightRay`) count it as blocked; a flying bolt passes it, as the original's flight ray meets only what its scene holds
+([flight collision](game/combat.md#shot-origin-and-flight-collision)).
 A crossbow reload paused by the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
 [combat.md](game/combat.md#turrets) fire gate); in a fight without a target the controller stays on (state 3) and the reload counts on.
 Bolts and the line of fire hit each character's click hull, an axis-aligned box from the race's `hull size` (`CombatSystem.HullHalf`); the line of fire and the closing
@@ -838,7 +838,7 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
 - **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 4 units (the heightmap's samples are 18 apart; the Bepu mesh build is nearly all of a tile's
   cost, 0.45 ms at 2-unit cells, **Observed**), plus building
   collision from `Meitou.Simulation.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
-  skipped, ≤16 zones) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
+  skipped; the 24 most recently asked zones besides the loaded ones, which are kept) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
   centre lies in, as features reach past a building's 600; outdoor bodies hit group 14, the features' group (**Verified**,
   [pathfinding](game/pathfinding.md#own-builder) "Map features"). **Observed** (`meitou-tools navmesh --ragdoll`): map
   features add 8,475 triangles to 21.19's 9,617 (Rebirth), 2,702 to 20.32's 12,926, 4,355 to 23.22's 19,844, 792 to 34.46, 304 to 18.39;

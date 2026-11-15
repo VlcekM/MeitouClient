@@ -132,7 +132,34 @@ visible-area and frustum tests) and its platoon tests pass. Meitou: `MedicalTime
 
 ### Loaded zones and the world hold
 
-A zone's loaded flags are set only when the zone manager goes from state 4 to 5, after every zone of the load list is accepted (`FUN_140a0f820`:66-96, `FUN_1403ac950`); a request (`FUN_140a0f080`) is ignored in state 3 unless the zone is already requested and loaded. Each frame four sample points (the camera focus and +600 in x, in z and in both, **Verified** constant 600.0) are tested: one off the grid or in a zone whose loaded flag is 0 applies the forced pause (`FUN_140787d40(registry, 1)` writes only the paused byte `+0x8b9` and posts Pause_Game), so the game is held paused while the camera's surroundings load. Meitou: `PopulationSystem.RefreshLoaded` publishes `World.LoadedZones` / `ActiveZones` as the requested zones that `ZoneGate` (the host's navmesh for the zone exists) also passes; `PopulationSystem.ActiveZones`, which the host builds navmeshes for, stays the requested set. **Deliberate departure:** Meitou does not hold the game while zones load (no loading pause, by the project goal of better performance); the simulation keeps ticking and the camera's zones load as `ZoneGate` passes them. The player's pause and its button are untouched.
+A zone's loaded flags are set only when the zone manager goes from state 4 to 5, after every zone of the load list is accepted (`FUN_140a0f820`:66-96, `FUN_1403ac950`); a request (`FUN_140a0f080`) is ignored in state 3 unless the zone is already requested and loaded. Each frame four sample points (the camera focus and +600 in x, in z and in both, **Verified** constant 600.0) are tested: one off the grid or in a zone whose loaded flag is 0 applies the forced pause (`FUN_140787d40(registry, 1)` writes only the paused byte `+0x8b9` and posts Pause_Game), so the game is held paused while the camera's surroundings load. Meitou: `PopulationSystem.RefreshLoaded` publishes `World.LoadedZones` / `ActiveZones` as the requested zones that `ZoneGate` (the host's navmesh for the zone exists) also passes and whose buildings' collision is read
+([below](#zone-loading-and-collision)); `PopulationSystem.ActiveZones`, which the host builds navmeshes for, stays the requested set. **Deliberate departure:** Meitou does not hold the game while zones load (no loading pause, by the project goal of better performance); the simulation keeps ticking and the camera's zones load as `ZoneGate` passes them. The player's pause and its button are untouched.
+
+### Zone loading and collision
+
+**Verified** (decompile, 1.0.68):
+- A building gets its collision when made: `RootObjectFactory::createBuilding` (`FUN_14057cc70`) calls the physical-state slot `0x220`, which for a
+  top-level building (`FUN_140547270` → `FUN_140594350`) runs `Building::createPhysical` (slot `0x200`, `FUN_1405609e0`) while its zone is
+  requested or loaded (`+0xb0` / `+0xb1`) and releases it (slot `0x208`) once the zone is neither. Each part with an `xml collision` queues a
+  `SimplePhysXEntity` (`FUN_14055f6e0`, `FUN_1404cde30`) on the physics object's creation chain (`PhysicsActual +0x1a0`, `FUN_1400f1670`).
+- The main thread's physics sync (`PhysicsActual` slot 4, `FUN_1404cdad0`) hands that chain to the physics thread (`FUN_1407def50`), whose step
+  (`PhysicsActual::backThreadUpdate`, `FUN_1407dd060`) first reads each entity's collision file and adds its actors to the scene
+  (`FUN_1404cc620` → `SimplePhysXEntity::createBT`, `FUN_1404cd4f0`; a missing file is logged and gives no shapes), then simulates. The
+  creation runs while paused too: the pause only zeroes the simulated time.
+- Physics is idle (`FUN_140173fb0`) when the creation and removal chains are empty and the sync found nothing left on the physics thread (flag
+  `+0x320`). The zone manager's state 3 step (`FUN_140a0eab0`), which moves it to state 4, runs only while physics is idle, and a zone's navmesh
+  is asked for only while physics is idle (otherwise `+0xcc` marks it and the per-frame zone update `FUN_140a0f2d0` asks once idle); state 4 to 5
+  needs every zone's navmesh (`FUN_1403ab630`). So the buildings made while a zone loads have their collision in the scene before the zone is
+  flagged loaded and its characters are activated ([inactive characters](#inactive-characters)).
+- An unloaded zone has no building objects ([buildings](buildings-production.md)), so a bolt or ray into it meets none of its buildings. A
+  building made in a loaded zone (construction, a swap) gets its shapes at the physics step after the next sync, so for that frame or so a bolt
+  passes it: the flight ray (`FUN_1404380e0`) tests only what the scene holds.
+
+Meitou: a requested zone loads only once its buildings' collision is gathered (`PopulationSystem.Accepted`, `IRagdollEnvironment.ZoneRead`;
+the gather starts at the request, beside the navmesh build), and a loaded zone stays loaded whatever its collision does. The loaded zones'
+collision is never evicted (`HoldZones`). A run-time building change gathers the zone again and keeps its old triangles until the new ones
+are in (`RagdollGeometry.Regather`, about 0.1-0.2 s), where the original lacks only the new building's shapes for a step. Engine choice: a
+gathered zone that is not loaded still stops bolts and rays.
 
 ### Settings and constants
 
