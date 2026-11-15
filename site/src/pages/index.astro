@@ -54,7 +54,11 @@ const pairs = [
   { name: 'Weather', before: '/compare/weather-before.webp', after: '/compare/weather-after.webp' },
 ];
 ---
-<Base title="MeitouClient - Kenshi engine reimplementation" video>
+<Base
+  title="MeitouClient - Kenshi engine reimplementation"
+  description="Run Kenshi on MeitouClient, an open-source engine for Windows, Linux, and macOS that uses your installed copy of the game."
+  video
+>
   <script slot="head" type="application/ld+json" set:html={JSON.stringify(metadata)} />
   <section class="hero">
     <div class="stack">
@@ -148,6 +152,7 @@ const pairs = [
       <div class="links">
         <a class="mt-btn" href="https://discord.gg/DVAHH2n9DR"><DiscordIcon /><span>Discord</span></a>
         <a class="mt-btn" href="https://github.com/VlcekM/MeitouClient"><GithubIcon /><span>GitHub</span></a>
+        <a class="mt-btn" href="/build/"><span>Build from source</span></a>
       </div>
     </div>
   </section>
