@@ -1170,6 +1170,13 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   then 0); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's `building designation`;
   town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is reserved for the squad in a
   global table→squad map (`DAT_14212ddb8`) and becomes the package's target; all bars full: no target.
+  - The start needs the platoon's squad object (+0x1d8, null while unloaded) and the town's zone loaded, and sets the started flag (+0x150)
+    only then; the target query (vfunc 1, `FUN_140293ea0`, what 214 Relaxing asks) runs the start first while that flag is clear (**Verified**,
+    decompile). Whether the package's activation also calls it, and whether the reservations are saved, is **Unknown**.
+  - **Observed** (KH 1.0.65, four runs of one Hub save from 10:20): the Hub's five bar squads (Mercenary guild, two Drifters recruit squads,
+    Bar thugs, Hound Pacifier) all relax at the Storm House's tables for 3 hours, while seven `hub squatters` squads (package `Squatters`,
+    signal 17, no 214 goal) block none of them. Meitou: a bar-class package takes a table at its start only when a goal of it is 214
+    (`AiSystem.Rules.AsksForTable`; engine reading of the lazy start), so a package without one holds none and keeps its home.
   - The table search (`FUN_140292de0`, **Verified** by disassembly) asks the town (vfunc 0x2c8, `FUN_1409fc540`) for its furniture through a filter
     (vfunc 5 `FUN_1408ca670`). It keeps a piece:
     - of the package's town, and of a faction not hostile to the platoon's (`FUN_1406b26d0`);

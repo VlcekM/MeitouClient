@@ -3124,8 +3124,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         /// <summary>
-        /// A package of class <paramref name="kind"/> just started for the bound squad: a patrol lays its route, a bar package takes a table, and the
-        /// other classes set up what they need.
+        /// A package of class <paramref name="kind"/> just started for the bound squad: a patrol lays its route, a bar package that relaxes
+        /// takes a table (<see cref="AsksForTable"/>), and the other classes set up what they need.
         /// </summary>
         public void Started(Blackboard board, AiPackage package, PackageClass kind)
         {
@@ -3137,6 +3137,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     break;
                 case PackageClass.Bar:
                 case PackageClass.BarOutdoors:
+                    if (!AsksForTable(package)) break;
                     if (BarTown(board) is >= 0 and var town
                         && _system.PickTable(_world, town, _squad, outdoors: kind == PackageClass.BarOutdoors) is var (bar, table))
                         (board.Home, board.BarTable) = (bar, table);
@@ -3159,6 +3160,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     _system.RefugeeStarted(_world, _squad, board);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Whether a goal of <paramref name="package"/> asks for the package's target (214 Relaxing). The original's bar package takes its table when
+        /// the target is first asked for (docs/game/ai-tasks.md "Hang-around-bar package"), so one without such a goal, the Hub's Squatters, holds none.
+        /// </summary>
+        static bool AsksForTable(AiPackage package)
+        {
+            foreach (var goals in package.Roles)
+            {
+                foreach (var goal in goals)
+                    if (goal.Task.Type == TaskType.RelaxInTownPackage) return true;
+            }
+
+            return false;
         }
     }
 
