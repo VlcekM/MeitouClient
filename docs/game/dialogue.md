@@ -601,7 +601,14 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
   centred, black shadow).
 
 Code (**Observed**): the window (`FUN_140725740`, opened by `FUN_140727820`) names the speaker and the player character and renders
-both portraits; choices use the MyGUI colours `DialogueTextOption` / `DialogueTextOptionHover`; the NPC frame grows to its text (Meitou keeps the layout's frame and scrolls a longer line under the EditBox's bar). The
+both portraits; choices use the MyGUI colours `DialogueTextOption` / `DialogueTextOptionHover`; the NPC frame grows to its text (Meitou keeps the layout's frame and scrolls a longer line under the EditBox's bar).
+**Choices** (**Verified**, 1.0.68 decompile `FUN_1407239e0`, `FUN_140721fe0`, `FUN_140725740`; 0.05 = `DAT_141696c74`, `re/data_values.txt`):
+each choice is a `Kenshi_WordWrapEmpty` EditBox (word-wrapped, Kenshi_StandardFont_Medium) in `PlayerDialog` captioned "N. text", 0.05 x the
+canvas width in from each side, as high as its wrapped text, followed by a gap of 0.05 x the canvas height. The canvas is the view's size: the
+layout's at the window's creation, after each layout the grown view's, so the next set's gaps use it. `PlayerPanel` becomes max(the rows'
+total, the layout's `PlayerDialog` height) plus its other chrome, its children following their MyGUI align (frame, `PlayerDialog` and money
+box Stretch), and is re-placed with its bottom margin to the screen kept, so it grows upward; `NpcPanel` keeps its gap above it. No choice
+is cut. Meitou: `DialogueChoiceLayout` (issue #775: long choices were one clipped line). The
 bubble (`FUN_140725f30`) uses Kenshi_StandardFont_Large or _Medium, sits 4 units above the "Bip01 Head" bone, and fades from opaque at
 1000 to gone at 2500 units from the camera, the distance ×0.5 for large-font events, ×0.75 for the rest of the
 [interrupting set](#firing-an-event), ×1 for the others; an interrupting bubble is clamped inside the screen, left and top edges winning (`FUN_140672320`,
