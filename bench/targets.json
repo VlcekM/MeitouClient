@@ -31,5 +31,6 @@
   {"commit": "bc1b6295", "date": "2026-11-13", "label": "v0.19.0", "kind": "release", "note": ""},
   {"commit": "f2601d8a", "date": "2026-11-14", "label": "daily 2026-11-14", "kind": "daily", "note": "v0.19.1-nightly.20261114"},
   {"commit": "da6af12e", "date": "2026-11-15", "label": "v0.20.0", "kind": "release", "note": ""},
-  {"commit": "e70a346b", "date": "2026-11-15", "label": "daily 2026-11-15", "kind": "daily", "note": "v0.20.1-nightly.20261115"}
+  {"commit": "e70a346b", "date": "2026-11-15", "label": "daily 2026-11-15", "kind": "daily", "note": "v0.20.1-nightly.20261115"},
+  {"commit": "8c79093d", "date": "2026-11-15", "label": "v0.20.1", "kind": "release", "note": ""}
 ]
