@@ -129,9 +129,16 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// What a nest build may make: members up to <paramref name="Cap"/> with <paramref name="Members"/> there already, <paramref name="Counts"/>
     /// squads per entry, rolls keyed from <paramref name="First"/>, at most <paramref name="Rolls"/> of them and <paramref name="Squads"/> squads;
-    /// <paramref name="Place"/> false only weighs (a player is near).
+    /// <paramref name="Place"/> false only weighs (a player is near); <paramref name="Guard"/> also only weighs when a player's character is within
+    /// <see cref="NestGuardRadius"/> of the centre the build picks (a load, whose centre is not known before).
     /// </summary>
-    sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null);
+    sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null,
+        bool Guard = false);
+
+    /// <summary>
+    /// Whether any of <paramref name="players"/> is within <paramref name="radius"/> of <paramref name="at"/>.
+    /// </summary>
+    static bool PlayerNear(Vector2[] players, Vector2 at, float radius) => players.Any(p => Vector2.DistanceSquared(p, at) < radius * radius);
 
     /// <summary>
     /// The wild sites (sectors and nests), made at the first look of a world with biomes; empty before or without.
@@ -749,7 +756,7 @@ public sealed partial class PopulationSystem
             int cap = pools.Ded ? 0 : (int)MathF.Floor(pools.Roaming.Current);
             var counts = new int[site.Nest!.RoamingSquads.Count];
             for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(site.Nest.RoamingSquads[i].Id);
-            var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64);
+            var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64, Guard: true);
             if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, players, budget));
             else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, players, budget)));
             return;
@@ -854,7 +861,9 @@ public sealed partial class PopulationSystem
         state.Pending = false;
         state.Made = (b.TopUp ? state.Made : 0) + b.Rolls;
         var site = _wildSites![b.Site];
-        if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) _wildCentres[b.Site] = b.Centre;
+        // A load that found a centre has a layout (empty or not), also when a player near it held its squads back; a dormant nest has none.
+        bool found = b.Squads.Count > 0 || site.SaveInstance is not null || b.Layout is not null;
+        if (site.Kind == WildKind.Nest && found) _wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
         if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
         return true;
@@ -1159,6 +1168,9 @@ public sealed partial class PopulationSystem
 
         // no walkable spot: the nest is dormant this load
         if (centre is not { } c) return new BuiltWild(site.Index, loadId, site.Spots[0], squads, TopUp: topUp);
+
+        // A player's character near the centre stops the load's fill as it stops a top-up (FUN_1407866d0): the rolls only weigh.
+        bool place = budget.Place && !(budget.Guard && PlayerNear(players, c, NestGuardRadius));
         int cap = budget.Cap;
         var entries = nest.RoamingSquads;
         var counts = (int[])budget.Counts.Clone();
@@ -1191,7 +1203,7 @@ public sealed partial class PopulationSystem
                 break;
             }
 
-            if (!budget.Place) break;
+            if (!place) break;
             counts[e]++;
             var template = templates[e]!;
             int faction = _data.SpawnFactionOf(template, site.Nest is not null ? site.Faction : null);
