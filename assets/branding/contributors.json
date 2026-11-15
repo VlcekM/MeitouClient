@@ -32,8 +32,8 @@
     "areas": "Benchmarks, Proton saves, Tracers"
   },
   "lucasskrewer": {
-    "commits": 12,
-    "areas": "Benchmarks, Animal hunger"
+    "commits": 23,
+    "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
     "commits": 3,
@@ -48,15 +48,19 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 45,
-    "areas": "Animals, Medic, Crime, Doors"
+    "commits": 51,
+    "areas": "Animals, Inventory, Medic, Bandits, Dialogue"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 13,
-    "areas": "Metal rendering, Launcher"
+    "commits": 15,
+    "areas": "Metal, Debug menu, Launcher"
+  },
+  "mattresspad": {
+    "commits": 2,
+    "areas": "Homepage metadata"
   }
 }
