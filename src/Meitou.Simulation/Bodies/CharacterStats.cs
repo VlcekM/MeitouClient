@@ -15,6 +15,11 @@ public sealed class CharacterStats
     public const float XpCap = 101;
 
     /// <summary>
+    /// The largest amount the core gain adds (<see cref="CoreGain"/>).
+    /// </summary>
+    const float MaxCoreGain = 20;
+
+    /// <summary>
     /// The stored values by stat number. Indexed by stat number; numbers 14, 15 (shared with Medic), 20 and 33 (no storage) stay unused.
     /// </summary>
     readonly float[] _values = new float[StatsInfo.Count];
@@ -28,6 +33,12 @@ public sealed class CharacterStats
     /// The levels in code mods' skills, made on first use (<see cref="ModSkills"/>).
     /// </summary>
     ModSkillLevels? _modSkills;
+
+    /// <summary>
+    /// What this character's XP gains are multiplied by (Advanced settings "Squad XP" and "Others' XP", <see cref="BodyOptions.SquadXp"/>; Meitou
+    /// only, the game has 1). <see cref="BodySystem"/> sets it on every body step from the character's side; not saved.
+    /// </summary>
+    public float XpRate { get; set; } = 1;
 
     /// <summary>
     /// Stats that read as 1 for a character built without data (the editor's default of a STATS field).
@@ -174,7 +185,7 @@ public sealed class CharacterStats
         if (float.IsNaN(stat)) return 20;
         float f = (cap - stat) / cap;
         f *= f;
-        if (!(amount > 0 && amount <= 20 && f > 0 && f <= 20)) return stat;
+        if (!(amount > 0 && amount <= MaxCoreGain && f > 0 && f <= 20)) return stat;
         float result = stat + amount * f;
         return float.IsNaN(result) ? stat : result;
     }
@@ -189,7 +200,20 @@ public sealed class CharacterStats
         var s = StatsInfo.StorageOf(stat);
         if (s == StatsEnumerated.None) return 0;
         if (float.IsNaN(_values[(int)s])) return _values[(int)s];
-        return _values[(int)s] = CoreGain(_values[(int)s], amount, cap);
+        return _values[(int)s] = CoreGain(_values[(int)s], Rated(_values[(int)s], amount, cap), cap);
+    }
+
+    /// <summary>
+    /// A gain times <see cref="XpRate"/>, held to the core's limit of 20 so a multiplied gain is never dropped. An amount the core ignores stays as it
+    /// is, and a stat at or past the gain's cap (a training dummy's level) takes no raise, so a dummy's limit stands.
+    /// </summary>
+    internal float Rated(float stat, float amount, float cap)
+    {
+        float rate = XpRate;
+        if (rate == 1 || !(amount > 0 && amount <= MaxCoreGain)) return amount;
+        if (rate > 1 && stat >= cap) return amount;
+
+        return MathF.Min(amount * rate, MaxCoreGain);
     }
 
     /// <summary>

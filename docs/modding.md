@@ -53,6 +53,8 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
+- A code mod whose feature Meitou has built in (`BuiltInMods`, [rekenshi](formats/rekenshi.md): the `player-only-xp` port) is left out
+  of the load set and counted as disabled.
 
 ## Trust
 

@@ -47,6 +47,11 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     public const float ContinuousRate = 0.02f;
 
     /// <summary>
+    /// The medic skill from which <see cref="CharacterStats.XpRate"/> above 1 no longer applies to <see cref="Medic"/>.
+    /// </summary>
+    const float MedicRateLimit = 100;
+
+    /// <summary>
     /// Base of a per-event gain: <c>exp gain multiplier</c> (already x0.25, 0.75 in the base game) x 0.1 = 0.075.
     /// </summary>
     public float EventUnit => constants.ExpGainMultiplier * 0.1f;
@@ -281,7 +286,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// Medic (<c>FUN_1408c6130</c>, <b>Verified</b> decompile): <c>dt / T x exp gain multiplier x race[stat]</c> added straight to the stat (no core
     /// curve, no cap), T seconds per point = lerp(<c>XP rate medic 1</c>, <c>XP rate medic 99</c>, skill / 100) and nothing when T is not above 0
     /// (the order of the lerp's ends is read from the editor's field names). The race factor is the medic race's entry for the patient race's <c>heal
-    /// stat</c>.
+    /// stat</c>. Meitou: the time counts <see cref="CharacterStats.XpRate"/> times, a raise only below 100 (the gain has no cap to stop it).
     /// </summary>
     public float Medic(CharacterStats stats, RaceData patientRace, RaceData medicRace, float dtSeconds, StatsEnumerated? healStat = null)
     {
@@ -290,7 +295,10 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         float t = skill * 0.01f;
         float secondsPerPoint = constants.XpRateMedic1 + (constants.XpRateMedic99 - constants.XpRateMedic1) * t;
         if (!(secondsPerPoint > 0)) return skill;
-        return stats[stat] = skill + dtSeconds / secondsPerPoint * constants.ExpGainMultiplier * medicRace.StatMultiplier(patientRace.HealStat);
+
+        float rate = stats.XpRate > 1 && skill >= MedicRateLimit ? 1 : stats.XpRate;
+        float gain = dtSeconds * rate / secondsPerPoint * constants.ExpGainMultiplier * medicRace.StatMultiplier(patientRace.HealStat);
+        return stats[stat] = skill + gain;
     }
 
     /// <summary>
@@ -300,7 +308,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <c>CombatSystem.MassCombatEffect</c>.
     /// </summary>
     public float MassCombat(CharacterStats stats) =>
-        stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat) + constants.ExpGainMultiplier * 0.05f;
+        stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat) + constants.ExpGainMultiplier * 0.05f * stats.XpRate;
 
     /// <summary>
     /// Toughness when a hit knocks the character out (<c>FUN_1408c6720</c>, from the part damage <c>FUN_14064f300</c>, <b>Verified</b> decompile):

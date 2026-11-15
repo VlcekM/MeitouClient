@@ -704,6 +704,8 @@ sealed partial class GameHost(
                 Dismemberment = Saves.Gameplay.Dismemberment,
                 Decapitation = Config.Decapitation,
                 AdvancedRagdolls = Config.AdvancedRagdolls,
+                SquadXp = Config.SquadXp,
+                OthersXp = Config.OthersXp,
             },
             ZoneReady = ready =>
             {

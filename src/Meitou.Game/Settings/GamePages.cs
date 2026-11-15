@@ -81,6 +81,11 @@ sealed class GamePages(SettingsMenu menu)
     Slider? _fastSpeedSlider, _fastestSpeedSlider;
 
     /// <summary>
+    /// The squad and others' XP sliders, made on first use.
+    /// </summary>
+    Slider? _squadXpSlider, _othersXpSlider;
+
+    /// <summary>
     /// The dropped items kept slider, made on first use.
     /// </summary>
     Slider? _groundItemsSlider;
@@ -263,6 +268,28 @@ sealed class GamePages(SettingsMenu menu)
     /// </summary>
     static int ClampHarpoonLimit(float v) =>
         Math.Clamp((int)MathF.Round(v), Simulation.Combat.RangedTuning.MinStuckLimit, Simulation.Combat.RangedTuning.MaxStuckLimit);
+
+    /// <summary>
+    /// The squad XP slider, marked at the game's rate.
+    /// </summary>
+    Slider SquadXpSlider => _squadXpSlider ??= XpRate("Squad XP", () => menu.Config.SquadXp, v => menu.Config.SquadXp = v);
+
+    /// <summary>
+    /// The others' XP slider, marked at the game's rate.
+    /// </summary>
+    Slider OthersXpSlider => _othersXpSlider ??= XpRate("Others' XP", () => menu.Config.OthersXp, v => menu.Config.OthersXp = v);
+
+    /// <summary>
+    /// An XP multiplier in hundredths (typed by clicking its number; the arrow keys move it in quarters), applied to the running world at once.
+    /// </summary>
+    Slider XpRate(string label, Func<float> get, Action<float> set) =>
+        new(label, UserConfig.MinXpRate, UserConfig.MaxXpRate, get,
+            v =>
+            {
+                set(Math.Clamp(MathF.Round(v * 100) / 100, UserConfig.MinXpRate, UserConfig.MaxXpRate));
+                menu.GameplayChanged?.Invoke();
+            },
+            "0.##", Text: v => $"{v:0.##}x", Faithful: 1, Step: 0.25f);
 
     /// <summary>
     /// The fast speed slider, in half steps, marked at the game's default.
@@ -631,7 +658,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The world and play rows: doors, decapitation, ragdolls, the speeds, pausing, animals, outlines, selection and ground items.
+    /// The world and play rows: doors, decapitation, ragdolls, XP, the speeds, pausing, animals, outlines, selection and ground items.
     /// </summary>
     void AddWorldRows(List<SettingsMenu.Entry> result)
     {
@@ -651,6 +678,12 @@ sealed class GamePages(SettingsMenu menu)
             + "In the game a body drops where it stood, its joints stopping hard.",
             Toggle: new("Advanced ragdolls", () => menu.Config.AdvancedRagdolls,
                 v => { menu.Config.AdvancedRagdolls = v; menu.GameplayChanged?.Invoke(); }, Remaster: true)));
+        result.Add(new(SquadXpSlider.Label,
+            "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). "
+            + "0 stops it. Click the number to type an exact value. A training dummy still stops at its level.",
+            Slider: SquadXpSlider));
+        result.Add(new(OthersXpSlider.Label,
+            "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x).", Slider: OthersXpSlider));
         result.Add(new(FastSpeedSlider.Label, "The game speed of the second speed button (two arrows) and its key (the game: 2x).",
             Slider: FastSpeedSlider));
         result.Add(new(FastestSpeedSlider.Label,

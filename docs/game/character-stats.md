@@ -426,6 +426,8 @@ Stats are `float`s inside `CharStats`. The number is what RACE `heal stat`, `sta
 | Mass combat | `FUN_1408c5e80` | **Verified**: +0x9c rises by 0.75 x 0.05 per call, straight; one caller, the answer to a slot ask `FUN_140666a30` ([combat](combat.md#attack-slots-and-circling): the asked character's, while stumbling or fighting; nothing reads the stat; not called in Meitou) |
 | Other crafting and machine skills | callers of `FUN_1408c7250` / `FUN_1408c7310` | `FUN_1408c7250(stat)` picks a per-stat base `amount` and calls the generic entry with a global float as `dt` (`DAT_142133794`, the game-speed-scaled frame time, the third time value of [game-loop.md](game-loop.md#the-three-time-values)): 0.5 by default, thievery and lockpicking 0.1, turrets 1.0, perception 3.0, farming 0.75, crossbows 1.2 (**Observed**; the farming and crossbows values come from a switch fall-through, 0.5 x 1.5 and 0.8 x 1.5). `FUN_1408c7310(stat, amount)` is the same with dt 1 |
 
+Meitou ("Squad XP" and "Others' XP", Advanced settings, 1x; not the original's): `BodySystem` sets `CharacterStats.XpRate` on each body step, the squad rate for the player's characters and faction, the other for everyone else. `CharacterStats.Gain` multiplies an amount the core would take by it, held to 20 so a multiplied gain is never dropped, and gives no raise to a stat at or past the gain's cap (a training dummy's level stands); Medic multiplies its time (a raise only below 100), Mass combat its step. A rate below 1 always applies; 0 stops XP.
+
 ### Effective stats: injuries and hunger
 
 Decoded cases (hex constants converted). `limb`, h0, l0 and f0 are **Verified** in game for every row (#46,
