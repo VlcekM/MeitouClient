@@ -279,8 +279,8 @@ public sealed partial class CarrySystem
     /// The take (<c>FUN_14034d930</c> / <c>FUN_140342de0</c>): the body's weapons when the looter has none equipped, each only while a weapon section
     /// of the looter is empty (the original also from an imprisoned body, which the finder never picks here); its food (<c>item function</c> 3, then
     /// 15), then its backpack's food, with <paramref name="carriedBags"/> also the food in bags carried in its grid (Meitou fix,
-    /// <see cref="World.BagSearchFix"/>); with <paramref name="everything"/> also every item and armour of it and every item of its backpack. Returns
-    /// the items moved.
+    /// <see cref="World.BagSearchFix"/>); with <paramref name="everything"/> also every item and armour of it and every item of its backpack (and of
+    /// its carried bags with the fix). Returns the items moved.
     /// </summary>
     int NpcTake(CharacterCold looter, CharacterCold victim, bool everything, bool carriedBags)
     {
@@ -304,6 +304,7 @@ public sealed partial class CarrySystem
             items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.Item or FcsRecordType.Armour && !items.Contains(x)
                 && !(x.Type == FcsRecordType.Armour && x.Uniform.Length > 0)));
             if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.Item && !items.Contains(x)));
+            if (carriedBags) items.AddRange(from.CarriedBags().SelectMany(b => b.Items.Where(x => x.Type == FcsRecordType.Item && !items.Contains(x))));
         }
         moved += Take(looter, victim, items);
         if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.Armour)) WearIfBetter(looter, piece);
