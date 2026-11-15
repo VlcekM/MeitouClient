@@ -248,9 +248,24 @@ public sealed record DebugUnlockResearch : DebugCommand;
 
 /// <summary>
 /// Spawns a character of record <see cref="Record"/> (of the RACE <see cref="Race"/> when given: control channel `spawn-at --race`) at
-/// <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).
+/// <see cref="At"/>, alone in a squad of <see cref="Faction"/> when it names one ("player": the player's faction; <see cref="HostileFaction"/>: the
+/// first faction hostile to the player's; else a faction id or name), else of the faction its record lists (the first hostile one for a record that
+/// lists none). <see cref="PopulationSystem"/> applies it.
 /// </summary>
-public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null, string? Race = null) : DebugCommand;
+public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null, string? Race = null) : DebugCommand
+{
+    /// <summary>
+    /// The <see cref="Faction"/> that means the first faction hostile to the player's: the debug menu's "Spawn NPC (hostile)" row, whatever faction
+    /// the record lists.
+    /// </summary>
+    public const string HostileFaction = "hostile";
+
+    /// <summary>
+    /// The spawn must aggro: its members get the "Attack enemies" goal (16) even though their synthetic template lists no packages (the debug menu's
+    /// "Spawn NPC (hostile)" row).
+    /// </summary>
+    public bool Aggro { get; init; }
+}
 
 /// <summary>
 /// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass

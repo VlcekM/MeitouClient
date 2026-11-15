@@ -176,9 +176,9 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     Silk.NET.Input.CursorMode _cursorBeforeOrbit = Silk.NET.Input.CursorMode.Normal;
     /// <summary>
-    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler (its release is not the game's).
+    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler or the debug menu (their releases are not the game's).
     /// </summary>
-    bool _panelDrag, _shiftDown, _profilerClick;
+    bool _panelDrag, _shiftDown, _profilerClick, _debugMenuClick;
     /// <summary>
     /// The highlight key (Alt) is held, as of the last control tick.
     /// </summary>
@@ -1160,6 +1160,12 @@ sealed class GameLoop(GameHost host)
                 return;
             }
 
+            // The debug menu takes the wheel while it is open, as it takes every key and click.
+            if (PanelLive() && _overlay is not null && host.DebugMenu.DebugMenuOpen)
+            {
+                host.DebugMenu.Scroll(wheel.Y);
+                return;
+            }
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
@@ -1186,6 +1192,13 @@ sealed class GameLoop(GameHost host)
             return;
         }
         if (PanelLive() && _panel?.Contains(at) == true) return;
+        // The debug menu takes every left click while it is open, as it takes every key.
+        if (select && PanelLive() && _overlay is not null && host.DebugMenu.DebugMenuOpen)
+        {
+            host.DebugMenu.DebugMenuClick(at);
+            _debugMenuClick = true;
+            return;
+        }
         if (select && PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true) return;
         if (select && PanelLive() && host.Sandbox.SandboxToggleClick(at)) return;
         // F12's legend opens and closes rows
@@ -1249,9 +1262,10 @@ sealed class GameLoop(GameHost host)
         }
 
         bool cinemaDrag = _cinema.MouseUp();
-        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
+        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && !_debugMenuClick && _panel?.Visible != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
         _profilerClick = false;
+        _debugMenuClick = false;
         _panel?.MouseUp();
         _panelDrag = false;
         if (physical is { } button) host.Session.Input.SetMouseButton(button, false);
@@ -1828,9 +1842,6 @@ sealed class GameLoop(GameHost host)
             panelsBottom = overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", _stats, panelsBottom, laidOut: host.DebugOverlays.StatsLaidOut);
             host.DebugOverlays.FindStatsToggles(overlay.CharWidth);
         }
-        if (host.DebugMenu.DebugMenuOpen)
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
-                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
         if (host.Player.WorldMap.MapPick is not null && host.Player.WorldMap.MapTabShown) host.DebugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.ExplodeClickOn) host.DebugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.InspectorMenuOpen) host.DebugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
@@ -1838,6 +1849,10 @@ sealed class GameLoop(GameHost host)
         if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DrawConsole(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.Draw(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.DrawVram(overlay, size.X, size.Y);
+        // The debug menu is drawn last, over every other debug panel (the console, the profiler, the editors and the hints).
+        if (host.DebugMenu.DebugMenuOpen)
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
+                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
     }
 
     /// <summary>

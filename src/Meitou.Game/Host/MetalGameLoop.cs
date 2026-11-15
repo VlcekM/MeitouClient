@@ -1653,6 +1653,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _shiftDown;
 
     /// <summary>
+    /// The last left press went to the debug menu, so its release is not the interface's.
+    /// </summary>
+    bool _debugMenuClick;
+
+    /// <summary>
     /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu repeats here, to scroll its lists: after 0.5 s,
     /// then 30 times a second (the Windows defaults). No other key repeats.
     /// </summary>
@@ -1956,6 +1961,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _settings.MouseDown(at, mapped);
                 return;
             }
+            // The debug menu takes every left click while it is open, as it takes every key.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left)
+            {
+                host.DebugMenu.DebugMenuClick(at);
+                _debugMenuClick = true;
+                return;
+            }
             bool select = host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
             if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true)
                 return;
@@ -1967,13 +1979,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         mouse.MouseUp += (_, button) =>
         {
             if (host.Covered) return;
+            bool menuClick = _debugMenuClick;
+            _debugMenuClick = false;
             if (_settings?.Visible == true)
             {
                 _settings.MouseUp();
                 return;
             }
             if (KeyMap.Map(button) is not { } mapped) return;
-            _hud?.MouseUp(host.PlayerButton(mapped), Pixels(mouse.Position), _shiftDown);
+            if (!menuClick) _hud?.MouseUp(host.PlayerButton(mapped), Pixels(mouse.Position), _shiftDown);
             host.Session.Input.SetMouseButton(mapped, false);
         };
         mouse.Scroll += (_, wheel) =>
@@ -1982,6 +1996,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (_settings?.Visible == true)
             {
                 _settings.Scroll(wheel.Y);
+                return;
+            }
+            // The debug menu takes the wheel while it is open, as it takes every key and click.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen)
+            {
+                host.DebugMenu.Scroll(wheel.Y);
                 return;
             }
             var at = Pixels(mouse.Position);

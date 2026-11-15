@@ -384,7 +384,7 @@ sealed class DebugMenu(GameHost host)
         }
         else
         {
-            _debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
+            _debugStatus = DebugApplyNow(DebugRow.Teleport, "", at: at);
             _mapTeleportNote = _debugStatus;
             if (DebugFailed)
             {
@@ -556,13 +556,47 @@ sealed class DebugMenu(GameHost host)
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
 
     /// <summary>
-    /// The row Up (-1) or Down (+1) reaches from the current one, in the order shown.
+    /// The row <paramref name="delta"/> rows from the current one, in the order shown (wrapping).
     /// </summary>
     int DebugStep(int delta)
     {
         var layout = DebugLayout();
-        int at = layout.FindIndex(l => l.Row == _debugRow);
-        return layout[((at < 0 ? 0 : at) + delta + layout.Count) % layout.Count].Row;
+        int at = layout.FindIndex(l => l.Row == _debugRow), n = layout.Count;
+        return layout[((at < 0 ? 0 : at) + delta % n + n) % n].Row;
+    }
+
+    /// <summary>
+    /// How many rows a wheel notch moves a list.
+    /// </summary>
+    const int ScrollLines = 1;
+
+    /// <summary>
+    /// The mouse wheel while the menu is open: the open sub-view (or the main menu) moves its highlight by <see cref="ScrollLines"/> rows a notch, up for
+    /// a wheel away from the user, so a long list scrolls with it.
+    /// </summary>
+    internal void Scroll(float wheel)
+    {
+        int lines = -(int)MathF.Round(wheel) * ScrollLines;
+        if (lines == 0) return;
+        if (_itemPicker.Open)
+        {
+            _itemPicker.Scroll(lines);
+            return;
+        }
+
+        if (_characterEditor.Open)
+        {
+            _characterEditor.Scroll(lines);
+            return;
+        }
+
+        if (DebugParts is { } parts)
+        {
+            _debugPart = Math.Clamp(_debugPart + lines, 0, parts.Length - 1);
+            return;
+        }
+
+        _debugRow = DebugStep(lines);
     }
 
     /// <summary>
@@ -601,7 +635,7 @@ sealed class DebugMenu(GameHost host)
                 case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
                 break;
                 case EngineKey.Enter:
-                    _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
+                    _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
                     break;
             }
             return;
@@ -652,7 +686,7 @@ sealed class DebugMenu(GameHost host)
             case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
             break;
             case EngineKey.Enter:
-                _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim());
+                _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim());
                 break;
         }
     }
@@ -894,8 +928,8 @@ sealed class DebugMenu(GameHost host)
             case DebugRow.SpawnNpc:
                 if (DebugRecord(field, character: true) is not { } npc)
                     return DebugFail($"no character record matches '{field}'");
-                world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(here.X, here.Z)) { Tick = tick });
-                return $"spawned {npc.Name} at {here.X:0}, {here.Z:0}";
+                world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(here.X, here.Z), DebugSpawn.HostileFaction) { Tick = tick, Aggro = true });
+                return $"spawned {npc.Name} (hostile) at {here.X:0}, {here.Z:0}";
             case DebugRow.GiveItem:
                 var (name, quantity, quality) = DebugItemField(field);
                 return DebugGive(name, quantity, quality);
@@ -948,6 +982,28 @@ sealed class DebugMenu(GameHost host)
                 return "every research finished";
         }
         return "";
+    }
+
+    /// <summary>
+    /// <see cref="DebugApply"/> and, while the game is paused, the one tick that carries out the command it queued, so the menu's values show the change
+    /// at once; a running game's next tick takes it.
+    /// </summary>
+    string DebugApplyNow(DebugRow row, string field, (string? Id, string Name) part = default, Vector3? at = null)
+    {
+        int queued = host.Session.World.Commands.Count;
+        string status = DebugApply(row, field, part, at);
+        if (host.Session.World.Commands.Count > queued) ApplyWhilePaused();
+        return status;
+    }
+
+    /// <summary>
+    /// Runs one simulation tick while the game is paused, so the command the menu just queued takes effect at once (the menu's values then show it);
+    /// nothing while the game runs, whose next tick takes it.
+    /// </summary>
+    internal void ApplyWhilePaused()
+    {
+        if (!host.Session.Simulation.IsPaused || host.Covered) return;
+        host.Session.Step(1);
     }
 
     /// <summary>
@@ -1056,6 +1112,17 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
+    /// A line of the menu as drawn: its text, whether it is a section title, whether it is highlighted, whether it is a switch that is on, the row it
+    /// belongs to (-1 for a section title) and, for a line of the open part list, the part's index (-1 otherwise).
+    /// </summary>
+    readonly record struct MenuLine(string Text, bool Title, bool Highlight, bool On, int Row, int Part);
+
+    /// <summary>
+    /// The menu's lines as last drawn, with their rectangles; a click hit-tests them.
+    /// </summary>
+    readonly List<(MenuLine Line, Vector4 Rect)> _drawnLines = [];
+
+    /// <summary>
     /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): the title with the switches on, the
     /// rows (scrolled to the highlighted one), the selection, camera target and money, the hint with <paramref name="close"/> and the status.
     /// <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display): the text and every size in the menu grow with it.
@@ -1077,15 +1144,14 @@ sealed class DebugMenu(GameHost host)
 
         var world = host.Session.World;
         var here = host.Session.Camera.Current.Target;
-        // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
-        var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
+        var lines = new List<MenuLine>();
         var onNames = new List<string>();
         host.Modding.EnsureDebugFields();
         DebugMenuAddLines(world, lines, onNames);
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money "
             + $"c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = DebugParts is null ? $"Up/Down pick   type to edit   Enter apply / switch   Esc/{close} close"
-            : $"Up/Down pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
+        string hint = DebugParts is null ? $"Up/Down or click pick   type to edit   Enter apply   Esc/{close} close"
+            : $"Up/Down or click pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
                 + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10 * scale, y0 = top + 16 * scale, charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale;
@@ -1111,9 +1177,11 @@ sealed class DebugMenu(GameHost host)
         float y = y0 + pad;
         o.TextScaled(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour, scale);
         y += 1.5f * lineHeight;
+        _drawnLines.Clear();
         for (int i = first; i < first + count; i++, y += lineHeight)
         {
-            var (text, isTitle, highlight, on) = lines[i];
+            var line = lines[i];
+            var (text, isTitle, highlight, on, _, _) = line;
             if (isTitle)
             {
                 o.TextScaled("-- " + text + " --", x0 + pad, y, dim, scale);
@@ -1121,6 +1189,7 @@ sealed class DebugMenu(GameHost host)
             }
             if (on) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, DebugOnTint);
             if (highlight) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            _drawnLines.Add((line, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
             // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
             if (on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
             o.TextScaled(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour, scale);
@@ -1136,14 +1205,58 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
+    /// A left click on the menu: a row is picked and, unless it takes typed text, applied as Enter does; a row with a field is only picked (Enter applies
+    /// it); a line of the open part list is picked and applied. A click outside the menu does nothing.
+    /// </summary>
+    internal void DebugMenuClick(Vector2 at)
+    {
+        host.Modding.EnsureDebugFields();
+        if (_itemPicker.Open)
+        {
+            _itemPicker.Click(at);
+            return;
+        }
+
+        if (_characterEditor.Open)
+        {
+            _characterEditor.Click(at);
+            return;
+        }
+
+        foreach (var (line, rect) in _drawnLines)
+        {
+            if (!Inside(rect, at)) continue;
+            if (line.Part >= 0 && DebugParts is { } parts)
+            {
+                _debugPart = Math.Min(line.Part, parts.Length - 1);
+                DebugMenuKey(EngineKey.Enter);
+                return;
+            }
+
+            if (line.Row < 0) return;   // a section title
+            bool partsOpen = DebugParts is not null;
+            DebugParts = null;
+            _debugRow = line.Row;
+            if (partsOpen) return;   // a click on a row leaves the open part list
+            if (!DebugHasField(_debugRow)) DebugMenuKey(EngineKey.Enter);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies in <paramref name="rect"/> (x0, y0, x1, y1).
+    /// </summary>
+    static bool Inside(Vector4 rect, Vector2 at) => at.X >= rect.X && at.X <= rect.Z && at.Y >= rect.Y && at.Y <= rect.W;
+
+    /// <summary>
     /// The debug menu's lines: section titles, one per row (with its value and whether it is on) and the part list of the row picking one;
     /// <paramref name="onNames"/> collects the switches that are on.
     /// </summary>
-    void DebugMenuAddLines(Simulation.World world, List<(string Text, bool Title, bool Highlight, bool On)> lines, List<string> onNames)
+    void DebugMenuAddLines(Simulation.World world, List<MenuLine> lines, List<string> onNames)
     {
         foreach (var (header, i) in DebugLayout())
         {
-            if (header is not null) lines.Add((header, true, false, false));
+            if (header is not null) lines.Add(new(header, true, false, false, -1, -1));
             bool current = i == _debugRow;
             string mark = current && DebugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
@@ -1152,7 +1265,7 @@ sealed class DebugMenu(GameHost host)
                 string state = tool.State();
                 bool toolOn = tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
-                lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn));
+                lines.Add(new(mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn, i, -1));
                 continue;
             }
             string value = DebugRowValue(i, current, world, out bool rowOn);
@@ -1163,11 +1276,12 @@ sealed class DebugMenu(GameHost host)
                         ? $" x{host.PopData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}"
                         : ""));
             }
-            lines.Add((mark + DebugColumns(host.Modding.DebugLabel(i), "", value), false, current && DebugParts is null, rowOn));
+            string text = mark + DebugColumns(host.Modding.DebugLabel(i), "", value);
+            lines.Add(new(text, false, current && DebugParts is null, rowOn, i, -1));
             if (DebugPicksPart(i) && current && DebugParts is { } parts)
             {
                 for (int k = 0; k < parts.Length; k++)
-                    lines.Add(((k == _debugPart ? "    > " : "      ") + parts[k].Name, false, k == _debugPart, false));
+                    lines.Add(new((k == _debugPart ? "    > " : "      ") + parts[k].Name, false, k == _debugPart, false, i, k));
             }
         }
     }
@@ -1275,6 +1389,22 @@ sealed class DebugMenu(GameHost host)
     /// A switch that is on: its text colour (green) and the row's background tint.
     /// </summary>
     static readonly Vector4 DebugOnText = new(0.45f, 1f, 0.5f, 1), DebugOnTint = new(0.1f, 0.5f, 0.15f, 0.35f);
+
+    /// <summary>
+    /// A small clickable button's background (the sub-views' "back").
+    /// </summary>
+    internal static readonly Vector4 ButtonColour = new(0.3f, 0.45f, 0.7f, 0.85f);
+
+    /// <summary>
+    /// Draws the sub-views' "back" button at <paramref name="x"/>, <paramref name="y"/> (a click on it steps back, as Esc does); returns its rectangle.
+    /// </summary>
+    internal static Vector4 DrawBackButton(DebugOverlay o, float x, float y, float scale)
+    {
+        float pad = 6 * scale, width = 4 * o.CharWidth * scale + 2 * pad, height = o.LineHeight * scale;
+        o.Rect(x, y, x + width, y + height, ButtonColour);
+        o.TextScaled("back", x + pad, y, DebugOverlay.TextColour, scale);
+        return new Vector4(x, y, x + width, y + height);
+    }
 
     /// <summary>
     /// A row label without its hint: "Godmode (all players)" is "Godmode", "Teleport on map..." is "Teleport on map".
