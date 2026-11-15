@@ -204,8 +204,20 @@ and `stealth mode` are EITHER or equal to the character's, and the arm check `@ 
 stand in the stances of the empty-handed, all `has weapon L/R` 0, but draws `stand 1 sword`); otherwise it draws from the idle list (`@ 14051ec80`, `@ 140523450`). The standing update
 `@ 14051d3b0` re-picks when the timer (`idle time` seconds) runs out, so a fitting stance is held. Weapon kinds are not tested.
 Base data (**Verified** by probe): the 8 stances are layer `all`, combat and stealth mode 0, `play speed` 0 (`squat` 0.01), clips 0.033 s:
-characters stand still in their stance out of combat and not sneaking. Meitou: `AnimationDefinition.FitsAsStance`,
+the stance is a still pose, with [breathing](#breathing) over it. Meitou: `AnimationDefinition.FitsAsStance`,
 `AnimationSystem.OwnStance`; a clip that never advances starts at its first frame (engine choice; the original's start time is **Unknown**).
+
+### Breathing
+
+**Verified** (decompile and disassembly of `AnimationClassHuman` slot 32 `FUN_14051e150`, constants read from the binary): the out-of-combat pick
+`FUN_140520500` calls it on its standing path (filtered speed exactly 0, no action, not in the combat stance, bed, cage or deep water; the combat pick
+`FUN_14051d660` never calls it). It plays the record named `breathing noarms` (layer `overlay`, loop; `delete below waist`, `delete L/R arm`: spine,
+neck, head, jaw and breasts only, clip 7.37 s) on the overlay manager at target weight 0.5 (a global initialised to 1.0, × 0.5) and play rate
+0.35 + 0.1 × a random draw made once per process, not the record's `play speed`; `" noarms"` is appended unconditionally (`breathing` itself is
+never played). The layer's `+0x58` is 0.95 where other callers pass 1.0; not read by the time step, meaning **Unknown**. Further gates: animation
+class byte `+0x191` clear (only ever cleared in the code found), character `FUN_1405c9750` false, character vfunc `0x360` (the leg-collapse test of
+the cage pick) false, and vfunc `0x368` not 1; their meanings are **Unknown**. Meitou: `AnimationSystem.AddBreathing` on the standing idle path
+out of the combat stance; the rate is drawn once per world from its seed (engine choice).
 
 ### In a bed or a cage
 

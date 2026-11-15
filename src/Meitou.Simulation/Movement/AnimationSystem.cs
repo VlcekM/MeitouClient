@@ -1239,6 +1239,7 @@ public sealed class AnimationSystem(
         else if (technique < 0)
         {
             PickIdle(a, cold, stance, speed, dt, seed, key, tick, lower, wanted);
+            if (!stance.Combat) AddBreathing(seed, wanted);
         }
     }
 
@@ -1654,7 +1655,7 @@ public sealed class AnimationSystem(
         {
             ref var layer = ref a.Layers[k];
             var d = Library.Definitions[layer.Definition];
-            float step = BlendStep(d, layer.Target > 0, a.Rate, speed) * dt;
+            float step = BlendStep(d, RateOf(layer.Definition, d.PlaySpeed), layer.Target > 0, a.Rate, speed) * dt;
             layer.Weight = layer.Weight < layer.Target ? MathF.Min(layer.Weight + step, layer.Target) : MathF.Max(layer.Weight - step, layer.Target);
             float before = layer.Time;
             float length = lengths.Of(d.Clip);
@@ -1673,6 +1674,7 @@ public sealed class AnimationSystem(
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
             else if (layer.Definition == a.HeldIndex && a.HeldFlat) layer.Time += dt * a.HeldRate;
+            else if (layer.Definition == BreathClip) layer.Time += dt * RateOf(BreathClip, d.PlaySpeed);
             else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
 
             // a one-shot clip holds its last frame
@@ -1715,17 +1717,17 @@ public sealed class AnimationSystem(
     /// <summary>
     /// How fast a layer's weight moves, per second (docs/animation.md "Layer managers"): the CONSTANTS blend rate times its body half's factor (lower
     /// 2, upper and whole body 1.25, overlay 1); a wanted layer moves at that times its play rate clamped to 0.5..10, one fading out at the plain
-    /// rate.
+    /// rate. <paramref name="playSpeed"/> is the layer's own play speed (the record's, or the rate its caller set).
     /// </summary>
-    float BlendStep(AnimationDefinition d, bool wanted, float bodyRate, float speed)
+    float BlendStep(AnimationDefinition d, float playSpeed, bool wanted, float bodyRate, float speed)
     {
         float half = d.Area switch { AnimationArea.Lower => LowerBlend, AnimationArea.Overlay => OverlayBlend, _ => UpperBlend };
         if (!wanted) return BlendRate * half;
 
         // The play rate in clip seconds per second (a movement clip's follows the speed); a technique, an action or a lift runs on its own clock,
         // taken as 1.
-        float play = d.MoveSpeed != 0 ? bodyRate * d.PlaySpeed * speed
-            : d.PlaySpeed > 0 ? d.PlaySpeed
+        float play = d.MoveSpeed != 0 ? bodyRate * playSpeed * speed
+            : playSpeed > 0 ? playSpeed
             : d.Technique || d.IsAction ? 1 : 0;
         return BlendRate * half * Math.Clamp(play, MinPlayBlend, MaxPlayBlend);
     }
@@ -1817,6 +1819,27 @@ public sealed class AnimationSystem(
     /// The forward speed over which the injury hold is not played (<c>FUN_140520000</c>: the constant at <c>141683170</c>).
     /// </summary>
     const float PainHoldMaxSpeed = 50;
+
+    /// <summary>
+    /// The breathing overlay every standing human plays (<c>breathing noarms</c>: spine, neck and head only; <b>Verified</b>,
+    /// <c>AnimationClassHuman</c> slot 32 <c>FUN_14051e150</c>, docs/animation.md "Breathing"); -1 when the data has none.
+    /// </summary>
+    int BreathClip { get; } = library.IndexOf("breathing noarms");
+
+    /// <summary>
+    /// The breathing layer's target weight (<c>FUN_14051e150</c>: 1.0 x 0.5).
+    /// </summary>
+    const float BreathWeight = 0.5f;
+
+    /// <summary>
+    /// The breathing layer's play rate is <see cref="BreathRateMin"/> plus up to <see cref="BreathRateSpread"/>, drawn once (<c>FUN_14051e150</c>).
+    /// </summary>
+    const float BreathRateMin = 0.35f, BreathRateSpread = 0.1f;
+
+    /// <summary>
+    /// The breathing layer's play rate in this world, drawn from its seed on the first update (0 until then).
+    /// </summary>
+    float _breathRate;
 
     /// <summary>
     /// The hurt-part hold the character plays now (<c>FUN_14064a100</c> builds the list, <c>FUN_140520000</c> and <c>FUN_14051fe60</c> pick;
@@ -1918,6 +1941,24 @@ public sealed class AnimationSystem(
             a.IdleLeft -= dt;
         }
     }
+
+    /// <summary>
+    /// A human standing out of the combat stance with no action, technique or held clip breathes: the looping breathing overlay at half weight, at
+    /// the world's breathing rate (the out-of-combat pick <c>FUN_140520500</c> calls slot 32 on its standing path, docs/animation.md "Breathing").
+    /// </summary>
+    void AddBreathing(ulong seed, List<(int Index, float Weight)> wanted)
+    {
+        if (BreathClip < 0) return;
+        if (_breathRate == 0)
+            _breathRate = BreathRateMin + BreathRateSpread * Rng.Float(Rng.Hash(seed, 0, RngPurpose.Animation, 0x425245415448UL));
+
+        wanted.Add((BreathClip, BreathWeight));
+    }
+
+    /// <summary>
+    /// The play rate of the breathing layer, else <paramref name="rate"/>.
+    /// </summary>
+    float RateOf(int definition, float rate) => definition == BreathClip && _breathRate > 0 ? _breathRate : rate;
 
     #endregion
 
