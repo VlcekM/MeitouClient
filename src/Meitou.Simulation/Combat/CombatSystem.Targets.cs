@@ -170,14 +170,17 @@ public sealed partial class CombatSystem
     /// after it was last sensed); a world without senses never holds it. Engine choice: an enemy in a cage is not counted and a task target in a cage
     /// counts as gone. The original ends such a fight through its goal (an arrest's effect 129 holds once the target is imprisoned), which the
     /// engine's own fights (an arrest's, a joiner's) do not have: left in it, guards stood in combat mode at the cage and turned on the prisoner
-    /// once it was let out (#629). Reads the last tick's fights and the senses of the last look.
+    /// once it was let out (#629). A player character's fight that its own goal started ends sooner (<see cref="GoalSpent"/>). Reads the last tick's
+    /// fights and the senses of the last look.
     /// </summary>
     bool NothingLeft(World world, int i, in CombatSlot s)
     {
         if (AttackerCount(world, i) > 0) return false;
 
         var senses = CharacterFacts.Senses(world, i);
-        if (senses is { ThreatToAllies: > 0 } || senses is not null && senses.Enemies > senses.CagedEnemies) return false;
+        if (senses is { ThreatToAllies: > 0 }) return false;
+        if (GoalSpent(world.Characters.Cold(i)!, senses)) return true;
+        if (senses is not null && senses.Enemies > senses.CagedEnemies) return false;
 
         var table = world.Characters;
         var prev = table.Previous;
@@ -188,6 +191,17 @@ public sealed partial class CombatSystem
 
         return senses is null || !senses.Knows(new CharacterId(t, s.TaskGeneration));
     }
+
+    /// <summary>
+    /// Whether a player character's targetless fight is one its own goal started (32 Self preservation or 15 Protect allies, row 13) and that goal has
+    /// nothing left: no threat on it (<see cref="SenseBlock.ThreatToMe"/>; the caller has checked its attackers and the allies' threat). The original
+    /// ends it there through the goal: its desire falls to 0 and the AI's next choice replaces the fight, while enemies it only knows of (an entry not
+    /// yet decayed, a crawler) still count in <c>numEnemies</c> (<b>Observed</b>, original 1.0.65 via the harness, #695: a player character left a
+    /// fight for Aimless with a crawling, conscious bandit 45 away).
+    /// </summary>
+    static bool GoalSpent(CharacterCold cold, SenseBlock? senses) =>
+        cold.IsPlayer && cold.Running is { Source: Ai.TaskSource.Goal, Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf }
+        && senses is not { ThreatToMe: > 0 };
 
     /// <summary>
     /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those

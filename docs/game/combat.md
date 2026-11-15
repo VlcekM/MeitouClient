@@ -647,7 +647,11 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
   Meitou (`CombatSystem.NothingLeft`): a fighter that loses another target, or whose periodic choice finds nobody, fights on without a target (state 9), choosing again every pick
   interval and still defending, until the test passes over its senses ([perception](perception.md#senses): `Enemies`, `ThreatToAllies`), `AttackerCount` and the task target (gone, dead,
   knocked out; carried too, engine reading). Engine choice: a task target with no sense entry counts as gone, so the entry's decay (30 / 60 / 120 units of 2 s) ends the wait on a live
-  target the fighter lost; a world without senses ends the fight at once. Engine choice: an enemy in a cage is not counted (`SenseBlock.CagedEnemies`)
+  target the fighter lost; a world without senses ends the fight at once. A player character's fight that its own goal started (32 Self preservation or
+  15 Protect allies, row 13) also ends without a target once nobody attacks it and no threat is sensed on it or its allies, whatever `Enemies` holds
+  (`CombatSystem.GoalSpent`): the original ends it through the goal, whose desire falls to 0 and whose replacement takes over. **Observed** (original 1.0.65,
+  harness, #695): after a fight with a spawned Dust Bandit squad the character went Aimless with a crawling, conscious bandit 45 away, which
+  `numEnemies` counts (`FUN_1408593d0` skips only down, dead `+0x5bc` or carried). Engine choice: an enemy in a cage is not counted (`SenseBlock.CagedEnemies`)
   and a task target in a cage counts as gone. The original ends such a fight through its goal ([arrest chain](ai-tasks.md): effect 129 holds once the target is
   imprisoned), which the engine's own fights (an arrest's, a joiner's) lack. **Observed** (Meitou, headless The Slaves start, a player slave put in a cage
   mid-arrest): without it the guards stayed in combat mode while they sensed the prisoner and turned on it when it was let out (#629).
