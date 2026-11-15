@@ -677,11 +677,11 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   `areasmap.tga` pixel there (1152 units a pixel, `trunc((coord + 147456) / 1152)`, the map object being built from -147456 to 147456 by `FUN_1408fb580`) is not black (black is the NONE group); then, for a loaded sector, the point is
   set to the terrain height, snapped to the navmesh from there (`FUN_1403a3ac0`, box half-extent 600, a door-and-water hit filter; the query being
   nearest-point is **Observed**, from the call shape) and refused inside a non-Ruins town or where the face data's high nibble is above 0. The navmesh covers the water, so walkability alone is not this test.
-  So a spot starts on the ground, never on a building's upper storey. Meitou (`PopulationWild.SpotGround`, sector and nest spots): `SpawnFloor` 95,
+  So a spot starts on the surface nearest the terrain, not the highest. Meitou (`PopulationWild.SpotGround`, sector and nest spots): `SpawnFloor` 95,
   `BiomeMap.IsPainted`, and a walkable surface within the stand range of the terrain (`GroundLevel`), the gate code read there; a spot with only raised
-  floors over it (a ruin's storeys, a rock's top) is refused and drawn again rather than moved (engine choice), and the squad and its members are made on that
-  ground surface. **Observed** headless on the #731 save (`Nest of Beak Things` beside the Crater's Ancient Citadel): before, a squad was made on the
-  citadel's top floor (1969 over terrain 1606); after, on the terrain beside it.
+  floors over it (a ruin's storeys, a rock's top) is refused and drawn again rather than moved (engine choice), and each member is made on the ground
+  surface at its own offset (`BuiltSquad.Grounded`). **Observed** headless (#731 save, `Nest of Beak Things` beside the Crater's Ancient Citadel): a
+  spot under the citadel has navmesh only at 1910 and 1969 over terrain 1606.
   Weight of a `homeless spawns` entry: `max(0, v0 - k x n)` (times `FUN_1402dd530`, a constant 1), n = the living platoons of that faction and template in the **whole world**,
   loaded or not (`FUN_1406b9d10`), k = (sum of the list's v0) / (loaded zones x P x `homeless spawn amount`), the zone count being the size of the zone manager's loaded-zone map
   (`+0x168128`, read by the zone loops; Meitou divides by ceil(P x amount) instead of P x amount, since a sector makes that many at once: engine choice). So a template is held to its share v0 / sum of the loaded world's squads. Meitou: `WorldShareOf` (living squads, unloaded platoons, kept wild squads, town residents of the same template included as in the original; the zones are the active ones).

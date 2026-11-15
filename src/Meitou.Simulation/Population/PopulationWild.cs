@@ -1015,7 +1015,8 @@ public sealed partial class PopulationSystem
             var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
             int faction = _data.SpawnFactionOf(template);
             if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players) is not { } spot) continue;
-            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(OnGround(one, walk));
+            var owner = faction >= 0 ? _data.Factions[faction] : null;
+            if (BuildOne(template, faction, owner, key, seed, spot) is { } one) squads.Add(one with { Grounded = true });
         }
 
         return topUp >= 0
@@ -1115,16 +1116,11 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The walkable surface at ground level at a spot: the one a character standing on the terrain there would stand on, or null where the only
     /// surfaces are far above the terrain (a ruin's raised floors, a rock's top). The original sets a wild spot on the terrain and snaps it to the
-    /// navmesh from there (<c>FUN_1408f50d0</c>, <b>Verified</b>), so it never starts on an upper storey (#731: a beak thing made on a ruin's top
-    /// floor); Meitou refuses the spot and draws again instead of moving it (engine choice).
+    /// navmesh from there (<c>FUN_1408f50d0</c>, <b>Verified</b>), so it starts on the surface nearest the terrain, not the highest (#731: a beak
+    /// thing made on a ruin's top floor); Meitou refuses the spot and draws again instead of moving it (engine choice).
     /// </summary>
     static float? GroundLevel(IWalkability walk, Vector2 p) =>
         walk.TryStand(p.X, p.Y, walk.TerrainHeight(p.X, p.Y), out float y) ? y : null;
-
-    /// <summary>
-    /// A wild squad made on the ground-level surface of its spot (<see cref="GroundLevel"/>), its members on that storey too.
-    /// </summary>
-    static BuiltSquad OnGround(BuiltSquad one, IWalkability walk) => GroundLevel(walk, one.Position) is { } y ? one with { NearY = y + SpotLift } : one;
 
     /// <summary>
     /// The world's gate codes, when the lock system has them.
@@ -1211,7 +1207,7 @@ public sealed partial class PopulationSystem
 
             if (spot is null) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
-            squads.Add(OnGround(one, walk));
+            squads.Add(one with { Grounded = true });
             members += one.Plan.TotalMembers;
         }
 

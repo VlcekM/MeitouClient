@@ -29,8 +29,9 @@ public sealed partial class PopulationSystem
     /// </summary>
     /// <param name="NearY">The height of the spot inside a building it stands on (the floor under it is used); null: on the ground.</param>
     /// <param name="Home">The building its town gave it as its home; null: none.</param>
+    /// <param name="Grounded">Made on the surface at terrain level of each member's spot, not the highest one (wild squads, #731).</param>
     internal sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members, float? NearY = null,
-        TownBuilding? Home = null);
+        TownBuilding? Home = null, bool Grounded = false);
 
     /// <summary>
     /// A built town: its site, the load it was built for, its squads and its homes.
