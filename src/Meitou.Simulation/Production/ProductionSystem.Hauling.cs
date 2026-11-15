@@ -51,19 +51,21 @@ public sealed partial class ProductionSystem
 
         // A full output is taken only when some storage takes it; without one the machine stays full.
         bool took = false;
-        if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made &&
-            NearestStorage(world, site, s => s.Data.Accepts(made.Record, made.Type) && Fits(s.Storage!, made)) is not null)
+        if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made && StorageFor(world, site, made) is not null)
         {
             int moved = Placed(inv, made);
             if (moved > 0) { output.Count -= moved; changed = took = true; }
         }
 
+        // A bench full on its first craft: its finished items a storage takes (#762).
+        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i) is not null)) changed = took = true;
+
         if (changed) world.Machines.Touch();
 
         // The carried output goes to the storage once a full output was taken, or while the output stays full (no room to take it): not for a
         // stray unit, which sent a miner on a trip for every piece of ore it carried (#388).
-        if (m.Output is { } o && (took || o.Full) && Carried(inv, o.Recipe.Item).FirstOrDefault() is { } carried &&
-            NearestStorage(world, site, s => s.Data.Accepts(carried.Record, carried.Type) && Fits(s.Storage!, carried)) is { } into)
+        bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
+        if ((took || full) && CarriedMade(inv, m).Select(i => StorageFor(world, site, i)).FirstOrDefault(s => s is not null) is { } into)
             return Go(cold, into, null);
 
         if (m.Craft is { Queue.Count: 0 }) return false;
@@ -123,11 +125,11 @@ public sealed partial class ProductionSystem
                 }
             }
         }
-        else if (inv is not null && machine.Output is { } output && store.Storage is { } into)
+        else if (inv is not null && store.Storage is { } into)
         {
-            foreach (var item in Carried(inv, output.Recipe.Item).ToList())
+            foreach (var item in CarriedMade(inv, machine).ToList())
             {
-                if (!store.Data.Accepts(item.Record, item.Type)) break;
+                if (!store.Data.Accepts(item.Record, item.Type)) continue;
                 inv.Remove(item);
                 if (into.Add(item)) continue;
 
@@ -156,6 +158,73 @@ public sealed partial class ProductionSystem
     /// </summary>
     static IEnumerable<ItemInstance> Carried(Inventory inv, string record) =>
         inv.All().Where(i => i.Record == record && i.Section is "main" or "backpack_content" && !i.LockedOn && i.Contents is null);
+
+    /// <summary>
+    /// The loose stacks in a character's main grid and backpack of what machine <paramref name="m"/> makes (<see cref="Makes"/>).
+    /// </summary>
+    static IEnumerable<ItemInstance> CarriedMade(Inventory inv, Machine m) =>
+        inv.All().Where(i => i.Section is "main" or "backpack_content" && !i.LockedOn && i.Contents is null && Makes(m, i.Record));
+
+    /// <summary>
+    /// Whether machine <paramref name="m"/> makes <paramref name="record"/>: its output's item, or one of its bench's crafts.
+    /// </summary>
+    static bool Makes(Machine m, string record) =>
+        m.Output?.Recipe.Item == record || m.Data.Craft?.Options.Any(o => o.Item == record) == true;
+
+    /// <summary>
+    /// Whether a bench is held by its first craft's store (<see cref="CraftStep"/>'s output full).
+    /// </summary>
+    static bool CraftFull(CraftState state) => state.Queue.Count > 0 && Held(state, state.Queue[0].Option) >= state.Queue[0].Option.Store;
+
+    /// <summary>
+    /// Moves a bench's finished items that <paramref name="takes"/> into the inventory, the instances themselves so a crafted piece keeps its
+    /// quality and model; true when any moved. What finds no room stays in the bench.
+    /// </summary>
+    static bool TakeDone(CraftState state, Inventory inv, Func<ItemInstance, bool> takes)
+    {
+        bool moved = false;
+        for (int k = 0; k < state.Done.Count; k++)
+        {
+            var item = state.Done[k];
+            if (!takes(item)) continue;
+
+            int before = item.Quantity;
+            state.Done.RemoveAt(k);
+            if (inv.Add(item))
+            {
+                moved = true;
+                k--;
+                continue;
+            }
+
+            // Inventory.Add leaves the units it could not place on the item.
+            moved |= item.Quantity < before;
+            state.Done.Insert(k, item);
+            break;
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="from"/>'s output holds something <paramref name="store"/> takes and has room for: its output slot's item, or a
+    /// bench's finished item.
+    /// </summary>
+    bool Offers(Machine from, Machine store)
+    {
+        if (from.Output is { Count: > 0 } output && _items.Create(output.Recipe.Item, 1) is { } one && store.Data.Accepts(one.Record, one.Type)
+            && Fits(store.Storage!, one))
+            return true;
+
+        return from.Craft is { } craft && craft.Done.Any(i => store.Data.Accepts(i.Record, i.Type) && Fits(store.Storage!, i));
+    }
+
+    /// <summary>
+    /// The nearest player storage within <see cref="ProductionSettings.HaulRange"/> of <paramref name="site"/> that takes <paramref name="item"/>
+    /// and has room for it.
+    /// </summary>
+    string? StorageFor(World world, BuildSite site, ItemInstance item) =>
+        NearestStorage(world, site, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
 
     /// <summary>
     /// Whether some of an item fits: a stack of it with room, or a free cell.

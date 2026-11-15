@@ -527,7 +527,7 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   `FUN_14059bbd0` and the Town slots. Whether the resident set is saved is **Unknown**. The finder and the take (244, one item): [ai-tasks](ai-tasks.md#arrest-and-prison-rows).
   Meitou (`TownDutySystem.FoodWant`): for a player character a step-4 source of the [decision step](../simulation.md#decision-step) (after its orders, before its jobs; weight 0.5 against
   Self preservation's 1 and Hold's attack on sight), for the other player-faction characters a pass over those idle or on a job's task; a store owned by their faction in their own town or
-  one where the player owns a house (engine reading of the resident set, not tied to having stood in it); the occupied branch as above, gates read as a gate building in the town. A fight
+  one where the player owns a house, its storages too (engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above, gates read as a gate building in the town. A fight
   that replaces a player character's food run ends it.
 - Meitou: `FeedSystem` (checks every 30 ticks, engine choice), squad options `SquadAi.Feed` / `Share` (CAMERA
   bools `feed`, `share`, **Verified** reader `FUN_1403ebf50`; default on, **Unknown**).

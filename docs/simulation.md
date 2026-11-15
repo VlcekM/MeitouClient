@@ -1587,7 +1587,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   storage accepts an item when `itemtype limit` matches and `limit inventory` (a function 2 storage's only) is empty or lists it; `stackable bonus
   mult` scales its stacks. The player's drops into a storage follow the same rule ("does not take").
   Excess fetched inputs stay with the operator. Engine choices: storage within `HaulRange` 3000 of the machine, ties
-  by site id, a fetch takes what the inputs have room for; the trip is not saved. Crafted items are not hauled. Carried output
+  by site id, a fetch takes what the inputs have room for; the trip is not saved. A crafting bench's output is its finished items: an operator
+  takes those a storage accepts once the first craft's store is full, and a full bench whose items no storage takes is no work (the job passes
+  on); a "Hauling to" job fetches finished items as it does a producer's output, the instances themselves (quality and model kept) (#762). Carried output
   goes only with a full output just taken, or while the output stays full: a stray unit sends no one on a trip (#388). A walker
   stopped within reach of a site whose height has no floor (furniture on an upper storey the navmesh lacks, the Hub's Storm House)
   counts as there (`ProductionSystem.OffFloor`).
@@ -1621,9 +1623,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     40 (146's `!158`). Urgent (step 3, before Self preservation) while the character senses an enemy.
   - 87 Operating machine: blocked while others hold every operator place or the machine has no work (no power; no queued research or craft; a
     farm growing with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
-    a full output no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
-  - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output the storage takes is
-    emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes go first. Blocked with neither.
+    a full output (a bench's first craft at its store) no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
+  - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output (a bench's: its finished items) the storage takes is
+    emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes or crafts go first. Blocked with neither.
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
