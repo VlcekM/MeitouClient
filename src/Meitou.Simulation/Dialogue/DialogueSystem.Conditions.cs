@@ -18,8 +18,7 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// One condition (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): <c>who</c> 0 tests the speaker, any other value the target. Yes/no
     /// conditions pass when the computed answer equals value &gt; 0; counts compare by <c>compare by</c> (Num3: 1 &lt;, 2 &gt;, else ==; Num2: 1
-    /// &lt;, else &gt;=). Conditions whose inputs Meitou does not have (town wall locks, strength ratings, head counts, training equipment) compute
-    /// "no".
+    /// &lt;, else &gt;=). DC 23 and 26 are folded into the line's tag masks at load; codes outside the enum compute "no".
     /// </summary>
     bool Condition(World world, Conversation c, DialogueCondition dc, CharacterId me, CharacterCold mc, CharacterId other)
     {
@@ -54,7 +53,7 @@ public sealed partial class DialogueSystem
             9 or 19 or 35 or 37 or 38 or 43 or 72 => SquadCondition(world, dc, subjectId, s),
             18 or 20 or 50 or 52 or 53 or 54 or 55 or 78 => SpeakerSquadCondition(world, dc, me, mc, subjectId, s),
             27 or 28 or 29 or 30 or 41 or 42 or 44 or 45 or 71 or 79 => BodyCondition(dc, s),
-            11 or 16 or 17 or 31 or 57 or 58 or 60 or 68 or 73 or 74 or 75 => PlaceCondition(world, dc, me, mc, other, subjectId, sF),
+            11 or 16 or 17 or 31 or 49 or 57 or 58 or 60 or 68 or 70 or 73 or 74 or 75 => PlaceCondition(world, dc, me, mc, other, subjectId, sF),
             59 or 61 or 62 or 64 or 65 or 77 => KindCondition(dc, mc, s, meF),
             _ => Bool(dc, false),
         };
@@ -246,8 +245,8 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The place conditions: the speaker's house locked, near, in its building, in a foreign town, within walls, a town locked up, near a town of
-    /// S's faction, indoors, the player's town levels, in a player town.
+    /// The place conditions: the speaker's house locked, near, in its building, in a foreign town, a town with gates, within walls, a town locked
+    /// up, near a town of S's faction, indoors, on the speaker's faction's training dummy, the player's town levels, in a player town.
     /// </summary>
     bool PlaceCondition(World world, DialogueCondition dc, CharacterId me, CharacterCold mc, CharacterId other, CharacterId subjectId, int sF)
     {
@@ -265,16 +264,20 @@ public sealed partial class DialogueSystem
             case 31: return Bool(dc,
                 Position(world, subjectId) is { } where && TownAt(where) is >= 0 and var town
                 && (town >= _data.SiteFactions.Count || _data.SiteFactions[town] != world.Player.Faction));
+            // TOWN_HAS_FORTIFICATIONS_WALLS: S's current town has a gate building (Town slot 97 FUN_140929910 finds one); S in no town reads false.
+            case 49: return Bool(dc, Position(world, subjectId) is { } gated && HasGates(world, gated));
             // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open
             // world.
             case 57: return Bool(dc, Position(world, subjectId) is { } walled && world.SystemOf<Locks.LockSystem>()?.Regions?.CodeAt(walled) > 0);
             // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town
             // reads false.
-            case 58: return Bool(dc,
-                Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown
-                && Locks.LockSystem.TownLockedUp(world, _data.Sites[walledTown]));
+            case 58: return Bool(dc, Position(world, subjectId) is { } inTown && WallsLockedUp(world, inTown));
             case 60: return Bool(dc, Position(world, me) is { } here && NearestTownOf(sF, here) is { } d && d <= 23040);
             case 68: return Bool(dc, world.Characters.TryResolveNext(subjectId, out int indoors) && world.Sight.BuildingOf(indoors) is not null);
+            // USING_MY_TRAINING_EQUIPMENT: S's Character +0x158 (the faction of the dummy it trains on, the same state event 59 reads) is Me's faction.
+            case 70: return Bool(dc,
+                world.Characters.TryResolveNext(subjectId, out int trainee) && TrainingDummyOwner(world, trainee) is >= 0 and var owner
+                && owner == mc.Faction);
             case 73:
                 // The speaker's current town when it is the player's: that town's level (Town +0x388); false otherwise, whatever the value. Engine
                 // reading of "current town": the player outpost whose centre is within the player-town extent of the speaker.
@@ -374,6 +377,39 @@ public sealed partial class DialogueSystem
 
         return found;
     }
+
+    /// <summary>
+    /// DC 49: the town at <paramref name="at"/> (the placed town whose radius holds it, else the player outpost) has a building that is both in its
+    /// gate set and a GatewayBuilding (Town slot 97 <c>FUN_140929910</c> finds one): built or not, damaged or not, no door tested.
+    /// </summary>
+    bool HasGates(World world, Vector3 at)
+    {
+        if (TownAt(at) is >= 0 and var town) return _data.Sites[town].Buildings.Any(b => IsGateway(b.BuildingId));
+        if (PlayerTownAt(world, at) is not { } outpost) return false;
+
+        return world.Buildings.All.Any(s => s.Town == outpost.Number && IsGateway(s.Record));
+    }
+
+    /// <summary>
+    /// DC 58: the town at <paramref name="at"/> (as <see cref="HasGates"/>) has gates and none is open (Town slot 96 <c>FUN_140929820</c>); a
+    /// player outpost's gates are its buildings' first doors, as the campaign assault's breach test reads them.
+    /// </summary>
+    bool WallsLockedUp(World world, Vector3 at)
+    {
+        if (TownAt(at) is >= 0 and var town) return Locks.LockSystem.TownLockedUp(world, _data.Sites[town]);
+        if (PlayerTownAt(world, at) is not { } outpost) return false;
+
+        var doors = world.Fixtures.All.Where(f => f.Kind == Locks.FixtureKind.Door && f.DoorIndex == 0
+            && world.Buildings.Find(f.Building) is { } site && site.Town == outpost.Number);
+        return Locks.LockSystem.GatesLockedUp(doors);
+    }
+
+    /// <summary>
+    /// Whether a building of the record counts for DC 49: <c>is gateway</c> puts it in its town's gate set when it is made (Building slot 138
+    /// <c>FUN_140551b20</c>, run from the constructor) and <c>is wall gate</c> makes it a GatewayBuilding (the factory <c>FUN_14057cc70</c>), the
+    /// class slot 97 keeps (Building slot 123).
+    /// </summary>
+    bool IsGateway(string record) => _data.Db.Find(record) is { } r && r.GetBool("is gateway") && r.GetBool("is wall gate");
 
     /// <summary>
     /// The player's nearest outpost whose radius holds <paramref name="at"/>, or null.
