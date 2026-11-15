@@ -137,7 +137,8 @@ sealed class StealthView(PlayerInterface player)
     /// sneaks the <c>Stealth</c> icon on the left in the state's tag colour. The name is white and in square brackets when the character is selected,
     /// grey and bare otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
     /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does
-    /// (the original's anchor is not mapped). A name too long for the layout's box widens the panel (<see cref="PanelWidth"/>).
+    /// (the original's anchor is not mapped). A name too long for the layout's box widens the panel (<see cref="PanelWidth"/>). A dead character has
+    /// none, as in the original (<b>Observed</b>, docs/game/perception.md).
     /// </summary>
     internal void AddNameTags(List<UiControl> controls)
     {
@@ -147,6 +148,7 @@ sealed class StealthView(PlayerInterface player)
         foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
             if (!c.IsPlayer || c.Name.Length == 0 || player.CharacterEditor.EditorOpen || c.CarriedBy != CharacterId.None) continue;
+            if (c.Body is { Dead: true }) continue;
             if (!c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
 
             var feet = player.Where(c);
