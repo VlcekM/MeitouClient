@@ -72,12 +72,14 @@ public class ModHookTests
         Assert.Equal(-1, population.SpawnPlatoon(w, faction, "11-t", 0, around, 100, 200));   // gated behind a state that does not hold: no one
         Assert.Equal(before + 1, w.Platoons.Count);
         Assert.Equal(next, w.Platoons.PeekId);
+        Assert.Equal(next, population.SpawnPlatoon(w, faction, "12-t", 0, around, 100, 200));
 
         var (w2, population2) = Start();
         using var again = w2;
         int id2 = population2.SpawnPlatoon(w2, faction, "12-t", 0, around, 100, 200, money: 750);
 
         Assert.Equal(p.Position, w2.Platoons.Find(id2)!.Position);
+        Assert.Equal(id + 1, population2.SpawnPlatoon(w2, faction, "12-t", 0, around, 100, 200));   // the same id as after the refusals above
     }
 
     /// <summary>
@@ -166,15 +168,16 @@ public class ModHookTests
         new(index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality) { ModTag = item.ModTag };
 
     /// <summary>
-    /// A world whose player system routes <c>note</c> clicks to a handler that records each item it gets and uses the click.
+    /// A world whose player system routes <c>note</c> clicks to a handler that records each item it gets and uses the click when
+    /// <paramref name="take"/> (else lets it fall back to a quick move).
     /// </summary>
-    static SimWorld NoteWorld(List<ItemInstance> used)
+    static SimWorld NoteWorld(List<ItemInstance> used, bool take = true)
     {
         var extensions = new SimulationExtensions();
         extensions.ItemUses["note"] = use =>
         {
             used.Add(use.Item);
-            return true;
+            return take;
         };
         return new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground),
                 [new PlayerSystem { Extensions = extensions }]);
@@ -197,17 +200,29 @@ public class ModHookTests
     }
 
     /// <summary>
-    /// A click queued for one tagged note never reaches another note that took its cell with the same record, quantity and quality but another tag.
-    /// Catches a stale click consuming the wrong rival's ledger (review P1).
+    /// A root of a 2 x 2 main grid holding <paramref name="note"/> and an open-able 2 x 2 bag (empty), as the backpack section holds it.
+    /// </summary>
+    static (Inventory Root, Inventory Bag) WithBag(ItemInstance note)
+    {
+        var root = new Inventory(2, 2);
+        var bag = new Inventory(2, 2);
+        root.Items.Add(note);
+        root.Items.Add(new ItemInstance { Record = "bag", Section = "backpack_attach", Contents = bag });
+        return (root, bag);
+    }
+
+    /// <summary>
+    /// A click queued for one tagged note, with the bag open, reaches neither the handler nor the quick move once another note with the same record,
+    /// cell, quantity and quality but another tag took its place: the replacement stays in the main grid. Catches a stale click consuming the
+    /// wrong ledger, or the fallback moving it into the bag (review P1, and the follow-up's merge blocker).
     /// </summary>
     [Fact]
-    public void A_stale_click_never_reaches_a_differently_tagged_note_in_the_same_cell()
+    public void A_stale_click_with_the_bag_open_touches_neither_handler_nor_fallback_on_a_differently_tagged_note()
     {
         var used = new List<ItemInstance>();
         using var world = NoteWorld(used);
-        var root = new Inventory(2, 2);
         var first = new ItemInstance { Record = "note", ModTag = "rival|1" };
-        root.Items.Add(first);
+        var (root, bag) = WithBag(first);
         var who = Reader(world, root);
         var stale = Token(0, first);
         var second = new ItemInstance { Record = "note", ModTag = "rival|2" };
@@ -216,10 +231,32 @@ public class ModHookTests
         Click(world, who, stale);
 
         Assert.Empty(used);
+        Assert.Equal(("main", true), (second.Section, root.Items.Contains(second)));
+        Assert.Empty(bag.Items);
 
         Click(world, who, Token(0, second));
 
         Assert.Equal([second], used);
+    }
+
+    /// <summary>
+    /// A valid click whose handler returns false falls back to the quick move: with the bag open, the note goes into the bag. Catches a guard that
+    /// also blocks a handler's deliberate fallback.
+    /// </summary>
+    [Fact]
+    public void A_valid_click_whose_handler_declines_falls_back_to_the_quick_move()
+    {
+        var used = new List<ItemInstance>();
+        using var world = NoteWorld(used, take: false);
+        var note = new ItemInstance { Record = "note", ModTag = "rival|1" };
+        var (root, bag) = WithBag(note);
+        var who = Reader(world, root);
+
+        Click(world, who, Token(0, note));
+
+        Assert.Equal([note], used);
+        Assert.Contains(note, bag.Items);
+        Assert.DoesNotContain(note, root.Items);
     }
 
     /// <summary>
@@ -374,11 +411,11 @@ public class ModHookTests
     }
 
     /// <summary>
-    /// A saved ground item retagged in place rewrites its zone, while an untouched zone is left byte for byte. Catches the zone-save shortcut
+    /// A saved ground item retagged in place is saved and reloaded with its new tag, while an untouched zone is left byte for byte. Catches the zone-save shortcut
     /// keeping the old tag (review P2, the path #653 touched).
     /// </summary>
     [Fact]
-    public void A_retagged_ground_item_rewrites_its_zone_and_an_untouched_zone_stays_byte_identical()
+    public void A_retagged_ground_item_reloads_with_its_new_tag_and_an_untouched_zone_stays_byte_identical()
     {
         var file = new FcsFile();
         file.Records.Add(SyntheticTown.Rec("note", FcsRecordType.Item, "Note"));
@@ -401,9 +438,10 @@ public class ModHookTests
 
         note.ModTag = "rival|2";
         GroundItemSave.Write(save, world, factory);
-        var item = Assert.Single(SaveGroundItems.Read(save.Zones[WorldLayout.ZoneOf(100, 100)]));
+        using var loaded = new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground), []);
+        GroundItemSave.Load(save, loaded, factory);
 
-        Assert.Equal("rival|2", item.Item.ModTag);
+        Assert.Equal("rival|2", Assert.Single(loaded.GroundItems.All).Item.ModTag);
     }
 
     #endregion
