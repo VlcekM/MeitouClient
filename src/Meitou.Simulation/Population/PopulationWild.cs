@@ -1015,7 +1015,7 @@ public sealed partial class PopulationSystem
             var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
             int faction = _data.SpawnFactionOf(template);
             if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players) is not { } spot) continue;
-            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
+            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(OnGround(one, walk));
         }
 
         return topUp >= 0
@@ -1087,7 +1087,7 @@ public sealed partial class PopulationSystem
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
-            if (tooClose || SpotRefused(p, walk, regions) || !walk.IsWalkable(p.X, p.Y)) continue;
+            if (tooClose || SpotGround(p, walk, regions) is null) continue;
             return p;
         }
 
@@ -1095,14 +1095,36 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Whether the original's spot finder refuses a point (<c>FUN_1408f50d0</c>, <b>Verified</b>): terrain under <see cref="SpawnFloor"/>, a black
-    /// pixel of the areas map, or ground inside town walls (gate code above 0, <c>NavMesh::getGateCode</c>; only where the navmesh is loaded).
+    /// The height of a wild spot the original's spot finder accepts, or null: walkable at ground level (<see cref="GroundLevel"/>) and not
+    /// <see cref="SpotRefused"/>.
     /// </summary>
-    bool SpotRefused(Vector2 p, IWalkability walk, Locks.IGateRegions? regions)
+    float? SpotGround(Vector2 p, IWalkability walk, Locks.IGateRegions? regions) =>
+        GroundLevel(walk, p) is { } y && !SpotRefused(p, y, walk, regions) ? y : null;
+
+    /// <summary>
+    /// Whether the original's spot finder refuses a point (<c>FUN_1408f50d0</c>, <b>Verified</b>): terrain under <see cref="SpawnFloor"/>, a black
+    /// pixel of the areas map, or ground inside town walls (gate code above 0, <c>NavMesh::getGateCode</c>; only where the navmesh is loaded), the
+    /// code read on the surface at height <paramref name="y"/>.
+    /// </summary>
+    bool SpotRefused(Vector2 p, float y, IWalkability walk, Locks.IGateRegions? regions)
     {
         if (walk.TerrainHeight(p.X, p.Y) < SpawnFloor || _data.Biomes?.IsPainted(p.X, p.Y) == false) return true;
-        return regions?.CodeAt(new Vector3(p.X, walk.GroundHeight(p.X, p.Y), p.Y)) > 0;
+        return regions?.CodeAt(new Vector3(p.X, y, p.Y)) > 0;
     }
+
+    /// <summary>
+    /// The walkable surface at ground level at a spot: the one a character standing on the terrain there would stand on, or null where the only
+    /// surfaces are far above the terrain (a ruin's raised floors, a rock's top). The original sets a wild spot on the terrain and snaps it to the
+    /// navmesh from there (<c>FUN_1408f50d0</c>, <b>Verified</b>), so it never starts on an upper storey (#731: a beak thing made on a ruin's top
+    /// floor); Meitou refuses the spot and draws again instead of moving it (engine choice).
+    /// </summary>
+    static float? GroundLevel(IWalkability walk, Vector2 p) =>
+        walk.TryStand(p.X, p.Y, walk.TerrainHeight(p.X, p.Y), out float y) ? y : null;
+
+    /// <summary>
+    /// A wild squad made on the ground-level surface of its spot (<see cref="GroundLevel"/>), its members on that storey too.
+    /// </summary>
+    static BuiltSquad OnGround(BuiltSquad one, IWalkability walk) => GroundLevel(walk, one.Position) is { } y ? one with { NearY = y + SpotLift } : one;
 
     /// <summary>
     /// The world's gate codes, when the lock system has them.
@@ -1134,7 +1156,7 @@ public sealed partial class PopulationSystem
         if (centre is null)
         {
             foreach (var s in site.Spots)
-                if (walk.IsWalkable(s.X, s.Y) && !SpotRefused(s, walk, regions)) { centre = s; break; }
+                if (SpotGround(s, walk, regions) is not null) { centre = s; break; }
         }
 
         bool topUp = budget.Centre is not null;
@@ -1184,12 +1206,12 @@ public sealed partial class PopulationSystem
                 bool tooClose = false;
                 foreach (var at in players)
                     if (Vector2.DistanceSquared(at, p) < _settings.NestPlayerDistance * _settings.NestPlayerDistance) { tooClose = true; break; }
-                if (!tooClose && walk.IsWalkable(p.X, p.Y)) spot = p;
+                if (!tooClose && GroundLevel(walk, p) is not null) spot = p;
             }
 
             if (spot is null) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
-            squads.Add(one);
+            squads.Add(OnGround(one, walk));
             members += one.Plan.TotalMembers;
         }
 
