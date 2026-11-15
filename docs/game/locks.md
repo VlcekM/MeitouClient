@@ -164,8 +164,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 ## Doors
 
 - Door object fields (**Verified**: save writer `DoorStuff` slot 148 / reader 149): `state` (+0x380: 0 closed, 1 open,
-  2 opening, 3 closing; this is not the DoorState enum), `doa` open amount (+0x37c, 0..1), `broken` (+0x3ec), `gatecode`, `wants lock`
-  (+0x384), and the lock (`lock lvl`, `locked`, `broken`, `hardness`). `wants lock` starts from `always locks` (gates).
+  2 opening, 3 closing; this is not the DoorState enum), `doa` open amount (+0x37c, 0..1), `broken` (+0x3ec), `gatecode` (+0x378, written only:
+  the reader sets the code to -1, [gate codes](pathfinding.md#gate-codes)), `wants lock` (+0x384), and the lock (`lock lvl`, `locked`, `broken`,
+  `hardness`). `wants lock` starts from `always locks` (gates).
 - **Destroyed buildings have no doors** ([pathfinding](pathfinding.md) "Destroyed interiors", `Building::createPhysical`) and no lock: **Verified** by census, the
   level data's states of destroyed buildings (both Hub `Defensive Gate IV`, `4400-`/`4617-Newwworld-INGAME`) and two original Hub saves carry no
   door or lock keys for them (those saves write them only for the Hub's intact Bar and Residential Small). Meitou registers no door or own lock
@@ -459,6 +460,5 @@ Shackles: the item's INVENTORY_ITEM_STATE record carries the same four keys (`Lo
 | Exact strength terms of cut/break | settled (**Verified** `FUN_140338090`, `FUN_140641480`): multiplier flags hunger, limbs, limb items, gear (no light, no dust) x strength x CharStats scale `+0x34` (1 for people, the age for animals); Meitou `Lockpicking.Strength` |
 | Whether an awake prisoner can be lifted out of an unlocked cage (`FUN_14034fbe0`'s callers not traced) | allowed; the carry rules then knock out a non-friendly one on the shoulder and set a friendly one down |
 | Whether non-owners path around locked doors | a building whose doors are all effectively locked is closed for every path; closed unlocked doors are passable |
-| `gatecode` | preserve it |
 | Which door states 59/60 open for a walk | a walker whose next path legs cross a closed door's plane opens it; at a locked one it stops ("It's locked.") |
 | What else sets or clears the squad "house locked" flag | the rules above |

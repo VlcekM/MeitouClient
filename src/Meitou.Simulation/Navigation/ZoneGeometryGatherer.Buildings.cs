@@ -96,12 +96,37 @@ internal sealed partial class ZoneGeometryGatherer
             bool open = kind != InteriorKind.Real;
             bool upper = kind == InteriorKind.Blank && !record.GetBool("is wall gate") && !record.GetBool("links together");
             AddBuilding(g, record, b.Key, position, b.Rotation, destroyed, open: open, upper: upper);
+            if (!destroyed && InZone(g, b.Position)) QueueGateDoor(g, record, b.Key, position, b.Rotation);
             foreach (var (item, at, rotation) in LayoutObjects(b, record, position, destroyed))
                 AddBuilding(g, item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, destroyed: false, floor: item.Floor, open: open,
                         upper: upper);
         }
         g.BuildingLastTriangle = g.TriangleCount;
         g.BuildingHash = knownHash ?? BuildingHash(g.Zone, g.Margin);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies in the zone's own box (each building is in one zone's gate list).
+    /// </summary>
+    static bool InZone(ZoneGeometry g, Vector3 at) => at.X >= g.ZoneMin.X && at.X < g.ZoneMax.X && at.Z >= g.ZoneMin.Y && at.Z < g.ZoneMax.Y;
+
+    /// <summary>
+    /// Queues a gate's first door for <see cref="ZoneGeometry.GateSides"/>: a GatewayBuilding (the factory makes one for <c>is wall gate</c>,
+    /// <c>FUN_14057cc70</c>) that is not destroyed (a destroyed building has no doors) and has a door 0 with a collision box.
+    /// </summary>
+    void QueueGateDoor(ZoneGeometry g, GameRecord building, string key, Vector3 position, Quaternion rotation)
+    {
+        if (!building.GetBool("is wall gate")) return;
+
+        var node = NodeMatrix(building, position, rotation);
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, key, position, rotation, new BuildingState(false)))
+        {
+            if (mesh.DoorIndex != 0 || mesh.CollisionPath(false) is not { Length: > 0 } path || _collision.Get(path) is not { } prepared) continue;
+            if (prepared.Door.HalfExtents == Vector3.Zero) continue;
+
+            g.GateDoors.Add((key, mesh.Owner, prepared.Door, node));
+            return;
+        }
     }
 
     /// <summary>
@@ -289,6 +314,7 @@ internal sealed partial class ZoneGeometryGatherer
             int shapeFirst = g.TriangleCount;
             AddShape(g, shape, node, walkable ? BuildingSlopeDegrees : 0, carve: CarveConvexObstacles && !walkable);
             if (group is 9 or 10 && g.TriangleCount > shapeFirst) g.FloorRanges.Add((shapeFirst, g.TriangleCount));
+            if (group == 9 && interior is null && g.TriangleCount > shapeFirst) g.Floor0Ranges.Add((shapeFirst, g.TriangleCount));
         }
         if (g.TrackParts && g.TriangleCount > firstTriangle)
             g.PartRanges.Add((owner.Name, part.Name, path, firstTriangle, g.TriangleCount));

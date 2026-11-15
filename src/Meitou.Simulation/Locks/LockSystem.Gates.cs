@@ -23,13 +23,43 @@ public sealed partial class LockSystem
     Dictionary<int, List<(int To, int State, GateLink Gate)>>? _gateGraph;
 
     /// <summary>
-    /// Takes the host's gate regions; the gate graph is built again.
+    /// The codes the last passes gave each gate, by building: its first door's (<c>+0x378</c>) and the building's own (Building slot 35 / RootObject
+    /// <c>+0xA0</c>). Kept here as well as on the door fixture, so a gate whose site registers after the labelling still holds them.
     /// </summary>
-    void GateInputs(GateRegionsCommand command)
+    readonly Dictionary<string, (int Door, int Building)> _gateCodes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Takes the host's gate regions and applies them as <c>FUN_1402f03e0</c> does: each listed gate's first door gets the first code, the building
+    /// the second; the gate graph is built again.
+    /// </summary>
+    void GateInputs(World world, GateRegionsCommand command)
     {
         Regions = command.Regions;
         _gateGraph = null;
+        foreach (var gate in command.Regions.Gates)
+        {
+            if (gate.Codes.Length == 0) continue;
+
+            if (FirstDoor(world, gate.Building) is { } door) door.GateCode = gate.Codes[0];
+            _gateCodes[gate.Building] = (gate.Codes[0], gate.Codes[^1]);
+        }
     }
+
+    /// <summary>
+    /// Gives a gate building's first door the first code the last labelling gave it, for a site registered after that labelling (its restore sets
+    /// -1 first); a building no labelling listed keeps what it has.
+    /// </summary>
+    internal void ApplyGateCode(World world, string building)
+    {
+        if (_gateCodes.TryGetValue(building, out var codes) && FirstDoor(world, building) is { } door) door.GateCode = codes.Door;
+    }
+
+    /// <summary>
+    /// The codes Town slot 96 compares for a gate: its first door's and the building's own, from the last pass that listed it; else the door
+    /// fixture's own code (0 new, -1 restored) and the building's -1.
+    /// </summary>
+    public (int Door, int Building) GateCodes(string building, Fixture door) =>
+        _gateCodes.TryGetValue(building, out var codes) ? codes : (door.GateCode, -1);
 
     /// <summary>
     /// A gate's state as the gate-code pass records it (docs/game/pathfinding.md "Gate codes", <b>Observed</b>): 1 when a door is broken, open or
@@ -68,23 +98,29 @@ public sealed partial class LockSystem
             if (Regions is not null)
             {
                 foreach (var gate in Regions.Gates)
-                {
-                    if (gate.Codes.Length < 2) continue;
-                    int state = GateState(world.Fixtures, gate.Building);
-                    for (int i = 0; i < gate.Codes.Length; i++)
-                    {
-                        for (int j = 0; j < gate.Codes.Length; j++)
-                        {
-                            if (i == j) continue;
-                            if (!graph.TryGetValue(gate.Codes[i], out var list)) graph[gate.Codes[i]] = list = [];
-                            list.Add((gate.Codes[j], state, gate));
-                        }
-                    }
-                }
+                    AddGateEdges(graph, gate, GateState(world.Fixtures, gate.Building));
             }
 
             Volatile.Write(ref _gateGraph, graph);
             return graph;
+        }
+    }
+
+    /// <summary>
+    /// Adds a gate to the graph between its two codes (<c>FUN_1402eebb0</c> keys a gate by the pair of its codes); a gate whose codes are equal
+    /// joins nothing.
+    /// </summary>
+    static void AddGateEdges(Dictionary<int, List<(int To, int State, GateLink Gate)>> graph, GateLink gate, int state)
+    {
+        foreach (int from in gate.Codes)
+        {
+            foreach (int to in gate.Codes)
+            {
+                if (from == to) continue;
+                if (!graph.TryGetValue(from, out var list)) graph[from] = list = [];
+
+                list.Add((to, state, gate));
+            }
         }
     }
 
@@ -196,12 +232,13 @@ public sealed partial class LockSystem
     /// </summary>
     public static bool GatesLockedUp(World world, IEnumerable<string> buildings)
     {
-        var regions = world.SystemOf<LockSystem>()?.Regions;
+        var locks = world.SystemOf<LockSystem>();
         bool any = false;
         foreach (string building in buildings)
         {
-            if (FirstDoor(world, building) is not { InGateSet: true } door || !SplitsCodes(regions, building)) continue;
+            if (FirstDoor(world, building) is not { InGateSet: true } door || !SplitsCodes(locks, building, door)) continue;
             if (door.Motion == DoorMotion.Open) return false;
+
             any = true;
         }
 
@@ -220,17 +257,14 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// <c>FUN_140547930</c>: the gate's door code (door <c>+0x378</c>, the gate-code pass's code of one side) differs from the gate building's own
-    /// code (slot 35, the pass's code of the other side). Meitou's gate codes keep no per-side code: true when they give the gate two or more codes;
-    /// also true with no gate codes yet (headless, before the first labelling) or for a gate they do not list (engine choice).
+    /// <c>FUN_140547930</c>: the first door's gate code (<c>+0x378</c>, read as a word) differs from the gate building's own code (slot 35). After a
+    /// pass these are the gate's first and second codes; before one the door holds 0 (new) or 0xffff (restored from a state, -1 as a word) and the
+    /// building -1 (Meitou's lock system knows no navmesh face before the first labelling, so the building's door point finds none).
     /// </summary>
-    static bool SplitsCodes(IGateRegions? regions, string building)
+    static bool SplitsCodes(LockSystem? locks, string building, Fixture door)
     {
-        if (regions is null) return true;
-        foreach (var gate in regions.Gates)
-            if (gate.Building == building) return gate.Codes.Length >= 2;
-
-        return true;
+        var (doorCode, buildingCode) = locks?.GateCodes(building, door) ?? (door.GateCode, -1);
+        return (uint)(doorCode & 0xffff) != (uint)buildingCode;
     }
 
     /// <summary>

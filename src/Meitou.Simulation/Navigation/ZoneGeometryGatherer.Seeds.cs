@@ -73,6 +73,49 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
+    /// The side points of the queued gate doors (<see cref="GateDoorMarkers"/>): the inner marker drops onto floor-0 building parts (group 9), the
+    /// outer onto those or the terrain (groups 2 and 9), the nearest surface at or below each.
+    /// </summary>
+    void AddGateSides(ZoneGeometry g)
+    {
+        bool Floor0(Vector3 from, out float y) => HighestBelow(g, g.Floor0Ranges, from, out y);
+        bool Ground(Vector3 from, out float y)
+        {
+            bool floor = HighestBelow(g, g.Floor0Ranges, from, out y);
+            float terrain = _map.HeightAt(from.X, from.Z);
+            if (terrain > from.Y || floor && y >= terrain) return floor;
+
+            y = terrain;
+            return true;
+        }
+
+        foreach (var (building, door, frame, node) in g.GateDoors)
+        {
+            var (first, second) = GateDoorMarkers.Sides(door, frame, node, Floor0, Ground);
+            g.GateSides.Add(new GateSide(building, first, second));
+        }
+    }
+
+    /// <summary>
+    /// The highest triangle of <paramref name="ranges"/> at or below <paramref name="from"/>, any area.
+    /// </summary>
+    static bool HighestBelow(ZoneGeometry g, List<(int First, int Last)> ranges, Vector3 from, out float y)
+    {
+        y = float.MinValue;
+        bool hit = false;
+        foreach (var (first, last) in ranges)
+        {
+            bool found = RayDown(g, from.X, from.Z, highest: true, float.MinValue, first, last, out float h, anyArea: true, maxY: from.Y);
+            if (!found || h <= y) continue;
+
+            y = h;
+            hit = true;
+        }
+
+        return hit;
+    }
+
+    /// <summary>
     /// The two marker points either side of a box door, in the order the callers try them (the side of the negative axis direction first, which
     /// decides ties): the shape's centre moved perpendicular to its width (<c>door navmesh axis</c>) past its faces. False for a shape that is not a
     /// box or is degenerate.
@@ -107,6 +150,7 @@ internal sealed partial class ZoneGeometryGatherer
     void AddSeeds(ZoneGeometry g)
     {
         AddDoorMarkerSeeds(g);
+        AddGateSides(g);
         float water = WorldWater.Height;
 
         // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a floor-0/1 building part

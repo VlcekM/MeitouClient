@@ -936,26 +936,74 @@ nearest the goal walks across it to the point nearest the goal; before, it got n
 ## Gate codes
 
 The original labels the walkable ground by the gates (**Verified** structure, decompile of 1.0.68):
-- **Pass**: a background job (`FUN_1402ef4a0`, applied by `FUN_1402f03e0`) floods the navmesh (`FUN_1402ed460`, a Havok flood) from the two side points of every
-  gate (GateData, 0x48 bytes: side points +0x20 and +0x2c, codes +0x38 and +0x3c, state +0x40), writes each region's code into its faces, and gives every object
-  the code at its position (`setInsideTownWalls`, slot 0x120; read as `amInsideTownWalls`, slot 0x118, RootObject +0xA0, KenshiLib 1ce4a16 names). A flood that
-  hits its face limit logs "ERROR: LIMIT REACHED". Code 0 is the open world (**Observed**: the fight-or-flee rule measures the route
-  to code 0, and the pass logs "Multiple gatecode 0 regions"). `NavMesh::getGateCode` (`FUN_1403a30f0`) reads a position's code, -1 while a pass runs.
-- **Gate list and numbering** (**Verified**, decompile `FUN_1402eab70`, `FUN_1402ef4a0`, `FUN_1402f03e0`, `FUN_1402ec580`, `FUN_1402ec760`): the list holds every loaded building of class `+0x198` 7 (GatewayBuilding) that has a first door; its first side point comes from the door's `+0x3c8`, its second from `+0x3bc` (the two ends of the door along its `door navmesh axis`, dropped onto the ground, `FUN_14029cc90`). Connectivity (`FUN_1402ec580`) is a Havok search under the gate filter, false when either point does not snap onto the mesh. Steps: (1) "Enabled test": a gate whose two sides connect gets first code -1, any other a new number; (2) "Interior region test": numbered gates whose first sides connect take the earlier gate's number; (3) face codes are cleared (face data above 0xf keeps its low nibble) and each number is flooded from its first sides; (4) the second code is the face code at the second side, 0 when below 1, and a first code -1 takes it; (5) "Update codes": gates with second code 0 are grouped by whether their second sides connect, each group numbered after the gates, and the first group's number becomes 0 in both codes (more than one group logs "Multiple gatecode 0 regions"); only the second code is renumbered, so a gate of step 1's -1 whose second side lies in a later group ends with first code 0 and a nonzero second; (6) a first code 0xffff takes the second ("External code fix"); (7) the second codes are flooded from the second sides, and codes that fail to write become 0. Applying (`FUN_1402f03e0`): the door's `+0x378` gets the first code, the door's and the building's own code (slot 0x120) the second; the later loop over the zone's buildings (`FUN_140555fd0`: a building with a door takes its first door's code, the code at the door's point) skips class 7. Town slot 96 compares these two codes ([dialogue](dialogue.md#conditions), DC 58).
+- **Pass**: a background job (`FUN_1402ef4a0`, applied by `FUN_1402f03e0`) numbers the gates (GateData, 0x48 bytes: side points +0x20 and +0x2c,
+  codes +0x38 and +0x3c, state +0x40), floods regions from their sides (`FUN_1402ed460`) and writes each region's code into its faces (face data
+  `code << 4 | material nibble`). Code 0 is the open world (**Observed**: the fight-or-flee rule measures the route to code 0, and the pass logs
+  "Multiple gatecode 0 regions"). `NavMesh::getGateCode` (`FUN_1403a30f0`) reads a position's code, -1 while a pass runs. Objects keep a code of their
+  own (`setInsideTownWalls`, slot 0x120 / `amInsideTownWalls`, slot 0x118, RootObject +0xA0, KenshiLib 1ce4a16 names).
+- **Gate list** (**Verified**, `FUN_1402eab70`): every loaded building of class 7 (GatewayBuilding: the factory `FUN_14057cc70` makes one for
+  `is wall gate`) with a first door. Its sides are the door's inner marker `doorClosedPositionIn` (+0x3c8) and outer `doorClosedPositionOut` (+0x3bc),
+  each pushed away from the other by half their distance: first = in + (in - out) / 2, second = out + (out - in) / 2.
+- **Door markers** (**Verified**, disassembly of `FUN_14029cc90`, run when the door's physics is set up): A = the door's shape 0's global orientation
+  column `door navmesh axis` (the door record's), c = that shape's global position (+0x3b0). W = A x UNIT_Y; in = c - 15 W, out = c + 15 W. Each is
+  dropped by a PhysX ray straight down (closest hit, unlimited length; in against group 9 only, mask 0x200; out against groups 2 and 9, mask 0x204)
+  and stays where it was on a miss. Then N = A x (the door's own Y axis): when (in - c).N > -5, in moves along -N to -10; when (out - c).N < 5, out
+  moves along N to +10. So the box's local axis direction decides which side is first.
+- **Faces** (**Verified**): the face at a point (`FUN_1403a2750`) is what the navmesh mediator's slot 0x40 returns for the point and the point 500
+  Havok units (5000) above it; none gives -1. `getGateCode` takes that face, else the closest within a box of half extent 4 Havok units (40) whose data is not 5
+  (`InteriorFilter`); face data -1 or an unlabelled face reads 0 in the exterior, an unlabelled door face (data 4 or 5) -1; in a section whose
+  +0x1a0 is 0x10000 or more an unlabelled face reads -1. Under the `GateFilter` (`FUN_1402f4730`) a search never enters a face whose data is 4 or 5:
+  every unlabelled door face.
+- **Connection** (**Verified**, `FUN_1402ec580`): a Havok path search between two points under the gate filter; false when either point has no
+  face (`FUN_1402ea530`) or the search fails.
+- **Flood** (**Verified**, `FUN_1402ed460`, `FUN_140ce5e60`): per code, ascending, from the side point of the last gate holding it (first codes 0xffff
+  are left out; codes 0 and below are not flooded). A start point without a face logs "Floodfill has no starting polygon"; a start face that has a
+  code already is skipped. The flood runs under the gate filter, crosses only edges whose nearest point lies within 900 Havok units (9000) of the
+  start seen from above, and stops after 100 000 iterations or when its open set or search state (0x20000 / 0x90200 bytes) is full. Its callback
+  (`GateFillCallback`, `FUN_1402ea7a0`) refuses an exterior face whose streaming edge leads to an unloaded section or, with no streaming edges, that
+  has a boundary edge of 2 Havok units (20) or more along its section's border; a refused face aborts the flood. A stopped or aborted flood logs
+  "LIMIT REACHED", writes nothing and its code fails; otherwise every face reached but those with data 4 or 5 gets the code.
+- **Numbering** (**Verified**, `FUN_1402ef4a0`): (1) "Enabled test": a gate whose two sides connect gets first code -1, any other the next number
+  from 1; (2) "Interior region test": a numbered gate whose first side connects to an earlier numbered gate's takes its number; (3) the face codes are
+  cleared (data above 0xf keeps its low nibble) and the first codes flooded from the first sides; (4) the second code is `getGateCode` at the second
+  side, 0 when below 1, and a first code -1 takes it; (5) "Update codes": gates with second code 0 are grouped by whether their second sides
+  connect, each group numbered from the gate count + 1, and the first group's number becomes 0 in both codes (more than one group logs "Multiple
+  gatecode 0 regions"); (6) a first code 0xffff takes the second ("External code fix"); (7) the second codes are flooded from the second sides.
+  Failures of both floods are counted together: exactly one logs "Single gatecode fail - Attempting to swap with code 0": codes 0 become the next
+  free number, the failed code 0, and the first gate holding the new number floods it from that side (failures recounted); every failed code then
+  becomes 0 ("Failed to write n codes").
+- **Applying** (**Verified**, `FUN_1402f03e0`): the first door's `gateCode` (+0x378) gets the first code, the door's and the building's own code
+  (slot 0x120) the second. The later loop over the loaded buildings skips class 7 and runs `FUN_140555fd0`: a door (`imADoor`, +0x1a0) takes
+  `getGateCode` at its outer marker, a building with a door its first door's code.
+- **Before a pass** (**Verified**): a new door's `gateCode` is 0 (`FUN_14029fb40`); a door restored from a building state gets -1
+  (`DoorStuff::_loadFromSerialise` `FUN_1402a06a0` sets it and never reads the saved `gatecode`, which `FUN_1402a0320` writes). A building's own code
+  is -1 (constructor) until `FUN_140555fd0` runs on it (placement and moves: slots 16, 146 and `FUN_1407727b0`), then the code at its first door's
+  outer marker, -1 where no face is found. Town slot 96 reads `gateCode` as a word, so a restored door (0xffff) always differs from its building
+  ([dialogue](dialogue.md#conditions), DC 58).
 - **Gate states** (`FUN_1402eebb0`, `FUN_1402eb070`): a map keyed by the pair (smaller code | larger << 8); several gates between one pair keep the lowest
   state (**Verified**); routes through several gates are as bad as their worst gate, best route kept (**Observed**). Same code → 0, either -1 → -1.
   Gate state 1 open or broken, 2 closed, 3 locked (**Observed**). `FUN_1402ebdd0` finds the gate a route between two codes leaves by.
 - **Readers in play**: the spawn-inside-walls repair of a squad's activation (`FUN_1404ffad0`, **Verified**, [factions](factions-squads-towns.md#town-residents)); DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS ([gates](locks.md#cutting-and-breaking-285--185-cut-286--186-break)), the run-away score
   ([combat](combat.md)). Wall termites reads the pass's town list but is disabled ([walls](buildings-production.md#walls)).
 
-Meitou (`Meitou.Simulation/Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality
-(`TownBuildings.IsGate`); their door polygons (named by the building, `ZoneNavMesh.DoorIds`) are the boundaries. From each polygon beside a gate's door
-polygons a flood spreads over kept polygons, across zone links, never into a gate's door; it is a walled region (codes from 1, gates in instance id order)
-when it stays within 4000 (X/Z) of its start, under 200 000 polygons and away from the loaded world's edge, else code 0, as is every polygon no flood
-reached; off the mesh -1. `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; the host hands the result to the world
-(`GateRegionsCommand`, not hashed or saved). **Observed** (Meitou's meshes, 3 x 3 zones, 35 to 90 ms): Stack, Squin, Heng and Admag are walled regions
-joined to 0 by their gates; the Hub's gateways have no doors, so it has none; Bad Teeth's gates all lie in 0. A gate may also border small pockets of its
-own (gateway inside), which get codes of their own.
+Meitou (engine reading; `NavGateRegions`, `GateCodePass`, `GateCodeFlood`, `GateFaces`): the gatherer computes each zone's gates' side points by
+the rules above from the door's first collision box (`ZoneGeometryGatherer.AddGateSides`, `GateDoorMarkers`; rays against the gathered group-9
+triangles and the terrain) and the zone mesh keeps them (`ZoneNavMesh.GateSides`, cached). Faces are kept polygons, door faces `NavArea.Door`
+polygons, interior sections the interior polygons. Differences: the face at a point is the lowest polygon above it, which meets a polygon up to 5 under the point (Meitou's surfaces follow the
+ground within a few units either way); the connection test is connected parts (no iteration cap); the flood applies the 100 000-step cap but not the
+byte caps; an unjoined border edge is open only toward a zone with no mesh loaded (Meitou's stitching leaves short gaps across loaded borders: Stack's
+yard on the 19.29 / 20.29 border); gates are listed by zone (X, then Z), then as gathered. `IGateRegions.CodeAt` reads an object's code at a
+position: `getGateCode`, except that an unlabelled interior polygon takes its building's code, the highest code of the exterior ground its
+connected interior's joins reach, across zone borders and through runs of exterior door polygons (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; `LockSystem` applies the result
+(`GateRegionsCommand`, not hashed or saved): door 0's `Fixture.GateCode` takes the first code, the building the second, and Town slot 96 reads both
+from the last labelling that listed the gate. Before the first labelling a
+building's code is -1 (the lock system knows no navmesh face). **Observed** (`NavGateRegions.Label` over Meitou's meshes, 3 x 3 zones around each
+town, 5 to 45 ms): Stack, Squin, Heng, Admag and Bad Teeth each have one walled region (code 1) and every gate [1, 0], the first side inside; Mongrel's
+two gates and Shark's Makeshift Gate have both sides connected, so [0, 0] (the routes run kilometres around through the terrain, not through the
+gates: Mongrel's wall line is open on Meitou's mesh); the Hub has no gate with a door. No flood failed there. Positions reading -1 are exterior door polygons, a few exterior polygons the face lookup misses at their centre, and
+interiors with no walkable join (Stack 218 interior polygons, the most). **Observed**
+(saved `gatecode0` in the original's saves, written after a pass): the gates of Stack, Squin, Heng, Admag, Bad Teeth and Mongrel hold 1 to 3, every
+other door -1, so the first side is the inside and Mongrel is walled in the original (Meitou's mesh joins its two sides).
 
 ## Unknowns
 

@@ -15,12 +15,12 @@ public sealed class NavMeshCache
     /// <summary>
     /// Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).
     /// </summary>
-    public const int BuilderVersion = 59;
+    public const int BuilderVersion = 60;
 
     /// <summary>
     /// The layout version of the cache file; a file with another is not read.
     /// </summary>
-    const int FormatVersion = 6;
+    const int FormatVersion = 7;
     /// <summary>
     /// The first four bytes of a cache file.
     /// </summary>
@@ -142,6 +142,7 @@ public sealed class NavMeshCache
             corners[i] = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
 
         var heights = ReadHeights(r, count);
+        var gateSides = ReadGateSides(r);
         if (r.ReadInt32() != count)
             return null; // trailer: truncated writes fail here
 
@@ -159,6 +160,7 @@ public sealed class NavMeshCache
             BoundsMax = boundsMax,
             DoorIds = doorIds.Length > 0 ? doorIds : null,
             DoorOf = doorOf,
+            GateSides = gateSides,
             Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null,
             Heights = heights,
             InteriorStart = interiorStart,
@@ -191,6 +193,23 @@ public sealed class NavMeshCache
 
         return heights;
     }
+
+    /// <summary>
+    /// The gates' side points (null when the zone has none).
+    /// </summary>
+    static GateSide[]? ReadGateSides(BinaryReader r)
+    {
+        var sides = new GateSide[r.ReadInt32()];
+        for (int i = 0; i < sides.Length; i++)
+            sides[i] = new GateSide(r.ReadString(), ReadVector(r), ReadVector(r));
+
+        return sides.Length > 0 ? sides : null;
+    }
+
+    /// <summary>
+    /// Reads three floats.
+    /// </summary>
+    static Vector3 ReadVector(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
 
     /// <summary>
     /// Writes a zone's mesh with the hashes <see cref="TryLoad"/> checks: to a temporary file first, then moved over the zone's file.
@@ -240,6 +259,7 @@ public sealed class NavMeshCache
             }
 
             WriteHeights(w, m.Heights);
+            WriteGateSides(w, m.GateSides);
             w.Write(m.PolygonCount);
         }
 
@@ -266,6 +286,30 @@ public sealed class NavMeshCache
             w.Write(i);
 
         if (withDoors) w.Write((short)(m.DoorOf?[p] ?? -1));
+    }
+
+    /// <summary>
+    /// Writes the gates' side points (a count first).
+    /// </summary>
+    static void WriteGateSides(BinaryWriter w, GateSide[]? sides)
+    {
+        w.Write(sides?.Length ?? 0);
+        foreach (var side in sides ?? [])
+        {
+            w.Write(side.Building);
+            WriteVector(w, side.First);
+            WriteVector(w, side.Second);
+        }
+    }
+
+    /// <summary>
+    /// Writes three floats.
+    /// </summary>
+    static void WriteVector(BinaryWriter w, Vector3 v)
+    {
+        w.Write(v.X);
+        w.Write(v.Y);
+        w.Write(v.Z);
     }
 
     /// <summary>

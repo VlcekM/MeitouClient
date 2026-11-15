@@ -247,54 +247,17 @@ public sealed class NavSystem : IDisposable
     /// One gate labelling at a time.
     /// </summary>
     readonly object _labelGate = new();
-    /// <summary>
-    /// The <c>functionality</c> records looked up by the gate test, cached by id across labellings.
-    /// </summary>
-    readonly Dictionary<string, GameRecord?> _functions = [];
 
     /// <summary>
-    /// The level data's buildings by placement key (what the door polygons are named by), their BUILDING record ids. Made on first use and again when
-    /// the level data was edited (WorldLevelData.EditRevision).
-    /// </summary>
-    (int Revision, Dictionary<string, string> Map)? _levelRecords;
-
-    /// <summary>
-    /// The gate codes of the meshes loaded now (<see cref="NavGateRegions"/>). Slow (a flood over the walled regions): call it off the simulation
-    /// thread. One labelling at a time; each reads the world and the player's buildings as they are then.
+    /// The gate codes of the meshes loaded now (<see cref="NavGateRegions"/>: the gate-code pass over the gates their zones hold). Slow (floods over
+    /// the loaded navmesh): call it off the simulation thread. One labelling at a time.
     /// </summary>
     public NavGateRegions LabelGates()
     {
         lock (_labelGate)
         {
-            var runtime = Runtime.All().ToDictionary(p => p.Key, p => p.BuildingId, StringComparer.Ordinal);
-            return NavGateRegions.Label(Walkability.World, id => IsGateId(runtime, id));
+            return NavGateRegions.Label(Walkability.World);
         }
-    }
-
-    /// <summary>
-    /// Whether a door owner (a runtime or level building instance id) is a gate: its BUILDING record is one.
-    /// </summary>
-    bool IsGateId(Dictionary<string, string> runtime, string id)
-    {
-        if (!runtime.TryGetValue(id, out var record) && !LevelRecords().TryGetValue(id, out record)) return false;
-
-        return _db.Find(record) is { } building && TownBuildings.IsGate(_db, building, _functions);
-    }
-
-    /// <summary>
-    /// The level data's buildings' record ids by placement key, made again when <see cref="WorldLevelData.EditRevision"/> moved on.
-    /// </summary>
-    Dictionary<string, string> LevelRecords()
-    {
-        int revision = _levels.EditRevision;
-        if (_levelRecords is { } known && known.Revision == revision) return known.Map;
-
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var b in _levels.Buildings())
-            map.TryAdd(b.Key, b.BuildingId);
-
-        _levelRecords = (revision, map);
-        return map;
     }
 
     #endregion
