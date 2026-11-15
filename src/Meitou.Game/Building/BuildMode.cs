@@ -1204,6 +1204,7 @@ sealed class BuildMode(PlayerInterface player)
         else if (!site.Complete && !site.Destroyed) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         player.Production.AddMachineVerb(verbs, site, selection);
         if (site.Complete && player.Production.Machine(site.Id) is { } machine) AddMachineVerbs(verbs, site, selection, machine, own);
+        if (own && site.Complete) AddModJobVerbs(verbs, site, selection);
 
         if (own && site.LevelPlacement is null)
             verbs.Add(("Dismantle", () => player.Say(new DismantleOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
@@ -1254,6 +1255,33 @@ sealed class BuildMode(PlayerInterface player)
                 ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.UseTurret, site.Id)
                     { Tick = player.Session.World.Tick }
                 : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+    }
+
+    /// <summary>
+    /// The code mods' jobs on a finished building of the player's (docs/modding.md "Mod jobs"): each kind of the building's record whose takers
+    /// the selection holds gives the selection that job.
+    /// </summary>
+    void AddModJobVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection)
+    {
+        foreach (var kind in Simulation.Production.ModJobs.On(site.Record))
+        {
+            if (!selection.Any(id => TakesModJob(kind, id))) continue;
+
+            verbs.Add((kind.Caption, () => player.Say(new Simulation.Production.AddModJob(selection, kind.Id, site.Id)
+                { Tick = player.Session.World.Tick })));
+        }
+    }
+
+    /// <summary>
+    /// Whether the drawn character <paramref name="id"/> is one the mod job takes (the simulation tests again:
+    /// <see cref="Simulation.Production.ModJobs.Takes"/>).
+    /// </summary>
+    bool TakesModJob(Simulation.Production.ModJobKind kind, CharacterId id)
+    {
+        if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return false;
+
+        var side = c.Animal ? Simulation.Production.ModJobTakers.Animals : Simulation.Production.ModJobTakers.People;
+        return (kind.Takers & side) != 0;
     }
 
     /// <summary>

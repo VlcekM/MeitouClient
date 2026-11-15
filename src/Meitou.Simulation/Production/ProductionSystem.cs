@@ -416,6 +416,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case AddOrderJob add: AddOrderJobs(world, add); break;
                 case DisposeCorpseOrder dispose: DisposeCarried(world, dispose); break;
                 case RemoveJob remove: RemoveJobAt(world, remove); break;
+                case AddModJob add: ModJobs.Give(world, add, Who(world, add.Characters)); break;
+                case RemoveModJob remove: ModJobs.Take(world, remove); break;
                 case MoveJob move: MoveJobTo(world, move); break;
                 case PutInMachine put: Put(world, put); break;
                 case TakeFromMachine take: Take(world, take); break;
