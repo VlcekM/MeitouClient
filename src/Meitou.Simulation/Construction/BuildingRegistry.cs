@@ -289,7 +289,7 @@ public sealed class PlayerTown
 /// <summary>
 /// The player-built sites of the world in creation order (docs/simulation.md "Buildings"). Ids are the original's
 /// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, n from a counter per zone that starts above every such id in the loaded save
-/// (<see cref="Reserve"/>). Every change that the host or a save must see bumps <see cref="Version"/>; adding, completing, destroying and removing a
+/// (<see cref="Reserve"/>), skipping the ids sites and the level's buildings hold (<see cref="NewId"/>). Every change that the host or a save must see bumps <see cref="Version"/>; adding, completing, destroying and removing a
 /// site also bump <see cref="Revision"/>. Hashed by <see cref="World.StateHash"/> only while it holds a site.
 /// </summary>
 public sealed partial class BuildingRegistry
@@ -460,16 +460,18 @@ public sealed partial class BuildingRegistry
     }
 
     /// <summary>
-    /// The id the next site in <paramref name="zone"/> gets (skipping any id in use).
+    /// The id the next site in <paramref name="zone"/> gets: the next number whose id no site holds and <paramref name="level"/> does not list as a
+    /// standing building of the zone (the original takes the next number while the zone's building list holds the id with a target,
+    /// docs/formats/zones.md "Containers and IDs").
     /// </summary>
-    public string NewId(ZoneCoordinate zone)
+    public string NewId(ZoneCoordinate zone, LevelBuildingIds? level = null)
     {
         while (true)
         {
             int n = _counters.GetValueOrDefault(zone) + 1;
             _counters[zone] = n;
             string id = IdOf(n, zone);
-            if (!_byId.ContainsKey(id)) return id;
+            if (!_byId.ContainsKey(id) && level?.Holds(zone, id) != true) return id;
         }
     }
 

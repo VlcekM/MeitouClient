@@ -180,8 +180,8 @@ public sealed record PlacementQuery(
     public float GroundAt(float x, float z) => Surface ?? Services.Ground(x, z);
 
     /// <summary>
-    /// Whether a building of <paramref name="record"/> at <paramref name="position"/> / <paramref name="rotation"/> (a site or queued ghost) never
-    /// blocks this ghost.
+    /// Whether a building of <paramref name="record"/> at <paramref name="position"/> / <paramref name="rotation"/> (a site, queued ghost or level
+    /// building) never blocks this ghost.
     /// </summary>
     public bool Passes(string record, Vector3 position, Quaternion rotation) =>
         PassThrough?.Invoke(record) == true || Ignore?.Invoke(record, position, rotation) == true;
@@ -283,9 +283,11 @@ public static class PlacementCheck
     }
 
     /// <summary>
-    /// Whether a level building may block the ghost: not the one it stands in (<paramref name="parent"/>), nor one of a record it passes through.
+    /// Whether a level building may block the ghost: not the one it stands in (<paramref name="parent"/>), nor one it passes (a record it passes
+    /// through, or a town wall at a wall piece's snapped joint, as the original's joint test takes any wall).
     /// </summary>
-    static bool Blocks(PlacementQuery q, PlacedFootprint other, string? parent) => other.Id != parent && q.PassThrough?.Invoke(other.Record) != true;
+    static bool Blocks(PlacementQuery q, PlacedFootprint other, string? parent) =>
+        other.Id != parent && !q.Passes(other.Record, other.Position, other.Rotation);
 
     /// <summary>
     /// What the ghost's footprint <paramref name="hull"/> overlaps: the floor's edge, a building, a site, a queued ghost or a character;

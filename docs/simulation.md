@@ -717,8 +717,10 @@ Crossbow reload/steady aim, skill spread, bolt flight, ammo, obstruction and fri
 simulation state; `Schedule` advances bolts. Targets without medical bodies do not stop bolts. Bolts and the line of fire stop at the
 terrain heightmap and the buildings' collision triangles (the ragdolls' environment, `SolidHits`), not the walkable surfaces (a roof over
 the shooter counted as ground). A building is there once its zone's collision has been read on a worker (about 0.1-0.2 s a zone, headless, Black Desert City);
-until then the line of fire holds the shot and the closing ray, the melee alert line and the sight ray (`SightRay`) count as blocked, while a
-bolt already flying passes it, which breaks determinism for such a bolt.
+until then the line of fire holds the shot and the closing ray, the melee alert line and the sight ray (`SightRay`) count as blocked. A flying
+bolt whose step meets collision still being read waits for it (`SolidHits` `wait`, `IRagdollEnvironment.AwaitBuildings`: the serial bolt step
+blocks on the zone's gather), so it never passes a building whose collision was not there yet; only a failed read is passed. The original's
+flight ray has no such case ([flight collision](game/combat.md#shot-origin-and-flight-collision)).
 A crossbow reload paused by the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
 [combat.md](game/combat.md#turrets) fire gate); in a fight without a target the controller stays on (state 3) and the reload counts on.
 Bolts and the line of fire hit each character's click hull, an axis-aligned box from the race's `hull size` (`CombatSystem.HullHalf`); the line of fire and the closing
@@ -1330,9 +1332,10 @@ Damage: melee blows on walls and doors (`CombatSystem.ApplyZoneBuildings`, the o
 
 **Simulation state.** `World.Buildings` (`Construction.BuildingRegistry`, sites as `BuildSite`): player-built sites in
 creation order, by id, holding the snapshot's fields plus rate, builder counter and the destroyed flags. Owned town houses needing repair also register, with `LevelPlacement` and a zone-qualified id; completed restored houses stay registered for their scene overlay. Ids `<n>-zone<X>.<Y>-INGAME`, n from a per-zone counter (hashed) that starts above every such id
-in the loaded save (generated interiors share the pattern; `Reserve(id)`). The 106 `-zoneX.Y-INGAME` ids of the level data
-are not reserved by the simulation (**engine gap**, the host may call `World.Buildings.Reserve`); a collision with a base
-placement is the host's to avoid. `World.Research` (`Construction.ResearchState`): completed RESEARCH ids and the
+in the loaded save (generated interiors share the pattern; `Reserve(id)`); a number whose id a site holds or the zone's level building list
+holds with a target (`LevelBuildingIds`, asked live so level-editor buildings count; 106 such level ids) is skipped, as the original's
+[id rule](formats/zones.md#containers-and-ids). Engine choice: the counter numbers player sites only and starts above the save's ids, where the
+original's also numbers the zone's records. `World.Research` (`Construction.ResearchState`): completed RESEARCH ids and the
 `Unlocked` set (replaced, never changed in place). A new game completes the start-off's `research`, or the default start research
 (`ResearchGate.DefaultStartId`, [build menu](game/buildings-production.md#build-menu)) when it lists none
 (`PopulationSystem.StartPlayer`); a load takes the save's. Research benches change it ([Production](#production), which says when it is hashed).
@@ -1460,7 +1463,7 @@ y -19..+4) and fails with the floor-number text when there is none. A site insid
 the parent's roof and walls while the interior view shows the parent; a site in a level building takes the usual town rules. Messages: `PlacementRules.Message`, else the original's text table in `PlacementCheck`.
 
 Build mode (B, `Kenshi_BuildWindow`, Faithful UI only): categories and groups list `WorldSnapshot.UnlockedBuildings` in
-database order (the original's order is **Unknown**); the window estimates hours as materials / (`build speed mult` x 6),
+the original's order ([build menu](game/buildings-production.md#build-menu)) and the Commands box shows its text (`BuildMode.BuildCommandsText`); the window estimates hours as materials / (`build speed mult` x 6),
 rounded up (rounding **Unknown**). Left click or Space queues a valid ghost, Backspace or Undo drops the last, Confirm sends
 `PlaceBuildings`; leaving build mode drops the queue. The HUD panels the window covers are hidden meanwhile. Right click
 on a site with characters selected gives `BuildOrder` (held 0.2 s: menu with Build, Dismantle -> `DismantleOrder`, Cancel
@@ -1479,8 +1482,8 @@ flag, that has a link point within sqrt 10 of one of the piece's link points or 
 catches crest shorts; a normal/single root wins over a subsection root; gates never parent). Orders, builders and the
 auto-job act on the root; its progress sets the children's (`min(p/target, 1) x child target`) and completes them; its
 removal removes them. So an attached piece costs nothing; the link is not saved or hashed. A destroyed attached piece
-just follows its wall again (original **Unknown**). **Engine gaps**: level (NPC town) walls are not snap candidates;
-indoor lines (radius 25), the steep-climb straight extension, the offset clamp and the arrows are not built; the stretch
+just follows its wall again (original **Unknown**). Level (NPC town) walls are snap candidates and, at a snapped joint, do not block a
+piece as sites and ghosts do not (`PlacementCheck.Blocks`, [snapping](game/buildings-production.md#walls)). **Engine gaps**: indoor lines (radius 25), the steep-climb straight extension, the offset clamp and the arrows are not built; the stretch
 is recomputed each frame from the signed overshoot. The snapshot carries `WallParent`; picking an attached piece in the
 UI picks its wall (name, verbs and Cancel's nothing-delivered check are the wall's).
 
@@ -2031,9 +2034,6 @@ the level data) stay.
 ## Open questions and known gaps
 
 **Engine gaps** are listed where they apply, not here: [unique characters](#unique-characters) and [campaigns](#off-screen-tier),
-[ranged](#ranged) (bolts before a building's collision loads), [locks](#cages-beds-and-locks),
-[slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets),
-[prospecting](#prospecting), [AI](#ai) (planner finders).
-Smuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-parity.md).
+[locks](#cages-beds-and-locks),\n[slavery](#arrest-and-jail), [kidnapping](#kidnapping), [buildings](#buildings) and walls, [production](#production) (turrets),\n[prospecting](#prospecting), [AI](#ai) (planner finders).\nSmuggling and stealing: [trade](#trade). UI: [faithful-ui-parity](faithful-ui-parity.md).
 
 - Navmesh: the cache key does not see a changed collision file; a running build is not stopped on unload (it finishes into the cache).

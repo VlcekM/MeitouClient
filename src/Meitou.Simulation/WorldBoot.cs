@@ -183,6 +183,7 @@ public sealed class WorldBoot
             data.Layouts = layouts;
             data.Sight = new BuildingSight(o.Install, o.Database, levels, layouts!);
             data.ResourceNodes = ResourceNodes(o, levels);
+            data.LevelBuildingIds = new Construction.LevelBuildingIds(levels);
         }
 
         return data;

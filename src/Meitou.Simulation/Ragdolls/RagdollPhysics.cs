@@ -680,6 +680,13 @@ public interface IRagdollEnvironment
     /// tests; the same meaning of the result. Environments without them answer with the ordinary buildings.
     /// </summary>
     bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Buildings(min, max, triangles);
+    /// <summary>
+    /// Blocks until the building collision between the corners is known (or its reading failed), so the next <see cref="Buildings"/> or
+    /// <see cref="Roofs"/> there answers ready. Environments that always know theirs return at once.
+    /// </summary>
+    void AwaitBuildings(Vector3 min, Vector3 max, bool roofs)
+    {
+    }
 }
 
 /// <summary>

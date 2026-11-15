@@ -473,6 +473,11 @@ public sealed class PopulationData
     public Meitou.Data.Gameplay.Construction.IResourceNodes? ResourceNodes { get; set; }
 
     /// <summary>
+    /// The level data's building ids a new player site's id skips; null: no level data.
+    /// </summary>
+    public Construction.LevelBuildingIds? LevelBuildingIds { get; set; }
+
+    /// <summary>
     /// The town buildings' rooms and lamps for the sight tests (<see cref="SightMap"/>); null: everyone outdoors and unlit.
     /// </summary>
     public ISightSource? Sight { get; set; }
