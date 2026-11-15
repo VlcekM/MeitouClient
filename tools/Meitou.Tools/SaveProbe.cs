@@ -1298,6 +1298,7 @@ static class SaveProbe
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
+              escape <cage id> [rounds] [interval] [x z]  the leader is caged, sneaks out and walks to x z: who sees, has spotted or fights it (#776)
               uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
               recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse

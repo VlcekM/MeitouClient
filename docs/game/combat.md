@@ -412,8 +412,8 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   fighter stood still for that long before its first step (**Observed**, Meitou: 25 to 79 ticks at 30 per second at the start of a fight, 3 ticks after the change).
 - **Joining**: a lower table slot asks first; one not yet in is counted ahead only when it may decide this tick (not staggered,
   defending, or swinging past its abort point), so nobody is left out for a fighter that does not ask (engine choice).
-  A path chaser (`CombatSystem.PathChasing`, the original's states 10/11, which never decide) neither joins nor counts ahead for a list place
-  or an attack slot. Its line is tested running too (`Fighting.OnPathChase`): before, a runner never took the chase, so guards running in from
+  A path chaser (`CombatSystem.PathChasing`, the original's states 10/11) neither joins nor counts ahead for a list place or an attack slot
+  (**Verified**, `FUN_14060c8b0`: with the blocked-line flag set it takes state 10 and returns before the ask `FUN_14060c670`). Its line is tested running too (`Fighting.OnPathChase`): before, a runner never took the chase, so guards running in from
   outdoors or the floor below filled the list and the slots while one beside the target waited on the ring, 25 away, for 17 s (**Observed**,
   `probe escape` on Sho-Battai's prison, #776).
 - **Waiting**: fighters left out, and engaged ones in the wait after their own swing (state 6, [Pacing](#pacing)), keep the state-6 band by the [fight steering](#fight-steering); none orbits.
