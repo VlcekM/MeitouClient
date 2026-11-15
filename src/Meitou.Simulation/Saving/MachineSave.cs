@@ -13,9 +13,10 @@ namespace Meitou.Simulation.Saving;
 /// GAMESTATE_BUILDING (docs/game/buildings-production.md "Production", "Farming" and "Power": <c>production amount</c>, <c>resource mult</c>,
 /// <c>power on</c>, <c>gets battery</c>, <c>batterycharge</c>, <c>consumption amount-&lt;k&gt;</c>, <c>plant growth</c>, <c>plant death</c>, <c>plant
 /// start</c>, <c>plants harvested</c>, <c>save time</c>), and its items in an INVENTORY_STATE named first by the building's instance states
-/// (docs/formats/save.md "Zone files"). The items' sections are <c>in&lt;k&gt;</c>, <c>out</c> and, for the storage grid, <c>main</c> (the original's
-/// storage section name is <b>Unknown</b>; no sample save holds a player building with items, so the original reading these is unverified). A loaded
-/// farm's plants all take the farm's growth (the harvested ones -10): the stagger between plants is not saved.
+/// (docs/formats/save.md "Machine inventory sections"). The items' sections are the original's: <c>in1</c>, <c>in2</c>, ... for the inputs,
+/// <c>out</c> for the output and <c>backpack_content</c> for a storage grid (a furnace's grid <c>in1</c>); an inventory older Meitou wrote numbers its
+/// inputs from <c>in0</c> and names its grid <c>main</c>, and is read as such. A loaded farm's plants all take the farm's growth (the harvested ones
+/// -10): the stagger between plants is not saved.
 /// </summary>
 public static class MachineSave
 {
@@ -32,6 +33,16 @@ public static class MachineSave
     /// The item furnace's input section (<b>Verified</b>, <c>FurnaceBuilding::setupFromData</c>), Meitou's storage grid of a furnace.
     /// </summary>
     const string FurnaceSection = "in1";
+    /// <summary>
+    /// The section of a building's storage grid (<b>Verified</b>, <c>FUN_140554530</c>: every building with <c>has inventory</c>), Meitou's
+    /// <c>main</c>.
+    /// </summary>
+    const string StorageSection = "backpack_content";
+    /// <summary>
+    /// The Meitou bool on a player building's INVENTORY_STATE (<c>&lt;id&gt;-inventory</c>) that says its sections are the original's: one Meitou
+    /// wrote without it numbers the inputs from <c>in0</c> (the original ignores it: keys are read by name).
+    /// </summary>
+    public const string OriginalSectionsKey = "meitou original sections";
 
     /// <summary>
     /// The key prefix of a remembered ingredient's string id (followed by its number).
@@ -65,17 +76,20 @@ public static class MachineSave
     }
 
     /// <summary>
-    /// Replaces the building's inventory record with its items, or removes the record when it holds none.
+    /// Replaces the building's inventory record with its items, marked as holding the original's sections, or removes the record when it holds none.
     /// </summary>
-    static void WriteInventory(SaveFile file, BuildSite site, FcsInstance instance, List<SaveItem> saveItems) =>
-        WriteInventory(file, site.Zone, instance, site.Id + InventorySuffix, saveItems);
+    static void WriteInventory(SaveFile file, BuildSite site, FcsInstance instance, List<SaveItem> saveItems)
+    {
+        if (WriteInventory(file, site.Zone, instance, site.Id + InventorySuffix, saveItems) is { } inventory)
+            inventory.Bools[OriginalSectionsKey] = true;
+    }
 
     /// <summary>
     /// Replaces a building instance's inventory record with its items, or removes the record when it holds none: the record
     /// <paramref name="inventoryId"/>, or with null the INVENTORY_STATE the instance lists (a level building's,
-    /// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> when it has none yet, as the original names it).
+    /// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> when it has none yet, as the original names it). Returns the record written, null when removed.
     /// </summary>
-    internal static void WriteInventory(SaveFile file, ZoneCoordinate zone, FcsInstance instance, string? inventoryId, List<SaveItem> saveItems)
+    internal static FcsRecord? WriteInventory(SaveFile file, ZoneCoordinate zone, FcsInstance instance, string? inventoryId, List<SaveItem> saveItems)
     {
         string IdOf(int n) => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{zone.X}.{zone.Y}-INGAME");
 
@@ -86,10 +100,10 @@ public static class MachineSave
 
         if (saveItems.Count == 0)
         {
-            if (inventory is null) return;
+            if (inventory is null) return null;
             SaveInventory.Replace(file, inventory, [], IdOf);
             file.Records.Remove(inventory);
-            return;
+            return null;
         }
 
         if (inventory is null)
@@ -101,6 +115,7 @@ public static class MachineSave
 
         SaveInventory.Replace(file, inventory, saveItems, IdOf);
         instance.States.Insert(0, inventory.StringId);
+        return inventory;
     }
 
     /// <summary>
@@ -216,18 +231,18 @@ public static class MachineSave
     }
 
     /// <summary>
-    /// The machine's items as saved: each input k under <c>in&lt;k + firstInput&gt;</c>, the output under <c>out</c>, then the crafting bench's
-    /// finished items. <paramref name="firstInput"/> is the number of the first input's section: the original's are 1, 2, ... (town machines),
-    /// Meitou's player buildings write 0, 1, ....
+    /// The machine's items as saved, in the original's sections (docs/formats/save.md "Machine inventory sections"): each input k under
+    /// <c>in&lt;k + 1&gt;</c>, the output under <c>out</c>, then the crafting bench's finished items and the storage grid's items (a furnace's under
+    /// <c>in1</c>, any other's <c>main</c> under <c>backpack_content</c>).
     /// </summary>
-    internal static List<SaveItem> Items(Machine m, int firstInput = 0)
+    internal static List<SaveItem> Items(Machine m)
     {
         var list = new List<SaveItem>();
         for (int k = 0; k < m.Inputs.Length; k++)
         {
             if (m.Inputs[k].Count > 0)
             {
-                string section = "in" + (k + firstInput).ToString(CultureInfo.InvariantCulture);
+                string section = "in" + (k + 1).ToString(CultureInfo.InvariantCulture);
                 list.Add(new SaveItem { BaseId = m.Inputs[k].Item, Section = section, Quantity = m.Inputs[k].Count });
             }
         }
@@ -235,14 +250,23 @@ public static class MachineSave
         if (m.Output is { Count: > 0 } o) list.Add(new SaveItem { BaseId = o.Recipe.Item, Section = "out", Quantity = o.Count });
         if (m.Craft is { } c) list.AddRange(c.Done.Select(SavedKit.FromItem));
         if (m.Storage is { } s)
-        {
-            list.AddRange(m.Data.IsFurnace
-                ? s.Items.Select(i => SavedKit.FromItem(i, FurnaceSection))
-                : SavedKit.FromInventory(s));
-        }
+            list.AddRange(m.Data.IsFurnace ? s.Items.Select(i => SavedKit.FromItem(i, FurnaceSection)) : StorageItems(s));
 
         return list;
     }
+
+    /// <summary>
+    /// A storage grid's saved items with Meitou's <c>main</c> named as the original's grid section (<see cref="SavedKit.FromInventory"/>).
+    /// </summary>
+    static IEnumerable<SaveItem> StorageItems(Inventory s) =>
+        s.Items
+            .Where(i => !InventoryCommands.IsLimbSection(i.Section))
+            .Select(StorageItem);
+
+    /// <summary>
+    /// A storage grid's saved item, <c>main</c> as <c>backpack_content</c>.
+    /// </summary>
+    static SaveItem StorageItem(ItemInstance item) => SavedKit.FromItem(item, item.Section == "main" ? StorageSection : item.Section);
 
     /// <summary>
     /// Reads the machines of the player buildings the world holds (after <see cref="BuildingSave.Read"/>); an unfinished one keeps its stock too (an
@@ -276,15 +300,20 @@ public static class MachineSave
         if (!save.Zones.TryGetValue(site.Zone, out var zone) || zone.BuildingList?.Instances.FirstOrDefault(i => i.Id == site.Id) is not { } instance)
             return;
 
-        if (ListedInventory(zone.File, instance) is { } inventory) PutItems(m, SaveInventory.Read(zone.File, inventory), factory);
+        if (ListedInventory(zone.File, instance) is not { } inventory) return;
+
+        bool fromZero = inventory.StringId == site.Id + InventorySuffix && !inventory.Bools.GetValueOrDefault(OriginalSectionsKey);
+        PutItems(m, SaveInventory.Read(zone.File, inventory), factory, fromZero);
     }
 
     /// <summary>
-    /// Puts a building's saved items into its machine: the outputs, the inputs (section numbers from <paramref name="firstInput"/>,
-    /// <see cref="Items"/>) and the storage grid.
+    /// Puts a building's saved items into its machine: the outputs, the inputs and the storage grid (<see cref="Items"/>). The inputs are numbered
+    /// from <c>in1</c>, or from <c>in0</c> as older Meitou wrote them when <paramref name="fromZero"/> is set or an item lies in <c>in0</c> (the
+    /// original never names one, docs/formats/save.md "Machine inventory sections").
     /// </summary>
-    internal static void PutItems(Machine m, IEnumerable<SaveItem> items, ItemFactory factory, int firstInput = 0)
+    internal static void PutItems(Machine m, List<SaveItem> items, ItemFactory factory, bool fromZero = false)
     {
+        int firstInput = fromZero || items.Any(i => i.Section == "in0") ? 0 : 1;
         var storage = new List<SaveItem>();
         foreach (var item in items)
         {
@@ -311,9 +340,10 @@ public static class MachineSave
 
         if (m.Storage is { } grid && storage.Count > 0)
         {
-            foreach (var item in SavedKit.ToInventory(storage, factory).Items)
+            foreach (var item in SavedKit.ToGrid(storage, factory, grid.Width, grid.Height).Items)
             {
-                if (m.Data.IsFurnace) item.Section = "main";   // its in1 is Meitou's storage grid
+                // A furnace's in1 and any other building's backpack_content are Meitou's storage grid main.
+                if (m.Data.IsFurnace || item.Section == StorageSection) item.Section = "main";
 
                 // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cell, as the
                 // original's loader does.

@@ -43,6 +43,30 @@ public static class SavedKit
     }
 
     /// <summary>
+    /// The items as a machine's storage grid at their saved sections and cells (<see cref="Fill"/>): at least <paramref name="width"/> x
+    /// <paramref name="height"/> cells, as large as the saved cells need and with room below them for every item, so only an item overlapping
+    /// another is moved and none is lost before the machine's own grid takes them.
+    /// </summary>
+    internal static Inventory ToGrid(IReadOnlyList<SaveItem> items, ItemFactory factory, int width, int height)
+    {
+        int room = 0;
+        foreach (var s in items)
+        {
+            if (factory.Info(s.BaseId) is not { } info) continue;
+
+            int w = Math.Max(s.Rotated ? info.Height : info.Width, 1);
+            int h = Math.Max(s.Rotated ? info.Width : info.Height, 1);
+            width = Math.Max(width, s.X + w);
+            height = Math.Max(height, s.Y + h);
+            room += Math.Max(w, h);
+        }
+
+        var inventory = new Inventory(width, height + room);
+        Fill(inventory, items, factory, null, "main", null);
+        return inventory;
+    }
+
+    /// <summary>
     /// The character whose inventory is loaded: its RACE id (null: not in the data, no limit) and whether it is an animal (an ANIMAL_CHARACTER).
     /// </summary>
     readonly record struct Wearer(string? Race, bool Animal);

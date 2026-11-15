@@ -25,12 +25,6 @@ public static class TownMachineSave
     #region Zone states
 
     /// <summary>
-    /// The number of a machine's first input section (<b>Observed</b>, the owner's original saves: 62 <c>in1</c> and 12 <c>in2</c> item sections,
-    /// no <c>in0</c>; the loader <c>FUN_14029e7b0</c> names section <c>in</c> + (k + 1)).
-    /// </summary>
-    const int FirstInput = 1;
-
-    /// <summary>
     /// Writes the town machines into their buildings' states and inventories, the ones whose building has no state into CAMERA keys (the old
     /// CAMERA keys removed first).
     /// </summary>
@@ -49,7 +43,7 @@ public static class TownMachineSave
             if (instances.TryGetValue(key, out var placed) && placed.State is { } state)
             {
                 MachineSave.WriteProduction(state, m, world.GameHours);
-                MachineSave.WriteInventory(placed.Zone.File, placed.Zone.Coordinate, placed.Instance, null, MachineSave.Items(m, FirstInput));
+                MachineSave.WriteInventory(placed.Zone.File, placed.Zone.Coordinate, placed.Instance, null, MachineSave.Items(m));
                 continue;
             }
 
@@ -82,7 +76,7 @@ public static class TownMachineSave
     {
         if (placed.State is { } state) MachineSave.ReadProduction(state, m);
         if (MachineSave.ListedInventory(placed.Zone.File, placed.Instance) is { } inventory)
-            MachineSave.PutItems(m, SaveInventory.Read(placed.Zone.File, inventory), factory, FirstInput);
+            MachineSave.PutItems(m, SaveInventory.Read(placed.Zone.File, inventory), factory);
     }
 
     /// <summary>
