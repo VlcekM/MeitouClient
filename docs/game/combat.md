@@ -338,7 +338,9 @@ path-facing branches set the heading at once (before, `Turn` at 4π rad/s, which
   chase does not pick, below). Meitou (`CombatSystem.ChooseTarget` over `CharacterFacts.Senses`, [perception](perception.md#senses)): the lists and the finder as above (the leave-alone and
   area tests left out), the aggro mode taken as 0; a pick after the timer runs out is made while the fighter runs on a path too (engine choice).
 - **Target score** (`AI::chooseBestAttackTarget` `FUN_14059e300`). Skips ragdolls (`Character::isRagdoll`), candidates the leave-alone test
-  `FUN_1408569a0` passes, allies by faction (`FUN_1406b2630`, unless the candidate is a slave) and impossible-path candidates. Leave alone: for
+  `FUN_1408569a0` passes, allies by faction (`FUN_1406b2630`, unless the candidate is a slave), impossible-path candidates and an obedient slave of the
+  chooser's faction (slave state 1, chained with that faction its owner, `FUN_14032e2a0`, and holding job 187; **Verified**, the test gates the
+  candidate's whole score; Meitou `TargetScore.SparesSlave` in the fight, look and assault choosers). Leave alone: for
   an NPC chooser, a candidate it does not remember as an attacker and whose faction is not an enemy, when the candidate has diplomatic status
   (`Character::isDiplomaticStatus`: NPC class Diplomat, [ui-screens](ui-screens.md#4-hud-mainbargui)) or is in a war campaign whose +0xc0 is 0; for a player chooser, a candidate not aware of it, conscious,
   of another faction, while the chooser mans no turret, whose intended target is nobody, or who has no aggression towards it, or whose target
@@ -477,8 +479,10 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   the subject's attackers and threats that are enemies or target it, never allies, within 150 of a subject other than the chooser; best by the
   target score) or 35 Running away (slot 55 `FUN_1405a34e0`, **Verified** by decompile: for a character whose faction object is set at `+0x250` (a player
   faction, `FUN_1407916d0`) 0 when it has an arm to fight with (either arm usable, medical `+0x165` / `+0x166`, `FUN_140644150`), when `FUN_1404366b0` holds
-  (the character's `+0x2f0` object, read as ranged mode, has its flag `+0x36` set and the hand it names resolves to something not down), or when any
-  item in a weapon slot is outside categories 3, 6, 8; then, for every character, 1.0 when Character vslot `0x360` (byte `+0x5b8`, `FUN_1405e1ef0`) is set; else
+  (the character's `+0x2f0` object, read as ranged mode, has its flag `+0x36` set and the hand it names resolves to something not down), or when an
+  item of its `hip` section (`FUN_140747ff0` with the section name "hip") is a weapon whose `skill category` (Weapon `+0x234`, which the weapon
+  constructor `FUN_140898830` reads from "skill category"; Weapon vfunc `0x2e8` returns the weapon itself) is not 3 Heavy, 6 crossbow or 8 polearm
+  (Meitou: `AiSystem.ObedientRunDesire`, the Obedient Slave job's goal 35, [ai-tasks](ai-tasks.md#slave-work-shout-and-capture)); then, for every character, 1.0 when Character vslot `0x360` (byte `+0x5b8`, `FUN_1405e1ef0`) is set; else
   0.001 when it can get out (`AI::isLocationAccessible` `FUN_1405a2710`: a null location hand, i.e. outdoors, or a building with no doors, a door open or
   one opening, `Building::hasAnOpenDoor` `FUN_1405499a0`) unless it stands inside town walls (its [gate code](pathfinding.md#gate-codes) above 0) whose gate state to code 0 (`FUN_1402eb070`; the states 1 a gate open or broken, 2 closed, 3 locked, a route as bad as its worst gate and the best route kept, **Observed**) is 3, i.e. every way out passes a locked gate; else 0).
   <a id="crippled-flag"></a>Byte `+0x5b8` is the **crippled flag** (**Verified**): `Character` embeds its `MedicalSystem` at `+0x458` (KenshiLib 1ce4a16 layout), so `+0x5b8` is medical `+0x160`, which the medical

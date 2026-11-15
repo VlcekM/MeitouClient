@@ -257,35 +257,43 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             return;
         }
 
+        var (centre, k) = EnemyCentre(world, table, s);
+        cold.FleesAlone = false;
+        Begin(world, table, s, centre, k);
+    }
+
+    /// <summary>
+    /// Where <c>Task_Runaway</c> sends a character from the enemies it senses (<see cref="Centre"/>, <see cref="FirstLeg"/>), for a run that is not
+    /// this system's: an obedient player slave's goal 35 (Kidnap/ObedientSlave.cs). Serial phases only.
+    /// </summary>
+    internal Vector2 EnemyRunPoint(World world, int s)
+    {
+        var table = world.Characters;
+        var (centre, k) = EnemyCentre(world, table, s);
+        var (away, from) = FirstLeg(world, table, s, centre, k);
+        return RunPoint(world, table, s, away, FirstRun, from);
+    }
+
+    /// <summary>
+    /// <see cref="Centre"/> with this tick's standing factions.
+    /// </summary>
+    (Vector3 Centre, int Count) EnemyCentre(World world, CharacterTable table, int s)
+    {
         if (_standingAt != world.Tick)
         {
             StandingFactions(table);
             _standingAt = world.Tick;
         }
 
-        var (centre, k) = Centre(world, table, s);
-        cold.FleesAlone = false;
-        Begin(world, table, s, centre, k);
+        return Centre(world, table, s);
     }
 
     /// <summary>
-    /// <c>Task_Runaway</c>'s start (<c>FUN_14034b440</c>): the character stops fighting and runs at full speed to a point <see cref="FirstRun"/> + up
-    /// to <see cref="RunSpread"/> from <paramref name="centre"/> (the mean of <paramref name="count"/> positions), on the far side of it from the
-    /// character; a random way when there is none.
+    /// <c>Task_Runaway</c>'s start (<c>FUN_14034b440</c>): the character stops fighting and runs at full speed along <see cref="FirstLeg"/>.
     /// </summary>
     void Begin(World world, CharacterTable table, int s, Vector3 centre, int count)
     {
-        var here = table.Next[s].Position;
-        Vector2 away;
-        if (count == 0) away = RandomDirection(world, s, 0);
-        else
-        {
-            if (count > 1) centre /= count;
-            away = new Vector2(here.X - centre.X, here.Z - centre.Z);
-            away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : RandomDirection(world, s, 0);
-        }
-
-        var from = count == 0 ? new Vector2(here.X, here.Z) : new Vector2(centre.X, centre.Z);
+        var (away, from) = FirstLeg(world, table, s, centre, count);
         ref var n = ref table.Next[s];
         table.Cold(s)!.Fleeing = true;
         if (n.Task == (byte)CharacterTask.Attack || table.Cold(s)!.InCombat)
@@ -293,6 +301,21 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
         Run(world, table, s, away, FirstRun, from);
         Fled++;
+    }
+
+    /// <summary>
+    /// <c>Task_Runaway</c>'s first leg (<c>FUN_14034b440</c>): from <paramref name="centre"/> (the mean of <paramref name="count"/> positions) on the
+    /// far side of it from the character; from where it stands a random way when there is none.
+    /// </summary>
+    (Vector2 Away, Vector2 From) FirstLeg(World world, CharacterTable table, int s, Vector3 centre, int count)
+    {
+        var here = table.Next[s].Position;
+        if (count == 0) return (RandomDirection(world, s, 0), new Vector2(here.X, here.Z));
+
+        if (count > 1) centre /= count;
+        var away = new Vector2(here.X - centre.X, here.Z - centre.Z);
+        away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : RandomDirection(world, s, 0);
+        return (away, new Vector2(centre.X, centre.Z));
     }
 
     /// <summary>
@@ -528,13 +551,21 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// Sends the character at <paramref name="s"/> running from <paramref name="from"/> (else where it stands) <paramref name="distance"/> plus up to
     /// <see cref="RunSpread"/> at random along <paramref name="direction"/>.
     /// </summary>
-    void Run(World world, CharacterTable table, int s, Vector2 direction, float distance, Vector2? from = null)
+    void Run(World world, CharacterTable table, int s, Vector2 direction, float distance, Vector2? from = null) =>
+        TaskStart.Walk(world, s, RunPoint(world, table, s, direction, distance, from), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway,
+            TaskSource.Npc);
+
+    /// <summary>
+    /// The end of a hop of <see cref="Run"/>: <paramref name="distance"/> plus up to <see cref="RunSpread"/> at random along
+    /// <paramref name="direction"/> from <paramref name="from"/> (else where the character stands).
+    /// </summary>
+    Vector2 RunPoint(World world, CharacterTable table, int s, Vector2 direction, float distance, Vector2? from = null)
     {
         ref var n = ref table.Next[s];
         var id = new CharacterId(s, n.Generation);
         float r = Rng.Float(Rng.Hash(world.Seed, Rng.Key(id), RngPurpose.Flee, ((ulong)world.Tick << 2) | 2));
         var start = from ?? new Vector2(n.Position.X, n.Position.Z);
-        TaskStart.Walk(world, s, start + direction * (distance + RunSpread * r), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, TaskSource.Npc);
+        return start + direction * (distance + RunSpread * r);
     }
 
     #endregion

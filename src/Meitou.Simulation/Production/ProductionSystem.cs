@@ -892,8 +892,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// The serial step: prospecting, the sync and the errands, the operator counts and the research bench, the town workers; then the farms, the
-    /// machines' own work and every operator's step, the power, and the touches.
+    /// The serial step: prospecting, the sync and the errands, the operator counts and the research bench, the town workers and obedient slaves; then
+    /// the farms, the machines' own work and every operator's step, the power, and the touches.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -905,6 +905,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         int bench = ResetOperators(world);
         TownMachines(world);
         TownWorkers(world, world.TickSeconds);
+        ObedientWorkers(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.
         if (bench > research.BenchLevel)

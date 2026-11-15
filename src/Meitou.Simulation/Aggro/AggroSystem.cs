@@ -1659,6 +1659,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (c.SlaveState == 1)
             enemy &= c.SlaveOwner != s.Faction && s.Relations.Contains(c.SlaveOwner) && s.Relations.IsHostile(s.Faction, c.SlaveOwner);
 
+        // A slave looker sides with its master: the squad memory below still makes an enemy.
+        if (enemy && MasterSpares(ref s, slot, c)) enemy = false;
+
         if (s.Memory is { } memory)
         {
             var target = new CharacterId(slot, gen);
@@ -1680,6 +1683,36 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         return enemy;
+    }
+
+    /// <summary>
+    /// A slave looker's side of slot 125 (docs/game/perception.md "Sense tags"): a looker in slave state 1 whose master squad resolves never regards
+    /// one of the master's faction as an enemy (<c>FUN_14079c950</c>), and an obedient player slave (holding job 187) none the master regards as
+    /// friendly (<c>FUN_1408569a0</c> asks slot 126 of the owner, <see cref="MasterRegardsFriendly"/>). Both come after the squad memory's tags.
+    /// </summary>
+    static bool MasterSpares(ref Scan s, int slot, CharacterCold c)
+    {
+        if (s.Cold is not { SlaveState: 1, SlaveMaster: >= 0 } me || s.World.Squads.Find(me.SlaveMaster) is not { } master) return false;
+        if (c.Faction == master.Faction) return true;
+
+        return s.Player && Kidnap.ObedientSlave.HasJob(me) && MasterRegardsFriendly(ref s, master, slot, c);
+    }
+
+    /// <summary>
+    /// Slot 126 of the master (<c>FUN_1407923d0</c>, the rule of <see cref="Dialogue.DialogueSystem"/>'s <c>RegardsFriendly</c> for an NPC owner):
+    /// never when the master squad holds TEMP_ENEMY on the character, always with TEMP_ALLY or a love tag, else the master's faction is allied to the
+    /// character's (the same faction is <see cref="MasterSpares"/>'s first test).
+    /// </summary>
+    static bool MasterRegardsFriendly(ref Scan s, Squad master, int slot, CharacterCold c)
+    {
+        if (s.Memory is { } memory)
+        {
+            var (tags, entry) = memory.Read(s.World, master.Id, new CharacterId(slot, s.Table.Previous[slot].Generation));
+            if ((tags >> Dialogue.MemoryTag.TempEnemy & 1) != 0) return false;
+            if ((tags >> Dialogue.MemoryTag.TempAlly & 1) != 0 || (entry?.Long & Dialogue.MemoryTag.LoveMask) is > 0) return true;
+        }
+
+        return s.Relations.Contains(master.Faction) && s.Relations.Contains(c.Faction) && s.Relations.IsAlly(master.Faction, c.Faction);
     }
 
     /// <summary>
@@ -2229,6 +2262,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         ref readonly var other = ref s.Table.Previous[slot];
         var fight = s.Combat?.StateOf(new CharacterId(slot, other.Generation)) ?? CombatSlot.Fresh(other.Generation);
+        if (s.Cold is { } chooser && TargetScore.SparesSlave(chooser, c)) return null;
 
         if (s.HoldPost && !Orders.HoldPost(s.Eye, s.HoldPoint, other.Position, other.Velocity, other.Yaw, c.Medical!.Crawling
             || fight.AttackTech >= 0, c.InCombat))

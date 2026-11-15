@@ -230,7 +230,7 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   (uniform faction at +0x108 while +0x100 > 0.6 and +0x110 <= 0) stands in for the target's faction. A slave target: not when its owner
   is the looker's, and only when the looker is hostile to the owner's faction; it then still takes the faction test below on its own faction,
   so hostility to the slavers alone does not make their slaves enemies (#694: a raid on Slave Traders turned the squad on their Outlaw slaves,
-  default relation 0, which the report's save then held at -100, **Observed**). A slave looker: never its owner's faction. A target of the
+  default relation 0, which the report's save then held at -100, **Observed**). A slave looker (state 1) whose owner hand resolves: never the owner's faction (**Verified**, the tags come first). A target of the
   faction the looker's platoon object +0x80 names is an enemy. Otherwise hostile(looker faction → target faction),
   relation <= -30, when `FUN_1408569a0` fails and the looker's +0xea flag is clear (and the target's is clear, or the looker's faction is
   not real or its default relation, relations `+0x60`, is strictly below -30; **Verified** `FUN_14079c950`). +0xea is "freed": set by a release
@@ -239,8 +239,12 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   reading, "while the 8 bytes at `+0x110` are zero", was wrong: that function never reads `+0x110`), and by a pending crime set through the wrapper `FUN_140852e10` when the setter
   succeeds (callers: police hit, caught stealing, fencing, kidnapping seen, uniform theft, body put-down; not through the direct setter `FUN_140852c80`, e.g. attack orders and
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
-  a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
-  `FUN_1408569a0` is left out here (for an NPC looker it never drops a target its faction is hostile to); the finders apply it ([ai-tasks](ai-tasks.md#combat-goals)).
+  a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`.
+- **`FUN_1408569a0`'s obedient-slave branch** (**Verified**, decompile): for a looker whose faction has +0x250, in slave state 1, holding job 187 (`FUN_140597380`), whose owner hand
+  resolves and whose owner calls the target friendly (slot 126 `FUN_1407923d0`, asked to read the target's disguise), it holds, so slot 125 says not an enemy: an obedient player slave takes
+  none of its master's friends for an enemy (the tags still make one). Meitou (`AggroSystem.MasterSpares`): both slave-looker rules, the owner being the slave's master squad
+  (`CharacterCold.SlaveMaster`; its faction, its squad memory for slot 126's tags); slot 126's disguise is left out. The rest of `FUN_1408569a0` (for an NPC looker it never drops a
+  target its faction is hostile to) is applied by the finders, not here ([ai-tasks](ai-tasks.md#combat-goals)).
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
