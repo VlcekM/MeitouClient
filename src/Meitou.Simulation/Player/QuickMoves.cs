@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Meitou.Data.Fcs;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Items;
@@ -28,11 +29,8 @@ sealed class QuickMoves(PopulationData? data)
         if (!table.TryResolveNext(quick.Character, out int s) || table.Cold(s) is not { IsPlayer: true, Inventory: { } root } cold)
             return;
         var item = root.All().ElementAtOrDefault(quick.Item.Index);
-        if (!HeldItems.Matches(item, quick.Item)
-                || !(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section))
-                || HeldItems.HolderOf(root, item) is not { } holder)
-            return;
-        if (item.LockedOn)
+        if (!Clickable(root, item, quick.Item, out var holder)) return;
+        if (item!.LockedOn)
         {
             world.Post(HeldItems.LockedText);
             return;
@@ -63,6 +61,21 @@ sealed class QuickMoves(PopulationData? data)
             return;
         }
         MoveUnits(quick, cold, root, bag, holder, item, from);
+    }
+
+    /// <summary>
+    /// Whether a right click may act on <paramref name="item"/> (a quick move, or a mod's item use, <see cref="ItemUses"/>): the item the token
+    /// names, in a movable or limb section, held by <paramref name="root"/> or its bag (<paramref name="holder"/>). The caller checks
+    /// <see cref="ItemInstance.LockedOn"/>.
+    /// </summary>
+    internal static bool Clickable(Inventory root, ItemInstance? item, InventoryItemToken token, [NotNullWhen(true)] out Inventory? holder)
+    {
+        holder = null;
+        if (!HeldItems.Matches(item, token)) return false;
+        if (!(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section))) return false;
+
+        holder = HeldItems.HolderOf(root, item);
+        return holder is not null;
     }
 
     /// <summary>

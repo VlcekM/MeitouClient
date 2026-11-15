@@ -316,8 +316,8 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, buy-back coins, a bag's contents) to the world
-    /// hash.
+    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, a mod tag, buy-back coins, a bag's contents) to
+    /// the world hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -334,6 +334,7 @@ public sealed class Inventory(int width, int height)
             h.Add(i.Charges);
             if (i.Unique) h.Add(Rng.StableHash("Unique"));
             if (i.Rotated) h.Add(Rng.StableHash("Rotated"));
+            if (i.ModTag.Length > 0) HashTag(ref h, i.ModTag);   // only when tagged, so untagged inventories hash as before
             if (i.Buyback is { } receipt)
             {
                 h.Add(Rng.StableHash("Buyback"));
@@ -343,6 +344,15 @@ public sealed class Inventory(int width, int height)
             }
             i.Contents?.Hash(ref h);
         }
+    }
+
+    /// <summary>
+    /// Adds a code mod's item tag (<see cref="ItemInstance.ModTag"/>) to the world hash after a field marker.
+    /// </summary>
+    internal static void HashTag(ref StateHasher h, string tag)
+    {
+        h.Add(Rng.StableHash("ModTag"));
+        h.Add(Rng.StableHash(tag));
     }
 }
 

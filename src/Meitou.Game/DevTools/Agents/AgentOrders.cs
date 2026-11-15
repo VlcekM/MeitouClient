@@ -1880,8 +1880,7 @@ sealed class AgentOrders(PlayerInterface player)
         }
 
         var item = hits[0];
-        player.Say(new QuickMoveItem(who[0], new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity,
-            item.Quality), false, false) { Tick = player.Session.World.Tick });
+        player.Say(new QuickMoveItem(who[0], InventoryItemToken.Of(item), false, false) { Tick = player.Session.World.Tick });
         message = $"equip (right click) {item.Name} [{item.Section}] "
             + $"of {CharacterKey(who[0])}{(hits.Count > 1 ? $"; {hits.Count - 1} more items match" : "")}";
         return true;
@@ -1917,8 +1916,7 @@ sealed class AgentOrders(PlayerInterface player)
             return false;
         }
 
-        player.Say(new QuickMoveItem(who[0], new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity,
-            item.Quality), false, false) { Tick = player.Session.World.Tick });
+        player.Say(new QuickMoveItem(who[0], InventoryItemToken.Of(item), false, false) { Tick = player.Session.World.Tick });
         message = $"unequip (right click) {item.Name} [{item.Section}] of {CharacterKey(who[0])}";
         return true;
     }
