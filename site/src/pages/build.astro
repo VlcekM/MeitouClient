@@ -1,14 +1,20 @@
 ---
 import Base from '../layouts/Base.astro';
 
+const title = 'Build MeitouClient from source';
+
 const commands = `dotnet build -c Release
 dotnet test -c Release --filter "Category!=Slow&Category!=Bench"
 dotnet run -c Release --project src/Meitou.Game -- --new-game
 dotnet run -c Release --project tools/Meitou.ModelViewer -- --world --town "The Hub"`;
 const config = `{ "kenshiPath": "<your Kenshi install directory>" }`;
 ---
-<Base title="Build - Meitou">
+<Base
+  title={title}
+  description="Compile MeitouClient with the .NET 11 SDK, point it to your Kenshi installation, and run the game and its tests."
+>
   <section class="page">
+    <h1>{title}</h1>
     <article class="mt-plate">
       <h2>Build and Run</h2>
       <p>Building needs the .NET 11 SDK. Release builds are what you want for playing.</p>
@@ -37,4 +43,5 @@ const config = `{ "kenshiPath": "<your Kenshi install directory>" }`;
 <style>
   /* minmax(0, 1fr): the track must not grow to the longest code line, so the code blocks scroll instead. */
   .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-7); max-width: 820px; padding-top: var(--space-7); }
+  .page h1 { margin: 0; font: 600 2rem/1.15 var(--font-exo); }
 </style>
