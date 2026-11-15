@@ -1167,7 +1167,7 @@ static class SaveProbe
               nests                    the wild layout's nests whose first candidate spot the original would refuse
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
-              watch <name> [rounds]    a character's task, AI and fight target every 40 ticks (default 10 rounds)
+              watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
@@ -1185,7 +1185,7 @@ static class SaveProbe
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
-              sites <radius>           the player's buildings near the leader with floor and parent
+              sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones

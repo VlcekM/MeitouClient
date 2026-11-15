@@ -670,7 +670,8 @@ public sealed partial class ProductionSystem
         foreach (var s in world.Machines.All)
         {
             bool holds = s.Output is { Count: > 0 } || s.Craft is { Done.Count: > 0 };
-            if (s.Data.IsStorage || !holds || Site(world, s.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
+            if (s.Data.IsStorage || !holds || Site(world, s.Site) is not { Complete: true } site || site.Owner != world.Player.Faction)
+                continue;
 
             float gap = Gap(site.Position, storage.Position);
             if (gap > Settings.HaulRange || gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
@@ -777,7 +778,8 @@ public sealed partial class ProductionSystem
                 world.Machines.Touch();
             }
 
-            if (there.Craft is { } craft && TakeDone(craft, inv, i => store.Data.Accepts(i.Record, i.Type))) world.Machines.Touch();
+            if (there.Craft is { } craft && TakeDone(craft, inv, i => store.Data.Accepts(i.Record, i.Type)))
+                world.Machines.Touch();
 
             if (Delivered(world, inv, store, Ditching(cold)).Any()) cold.HaulSite = storeId;
             else End(world, slot);

@@ -51,22 +51,28 @@ public sealed partial class ProductionSystem
 
         // A full output is taken only when some storage takes it; without one the machine stays full.
         bool took = false;
-        if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made && StorageFor(world, site, made) is not null)
+        if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made
+            && StorageFor(world, site, made) is not null)
         {
             int moved = Placed(inv, made);
             if (moved > 0) { output.Count -= moved; changed = took = true; }
         }
 
         // A bench full on its first craft: its finished items a storage takes (#762).
-        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i) is not null)) changed = took = true;
+        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i) is not null))
+            changed = took = true;
 
         if (changed) world.Machines.Touch();
 
         // The carried output goes to the storage once a full output was taken, or while the output stays full (no room to take it): not for a
         // stray unit, which sent a miner on a trip for every piece of ore it carried (#388).
         bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
-        if ((took || full) && CarriedMade(inv, m).Select(i => StorageFor(world, site, i)).FirstOrDefault(s => s is not null) is { } into)
-            return Go(cold, into, null);
+        string? into = took || full
+            ? CarriedMade(inv, m)
+                .Select(i => StorageFor(world, site, i))
+                .FirstOrDefault(s => s is not null)
+            : null;
+        if (into is not null) return Go(cold, into, null);
 
         if (m.Craft is { Queue.Count: 0 }) return false;
         foreach (var input in m.Inputs)
