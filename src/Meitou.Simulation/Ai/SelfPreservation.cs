@@ -67,13 +67,15 @@ public static class SelfPreservation
     /// The planner's choice under goal 32 at threat level <paramref name="level"/> (docs/game/ai-tasks.md "Planner": best first by g + h, g the least
     /// desire on the way down from the goal's own, h the node's): true when 35 runs, false when the chain through 13 fights. A character that cannot
     /// fight (no arm, or crippled with nothing close) runs; a crippled one runs even when it can fight, for 35 is worth 1 against 4's 0.1; any other
-    /// fights, 35 being worth 0.001.
+    /// fights, 35 being worth 0.001. One in deep water runs too: the chain through 13 is a dead end there, its providers of state 7 (4 and 262)
+    /// needing <c>!me swim</c>, which no row provides (<see cref="Combat.CombatSystem.SwimBarred"/>); an animal's 227 has no such test.
     /// </summary>
     public static bool Runs(CharacterCold cold, float level, bool walled = false)
     {
         float run = RunDesire(cold, walled);
         if (run <= 0 || !CanRun(cold)) return false;
-        float fight = AttackDesire(cold, level >= 1);
+        bool swimming = cold is { WaterState: 3, InSomething: Locks.HeldState.None } && cold.Fighter?.IsAnimal != true;
+        float fight = swimming ? 0 : AttackDesire(cold, level >= 1);
         return fight <= 0 || Value(level, run) > Value(level, fight);
     }
 
