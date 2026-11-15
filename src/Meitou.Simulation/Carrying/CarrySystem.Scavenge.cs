@@ -253,8 +253,8 @@ public sealed partial class CarrySystem
     /// <summary>
     /// A law-enforcement looter's take (<c>Task_Loot_AI</c> update with the confiscate flag, <c>Inventory::getAllStolenItems(inventory, false)</c>;
     /// <b>Observed</b>): one unit of each item of the victim's own inventory (worn gear included, not what is inside its backpack) that is stolen for
-    /// it, in list order, into the looter's inventory, with <paramref name="carriedBags"/> then those inside bags carried in its grid (Meitou fix,
-    /// <see cref="World.BagSearchFix"/>); the first that does not fit stays and ends the take. Returns the items moved.
+    /// it, in list order, into the looter's inventory, with <paramref name="carriedBags"/> then those inside its worn backpack and the bags carried in
+    /// its grid (Meitou fix, <see cref="World.BagSearchFix"/>); the first that does not fit stays and ends the take. Returns the items moved.
     /// </summary>
     public int Confiscate(CharacterCold looter, CharacterCold victim, bool carriedBags)
     {
@@ -278,12 +278,13 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// The items stolen for <paramref name="victim"/> that a confiscation takes, each with the inventory holding it: its own inventory's, then with
-    /// <paramref name="carriedBags"/> those of bags carried in its grid.
+    /// <paramref name="carriedBags"/> those of its worn backpack and of the bags carried in its grid.
     /// </summary>
     List<(Inventory Owner, ItemInstance Item)> StolenOn(CharacterCold victim, bool carriedBags)
     {
         var from = victim.Inventory!;
-        var bags = carriedBags ? from.CarriedBags() : [];
+        var worn = from.Backpack?.Contents is { } bag ? [bag] : Array.Empty<Inventory>();
+        var bags = carriedBags ? worn.Concat(from.CarriedBags()) : [];
         return [.. new[] { from }.Concat(bags).SelectMany(b => b.Items.Where(x => x.IsStolenFor(victim.Faction, Data)).Select(x => (b, x)))];
     }
 

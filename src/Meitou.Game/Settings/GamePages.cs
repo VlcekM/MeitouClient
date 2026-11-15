@@ -546,8 +546,8 @@ sealed class GamePages(SettingsMenu menu)
             Toggle: new("Walls inside buildings", () => menu.Config.FixPartsInBuildings, v => menu.Config.FixPartsInBuildings = v,
                 Remaster: true, OnOff: true)));
         result.Add(new("Bags in the inventory",
-            "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory. "
-            + "The game searches only the inventory and the worn backpack, so contraband in a bag put in the inventory is never found.",
+            "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards "
+            + "confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found.",
             Toggle: new("Bags in the inventory", () => menu.Config.FixBagSearch,
                 v => { menu.Config.FixBagSearch = v; menu.BagSearchChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
