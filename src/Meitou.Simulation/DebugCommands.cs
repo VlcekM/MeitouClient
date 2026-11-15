@@ -89,9 +89,10 @@ public sealed record DebugOnePunch(bool On) : DebugCommand;
 public sealed record DebugNoStumble(bool On) : DebugCommand;
 
 /// <summary>
-/// The console's god mode: "Set stats to 1000" and "Auto heal" together (<see cref="PlayerState.StatsTo1000"/>, <see cref="PlayerState.AutoHeal"/>).
+/// The console's gigachad mode: "Set stats to 1000" and "Auto heal" together (<see cref="PlayerState.StatsTo1000"/>,
+/// <see cref="PlayerState.AutoHeal"/>).
 /// </summary>
-public sealed record DebugGodmode(bool On) : DebugCommand;
+public sealed record DebugGigachadmode(bool On) : DebugCommand;
 
 /// <summary>
 /// Turns the debug guard on or off (<see cref="PlayerState.Guard"/>): while on, four times a second the hostile characters within
@@ -756,7 +757,7 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// Applies the debug menu's player-wide switches (stats 1000, auto heal, instant move, one punch, no stumbling, godmode, guard); other
+    /// Applies the debug menu's player-wide switches (stats 1000, auto heal, instant move, one punch, no stumbling, gigachadmode, guard); other
     /// commands are left alone.
     /// </summary>
     private static void ApplyPlayerSwitch(World world, PopulationData? data, CharacterAssembly? assembly, DebugCommand command)
@@ -780,8 +781,8 @@ static class DebugCheats
             case DebugNoStumble noStumble:
                 world.Player.NoStumble = noStumble.On;
                 break;
-            case DebugGodmode god:
-                (world.Player.StatsTo1000, world.Player.AutoHeal) = (god.On, god.On);
+            case DebugGigachadmode chad:
+                (world.Player.StatsTo1000, world.Player.AutoHeal) = (chad.On, chad.On);
                 StatsTick(world, force: true);   // on: boosted and healed at once; off: every raised character gets its stats back
                 HealTick(world, data, assembly, force: true);
                 break;

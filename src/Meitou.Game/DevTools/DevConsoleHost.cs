@@ -279,7 +279,7 @@ sealed class DevConsoleHost(GameHost host)
         c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(host.Player.AgentOrders.ControlCarriedItemNames(), typed) : []);
         c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(host.Player.AgentOrders.ControlGroundItemKeys(), typed) : []);
         c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
-        foreach (var name in new[] { "godmode", "guard", "tpmap" })
+        foreach (var name in new[] { "gigachadmode", "guard", "tpmap" })
             c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
         IEnumerable<string> Levels(string typed) => Starting(["1", "2", "3", "4", "5", "underkill", "light", "normal",
             "overkill", "ridiculous"], typed);
@@ -356,7 +356,7 @@ sealed class DevConsoleHost(GameHost host)
     }
 
     /// <summary>
-    /// The cheat and debug commands (money, heal, godmode, tp, kill, research, ...).
+    /// The cheat and debug commands (money, heal, gigachadmode, tp, kill, research, ...).
     /// </summary>
     void RegisterConsoleDebugCommands()
     {
@@ -366,9 +366,9 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("heal", "heal", "heal the selected characters fully (else the inspected one)", ConsoleHeal);
 
-        Add("godmode", "godmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, for every player character (also later recruits): "
-            + "all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
-            + "character's own stats; no argument toggles; reports the state", ConsoleGodmode);
+        Add("gigachadmode", "gigachadmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, "
+            + "for every player character (also later recruits): all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
+            + "character's own stats; no argument toggles; reports the state", ConsoleGigachadmode);
 
         Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected "
             + "characters (else the lead) there and puts the camera on the spot; no argument toggles; reports the state", ConsoleTpmap);
@@ -565,12 +565,12 @@ sealed class DevConsoleHost(GameHost host)
     }
 
     /// <summary>
-    /// The <c>godmode</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
+    /// The <c>gigachadmode</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>).
     /// </summary>
-    void ConsoleGodmode(IReadOnlyList<string> args, DevConsole con)
+    void ConsoleGigachadmode(IReadOnlyList<string> args, DevConsole con)
     {
-        if (!Need(args, 0, 1, Self("godmode"))) return;
-        Report(con, host.DebugMenu.DebugGodmodeApply(args.Count > 0 ? args[0] : ""));
+        if (!Need(args, 0, 1, Self("gigachadmode"))) return;
+        Report(con, host.DebugMenu.DebugGigachadmodeApply(args.Count > 0 ? args[0] : ""));
     }
 
     /// <summary>

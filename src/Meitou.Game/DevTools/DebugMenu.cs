@@ -1316,18 +1316,18 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// The console's god mode, the menu's "Set stats to 1000" and "Auto heal" together: <paramref name="field"/> is on / off, or empty to toggle
+    /// The console's gigachad mode, the menu's "Set stats to 1000" and "Auto heal" together: <paramref name="field"/> is on / off, or empty to toggle
     /// (on unless both are already on).
     /// </summary>
-    internal string DebugGodmodeApply(string field)
+    internal string DebugGigachadmodeApply(string field)
     {
         DebugFailed = false;
         var world = host.Session.World;
         bool on = Toggled(field, world.Player.StatsTo1000 && world.Player.AutoHeal);
-        world.Commands.Enqueue(new DebugGodmode(on) { Tick = world.Tick });
+        world.Commands.Enqueue(new DebugGigachadmode(on) { Tick = world.Tick });
         return on
-            ? "godmode on: every player character has all stats 1000 and is healed 5 times a second"
-            : "godmode off: each character has its own stats back";
+            ? "gigachadmode on: every player character has all stats 1000 and is healed 5 times a second"
+            : "gigachadmode off: each character has its own stats back";
     }
 
     /// <summary>
