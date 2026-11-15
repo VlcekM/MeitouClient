@@ -282,6 +282,11 @@ sealed class UserConfig
     /// </summary>
     public bool MainMenuTransitions { get; set; } = true;
     /// <summary>
+    /// The game's camera leash (Advanced settings, in neither side of the gameplay switch), on by default: the strategy and free cameras stay
+    /// within <see cref="Data.World.KenshiCamera.LeashRadius"/> of the nearest of the player's characters.
+    /// </summary>
+    public bool CameraLeash { get; set; } = true;
+    /// <summary>
     /// The title screen (Interface settings), independent of <see cref="UiMode"/>: on, Meitou's menu over the staged world scene; off, the original's picture.
     /// </summary>
     public bool MeitouMainMenu { get; set; } = true;

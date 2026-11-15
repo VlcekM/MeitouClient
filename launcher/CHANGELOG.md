@@ -2,6 +2,12 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.12.0
+
+- Mods page: Ctrl+click and Shift+click select several mods; dragging them or Alt+arrows moves them together.
+- A mod that empties the file paths of mods above it (usually a stub patch in the wrong place) now says so on its row. The note
+  suggests the mod probably belongs higher in the load order.
+
 ## v1.11.1
 
 - A workshop mod's row on the Mods page has a link icon that opens its Steam workshop page with one click, in place of the double click.

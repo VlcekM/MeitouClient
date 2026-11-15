@@ -188,9 +188,9 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only, as is Lamp warmth.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
-  Traced), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid). The switches they stand for
-  (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at start, so the launcher's choice wins
-  and an older file of switches alone keeps its look.
+  Traced / Traced near, cascades far), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid).
+  The switches they stand for (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at
+  start, so the launcher's choice wins and an older file of switches alone keeps its look.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game. The Display section has two: the upscaler (render scale and its custom value, sharpness, DLSS preset) and HDR output (white and peak brightness).
@@ -280,6 +280,14 @@ interpolated string, which no translation could match.
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
+- An enabled mod that blanks mods above it reads "Empties file paths in N records of A, B, C and K more: it likely belongs above them"
+  (`ModBlanking`, `ModRecordScan`, Meitou.Core; [why](animation.md#animation-files)). It counts a record when it is stated whole (flag
+  bit 0 clear), empties more of the filename values set so far than it gives itself, and the mod its string id names is enabled above it;
+  REMOVED resets the record. Not counted: changes (bit 0 set), the base game's records, stubs for mods that are not enabled, records of a
+  renamed mod (the id keeps the old name), and patches that overwrite with full copies instead of blanks. It also names a mod that
+  restates another's record with most of its paths cleared, which may be meant (**Observed**: two armour records of one overhaul among
+  363 workshop files). The data files are scanned once per list load, off the UI thread (363 files, 131 MB: 0.14 s from a warm file
+  cache; a cold start with a long list is not measured), and the list is walked again on every change.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question

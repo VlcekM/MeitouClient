@@ -51,16 +51,11 @@ sealed class LookBar(SettingsMenu menu)
     void DrawFaithfulState()
     {
         int changes = menu.LookPresets.LookChanges().Count;
-        if (changes > 0)
-        {
-            string count = changes == 1 ? "1 change from the game" : $"{changes} changes from the game";
-            menu.Canvas.Text(count, menu.Canvas.R(474, 98, 150, 30), 12, SettingsCanvas.Brass);
-            menu.Canvas.Button("Revert", menu.Canvas.R(628, 100, 66, 26), () => menu.LookPresets.SetFaithful(true));
-        }
-        else
-        {
-            menu.Canvas.Text("As the game ships", menu.Canvas.R(474, 98, 200, 30), 12, SettingsCanvas.MutedInk);
-        }
+        if (changes == 0) return;
+
+        string count = changes == 1 ? "1 change from the game" : $"{changes} changes from the game";
+        menu.Canvas.Text(count, menu.Canvas.R(474, 98, 150, 30), 12, SettingsCanvas.Brass);
+        menu.Canvas.Button("Revert", menu.Canvas.R(628, 100, 66, 26), () => menu.LookPresets.SetFaithful(true));
     }
 
     /// <summary>

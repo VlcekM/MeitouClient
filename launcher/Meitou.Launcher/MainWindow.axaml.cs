@@ -852,6 +852,16 @@ public sealed partial class MainWindow : Window
     bool _checksSuspended;
 
     /// <summary>
+    /// The check for mods that blank earlier ones, with the scans of the data files it has read.
+    /// </summary>
+    readonly ModBlankingCheck _blanking = new();
+
+    /// <summary>
+    /// A blanking check is posted and has not started: the changes until then share it (Select all ticks every row).
+    /// </summary>
+    bool _blankingQueued;
+
+    /// <summary>
     /// The Steam Workshop sync of the mods page (macOS): at most one at a time.
     /// </summary>
     readonly WorkshopSyncRunner _workshopSync = new();
@@ -865,6 +875,7 @@ public sealed partial class MainWindow : Window
     {
         int load = ++_modsLoad;
         _modsReady = false;
+        _blanking.Reset();
         _mods.Clear();
         ModsEmpty.IsVisible = false;
         SyncWorkshopButton.IsVisible = MacSteam.CanSync;
@@ -900,6 +911,7 @@ public sealed partial class MainWindow : Window
             row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
         _modsReady = true;
         ShowDependencyProblems();
+        QueueBlankingCheck();
         ModsEmpty.IsVisible = _mods.Count == 0;
         ModsEmpty.Text = Tr(gameInstall is null ? "Set the Kenshi folder in Settings to list its mods."
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
@@ -914,6 +926,36 @@ public sealed partial class MainWindow : Window
         if (_checksSuspended) return;
         var problems = CodeModChecks.Check(DependencyEntries());
         foreach (var row in _mods) row.DependencyProblems = problems.TryGetValue(row.Name, out var lines) ? lines : [];
+    }
+
+    /// <summary>
+    /// Posts one check for mods that blank earlier ones (<see cref="ShowBlanking"/>) for the changes of this turn of the UI thread.
+    /// </summary>
+    void QueueBlankingCheck()
+    {
+        if (_blankingQueued || !_modsReady) return;
+
+        _blankingQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _blankingQueued = false;
+            ShowBlanking();
+        });
+    }
+
+    /// <summary>
+    /// Marks the enabled mods that empty the file paths of mods above them (docs/launcher.md "Mod list"): a stub patch that belongs above the
+    /// mods it names. The data files are scanned off the UI thread, each once; a list that changed meanwhile drops the result for its own.
+    /// </summary>
+    async void ShowBlanking()
+    {
+        if (!_modsReady || _install is not { } install) return;
+
+        var enabled = _mods.Where(m => m.Enabled).Select(m => (m.Name, m.Mod.Path)).ToList();
+        var blanked = await _blanking.RunAsync(install, enabled);
+        if (blanked is null) return;
+
+        foreach (var row in _mods) row.Blanks = row.Enabled && blanked.TryGetValue(row.Name, out var mods) ? mods : [];
     }
 
     /// <summary>
@@ -1014,6 +1056,7 @@ public sealed partial class MainWindow : Window
     void ModListChanged()
     {
         ShowDependencyProblems();
+        QueueBlankingCheck();
         if (_checksSuspended || !_modsReady || _toggleSavePending) return;
 
         _toggleSavePending = true;

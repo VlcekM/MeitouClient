@@ -538,6 +538,16 @@ public static class TownBuildings
     }
 
     /// <summary>
+    /// A building standing on its own (a nest's <c>debris building</c> round a home) as a piece of that home's furniture, as an interior layout's
+    /// piece would be: a chair or throne sat on, a dummy or a MINE, RESEARCH, REFINERY or CRAFTING piece stood at; null for anything else.
+    /// </summary>
+    public static HomeSpot? FurnitureSpot(GameDatabase db, GameRecord building, Vector3 at, float yaw)
+    {
+        if (FunctionOf(db, building, []) is not { } function) return null;
+        return TownBuildingContents.FurnitureOf(db, building, function, at, yaw, inside: true);
+    }
+
+    /// <summary>
     /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1
     /// towards the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in
     /// front, else the opposite one. <paramref name="faithful"/>: behind it, as the game does, the absolute look point negated (generally towards the

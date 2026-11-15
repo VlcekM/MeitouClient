@@ -46,7 +46,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// The colour program, the colour program without a discard (<see cref="EarlyDepth"/>: fully visible batches) and the depth (shadow caster)
     /// program, all native.
     /// </summary>
-    readonly ObjProg _colourProg, _solidProg, _depthProg;
+    readonly ObjProg _colourProg, _solidProg, _depthProg, _blendedProg;
 
     /// <summary>
     /// The objects' texture cache (decoded on workers, mip-streamed; <see cref="Textures"/>).
@@ -116,6 +116,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _solidProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(),
             BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         _depthProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
+        _blendedProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.BlendedNative(), "objects see-through");
+        _glassScene = new GlassScene(gpu);
         _textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
         var library = assets.Materials;
         _resolver = new MaterialResolver(objects.Database, library, assets);
@@ -194,6 +196,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _colourProg.Dispose();
         _solidProg.Dispose();
         _depthProg.Dispose();
+        _blendedProg.Dispose();
+        _glassScene.Dispose();
         _nativeFrame.Dispose();
         _streamer.Dispose();
         _meshes.Dispose();
@@ -1220,6 +1224,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 .OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source,
                         StringComparison.Ordinal) ? 1 : 0))
                 .FirstOrDefault();
+            m = GlassBottles.Apply(m, placed.MeshPath, [placed.Source.StringId, placed.Owner.StringId], _assets);
             bool border = m?.BorderAddressing ?? false;
 
             // A map nothing can read is not loaded (<see cref="Material"/> never reads it): the normal map only with tangents, for an ALPHA
@@ -1227,6 +1232,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             var part = gpu.Parts[i];
             bool wantNormal = part.HasTangents || m?.Alpha == AlphaSource.NormalAlpha || (m?.Emissive ?? false);
             bool wantSecond = part.HasColours;
+
+            // A see-through item's opacity map rides in the second set's diffuse slot: an item's material is never dual.
+            var second = m?.Alpha == AlphaSource.Opacity
+                ? m.Opacity
+                : wantSecond
+                    ? m?.Diffuse2
+                    : null;
 
             // The textures are made without loading (<c>deferred</c>): <see cref="Resolve"/> tells them how near they are used, then reads their
             // keys.
@@ -1237,7 +1249,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;
             result[i] = new ObjectPartMaterial(m, _textureCache.Get(m?.Diffuse, border, deferred: true),
                 wantNormal ? _textureCache.Get(m?.Normal, border, deferred: true) : null,
-                wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null,
+                second is null ? null : _textureCache.Get(second, border, deferred: true),
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
             {
@@ -1375,6 +1387,30 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     best = (hit.Position, room);
                 }
         return best;
+    }
+
+    /// <summary>
+    /// How far outside a room's hull a terrain hit is still tested against its drawn mask (engine choice): the cheap test before the mask's.
+    /// </summary>
+    const float CutMargin = 10;
+
+    /// <summary>
+    /// How far along the ray a floor pick looks when the terrain it meets at <paramref name="ground"/> is cut by a loaded building's interior mask
+    /// (<see cref="InteriorVolume.CutsGround"/>): the pick goes on to where the ray leaves that room's box (a tower's ground floor below a hillside,
+    /// feedback #712). Null when no mask cuts the terrain there.
+    /// </summary>
+    public float? CutGroundReach(Vector3 origin, Vector3 direction, Vector3 ground)
+    {
+        float distance = Vector3.Distance(origin, ground);
+        float? reach = null;
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+            {
+                if (room.Contains(ground, CutMargin) && room.CutsGround(origin, direction, distance)
+                    && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0))
+                    reach = exit;
+            }
+        return reach;
     }
 
     /// <summary>
@@ -1863,6 +1899,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             if (wireMode != 2)
             {
                 PrepareDraws(options, wire: false);
+                if (BlendSeeThrough && !_depthPass) HoldSeeThrough(in view, fadeRange);
                 RecordDraws(prog, wire: false, in view, fadeRange);
             }
             if (wireMode != 0)
@@ -2409,14 +2446,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
 
     /// <summary>
-    /// The last state per segment kind (0 colour, 1 depth, 2 colour wireframe, 3 depth wireframe, 4 solid colour), for the quick compare.
+    /// The last state per segment kind (0 colour, 1 depth, 2 colour wireframe, 3 depth wireframe, 4 solid colour, 5 see-through), for the quick
+    /// compare.
     /// </summary>
-    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[5];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[6];
 
     /// <summary>
     /// The id of <see cref="_lastSegment"/> per kind (0: none yet).
     /// </summary>
-    readonly int[] _segmentIds = new int[5];
+    readonly int[] _segmentIds = new int[6];
 
     /// <summary>
     /// The segment ids handed out so far.
@@ -2487,7 +2525,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
                     if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
-                    d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
+                    bool dithered = d.Push.AlphaSource == (int)AlphaSource.Opacity;
+                    d.TwoSided = pm.Material is { DoubleSided: true };
+                    d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f && !dithered;
                     d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true } && !(_depthPass && CastersBothSides);
                 }
                 DrawCalls++;
@@ -2523,14 +2563,19 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         uint normalId = textured ? pm.Normal : 0;
         bool normal = options.NormalMaps && textured && normalId != 0 && gp.HasTangents;
         uint diffuse2 = textured ? pm.Diffuse2 : 0;
-        bool dual = textured && diffuse2 != 0 && gp.HasColours;
+        var alpha = m?.Alpha ?? AlphaSource.None;
+
+        // A see-through item: its opacity map is in the second diffuse slot (MakeMaterials); drawn solid until that map is resident, and a glass
+        // bottle's own (GlassBottles) with the glass switch off.
+        bool seeThrough = alpha == AlphaSource.Opacity && textured && diffuse2 != 0 && (GlassBottles.Enabled || m?.BuiltInGlass != true);
+        bool dual = textured && diffuse2 != 0 && gp.HasColours && alpha != AlphaSource.Opacity;
         d.Diffuse = textured ? diffuse : 0;
         d.Normal = normalId;
-        d.Diffuse2 = dual ? diffuse2 : 0;
+        d.Diffuse2 = dual || seeThrough ? diffuse2 : 0;
         d.Normal2 = dual ? pm.Normal2 : 0;
         d.Metal = textured ? pm.Metal : 0;
-        var alpha = m?.Alpha ?? AlphaSource.None;
-        if (!textured || alpha == AlphaSource.NormalAlpha && normalId == 0) alpha = AlphaSource.None;
+        bool noCutMap = alpha == AlphaSource.NormalAlpha && normalId == 0 || alpha == AlphaSource.Opacity && !seeThrough;
+        if (!textured || noCutMap) alpha = AlphaSource.None;
 
         // The cut-out mask is the normal map's alpha: sampled whenever the map exists (the lighting checks for tangents itself).
         bool cut = alpha == AlphaSource.NormalAlpha;
@@ -2546,13 +2591,14 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         pc.AlphaChannel = Math.Clamp(m?.AlphaChannel ?? 3, 0, 3);
         pc.GreyChannel = textured ? m?.GreyChannel ?? -1 : -1;
         pc.Tint = m?.Tint ?? Vector3.One;
-        pc.AlphaThreshold = alpha == AlphaSource.None ? 0f : m!.AlphaThreshold;
+        pc.AlphaThreshold = alpha is AlphaSource.None or AlphaSource.Opacity ? 0f : m!.AlphaThreshold;
         pc.Emissive = textured && normalId != 0 && (m?.Emissive ?? false) ? 1u : 0u;
         pc.UseVertexColour = gp.HasColours && (m?.VertexColours ?? false) ? 1u : 0u;
         pc.Specular = textured ? m?.SpecularMult ?? 1 : 0.3f;
         pc.Spare = (pm.Dust ? MeshSurface.Dust : 0u) | (m?.Foliage ?? false ? MeshSurface.Foliage : 0u)
             | (m?.Dust ?? false ? MeshSurface.TriplanarDust : 0u)
-            | (textured && MetalTextures.Enabled && MetalTextures.Holds(m?.Diffuse) ? MeshSurface.MetalByTexture : 0u);
+            | (textured && MetalTextures.Enabled && MetalTextures.Holds(m?.Diffuse) ? MeshSurface.MetalByTexture : 0u)
+            | (seeThrough && m!.BuiltInGlass ? MeshSurface.Glass : 0u);
     }
 
     /// <summary>
@@ -2724,6 +2770,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         /// Drawn with the program without a discard (<see cref="EarlyDepth"/>): a batch of fully visible instances, a material without a cut-out.
         /// </summary>
         public bool Solid;
+
+        /// <summary>
+        /// The material is double-sided (the blended pass draws a see-through item's back faces only then).
+        /// </summary>
+        public bool TwoSided;
 
         /// <summary>
         /// Back faces culled (<see cref="Batch.BackCull"/>, not for a double-sided material).
@@ -2952,6 +3003,191 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             Count = 0;
             Owner._drawJobs.Return(this);
         }
+    }
+
+    #endregion
+
+    #region See-through items (the blended pass)
+
+    /// <summary>
+    /// The see-through draws the last main colour pass held back (<see cref="BlendSeeThrough"/>), nearest first.
+    /// </summary>
+    readonly List<ObjDraw> _blended = [];
+
+    /// <summary>
+    /// The held draws' view, fade range and instance rows: those of the pass that held them.
+    /// </summary>
+    ViewConstants _blendedView;
+
+    /// <summary>
+    /// The dither fades' distances of the pass that held the draws.
+    /// </summary>
+    Vector4 _blendedFade;
+
+    /// <summary>
+    /// The instance constants of the pass that held the draws (the frame's own allocation, alive until the frame's jobs have run).
+    /// </summary>
+    GpuBufferBinding _blendedRows;
+
+    /// <summary>
+    /// The blended pass's blend: the fragment's colour added to the scene's times the fragment's alpha (an item writes its colour times its opacity
+    /// and one less the opacity, a glass bottle the glass over the scene's copy and 0); the scene's alpha (the character mask) kept.
+    /// </summary>
+    static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.SrcAlpha, AlphaSrc: BlendingFactor.Zero,
+        AlphaDst: BlendingFactor.One);
+
+    /// <summary>
+    /// The scene's copy the glass bottles refract.
+    /// </summary>
+    readonly GlassScene _glassScene;
+
+    /// <summary>
+    /// The copy's bindless index this frame (null: none, the bottles drawn as ordinary see-through items).
+    /// </summary>
+    uint? _glassSceneIndex;
+
+    /// <summary>
+    /// Set by the world frame around the main view's <see cref="Draw"/>: the see-through items' draws (<see cref="AlphaSource.Opacity"/>) are held
+    /// back for <see cref="DrawSeeThrough"/> instead of being dithered into the opaque scene (docs/render-objects.md "See-through items").
+    /// </summary>
+    public bool BlendSeeThrough { get; set; }
+
+    /// <summary>
+    /// Whether the main view held see-through draws back this frame.
+    /// </summary>
+    public bool HasSeeThrough => _blended.Count > 0;
+
+    /// <summary>
+    /// Takes the see-through draws out of the prepared list into <see cref="_blended"/>, the others keeping their order.
+    /// </summary>
+    void HoldSeeThrough(in ViewConstants view, Vector4 fadeRange)
+    {
+        _blended.Clear();
+        int kept = 0;
+        for (int i = 0; i < _drawCount; i++)
+        {
+            if (_draws[i].Push.AlphaSource == (int)AlphaSource.Opacity) _blended.Add(_draws[i]);
+            else _draws[kept++] = _draws[i];
+        }
+        _drawCount = kept;
+        if (_blended.Count == 0) return;
+
+        (_blendedView, _blendedFade) = (view, fadeRange);
+        _blendedRows = new GpuBufferBinding(_instances.Handle, _instances.Offset);
+    }
+
+    /// <summary>
+    /// Copies the scene for the glass bottles among the held draws (none: no copy); with no pass open, before <see cref="DrawSeeThrough"/>.
+    /// </summary>
+    public void PrepareSeeThrough(GpuTexture sceneColour)
+    {
+        _glassSceneIndex = HoldsGlass() ? _glassScene.Capture(sceneColour) : null;
+    }
+
+    /// <summary>
+    /// Draws the held draws into the open pass (the scene's colour and depth), premultiplied (<see cref="Premultiplied"/>), tested against the
+    /// scene's depth. First the glass bottles, when the scene was copied for them (<see cref="PrepareSeeThrough"/>): their front faces replace
+    /// the scene with the glass over the copy and write their depth, so overlapping bottles and a neck over its shoulder keep their order. Then
+    /// the other see-through items, farthest first, writing no depth: over the scene by their opacity, front faces only unless the material is
+    /// double-sided, as two layers of a closed shape would show nearly twice the opacity (a bottle without the copy is one of them). After the
+    /// opaque scene and the GI's resolve: the program reads the probes itself.
+    /// </summary>
+    public void DrawSeeThrough()
+    {
+        if (_blended.Count == 0) return;
+
+        var targets = Gpu.CurrentTargets();
+        var state = Gpu.CurrentState() with { Cull = CullMode.None, DepthWrite = false, Blend = Premultiplied, ColourMask = DrawState.Rgb };
+        if (_glassSceneIndex is not null) RecordBlended(targets, state with { DepthWrite = true }, glass: true, "objects glass");
+        RecordBlended(targets, state, glass: false, "objects see-through");
+
+        _blended.Clear();
+        _glassSceneIndex = null;
+    }
+
+    /// <summary>
+    /// Records the held draws that are (<paramref name="glass"/>) or are not drawn as glass in one job of <paramref name="state"/>, farthest
+    /// first; nothing when there are none.
+    /// </summary>
+    void RecordBlended(PassTargets targets, DrawState state, bool glass, string label)
+    {
+        int segment = SegmentId(5, _blendedProg.P, targets, state);
+        var job = BlendedJob(targets, state);
+        for (int i = _blended.Count - 1; i >= 0; i--)
+        {
+            var d = _blended[i];
+            if (DrawnAsGlass(d) == glass) job.Draws[job.Count++] = BlendedDraw(d, segment, state, targets.Formats);
+        }
+
+        if (job.Count > 0) Gpu.Record(label, job);
+        else job.Release();
+    }
+
+    /// <summary>
+    /// A draw job for the held draws: the pass state, the view and the instance rows.
+    /// </summary>
+    DrawJob BlendedJob(PassTargets targets, DrawState state)
+    {
+        var job = _drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, _blendedProg.P, 0);
+        job.Frame = _nativeFrame.Prepare(in _blendedView);
+        for (int a = 0; a < 4; a++) job.Rows[a] = new GpuBufferBinding(_blendedRows.Buffer, _blendedRows.Offset + (ulong)(16 * a));
+        NewTextureSegment();
+        if (job.Draws.Length < _blended.Count) job.Draws = new DrawJob.Draw[Math.Max(_blended.Count, job.Draws.Length * 2)];
+        return job;
+    }
+
+    /// <summary>
+    /// Whether held draw <paramref name="d"/> is drawn as glass this frame: a glass bottle with the scene's copy.
+    /// </summary>
+    bool DrawnAsGlass(in ObjDraw d) => IsGlass(d) && _glassSceneIndex is not null;
+
+    /// <summary>
+    /// Whether a held draw is a glass bottle.
+    /// </summary>
+    bool HoldsGlass()
+    {
+        foreach (var d in _blended)
+            if (IsGlass(d)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="d"/> is one of Meitou's glass bottles (<see cref="MeshSurface.Glass"/>).
+    /// </summary>
+    static bool IsGlass(in ObjDraw d) => (d.Push.Spare & MeshSurface.Glass) != 0;
+
+    /// <summary>
+    /// One held draw resolved for the blended segment: its pipeline, buffers and push block with the textures' bindless indices; drawn as glass,
+    /// the second normal slot (a see-through item is never dual) carries the scene's copy and only the front faces are drawn, else the glass
+    /// flag is dropped.
+    /// </summary>
+    DrawJob.Draw BlendedDraw(ObjDraw d, int segment, DrawState state, AttachmentFormats formats)
+    {
+        bool glass = DrawnAsGlass(d);
+        ref var pc = ref d.Push;
+        pc.FadeRange = _blendedFade;
+        pc.Diffuse = Texture(d.Diffuse);
+        pc.Normal = Texture(d.Normal);
+        pc.Diffuse2 = Texture(d.Diffuse2);
+        pc.Normal2 = glass ? _glassSceneIndex!.Value : Texture(d.Normal2);
+        pc.MetalMap = d.Metal == 0 ? 0 : Texture(d.Metal) + 1;
+        pc.Spare &= glass ? 0xFFu : 0xFFu & ~MeshSurface.Glass;
+
+        var part = d.Part;
+        ref var n = ref part.BlendedNative;
+        Current(ref n, part, _blendedProg);
+        return new DrawJob.Draw
+        {
+            Pipeline = n.SegA == segment ? n.PipeA!.Value : PipelineFor(ref n, _blendedProg, segment, state, formats, "objects see-through"),
+            Vertices = n.Vertices,
+            Elements = new GpuBufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
+            Push = pc,
+            IndexCount = (uint)part.Count[d.Level],
+            Instances = d.Instances,
+            FirstInstance = d.FirstInstance,
+            Cull = d.TwoSided && !glass ? CullMode.None : CullMode.Back,
+        };
     }
 
     #endregion

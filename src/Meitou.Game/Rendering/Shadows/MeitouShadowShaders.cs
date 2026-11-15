@@ -68,10 +68,12 @@ static class MeitouShadowShaders
             vec4 uMsTerrain2;      // x: samples per side, y: height bias, z: minimum softness (height), w: softness per unit of occluder distance
             vec4 uMsFlags;         // x: 1 when the blocker map is valid (contact-hardening penumbrae), y: terrain term fade end, z: cascades filtered in full (the filter tier), w: cascades with character layers (the traced sun)
             mat4 uMsLandmarkTile;  // (world - origin) -> (u, v, depth) in the landmark map (ShadowPass.Meitou, "landmark shadows")
-            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: unused, w: 1 when the landmark map is on
+            vec4 uMsLandmark;      // x: filter radius (UV), y: normal offset (world), z: 1 when the traced sun's map is on (msVolumeOn), w: 1 when the landmark map is on
         };
         // While set (kenshiLight, the traced sun's term): the cascades are left out; the rays hold their casters.
         bool msTraced = false;
+        // While set (kenshiLight, the share of a traced receiver the rays hand to the cascades): the cascades alone, not the sun map.
+        bool msCascadesOnly = false;
         // The cross product of the world position's derivatives (the surface's plane), taken by kenshiLight before a branch around the lookup (derivatives need
         // the whole quad), and whether it is set: the lookup then uses it instead of its own.
         vec3 msPlane = vec3(0.0);
@@ -80,29 +82,38 @@ static class MeitouShadowShaders
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
 
-        // The traced sun's depth map (ShadowPass.RenderTraced): no cascade (uShadowForward.w 0) and uMsSlice[0].w 1. Tile l takes the position relative to the eye to layer l's (u, v, distance
-        // from its plane), uMsSlice[0].x the layers, uMsSlice[1].xyz towards the sun, uMsSlice[2] each layer's texel; the layers are uShadowBlocker's (Gi.TracedSunVolume). Outside: lit.
-        bool msVolumeOn() { return int(uShadowForward.w) == 0 && uMsSlice[0].w > 0.5 && uShadowOrigin.w > 0.5; }
+        uniform sampler2DArray uShadowSunMap;   // the traced sun's map (Gi.TracedSunVolume): a layer per square, the distance from its plane to the first caster
+
+        // The traced sun's map (ShadowPass.PutSunMap), on while the sun is traced (uMsLandmark.z 1); its tiles and slices from ShadowPass.SunMapSlot (msSun). Tile msSun + l takes the
+        // position relative to the eye to layer l's (u, v, distance from its plane), uMsSlice[msSun].x the layers, uMsSlice[msSun + 1].xyz towards the sun and w the view depth the rays
+        // end at, uMsSlice[msSun + 2] each layer's texel. With no cascade (uShadowForward.w 0) it serves every depth, else the depths before cascade 0's. Outside its squares: lit.
+        const int msSun = {{ShadowPass.SunMapSlot}};
+        bool msVolumeOn() { return uMsLandmark.z > 0.5 && uShadowOrigin.w > 0.5; }
+        float msHandoff() { return uMsSlice[msSun + 1].w; }
+        bool msVolumeServes(vec3 world)
+        {
+            return msVolumeOn() && (int(uShadowForward.w) == 0 || dot(world - uShadowOrigin.xyz, uShadowForward.xyz) < uMsSlice[0].x);
+        }
         float msVolumeAt(vec3 world)
         {
             vec3 rel = world - uShadowOrigin.xyz;
-            for (int l = 0; l < int(uMsSlice[0].x); l++)
+            for (int l = 0; l < int(uMsSlice[msSun].x); l++)
             {
-                vec3 c = (uShadowTile[l] * vec4(rel, 1.0)).xyz;
-                ivec2 size = textureSize(uShadowBlocker, 0).xy;
+                vec3 c = (uShadowTile[msSun + l] * vec4(rel, 1.0)).xyz;
+                ivec2 size = textureSize(uShadowSunMap, 0).xy;
                 vec2 f = c.xy * vec2(size) - 0.5;
                 ivec2 i = ivec2(floor(f));
                 if (i.x < 0 || i.y < 0 || i.x >= size.x - 1 || i.y >= size.y - 1) continue;
                 vec2 a = f - vec2(i);
-                float reach = c.z - uMsSlice[2][l] * 1.5;
-                vec4 lit = vec4(texelFetch(uShadowBlocker, ivec3(i, l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 0), l), 0).r >= reach ? 1.0 : 0.0,
-                    texelFetch(uShadowBlocker, ivec3(i + ivec2(0, 1), l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowBlocker, ivec3(i + ivec2(1, 1), l), 0).r >= reach ? 1.0 : 0.0);
+                float reach = c.z - uMsSlice[msSun + 2][l] * 1.5;
+                vec4 lit = vec4(texelFetch(uShadowSunMap, ivec3(i, l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowSunMap, ivec3(i + ivec2(1, 0), l), 0).r >= reach ? 1.0 : 0.0,
+                    texelFetch(uShadowSunMap, ivec3(i + ivec2(0, 1), l), 0).r >= reach ? 1.0 : 0.0, texelFetch(uShadowSunMap, ivec3(i + ivec2(1, 1), l), 0).r >= reach ? 1.0 : 0.0);
                 return mix(mix(lit.x, lit.y, a.x), mix(lit.z, lit.w, a.x), a.y);
             }
             return 1.0;
         }
         // A surface's: looked up a little towards the sun, so that it does not shade itself.
-        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[1].xyz * 2.0); }
+        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[msSun + 1].xyz * 2.0); }
 
         // The terrain's own shadow beyond the cascades: a world point is shadowed by the land towards the sun when it lies below the
         // top of that land's shadow (precomputed per sun direction, TerrainShadowMap), softened by the occluder's distance.
@@ -233,6 +244,31 @@ static class MeitouShadowShaders
             return mix(1.0, lit / 8.0, w);
         }
 
+        // The first cascade whose slice and box hold the point, blended into the next over the last part of its slice; 1 in none.
+        float msCascades(vec3 world, float depth, vec3 ng, vec3 nl, float noise)
+        {
+            int count = int(uShadowForward.w);
+            for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
+            {
+                if (c >= count || depth > uMsSlice[c].y) continue;
+                float s = msCascade(c, world, ng, nl, noise);
+                if (s < 0.0) continue;   // not in this box: the next, coarser cascade
+                // Over the last part of the slice the next cascade is blended in (it covers that band too): no seam.
+                if (c + 1 < count)
+                {
+                    float band = uMsSlice[c + 1].x;
+                    float b = clamp((depth - band) / max(uMsSlice[c].y - band, 1e-3), 0.0, 1.0);
+                    if (b > 0.0)
+                    {
+                        float s2 = msCascade(c + 1, world, ng, nl, noise);
+                        if (s2 >= 0.0) s = mix(s, s2, b);
+                    }
+                }
+                return s;
+            }
+            return 1.0;
+        }
+
         float kenshiShadowMeitou(vec3 world, vec3 n)
         {
             if (uShadowOrigin.w < 0.5) return 1.0;
@@ -245,30 +281,17 @@ static class MeitouShadowShaders
             float noise = msNoise(gl_FragCoord.xy + uMsParams.x);
             float depth = dot(world - uShadowOrigin.xyz, uShadowForward.xyz);
             float csm = 1.0;
-            // The traced sun's term (ShadowPass.TracedWhole) takes no cascade: the rays hold everything the cascades held, the terrain and landmark maps stay.
+            // The traced sun's term (ShadowPass.Traced) takes no cascade: the rays hold everything the cascades held, the terrain and landmark maps stay.
             if (depth < uMsParams.y && !msTraced)
             {
-                if (msVolumeOn()) csm = msVolumeSurface(world, depth);   // traced, for what draws no traced pixel (impostors, the reflection, foam, skin entry)
-                int count = int(uShadowForward.w);
-                for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
-                {
-                    if (c >= count || depth > uMsSlice[c].y) continue;
-                    float s = msCascade(c, world, ng, nl, noise);
-                    if (s < 0.0) continue;   // not in this box: the next, coarser cascade
-                    // Over the last part of the slice the next cascade is blended in (it covers that band too): no seam.
-                    if (c + 1 < count)
-                    {
-                        float band = uMsSlice[c + 1].x;
-                        float b = clamp((depth - band) / max(uMsSlice[c].y - band, 1e-3), 0.0, 1.0);
-                        if (b > 0.0)
-                        {
-                            float s2 = msCascade(c + 1, world, ng, nl, noise);
-                            if (s2 >= 0.0) s = mix(s, s2, b);
-                        }
-                    }
-                    csm = s;
-                    break;
-                }
+                // Traced, what draws no traced pixel (impostors, the reflection, foam, skin entry) reads the sun map: at every depth with no cascade,
+                // else handed to the cascades over the band from cascade 0's first depth to where the rays end, as the traced share is (atmoTracedShare).
+                float cascades = 1.0;
+                if (msVolumeOn() && !msCascadesOnly)
+                    cascades = int(uShadowForward.w) == 0 ? 0.0 : smoothstep(uMsSlice[0].x, msHandoff(), depth);
+
+                if (cascades < 1.0) csm = msVolumeSurface(world, depth);
+                if (cascades > 0.0) csm = mix(csm, msCascades(world, depth, ng, nl, noise), cascades);
                 csm = mix(csm, 1.0, smoothstep(uMsParams.z, uMsParams.y, depth));   // no hard edge where the range ends
             }
             return min(csm, min(msTerrain(world, depth), msLandmark(world, ng, depth, noise)));

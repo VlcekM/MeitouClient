@@ -1889,9 +1889,6 @@ msgstr "{1}：{2} 项设置"
 msgid "Faithful"
 msgstr "忠实"
 
-msgid "As the game ships"
-msgstr "与原版一致"
-
 msgid "1 change from the game"
 msgstr "与原版有 1 处不同"
 

@@ -87,8 +87,8 @@ sealed class QualityTiers(SettingsMenu menu)
     /// The quality switches the presets set: the relief's (docs/render-terrain.md "Ground relief", RTX 4090: refinement +0.38 ms; parallax and
     /// displacement are effects, not tiers), then Meitou's effects by what they cost (measured on an RTX 4090 at 1440p native, GPU time: the
     /// materials, trails, foam and far grass under 0.1 ms; reflections +0.13, GTAO +0.11 and +0.54 at its high quality; the radiance cache +0.17,
-    /// the traced sun +1.3; its grass shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are the switches their
-    /// choices stand for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>).
+    /// the traced sun +1.3, with its far cascades; its grass shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are
+    /// the switches their choices stand for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>).
     /// </summary>
     internal static readonly PresetToggle[] PresetToggles =
     [
@@ -103,13 +103,14 @@ sealed class QualityTiers(SettingsMenu menu)
         new("Ground-truth occlusion", false, false, true, High: true),
         new("Hybrid GI", false, false, true, High: false),
         new("Traced sun shadows", false, false, true, High: false),
+        new(WorldFrame.TracedFarCascadesSwitch, false, false, true, High: false),
         new(WorldFrame.TracedGrassSwitch, false, false, false, High: false, Extreme: true),
     ];
 
     /// <summary>
     /// The tier switches that need the indirect light's traced scene: off, whatever the tier, while it is off (no ray tracing on the device).
     /// </summary>
-    static readonly string[] TracedSwitches = ["Hybrid GI", "Traced sun shadows"];
+    static readonly string[] TracedSwitches = ["Hybrid GI", "Traced sun shadows", WorldFrame.TracedFarCascadesSwitch];
 
     /// <summary>
     /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing

@@ -537,6 +537,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public MouthMesh? Mouth;
         /// <summary>
+        /// The rigid meshes code mods hang on its bones (<see cref="CharacterInstance.BoneMeshes"/>).
+        /// </summary>
+        public IReadOnlyList<Simulation.BoneMesh> BoneMeshes;
+        /// <summary>
         /// The ragdoll's bones over the animation (null: none).
         /// </summary>
         public BonePose? Bones;
@@ -610,6 +614,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// Each stuck bolt's transform in its bone's frame, fixed the first time it was drawn (by bolt id).
         /// </summary>
         public readonly Dictionary<int, Matrix4x4> BoltLocal = [];
+        /// <summary>
+        /// Each bone mesh's debris identity by its key (<see cref="AddBoneMeshes"/>), so the temporal upscalers get its motion; null before the first.
+        /// </summary>
+        public Dictionary<string, long>? BoneMeshIds;
         /// <summary>
         /// The bounding sphere's centre in the world at the last update (<see cref="RayHit"/>).
         /// </summary>
@@ -967,15 +975,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// The bolts stuck in this update's posed characters (docs/game/combat.md "Bolt visuals"), as loose meshes into <paramref name="into"/> (cleared
     /// first), after <see cref="Update"/>: each fixed to its bone the first time it is seen, its +z along the flight and pulled back from the bone's
     /// origin by <see cref="BoltDepth"/>, then carried by the bone (a ragdoll's included), as the original attaches it to the bone keeping its world
-    /// orientation (<c>FUN_14052bfa0</c>). An animal's held limb comes with them (<see cref="AddMouth"/>).
+    /// orientation (<c>FUN_14052bfa0</c>). An animal's held limb and the code mods' bone meshes come with them (<see cref="AddMouth"/>,
+    /// <see cref="AddBoneMeshes"/>; <paramref name="centreOf"/>: a debris mesh's bounds centre in its own space, loading it).
     /// </summary>
-    public void CollectBolts(List<DebrisPiece> into)
+    public void CollectBolts(List<DebrisPiece> into, Func<string, Vector3?> centreOf)
     {
         into.Clear();
         for (int i = 0; i < _liveCount; i++)
         {
             ref var l = ref _live[i];
             AddMouth(ref l, into);
+            AddBoneMeshes(ref l, into, centreOf);
             var state = l.State;
             if (l.Bolts is not { Count: > 0 } bolts || l.PortraitOnly || l.Asset.IsIcon)
             {
@@ -1026,6 +1036,36 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 out var rotation, out var position))
             return;
         into.Add(new DebrisPiece(held.Mesh, scale.X, rotation, position, 1, held.Look));
+    }
+
+    /// <summary>
+    /// The code mods' bone meshes (<see cref="CharacterInstance.BoneMeshes"/>) as loose meshes, each with its origin at its posed bone moved and turned
+    /// as it says (<see cref="BoneAnchor.Node(SkeletonRig, Matrix4x4[], in Matrix4x4, string, Vector3, Quaternion)"/>) and sized with the character;
+    /// a mesh whose bone the skeleton lacks, or that does not load, is left out.
+    /// </summary>
+    void AddBoneMeshes(ref Live l, List<DebrisPiece> into, Func<string, Vector3?> centreOf)
+    {
+        if (l.State is not { } state) return;
+        if (l.BoneMeshes is not { Count: > 0 } meshes)
+        {
+            state.BoneMeshIds = null;
+            return;
+        }
+        if (l.PortraitOnly || l.Asset.IsIcon || state.Posed < 0 || state.Bones.Length != l.Asset.Rig.BoneCount) return;
+
+        float scale = l.World.ScaleLength();
+        var ids = state.BoneMeshIds ??= [];
+        if (ids.Count > meshes.Count) ids.Clear();
+        foreach (var mesh in meshes)
+        {
+            if (BoneAnchor.Node(l.Asset.Rig, state.Bones, l.World, mesh.Bone, mesh.Offset, mesh.Rotation) is not var (origin, rotation)) continue;
+            if (centreOf(mesh.Mesh) is not { } centre) continue;
+
+            // A loose mesh is drawn centred on its bounds (DebrisRenderer): its middle goes where the posed origin puts it.
+            if (!ids.TryGetValue(mesh.Key, out long id)) ids[mesh.Key] = id = DebrisPiece.NewId();
+            var middle = origin + Vector3.Transform(centre * scale, rotation);
+            into.Add(new DebrisPiece(mesh.Mesh, scale, rotation, middle, Id: id));
+        }
     }
 
     /// <summary>
@@ -1255,7 +1295,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.World = WorldOf(in inst, asset, scale);
         (l.Anchor, l.Scale) = (inst.World is null ? inst.Anchor : null, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
-        l.Mouth = inst.Mouth;
+        (l.Mouth, l.BoneMeshes) = (inst.Mouth, inst.BoneMeshes);
         l.Centre = centre;
         l.Radius = asset.Radius * scale;
         l.AttachBase = _attachCount;
@@ -1871,6 +1911,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (m.ArmourMetal) flags |= CharacterShaders.ArmourMetal;
         if (m.LimbMetal) flags |= CharacterShaders.LimbMetal;
         if (m.MetalMap && has[CharacterShaders.SlotColourMap]) flags |= CharacterShaders.HasMetalMap;
+
+        // Solid until the opacity map is resident.
+        if (m.SeeThrough && has[CharacterShaders.SlotOpacity]) flags |= CharacterShaders.SeeThrough;
 
         // Textures assigned but not resident yet: a hair's diffuse (its cut-out), a clipped item's normal map, the head's maps.
         if (m.Shading == CharacterShaders.ShadeHair && m.Tex[CharacterShaders.SlotDiffuse] is not null && !has[CharacterShaders.SlotDiffuse]

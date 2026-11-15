@@ -16,7 +16,17 @@ readonly record struct ModsLine(int Row, SettingsMenu.Entry? Entry);
 sealed class ModSettingsRows(SettingsMenu menu)
 {
     /// <summary>
-    /// Mod groups shown once already: a group starts open the first time it is shown.
+    /// The separator of a setting's key: a unit separator, which no property name holds.
+    /// </summary>
+    const char KeySeparator = '\u001F';
+
+    /// <summary>
+    /// The separator of a sub-group's id: a record separator, which no property name holds, so no setting's key looks like one.
+    /// </summary>
+    const char SubGroupSeparator = '\u001E';
+
+    /// <summary>
+    /// Mod groups and sub-groups shown once already: one starts open the first time it is shown.
     /// </summary>
     readonly HashSet<string> _modGroupsSeen = [];
 
@@ -35,7 +45,7 @@ sealed class ModSettingsRows(SettingsMenu menu)
     internal bool AnyGroups => menu.ModSettings().Count > 0;
 
     /// <summary>
-    /// Opens or closes every mod's settings group (Expand all, Collapse all).
+    /// Opens or closes every mod's settings group and sub-group (Expand all, Collapse all).
     /// </summary>
     internal void FoldAll(bool open)
     {
@@ -46,6 +56,15 @@ sealed class ModSettingsRows(SettingsMenu menu)
 
             if (open) menu.Grouping.OpenGroups.Add(id);
             else menu.Grouping.OpenGroups.Remove(id);
+
+            foreach (var subGroup in group.Settings.Select(s => s.SubGroup).Where(name => name.Length > 0).Distinct())
+            {
+                string subGroupId = SubGroupId(group, subGroup);
+                _modGroupsSeen.Add(subGroupId);
+
+                if (open) menu.Grouping.OpenGroups.Add(subGroupId);
+                else menu.Grouping.OpenGroups.Remove(subGroupId);
+            }
         }
 
         menu.Focus = -1;
@@ -55,6 +74,11 @@ sealed class ModSettingsRows(SettingsMenu menu)
     /// A mod's settings group's id among the open groups.
     /// </summary>
     static string GroupId(ModSettingsGroup group) => "mod:" + group.ModId;
+
+    /// <summary>
+    /// A sub-group's id among the open groups: the mod's group's id, a record separator and the sub-group's name.
+    /// </summary>
+    static string SubGroupId(ModSettingsGroup group, string subGroup) => $"{GroupId(group)}{SubGroupSeparator}{subGroup}";
 
     /// <summary>
     /// Each mod's row with its settings group under it; a group whose mod has no row (not in the list file) comes last, under its name.
@@ -80,7 +104,8 @@ sealed class ModSettingsRows(SettingsMenu menu)
     }
 
     /// <summary>
-    /// A mod's settings group header under <paramref name="label"/>, its settings under it while open (a group starts open the first time).
+    /// A mod's settings group header under <paramref name="label"/>, its settings under it while open (a group starts open the first time): a
+    /// setting its VisibleWhen hides is left out, and a sub-group's settings sit under its own header.
     /// </summary>
     void AddModGroup(List<ModsLine> lines, ModSettingsGroup group, string label)
     {
@@ -92,16 +117,44 @@ sealed class ModSettingsRows(SettingsMenu menu)
         lines.Add(new(-1, new(label, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset)));
         if (!open) return;
 
-        foreach (var setting in group.Settings) lines.Add(new(-1, ModSettingEntry(setting, id)));
+        var visible = group.Settings.Where(s => s.Visible).ToList();
+        var subGroups = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var setting in visible)
+        {
+            if (setting.SubGroup.Length == 0)
+            {
+                lines.Add(new(-1, ModSettingEntry(setting, id, depth: 1)));
+                continue;
+            }
+
+            if (subGroups.Add(setting.SubGroup)) AddModSubGroup(lines, group, setting.SubGroup);
+        }
+    }
+
+    /// <summary>
+    /// A sub-group's header under the mod's group, its visible settings under it while it is open (it starts open the first time).
+    /// </summary>
+    void AddModSubGroup(List<ModsLine> lines, ModSettingsGroup group, string subGroup)
+    {
+        string id = SubGroupId(group, subGroup);
+        if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
+        bool open = menu.Grouping.OpenGroups.Contains(id);
+        var members = group.Settings.Where(s => s.SubGroup == subGroup).ToList();
+        bool changed = members.Any(s => !s.IsDefault);
+        Action? reset = changed ? () => ResetModSubGroup(members) : null;
+        lines.Add(new(-1, new(subGroup, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: 1)));
+        if (!open) return;
+
+        foreach (var member in members.Where(s => s.Visible)) lines.Add(new(-1, ModSettingEntry(member, id, depth: 2)));
     }
 
     /// <summary>
     /// A setting's row: a switch, a slider or a choice by its kind, its reset back to the default.
     /// </summary>
-    SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group)
+    SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth)
     {
-        string raw = $"{group}/{setting.Key}";
-        var entry = new SettingsMenu.Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: 1,
+        string raw = $"{group}{KeySeparator}{setting.Key}";
+        var entry = new SettingsMenu.Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: depth,
             Reset: () => ChangeModSetting(setting, setting.Reset));
         return setting.Kind switch
         {
@@ -128,6 +181,14 @@ sealed class ModSettingsRows(SettingsMenu menu)
     void ResetModGroup(ModSettingsGroup group)
     {
         foreach (var setting in group.Settings) ChangeModSetting(setting, setting.Reset);
+    }
+
+    /// <summary>
+    /// A sub-group's settings back to their defaults.
+    /// </summary>
+    void ResetModSubGroup(IReadOnlyList<ModSetting> members)
+    {
+        foreach (var member in members) ChangeModSetting(member, member.Reset);
     }
 
     /// <summary>

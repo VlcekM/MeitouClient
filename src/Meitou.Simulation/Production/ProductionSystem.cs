@@ -596,12 +596,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone && cold.Carrying.IsNone;
 
     /// <summary>
-    /// <see cref="Able"/> for a list job of <paramref name="type"/>, except that a carrier standing idle with nothing under way (no provenance, no
-    /// errand; e.g. after a pick-up order) takes up a follow row (31, 45, 289; their list B has no IS_CARRYING_SOMETHING 47, docs/game/ai-tasks.md).
+    /// <see cref="Able"/> for a list job of <paramref name="type"/>, except that a carrier standing idle with nothing under way (no provenance of
+    /// its task, no errand; e.g. after a pick-up order, or a move order's walk ended, whose provenance stays, #711) takes up a follow row (31, 45,
+    /// 289; their list B has no IS_CARRYING_SOMETHING 47, docs/game/ai-tasks.md).
     /// </summary>
     static bool AbleFor(CharacterCold cold, TaskType type, CharacterTask task, bool onErrand) =>
         cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone
-        && (cold.Carrying.IsNone || PermaJobs.Follows(type) && task == CharacterTask.Idle && cold.Running is null && !onErrand);
+        && (cold.Carrying.IsNone || PermaJobs.Follows(type) && task == CharacterTask.Idle && cold.Running?.Runs(task) != true && !onErrand);
 
     /// <summary>
     /// The characters operating the site.
@@ -902,7 +903,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var research = world.Research;
         research.Rate = 0;
         int bench = ResetOperators(world);
-        TownFarms(world);
+        TownSelfRunning(world);
         TownWorkers(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.
@@ -1873,9 +1874,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Put an item into a container's grid (<see cref="ContainerAccess.ContainerFor"/>): at a free cell, or with X below 0 where it first fits
-    /// (<see cref="PutInMachine.Count"/> units); a bag or limb item is refused like the machine's.
+    /// (<see cref="PutInMachine.Count"/> units); a bag or limb item is refused like the machine's. A worn item re-dresses the character, so a
+    /// weapon put away leaves its hand (#761).
     /// </summary>
-    static void PutInContainer(World world, Locks.Fixture container, CharacterCold cold, PutInMachine put)
+    void PutInContainer(World world, Locks.Fixture container, CharacterCold cold, PutInMachine put)
     {
         // engine choice: a shop's stock is not a place to leave things
         if (ContainerAccess.ShopOf(world, container) is not null) { world.Post("That stock is the shop's."); return; }
@@ -1888,22 +1890,31 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             !InventoryCommands.IsMovableSection(item.Section) || item.Contents is not null && item.Section == "backpack_attach") return;
         var owner = root.Items.Contains(item) ? root : root.Backpack?.Contents;
         if (owner is null) return;
-        if (put.X < 0)
-        {
-            if (InventoryCommands.MoveUnits(owner, item, InventoryCommands.ClickCount(item, put.Count), storage) > 0) world.Machines.Touch();
-            return;
-        }
 
+        bool worn = InventoryCommands.IsEquipmentSection(item.Section);
+        if (!PutInGrid(owner, item, storage, put)) return;
+
+        world.Machines.Touch();
+        if (worn) Assembly?.RefreshEquipment(cold);
+    }
+
+    /// <summary>
+    /// Moves an item from <paramref name="owner"/> into a storage grid: with X below 0 where it first fits (<see cref="PutInMachine.Count"/>
+    /// units), else at the free cell asked for. False when nothing moved.
+    /// </summary>
+    static bool PutInGrid(Inventory owner, ItemInstance item, Inventory storage, PutInMachine put)
+    {
+        if (put.X < 0) return InventoryCommands.MoveUnits(owner, item, InventoryCommands.ClickCount(item, put.Count), storage) > 0;
         if (put.Y < 0 || put.X > storage.Width - item.Width || put.Y > storage.Height - item.Height
             || !storage.IsFree("main", put.X, put.Y, item.Width, item.Height))
-            return;
+            return false;
 
         owner.Remove(item);
         item.Section = "main";
         item.X = put.X;
         item.Y = put.Y;
         storage.Items.Add(item);
-        world.Machines.Touch();
+        return true;
     }
 
     /// <summary>
@@ -1966,43 +1977,46 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             !InventoryCommands.IsMovableSection(item.Section)) return;
         var owner = root.Items.Contains(item) ? root : root.Backpack?.Contents;
         if (owner is null) return;
-        if (put.Slot >= 0)
-        {
-            if (put.Slot >= m.Inputs.Length || m.Inputs[put.Slot] is not { } input || input.Item != item.Record) return;
-            int room = input.Recipe.Capacity - input.Count;
-            int n = Math.Min(room, put.Count > 0 ? Math.Min(put.Count, item.Quantity) : item.Quantity);
-            if (n <= 0) return;
-            input.Count += n;
-            item.Quantity -= n;
-            if (item.Quantity == 0) owner.Remove(item);
-        }
-        else
-        {
-            if (m.Storage is not { } storage || m.Closed || item.Contents is not null && item.Section == "backpack_attach") return;
-            if (m.Data.IsStorage && !m.Data.TakesByHand(item.Record, item.Type))
-            {
-                world.Post($"{m.Data.Name} does not take {item.Name}.");
-                return;
-            }
 
-            if (put.X < 0)
-            {
-                if (InventoryCommands.MoveUnits(owner, item, InventoryCommands.ClickCount(item, put.Count), storage) > 0) world.Machines.Touch();
-                return;
-            }
-
-            if (put.Y < 0 || put.X > storage.Width - item.Width || put.Y > storage.Height - item.Height
-                || !storage.IsFree("main", put.X, put.Y, item.Width, item.Height))
-                return;
-
-            owner.Remove(item);
-            item.Section = "main";
-            item.X = put.X;
-            item.Y = put.Y;
-            storage.Items.Add(item);
-        }
+        // A worn item re-dresses the character, so a weapon put away leaves its hand (#761).
+        bool worn = InventoryCommands.IsEquipmentSection(item.Section);
+        bool moved = put.Slot >= 0 ? PutInInput(m, owner, item, put) : PutInStorage(world, m, owner, item, put);
+        if (!moved) return;
 
         world.Machines.Touch();
+        if (worn) Assembly?.RefreshEquipment(cold);
+    }
+
+    /// <summary>
+    /// Puts units of an item into the machine's input slot of its record, as many as it has room for. False when nothing moved.
+    /// </summary>
+    static bool PutInInput(Machine m, Inventory owner, ItemInstance item, PutInMachine put)
+    {
+        if (put.Slot >= m.Inputs.Length || m.Inputs[put.Slot] is not { } input || input.Item != item.Record) return false;
+        int room = input.Recipe.Capacity - input.Count;
+        int n = Math.Min(room, put.Count > 0 ? Math.Min(put.Count, item.Quantity) : item.Quantity);
+        if (n <= 0) return false;
+
+        input.Count += n;
+        item.Quantity -= n;
+        if (item.Quantity == 0) owner.Remove(item);
+        return true;
+    }
+
+    /// <summary>
+    /// Puts an item into the machine's storage grid (<see cref="PutInGrid"/>); a storage refuses what it does not take by hand. False when nothing
+    /// moved.
+    /// </summary>
+    static bool PutInStorage(World world, Machine m, Inventory owner, ItemInstance item, PutInMachine put)
+    {
+        if (m.Storage is not { } storage || m.Closed || item.Contents is not null && item.Section == "backpack_attach") return false;
+        if (m.Data.IsStorage && !m.Data.TakesByHand(item.Record, item.Type))
+        {
+            world.Post($"{m.Data.Name} does not take {item.Name}.");
+            return false;
+        }
+
+        return PutInGrid(owner, item, storage, put);
     }
 
     /// <summary>

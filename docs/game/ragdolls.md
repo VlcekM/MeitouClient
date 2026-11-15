@@ -81,12 +81,12 @@ also uses 0x8000 internally as "release all".
   opposite request for the same parts cancels both, a duplicate is dropped. Only when the character
   has a visual or is dead (slot 31) and, for "on", is not in furniture (Character `+0x2f8`, the
   bed/cage state of [carry-loot](carry-loot.md)).
-  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls. **Observed** (harness `cage-in --record` in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and `stealth-ko`): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced (**Unknown**).
+  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls, and the animation poses it by the fixture's clip, not the layers it went down with (`AnimationSystem.Update`; #733: a body laid in a bed kept its lying clip on the floor by the bed). **Observed** (harness `cage-in --record` in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and `stealth-ko`): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced (**Unknown**).
 
 - The queue is drained at the sync point `FUN_1407d2380` → `FUN_1405d2c30` → setter `FUN_1405d0db0`,
   which keeps a request queued while the skeleton is not ready or a get-up blend runs.
 - The setter, for WHOLE or CARRY_MODE: unlinks a carried body (also when the carrying arm goes limp),
-  stops movement, puts the weapon away (slot 90), loads RACE `male ragdoll` / `female ragdoll`, then
+  stops movement, puts the weapon away (slot 90; Meitou: the body tick, while `IsRagdoll`), loads RACE `male ragdoll` / `female ragdoll`, then
   AnimationClass slot 10 (`FUN_1405b9a10`; Human `FUN_1405ba050` also records the arm bits).
   Notify slot 132: humans holding a weapon in a limp arm put it away (`FUN_1405cc230`).
 - RACE `male carry ragdoll` / `female carry ragdoll` are **Verified** unused: no string reference in
@@ -349,6 +349,11 @@ Driver `FUN_1405b8180` (AnimationClass), update `FUN_1407d3c00`:
   Meitou (`RagdollBody.BoneInBody`): the bone sits at its actor's origin, so a parentless bone is drawn there and the other bones keep the skeleton's offsets; a pinned or new
   body puts its actor on the animated bone (engine choice for the pinned case: the same convention both ways, so no jump on entering a ragdoll). Where the file and skeleton
   differ (whale2: Bip01 actor 24 from the bone) the shapes keep their offsets from the actor, not from the skeleton's bone.
+- No `Bip01` actor (`hu_m_ragdoll.phs`, the Cannibal and Fishman races' ragdoll; most races use `hu_m_ragdoll_5.phs`, which has one. **Observed** with
+  `spawn-at ... "Cannibal" --dead`, `spawn-at ... --dead --race Fishman` and `ragdoll-dump`: bodies from `Bip01 L Thigh`, including `Bip01 Spine`, none on
+  `Bip01`): with the root bone unset, the drawn body hung at its animated standing offsets above its bodies on the
+  floor. Meitou (`RagdollSystem.PlaceRootWithoutBody`, engine choice): sets `Bip01` from the simulated spine or pelvis bone nearest it,
+  through their binding-pose offset, so the unsimulated pelvis lies with the trunk. A ragdoll with no trunk body (carried, a collapsed limb) keeps the animated root.
 - Carried animal: the carry-bone body is moved kinematically to the carrier's attach bone.
 - Partial (non-WHOLE) ragdolls are woken every frame (wake 20) and never freeze.
 - Water (only when byte `+0x79` of the character's race data is set): when the root is at or below

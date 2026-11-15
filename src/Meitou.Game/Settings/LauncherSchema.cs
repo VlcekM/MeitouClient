@@ -109,8 +109,8 @@ static class LauncherSchema
         Graphics(WorldFrame.FarWaterClaritySlider, 0, 1, 0.01f, 0.25f) with { Format = "0.00" },
         Graphics(WorldFrame.WaterClearDistanceSlider, 1000, 100000, 100, 10000) with { Logarithmic = true },
         // Lighting: the technique choices first (WorldFrame.AddChoiceSliders), their defaults as a fresh WorldOptions' switches have them
-        Graphics(WorldFrame.SunShadowsChoice, 0, 3, 1, ChoiceDefault(WorldFrame.SunShadowsChoice)) with
-            { Labels = ["Off", "Faithful cascades", "Meitou cascades", "Traced (ray tracing)"] },
+        Graphics(WorldFrame.SunShadowsChoice, 0, 4, 1, ChoiceDefault(WorldFrame.SunShadowsChoice)) with
+            { Labels = ["Off", "Faithful cascades", "Meitou cascades", "Traced (ray tracing)", "Traced near, cascades far"] },
         Graphics(WorldFrame.OcclusionChoice, 0, 2, 1, ChoiceDefault(WorldFrame.OcclusionChoice)) with
             { Name = "Ambient occlusion", Labels = ["Off", "SSAO", "GTAO"] },
         Graphics(WorldFrame.GiChoice, 0, 2, 1, ChoiceDefault(WorldFrame.GiChoice)) with
@@ -207,6 +207,18 @@ static class LauncherSchema
     }
 
     /// <summary>
+    /// The sun shadows' choice at either traced position (3 or 4): at none of 0, 1 and 2 (an older launcher, which knows no Not, shows the row).
+    /// </summary>
+    static SettingCondition SunTraced()
+    {
+        const string key = WorldFrame.SunShadowsChoice;
+        var notMeitou = new SettingCondition { Key = key, Value = 2, Not = true };
+        var notFaithful = new SettingCondition { Key = key, Value = 1, Not = true, And = notMeitou };
+
+        return new SettingCondition { Key = key, Value = 0, Not = true, And = notFaithful };
+    }
+
+    /// <summary>
     /// The Tab panel switches: the Faithful / Meitou ones (their state as a fresh <see cref="WorldOptions"/> has it) and the plain on/off ones.
     /// </summary>
     static IEnumerable<SettingDescription> Switches()
@@ -240,8 +252,7 @@ static class LauncherSchema
         yield return Switch(WorldFrame.MaterialEyesSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialMetalSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
-        yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with
-            { ShownWhen = new() { Key = WorldFrame.SunShadowsChoice, Value = 3 } };
+        yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with { ShownWhen = SunTraced() };
         yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "Meitou: on", true);
         yield return Switch(WorldFrame.WetWorldSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).

@@ -10,21 +10,27 @@ using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Ui;
 using Meitou.Modding;
 using Meitou.Simulation;
+using Meitou.Simulation.Dialogue;
+using Meitou.Simulation.Editing;
 using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
-/// <see cref="DebugCommand"/>s. Up/Down pick a row, typing fills its field, Enter applies it, Esc or the close key closes; while open it takes every
-/// key. The rows are grouped in labelled sections (<see cref="DebugCheatSections"/>: Character, World / Spawn, Combat; then Mods for code mods' rows
-/// ([modding](docs/modding.md)); then Tools and Overlays, <see cref="DebugTools"/>, whose rows also take Space, Left and Right); Up and Down walk
-/// them in the order shown. Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the middle
-/// of the screen); heal, max skills and damage the selected characters, else the inspected one. Heal keeps lost limbs; its sub-row Heal fully gives
-/// them back. Godmode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills hostiles
-/// within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too: while on,
-/// a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player character's), all
-/// or one faction's.
+/// <see cref="DebugCommand"/>s. The menu opens on its categories (<see cref="DebugCategories"/>: Character, Squad / Faction, World / Spawn, Combat,
+/// Cheats, then Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a
+/// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
+/// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
+/// (the middle of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
+/// gives them back. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's
+/// selection), else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the
+/// squad has room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move
+/// instantly, One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
+/// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
+/// "Teleport on map" is a switch too:
+/// while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player
+/// character's), all or one faction's.
 /// </summary>
 sealed class DebugMenu(GameHost host)
 {
@@ -64,9 +70,9 @@ sealed class DebugMenu(GameHost host)
         HealFully,
 
         /// <summary>
-        /// Sets every stat of the targets to 100.
+        /// Opens the Edit character sub-view: quick actions, Appearance and every stat by category.
         /// </summary>
-        MaxSkills,
+        EditCharacter,
 
         /// <summary>
         /// Cuts the targets for the typed damage, on the picked part or at random.
@@ -94,9 +100,29 @@ sealed class DebugMenu(GameHost host)
         ClearBounties,
 
         /// <summary>
-        /// Switches godmode for every player character.
+        /// Switches "Set stats to 1000" for every player character.
         /// </summary>
-        Godmode,
+        StatsTo1000,
+
+        /// <summary>
+        /// Switches "Auto heal" for every player character.
+        /// </summary>
+        AutoHeal,
+
+        /// <summary>
+        /// Switches "Move instantly": a right click teleports the selected characters instead of walking them.
+        /// </summary>
+        InstantMove,
+
+        /// <summary>
+        /// Switches "One-punch man mode": every hit landed by a player character kills.
+        /// </summary>
+        OnePunch,
+
+        /// <summary>
+        /// Switches "No stumbling": a hit no longer staggers a player character.
+        /// </summary>
+        NoStumble,
 
         /// <summary>
         /// Switches the guard (kills hostiles near the lead and heals the player's characters).
@@ -122,6 +148,11 @@ sealed class DebugMenu(GameHost host)
         /// Opens the item picker; Enter on its last step drops the chosen item at the camera's target.
         /// </summary>
         DropItem,
+
+        /// <summary>
+        /// Recruits the first target into the player's faction and active squad, then opens the character editor on it.
+        /// </summary>
+        Recruit,
     }
 
     /// <summary>
@@ -129,43 +160,65 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     internal static readonly string[] DebugLabels =
     [
-        "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)",
-        "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)",
-            "Explosion level", "Explode at target", "Explode on click", "Drop item (at camera target)",
+        "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
+        "Edit character", "Damage (cut)",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Set stats to 1000", "Auto heal", "Move instantly",
+            "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
+            "Drop item", "Recruit",
     ];
 
     /// <summary>
-    /// The cheat rows' sections, in the order shown (and walked by Up / Down).
+    /// A category of the menu: its title and its rows (a cheat's number, a mod row's, or <see cref="GameMods.DebugRowCount"/> + a tool's index).
     /// </summary>
-    static readonly (string Title, DebugRow[] Rows)[] DebugCheatSections =
-    [
-        ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
-        ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.DropItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.ExplodeLevel, DebugRow.Explode,
-            DebugRow.ExplodeClick]),
-    ];
+    readonly record struct DebugCategory(string Title, int[] Rows);
 
     /// <summary>
-    /// The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or
-    /// <see cref="GameMods.DebugRowCount"/> + the tool's index).
+    /// The menu's categories, in the order shown: the cheats by purpose, then the code mods' rows (skipped when no mod added one), then the tools.
     /// </summary>
-    List<(string? Header, int Row)> DebugLayout()
+    DebugCategory[] DebugCategories()
     {
-        var layout = new List<(string?, int)>();
-        foreach (var (title, rows) in DebugCheatSections)
-            for (int k = 0; k < rows.Length; k++) layout.Add((k == 0 ? title : null, (int)rows[k]));
-        for (int m = DebugLabels.Length; m < host.Modding.DebugRowCount; m++)
-            layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
+        var worldRows = new List<int> { (int)DebugRow.Teleport, (int)DebugRow.SpawnNpc, (int)DebugRow.DropItem };
+        var tools = new List<int>();
+        var overlays = new List<int>();
         if (DebugToolsOn)
         {
             for (int t = 0; t < DebugTools.Length; t++)
             {
-                layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null,
-                    host.Modding.DebugRowCount + t));
+                int row = host.Modding.DebugRowCount + t;
+                switch (DebugTools[t].Section)
+                {
+                    case "World": worldRows.Add(row); break;
+                    case "Overlays": overlays.Add(row); break;
+                    default: tools.Add(row); break;
+                }
             }
         }
-        return layout;
+
+        var categories = new List<DebugCategory>
+        {
+            new("Character", [(int)DebugRow.EditCharacter, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
+                (int)DebugRow.GiveItem]),
+            new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.UnlockResearch]),
+            new("World / Spawn", [.. worldRows]),
+            new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
+                (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
+            new("Cheats", [(int)DebugRow.StatsTo1000, (int)DebugRow.AutoHeal, (int)DebugRow.InstantMove, (int)DebugRow.OnePunch,
+                (int)DebugRow.NoStumble, (int)DebugRow.Guard]),
+        };
+        if (host.Modding.DebugRowCount > DebugLabels.Length)
+            categories.Add(new("Mods", [.. Enumerable.Range(DebugLabels.Length, host.Modding.DebugRowCount - DebugLabels.Length)]));
+        if (tools.Count > 0) categories.Add(new("Tools", [.. tools]));
+        if (overlays.Count > 0) categories.Add(new("Overlays", [.. overlays]));
+        return [.. categories];
+    }
+
+    /// <summary>
+    /// The open category's rows, in the order shown (and walked by Up / Down); empty at the categories.
+    /// </summary>
+    List<int> DebugLayout()
+    {
+        var categories = DebugCategories();
+        return _category >= 0 && _category < categories.Length ? [.. categories[_category].Rows] : [];
     }
 
     /// <summary>
@@ -189,12 +242,42 @@ sealed class DebugMenu(GameHost host)
     readonly DebugItemPicker _itemPicker = new(host);
 
     /// <summary>
-    /// The menu is open.
+    /// The Edit character row's sub-view: quick actions, Appearance and every stat by category.
     /// </summary>
-    internal bool DebugMenuOpen;
+    readonly DebugCharacterEditor _characterEditor = new(host);
 
     /// <summary>
-    /// The highlighted row.
+    /// The menu is open; opening it shows the categories again.
+    /// </summary>
+    internal bool DebugMenuOpen
+    {
+        get => _debugMenuOpen;
+        set
+        {
+            _debugMenuOpen = value;
+            if (!value) return;
+            _category = -1;
+            DebugParts = null;
+        }
+    }
+
+    /// <summary>
+    /// The open flag behind <see cref="DebugMenuOpen"/>.
+    /// </summary>
+    bool _debugMenuOpen;
+
+    /// <summary>
+    /// The open category, or -1 at the categories.
+    /// </summary>
+    int _category = -1;
+
+    /// <summary>
+    /// The highlighted category at the categories.
+    /// </summary>
+    int _categoryCursor;
+
+    /// <summary>
+    /// The highlighted row of the open category.
     /// </summary>
     int _debugRow;
 
@@ -207,6 +290,25 @@ sealed class DebugMenu(GameHost host)
     /// The highlighted row (the photo and agent tools read it).
     /// </summary>
     internal int RowIndex => _debugRow;
+
+    /// <summary>
+    /// The menu is at the categories (no category is open, or the open one is gone).
+    /// </summary>
+    internal bool DebugAtCategories => _category < 0 || _category >= DebugCategories().Length;
+
+    /// <summary>
+    /// The open category's title, or the highlighted one at the categories (the agent tools read it).
+    /// </summary>
+    internal string DebugCategoryTitle
+    {
+        get
+        {
+            var categories = DebugCategories();
+            if (categories.Length == 0) return "";
+            int at = _category >= 0 && _category < categories.Length ? _category : Math.Clamp(_categoryCursor, 0, categories.Length - 1);
+            return categories[at].Title;
+        }
+    }
 
     /// <summary>
     /// The status line (the photo and agent tools read it).
@@ -260,6 +362,17 @@ sealed class DebugMenu(GameHost host)
     /// "on" or "off".
     /// </summary>
     static string OnOff(bool on) => on ? "on" : "off";
+
+    /// <summary>
+    /// A switch's new state from a typed field ("on", "1", "true" / "off", "0", "false"), or the opposite of <paramref name="current"/> when the
+    /// field says neither.
+    /// </summary>
+    static bool Toggled(string field, bool current) => field.Trim().ToLowerInvariant() switch
+    {
+        "on" or "1" or "true" => true,
+        "off" or "0" or "false" => false,
+        _ => !current,
+    };
 
     /// <summary>
     /// The tool rows below the cheats: each opens a tool or switches an overlay; a new tool adds its row here (tools first, then the Overlays
@@ -379,7 +492,7 @@ sealed class DebugMenu(GameHost host)
         }
         else
         {
-            _debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
+            _debugStatus = DebugApplyNow(DebugRow.Teleport, "", at: at);
             _mapTeleportNote = _debugStatus;
             if (DebugFailed)
             {
@@ -528,11 +641,6 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.
-    /// </summary>
-    int DebugMenuRows => host.Modding.DebugRowCount + (DebugToolsOn ? DebugTools.Length : 0);
-
-    /// <summary>
     /// Whether <paramref name="row"/> is a tool row.
     /// </summary>
     internal bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
@@ -541,9 +649,10 @@ sealed class DebugMenu(GameHost host)
     /// Whether <paramref name="row"/> takes typed text: a mod row with a field, or a cheat row other than the switches and actions without one.
     /// </summary>
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits
-            or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode
-            or DebugRow.ExplodeClick or DebugRow.DropItem));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacter or DebugRow.ForceHits
+            or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
+            or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
+            or DebugRow.DropItem or DebugRow.Recruit));
 
     /// <summary>
     /// The rows that open the body part list.
@@ -551,18 +660,82 @@ sealed class DebugMenu(GameHost host)
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
 
     /// <summary>
-    /// The row Up (-1) or Down (+1) reaches from the current one, in the order shown.
+    /// The row <paramref name="delta"/> rows from the current one, in the order shown (wrapping).
     /// </summary>
     int DebugStep(int delta)
     {
         var layout = DebugLayout();
-        int at = layout.FindIndex(l => l.Row == _debugRow);
-        return layout[((at < 0 ? 0 : at) + delta + layout.Count) % layout.Count].Row;
+        if (layout.Count == 0) return _debugRow;
+        int at = layout.IndexOf(_debugRow), n = layout.Count;
+        return layout[((at < 0 ? 0 : at) + delta % n + n) % n];
     }
 
     /// <summary>
-    /// A key while the menu is open: in a sub-list Up and Down pick and Enter applies; otherwise the rows are walked, edited and applied, the tools
-    /// switched.
+    /// How many rows a wheel notch moves a list.
+    /// </summary>
+    const int ScrollLines = 1;
+
+    /// <summary>
+    /// The mouse wheel while the menu is open: the open sub-view (or the categories, or the open category) moves its highlight by
+    /// <see cref="ScrollLines"/> rows a notch, up for a wheel away from the user, so a long list scrolls with it.
+    /// </summary>
+    internal void Scroll(float wheel)
+    {
+        int lines = -(int)MathF.Round(wheel) * ScrollLines;
+        if (lines == 0) return;
+        if (_itemPicker.Open)
+        {
+            _itemPicker.Scroll(lines);
+            return;
+        }
+
+        if (_characterEditor.Open)
+        {
+            _characterEditor.Scroll(lines);
+            return;
+        }
+
+        if (DebugParts is { } parts)
+        {
+            _debugPart = Math.Clamp(_debugPart + lines, 0, parts.Length - 1);
+            return;
+        }
+
+        if (DebugAtCategories)
+        {
+            var categories = DebugCategories();
+            if (categories.Length > 0) _categoryCursor = Math.Clamp(_categoryCursor + lines, 0, categories.Length - 1);
+            return;
+        }
+
+        _debugRow = DebugStep(lines);
+    }
+
+    /// <summary>
+    /// Whether the menu's selection takes typed text, so the menu must take every key: a row with a field (in a category or its part list), the item
+    /// picker (its search) or a character-editor category (its values). Otherwise it takes only <see cref="DebugMenuTakesKey"/> and the rest are the
+    /// game's.
+    /// </summary>
+    internal bool DebugMenuTakesText
+    {
+        get
+        {
+            if (_itemPicker.Open) return true;
+            if (_characterEditor.Open) return _characterEditor.TakesText;
+            return !DebugAtCategories && DebugHasField(_debugRow);
+        }
+    }
+
+    /// <summary>
+    /// Whether the menu takes <paramref name="key"/> while its selection takes no typed text: the navigation and activation keys only (Escape, Enter
+    /// and the arrows); every other key is the game's, as if the menu were closed.
+    /// </summary>
+    internal static bool DebugMenuTakesKey(EngineKey key) => key is EngineKey.Escape or EngineKey.Enter or EngineKey.Up or EngineKey.Down
+        or EngineKey.Left or EngineKey.Right;
+
+    /// <summary>
+    /// A key while the menu is open: at the categories Up and Down pick one and Enter or Right opens it; in a category the rows are walked, edited and
+    /// applied, the tools switched, and Esc goes back; in a sub-list Up and Down pick and Enter applies.
     /// </summary>
     internal void DebugMenuKey(EngineKey key)
     {
@@ -573,28 +746,109 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
-        if (DebugParts is { } parts)
+        if (_characterEditor.Open)
         {
-            switch (key)
-            {
-                case EngineKey.Escape or EngineKey.Left:
-                    DebugParts = null;
-                    break;
-                case EngineKey.Up:
-                    _debugPart = (_debugPart + parts.Length - 1) % parts.Length;
-                    break;
-                case EngineKey.Down:
-                    _debugPart = (_debugPart + 1) % parts.Length;
-                    break;
-                case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
-                break;
-                case EngineKey.Enter:
-                    _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
-                    break;
-            }
+            _characterEditor.Key(key);
             return;
         }
+
+        if (DebugAtCategories) RootKey(key);
+        else CategoryKey(key);
+    }
+
+    /// <summary>
+    /// A key at the categories: Up and Down pick one (wrapping), Enter or Right opens it, Esc closes the menu.
+    /// </summary>
+    void RootKey(EngineKey key)
+    {
+        var categories = DebugCategories();
+        if (categories.Length == 0) return;
+        switch (key)
+        {
+            case EngineKey.Up:
+                _categoryCursor = (_categoryCursor + categories.Length - 1) % categories.Length;
+                break;
+            case EngineKey.Down:
+                _categoryCursor = (_categoryCursor + 1) % categories.Length;
+                break;
+            case EngineKey.Enter or EngineKey.Right:
+                OpenCategory(_categoryCursor);
+                break;
+            case EngineKey.Escape:
+                DebugMenuOpen = false;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Opens category <paramref name="index"/> on its first row.
+    /// </summary>
+    void OpenCategory(int index)
+    {
+        var categories = DebugCategories();
+        if (categories.Length == 0) return;
+        _category = Math.Clamp(index, 0, categories.Length - 1);
+        _categoryCursor = _category;
+        var rows = categories[_category].Rows;
+        _debugRow = rows.Length > 0 ? rows[0] : 0;
+        _debugPart = 0;
+        DebugParts = null;
+    }
+
+    /// <summary>
+    /// Esc from a category: back to the categories.
+    /// </summary>
+    void CloseCategory()
+    {
+        _category = -1;
+        _categoryCursor = Math.Clamp(_categoryCursor, 0, Math.Max(DebugCategories().Length - 1, 0));
+        _debugPart = 0;
+        DebugParts = null;
+    }
+
+    /// <summary>
+    /// A key in a category: in a sub-list Up and Down pick and Enter applies; otherwise the rows are walked, edited and applied, the tools switched,
+    /// and Esc goes back to the categories.
+    /// </summary>
+    void CategoryKey(EngineKey key)
+    {
+        if (DebugParts is { } parts) PartKey(key, parts);
+        else RowKey(key);
+    }
+
+    /// <summary>
+    /// A key while the open part list is shown: Up and Down pick, Enter applies the row to the picked part, Backspace edits the row's field, Esc or
+    /// Left closes the list.
+    /// </summary>
+    void PartKey(EngineKey key, (string? Id, string Name)[] parts)
+    {
+        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
+        switch (key)
+        {
+            case EngineKey.Escape or EngineKey.Left:
+                DebugParts = null;
+                break;
+            case EngineKey.Up:
+                _debugPart = (_debugPart + parts.Length - 1) % parts.Length;
+                break;
+            case EngineKey.Down:
+                _debugPart = (_debugPart + 1) % parts.Length;
+                break;
+            case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
+            break;
+            case EngineKey.Enter:
+                _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim(), parts[_debugPart]);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A key on the rows of a category: Up and Down walk them, Enter applies the highlighted one (or opens its part list or sub-view), Backspace edits
+    /// its field, the tools switch on Enter, Space, Left or Right, and Esc goes back to the categories.
+    /// </summary>
+    void RowKey(EngineKey key)
+    {
+        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
         switch (key)
         {
             case EngineKey.Enter or EngineKey.Left or EngineKey.Right when _debugRow < DebugLabels.Length
@@ -609,12 +863,18 @@ sealed class DebugMenu(GameHost host)
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.DropItem:
                 _itemPicker.Begin();
                 break;
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacter:
+                _characterEditor.Begin();
+                break;
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.Recruit:
+                RecruitAndEdit();
+                break;
             case EngineKey.Enter or EngineKey.Right when DebugPicksPart(_debugRow):
                 DebugParts = (DebugRow)_debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
                 if (DebugParts is not null) _debugPart = Math.Min(_debugPart, DebugParts.Length - 1);
                 break;
             case EngineKey.Escape:
-                DebugMenuOpen = false;
+                CloseCategory();
                 break;
             case EngineKey.Up:
                 _debugRow = DebugStep(-1);
@@ -638,7 +898,7 @@ sealed class DebugMenu(GameHost host)
             case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1];
             break;
             case EngineKey.Enter:
-                _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim());
+                _debugStatus = DebugApplyNow((DebugRow)_debugRow, field.Trim());
                 break;
         }
     }
@@ -648,7 +908,7 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     (string? Id, string Name)[]? DebugPartList()
     {
-        if (DebugTargets() is not [var first, ..])
+        if (DebugTargets(host) is not [var first, ..])
         {
             _debugStatus = "select or inspect a character first";
             return null;
@@ -691,13 +951,14 @@ sealed class DebugMenu(GameHost host)
     {
         host.Modding.EnsureDebugFields();
         if (_itemPicker.Open) _itemPicker.Type(c);
-        else if (DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
+        else if (_characterEditor.Open) _characterEditor.Type(c);
+        else if (!DebugAtCategories && DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
     /// <summary>
-    /// Heal, max skills and damage: the selected characters, else the inspected one.
+    /// Heal, edit character and damage: the selected characters, else the inspected one.
     /// </summary>
-    CharacterId[] DebugTargets()
+    internal static CharacterId[] DebugTargets(GameHost host)
     {
         var player = host.Session.World.Player;
         // includes a select issued this tick (--setup / --exec run commands in one frame)
@@ -866,7 +1127,7 @@ sealed class DebugMenu(GameHost host)
         var world = host.Session.World;
         long tick = world.Tick;
         var selected = host.Player.AgentOrders.ControlOrderers().ToArray();
-        var targets = DebugTargets();
+        var targets = DebugTargets(host);
         var here = at ?? host.Session.Camera.Current.Target;
         if ((int)row >= DebugLabels.Length)
             return host.Modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
@@ -879,8 +1140,8 @@ sealed class DebugMenu(GameHost host)
             case DebugRow.SpawnNpc:
                 if (DebugRecord(field, character: true) is not { } npc)
                     return DebugFail($"no character record matches '{field}'");
-                world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(here.X, here.Z)) { Tick = tick });
-                return $"spawned {npc.Name} at {here.X:0}, {here.Z:0}";
+                world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(here.X, here.Z), DebugSpawn.HostileFaction) { Tick = tick, Aggro = true });
+                return $"spawned {npc.Name} (hostile) at {here.X:0}, {here.Z:0}";
             case DebugRow.GiveItem:
                 var (name, quantity, quality) = DebugItemField(field);
                 return DebugGive(name, quantity, quality);
@@ -889,15 +1150,13 @@ sealed class DebugMenu(GameHost host)
                     return DebugFail("money: a whole number, e.g. 500 or -500");
                 world.Commands.Enqueue(new DebugMoney(delta) { Tick = tick });
                 return $"money {delta.ToString("+#;-#;0", CultureInfo.InvariantCulture)}";
+            case DebugRow.Recruit:
+                return DebugRecruitApply(world, tick);
             case DebugRow.Heal or DebugRow.HealFully:
                 if (targets.Length == 0) return DebugFail("select or inspect a character first");
                 bool limbs = row == DebugRow.HealFully;
                 world.Commands.Enqueue(new DebugHeal(targets, limbs) { Tick = tick });
                 return $"healed {targets.Length}{(limbs ? ", limbs restored" : "")}";
-            case DebugRow.MaxSkills:
-                if (targets.Length == 0) return DebugFail("select or inspect a character first");
-                world.Commands.Enqueue(new DebugMaxSkills(targets) { Tick = tick });
-                return $"every stat 100 for {targets.Length}";
             case DebugRow.Damage:
                 if (targets.Length == 0) return DebugFail("select or inspect a character first");
                 if (!float.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out float cut) || !(cut > 0))
@@ -919,13 +1178,6 @@ sealed class DebugMenu(GameHost host)
                 DebugParts = null;
                 string whose = selected.Length > 0 ? $"{selected.Length} selected" : "your characters";
                 return faction is null ? $"every bounty cleared on {whose}" : $"{part.Name?.Split("   ")[0]} bounties cleared on {whose}";
-            case DebugRow.Godmode:
-                bool godOn = field.Trim().ToLowerInvariant() switch { "on" or "1" or "true" => true, "off" or "0" or "false" => false,
-                    _ => !world.Player.Godmode };
-                world.Commands.Enqueue(new DebugGodmode(godOn) { Tick = tick });
-                return godOn
-                    ? "godmode on: every player character has all stats 1000 and is healed 5 times a second"
-                    : "godmode off: each character has its own stats back";
             case DebugRow.Guard:
                 return DebugGuardApply(world, field, tick);
             case DebugRow.Explode:
@@ -935,10 +1187,142 @@ sealed class DebugMenu(GameHost host)
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
+            default:
+                return DebugSwitchApply(world, row, field, tick);
+        }
+    }
+
+    /// <summary>
+    /// The Recruit row: queues the recruitment of the selected or inspected character, or says why it can't join.
+    /// </summary>
+    private string DebugRecruitApply(World world, long tick)
+    {
+        var recruitTarget = RecruitTarget(host);
+        if (recruitTarget.IsNone) return DebugFail("select or inspect a character first");
+        if (host.PopData is not { } data) return DebugFail("no game data");
+        if (!world.Characters.TryResolveNext(recruitTarget, out int recruitSlot)) return DebugFail("that character is gone");
+        if (DialogueSystem.RecruitRefusal(world, data, recruitTarget) is { } refusal) return DebugFail(refusal);
+        world.Commands.Enqueue(new DebugRecruit(recruitTarget) { Tick = tick });
+        return $"{world.Characters.Cold(recruitSlot)!.Name} joins your squad";
+    }
+
+    /// <summary>
+    /// The player-wide switch rows (stats 1000, auto heal, instant move, one punch, no stumbling): <paramref name="field"/> sets or toggles the
+    /// switch and queues it; any other row returns an empty string.
+    /// </summary>
+    private static string DebugSwitchApply(World world, DebugRow row, string field, long tick)
+    {
+        switch (row)
+        {
+            case DebugRow.StatsTo1000:
+                bool statsOn = Toggled(field, world.Player.StatsTo1000);
+                world.Commands.Enqueue(new DebugStats1000(statsOn) { Tick = tick });
+                return statsOn ? "stats 1000 on: every player character has all stats at 1000"
+                    : "stats 1000 off: each character has its own stats back";
+            case DebugRow.AutoHeal:
+                bool healOn = Toggled(field, world.Player.AutoHeal);
+                world.Commands.Enqueue(new DebugAutoHeal(healOn) { Tick = tick });
+                return healOn ? "auto heal on: every player character is healed 5 times a second" : "auto heal off";
+            case DebugRow.InstantMove:
+                bool instantOn = Toggled(field, world.Player.InstantMove);
+                world.Commands.Enqueue(new DebugInstantMove(instantOn) { Tick = tick });
+                return instantOn ? "move instantly on: a right click teleports the selected characters" : "move instantly off";
+            case DebugRow.OnePunch:
+                bool punchOn = Toggled(field, world.Player.OnePunch);
+                world.Commands.Enqueue(new DebugOnePunch(punchOn) { Tick = tick });
+                return punchOn ? "one-punch man mode on: every hit by one of your characters kills" : "one-punch man mode off";
+            case DebugRow.NoStumble:
+                bool stumbleOff = Toggled(field, world.Player.NoStumble);
+                world.Commands.Enqueue(new DebugNoStumble(stumbleOff) { Tick = tick });
+                return stumbleOff ? "no stumbling on: hits no longer stagger your characters" : "no stumbling off";
         }
         return "";
     }
 
+    /// <summary>
+    /// <see cref="DebugApply"/> and, while the game is paused, the one tick that carries out the command it queued, so the menu's values show the change
+    /// at once; a running game's next tick takes it.
+    /// </summary>
+    string DebugApplyNow(DebugRow row, string field, (string? Id, string Name) part = default, Vector3? at = null)
+    {
+        int queued = host.Session.World.Commands.Count;
+        string status = DebugApply(row, field, part, at);
+        if (host.Session.World.Commands.Count > queued) ApplyWhilePaused();
+        return status;
+    }
+
+    /// <summary>
+    /// The Recruit row's target: the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's
+    /// selection), else the first selected.
+    /// </summary>
+    static CharacterId RecruitTarget(GameHost host)
+    {
+        var player = host.Session.World.Player;
+        if (!player.Inspected.IsNone) return player.Inspected;
+        var selected = host.Player.AgentOrders.ControlOrderers();
+        return selected.Count > 0 ? selected[0] : CharacterId.None;
+    }
+
+    /// <summary>
+    /// The Recruit row: the target joins the player's faction and active squad, then the debug menu closes and the character editor opens on it
+    /// (name and appearance), as a recruit's would.
+    /// </summary>
+    void RecruitAndEdit()
+    {
+        var target = RecruitTarget(host);
+        if (target.IsNone)
+        {
+            _debugStatus = "select or inspect a character first";
+            return;
+        }
+
+        _debugStatus = DebugApplyNow(DebugRow.Recruit, "");
+        if (DebugFailed) return;
+        if (!host.Player.CharacterEditor.OpenEditor(EditKind.Recruit, [target]))
+        {
+            _debugStatus = "the character editor did not open";
+            return;
+        }
+
+        DebugMenuOpen = false;
+    }
+
+    /// <summary>
+    /// The console's god mode, the menu's "Set stats to 1000" and "Auto heal" together: <paramref name="field"/> is on / off, or empty to toggle
+    /// (on unless both are already on).
+    /// </summary>
+    internal string DebugGodmodeApply(string field)
+    {
+        DebugFailed = false;
+        var world = host.Session.World;
+        bool on = Toggled(field, world.Player.StatsTo1000 && world.Player.AutoHeal);
+        world.Commands.Enqueue(new DebugGodmode(on) { Tick = world.Tick });
+        return on
+            ? "godmode on: every player character has all stats 1000 and is healed 5 times a second"
+            : "godmode off: each character has its own stats back";
+    }
+
+    /// <summary>
+    /// Runs one simulation tick while the game is paused, so the command the menu just queued takes effect at once (the menu's values then show it);
+    /// nothing while the game runs, whose next tick takes it.
+    /// </summary>
+    internal void ApplyWhilePaused()
+    {
+        if (!host.Session.Simulation.IsPaused || host.Covered) return;
+        host.Session.Step(1);
+    }
+
+    /// <summary>
+    /// Sets every stat of the targets to 100 (the console's <c>maxstats</c>, and the Edit character sub-view's Max out everything).
+    /// </summary>
+    internal string DebugMaxAll()
+    {
+        DebugFailed = false;
+        var targets = DebugTargets(host);
+        if (targets.Length == 0) return DebugFail("select or inspect a character first");
+        host.Session.World.Commands.Enqueue(new DebugMaxSkills(targets) { Tick = host.Session.World.Tick });
+        return $"every stat 100 for {targets.Length}";
+    }
 
     /// <summary>
     /// Takes <c>--maker x</c>, <c>--model x</c> and <c>--level n</c> out of <paramref name="args"/>; null when none is given.
@@ -1034,42 +1418,74 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): the title with the switches on, the
-    /// rows (scrolled to the highlighted one), the selection, camera target and money, the hint with <paramref name="close"/> and the status.
-    /// <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display): the text and every size in the menu grow with it.
-    /// While the item picker is open it is drawn instead of the rows.
+    /// A line of the menu as drawn: its text, whether it is highlighted, whether it is a switch that is on, the row (or category) it belongs to and,
+    /// for a line of the open part list, the part's index (-1 otherwise).
     /// </summary>
-    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1)
+    readonly record struct MenuLine(string Text, bool Highlight, bool On, int Row, int Part);
+
+    /// <summary>
+    /// The menu's lines as last drawn, with their rectangles; a click hit-tests them.
+    /// </summary>
+    readonly List<(MenuLine Line, Vector4 Rect)> _drawnLines = [];
+
+    /// <summary>
+    /// The category view's "back" button's rectangle as last drawn (a click on it goes back to the categories); null at the categories.
+    /// </summary>
+    Vector4? _backButton;
+
+    /// <summary>
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the menu's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
+    /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): at the categories their titles with how
+    /// many switches inside are on, in a category its rows (scrolled to the highlighted one) with a back button, the selection, camera target and money,
+    /// the hint with <paramref name="close"/> and the status. <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display):
+    /// the text and every size in the menu grow with it. While the item picker or the Edit character sub-view is open it is drawn instead.
+    /// </summary>
+    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1,
+        DebugOverlay.OverlayPass? pass = null)
     {
         if (_itemPicker.Open)
         {
-            _itemPicker.Draw(o, width, height, top, scale, close, atRight);
+            _itemPicker.Draw(o, width, height, top, scale, close, atRight, pass);
+            return;
+        }
+
+        if (_characterEditor.Open)
+        {
+            _characterEditor.Draw(o, width, height, top, scale, close, atRight, pass);
             return;
         }
 
         var world = host.Session.World;
         var here = host.Session.Camera.Current.Target;
-        // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
-        var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
+        var lines = new List<MenuLine>();
         var onNames = new List<string>();
         host.Modding.EnsureDebugFields();
         DebugMenuAddLines(world, lines, onNames);
+        var categories = DebugCategories();
+        bool root = _category < 0 || _category >= categories.Length;
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money "
             + $"c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = DebugParts is null ? $"Up/Down pick   type to edit   Enter apply / switch   Esc/{close} close"
-            : $"Up/Down pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
-                + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
+        string hint = root
+            ? $"Up/Down or click pick   Enter open   Esc/{close} close"
+            : DebugParts is null
+                ? "Up/Down or click pick   type to edit   Enter apply   Esc back"
+                : $"Up/Down or click pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   "
+                    + $"{((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10 * scale, y0 = top + 16 * scale, charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale;
-        int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, 30)));
-        // The title line names every switch that is on, cut with "+N more" to the panel's width.
-        string title = $"Debug   ({close} closes)";
+        int chars = Math.Max(lines.Count > 0 ? lines.Max(l => l.Text.Length) : 0, Math.Max(info.Length, Math.Max(hint.Length, 30)));
+        // The title names the open category, or, in one, every switch that is on (cut with "+N more" to the panel's width).
+        string title = root ? $"Debug   ({close} closes)" : $"Debug > {categories[_category].Title}   ({close} closes)";
         if (onNames.Count > 0) title = DebugOnSummary(title, onNames, chars);
         chars = Math.Max(chars, title.Length);
+        var status = WrapStatus(_debugStatus, chars, 3);
         float w = chars * charWidth + 2 * pad;
-        // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view (titles take a little
-        // extra height).
-        int room = (int)((height - y0 - 4 * pad) / lineHeight) - 6;
+        // The list scrolls when the screen is too low for all of it: the window of lines keeps the highlighted one in view.
+        int room = (int)((height - y0 - 4 * pad) / lineHeight) - (root ? 6 : 7);
         int first = 0, count = lines.Count;
         if (count > room && room > 4)
         {
@@ -1077,45 +1493,125 @@ sealed class DebugMenu(GameHost host)
             first = Math.Clamp(at - room / 2, 0, count - room);
             count = room;
         }
-        float h = (count + 8) * lineHeight + 2 * pad;
+        float h = (count + 5 + (root ? 0 : 1) + status.Count) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
         float y = y0 + pad;
         o.TextScaled(title, x0 + pad, y, onNames.Count > 0 ? DebugOnText : DebugOverlay.TextColour, scale);
         y += 1.5f * lineHeight;
+        _drawnLines.Clear();
         for (int i = first; i < first + count; i++, y += lineHeight)
         {
-            var (text, isTitle, highlight, on) = lines[i];
-            if (isTitle)
-            {
-                o.TextScaled("-- " + text + " --", x0 + pad, y, dim, scale);
-                continue;
-            }
+            var line = lines[i];
+            var (text, highlight, on, _, _) = line;
             if (on) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, DebugOnTint);
             if (highlight) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            _drawnLines.Add((line, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
             // A switch that is on: green text, a green tint behind and a '*' in the marker column (the cursor's '>' wins on the current row).
-            if (on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
+            if (!root && on && !highlight && text.StartsWith("  ", StringComparison.Ordinal)) text = "* " + text[2..];
             o.TextScaled(text, x0 + pad, y, on ? DebugOnText : DebugOverlay.TextColour, scale);
         }
         y += 0.5f * lineHeight;
         o.TextScaled(info, x0 + pad, y, dim, scale);
-        o.TextScaled(hint, x0 + pad, y + lineHeight, dim, scale);
-        // The status never sets the panel's width: it wraps to it, at most three lines, cut with "...".
-        var status = WrapStatus(_debugStatus, chars, 3);
+        y += lineHeight;
+        _backButton = root ? null : DrawBackButton(o, x0 + pad, y, scale);
+        if (!root) y += lineHeight;
+        o.TextScaled(hint, x0 + pad, y, dim, scale);
         for (int k = 0; k < status.Count; k++)
-            o.TextScaled(status[k], x0 + pad, y + (2 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+            o.TextScaled(status[k], x0 + pad, y + (1 + k) * lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
-    /// The debug menu's lines: section titles, one per row (with its value and whether it is on) and the part list of the row picking one;
-    /// <paramref name="onNames"/> collects the switches that are on.
+    /// Whether <paramref name="at"/> lies on the menu as last drawn (the open sub-view's panel while one is open): a click there is the menu's, one
+    /// anywhere else is the interface's and the world's.
     /// </summary>
-    void DebugMenuAddLines(Simulation.World world, List<(string Text, bool Title, bool Highlight, bool On)> lines, List<string> onNames)
+    internal bool DebugMenuContains(Vector2 at)
     {
-        foreach (var (header, i) in DebugLayout())
+        if (_itemPicker.Open) return _itemPicker.Contains(at);
+        if (_characterEditor.Open) return _characterEditor.Contains(at);
+        return _panelRect is { } rect && Inside(rect, at);
+    }
+
+    /// <summary>
+    /// A left click on the menu: at the categories a category is opened; in one, the back button goes back as Esc does, a row is picked and, unless it
+    /// takes typed text, applied as Enter does (a row with a field is only picked), and a line of the open part list is picked and applied. The caller
+    /// checks <see cref="DebugMenuContains"/> first, so a click outside the menu never reaches it.
+    /// </summary>
+    internal void DebugMenuClick(Vector2 at)
+    {
+        host.Modding.EnsureDebugFields();
+        if (_itemPicker.Open)
         {
-            if (header is not null) lines.Add((header, true, false, false));
+            _itemPicker.Click(at);
+            return;
+        }
+
+        if (_characterEditor.Open)
+        {
+            _characterEditor.Click(at);
+            return;
+        }
+
+        if (_backButton is { } back && Inside(back, at))
+        {
+            CloseCategory();
+            return;
+        }
+
+        foreach (var (line, rect) in _drawnLines)
+        {
+            if (!Inside(rect, at)) continue;
+            if (DebugAtCategories)
+            {
+                _categoryCursor = line.Row;
+                OpenCategory(line.Row);
+                return;
+            }
+
+            if (line.Part >= 0 && DebugParts is { } parts)
+            {
+                _debugPart = Math.Min(line.Part, parts.Length - 1);
+                DebugMenuKey(EngineKey.Enter);
+                return;
+            }
+
+            bool partsOpen = DebugParts is not null;
+            DebugParts = null;
+            _debugRow = line.Row;
+            if (partsOpen) return;   // a click on a row leaves the open part list
+            if (!DebugHasField(_debugRow)) DebugMenuKey(EngineKey.Enter);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies in <paramref name="rect"/> (x0, y0, x1, y1).
+    /// </summary>
+    internal static bool Inside(Vector4 rect, Vector2 at) => at.X >= rect.X && at.X <= rect.Z && at.Y >= rect.Y && at.Y <= rect.W;
+
+    /// <summary>
+    /// The menu's lines: at the categories one per category (with how many of its switches are on), in a category one per row (with its value and
+    /// whether it is on) and the part list of the row picking one; <paramref name="onNames"/> collects the switches that are on.
+    /// </summary>
+    void DebugMenuAddLines(Simulation.World world, List<MenuLine> lines, List<string> onNames)
+    {
+        var categories = DebugCategories();
+        if (_category < 0 || _category >= categories.Length)
+        {
+            for (int c = 0; c < categories.Length; c++)
+            {
+                bool current = c == _categoryCursor;
+                int active = DebugActiveCount(categories[c], world);
+                string value = active > 0 ? $"{active} active" : "";
+                lines.Add(new((current ? "> " : "  ") + DebugCategoryColumns(categories[c].Title, value), current, active > 0, c, -1));
+            }
+            return;
+        }
+
+        foreach (int i in DebugLayout())
+        {
             bool current = i == _debugRow;
             string mark = current && DebugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
@@ -1124,7 +1620,7 @@ sealed class DebugMenu(GameHost host)
                 string state = tool.State();
                 bool toolOn = tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
-                lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn));
+                lines.Add(new(mark + DebugColumns(tool.Label, tool.Key, state), current && DebugParts is null, toolOn, i, -1));
                 continue;
             }
             string value = DebugRowValue(i, current, world, out bool rowOn);
@@ -1135,13 +1631,44 @@ sealed class DebugMenu(GameHost host)
                         ? $" x{host.PopData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}"
                         : ""));
             }
-            lines.Add((mark + DebugColumns(host.Modding.DebugLabel(i), "", value), false, current && DebugParts is null, rowOn));
+            string text = mark + DebugColumns(host.Modding.DebugLabel(i), "", value);
+            lines.Add(new(text, current && DebugParts is null, rowOn, i, -1));
             if (DebugPicksPart(i) && current && DebugParts is { } parts)
             {
                 for (int k = 0; k < parts.Length; k++)
-                    lines.Add(((k == _debugPart ? "    > " : "      ") + parts[k].Name, false, k == _debugPart, false));
+                    lines.Add(new((k == _debugPart ? "    > " : "      ") + parts[k].Name, k == _debugPart, false, i, k));
             }
         }
+    }
+
+    /// <summary>
+    /// How many of a category's rows are switches that are on.
+    /// </summary>
+    int DebugActiveCount(DebugCategory category, Simulation.World world)
+    {
+        int count = 0;
+        foreach (int row in category.Rows)
+        {
+            if (DebugRowOn(row, world)) count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Whether row <paramref name="i"/> is a switch that is on (a cheat's live state, or a tool's).
+    /// </summary>
+    bool DebugRowOn(int i, Simulation.World world)
+    {
+        if (DebugIsTool(i))
+        {
+            var tool = DebugTools[i - host.Modding.DebugRowCount];
+            string state = tool.State();
+            return tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
+        }
+
+        DebugRowValue(i, false, world, out bool on);
+        return on;
     }
 
     /// <summary>
@@ -1182,12 +1709,34 @@ sealed class DebugMenu(GameHost host)
                     value = $"{_explodeLevel} {ExplodeLevels.Names[_explodeLevel - 1]}";
                     rowOn = _explodeLevel != ExplodeLevels.Normal;
                     break;
-                case DebugRow.Godmode:
-                    value = OnOff(world.Player.Godmode);
-                    rowOn = world.Player.Godmode;
+                case DebugRow.StatsTo1000:
+                    value = OnOff(world.Player.StatsTo1000);
+                    rowOn = world.Player.StatsTo1000;
+                    break;
+                case DebugRow.AutoHeal:
+                    value = OnOff(world.Player.AutoHeal);
+                    rowOn = world.Player.AutoHeal;
+                    break;
+                case DebugRow.InstantMove:
+                    value = OnOff(world.Player.InstantMove);
+                    rowOn = world.Player.InstantMove;
+                    break;
+                case DebugRow.OnePunch:
+                    value = OnOff(world.Player.OnePunch);
+                    rowOn = world.Player.OnePunch;
+                    break;
+                case DebugRow.NoStumble:
+                    value = OnOff(world.Player.NoStumble);
+                    rowOn = world.Player.NoStumble;
                     break;
                 case DebugRow.DropItem:
                     value = "Enter: pick an item";
+                    break;
+                case DebugRow.EditCharacter:
+                    value = "Enter: edit the character";
+                    break;
+                case DebugRow.Recruit:
+                    value = "Enter: recruit and edit";
                     break;
                 case DebugRow.ExplodeClick:
                     rowOn = ExplodeClickOn;
@@ -1246,7 +1795,23 @@ sealed class DebugMenu(GameHost host)
     static readonly Vector4 DebugOnText = new(0.45f, 1f, 0.5f, 1), DebugOnTint = new(0.1f, 0.5f, 0.15f, 0.35f);
 
     /// <summary>
-    /// A row label without its hint: "Godmode (all players)" is "Godmode", "Teleport on map..." is "Teleport on map".
+    /// A small clickable button's background (the sub-views' "back").
+    /// </summary>
+    internal static readonly Vector4 ButtonColour = new(0.3f, 0.45f, 0.7f, 0.85f);
+
+    /// <summary>
+    /// Draws the sub-views' "back" button at <paramref name="x"/>, <paramref name="y"/> (a click on it steps back, as Esc does); returns its rectangle.
+    /// </summary>
+    internal static Vector4 DrawBackButton(DebugOverlay o, float x, float y, float scale)
+    {
+        float pad = 6 * scale, width = 4 * o.CharWidth * scale + 2 * pad, height = o.LineHeight * scale;
+        o.Rect(x, y, x + width, y + height, ButtonColour);
+        o.TextScaled("back", x + pad, y, DebugOverlay.TextColour, scale);
+        return new Vector4(x, y, x + width, y + height);
+    }
+
+    /// <summary>
+    /// A row label without its hint: "Guard (kill + heal in radius)" is "Guard", "Teleport on map..." is "Teleport on map".
     /// </summary>
     static string DebugShortName(string label)
     {
@@ -1275,6 +1840,11 @@ sealed class DebugMenu(GameHost host)
     /// One menu line after its 2-character marker: label, key hint and value, each in its own column so every value starts at the same place.
     /// </summary>
     static string DebugColumns(string label, string key, string value) => $"{label,-DebugLabelWidth} {key,-DebugKeyWidth} {value}".TrimEnd();
+
+    /// <summary>
+    /// A category line after its 2-character marker: the title, then how many of its switches are on, in a narrower column than the rows'.
+    /// </summary>
+    static string DebugCategoryColumns(string title, string value) => value.Length > 0 ? $"{title,-18} {value}" : title;
 
     /// <summary>
     /// The pick & collision inspector's menu (Meitou only, docs/viewer.md "Pick & collision inspector"). The F10 debug menu's Tools row opens it; it

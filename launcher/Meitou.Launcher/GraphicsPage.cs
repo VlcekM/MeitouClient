@@ -525,7 +525,7 @@ public sealed partial class MainWindow
     TextBlock LookStatus(bool faithful, int changes, LookChoice active)
     {
         string status = faithful
-            ? changes == 0 ? Tr("As the game ships") : changes == 1 ? Tr("1 change from the game") : Tr("{1} changes from the game", changes)
+            ? changes == 0 ? "" : changes == 1 ? Tr("1 change from the game") : Tr("{1} changes from the game", changes)
             : changes > 0 ? changes == 1 ? Tr("1 unsaved change") : Tr("{1} unsaved changes", changes)
             : active.Source == "mine" ? Tr("Mine · Meitou {1}", MadeOf(active))
                 : active.Source == "built in" ? Tr("Built in") : Tr("Example");

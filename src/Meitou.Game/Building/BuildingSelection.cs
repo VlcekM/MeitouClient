@@ -28,6 +28,11 @@ sealed class BuildingSelection(PlayerInterface player)
     internal SelectedBuilding? Selected;
 
     /// <summary>
+    /// The UseableStuff and StorageBuilding lines of a building with no machine of the player's.
+    /// </summary>
+    internal UseableLines Useable { get; } = new(player);
+
+    /// <summary>
     /// A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.
     /// </summary>
     public bool DeselectBuildings { get; set; } = true;
@@ -436,10 +441,12 @@ sealed class BuildingSelection(PlayerInterface player)
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
+        Useable.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
-        if (detail?.Bed is { } bed)
+        // A skeleton bed's section 6 is the machine lines, not the Healing bonus (UseableStuff slot 40 FUN_140304e90 shows it for BF_BED alone).
+        if (detail?.Bed is { } bed && !Useable.IsSkeletonBed(site?.Record ?? focus.Record))
         {
             if (bed.Cost != 0)
                 state.Add(new("Cost to use:", bed.Cost < 0 ? Loc.Tr("Private") : $"({Loc.Tr("Pay c.{1,num}", bed.Cost)})"));
@@ -501,7 +508,8 @@ sealed class BuildingSelection(PlayerInterface player)
         if (rich is { } richness && player.Production.Machine(focus.SiteId)?.Farm is null)
             ProductionWindows.AddRichnessLine(richness, stats);
 
-        if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
+        bool bedLines = detail?.Bed is not null && !Useable.IsSkeletonBed(focus.Record ?? player.Production.Machine(focus.SiteId)?.Record);
+        if (!bedLines && own && player.Production.Machine(focus.SiteId) is { } machine)
         {
             Simulation.Combat.TurretPanelView? turretPanel =
                 player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;
@@ -513,6 +521,11 @@ sealed class BuildingSelection(PlayerInterface player)
             (status, bad) = ProductionWindows.ProductionStatus(0, e);
             stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
             ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
+        }
+        else
+        {
+            // Furniture with no machine of the player's (a town's) shows the UseableStuff lines all the same.
+            Useable.AddStatsLines(focus, stats);
         }
     }
 

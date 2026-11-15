@@ -451,6 +451,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (a gate not offering the template's `layout interior`, which the chooser does not test for gates) stays free, is chosen again, and the entry
   houses nobody more. Then every free building whose interiors take the default resident's
   `layout interior` gets it (`FUN_14092e4b0`).
+  **Verified** (base data under these rules; the original 1.0.65 in a new game, KenshiHarness): the Grid's Workshop Complex (rebirth) has three
+  Metal Warehouses, `workshop empty` v0 2 and no default resident, so the highest-serial one, `15.47:4-rebirth-INGAME` at the map marker, keeps
+  its level state's empty interior and stands bare while `15.47:2` is furnished (#730).
 - **Layouts** (**Verified**, decompile): housing (`FUN_14092e4b0`, called only by the driver, → `FUN_140552140`, called only by it) re-owns the home
   to the template's `faction` (else the town's), clears its interior and exterior objects, sets the interior layout name (LayoutInterior vfunc 12
   `FUN_14054c420`, a name only) to the template's `layout interior` and the exterior one to `layout exterior`, empty ones included, whatever the level
@@ -638,7 +641,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   - The real items (physics debris, loot) are made only when the zone's `ZoneMapContent::newGameFirstTimeLoaded` (+0xa8, read through
     `getZoneMapLocation`) is set: a zone with no save file. The meshes and buildings come every load.
   - Meitou (`NestFurniture`, `PopulationCamps.cs`): all of it when a nest's zone activates, removed when it unloads (NPCs in its cages let out); a
-    `spawn in town centre` town's when it is made, kept (again when its TOWN record changed). Its own rolls keyed by the camp's place; the navmesh query
+    `spawn in town centre` town's when it is made, kept (again when its TOWN record changed), with its residents' nests round their homes
+    ([zones](../formats/zones.md#nest-debris-and-loot)). Its own rolls keyed by the camp's place; a centre snaps to the closest walkable point within 60
+    (engine choice: the original's snap reach is **Unknown**; unsnapped, a centre in a ruin's rubble lost every piece near it); the navmesh query
     is the walkability at the centre's height within 60. The items are loose ground items, laid once per camp in this world and only in a zone the
     loaded save has no file of. Its pieces are fixtures: cages, locked containers and beds (a bandit camp's Camp Beds, #362). A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
     (nest markers skipped). Not modelled: the dedupe of a town's saved pieces (Meitou makes them again, not saving them).
@@ -672,8 +677,13 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   sector, pushed out of towns (2 x radius own, 1 x another faction's) and, if within 1382.4 of the camera focus, away from it; accepted only when `FUN_1408f4d70` passes:
   the terrain height there (`FUN_1409b32f0`) is **not below 95** (-99, "no terrain", passes), so nothing spawns more than 5 units under the water level (100), and the
   `areasmap.tga` pixel there (1152 units a pixel, `trunc((coord + 147456) / 1152)`, the map object being built from -147456 to 147456 by `FUN_1408fb580`) is not black (black is the NONE group); then, for a loaded sector, the point is
-  snapped to the navmesh and refused inside a non-Ruins town or where the face data's high nibble is above 0. The navmesh covers the water, so walkability alone is not this test.
-  Meitou: `SpotAllowed` (terrain >= `SpawnMinTerrainHeight` 95, `BiomeMap.Painted`) next to `IsWalkable`.
+  set to the terrain height, snapped to the navmesh from there (`FUN_1403a3ac0`, box half-extent 600, a door-and-water hit filter; the query being
+  nearest-point is **Observed**, from the call shape) and refused inside a non-Ruins town or where the face data's high nibble is above 0. The navmesh covers the water, so walkability alone is not this test.
+  So a spot starts on the surface nearest the terrain, not the highest. Meitou (`PopulationWild.SpotGround`, sector and nest spots): `SpawnFloor` 95,
+  `BiomeMap.IsPainted`, and a walkable surface within the stand range of the terrain (`GroundLevel`), the gate code read there; a spot with only raised
+  floors over it (a ruin's storeys, a rock's top) is refused and drawn again rather than moved (engine choice), and each member is made on the ground
+  surface at its own offset (`BuiltSquad.Grounded`). **Observed** headless (#731 save, `Nest of Beak Things` beside the Crater's Ancient Citadel): a
+  spot under the citadel has navmesh only at 1910 and 1969 over terrain 1606.
   Weight of a `homeless spawns` entry: `max(0, v0 - k x n)` (times `FUN_1402dd530`, a constant 1), n = the living platoons of that faction and template in the **whole world**,
   loaded or not (`FUN_1406b9d10`), k = (sum of the list's v0) / (loaded zones x P x `homeless spawn amount`), the zone count being the size of the zone manager's loaded-zone map
   (`+0x168128`, read by the zone loops; Meitou divides by ceil(P x amount) instead of P x amount, since a sector makes that many at once: engine choice). So a template is held to its share v0 / sum of the loaded world's squads. Meitou: `WorldShareOf` (living squads, unloaded platoons, kept wild squads, town residents of the same template included as in the original; the zones are the active ones).
@@ -720,6 +730,11 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   moved 200 outward from the town position); the leader walks to it and the next is drawn within 100 (origin, outward and the radius: engine choices).
   `patrol approaches towns` is set on 933 of 961 squad templates of the merged load order, the Starving Bandit and Dust Bandit roamers
   among them, so their patrols target NPC towns as above; no other town check was found (**Verified**, record dump).
+  A Starving Bandit mob spawned just west of the Hub leaves in any direction and sometimes walks straight through the town on its first
+  patrol: 1 of 9 complete original runs from one save (closest 211 to the town centre; 2026-11-15), Meitou 6 of 20 probe seeds, within chance
+  (**Observed**). For an east sector point whose straight line misses the town by ~1100, both cut through it: a player ordered on the world map
+  from (-47560, 1640) to the mob's spawn (-55251, 2070) passed 265 from the centre, Meitou's navmesh path ~200 on the same corners (**Observed**,
+  KH 2026-11-15; the camera clamps to ~2000 from the squad, so long walks need the map: ~36 units a pixel after 12 zoom-ins).
 - **Traders**: restocked only while active, when the clock passes the platoon's `inventory refresh time`; an unloaded one catches up at
   its first active tick.
 - **Prisoners** (**Observed**): frozen with their platoon; sentences are absolute timestamps and release is a loaded AI task.

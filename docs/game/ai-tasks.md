@@ -465,7 +465,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 69 | `isRouteTraceBlocked` |
 | 70 | `isObjectMine` |
 | 71 | `isBuildingDamaged` |
-| 72 | `isFullyRested` (**Observed**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): false for a character (or character target) whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (`FUN_140643cd0`; the field's meaning is **Unknown**). Meitou: false off the player's side, else not incapacitated |
+| 72 | `isFullyRested` (**Observed**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): false for a character (or character target) whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (`FUN_140643cd0`, the threshold the upper half of `DAT_14168a258`). The field (**Observed**, decompile of the medical update `FUN_140644e60`): starting at 100, for each part with no replacement limb (`+0x28` null) and the flag `+0x7c` of its vfunc-0xd0 object clear, a part whose (h - s) x 100 / M (M = base x mult x scale - wear, [character-stats](character-stats.md)) is below the running value stores its raw h - s; the result x 0.01, snapped to 1 above 0.999. Bandage and rig are not counted. Comparing a percentage but storing raw h - s reads as a decompile quirk; which is meant is **Unknown**. Meitou: false off the player's side, else not incapacitated |
 | 73 | `machineHasFreeOperatorSlot` |
 | 74 | `isEnemyForceDefeated` |
 | 76 | `isMessageDelivered` |
@@ -710,8 +710,12 @@ Meitou: [simulation, captives](../simulation.md#captives).
   RECAPTURED_A_SLAVE also comes from the cuffing task ([capture](#slave-work-shout-and-capture)).
   - Vslot 124 returns 0 in `Character` and `CharacterAnimal` (`FUN_1405e1f20`). `CharacterHuman` overrides it with its appearance's `shaved` (`FUN_1405b24c0`:
     `animation` `+0x448`, `appearance` `+0xe8`, `shaved` `+0x168`; RTTI vtables, KenshiLib offsets).
-  - An ex-slave's hair grows back when it goes free after 4 days (`StateBroadcastData::periodicUpdate` `FUN_1405a4f50`, `shaveHead(false)`). The other
-    `shaveHead` callers (`0x140585dc8`, `0x1405f58cf`) are **Unknown**.
+  - An ex-slave's hair grows back when it goes free after 4 days (`StateBroadcastData::periodicUpdate` `FUN_1405a4f50`, `shaveHead(false)`).
+  - Opening the character editor in play (mode 1) grows back every listed human's hair at once (**Verified**, decompile: the constructor
+    `FUN_1405f4dd0` calls `shaveHead(false)` at `0x1405f58cf` for each character with a human body when its mode is 1; the mode-1 openers are a
+    surgeon's DA_CHARACTER_EDITOR (DA 11, `FUN_140680560` -> `FUN_1407f3670`), DA 3 recruiting and animal buying). So visiting a plastic
+    surgeon restores a shaven head, even if the editor is then cancelled. Meitou: `InPlayEditorOpened` -> `CharacterEditing.GrowHair`.
+    The caller `0x140585dc8` is **Unknown**.
   - Meitou: `CaptiveSystem` fires 35 or 37 and shaves `CharacterCold.Shaved`, saved as `shaved`. The look is built with the character's shave
     (`CharacterOptions.Shaved`; the CHARACTER's `shaved` for a new character and a loaded one without a state record): no hair, and cut horns
     on a mesh with `bone_horns_top_short` (whether a shave in play cuts them in the original is **Unknown**; Meitou follows the one appearance
@@ -913,7 +917,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   **Meitou** (`RetaliationSystem.JoinFight`, `BestAlly`, `Plan`): the aggro system's senses stand in for the sensed map (entries tagged ALLY, not KO or imprisoned, seen or heard at the last look), the fight
   threat is `CombatSystem.FightThreat` (so an attacked ally that fights nobody counts), Passive gives the desire 0 in a fight too, the slave gate is asked once for the first slave met (the finder latches it), the best ally is the first in slot order on a tie,
   the result is capped at 1.2, the plan is `CombatSystem.BestAttackerOf` for the ally, and a character on Hold also needs `Orders.HoldPost`. It cannot start while the character fights on another plan or
-  cannot fight; while its own fight runs with no ally left its desire stays 0.7 (engine, the fight task ends by itself). The step reaches it at the engine re-ask of an idle or job-task character
+  cannot fight; while its own fight runs with no ally left its desire stays 0.7 (engine: the fight ends by itself, once targetless with no threat left, [leaving a fight](combat.md#leaving-a-fight)). The step reaches it at the engine re-ask of an idle or job-task character
   (within `JobCheckTicks` of a mate starting to fight) or at any replan; an order or a goal's task keeps it out. **Observed** (offscreen sandbox): a player character in a squad of its own 45 to 55 units away joins
   an ally's fight when nothing else wants it (run with the threat taken as 1). The second zero of `FUN_140599b90` is Passive (the byte `+0x12c` of the character's `+0x450` object, standing order 13; **Observed** that it is the same object as Hold's `+0x12b`). The old engine join (squad mates within 250 at a fixed 0.6) is gone.
 - **The medic jobs' own threat tests** (**Verified** against `TaskDataTable`, lists read row by row): 58 Medic and 250 Splint Rigging have no list B; their treatment rows 25 First aid and
@@ -1166,6 +1170,13 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   then 0); only while that town's zone is loaded. The town's buildings of designation 3 (BD_BAR, the residents' template's `building designation`;
   town vfunc `0x2d0`) are scanned cyclically from a random one; the first with a free **table** wins, that table is reserved for the squad in a
   global table→squad map (`DAT_14212ddb8`) and becomes the package's target; all bars full: no target.
+  - The start needs the platoon's squad object (+0x1d8, null while unloaded) and the town's zone loaded, and sets the started flag (+0x150)
+    only then; the target query (vfunc 1, `FUN_140293ea0`, what 214 Relaxing asks) runs the start first while that flag is clear (**Verified**,
+    decompile). Whether the package's activation also calls it, and whether the reservations are saved, is **Unknown**.
+  - **Observed** (KH 1.0.65, four runs of one Hub save from 10:20): the Hub's five bar squads (Mercenary guild, two Drifters recruit squads,
+    Bar thugs, Hound Pacifier) all relax at the Storm House's tables for 3 hours, while seven `hub squatters` squads (package `Squatters`,
+    signal 17, no 214 goal) block none of them. Meitou: a bar-class package takes a table at its start only when a goal of it is 214
+    (`AiSystem.Rules.AsksForTable`; engine reading of the lazy start), so a package without one holds none and keeps its home.
   - The table search (`FUN_140292de0`, **Verified** by disassembly) asks the town (vfunc 0x2c8, `FUN_1409fc540`) for its furniture through a filter
     (vfunc 5 `FUN_1408ca670`). It keeps a piece:
     - of the package's town, and of a faction not hostile to the platoon's (`FUN_1406b26d0`);
@@ -1194,8 +1205,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,
   CRAFTING, CHAIR; reading the mask as bits is **Observed**). Both it and 275 lead to 221 (pretend operating).
   **Verified** (decompile 2026-11-03): with no target set the finder lists the home interior's buildings that pass the mask (`FUN_1408cbad0`), returns the factor 0 (goal not wanted) when none
-  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0. Meitou: `HomeSpotKind.Chair` (spots), `Training` and `Workstation`
-  (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`) are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
+  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0.
+  The home is the squad's own building, also under a bar package (**Observed**, 1.0.65, three runs of one Hub save, 10:20 to 13:20: the `hub squatters`, package
+  `Squatters` of signal 17, stay at their ruins' campfires and stools, within 120 of where they started), and the furniture its residents' nest stood round it counts
+  ([zones](../formats/zones.md#nest-debris-and-loot); a ruin has no interior of its own). Meitou: `HomeSpotKind.Chair` (spots), `Training` and `Workstation`
+  (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`), then the nest's pieces (`NestBuildings.FurnitureOf`), of `Blackboard.OwnHome`
+  are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
   piece at random (`FreeFurniture`; distinct pieces per member is the engine's claim, **Observed**), sit on a chair, stand at a dummy, or stand at a workstation facing it at the machine's work clip and
   hunger rate (`PretendOperate`: 221's look; no machine runs).
 - **275 Sitting around** (`FUN_1408caf00`; the registration's finder thunk `LAB_1400061db` is not in the RE files, so the row link is **Observed**; the rest **Verified** by decompile):
@@ -1355,7 +1370,7 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     `Character_Drop_Person` and floats the functionality's `string` over the machine ([corpse machine label](buildings-production.md#classes-and-functions)).
   - 45 Bodyguard, 31 Staying close and 97 Training have no finder: they act on the job's own target; 45 and 31 are goals (Task_Blank, rows above) on the job's character, the context menu gives
     them as "Follow" (31) and "Bodyguard" (45), the dispatcher always adds 45 as a job. None of 31, 45, 289 has 47 `IS_CARRYING_SOMETHING` in list B (row table), so nothing in
-    those rows stops a carrier following. Meitou: a carrier standing idle with nothing under way (after a pick-up order or a 148 lift) takes them up, ahead of 106 when listed above it; one
+    those rows stops a carrier following. Meitou: a carrier standing idle with nothing under way (after a pick-up order, a 148 lift or a finished move order, whose provenance stays; #711) takes them up, ahead of 106 when listed above it; one
     whose job, errand or order still holds the body does not, and the other production list jobs wait until the body is put down (`ProductionSystem.AbleFor`). 97 is `Task_UseTrainingDummy` (slots 1-3 `FUN_1403513a0`, `FUN_14035c1e0`, `FUN_140345570`; **Verified** by
     decompile): the dummy (function 7, BF_TRAINING; the animation event `Impact Dummy`, a "Training" progress bar for the player's characters) is operated through `UseableStuff` vfunc 0x4b0: with a
     positive `stat used` (+0x3f8) it calls the continuous XP entry with a cap, `FUN_1408c64f0`(stats, dt, 2.0, &stat, cap = the float +0x1a4, stat number): nothing once the stat is at the cap, else the

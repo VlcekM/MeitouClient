@@ -269,6 +269,30 @@ sealed partial class GameHost
     internal Vector3 TrackedPosition(CharacterSnapshot c) => DrawnPosition(Tracked(c));
 
     /// <summary>
+    /// Switches the camera leash for the frame: on with its setting, except while <paramref name="held"/> (a flight or the cinematic camera has
+    /// the view), on the title, in photo mode and in the play benchmark (its script pans far from the squad).
+    /// </summary>
+    internal void UpdateCameraLeash(bool held)
+    {
+        var leash = Session.Camera.Leash;
+        leash.Anchors ??= LeashAnchors;
+        leash.Enabled = Config.CameraLeash && !held && !TitleScreen.TitleVisible && Session.Camera.Free.Photo is null
+            && GameOptions.PlayBench is null;
+    }
+
+    /// <summary>
+    /// The camera leash's anchors: every one of the player's characters where the camera would track it (a carried one at its carrier).
+    /// </summary>
+    IReadOnlyList<Vector3> LeashAnchors()
+    {
+        var anchors = new List<Vector3>();
+        foreach (var c in Session.CurrentSnapshot.Characters)
+            if (c.IsPlayer) anchors.Add(Tracked(c).Position);
+
+        return anchors;
+    }
+
+    /// <summary>
     /// The drawn facing of <paramref name="body"/>'s carrier between the last two snapshots (<paramref name="fallback"/> without it).
     /// </summary>
     float CarrierYaw(WorldSnapshot now, CharacterSnapshot body, float fallback, float alpha)
@@ -465,6 +489,7 @@ sealed partial class GameHost
             Shots = c.CrossbowShots,
             Bolts = Debris.BoltsOf(c),
             Mouth = Debris.MouthOf(c),
+            BoneMeshes = c.BoneMeshes,
             Scale = c.Scale,
             DrawDistanceScale = c.DrawDistanceScale,
             Hidden = hidden,

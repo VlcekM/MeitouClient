@@ -58,6 +58,17 @@ static partial class WindowPointer
     static Glfw? s_glfwApi;
 
     /// <summary>
+    /// The pointer's position in the window's client area right now (window units, Windows only), or null elsewhere or on failure. Read just before a
+    /// drawing that must keep up with the Windows cursor: the mouse events were taken a whole frame's work earlier.
+    /// </summary>
+    public static Vector2? ClientNow(IWindow window)
+    {
+        if (!OperatingSystem.IsWindows() || window.Native?.Win32 is not { } native) return null;
+        if (GetCursorPos(out var point) == 0 || ScreenToClient(native.Hwnd, ref point) == 0) return null;
+        return new Vector2(point.X, point.Y);
+    }
+
+    /// <summary>
     /// The pointer as a fraction of the window's client area (0 to 1 on both axes), or null when the window is not in front or the pointer is outside
     /// it.
     /// </summary>

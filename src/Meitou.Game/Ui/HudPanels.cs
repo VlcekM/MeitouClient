@@ -692,7 +692,9 @@ sealed class HudPanels(PlayerInterface player)
 
         if (buildingRows is null && lead?.Body is { } body) AddCharacterRows(rows, lead, body);
 
-        for (int i = 1; i <= 9; i++) BindMedicalBar(b, i, rows);
+        int bars = MedicalBars();
+        for (int i = 1; i <= bars; i++) BindMedicalBar(b, i, rows);
+        MedicalPanelRows.Spread(player.FaithfulHud, b, Math.Min(rows.Count, bars));
 
         if (buildingRows is null && lead?.Body is not null)
         {
@@ -707,7 +709,22 @@ sealed class HudPanels(PlayerInterface player)
     }
 
     /// <summary>
-    /// A character's medical rows: Blood (Oil for a robot race), each body part, then Hunger (none for a robot race).
+    /// The panel's rows: the layout's nine and one more for each code mod's meter, added to the HUD layout when it lacks them (the mods register
+    /// after the interface is loaded).
+    /// </summary>
+    int MedicalBars()
+    {
+        int bars = MedicalPanelRows.LayoutBars + Simulation.Bodies.ModMeters.All.Count;
+        if (bars == MedicalPanelRows.LayoutBars) return bars;
+
+        string last = $"LifeBar{bars}";
+        if (player.FaithfulHud.Find(last) is null) player.FaithfulHud = MedicalPanelRows.WithBars(player.FaithfulHud, bars);
+        return player.FaithfulHud.Find(last) is null ? MedicalPanelRows.LayoutBars : bars;
+    }
+
+    /// <summary>
+    /// A character's medical rows: Blood (Oil for a robot race), each body part, then Hunger (none for a robot race), then the code mods' meters
+    /// that have a reading for it, in registration order.
     /// </summary>
     void AddCharacterRows(List<PlayerInterface.MedicalRow> rows, CharacterSnapshot lead, BodyStatus body)
     {
@@ -753,7 +770,27 @@ sealed class HudPanels(PlayerInterface player)
                 hungerArrows, false, tip)
             { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });
         }
+
+        AddMeterRows(rows, lead);
     }
+
+    /// <summary>
+    /// The code mods' meters (docs/modding.md "Medical meters") with a reading for <paramref name="lead"/>.
+    /// </summary>
+    static void AddMeterRows(List<PlayerInterface.MedicalRow> rows, CharacterSnapshot lead)
+    {
+        var meters = Simulation.Bodies.ModMeters.All;
+        for (int i = 0; i < lead.Meters.Count && i < meters.Count; i++)
+        {
+            if (lead.Meters[i] is not { } m) continue;
+            rows.Add(new(meters[i].Label, Fraction(m.Green), Fraction(m.Yellow), Fraction(m.Red), m.Value ?? "", m.Arrows ?? "", false, m.Tooltip));
+        }
+    }
+
+    /// <summary>
+    /// A mod's layer fraction kept to the bar (0 for one that is not a number).
+    /// </summary>
+    static float Fraction(float f) => float.IsFinite(f) ? Math.Clamp(f, 0, 1) : 0;
 
     /// <summary>
     /// The panel's bar <paramref name="i"/> (1-based): hidden past the rows, else its layers, tooltip, value and name.

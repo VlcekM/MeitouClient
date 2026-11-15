@@ -1098,6 +1098,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         hud.Picking.MeshHit = (id, origin, direction) => _characters?.RayHit(host.DrawKey(id), origin, direction);
         hud.Floor = (() => host.Interiors.ViewedFloorValue, host.Interiors.StepFloor);
         hud.Picking.BuildingMoveHit = (origin, direction, distance) => _objects?.MoveHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
+        hud.Picking.CutGroundReach = (origin, direction, ground) => _objects?.CutGroundReach(origin, direction, ground);
         hud.Picking.SurfaceMoveHit = host.Interiors.SurfaceMoveHit;
         hud.Picking.InteriorFaceHit = (origin, direction, distance) => _objects?.FaceHit(origin, direction, host.Interiors.ViewedFloorValue, distance);
         hud.Picking.HasRooms = key => _objects?.InteriorFor(key) is not null;
@@ -1652,6 +1653,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _shiftDown;
 
     /// <summary>
+    /// The last left press went to the debug menu, so its release is not the interface's.
+    /// </summary>
+    bool _debugMenuClick;
+
+    /// <summary>
     /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu repeats here, to scroll its lists: after 0.5 s,
     /// then 30 times a second (the Windows defaults). No other key repeats.
     /// </summary>
@@ -1744,7 +1750,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (host.Covered) return;
             if (_settings?.Visible == true) _settings.TextInput(value);
             else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
-            else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
+            else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
             else _hud?.UiText(value);
         };
     }
@@ -1834,9 +1840,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.DebugMenu.DebugParts = null;
             return true;
         }
+        // The debug menu takes every key while its selection takes typed text, else only the navigation and activation keys; the rest are the game's.
         if (host.DebugMenu.DebugMenuOpen)
         {
-            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) host.DebugMenu.DebugMenuKey(menuKey);
+            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is not { } menuKey) return false;
+            if (!host.DebugMenu.DebugMenuTakesText && !DebugMenu.DebugMenuTakesKey(menuKey)) return false;
+            host.DebugMenu.DebugMenuKey(menuKey);
             return true;
         }
         if (key == SilkKey.F10 && _settings is not null)
@@ -1955,6 +1964,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _settings.MouseDown(at, mapped);
                 return;
             }
+            // The debug menu takes the left clicks on its panel while it is open; a click elsewhere is the interface's and the world's.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left
+                && host.DebugMenu.DebugMenuContains(at))
+            {
+                host.DebugMenu.DebugMenuClick(at);
+                _debugMenuClick = true;
+                return;
+            }
             bool select = host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
             if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true)
                 return;
@@ -1966,13 +1983,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         mouse.MouseUp += (_, button) =>
         {
             if (host.Covered) return;
+            bool menuClick = _debugMenuClick;
+            _debugMenuClick = false;
             if (_settings?.Visible == true)
             {
                 _settings.MouseUp();
                 return;
             }
             if (KeyMap.Map(button) is not { } mapped) return;
-            _hud?.MouseUp(host.PlayerButton(mapped), Pixels(mouse.Position), _shiftDown);
+            if (!menuClick) _hud?.MouseUp(host.PlayerButton(mapped), Pixels(mouse.Position), _shiftDown);
             host.Session.Input.SetMouseButton(mapped, false);
         };
         mouse.Scroll += (_, wheel) =>
@@ -1984,6 +2003,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             }
             var at = Pixels(mouse.Position);
+            // The debug menu takes the wheel over its panel while it is open; elsewhere the wheel zooms the camera as usual.
+            if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuContains(at))
+            {
+                host.DebugMenu.Scroll(wheel.Y);
+                return;
+            }
             if (_hud is { UiVisible: true } && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             // A panel's own scroll wins; over any HUD rectangle the wheel does not zoom the camera, as in the Vulkan host.
             if (_hud is not null && (_hud.UiScroll(at, wheel.Y) || _hud.ContainsUi(at))) return;
@@ -2573,6 +2598,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
         host.Session.Camera.Strategy.EdgePointer = host.Covered || _hud is not null && host.TitleScreen.TitleVisible || _settings?.Visible == true ||
             _hud is { UiVisible: false } or { UiCapturesPointer: true } ? null : WindowPointer.InWindow(_window);
+        host.UpdateCameraLeash(_tourHolds || _tour.Active);
 
         // The duel restarts between ticks when Backspace asks or its measured lap ends; its sun then holds at the lap's hour.
         if (_hud is not null) host.Duel.DuelFrame(false);
@@ -2900,6 +2926,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _hud.ViewProjection = view * host.Camera.Projection(aspect, host.Camera.Near, host.Camera.ViewDistance);
             // The move order under a held right button follows the cursor once a frame, as the Vulkan host's Steer does.
             _hud.Steer();
+
+            // The world draws the marker, so it fades with the interface hidden (F7) too.
+            _hud.MoveMarker.FadeMarker();
             if (_hud.UiVisible)
             {
                 _hud.Draw(overlay, size.X, size.Y, overlayPass);
@@ -2948,7 +2977,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         if (host.DebugMenu.DebugMenuOpen && _hud is not null && !feedbackShot)
         {
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale);
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale,
+                pass: overlayPass);
             wrote = true;
         }
 

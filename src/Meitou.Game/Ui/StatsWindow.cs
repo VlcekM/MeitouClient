@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
+using Meitou.Simulation.Bodies;
 
 namespace Meitou.Game.Ui;
 
@@ -51,6 +52,17 @@ sealed class StatsWindow(PlayerInterface player)
     ];
 
     /// <summary>
+    /// The rows a skill column fits at full row height (the column is 296 layout pixels high, rows 20), and the most it takes with code mods'
+    /// skills, whose rows then share its height.
+    /// </summary>
+    const int ColumnLines = 14, MaxColumnLines = 18;
+
+    /// <summary>
+    /// The prefix of a code mod's skill in <see cref="SelectedStat"/> and its rows' actions, before its index in <see cref="ModSkills.All"/>.
+    /// </summary>
+    const string ModSkillPrefix = "mod:";
+
+    /// <summary>
     /// The stats window's geometry: 980 x 650 at the inventory scale, the attributes and skills titles placed, the derived stats hidden.
     /// </summary>
     internal void BindStatsGeometry(MyGuiLayout layout, UiBindings bindings)
@@ -79,12 +91,18 @@ sealed class StatsWindow(PlayerInterface player)
     }
 
     /// <summary>
+    /// How many more code mods' skills <paramref name="column"/> takes besides <paramref name="pending"/> unregistered ones: the column's lines up
+    /// to <see cref="MaxColumnLines"/>.
+    /// </summary>
+    internal static int ModRoom(SkillColumn column, int pending) =>
+        MaxColumnLines - VanillaLines((int)column) - ModSkills.All.Count(s => s.Column == column) - pending;
+
+    /// <summary>
     /// The stat rows of the first selected character: each column's headings, labels and values (a click shows the stat's description).
     /// </summary>
     internal void AddStatsContent(List<UiControl> controls)
     {
         var lead = player.Selected().FirstOrDefault();
-        float scale = player.UiScale, rowHeight = 20 * scale;
 
         // The skill columns sit in Kenshi_GenericTextBoxSkin frames (the attributes column's frame has no text colour and keeps its grey).
         string statInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxSkin");
@@ -92,51 +110,124 @@ sealed class StatsWindow(PlayerInterface player)
         {
             string name = column == 0 ? "AttributesPanel" : $"Skills{column}Panel";
             if (controls.FirstOrDefault(c => c.Name == name) is not { } panel) continue;
-
-            var clip = panel.Bounds.Intersect(panel.Clip ?? panel.Bounds);
-            float y = panel.Bounds.Y;
-            for (int i = 0; i < StatPanels[column].Length; i++)
-            {
-                foreach (var heading in StatHeadings[column].Where(h => h.Before == i))
-                {
-                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", PlayerInterface.TitleColour,
-                        "Left VCenter", "", heading: true);
-                    y += rowHeight;
-                }
-
-                var stat = StatPanels[column][i];
-                string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
-                string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
-                string font = column == 0 ? "Kenshi_PaintedTextFont_Medium" : "Kenshi_StandardFont_Medium";
-                string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
-                bool wrapLabel = stat is StatsEnumerated.FriendlyFire or StatsEnumerated.SmithingBow;
-                Text($"{name}-label-{i}", label, font, colour, "Left VCenter", action, wrap: wrapLabel);
-                // The whole level, truncated like the next-level bar's split (rounding showed 12.5 as 13 with the bar at 50 %, #514).
-                float level = MathF.Floor(lead?.AllSkills.ElementAtOrDefault((int)stat) ?? 0);
-                Text($"{name}-value-{i}", level.ToString("0", CultureInfo.InvariantCulture), font, colour, "Right VCenter", action);
-                y += column == 0 ? 20 * scale : rowHeight * (wrapLabel ? 2 : 1);
-            }
-
-            void Text(string controlName, string caption, string font, string colour, string align, string action, bool heading = false,
-                bool wrap = false)
-            {
-                var properties = new Dictionary<string, string> { ["FontName"] = font, ["TextColour"] = colour, ["TextAlign"] = align };
-                if (wrap) properties["WordWrap"] = "true";
-
-                // Runtime category titles are larger than the surrounding standard text.
-                if (heading) properties["FontPixels"] = Math.Max(8, (int)MathF.Round(18 * scale)).ToString(CultureInfo.InvariantCulture);
-                bool value = align.StartsWith("Right", StringComparison.Ordinal);
-                float valueWidth = 32 * scale;
-                controls.Add(new(controlName, action.Length > 0 ? "Button" : "TextBox",
-                    new(panel.Bounds.X + (heading ? 5 * scale : value ? panel.Bounds.Width - valueWidth : 0), y - (heading ? 2 * scale : 0),
-                        heading ? panel.Bounds.Width - 5 * scale : value ? valueWidth : Math.Max(0, panel.Bounds.Width - valueWidth - 4 * scale),
-                        heading ? 24 * scale : rowHeight * (wrap ? 2 : 1)), caption, action, "", true,
-                    properties,
-                    Vector4.Zero, Pickable: action.Length > 0, Clip: clip));
-            }
+            new StatColumn(controls, panel, name, player.UiScale, RowHeight(column, panel)).Add(column, lead, statInk);
         }
 
         AddStatDescription(controls);
+    }
+
+    /// <summary>
+    /// A column's row height: 20 at the UI scale, less when its code mods' skills make more lines than fit.
+    /// </summary>
+    float RowHeight(int column, UiControl panel)
+    {
+        float full = 20 * player.UiScale;
+        int lines = VanillaLines(column) + ModSkills.All.Count(s => (int)s.Column == column);
+        return lines <= ColumnLines ? full : Math.Min(full, panel.Bounds.Height / lines);
+    }
+
+    /// <summary>
+    /// The lines the game's rows of <paramref name="column"/> take: its stats, the two-line ones once more, and its headings.
+    /// </summary>
+    static int VanillaLines(int column) => StatPanels[column].Length + StatPanels[column].Count(WrapsLabel) + StatHeadings[column].Length;
+
+    /// <summary>
+    /// Whether a stat's label is long enough to take two lines.
+    /// </summary>
+    static bool WrapsLabel(StatsEnumerated stat) => stat is StatsEnumerated.FriendlyFire or StatsEnumerated.SmithingBow;
+
+    /// <summary>
+    /// One column's rows as they are laid down from the panel's top: the game's stats under their headings, then the code mods' skills of the
+    /// column.
+    /// </summary>
+    sealed class StatColumn(List<UiControl> controls, UiControl panel, string name, float scale, float rowHeight)
+    {
+        /// <summary>
+        /// The clip of every row: the panel within its own clip.
+        /// </summary>
+        readonly UiRect _clip = panel.Bounds.Intersect(panel.Clip ?? panel.Bounds);
+
+        /// <summary>
+        /// The next row's top.
+        /// </summary>
+        float _y = panel.Bounds.Y;
+
+        /// <summary>
+        /// Adds the column's rows for <paramref name="lead"/>.
+        /// </summary>
+        public void Add(int column, Simulation.CharacterSnapshot? lead, string statInk)
+        {
+            for (int i = 0; i < StatPanels[column].Length; i++)
+            {
+                foreach (var heading in StatHeadings[column].Where(h => h.Before == i)) AddHeading($"{name}-heading-{i}", heading.Caption);
+                AddStat(column, i, lead, statInk);
+            }
+
+            for (int i = 0; i < ModSkills.All.Count; i++)
+                if ((int)ModSkills.All[i].Column == column) AddModSkill(i, lead, statInk);
+        }
+
+        /// <summary>
+        /// A category title in dashes.
+        /// </summary>
+        void AddHeading(string controlName, string caption)
+        {
+            string title = "-" + Loc.Tr(caption) + "-";
+            Text(controlName, title, "Kenshi_StandardFont_Large", PlayerInterface.TitleColour, "Left VCenter", "", heading: true);
+            _y += rowHeight;
+        }
+
+        /// <summary>
+        /// The game's stat <paramref name="i"/> of the column: its label and whole level.
+        /// </summary>
+        void AddStat(int column, int i, Simulation.CharacterSnapshot? lead, string statInk)
+        {
+            var stat = StatPanels[column][i];
+            string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
+            string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
+            string font = column == 0 ? "Kenshi_PaintedTextFont_Medium" : "Kenshi_StandardFont_Medium";
+            string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
+            bool wrapLabel = WrapsLabel(stat);
+            Text($"{name}-label-{i}", label, font, colour, "Left VCenter", action, wrap: wrapLabel);
+
+            // The whole level, truncated like the next-level bar's split (rounding showed 12.5 as 13 with the bar at 50 %, #514).
+            float level = MathF.Floor(lead?.AllSkills.ElementAtOrDefault((int)stat) ?? 0);
+            Text($"{name}-value-{i}", level.ToString("0", CultureInfo.InvariantCulture), font, colour, "Right VCenter", action);
+            _y += column == 0 ? 20 * scale : rowHeight * (wrapLabel ? 2 : 1);
+        }
+
+        /// <summary>
+        /// Code mod skill <paramref name="index"/> of <see cref="ModSkills.All"/>: its label and whole level, on one line.
+        /// </summary>
+        void AddModSkill(int index, Simulation.CharacterSnapshot? lead, string statInk)
+        {
+            string action = "stat:" + ModSkillPrefix + index.ToString(CultureInfo.InvariantCulture);
+            string level = MathF.Floor(lead?.ModSkills.ElementAtOrDefault(index) ?? 0).ToString("0", CultureInfo.InvariantCulture);
+            Text($"{name}-mod-label-{index}", Loc.Tr(ModSkills.All[index].Label), "Kenshi_StandardFont_Medium", statInk, "Left VCenter", action);
+            Text($"{name}-mod-value-{index}", level, "Kenshi_StandardFont_Medium", statInk, "Right VCenter", action);
+            _y += rowHeight;
+        }
+
+        /// <summary>
+        /// One text of the row at the current top: a heading across the panel, a value at its right, else a label beside the value.
+        /// </summary>
+        void Text(string controlName, string caption, string font, string colour, string align, string action, bool heading = false,
+            bool wrap = false)
+        {
+            var properties = new Dictionary<string, string> { ["FontName"] = font, ["TextColour"] = colour, ["TextAlign"] = align };
+            if (wrap) properties["WordWrap"] = "true";
+
+            // Runtime category titles are larger than the surrounding standard text.
+            if (heading) properties["FontPixels"] = Math.Max(8, (int)MathF.Round(18 * scale)).ToString(CultureInfo.InvariantCulture);
+            bool value = align.StartsWith("Right", StringComparison.Ordinal);
+            float valueWidth = 32 * scale;
+            controls.Add(new(controlName, action.Length > 0 ? "Button" : "TextBox",
+                new(panel.Bounds.X + (heading ? 5 * scale : value ? panel.Bounds.Width - valueWidth : 0), _y - (heading ? 2 * scale : 0),
+                    heading ? panel.Bounds.Width - 5 * scale : value ? valueWidth : Math.Max(0, panel.Bounds.Width - valueWidth - 4 * scale),
+                    heading ? 24 * scale : rowHeight * (wrap ? 2 : 1)), caption, action, "", true,
+                properties,
+                Vector4.Zero, Pickable: action.Length > 0, Clip: _clip));
+        }
     }
 
     /// <summary>
@@ -146,30 +237,67 @@ sealed class StatsWindow(PlayerInterface player)
     /// </summary>
     void AddStatDescription(List<UiControl> controls)
     {
-        if (!int.TryParse(SelectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
-            || controls.FirstOrDefault(c => c.Name == "Description1Panel") is not { } left
+        if (controls.FirstOrDefault(c => c.Name == "Description1Panel") is not { } left
             || controls.FirstOrDefault(c => c.Name == "Description2Panel") is not { } right)
             return;
 
         var lead = player.Selected().FirstOrDefault();
+        if (SelectedModSkill() is { } index)
+        {
+            AddModSkillDescription(controls, left, right, lead, index);
+            return;
+        }
+        if (!int.TryParse(SelectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count) return;
+
         var stat = (StatsEnumerated)selected;
-        var help = StatHelp.For(stat);
+        var readouts = lead?.Hud?.StatReadouts?.GetValueOrDefault(stat) ?? [];
+        float value = lead?.AllSkills.ElementAtOrDefault(selected) ?? 0;
+        float multiplier = lead?.SkillXpMultipliers.ElementAtOrDefault(selected) ?? 0;
+        AddDescriptionPanels(controls, left, right, StatLabel(stat), StatHelp.For(stat), readouts, value, multiplier);
+    }
+
+    /// <summary>
+    /// The index in <see cref="ModSkills.All"/> of the selected code mod's skill; null when a game stat (or none) is selected.
+    /// </summary>
+    int? SelectedModSkill() =>
+        SelectedStat.StartsWith(ModSkillPrefix, StringComparison.Ordinal)
+        && int.TryParse(SelectedStat.AsSpan(ModSkillPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int index)
+        && index < ModSkills.All.Count
+            ? index
+            : null;
+
+    /// <summary>
+    /// A code mod's skill's description panels: its name, the mod's Affects and Training lines, the lead's progress and the mod's description.
+    /// </summary>
+    void AddModSkillDescription(List<UiControl> controls, UiControl left, UiControl right, Simulation.CharacterSnapshot? lead, int index)
+    {
+        var skill = ModSkills.All[index];
+        var help = new StatHelpCatalog.Help(skill.Description, skill.Affects, skill.Training, "");
+        float value = lead?.ModSkills.ElementAtOrDefault(index) ?? 0;
+        AddDescriptionPanels(controls, left, right, Loc.Tr(skill.Label), help, [], value, 0);
+    }
+
+    /// <summary>
+    /// Both description panels for a stat titled <paramref name="title"/> at <paramref name="value"/>.
+    /// </summary>
+    void AddDescriptionPanels(List<UiControl> controls, UiControl left, UiControl right, string title, StatHelpCatalog.Help help,
+        IReadOnlyList<Simulation.StatReadout> readouts, float value, float multiplier)
+    {
         string statInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxSkin");
         float scale = player.UiScale;
         float row = Math.Min(20 * scale, (left.Bounds.Height - 4 * scale) / Math.Max(1, 3 + help.Affected.Count + help.Training.Count));
-        AddStatHelpRows(controls, left, lead, stat, help, statInk, scale, row);
+        AddStatHelpRows(controls, left, title, readouts, help, statInk, scale, row);
 
         var rightClip = right.Bounds.Intersect(right.Clip ?? right.Bounds);
-        var bar = AddNextLevelBar(controls, right, lead?.AllSkills.ElementAtOrDefault(selected) ?? 0, scale, row, rightClip);
-        float multiplier = lead?.SkillXpMultipliers.ElementAtOrDefault(selected) ?? 0;
+        var bar = AddNextLevelBar(controls, right, value, scale, row, rightClip);
         AddStatDescriptionBody(controls, right, bar, help, multiplier, statInk, scale, row, rightClip);
     }
 
     /// <summary>
     /// The left description panel: the stat's title, what it affects (each with the lead's number right-aligned when it has one) and how it trains.
     /// </summary>
-    void AddStatHelpRows(List<UiControl> controls, UiControl left, Simulation.CharacterSnapshot? lead, StatsEnumerated stat, StatHelpCatalog.Help help,
-        string statInk, float scale, float row)
+    void AddStatHelpRows(List<UiControl> controls, UiControl left, string title, IReadOnlyList<Simulation.StatReadout> readouts,
+        StatHelpCatalog.Help help, string statInk, float scale, float row)
     {
         float y = left.Bounds.Y + 4 * scale;
         var leftClip = left.Bounds.Intersect(left.Clip ?? left.Bounds);
@@ -181,11 +309,10 @@ sealed class StatsWindow(PlayerInterface player)
             y += row;
         }
 
-        Line("stat-description-title", StatLabel(stat), PlayerInterface.TitleColour, 18);
+        Line("stat-description-title", title, PlayerInterface.TitleColour, 18);
         Line("stat-affected-heading", StatHelp.TextAt(681), PlayerInterface.MainColour);
 
         // The rows' numbers (FUN_1408b1250, HudView.StatReadouts), matched to the catalog's rows by their label, right-aligned on the row.
-        var readouts = lead?.Hud?.StatReadouts?.GetValueOrDefault(stat) ?? [];
         for (int i = 0; i < help.Affected.Count; i++)
         {
             var readout = readouts.FirstOrDefault(r => Loc.Tr(r.Label) == help.Affected[i]);

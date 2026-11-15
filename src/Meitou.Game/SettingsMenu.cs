@@ -556,9 +556,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     static readonly (string Choice, int First, string Label, string[] Options, string Hint, string Section)[] Techniques =
     [
-        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced"],
+        (WorldFrame.SunShadowsChoice, 2, "Sun shadow technique", ["Soft cascades", "Ray traced", "Ray traced + cascades"],
             "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too "
-                + "(needs ray tracing, turns on indirect light).",
+                + "(needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away.",
             "Lighting"),
         (WorldFrame.OcclusionChoice, 1, "Ambient occlusion technique", ["SSAO", "GTAO"],
             "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more.",
@@ -629,7 +629,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or "Bolt tracers" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch
                 or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => "Characters",
             "Item icons" or "Portrait and editor sun" or "Character editor bar" => "Interface",
-            _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings
+            _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings, Glass bottles
         };
     }
 
@@ -789,8 +789,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// Whether a Graphics row acts now: a setting of an effect shows only while that effect is on, and one of a technique only with that technique
-    /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade; the grass shadows with
-    /// them; the screen-space contact shadows with the cascades; the cache's parts with the hybrid indirect light).
+    /// (the cascades' map size, filter and fifth cascade without the traced shadows, which draw no cascade, the size and filter also with their far
+    /// cascades; the grass shadows with them; the screen-space contact shadows with the cascades; the cache's parts
+    /// with the hybrid indirect light).
     /// </summary>
     bool RowShown(string label)
     {
@@ -800,9 +801,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         {
             WorldFrame.ShadowDistanceSlider => sun != 0,
             WorldFrame.ShadowMapSlider => sun is not (0 or 3),
-            WorldFrame.ShadowFilterSlider or WorldFrame.FifthCascadeSwitch => sun is -1 or 2,
-            "Contact shadows" => sun != 3,
-            WorldFrame.TracedGrassSwitch => sun is -1 or 3,
+            WorldFrame.ShadowFilterSlider => sun is -1 or 2 or 4,
+            WorldFrame.FifthCascadeSwitch => sun is -1 or 2,
+            "Contact shadows" => sun is not (3 or 4),
+            WorldFrame.TracedGrassSwitch => sun is -1 or 3 or 4,
             "Indoor GI" => gi != 0,
             WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => gi is -1 or 2,
             WorldFrame.GtaoQualitySlider => occlusion is -1 or 2,
@@ -1537,6 +1539,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.BuildingOutline = true;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
         Config.LuckyrenMode = false;
+        Config.CameraLeash = true;
         GamePages.ResetOptional();
         Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
         (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);

@@ -75,9 +75,9 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// cap, else the same gain with the core curve ((cap - stat) / cap)^2, so the stat only creeps towards the cap and never reaches it.
     /// </summary>
     public float Capped(CharacterStats stats, RaceData race, StatsEnumerated stat, float dtSeconds, float amount, float cap) =>
-        stats[stat] < cap
+        stats.Stored(stat) < cap
             ? stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat), cap)
-            : stats[stat];
+            : stats.Stored(stat);
 
     /// <summary>
     /// A per-event gain: the core gain of <c>0.075 x factor x race[stat]</c> (<paramref name="factor"/> carries the event's coefficient and the
@@ -142,22 +142,22 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         // difference.
         if (attackCoef > 0)
             stats.Gain(attackStat,
-                EventUnit * g * attackCoef * SkillDifferenceFactor(stats[attackStat], opponentSkill)
+                EventUnit * g * attackCoef * SkillDifferenceFactor(stats.Stored(attackStat), opponentSkill)
                 * race.StatMultiplier(StatsEnumerated.MeleeAttack));
         if (weaponCoef > 0 && weaponStat != StatsEnumerated.None)
             stats.Gain(weaponStat, EventUnit * g * weaponCoef
-                * SkillDifferenceFactor(stats[weaponStat] * race.StatMultiplier(StatsEnumerated.Weapons), opponentSkill));
+                * SkillDifferenceFactor(stats.Stored(weaponStat) * race.StatMultiplier(StatsEnumerated.Weapons), opponentSkill));
         if (dexterityCoef > 0)
-            PerEvent(stats, race, StatsEnumerated.Dexterity, g * dexterityCoef * SkillDifferenceFactor(stats[attackStat], opponentSkill));
+            PerEvent(stats, race, StatsEnumerated.Dexterity, g * dexterityCoef * SkillDifferenceFactor(stats.Stored(attackStat), opponentSkill));
         if (defenceCoef > 0)
         {
             // Event 2 puts the race entry (map[19]) into the difference, event 4 into the gain.
             if (ev == XpEvent.Defended)
                 stats.Gain(StatsEnumerated.MeleeDefence, EventUnit * g * defenceCoef
-                    * SkillDifferenceFactor(stats[StatsEnumerated.MeleeDefence] * race.StatMultiplier(StatsEnumerated.MeleeDefence), opponentSkill));
+                    * SkillDifferenceFactor(stats.Stored(StatsEnumerated.MeleeDefence) * race.StatMultiplier(StatsEnumerated.MeleeDefence), opponentSkill));
             else
                 PerEvent(stats, race, StatsEnumerated.MeleeDefence,
-                    g * defenceCoef * SkillDifferenceFactor(stats[StatsEnumerated.MeleeDefence], opponentSkill));
+                    g * defenceCoef * SkillDifferenceFactor(stats.Stored(StatsEnumerated.MeleeDefence), opponentSkill));
         }
 
         // Strength tail of every event: core(0.075 x 0.55 x 2 x xp rate strength x race[1]), scaled per event and by the weight factor.
@@ -167,7 +167,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         {
             // Verified (FUN_1408c6980 event 4): toughness x CharStats +0x34 (the stat scale) against the packet's four terms, x xp rate toughness.
             stats.Gain(StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
-                * SkillDifferenceFactor(stats.ScaledToughness, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
+                * SkillDifferenceFactor(stats.Stored(StatsEnumerated.Toughness) * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
         }
     }
 
@@ -286,7 +286,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     public float Medic(CharacterStats stats, RaceData patientRace, RaceData medicRace, float dtSeconds, StatsEnumerated? healStat = null)
     {
         var stat = healStat ?? patientRace.HealStat;
-        float skill = stats[stat];
+        float skill = stats.Stored(stat);
         float t = skill * 0.01f;
         float secondsPerPoint = constants.XpRateMedic1 + (constants.XpRateMedic99 - constants.XpRateMedic1) * t;
         if (!(secondsPerPoint > 0)) return skill;
@@ -300,7 +300,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <c>CombatSystem.MassCombatEffect</c>.
     /// </summary>
     public float MassCombat(CharacterStats stats) =>
-        stats[StatsEnumerated.MassCombat] += constants.ExpGainMultiplier * 0.05f;
+        stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat) + constants.ExpGainMultiplier * 0.05f;
 
     /// <summary>
     /// Toughness when a hit knocks the character out (<c>FUN_1408c6720</c>, from the part damage <c>FUN_14064f300</c>, <b>Verified</b> decompile):

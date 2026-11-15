@@ -223,8 +223,8 @@ public sealed record EffectDef
     /// </summary>
     public string ParticleSystem { get; init; } = "";
     /// <summary>
-    /// <c>affect type</c>: what the effect does to characters within <see cref="EffectRadius"/> (<see cref="WeatherAffecting.None"/> for an
-    /// unknown value).
+    /// <c>affect type</c>: what the effect does to characters within <see cref="EffectRadius"/>; an undefined number is kept, as the game keeps it
+    /// (a code mod's own kind, docs/formats/weather.md "Effects on characters").
     /// </summary>
     public WeatherAffecting AffectType { get; init; }
     /// <summary>
@@ -411,7 +411,8 @@ public sealed record WeatherDef
     /// </summary>
     public float HeatHaze { get; init; }
     /// <summary>
-    /// <c>affect type</c>: the weather's direct effect on characters (<see cref="WeatherAffecting.None"/> for an unknown value).
+    /// <c>affect type</c>: the weather's direct effect on characters; an undefined number is kept, as the game keeps it (a code mod's own kind,
+    /// docs/formats/weather.md "Effects on characters").
     /// </summary>
     public WeatherAffecting AffectType { get; init; }
     /// <summary>

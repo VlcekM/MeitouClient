@@ -122,20 +122,44 @@ public sealed partial class CrimeSystem
     /// </summary>
     public bool Steal(World world, int thief, StealSource container, CrimeCode code)
     {
-        var table = world.Characters;
-        if (table.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container)) return false;
+        if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container))
+            return false;
+
         SetPending(world, thief, code, container.Owner, CharacterId.None, MinTimer);
-        float p = 1;
-        int w = Watcher(world, thief, container);
-        if (w >= 0)
-        {
-            var wat = table.Next[w].Position;
-            bool otherBuilding = world.Sight.BuildingOf(w) != container.Building;
-            if (!(otherBuilding && !world.Fixtures.HasOpenDoor(container.Building)))
-                p = StealChance(Thievery(c), Vector3.Distance(wat, container.Position), otherBuilding,
-                    world.Sight.FloorOf(w, wat) != world.Sight.FloorAt(container.Building, container.Position));
-        }
+        float p = ContainerChance(world, thief, c, container, out int w);
         return Roll(world, thief, w, p, container.Owner, CharacterId.None, Rng.StableHash(container.Id));
+    }
+
+    /// <summary>
+    /// The chance the inventory window prints for a take out of another faction's container (<c>FUN_140712920</c> "Stealing chance:", the roll's
+    /// own p): null when the take is not a steal (<see cref="Steal(World, int, StealSource, CrimeCode)"/>'s gates).
+    /// </summary>
+    public static float? StealChanceOf(World world, int thief, StealSource container)
+    {
+        if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction
+            || container.Owner == world.Player.Faction || !IsStealing(world, container))
+        {
+            return null;
+        }
+
+        return ContainerChance(world, thief, c, container, out _);
+    }
+
+    /// <summary>
+    /// The steal roll's p out of a container (<see cref="StealChance"/>) and its watcher <paramref name="w"/> (-1: none, p 1).
+    /// </summary>
+    static float ContainerChance(World world, int thief, CharacterCold c, StealSource container, out int w)
+    {
+        var table = world.Characters;
+        w = Watcher(world, thief, container);
+        if (w < 0) return 1;
+
+        var wat = table.Next[w].Position;
+        bool otherBuilding = world.Sight.BuildingOf(w) != container.Building;
+        if (otherBuilding && !world.Fixtures.HasOpenDoor(container.Building)) return 1;
+
+        bool otherFloor = world.Sight.FloorOf(w, wat) != world.Sight.FloorAt(container.Building, container.Position);
+        return StealChance(Thievery(c), Vector3.Distance(wat, container.Position), otherBuilding, otherFloor);
     }
 
     /// <summary>
@@ -213,17 +237,40 @@ public sealed partial class CrimeSystem
         var ownerId = table.IdOf(owner);
         if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, ownerId, MinTimer);
         if (kind == TakeKind.Drag) item = null;
-        float p = 1;
+        float? p = PickpocketChance(c, o, item);
+        return Roll(world, thief, p is null ? -1 : owner, p ?? 1, o.Faction, ownerId, Rng.Key(ownerId));
+    }
+
+    /// <summary>
+    /// The chance the inventory window prints for a take of <paramref name="item"/> out of another faction's character (<c>FUN_140712920</c>
+    /// "Stealing chance:", <b>Observed</b>): the roll's p with the item passed, so an equipped item shows the x0.75 even though the drag rolls without
+    /// it. Null when the take is not a steal (<see cref="Pickpocket"/>'s gates) or the owner does not watch (engine choice: the original's gate for a
+    /// down owner is <b>Unknown</b>).
+    /// </summary>
+    public static float? StealChanceOf(World world, int thief, int owner, Items.ItemInstance item)
+    {
+        var table = world.Characters;
+        if (table.Cold(thief) is not { } c || table.Cold(owner) is not { IsPlayer: false } o || o.Faction == c.Faction || !IsStealing(world, o))
+            return null;
+
+        return PickpocketChance(c, o, item);
+    }
+
+    /// <summary>
+    /// The pickpocket roll's p (<see cref="Pickpocket"/>): 1.1 x thievery / 100, x0.75 for an equipped <paramref name="item"/>, x0.75 again for
+    /// equipped armour; null when the owner does not watch.
+    /// </summary>
+    static float? PickpocketChance(CharacterCold c, CharacterCold o, Items.ItemInstance? item)
+    {
         bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false })
             && o.CarriedBy.IsNone && !o.IsImprisoned
             && c.Medical is not { Incapacitated: true };
-        if (watches)
-        {
-            p = 1.1f * Thievery(c) * 0.01f;
-            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section))
-                p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
-        }
-        return Roll(world, thief, watches ? owner : -1, p, o.Faction, ownerId, Rng.Key(ownerId));
+        if (!watches) return null;
+
+        float p = 1.1f * Thievery(c) * 0.01f;
+        if (item is null || !Items.InventoryCommands.IsEquipmentSection(item.Section)) return p;
+
+        return p * (item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f);
     }
 
     /// <summary>

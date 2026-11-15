@@ -181,7 +181,7 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
 - **Wealth** = clamp(faction wealth, 0.2, 1), but the faction wealth function (`FUN_1402dd530`) is a stub returning 1.0, so wealth is always 1
   (**Verified**, kenshi_x64.exe decompile: 9-byte function, constant return). It scales only shop stock count, purse and nest spawn weight; no price reads it.
 - Meitou (`Shop.ForBuilding`, engine choices): the stock is the shop's one inventory in which each stock container's grid is a rectangle of its own (`Inventory.Regions`, packed by maximal rectangles, the lowest of four orders; an item never spans two), the trade window shows them all with the cells outside every container greyed (a drop there, or across two containers, goes to the nearest free container cell; "No room for that item." when none fits), a container's window only its own. The money stack goes to the purse, r is symmetric,
-  stock is saved on the platoon as squad shops' ([save keys](../formats/save.md#npc-platoons-meitou-mapping); the original keeps it in the containers, zone file). Observed with real data (Squin, 2026-10-24): 3 to 13 rows more than the packed size (geometry: 300 random orders found none lower), e.g. the Bughouse armour shop 18 x 274 for 271.
+  stock is saved on the platoon as squad shops' ([save keys](../formats/save.md#npc-platoons-meitou-mapping); the original keeps it in the containers, zone file). Containers wider than half the stock never share a row, so it is at least their stacked heights. Observed with real data (Squin): a few rows over the larger of the two (geometry: 300 random orders found none lower); the L-House bar's four 10 x 10 barrels make it 18 x 58 for 43 cells' rows.
 
 ## Artifacts
 
@@ -239,7 +239,7 @@ interior object with an inventory of the trader's home (`FUN_140953850`, `FUN_14
 `unique`, written only when set (`FUN_1407609e0` / `FUN_140761550`).
 
 **Meitou** (`Artifacts`, `PopulationSystem.Artifacts.cs`): the lists are made for a new game and an import (`SaveImport.Filter` writes them into the town states), kept per town,
-saved and read back with the keys above, and given out when a town makes its residents. Engine choices: the candidates are all the town's standing buildings with `interior` parts whose named interior layout (their residents', [layouts](factions-squads-towns.md#town-residents))
+saved and read back with the keys above, and given out when a town makes its residents, before any home is stocked (the fill spares them; **Verified**, decompile: `FUN_14095b210` unlocks every container it gathers and `FUN_1409565e0` relocks only the filled ones it could use, so an artifact in a Lost Armoury Weapon Cabinet lies unlocked, #758). Engine choices: the candidates are all the town's standing buildings with `interior` parts whose named interior layout (their residents', [layouts](factions-squads-towns.md#town-residents))
 places an object, and whose template Meitou housed there ([town residents](factions-squads-towns.md#town-residents)); ties keep the buildings' placement order, the entries' order and the containers' layout order, and the buildings
 draw in placement order; an entry of 0 or fewer units is skipped. A building with no interior objects is no candidate, as in the original; what goes to a building in another town's centre zone is placed, but a save made before
 that zone is visited writes no file for it, so loses it. Items flagged unique (`ItemInstance.Unique`) do not stack with others; a shop
@@ -252,6 +252,10 @@ no artifacts, as Meitou adds no state for a town a loaded save lacks. Tests: `Ar
 
 Ledgers are per wanted faction; crimes pending at deed time and witness booking are distinct.
 The per-character crime tick `FUN_1405cbb80` (bounty expiry, skipped while imprisoned; then the pending timer at ledger `+0x90`: at or below 0.0 clears the code and victim, else it is reduced by the tick delta) is jumped over by the character tick `FUN_1405d00b0` for a dead character (`+0x5bc`): **Verified**. A dead body's bounties never expire and its pending crime stays frozen.
+Nothing else clears it on death (decompile: no other writer of Character `+0x148`; the ragdoll path `FUN_1405d0db0` zeroes `+0x58` of
+slot 0x68's object `+0x650 + 0x28`, not the ledger), and neither the HUD's `BountyPanel` test nor the status entry checks for death: a corpse
+killed mid-crime keeps "Committing Crime!" with its frozen timer. **Verified** in the original 1.0.65 with the kh harness (an unprovoked
+attack, KO, Re_Dev Squish to death: "(18)" stayed on the dead character while the game ran; #696).
 CONSTANTS categories define theft/assault/murder/looting values. Expiry is0.04 hours/cat and
 permanent from10000; capture, claiming, bail and prison sentences use separate paths.
 Witness/innocence details remain partly unknown; a killing is no crime (11.6), only relation events.
@@ -714,7 +718,7 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   building's container: the watcher is the nearest conscious member (not dead, `+0x5bc` clear, posture below 3, on the thief's floor first) of the building owner's platoon (`FUN_140792ce0`; none: 1.0);
   t = lerp(min(1, distance / 200), 0.5, 1) with the distance from the watcher to the building, x0.5 and an early 1.0 under a test of the watcher's and the container's building and of the
   building's doors (`FUN_1405499a0`: no doors, or any door open) whose direction is **Unknown**; p = lerp(thievery/100 x t, 0.3, 2.25); a watcher that is dead, down, carried or imprisoned gives 1.0. A character victim: x0.75 for
-  an item whose byte `+0x129` is set and x0.75 again when its slot `0x2e0` answers true; a watcher other than the victim: x2 when in posture 3 (the finder never returns one), x1.5 on another floor.
+  an item whose byte `+0x129` is set and x0.75 again when its slot `0x2e0` answers true; a watcher other than the victim: x2 when in posture 3 (the finder never returns one), x1.5 on another floor. The inventory window prints it as `Stealing chance:` ([ui-screens](ui-screens.md)).
 - **Steal attempt** (`FUN_140794810`, **Observed**): caught when p < the draw, which stops the move ("Got caught stealing.", code 8 of `FUN_14070f7e0`; the item stays). A caught thief wakes a victim lying down (posture 1 or 3), the
   watcher fires event 8 (event 0x2f instead, and no crime, on a coin flip when the watcher's status is 1), a pending Theft (3) against the watcher's faction with timer 30 is set (`FUN_140852e10`) and the squad tags the thief
   (kind 4). Thievery XP: 20 x 2 for a success and 80 x 2 for a catch, only when p < 0.98 and the thief's own pending timer (`+0x180`) is below 10 (so a catch gives none). Meitou: `CrimeSystem.Steal` (waking, event 8 or the in-bed 0x2f, the Theft, the squad memory, the XP).

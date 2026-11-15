@@ -24,6 +24,8 @@ forward, `mid blow drop` 6.57 s ~4 back, `back blow high` has no clip. When they
 
 **Verified** (layer manager update `@ 1405b5c30`, with `FUN_1405b3090` / `FUN_14051caa0`): a layer whose animation the character's entity does not have (`hasAnimationState` false) is deleted before the weights are summed or scaled, so it takes no weight from the other layers. **Observed** (the base game plus a large mod list, rigs of the humanoid races): ~8 ANIMATION records resolve on no humanoid skeleton, e.g. `Block pole bottom` and `GROUNDED_BlowBack_Chest low`, whose clips only a mod's female animation file holds, and `stand 1 sword lefty`. Meitou: the renderer finds no layer for them, so before this a wanted one took the whole body half's weight (`Publish`) and the body stood in the binding pose until it ended. `AnimationSystem.Plays` (`CharacterRigs.Plays`, cached per appearance) drops such wanted layers, and a technique or hit reaction the body cannot play is not started (it stays in its stance; the combat system still holds it for the clip's length). **Unknown**: what the original picks when its hit reaction clip is missing.
 
+**Observed** (static reading of the swing update `FUN_14060a590`, not run in the original): an attack whose clip the entity lacks still lands. The technique layer's progress (`FUN_1405b4bb0`) reads 1.01 (`DAT_1416c114c`) once no layer of that name is left, so the blow count (`FUN_140666520`) passes every blow, the impact check runs on that update, and the clip-done test (`FUN_1405b4c00`: no layer is done) ends the swing: no motion and the blows at once. Meitou holds the swing for the clip's length (1 s for a clip no skeleton has, `AnimationLengths.Of`) and lands the blows inside it (engine difference).
+
 ### Clip times between ticks
 
 Engine choice (`GameHost.LayerTime`): the host draws a layer's clip time from the last tick's towards this one's by the shorter way round the clip (by the layer's
@@ -123,6 +125,16 @@ large modded install 355 of 573 ANIMATION clips exist only in linked files (**Ob
 `CharacterRigs.Rig(name, appearance)`; `AnimationLengths` adds every ANIMATION_FILE's clips after the base skeletons in the same
 order (it knows clips by name only). Tie order: list order (engine choice). With `preprocess` set, the startup preprocessing
 (below) also runs over the file's skeletons (`@ 140871f00`).
+
+**Observed** (workshop items 3148075501 `Many_Races_Animation_Patch.mod` and 3380056396 `CBT Many Animations to Multiple Species.mod`,
+read with `FcsReader`): multi-race animation patches hold stub records under other mods' string ids, flagged new, every field at the
+editor default: RACE stubs (1883 and 1267) with empty mesh, texture and ragdoll paths plus the `animation files` references, and in the
+first 186 ANIMATION_FILE stubs with empty `male animation` / `female animation`. Their pages require them above the race and animation
+mods: the later full records overwrite the defaults and the references stay ([merging](formats/fcs-mod.md#merging)). Loaded below, the
+blank values win, in the original (an empty string or filename is stored like any other, `FUN_1406c9ce0`) and in Meitou: the packs'
+files are no longer linked, so their techniques have no clip ([Clips a body lacks](#clips-a-body-lacks)), and the races draw
+`human_male.mesh`. Measured in Meitou (the 102 files on hand of #650's 819, with More Combat Animation, Military Craft and Great Anims
+added above the first patch): 268 of 446 enabled techniques resolve on a Greenlander's rig, 445 with both patches loaded first.
 
 ### Choosing candidates (`@ 14051d660`)
 

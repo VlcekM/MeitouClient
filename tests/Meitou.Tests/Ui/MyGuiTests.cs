@@ -3,6 +3,7 @@ using System.Xml;
 using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Tests.Ui;
 
@@ -129,4 +130,37 @@ public class MyGuiTests
         Assert.NotNull(hud.Find("LifeBar9"));
         Assert.Null(hud.Find("LifeBar10"));
     }
+
+    /// <summary>
+    /// Code mods' meters add copies of the ninth medical row to the expanded HUD, renamed throughout, and eleven rows share the nine rows' height.
+    /// </summary>
+    [Fact, Trait("Category", "Slow")]
+    public void Mod_meters_add_renamed_copies_of_the_ninth_medical_row_and_spread_the_rows()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "No Kenshi install configured.");
+        var resources = OgreScriptResources.ForInstall(install, Data.LoadOrder.FromInstall(install));
+        var ui = MyGuiResources.Load("kenshi_init.xml", name => resources.Find(name));
+        var hud = MyGuiTemplates.Expand(MyGuiReader.ReadLayout(resources.Find("Kenshi_MainPanel.layout")!), ui);
+
+        var more = MedicalPanelRows.WithBars(hud, 11);
+        var b = new UiBindings();
+        MedicalPanelRows.Spread(more, b, 11);
+
+        Assert.Same(hud, MedicalPanelRows.WithBars(hud, 9));
+        Assert.Equal(11, MedicalPanelRows.Bars(more));
+        Assert.Same(hud.Find("TownPanel"), more.Find("TownPanel"));
+        foreach (string row in (string[])["LifeBar10", "LifeBar11", "LifeBar11Value", "LifeBar11Tooltip"])
+            Assert.All(more.Find(row)!.DescendantsAndSelf(), w => Assert.DoesNotContain("LifeBar9", WidgetText(w)));
+
+        var nine = hud.Find("LifeBar9")!.Position;
+        var last = b.RelativePositions[more.Find("LifeBar11")!];
+        Assert.Equal(hud.Find("LifeBar1")!.Position.Y, b.RelativePositions[more.Find("LifeBar1")!].Y, 4);
+        Assert.Equal(nine.Y + nine.Height, last.Y + last.Height, 2);
+    }
+
+    /// <summary>
+    /// A widget's name, property values and user strings in one string.
+    /// </summary>
+    static string WidgetText(MyGuiWidget w) => string.Join(" ", [w.Name, .. w.Properties.Values, .. w.UserStrings.Values]);
 }

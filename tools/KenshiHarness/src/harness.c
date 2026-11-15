@@ -25,7 +25,7 @@ static const Entry COMMANDS[] = {
     {"shot", cmd_shot}, {"window", cmd_window}, {"ui", cmd_ui}, {"state", cmd_state}, {"load", cmd_load}, {"speed", cmd_speed}, {"wait", cmd_wait},
     {"camera", cmd_camera}, {"select", cmd_select}, {"mouse", cmd_mouse}, {"click", cmd_click}, {"drag", cmd_drag},
     {"scroll", cmd_scroll}, {"key", cmd_key}, {"type", cmd_type}, {"peek", cmd_peek}, {"sym", cmd_sym},
-    {"fault", cmd_fault},
+    {"fault", cmd_fault}, {"sound", cmd_sound},
 };
 
 int fail(Command* c, const char* format, ...)
@@ -352,6 +352,10 @@ void startPlugin(void)
 
     // A part whose exports are missing is logged and its commands fail; the rest still work.
     log_line("screen %d, ui %d, input %d, game %d, control %d", screen_init(), ui_init(), input_init(), game_init(), control_init());
+
+    int muted;
+    const char* why;
+    if (!sound_set(1, &muted, &why)) log_line("no audio session to unmute: %s failed", why);
 
     if (!install_listener()) return;
 

@@ -17,6 +17,31 @@ const platforms = [
   },
 ];
 
+const siteUrl = new URL('/', Astro.site).href;
+const applicationId = new URL('#application', siteUrl).href;
+const metadata = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': new URL('#website', siteUrl).href,
+      name: 'MeitouClient',
+      url: siteUrl,
+      about: { '@id': applicationId },
+    },
+    {
+      '@type': 'SoftwareApplication',
+      '@id': applicationId,
+      name: 'MeitouClient',
+      url: siteUrl,
+      description: 'An open-source reimplementation of the Kenshi engine.',
+      operatingSystem: platforms.map(({ name }) => name),
+      softwareRequirements: 'An installed copy of Kenshi.',
+      downloadUrl: releasesPage,
+    },
+  ],
+};
+
 const trailer = 'https://www.youtube.com/watch?v=qm722zwWnJU';
 
 // The performance video: 30 fps WebM, no audio.
@@ -29,7 +54,12 @@ const pairs = [
   { name: 'Weather', before: '/compare/weather-before.webp', after: '/compare/weather-after.webp' },
 ];
 ---
-<Base title="MeitouClient - Kenshi engine reimplementation" video>
+<Base
+  title="MeitouClient - Kenshi engine reimplementation"
+  description="Run Kenshi on MeitouClient, an open-source engine for Windows, Linux, and macOS that uses your installed copy of the game."
+  video
+>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(metadata)} />
   <section class="hero">
     <div class="stack">
       <h1>Run Kenshi on a new engine</h1>
@@ -94,7 +124,8 @@ const pairs = [
       <p class="lead">
         MeitouClient is an open-source reimplementation of the Kenshi engine in C# and .NET 11 with a Vulkan renderer. It is a
         drop-in replacement: the original game content, FCS mods and vanilla save games run unchanged. It needs your own copy
-        of Kenshi, and no game assets are distributed.
+        of Kenshi, and no game assets are distributed. For guides to the original game's mechanics, factions, and equipment,
+        visit the <a href="https://kenshi.wiki/">Kenshi Wiki</a>.
       </p>
       <div class="modes">
         <div class="mode">
@@ -121,6 +152,7 @@ const pairs = [
       <div class="links">
         <a class="mt-btn" href="https://discord.gg/DVAHH2n9DR"><DiscordIcon /><span>Discord</span></a>
         <a class="mt-btn" href="https://github.com/VlcekM/MeitouClient"><GithubIcon /><span>GitHub</span></a>
+        <a class="mt-btn" href="/build/"><span>Build from source</span></a>
       </div>
     </div>
   </section>
@@ -311,6 +343,8 @@ const pairs = [
   @media (prefers-reduced-motion: no-preference) { :global(html) { scroll-behavior: smooth; } }
   /* Narrow screens: drop the stack below the links at the top right. */
   @media (max-width: 900px) { .hero { padding-top: calc(var(--edge) + 48px); } }
+  /* The header links take two rows here (see Base.astro). */
+  @media (max-width: 359px) { .hero { padding-top: calc(var(--edge) + 96px); } }
   /* Too narrow for the buttons side by side beside the wordmark: stack them. */
   @media (max-width: 860px) { .actions { flex-direction: column; align-items: flex-start; } }
   @media (max-width: 640px) { h1 { white-space: normal; } }

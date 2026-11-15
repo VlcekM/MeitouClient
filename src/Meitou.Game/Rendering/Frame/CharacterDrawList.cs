@@ -56,6 +56,12 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public MouthMesh? Mouth { get; init; }
 
     /// <summary>
+    /// The rigid meshes code mods hang on its bones (<see cref="Simulation.CharacterCold.BoneMeshes"/>,
+    /// <see cref="Characters.CharacterRenderer.CollectBolts"/>); empty: none.
+    /// </summary>
+    public IReadOnlyList<Simulation.BoneMesh> BoneMeshes { get; init; } = [];
+
+    /// <summary>
     /// The node's whole rotation, in place of <see cref="Yaw"/> (a carried body's on its carrier's shoulder); null: turned by the yaw only.
     /// </summary>
     public Quaternion? Rotation { get; init; }

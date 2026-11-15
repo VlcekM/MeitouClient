@@ -1,0 +1,12 @@
+{
+  "id": "i5-12600kf-rtx3070-windows",
+  "github": "mattresspad",
+  "cpu": "Intel Core i5-12600KF",
+  "gpu": "NVIDIA GeForce RTX 3070",
+  "ram_gb": 16,
+  "os": "Windows 11 Home",
+  "os_family": "windows",
+  "resolution": "1920x1061",
+  "screen": "1920x1080",
+  "added": "2026-11-15"
+}

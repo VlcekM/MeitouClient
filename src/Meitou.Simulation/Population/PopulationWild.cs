@@ -129,9 +129,16 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// What a nest build may make: members up to <paramref name="Cap"/> with <paramref name="Members"/> there already, <paramref name="Counts"/>
     /// squads per entry, rolls keyed from <paramref name="First"/>, at most <paramref name="Rolls"/> of them and <paramref name="Squads"/> squads;
-    /// <paramref name="Place"/> false only weighs (a player is near).
+    /// <paramref name="Place"/> false only weighs (a player is near); <paramref name="Guard"/> also only weighs when a player's character is within
+    /// <see cref="NestGuardRadius"/> of the centre the build picks (a load, whose centre is not known before).
     /// </summary>
-    sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null);
+    sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null,
+        bool Guard = false);
+
+    /// <summary>
+    /// Whether any of <paramref name="players"/> is within <paramref name="radius"/> of <paramref name="at"/>.
+    /// </summary>
+    static bool PlayerNear(Vector2[] players, Vector2 at, float radius) => players.Any(p => Vector2.DistanceSquared(p, at) < radius * radius);
 
     /// <summary>
     /// The wild sites (sectors and nests), made at the first look of a world with biomes; empty before or without.
@@ -749,7 +756,7 @@ public sealed partial class PopulationSystem
             int cap = pools.Ded ? 0 : (int)MathF.Floor(pools.Roaming.Current);
             var counts = new int[site.Nest!.RoamingSquads.Count];
             for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(site.Nest.RoamingSquads[i].Id);
-            var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64);
+            var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64, Guard: true);
             if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, players, budget));
             else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, players, budget)));
             return;
@@ -854,9 +861,16 @@ public sealed partial class PopulationSystem
         state.Pending = false;
         state.Made = (b.TopUp ? state.Made : 0) + b.Rolls;
         var site = _wildSites![b.Site];
-        if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) _wildCentres[b.Site] = b.Centre;
+        // A load that found a centre has a layout (empty or not), also when a player near it held its squads back; a dormant nest has none.
+        bool found = b.Squads.Count > 0 || site.SaveInstance is not null || b.Layout is not null;
+        if (site.Kind == WildKind.Nest && found) _wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
-        if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
+        if (b.Layout is { IsEmpty: false } layout)
+        {
+            bool fresh = !world.SavedZones.Contains(WorldLayout.ZoneOf(b.Centre.X, b.Centre.Y));
+            StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1, fresh);
+        }
+
         return true;
     }
 
@@ -1015,7 +1029,8 @@ public sealed partial class PopulationSystem
             var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
             int faction = _data.SpawnFactionOf(template);
             if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players) is not { } spot) continue;
-            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
+            var owner = faction >= 0 ? _data.Factions[faction] : null;
+            if (BuildOne(template, faction, owner, key, seed, spot) is { } one) squads.Add(one with { Grounded = true });
         }
 
         return topUp >= 0
@@ -1087,7 +1102,7 @@ public sealed partial class PopulationSystem
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
-            if (tooClose || SpotRefused(p, walk, regions) || !walk.IsWalkable(p.X, p.Y)) continue;
+            if (tooClose || SpotGround(p, walk, regions) is null) continue;
             return p;
         }
 
@@ -1095,14 +1110,31 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Whether the original's spot finder refuses a point (<c>FUN_1408f50d0</c>, <b>Verified</b>): terrain under <see cref="SpawnFloor"/>, a black
-    /// pixel of the areas map, or ground inside town walls (gate code above 0, <c>NavMesh::getGateCode</c>; only where the navmesh is loaded).
+    /// The height of a wild spot the original's spot finder accepts, or null: walkable at ground level (<see cref="GroundLevel"/>) and not
+    /// <see cref="SpotRefused"/>.
     /// </summary>
-    bool SpotRefused(Vector2 p, IWalkability walk, Locks.IGateRegions? regions)
+    float? SpotGround(Vector2 p, IWalkability walk, Locks.IGateRegions? regions) =>
+        GroundLevel(walk, p) is { } y && !SpotRefused(p, y, walk, regions) ? y : null;
+
+    /// <summary>
+    /// Whether the original's spot finder refuses a point (<c>FUN_1408f50d0</c>, <b>Verified</b>): terrain under <see cref="SpawnFloor"/>, a black
+    /// pixel of the areas map, or ground inside town walls (gate code above 0, <c>NavMesh::getGateCode</c>; only where the navmesh is loaded), the
+    /// code read on the surface at height <paramref name="y"/>.
+    /// </summary>
+    bool SpotRefused(Vector2 p, float y, IWalkability walk, Locks.IGateRegions? regions)
     {
         if (walk.TerrainHeight(p.X, p.Y) < SpawnFloor || _data.Biomes?.IsPainted(p.X, p.Y) == false) return true;
-        return regions?.CodeAt(new Vector3(p.X, walk.GroundHeight(p.X, p.Y), p.Y)) > 0;
+        return regions?.CodeAt(new Vector3(p.X, y, p.Y)) > 0;
     }
+
+    /// <summary>
+    /// The walkable surface at ground level at a spot: the one a character standing on the terrain there would stand on, or null where the only
+    /// surfaces are far above the terrain (a ruin's raised floors, a rock's top). The original sets a wild spot on the terrain and snaps it to the
+    /// navmesh from there (<c>FUN_1408f50d0</c>, <b>Verified</b>), so it starts on the surface nearest the terrain, not the highest (#731: a beak
+    /// thing made on a ruin's top floor); Meitou refuses the spot and draws again instead of moving it (engine choice).
+    /// </summary>
+    static float? GroundLevel(IWalkability walk, Vector2 p) =>
+        walk.TryStand(p.X, p.Y, walk.TerrainHeight(p.X, p.Y), out float y) ? y : null;
 
     /// <summary>
     /// The world's gate codes, when the lock system has them.
@@ -1134,13 +1166,16 @@ public sealed partial class PopulationSystem
         if (centre is null)
         {
             foreach (var s in site.Spots)
-                if (walk.IsWalkable(s.X, s.Y) && !SpotRefused(s, walk, regions)) { centre = s; break; }
+                if (SpotGround(s, walk, regions) is not null) { centre = s; break; }
         }
 
         bool topUp = budget.Centre is not null;
 
         // no walkable spot: the nest is dormant this load
         if (centre is not { } c) return new BuiltWild(site.Index, loadId, site.Spots[0], squads, TopUp: topUp);
+
+        // A player's character near the centre stops the load's fill as it stops a top-up (FUN_1407866d0): the rolls only weigh.
+        bool place = budget.Place && !(budget.Guard && PlayerNear(players, c, NestGuardRadius));
         int cap = budget.Cap;
         var entries = nest.RoamingSquads;
         var counts = (int[])budget.Counts.Clone();
@@ -1173,7 +1208,7 @@ public sealed partial class PopulationSystem
                 break;
             }
 
-            if (!budget.Place) break;
+            if (!place) break;
             counts[e]++;
             var template = templates[e]!;
             int faction = _data.SpawnFactionOf(template, site.Nest is not null ? site.Faction : null);
@@ -1184,12 +1219,12 @@ public sealed partial class PopulationSystem
                 bool tooClose = false;
                 foreach (var at in players)
                     if (Vector2.DistanceSquared(at, p) < _settings.NestPlayerDistance * _settings.NestPlayerDistance) { tooClose = true; break; }
-                if (!tooClose && walk.IsWalkable(p.X, p.Y)) spot = p;
+                if (!tooClose && GroundLevel(walk, p) is not null) spot = p;
             }
 
             if (spot is null) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
-            squads.Add(one);
+            squads.Add(one with { Grounded = true });
             members += one.Plan.TotalMembers;
         }
 

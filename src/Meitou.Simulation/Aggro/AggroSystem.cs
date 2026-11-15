@@ -1648,8 +1648,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// Slot 125, "the looker regards it an enemy" (<c>FUN_14079c950</c>, docs/game/perception.md "Sense tags"; engine reading): one fighting the
     /// looker or fought by it, of any faction (the TEMP_ENEMY <c>AI::underMeleeAttack</c> writes, read for any squad; Meitou's scripted fights may
-    /// pit one faction against itself); else never its own faction; a slave only when the looker is hostile to its owner's faction and is not the
-    /// owner's; else hostility from the looker's faction to the one it is seen as (a disguise) without coexistence, with the freed rule; the squad
+    /// pit one faction against itself); else never its own faction; hostility from the looker's faction to the one it is seen as (a disguise)
+    /// without coexistence, with the freed rule, and for a slave also to its owner's faction, which is not the looker's (both tests); the squad
     /// memory's TEMP_ENEMY makes, TEMP_ALLY unmakes one; a contract's employer never is; a campaign assault's extra target always is.
     /// <paramref name="force"/>: an enemy that is a campaign force's member, sensed NEUTRAL (<c>FUN_140796240</c>).
     /// </summary>
@@ -1661,16 +1661,14 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (c.Faction == s.Faction) return false;
         if (s.War.IsSet && WarEnemy(ref s, c, at)) return true;
 
-        bool enemy;
+        int seenAs = Crime.ArrestSystem.SeenFaction(c);
+        bool enemy = s.Relations.Contains(seenAs) && s.Relations.IsHostile(s.Faction, seenAs) && s.Cold is not { Freed: true }
+            && (!c.Freed || s.Relations.Factions[s.Faction] is { } own && (own.NotReal || own.DefaultRelation < FreedHostility));
 
+        // A slave also needs the looker hostile to its owner's faction, which is not the looker's: hostility to the slavers alone does not make
+        // their slaves enemies (#694).
         if (c.SlaveState == 1)
-            enemy = c.SlaveOwner != s.Faction && s.Relations.Contains(c.SlaveOwner) && s.Relations.IsHostile(s.Faction, c.SlaveOwner);
-        else
-        {
-            int seenAs = Crime.ArrestSystem.SeenFaction(c);
-            enemy = s.Relations.Contains(seenAs) && s.Relations.IsHostile(s.Faction, seenAs) && s.Cold is not { Freed: true }
-                && (!c.Freed || s.Relations.Factions[s.Faction] is { } own && (own.NotReal || own.DefaultRelation < FreedHostility));
-        }
+            enemy &= c.SlaveOwner != s.Faction && s.Relations.Contains(c.SlaveOwner) && s.Relations.IsHostile(s.Faction, c.SlaveOwner);
 
         bool tagged = false;
 

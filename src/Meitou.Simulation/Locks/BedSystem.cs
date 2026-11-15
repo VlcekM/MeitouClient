@@ -216,13 +216,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         var c = world.Characters.Cold(slot)!;
         if (order.Row == TaskType.UseBed)
         {
-            if (c.InSomething != HeldState.Bed || c.InWhat != order.Site)
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Sleep, TaskType.UseBed, TaskSource.Order) { Site = order.Site });
-
-            // In the bed now (it stood in reach, or lay there already) the order leaves the queue at once, so the replan it asked for would find no
-            // order and start a job that gets it up again. One that walks there spends that replan on the walk.
-            if (c.InSomething == HeldState.Bed && c.InWhat == order.Site) c.Replan = false;
-
+            // Started even for a character lying in that bed already (a loaded sleeper, #684): 258 runs until replaced, so the order keeps the
+            // character there instead of leaving the queue to a job (a follow) that gets it up.
+            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Sleep, TaskType.UseBed, TaskSource.Order) { Site = order.Site });
             return;
         }
 

@@ -149,26 +149,24 @@ sealed class TownPlaceClaims(PopulationData data)
     }
 
     /// <summary>
-    /// Gives the members whose role list has relaxing (under a bar package), sitting around or staying home open at this hour a seat of their
-    /// <see cref="Blackboard.Home"/> (the package's bar under a bar package): in member order each takes the first seat no one in that building
-    /// claimed in this cadence pass; members left without one do not relax or sit. Relaxing takes a chair, else a bar node, else a general node (the
-    /// original operates furniture of the bar, docs/game/ai-tasks.md "Town goals", Observed; the node fallbacks are an engine choice); staying home a
-    /// chair only (the original's furniture not claimed by others, Observed; its mask also holds training furniture, which Meitou leaves out).
-    /// Sitting around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it still relaxes or stays (engine choice:
-    /// reassigning every pass in member order moved every later sitter to another chair whenever one came or went); the seats kept, and those a
-    /// character sits on by an order (the player's Use), are reserved for every squad first (<see cref="ReserveSeats"/>).
+    /// Gives the members whose role list has relaxing (under a bar package) or staying home open at this hour a seat: relaxing in the package's bar
+    /// (<see cref="Blackboard.Home"/>), staying home in the squad's own home (<see cref="Blackboard.OwnHome"/>: the finder of 43 lists the home
+    /// building's furniture, not the package's target; <b>Observed</b>, the Hub squatters, whose package is a bar package, stay in their ruins in the
+    /// original). In member order each takes the first seat no one in that building claimed in this cadence pass; members left without one do not
+    /// relax or stay. Relaxing takes a chair, else a bar node, else a general node (the original operates furniture of the bar, docs/game/ai-tasks.md
+    /// "Town goals", Observed; the node fallbacks are an engine choice); staying home a chair, dummy or workstation of the home, its nest's pieces
+    /// round it included (<see cref="SeatsOf"/>). Sitting around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it
+    /// still relaxes or stays (engine choice: reassigning every pass in member order moved every later sitter to another chair whenever one came or
+    /// went); the seats kept, and those a character sits on by an order (the player's Use), are reserved for every squad first
+    /// (<see cref="ReserveSeats"/>).
     /// </summary>
     public void ClaimSeats(World world, Blackboard board, Squad squad)
     {
         _kept.Clear();
         foreach (var (slot, spot) in board.SeatClaims) _kept[slot] = spot;
         board.SeatClaims.Clear();
-        if (board.Home is not { } home) return;
-        bool bar = board.BarTable >= 0;
+        if (board.Home is null && board.OwnHome is null) return;
 
-        // The squad's table: members sit nearest it (engine choice); an outdoor table has no seats, they stand at it.
-        Vector3? near = bar ? board.BarTable < home.Tables.Count ? home.Tables[board.BarTable] : home.Position : null;
-        HashSet<int>? taken = null;
         int hour = world.Hour;
         for (int k = 0; k < squad.Members.Count; k++)
         {
@@ -179,33 +177,107 @@ sealed class TownPlaceClaims(PopulationData data)
             for (int g = 0; g < roles.Count; g++)
             {
                 if (!roles[g].InWindow(hour)) continue;
-                relaxes |= bar && roles[g].Task.Type == TaskType.RelaxInTownPackage;
+                relaxes |= board.BarTable >= 0 && roles[g].Task.Type == TaskType.RelaxInTownPackage;
                 sits |= roles[g].Task.Type == TaskType.StayInHome;
             }
 
-            if (taken is null && !_seatTaken.TryGetValue(home, out taken)) _seatTaken[home] = taken = [];
-            int had = _kept.TryGetValue(s, out var old) ? IndexOf(home, old) : -1;
-            if (had >= 0 && Operated(world, home.SeatAt(had).Position)) had = -1;
-            if (!relaxes && !sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
-            {
-                if (had >= 0) taken.Remove(had);
-                continue;
-            }
+            ClaimSeat(world, board, s, id, relaxes, sits && !relaxes, cold.Ai.SeatUnreachable);
+        }
+    }
 
-            if (had >= 0 && (relaxes || StaysAt(old.Kind)))
-            {
-                taken.Add(had);
-                board.SeatClaims[s] = old;
-                continue;
-            }
+    /// <summary>
+    /// One member's seat of <see cref="ClaimSeats"/>: the one it kept, else a free one of the building its goal names; one that relaxes and stays
+    /// no longer, or gave its seat up, leaves it to the next member.
+    /// </summary>
+    void ClaimSeat(World world, Blackboard board, int slot, CharacterId id, bool relaxes, bool sits, bool unreachable)
+    {
+        var building = relaxes ? board.Home : board.OwnHome;
+        bool kept = _kept.TryGetValue(slot, out var old);
+        if (!relaxes && !sits || unreachable || building is null)
+        {
+            if (kept) Release(world, board, old);
+            return;
+        }
 
-            int seat = relaxes ? FreeSeat(home, taken, HomeSpotKind.Chair, near) : FreeFurniture(world, home, taken, id);
-            if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.Bar, near);
-            if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.General, near);
-            if (seat < 0 && relaxes && home.IsOutdoorTable) board.SeatClaims[s] = new HomeSpot(HomeSpotKind.General, home.Position, home.Yaw);
-            if (seat < 0) continue;
-            taken.Add(seat);
-            board.SeatClaims[s] = home.SeatAt(seat);
+        var seats = SeatsOf(world, building);
+        var taken = TakenOf(building);
+        int had = kept ? seats.IndexOf(old) : -1;
+        if (had >= 0 && Operated(world, seats.At(had).Position)) had = -1;
+        if (had >= 0 && (relaxes || StaysAt(old.Kind)))
+        {
+            taken.Add(had);
+            board.SeatClaims[slot] = old;
+            return;
+        }
+
+        int seat = relaxes ? BarSeat(building, board.BarTable, taken) : FreeFurniture(world, seats, taken, id);
+        if (seat < 0 && relaxes && building.IsOutdoorTable) board.SeatClaims[slot] = new HomeSpot(HomeSpotKind.General, building.Position, building.Yaw);
+        if (seat < 0) return;
+
+        taken.Add(seat);
+        board.SeatClaims[slot] = seats.At(seat);
+    }
+
+    /// <summary>
+    /// A free seat of the bar for a relaxing member, nearest the squad's table (engine choice; an outdoor table has no seats): a chair, else a bar
+    /// node, else a general node; -1: none.
+    /// </summary>
+    static int BarSeat(TownBuilding bar, int table, HashSet<int> taken)
+    {
+        Vector3 near = table < bar.Tables.Count ? bar.Tables[table] : bar.Position;
+        int seat = FreeSeat(bar, taken, HomeSpotKind.Chair, near);
+        if (seat < 0) seat = FreeSeat(bar, taken, HomeSpotKind.Bar, near);
+        if (seat < 0) seat = FreeSeat(bar, taken, HomeSpotKind.General, near);
+        return seat;
+    }
+
+    /// <summary>
+    /// Frees a seat a member held in the package's bar or its own home.
+    /// </summary>
+    void Release(World world, Blackboard board, HomeSpot spot)
+    {
+        foreach (var building in Buildings(board))
+            if (SeatsOf(world, building).IndexOf(spot) is >= 0 and var i) TakenOf(building).Remove(i);
+    }
+
+    /// <summary>
+    /// The buildings a squad's seats are in: the package's bar or home (<see cref="Blackboard.Home"/>) and its own home when that is another.
+    /// </summary>
+    static IEnumerable<TownBuilding> Buildings(Blackboard board)
+    {
+        if (board.Home is { } home) yield return home;
+        if (board.OwnHome is { } own && !ReferenceEquals(own, board.Home)) yield return own;
+    }
+
+    /// <summary>
+    /// The seats of a building as claims number them: its own (<see cref="TownBuilding.SeatAt"/>), then the furniture its residents' nest stood
+    /// round it (<see cref="NestBuildings.FurnitureOf"/>).
+    /// </summary>
+    static HomeSeats SeatsOf(World world, TownBuilding building) => new(building, world.NestBuildings.FurnitureOf(building.Key));
+
+    /// <summary>
+    /// A building's seats (<see cref="SeatsOf"/>): <paramref name="building"/>'s own, then <paramref name="stood"/>.
+    /// </summary>
+    readonly struct HomeSeats(TownBuilding building, IReadOnlyList<HomeSpot> stood)
+    {
+        /// <summary>
+        /// How many seats there are.
+        /// </summary>
+        public int Count => building.SeatCount + stood.Count;
+
+        /// <summary>
+        /// The seat of <paramref name="index"/>.
+        /// </summary>
+        public HomeSpot At(int index) => index < building.SeatCount ? building.SeatAt(index) : stood[index - building.SeatCount];
+
+        /// <summary>
+        /// The index of <paramref name="spot"/>; -1 when it is none of these.
+        /// </summary>
+        public int IndexOf(HomeSpot spot)
+        {
+            for (int i = 0; i < Count; i++)
+                if (At(i) == spot) return i;
+            return -1;
         }
     }
 
@@ -425,26 +497,24 @@ sealed class TownPlaceClaims(PopulationData data)
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is not { } board) continue;
-            if (board.Home is { } h) TakeOperatedSeats(world, h, TakenOf(h));
-            if (board.Home is { } home && board.SeatClaims.Count > 0)
-            {
-                var taken = TakenOf(home);
-                foreach (var spot in board.SeatClaims.Values)
-                    if (IndexOf(home, spot) is >= 0 and var i) taken.Add(i);
-            }
+            foreach (var building in Buildings(board)) TakeOperatedSeats(world, building, TakenOf(building));
+            foreach (var spot in board.SeatClaims.Values) Reserve(world, board, spot);
 
             foreach (var claim in board.SitClaims.Values) TakenOf(claim.Building).Add(claim.Index);
         }
     }
 
     /// <summary>
-    /// The seat index of <paramref name="spot"/> in <paramref name="building"/> (<see cref="TownBuilding.SeatAt"/>); -1 when it has none.
+    /// Marks a seat a member holds taken in the building it is in (the package's bar first, then the squad's own home).
     /// </summary>
-    static int IndexOf(TownBuilding building, HomeSpot spot)
+    void Reserve(World world, Blackboard board, HomeSpot spot)
     {
-        for (int i = 0; i < building.SeatCount; i++)
-            if (building.SeatAt(i) == spot) return i;
-        return -1;
+        foreach (var building in Buildings(board))
+        {
+            if (SeatsOf(world, building).IndexOf(spot) is not (>= 0 and var i)) continue;
+            TakenOf(building).Add(i);
+            return;
+        }
     }
 
     /// <summary>
@@ -454,13 +524,15 @@ sealed class TownPlaceClaims(PopulationData data)
     static bool StaysAt(HomeSpotKind kind) => kind is HomeSpotKind.Chair or HomeSpotKind.Training or HomeSpotKind.Workstation;
 
     /// <summary>
-    /// Whether the home interior holds a piece staying home takes; with none the goal is not wanted (the finder's factor is 0, <c>FUN_1408cbc00</c>).
+    /// Whether the home holds a piece staying home takes, its nest's pieces round it included (<see cref="SeatsOf"/>); with none the goal is not
+    /// wanted (the finder's factor is 0, <c>FUN_1408cbc00</c>).
     /// </summary>
-    internal static bool HasStayingFurniture(TownBuilding? home)
+    internal static bool HasStayingFurniture(World world, TownBuilding? home)
     {
         if (home is null) return false;
-        for (int i = 0; i < home.SeatCount; i++)
-            if (StaysAt(home.SeatAt(i).Kind)) return true;
+        var seats = SeatsOf(world, home);
+        for (int i = 0; i < seats.Count; i++)
+            if (StaysAt(seats.At(i).Kind)) return true;
         return false;
     }
 
@@ -468,15 +540,15 @@ sealed class TownPlaceClaims(PopulationData data)
     /// A piece staying home takes, drawn at random from those no one claimed (the finder draws from its list, <c>FUN_1409fb020</c> with
     /// <c>FUN_1409b3b40</c>); -1: none free.
     /// </summary>
-    static int FreeFurniture(World world, TownBuilding home, HashSet<int> taken, CharacterId who)
+    static int FreeFurniture(World world, HomeSeats seats, HashSet<int> taken, CharacterId who)
     {
         int free = 0;
-        for (int i = 0; i < home.SeatCount; i++)
-            if (!taken.Contains(i) && StaysAt(home.SeatAt(i).Kind)) free++;
+        for (int i = 0; i < seats.Count; i++)
+            if (!taken.Contains(i) && StaysAt(seats.At(i).Kind)) free++;
         if (free == 0) return -1;
         int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(who), RngPurpose.Think, SeedSalts.AiTarget ^ 0x43), free);
-        for (int i = 0; i < home.SeatCount; i++)
-            if (!taken.Contains(i) && StaysAt(home.SeatAt(i).Kind) && pick-- == 0) return i;
+        for (int i = 0; i < seats.Count; i++)
+            if (!taken.Contains(i) && StaysAt(seats.At(i).Kind) && pick-- == 0) return i;
         return -1;
     }
 

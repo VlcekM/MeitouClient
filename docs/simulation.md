@@ -371,6 +371,8 @@ original's table (CHARACTER → claimed, live character, state 1/0/2, player fla
 - **Release**: a squad leaving for good without being kept (Faithful despawn, a wild site unloading, a town squad remade by regeneration) frees its
   living uniques so its template makes them again, only when the entry is that character's (Meitou: knocked-out but alive counts as living); the
   dead stay claimed. Town squads stored on unload keep their claims.
+- **Recruits**: a character leaving its squad for another (recruited, bought, split off) leaves the save's platoon record it was made from too
+  (`SavedPopulation.Leave`); kept there, the record's unload kept it and the platoon made it again, a second copy of a recruited unique (#701).
 - **Seed**: at the first population look, the uniques of each template's first `prisoners` template are imprisoned and unclaimed (kept when a
   save already has them).
 - **Save**: CAMERA `usedUniques*` as the original (claimed entries; prisoners derived again). Handles are the written character's for player
@@ -441,7 +443,8 @@ Implemented (`PopulationRoaming.cs`):
   200 random town pairs go by road at preference 0.6; about 10 % of roads have a `length` well under their drawn length (0.17-0.44 ×, median
   1.00), which the original's cost uses as is, so a faction with preference 0.3 still takes the Hub-Stack road (walked 34000 vs 16900 straight).
 - **Hand-off**: a stand-in that travelled comes back on the nearest walkable point (`WalkableSpots.Nearest`: rings of 4 to 128 units, eight
-  directions each); its kept characters keep their offsets round it, each moved to a walkable point within 32 if needed, else onto it. A town's
+  directions each); its kept characters keep their offsets round it, each moved to a walkable point within 32 if needed, else onto it, and each
+  stands on the surface at terrain level there, not a ruin's upper floor over it (`MovedSpot`, #731; engine choice). A town's
   own or wild platoon, or one that did not move, keeps its characters' exact places.
 - **Cost** (**Observed**, headless, save 2 with 2000 extra travelling stand-ins, warm): the step 0.08-0.1 ms per look at 1 or 8 threads (too little
   work for the threads to pay), pools and fights 0.23-0.26 ms per look (fights run every 4th look), about 0.03 ms a tick in all; save 2 alone
@@ -459,7 +462,8 @@ Implemented (`PopulationRoaming.cs`):
     new kept platoon (the old one's characters are dropped; a save's leaves the save). A template whose members are all by chance gets up to
     8 rolls. **Observed** (headless): new game, Hub squatters 1 of 3 left → 2 fresh; save 2, Squin's Town Guard 2 of 5 → 4 fresh; both the
     same after save and load.
-  - **Nests**: the pool starts at 0.7 × `nest resident population` (or the save's `pop2`); a load fills it to `floor(pop2)` members; one nest a tick in turn (tick mod nest count; the tick stands in for the original's frame),
+  - **Nests**: the pool starts at 0.7 × `nest resident population` (or the save's `pop2`); a load fills it to `floor(pop2)` members, unless a player character is within 1250 of the centre it picks (then
+    it only weighs, as a top-up; engine choice, the original has no load fill: #731, a save loaded beside a nest made squads 150 from the player); one nest a tick in turn (tick mod nest count; the tick stands in for the original's frame),
     so each every N ticks, N = all nests: a loaded one with room makes one squad (rolls keyed after the load's), unless a player character is within 1250, then it only weighs.
     An entry must fit the free budget, except while the pool is empty with more than 4 free (the Fog Deathyard's `Fog hive nest`, expected
     size 1 + (12 + 24) / 2 = 19, against a budget of floor(0.7 × 25) = 17). A roll that finds no entry (all weights 0 or none fits the free budget) with no squad of the nest left alive sets `ded` for good, `tod`,
@@ -919,7 +923,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   locks a closed one that `wants lock`; locking a home's doors closes them (animated, the lock holds at once). Engine stand-in for
   Task_OpenDoor: every 3 ticks a walker within 40 of a closed door's leaf whose current or next path leg crosses the leaf's plane within its half
   width + 6 (`IDoorGate.DoorSpotOf`: the door collision's box via `NavDoorGeometry`; headless: none, so no walk-through opening) opens it; at an
-  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player). Both reaches run from
+  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player, once per door while it stays within 40 of where it said it). Both reaches run from
   the leaf's nearest point, not its centre (a gate's leaf is 70..80 wide). The box's normal is the thinnest horizontal direction of the door
   collision's footprint (`NavDoorGeometry.Fit`), not the nearer building axis: **Verified** (that footprint for every BUILDING with `doors`, plain
   game; each leaf is one box), 9 of 47 leaves are turned in their building (Saloon and Double House 45°, Outpost s-II/s-IV and Outpost Stairs 42°,
@@ -964,8 +968,8 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   right click on a bed, or its held menu's "Sleep") sends every awake, non-carrying selected character (as the original; the first there takes it, the rest are refused); `PutInBedOrder` (99: "Put in Bed" on the bed's menu;
   a quick click while carrying, engine) sends carriers, the cheaper rent paid, the body let go
   and laid in. In reach (`use range` + 15, on the bed's floor within 20, or a walk ended within 60) it pays the rent (`Cost`/`Pay`, player only; the 24 h memo
-  is engine state, not saved) and enters, its orders dropped; a bed order that finds it in the bed at once (in reach, or lying there) also drops the
-  replan it asked for, so it lies there as one that walked does; 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
+  is engine state, not saved) and enters, its orders dropped; the Sleep order (258) keeps running while it lies there, until replaced, also for a
+  sleeper loaded lying in that bed (#684: else its follow job got it up); 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of
   a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. Lifting a sleeper takes it out. Engine difference: no power test. The rescue job (148) and the one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
@@ -1221,7 +1225,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   (limbs severed unless dismemberment is Never; `DeathCause.Eaten` and "{1} has been eaten alive." when nothing is left). Events 52 and 11 every 10 s (engine throttle).
 - A captive's death by either resets the town's timer to now + uniform[1, 15) h; the first ask sets it. Timers and jobs are not saved (engine); hashed once any exists.
   **Observed** (headless probe, real data): a cannibal village kills a caged player character within 16 s of work once its timer is due; a fishman lab eats one in about 160 s.
-- **Process** (260: an awake non-slave occupant anywhere in the town; 183: first the nearest free slave of state 1 or 2 in sight that needs processing, walked to with no cage (the characters within sight range that the watcher senses, `CharacterFacts.Perceives`, stand in for the sensed list; not caged ones; engine reading), else an occupant on the worker's floor and in its building within 180 in 3D, whose owner is an ally or none, and that needs processing: an escaped or ex-slave, or a slave not both shaven and looking like one): cages of the worker's faction or an ally,
+- **Process** (260: an awake non-slave occupant anywhere in the town; 183: first the nearest free slave of state 1 or 2 in sight that needs processing, walked to with no cage (the characters within sight range that the watcher senses, `CharacterFacts.Perceives`, stand in for the sensed list: none before the watcher's first look, and a sneaker on its feet only once its look senses it; not caged ones; engine reading; **Observed** #759 save: a guard's first think after load took a sneaking escaped slave 480 away and followed her), else an occupant on the worker's floor and in its building within 180 in 3D, whose owner is an ally or none, and that needs processing: an escaped or ex-slave, or a slave not both shaven and looking like one): cages of the worker's faction or an ally,
   not the player's. 3 s of `medic`, then a human captive without locked shackles is cuffed first (182 needs 134 `isChained`, which only 166 Restraining gives, [ai-tasks](game/ai-tasks.md) planner table;
   engine choice: 166's 7 `isTargetDown` is not asked): it is chained (`CharacterAssembly.Chain`) and becomes a slave of the worker's faction and squad, as `setChainedMode` makes the cuffer the owner, so that squad's medics treat it in its cage. **Observed** (probe, #508 and #509 saves):
   a sold slave caged unshackled was stripped again and again, and Rebirth's caged player slaves that had taken their shackles off were neither re-shackled nor bandaged; now both are chained once and then bandaged. Then the captive's worn weapons and armour (not locked shackles, slave garments or the worker faction's `slave clothing`) go to the worker's inventory (else the ground; engine for the original's
@@ -1551,7 +1555,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   registry site, so it is neither drawn, saved nor built: the production system makes a complete site of it once its town has registered, and its machine is kept in
   memory, not saved. A right click with characters selected is an `OperateOrder` (Training, 97), with Shift the Training job, whoever owns the dummy
   ([UseableStuff verbs](game/ui-input.md#context-menu-verbs)); a saved order or job keeps the id. Picked as a bed is (its collision, else its middle within
-  30 px); pointer `use`. Not handled: an NPC idling at a dummy (town goals, `HomeSpotKind.Training`) does not count as its operator, so a player character can share it.
+  30 px); pointer `use`. Selected, its panel shows `Training:`, Workers and Max Skill Level ([Selected building](game/ui-screens.md#selected-building)). Not handled: an NPC idling at a dummy (town goals, `HomeSpotKind.Training`) does not count as its operator, so a player character can share it.
 - **Items.** `PutInMachine` and `TakeFromMachine` move items between a character within 40 of the building's footprint and the machine:
   inputs, output, or storage cells.
 - **Research** (`Construction/ResearchState`). A queue paid at queue time from the benches' storage; a paid id is never
@@ -1583,7 +1587,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   storage accepts an item when `itemtype limit` matches and `limit inventory` (a function 2 storage's only) is empty or lists it; `stackable bonus
   mult` scales its stacks. The player's drops into a storage follow the same rule ("does not take").
   Excess fetched inputs stay with the operator. Engine choices: storage within `HaulRange` 3000 of the machine, ties
-  by site id, a fetch takes what the inputs have room for; the trip is not saved. Crafted items are not hauled. Carried output
+  by site id, a fetch takes what the inputs have room for; the trip is not saved. A crafting bench's output is its finished items: an operator
+  takes those a storage accepts once the first craft's store is full, and a full bench whose items no storage takes is no work (the job passes
+  on); a "Hauling to" job fetches finished items as it does a producer's output, the instances themselves (quality and model kept) (#762). Carried output
   goes only with a full output just taken, or while the output stays full: a stray unit sends no one on a trip (#388). A walker
   stopped within reach of a site whose height has no floor (furniture on an upper storey the navmesh lacks, the Hub's Storm House)
   counts as there (`ProductionSystem.OffFloor`).
@@ -1617,9 +1623,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     40 (146's `!158`). Urgent (step 3, before Self preservation) while the character senses an enemy.
   - 87 Operating machine: blocked while others hold every operator place or the machine has no work (no power; no queued research or craft; a
     farm growing with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
-    a full output no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
-  - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output the storage takes is
-    emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes go first. Blocked with neither.
+    a full output (a bench's first craft at its store) no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
+  - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output (a bench's: its finished items) the storage takes is
+    emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes or crafts go first. Blocked with neither.
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
@@ -1731,7 +1737,7 @@ talker walks up (60 units, engine choice; 60 s to arrive), the NPC is held, then
 template, leader role; `DialogueDatabase`) is chosen from by score, line checks and a seeded pick. The NPC line is said (text, tokens and
 word swaps, effects at once); passing replies become choices, an NPC-side child a single `[...]`. The host opens `Kenshi_ConversationPanel`
 modal, which pauses the game; `DialogueChoice` and `EndConversation` apply between ticks at speed 0; effects that order fights are deferred
-to the next tick. A hostile target is attacked instead.
+to the next tick. A free hostile target is attacked instead; a caged one, hostile or not, is talked to and kept in its cage (#737).
 
 - **Effects built**: locks, interrupts, `change relations`, trade, relations, the three attacks, take and give money, faction rank (DA 35, read by DC 10), the surgeon's editor
   (paid by the line, `EditCharacter.Paid`), assign and clear bounty, lock this dialogue, DA 37 / 38 (a campaign's phase), `trigger campaign` (`PopulationSystem.TriggerFromDialogue`: the rules in
@@ -1915,8 +1921,9 @@ node, else a guard post, else any node; a home or seat given up
 after three failed walks is tried again when a new goal is taken up, and a member that gave its seat up
 leaves it to the next; a member keeps its seat while it still relaxes or sits (every squad's kept seats are reserved before any claims), so a
 patron coming or going does not move every later sitter to another chair. Headless Hub, Squin and Stack bars (2026-10-21): each patron sits once
-and stays for 12000 ticks, with or without that rule (the reported sit/stand churn is not reproduced). **Observed** (headless Hub, 2026-10-26): the
-Storm House's 5 tables go to `hub squatters` squads (package signal 17, STAY_IN_HOME only), so the visiting bar squads get none and shop at the counter.
+and stays for 12000 ticks, with or without that rule (the reported sit/stand churn is not reproduced). `hub squatters` squads (package `Squatters`,
+signal 17, goals Stay home and Patrol hometown, no Relaxing) reserve no table, as a bar package takes one only when a goal of it asks for the target
+([hang-around-bar package](game/ai-tasks.md)); staying home takes the furniture of the squad's own home ([ai-tasks](game/ai-tasks.md), 43).
 
 Turret goals (149, 222, 234, 146) man a turret of the squad's town: a placed BUILDING with a
 `BUILDING_FUNCTIONALITY` function 12 (`TownBuilding.Turret`: its `use range` and `gun turret`

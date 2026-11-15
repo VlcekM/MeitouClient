@@ -173,4 +173,10 @@ static class MeshSurface
     /// A triplanar map feature: dust as well (<c>uWeatherDust.w</c> is always 1; the game's caller table gives them no DUST).
     /// </summary>
     public const uint TriplanarDust = 16;
+
+    /// <summary>
+    /// One of Meitou's glass bottles (<c>GlassBottles</c>): the objects' blended pass draws it as glass, refracting the scene's copy
+    /// (docs/render-objects.md "Glass bottles"). Elsewhere it is an ordinary see-through item.
+    /// </summary>
+    public const uint Glass = 128;
 }

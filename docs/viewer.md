@@ -105,7 +105,7 @@ stored; human~19.5 units and katana12.8. Unit/placement formulas have their own 
 
 ## Pick & collision inspector
 
-Meitou only. Open it from the F10 debug menu's Tools row. It works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc closes it, and while it is open it takes every key. What was switched on stays on after it closes, so the camera can fly about with it drawn.
+Meitou only. Open it from the F10 debug menu's Tools category (Pick & collision inspector). It works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc closes it, and while it is open it takes every key. What was switched on stays on after it closes, so the camera can fly about with it drawn.
 
 - **Info panel** (top right): the ground point under the cursor and its zone, the ray's ground distance, the building a click would select (name, record, instance, hit distance, hull corners, size and area, the number and area of the per-shape hulls and how much larger the merged hull is, the height range), the other buildings the ray passes with their distances, how many near buildings it misses, the selected building and the number of selected characters.
 - The panel also lists the resource rocks near the cursor (what a right click would mine): the rock a click mines, and for the three nearest each one's distance from the ray against its radius, to see why a rock is or is not hit.

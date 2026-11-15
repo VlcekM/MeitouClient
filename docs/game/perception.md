@@ -224,7 +224,9 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
 - **Slot 125** (`CharacterAnimal::vfunc_125`, shared by all characters): never the same faction. Across platoons the looker's squad's
   TEMP_ENEMY tag (or, for a looker whose faction has +0x250, the target's tag on it) makes an enemy and TEMP_ALLY prevents one. A disguise
   (uniform faction at +0x108 while +0x100 > 0.6 and +0x110 <= 0) stands in for the target's faction. A slave target: not when its owner
-  is the looker's, and only when the looker is hostile to the owner's faction. A slave looker: never its owner's faction. A target of the
+  is the looker's, and only when the looker is hostile to the owner's faction; it then still takes the faction test below on its own faction,
+  so hostility to the slavers alone does not make their slaves enemies (#694: a raid on Slave Traders turned the squad on their Outlaw slaves,
+  default relation 0, which the report's save then held at -100, **Observed**). A slave looker: never its owner's faction. A target of the
   faction the looker's platoon object +0x80 names (**Unknown** role) is an enemy. Otherwise hostile(looker faction → target faction),
   relation <= -30, when `FUN_1408569a0` fails and the looker's +0xea flag is clear (and the target's is clear, or the looker's faction is
   not real or its default relation, relations `+0x60`, is strictly below -30; **Verified** `FUN_14079c950`). +0xea is "freed": set by a release

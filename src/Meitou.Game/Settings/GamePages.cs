@@ -655,6 +655,10 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
             Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
+        result.Add(new("Camera stays near your squads",
+            "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. "
+            + "Off, it can fly anywhere in the world.",
+            Toggle: new("Camera stays near your squads", () => menu.Config.CameraLeash, v => menu.Config.CameraLeash = v, OnOff: true)));
         result.Add(new("Open bags at once",
             "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading "
             + "until OPEN BAG is pressed for it.",

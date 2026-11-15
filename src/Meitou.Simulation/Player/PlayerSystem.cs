@@ -279,6 +279,9 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 if (player.InCreation) Editing.CharacterEditing.EndCreation(world, _assembly);
                 player.InCreation = false;
                 break;
+            case Editing.InPlayEditorOpened opened:
+                Editing.CharacterEditing.GrowHair(world, _assembly, opened);
+                break;
             case Items.PickUpItemOrder pick:
                 _pickUps.PickUpInput(world, pick);
                 break;
@@ -363,7 +366,8 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     /// </summary>
     public void SlowWorld(World world)
     {
-        DebugCheats.GodTick(world, data, _assembly);
+        DebugCheats.StatsTick(world);
+        DebugCheats.HealTick(world, data, _assembly);
         DebugCheats.GuardTick(world, data, _assembly);
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);

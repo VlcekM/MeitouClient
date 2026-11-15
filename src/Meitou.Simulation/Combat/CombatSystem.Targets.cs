@@ -40,24 +40,6 @@ public sealed partial class CombatSystem
     const float EyeHeight = 15;
 
     /// <summary>
-    /// The spacing of the points the steering's line test stands on (engine choice: under a footprint, so a wall's gap of a body width is
-    /// not skipped).
-    /// </summary>
-    const float SteerLineStep = 2;
-
-    /// <summary>
-    /// The radius of the circle the steering's line test sweeps against the walkable surface's walls (engine choice: near a point, so the line
-    /// itself is tested; a bar line a step thin is crossed between two of the <see cref="SteerLineStep"/> points, #439).
-    /// </summary>
-    const float SteerLineRadius = 0.1f;
-
-    /// <summary>
-    /// How far inside its polygon's edge the line test puts a fighter that stands off it (<see cref="IWalkability.SurfacePoint"/>): clear of the
-    /// swept circle, so the edge it stands by does not stop the sweep at any angle.
-    /// </summary>
-    const float SteerLineInset = 2 * SteerLineRadius;
-
-    /// <summary>
     /// The chooser's side of a target choice and the best candidate so far.
     /// </summary>
     struct Choice
@@ -188,14 +170,17 @@ public sealed partial class CombatSystem
     /// after it was last sensed); a world without senses never holds it. Engine choice: an enemy in a cage is not counted and a task target in a cage
     /// counts as gone. The original ends such a fight through its goal (an arrest's effect 129 holds once the target is imprisoned), which the
     /// engine's own fights (an arrest's, a joiner's) do not have: left in it, guards stood in combat mode at the cage and turned on the prisoner
-    /// once it was let out (#629). Reads the last tick's fights and the senses of the last look.
+    /// once it was let out (#629). A player character's fight that its own goal started ends sooner (<see cref="GoalSpent"/>). Reads the last tick's
+    /// fights and the senses of the last look.
     /// </summary>
     bool NothingLeft(World world, int i, in CombatSlot s)
     {
         if (AttackerCount(world, i) > 0) return false;
 
         var senses = CharacterFacts.Senses(world, i);
-        if (senses is { ThreatToAllies: > 0 } || senses is not null && senses.Enemies > senses.CagedEnemies) return false;
+        if (senses is { ThreatToAllies: > 0 }) return false;
+        if (GoalSpent(world.Characters.Cold(i)!, senses)) return true;
+        if (senses is not null && senses.Enemies > senses.CagedEnemies) return false;
 
         var table = world.Characters;
         var prev = table.Previous;
@@ -206,6 +191,17 @@ public sealed partial class CombatSystem
 
         return senses is null || !senses.Knows(new CharacterId(t, s.TaskGeneration));
     }
+
+    /// <summary>
+    /// Whether a player character's targetless fight is one its own goal started (32 Self preservation or 15 Protect allies, row 13) and that goal has
+    /// nothing left: no threat on it (<see cref="SenseBlock.ThreatToMe"/>; the caller has checked its attackers and the allies' threat). The original
+    /// ends it there through the goal: its desire falls to 0 and the AI's next choice replaces the fight, while enemies it only knows of (an entry not
+    /// yet decayed, a crawler) still count in <c>numEnemies</c> (<b>Observed</b>, original 1.0.65 via the harness, #695: a player character left a
+    /// fight for Aimless with a crawling, conscious bandit 45 away).
+    /// </summary>
+    static bool GoalSpent(CharacterCold cold, SenseBlock? senses) =>
+        cold.IsPlayer && cold.Running is { Source: Ai.TaskSource.Goal, Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf }
+        && senses is not { ThreatToMe: > 0 };
 
     /// <summary>
     /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those
@@ -414,30 +410,15 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>) or either side of an open doorway
-    /// (<see cref="AcrossOpenDoor"/>), within <see cref="SameFloorHeight"/> in height, and
-    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last, and no wall of the walkable surface across it
-    /// (<see cref="IWalkability.Slide"/>; engine stand-in for the navmesh line query <c>FUN_1403a56e0</c>). The walls are tested between where the
-    /// two stand on the surface (<see cref="IWalkability.SurfacePoint"/>): for one standing off the surface's edge that edge was a wall across every
-    /// line to it, so nobody steered or swung at it (#559). Last tick's places; any thread after Sight's update.
+    /// (<see cref="AcrossOpenDoor"/>), and the navmesh line of sight between them clear (<see cref="IWalkability.LineOfSight"/>, the face walk of
+    /// <c>FUN_1403a56e0</c>). Last tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {
         if (world.Sight.PlaceOf(a) != world.Sight.PlaceOf(t) && !AcrossOpenDoor(world, a, t)) return false;
 
         var prev = world.Characters.Previous;
-        Vector3 from = prev[a].Position;
-        Vector3 to = prev[t].Position;
-        if (MathF.Abs(to.Y - from.Y) > SameFloorHeight) return false;
-
-        var leg = new Vector2(to.X - from.X, to.Z - from.Z);
-        float length = leg.Length(), y = from.Y;
-        for (float d = SteerLineStep; d < length; d += SteerLineStep)
-            if (!world.Walkability.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
-
-        var start = world.Walkability.SurfacePoint(from, SteerLineInset);
-        var end = world.Walkability.SurfacePoint(to, SteerLineInset);
-        var line = new Vector2(end.X - start.X, end.Z - start.Z);
-        return world.Walkability.Slide(start, line, SteerLineRadius) == line;
+        return world.Walkability.LineOfSight(prev[a].Position, prev[t].Position);
     }
 
     /// <summary>

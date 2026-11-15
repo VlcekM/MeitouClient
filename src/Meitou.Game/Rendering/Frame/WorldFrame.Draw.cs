@@ -409,7 +409,7 @@ static partial class WorldFrame
 
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {
-            posed.CollectBolts(gpu.BoltPieces);
+            posed.CollectBolts(gpu.BoltPieces, mesh => boltMeshes.Centre(mesh));
 
             // loads a mesh the first time (a held limb's with its look)
             foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null, bolt.Limb);
@@ -1152,8 +1152,11 @@ static partial class WorldFrame
             objects.Selected = gpu.HoverOutline is null ? [] : gpu.OutlinedBuildings;   // their draws kept for the outline's masks
             if (f.Render.Objects)
             {
+                // The main view blends the see-through items after the scene (DrawSeeThrough) instead of dithering them.
+                objects.BlendSeeThrough = true;
                 objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain,
                     f.RelativeRotation * s.Jittered);
+                objects.BlendSeeThrough = false;
             }
             objects.FogCull = null;
             objects.InteriorCut = null;
@@ -1251,7 +1254,9 @@ static partial class WorldFrame
         f.Post.CharactersDrawn = false;   // none this frame unless some are drawn below
         if (gpu.Characters is not { } characters) return;
         f.Host.Stage(StageClock.Characters);
+        characters.BlendSeeThrough = true;
         characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.RelativeRotation * s.Jittered);
+        characters.BlendSeeThrough = false;
         f.Post.CharactersDrawn = characters.DrawnCharacters > 0;
         StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
     }
@@ -1362,6 +1367,7 @@ static partial class WorldFrame
 
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");
+        DrawSeeThrough(ref f);
 
         if (gpu.Shadow is { Enabled: true })
         {
@@ -1382,6 +1388,28 @@ static partial class WorldFrame
         // The SSAO onto the scene before the particles: they are not occluded by the surfaces behind them (the post chain leaves it out of its
         // composite).
         post.ApplySsao();
+    }
+
+    /// <summary>
+    /// The see-through items (a mod's opacity map, docs/render-objects.md "See-through items") blended over the lit opaque scene: after the GI's
+    /// resolve, the lamps' shadows, the characters' occlusion and the reflections, which read the opaque scene's colour, albedo and traced term,
+    /// and before the shafts and fog, which then lie over them. Into the scene's colour and depth alone (the albedo and traced targets keep what
+    /// the opaque scene wrote); they write no depth, so what comes later (fog, occlusion, motion) sees what is behind them. The objects', then
+    /// the characters'. The glass bottles first get their copy of the scene (<see cref="WorldObjectRenderer.PrepareSeeThrough"/>), with no pass open.
+    /// </summary>
+    static void DrawSeeThrough(ref FrameState f)
+    {
+        var gpu = f.Gpu;
+        bool objects = gpu.Objects is { HasSeeThrough: true };
+        bool characters = gpu.Characters is { HasSeeThrough: true };
+        if (!objects && !characters) return;
+
+        if (objects) gpu.Objects!.PrepareSeeThrough(f.Post.SceneColour);
+        f.Host.Open(7, PassTargets.Of(f.Post.SceneColour, f.Post.SceneDepth));
+        if (objects) gpu.Objects!.DrawSeeThrough();
+        if (characters) gpu.Characters!.DrawSeeThrough();
+        f.Host.Close();
+        StageClock.Lap(7, "see-through");
     }
 
     /// <summary>

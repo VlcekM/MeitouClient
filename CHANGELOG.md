@@ -3,6 +3,51 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.20.0
+
+- See-through items: a clothing or armour material's opacity map makes it see-through, blended cleanly over the scene with no dithering or ghosts under DLSS (#562)
+- Glass bottles (Meitou, on): sake and rum bottles are real glass, refracting the scene behind them with reflections, highlights and the drink inside; Faithful draws them solid (#562)
+- Lamp warmth (Advanced page, Meitou default): yellow-green ceiling lamps, spotlights and searchlights are drawn amber
+- Fight crowds as in the original: fighters no longer pile onto one target, waiting fighters hold their ring, and fighters either side of a doorway swing at each other (#632, #705)
+- A player character leaves a fight once nothing threatens it or an ally (#695); a noticed incoming swing clears the repeat penalty, as in the original
+- Stealth: a sneaker behind a wall, floor or terrain is not spotted (#588, #655); escaped slaves and prisoners are caught only once a guard's spot meter fills (#649)
+- Stealth KO on an upstairs caged slave works, and a KO walk that can't reach its target ends (#649)
+- Prisoners on a pole pick, cut or break their lock as caged ones do (#642); cutting a lock shows the Cutting bar (#656); caged prisoners can be talked to, so Recruitable Prisoners works (#737)
+- Guards: a stray bolt no longer books its victim for Assault; Hub citizens crying out at skeletons run instead of brawling (#648); guards open their own gates to reach a target (#595) but not to reach an animal (#645)
+- Bandits no longer treat a character at a town's edge as an enemy (#599); slaver raids no longer turn the squad on its slaves (#694)
+- Arrests from dialogue give up outside the guard's town (#666); a guard whose arrest ends mid-strip stops kneeling (#698)
+- Hired bodyguards follow their employer (#658); the map shows campaign squads and hired squads (#664)
+- Sleepers stay in their bed after a load (#684), face along the bed (#718), lean with a sloped bed (#688), and a body laid in a bed lies on the mattress (#733)
+- A sleeping shopkeeper no longer serves, and a caged or tied trader offers no Trade (#582, #641)
+- Wild squads spawn on the ground, each member at its own spot, not on a ruin's upper floor (#731); nests don't spawn next to the player (#731)
+- Navmesh: no detours round dips or stairs (#392, #408), no thin holes (#415), no swimming to one bank and back (#607); the Waystation bar can be entered (#436)
+- Characters with a leg down swim in deep water (#651); Group speed holds after a load (#729); Walk/Jog/Run applies to a walk under way (#691)
+- Move clicks on walls and foundations stop at the wall's foot; the camera pivot keeps big decks' floors
+- Floor picks reach a tower's ground floor below a hillside (#712)
+- Inventory windows open at the original's margins and sizes beside their partners; farm crop stats and condition bars are back
+- Animals: food given to a bagless animal says "No room", and a worn bag takes it; bagless animals eat what they fetch; a worn bag can no longer be put inside itself and lost (#703)
+- Shops: new traders no longer start with 2,000 cats (#659); caravans sell their pack animals' loads (#657); shelf respawns survive a save (#631)
+- Stocked homes spread loot over their containers as the original (#685); camp loot lies round the residents' homes
+- Item tooltips in other factions' containers show the stealing chance (#702)
+- Captives split off wild squads survive a load (#677); unique recruits no longer duplicate (#701); The Hub's bar stays standing (#673)
+- NPC medics treat by their own senses (#643); a kidnap victim caged in another faction's cage is freed once served (#628)
+- Town furniture panels show Workers, Efficiency, Max Skill Level, Training and Power lines as the original (#697)
+- Machine, seat and bed animations play at the original's rates (#634)
+- Build mode: right click picks a queued ghost back up (#663); list highlights follow the category (#670); Craft list scrolls (#672); research bench ARRANGE button (#639)
+- Plastic surgeons grow back a shaven head (#726); Eyegore draws the South Hive head (#692)
+- Mining works within reach of a rock's footprint (#587); taking water from a town well is not theft (#638)
+- Dialogue chains stop when the conversation closes (#707); "Not enough room" only for the player's characters (#683); "It's locked." once
+- Water reflections no longer mirror stand-ins of standing buildings (#668)
+- Skin mods' #rrggbb text colours are read, so dark UI mods aren't black-on-black (#660)
+- Vulkan: no dark triangles on carpets (#661) or dark pixels along edges on RX 580
+- Frame generation: no more 'Failed to create cursor' crashes in long sessions (#652); with vsync off it is no longer held at the refresh rate
+- Enhanced hardware mouse: the action icon no longer trails
+- Debug menu: character editor and drop-item picker
+- Code mods: AddSkill, AddMedicalMeter, stat modifiers, custom weather kinds, bone anchors and bone meshes (#602, #740)
+- Launcher: Ctrl/Shift multi-select and group moves, Steam workshop link icon, a warning on mods that blank the mods above them (#650), macOS workshop sync
+- --cache-root moves derived-data caches elsewhere (#601)
+- Metal: more rendering fixes and the hover outline
+
 ## v0.19.0
 
 - Graphics options sorted into tabs by subject, one master switch per effect with its technique under it; quality tiers up to Extreme set the Meitou effects, chosen by GPU class on first run

@@ -28,7 +28,13 @@ public enum AlphaSource
     /// <summary>
     /// A channel of the diffuse map (<see cref="SurfaceMaterial.AlphaChannel"/>; channel-packed hair).
     /// </summary>
-    DiffuseChannel
+    DiffuseChannel,
+
+    /// <summary>
+    /// The red channel of <see cref="SurfaceMaterial.Opacity"/>, dithered and not cut at a threshold (a see-through item,
+    /// <see cref="Frame.OpacityDither"/>).
+    /// </summary>
+    Opacity
 }
 
 /// <summary>
@@ -65,6 +71,16 @@ public sealed record SurfaceMaterial
     /// The game's metalness map (<c>metalness map</c>; red channel, objects.hlsl), where the record names one: few do.
     /// </summary>
     public string? Metal { get; init; }
+
+    /// <summary>
+    /// A see-through item's opacity map (MATERIAL_SPECS_CLOTHING <c>opacity map</c>, Meitou's own field: red 1 solid, 0 clear); null: none.
+    /// </summary>
+    public string? Opacity { get; init; }
+
+    /// <summary>
+    /// <see cref="Opacity"/> is Meitou's own map of a glass bottle (<see cref="GlassBottles"/>): drawn solid with the <c>glass</c> switch off.
+    /// </summary>
+    public bool BuiltInGlass { get; init; }
 
     /// <summary>
     /// Where the surface's alpha comes from (<see cref="AlphaSource.None"/>: opaque).
@@ -244,9 +260,15 @@ public sealed class MaterialResolver
 
         // Drop candidates whose diffuse texture doesn't exist, and repeats.
         return result.Where(m => m.Diffuse is null || _assets.Find(m.Diffuse) is not null)
-            .DistinctBy(m => (m.Diffuse?.ToLowerInvariant(), m.Normal?.ToLowerInvariant(), m.Diffuse2?.ToLowerInvariant(), m.Alpha))
+            .DistinctBy(Identity)
             .ToList();
     }
+
+    /// <summary>
+    /// What makes two candidates the same look: their maps (case-insensitive) and where the alpha comes from.
+    /// </summary>
+    static (string?, string?, string?, AlphaSource, string?) Identity(SurfaceMaterial m) =>
+        (m.Diffuse?.ToLowerInvariant(), m.Normal?.ToLowerInvariant(), m.Diffuse2?.ToLowerInvariant(), m.Alpha, m.Opacity?.ToLowerInvariant());
 
     /// <summary>
     /// The materials a record gives for the mesh named in its <paramref name="field"/>: by record type (foliage, map features, birds, hair, races,
@@ -445,24 +467,8 @@ public sealed class MaterialResolver
                     break;
                 }
             case FcsRecordType.MaterialSpecsClothing:
-                {
-                    // ItemShader { DEFAULT, ALPHA, DOUBLE_SIDED }; which channel ALPHA uses is not documented (docs/viewer.md).
-                    int type = spec.GetInt("material type");
-                    yield return new SurfaceMaterial
-                    {
-                        Description = $"{name} (type {type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "DOUBLE_SIDED", _ => type.ToString() }})",
-                        Diffuse = Tex(spec, "texture map"),
-                        Normal = Tex(spec, "normal map"),
-                        Alpha = type == 1 ? AlphaSource.NormalAlpha : AlphaSource.None,
-                        AlphaThreshold = type == 1 ? 0.5f : 0,
-                        DoubleSided = type is 1 or 2,
-                        SpecularMult = spec.GetFloat("specular mult", 1),
-                        // A ground item takes COLOURING when its mesh has vertex colours (docs/formats/runtime-materials.md "Callers"); worn items
-                        // never read this.
-                        VertexColours = true,
-                    };
-                    break;
-                }
+                yield return Clothing(spec);
+                break;
             case FcsRecordType.MaterialSpecsWeapon:
                 yield return new SurfaceMaterial
                 {
@@ -473,6 +479,40 @@ public sealed class MaterialResolver
                 };
                 break;
         }
+    }
+
+    /// <summary>
+    /// The material of a MATERIAL_SPECS_CLOTHING record: its maps, the ALPHA type's cut-out, or with an opacity map (Meitou's own field,
+    /// docs/render-objects.md "See-through items") the dither in its place.
+    /// </summary>
+    internal static SurfaceMaterial Clothing(GameRecord spec)
+    {
+        // ItemShader { DEFAULT, ALPHA, DOUBLE_SIDED }; which channel ALPHA uses is not documented (docs/viewer.md).
+        int type = spec.GetInt("material type");
+        string? opacity = Tex(spec, Frame.OpacityDither.MapField);
+        bool cut = type == 1 && opacity is null;
+        string typeName = type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "DOUBLE_SIDED", _ => type.ToString() };
+        var alpha = opacity is not null
+            ? AlphaSource.Opacity
+            : cut
+                ? AlphaSource.NormalAlpha
+                : AlphaSource.None;
+
+        return new SurfaceMaterial
+        {
+            Description = $"{spec.Type} '{spec.Name}' (type {typeName})",
+            Diffuse = Tex(spec, "texture map"),
+            Normal = Tex(spec, "normal map"),
+            Opacity = opacity,
+            Alpha = alpha,
+            AlphaThreshold = cut ? 0.5f : 0,
+            DoubleSided = type is 1 or 2,
+            SpecularMult = spec.GetFloat("specular mult", 1),
+
+            // A ground item takes COLOURING when its mesh has vertex colours (docs/formats/runtime-materials.md "Callers"); worn items never
+            // read this.
+            VertexColours = true,
+        };
     }
 
     /// <summary>

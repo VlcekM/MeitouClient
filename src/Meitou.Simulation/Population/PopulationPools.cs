@@ -625,15 +625,7 @@ public sealed partial class PopulationSystem
         if (pools.Ded) return;
 
         var players = PlayerSpots(world);
-        bool guarded = FocusBlocksNest(world, centre);
-        foreach (var at in players)
-        {
-            if (Vector2.DistanceSquared(at, centre) < NestGuardRadius * NestGuardRadius)
-            {
-                guarded = true;
-                break;
-            }
-        }
+        bool guarded = FocusBlocksNest(world, centre) || PlayerNear(players, centre, NestGuardRadius);
 
         var budget = new NestBudget(
             (int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded,

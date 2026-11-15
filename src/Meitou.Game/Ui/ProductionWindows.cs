@@ -820,8 +820,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 break;
             case MachinePanel.Training:
                 stats.Add(WorkersLine(e.Operators, e.MaxOperators));
-                stats.Add(new("Max Skill Level:", ((int)m.OutputValue - 1).ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour,
-                    Tooltip: "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time."));
+                stats.Add(MaxSkillLine(m.OutputValue));
                 break;
             case MachinePanel.Turret:
                 // TurretBuilding slot 40 (FUN_14030c2a0): section 6 the gun's lines and Efficiency, section 7 Workers and Efficiency.
@@ -833,6 +832,13 @@ sealed class ProductionWindows(PlayerInterface player)
                 break;
         }
     }
+
+    /// <summary>
+    /// A training dummy's <c>Max Skill Level:</c> line (UseableStuff slot 40 for BF_TRAINING): int(<paramref name="outputValue"/>) − 1.
+    /// </summary>
+    internal static PlayerInterface.HudLine MaxSkillLine(float outputValue) =>
+        new("Max Skill Level:", ((int)outputValue - 1).ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour,
+            Tooltip: "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time.");
 
     /// <summary>
     /// The stats lines of a selected machine: the farm's yield and growth rate, the output's progress, then (section 6: slots 155, 154, 153) Workers and
@@ -944,9 +950,18 @@ sealed class ProductionWindows(PlayerInterface player)
                 bad = true;
             }
 
-            stats.Add(new("Power:", $"{F(pw.Granted)}/{F(pw.Demand)}", PlayerInterface.MainColour,
-                pw.Granted < pw.Demand ? PlayerInterface.BadColour : null));
+            stats.Add(ConsumerPowerLine(pw.Granted, pw.Demand));
         }
+    }
+
+    /// <summary>
+    /// A consumer's <c>Power:</c> line (slot 153): granted over demand, the value Bad while it gets less than it asks.
+    /// </summary>
+    internal static PlayerInterface.HudLine ConsumerPowerLine(float granted, float demand)
+    {
+        static string F(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+        return new("Power:", $"{F(granted)}/{F(demand)}", PlayerInterface.MainColour, granted < demand ? PlayerInterface.BadColour : null);
     }
 
     /// <summary>

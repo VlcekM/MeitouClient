@@ -420,7 +420,8 @@ sealed class BuildMode(PlayerInterface player)
         if (building.LinksTogether) return (terrainHit, null, null);
 
         float length = Vector3.Distance(ray.Origin, terrainHit);
-        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, length) is { } floor) return (floor.Position, floor.Floor, null);
+        float reach = player.Picking.FloorReach(ray.Origin, ray.Direction, terrainHit);
+        if (host.Placement.FloorAlong(ray.Origin, ray.Direction, reach) is { } floor) return (floor.Position, floor.Floor, null);
 
         // Engine stand-in for the original's ghost meeting the physics shapes: walls have no rooms, so a turret over a wall top went to the terrain
         // inside the wall (#431).

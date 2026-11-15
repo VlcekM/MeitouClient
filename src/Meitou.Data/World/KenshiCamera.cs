@@ -21,6 +21,11 @@ public static class KenshiCamera
     /// </summary>
     public const float TrackHeight = 10;
     /// <summary>
+    /// How far the camera's pivot may be from the nearest of the player's characters; past it the pivot is put back on that sphere
+    /// (docs/formats/camera.md "Leash").
+    /// </summary>
+    public const float LeashRadius = 2250;
+    /// <summary>
     /// The boom when the camera is created or reset.
     /// </summary>
     public const float InitialDistance = 150;

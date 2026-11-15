@@ -142,6 +142,65 @@ whole-world transform the layers of one mesh a hair apart can fight for depth; t
 Shading still uses the absolute world position. **Observed** (The Hub, offscreen, three views): the picture within 0.15/255 mean of the
 whole-world transform. **Unknown** whether this was the z-fighting the user reported on ruins (not reproduced: no location yet).
 
+## See-through items (Meitou, issue #562)
+
+For mods and Meitou's glass bottles (below); no base-game record has the field. A `MATERIAL_SPECS_CLOTHING` record with the file field `opacity map` (`OpacityDither.MapField`) is partly
+see-through: the map's red channel is the opacity (1 solid, 0 clear), on the item's own UVs. Without the field nothing changes.
+
+- **The original** shows such an item solid: **Verified** `fcs.def` (1.0.68) has no `opacity` key and the 1.0.68 decompile no `opacity map` string.
+  A separate map because the existing alphas are taken: diffuse alpha is gloss, and the original cuts worn items where normal alpha is under 0.6
+  and drawn icons under 0.5 ([characters](characters.md), [ui-screens](game/ui-screens.md) "Item icons"), so opacity there would punch holes.
+  **Unknown**: whether FCS shows the field once a modder adds `opacity map: TEXTURE_ANY` under `[MATERIAL_SPECS_CLOTHING]` in their `fcs.def`.
+- **Main view: a blended pass** (`WorldFrame.DrawSeeThrough`, in `FinishScene` after the GI's resolve, the lamps' shadows, the characters'
+  occlusion and the reflections, before the shafts and fog). The colour passes leave the see-through draws out and they are drawn afterwards
+  over the scene by their opacity, into the scene's colour and depth alone (the GI's albedo and traced-sun targets keep the opaque scene),
+  depth tested, writing neither depth nor the scene's alpha (the character mask). So occlusion, reflections, fog, motion vectors and the
+  upscaler see what is behind them, as with the water and particles. Front faces only unless the material is double-sided: two layers of a
+  closed shape would show nearly twice the opacity. Glass bottles (below) write depth and draw front faces only.
+  - Ground items (`WorldObjectRenderer`, `AlphaSource.Opacity`, the map in the second diffuse slot: an item's material is never dual; it replaces
+    the ALPHA type's cut-out): `HoldSeeThrough` takes their draws out of the main pass, `DrawSeeThrough` records them farthest first with the
+    `objects see-through` program, which reads the GI's probes itself. Premultiplied (`One, SrcAlpha`): an item writes its colour times the
+    opacity and one less the opacity, the same result as blending by alpha; glass bottles (below) use the same state.
+  - Worn and held items (`CharacterShaders.SeeThrough`, the map in `SlotOpacity`): the colour program's push `seeThrough` is 1 in the main pass
+    (the item's fragments dropped) and 2 in the blended pass, which draws again only the batches that have held such a part and drops everything
+    else in them. The worn cut-out on normal alpha stays.
+  - Not sorted within a mesh or between objects and characters (objects first). A see-through item under a water surface is drawn over it.
+- **Elsewhere: a dither** (`opacityDither()`, the LOD cross-fade's interleaved gradient noise, never moving): the shadow casters (the shadow's
+  filter blurs it into a lighter shadow), the water reflection, the objects' selection mask, icons (supersampled ones average 4 x 4 samples
+  into alpha) and portraits. Hover and pick are solid; the GI's and the traced sun's rays take the item as solid (`RayCut`).
+- Drawn solid until the opacity map is resident.
+- **Glass bottles** (`glass` switch, Meitou, on; `GlassBottles`): Sake (`Item_Alcohol1.mesh`) and Cactus Rum / Empty Rum Bottle (`rumjug.mesh`),
+  on the ground or placed in buildings, get a map Meitou makes from the mesh at first use (its triangles drawn at their UVs by height share;
+  `%LOCALAPPDATA%\Meitou\glass`, one file per mesh and fill). Red is the opacity the dithered views draw: Sake 45 % up to 55 % of its height,
+  solid from 63 % (neck, stopper); rum 60 %, solid from 94 % (cork). Green is the drink, 1 under its level and 0 over a 3 % band (Sake 42 %,
+  rum 70 %, the Empty Rum Bottle `44428-rebirth.mod` none; a bottle placed by another record is full); blue how solid it is. The drink's
+  colour rides in the material's tint (unused without a grey channel). Only while the mesh's vertex count, the diffuse and the material are
+  the game's and the material has no alpha or grey channel of its own: a mod's own `opacity map` wins and is not switched. Faithful draws
+  them solid, at once (`Material` reads the switch per frame). Icons stay solid (drawn once and saved). Grog (a can) and the Water Jug stay
+  solid. **Observed** (the user's save, hidden frames, no mods, the opacity-only version): see-through on, solid with `--faithful glass`; the
+  rum map lies on the texture's body and base, the neck and cork solid. Cost of that version (play bench idle, Sake in view, 2 interleaved
+  pairs, RTX 4070): GPU median 4.57 and 4.53 ms on, 4.56 and 4.51 off.
+  - **The main view draws them as glass** (Vulkan; elsewhere ordinary see-through items): `MeshSurface.Glass` (bit 128 of the push spare)
+    marks the draws, `PrepareSeeThrough` blits the scene's colour at the render size into `GlassScene` before the blended pass (only with a
+    bottle held), and `DrawSeeThrough` records the bottles first in a job of their own: front faces only, writing depth (each fragment
+    replaces the scene, so overlapping bottles and a neck over its shoulder keep their order whatever the triangles' order), the copy's
+    bindless index in the second normal slot. A fragment: the copy seen through both walls (the texture's hue mostly washed out, darker
+    towards the silhouette) and the drink (its surface a darker line), times one less Schlick's Fresnel, plus the near wall's and the far
+    wall's reflection (the far wall's normal the near one's mirrored across the plane facing the eye, as in a round bottle; dimmed by the
+    near wall and the drink), each the game lighting's specular of a smooth dielectric (`kenshiLight` with no albedo, gloss 0.96: sun, sky
+    and lamps; at most 16), and 6 % of the lit texture; where the map is solid the lit texture. The copy's lookup is bent along the refracted
+    view ray, at most 6 pixels. The other see-through items follow, writing no depth.
+  - Limits: no depth copy, so the bend can pull in what stands just in front of the bottle; a bottle seen through another shows the scene
+    behind both (the copy is taken once); what comes after the pass (fog volumes, particles, the upscaler) sees the bottle's depth, as an
+    opaque object's. **Unknown**: the look in play (unseen; the glass program compiles, glslang), and its cost.
+- **Observed** (the user's game, a see-through bottle indoors, DLSS and frame generation): dithering the main view too, the pattern moved each
+  frame by the jitter, showed a net pattern and ghosts, every pixel's depth flipping between the bottle and the wall; hence the blended pass.
+  **Observed** (a hidden-window frame of that save, DLSS, a ground bottle whose map is 45 % on the body and solid on the neck and stopper):
+  the body is evenly see-through with no pattern, the stopper solid. **Unknown**: a worn see-through item and frame generation, both unseen.
+- Cost without such a material: the solid (no-discard) object program is untouched; the others gain one constant or flag test. **Observed**
+  (offscreen `--view hub`, 3 interleaved pairs of builds, RTX 4070, DLSS 0.667 at 720p, the dithered version): GPU total 2.62 against 2.63 ms,
+  objects 0.205 against 0.205 ms, shadows 0.249 against 0.250 ms. **Unknown**: the character pass (the viewer draws none, `--crowd` included).
+
 ## Building sign highlight
 
 `WorldObjectRenderer.HighlightSigns` splits real parts with owning BUILDING `is sign` into yellow-tinted

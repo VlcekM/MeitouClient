@@ -218,6 +218,10 @@ speaker, opens the character trading window (`CharacterTrading_AnimalBuying` `FU
 1. every animal (slot 0x248) within 3000 units of the speaker, of the speaker's faction, whose town (`FUN_1405ce5f0`) is the speaker's, not dead;
 2. then the animals of the speaker's own platoon within 2304 units not dead and not yet listed.
 
+Who sells (**Verified**, rebirth.mod SQUAD_TEMPLATE records under the install's load order, #736): `Merchant Nomads` (63537, `is trader`) is led by
+`Nomad Animal Trader` (63538), whose package reaches DA 48; the goat herders `Nomads` (42336: 1 to 5 `Nomad`, 3 to 7 Goats, a Pack Beast) are led by a plain
+`Nomad` with no talk line of its own, so they sell nothing.
+
 Rows: price = (val0 if 1 or more, else 14000) x (age + 0.1), truncated. Panel 1 "Strength:" (stats vfunc 0x10) and "Melee Attack:"
 (`FUN_140884ee0`; both read the age), "Gender:" Female / Male (appearance `sex female`, `FUN_140295a50`); panel 2 the name and "Age:" with
 "<age word> (<age x 100>)".

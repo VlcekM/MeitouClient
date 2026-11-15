@@ -85,6 +85,7 @@ static partial class NativeShaders
             vec4 weatherDust;
             uint weatherGround;
             uint weatherDustNoise;
+            uint shadowSunMap;
             vec4 fogVolumeEye;
             vec4 fogVolumeInfo;
             vec4 fogVolumeData[512];
@@ -228,6 +229,7 @@ static partial class NativeShaders
         ["uShadowTerrain"] = "textures2D[frame.shadowTerrain]",
         ["uShadowBlocker"] = "textures2DArray[frame.shadowBlocker]",
         ["uShadowLandmark"] = "shadowTextures[frame.shadowLandmark]",
+        ["uShadowSunMap"] = "textures2DArray[frame.shadowSunMap]",
         ["uWeatherWet"] = "frame.weatherWet", ["uWeatherDust"] = "frame.weatherDust",
         ["uWeatherGround"] = "textures2D[frame.weatherGround]", ["uWeatherDustNoise"] = "textures2D[frame.weatherDustNoise]",
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
@@ -545,6 +547,11 @@ unsafe struct FrameConstants
     [FieldOffset(276)] public uint WeatherDustNoise;
 
     /// <summary>
+    /// The bindless index of <c>uShadowSunMap</c>, the traced sun's map (a layer per square, the distance to the first caster).
+    /// </summary>
+    [FieldOffset(280)] public uint ShadowSunMap;
+
+    /// <summary>
     /// <c>uFogVolumeEye</c>: xyz the eye, w the fog blocks' light.
     /// </summary>
     [FieldOffset(288)] public Vector4 FogVolumeEye;
@@ -675,6 +682,7 @@ unsafe struct FrameConstants
         ("uShadowMap", BindlessKind.ShadowArray, 220), ("uShadowNoise", BindlessKind.Texture2D, 224), ("uShadowTerrain", BindlessKind.Texture2D, 228),
         ("uShadowBlocker", BindlessKind.Texture2DArray, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
+        ("uShadowSunMap", BindlessKind.Texture2DArray, 280),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
         ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
         ("uLampTiles", BindlessKind.Texture2D, 8636),

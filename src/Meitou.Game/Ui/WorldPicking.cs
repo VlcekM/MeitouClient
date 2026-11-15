@@ -12,9 +12,15 @@ sealed class WorldPicking(PlayerInterface player)
     #region Host hooks
 
     /// <summary>
-    /// The host's building-floor pick, limited to the terrain hit's distance.
+    /// The host's building-floor pick, limited to a distance (<see cref="FloorReach"/>).
     /// </summary>
     public Func<Vector3, Vector3, float, Vector3?>? BuildingMoveHit { get; set; }
+
+    /// <summary>
+    /// The host's reach past a terrain hit (origin, direction, the hit) that lies inside a building's rooms, where the terrain is cut; null outside
+    /// them.
+    /// </summary>
+    public Func<Vector3, Vector3, Vector3, float?>? CutGroundReach { get; set; }
 
     /// <summary>
     /// The host's pick of a raised walkable surface outside the rooms (a wall top, a ramp, a deck), limited to a distance.
@@ -83,7 +89,7 @@ sealed class WorldPicking(PlayerInterface player)
     {
         var terrain = GroundHit(origin, direction);
         float distance = terrain is { } hit ? Vector3.Distance(origin, hit) : 40000;
-        var room = BuildingMoveHit?.Invoke(origin, direction, distance);
+        var room = BuildingMoveHit?.Invoke(origin, direction, FloorReach(origin, direction, terrain));
         if (room is { } floor) distance = Vector3.Distance(origin, floor);
 
         var surface = SurfaceMoveHit?.Invoke(origin, direction, distance);
@@ -95,6 +101,18 @@ sealed class WorldPicking(PlayerInterface player)
         if (FootOf(at, direction) is not { } foot) return pick;
 
         return surface is { } top && TopOf(top, at, foot) ? pick : foot;
+    }
+
+    /// <summary>
+    /// How far along the ray a building's floor is looked for: up to the <paramref name="terrain"/> hit, or on through the room it lies in when the
+    /// terrain is cut there (<see cref="CutGroundReach"/>); the world's reach when the ray meets no terrain.
+    /// </summary>
+    public float FloorReach(Vector3 origin, Vector3 direction, Vector3? terrain)
+    {
+        if (terrain is not { } hit) return 40000;
+
+        float distance = Vector3.Distance(origin, hit);
+        return CutGroundReach?.Invoke(origin, direction, hit) is { } reach ? MathF.Max(distance, reach) : distance;
     }
 
     /// <summary>

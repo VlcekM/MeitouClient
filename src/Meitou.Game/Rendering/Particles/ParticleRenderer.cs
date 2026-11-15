@@ -63,9 +63,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
             for (int i = 0; i < 8; i++)
             {
                 vec3 w = centre + (vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) - 0.5) * (0.5 * size);
-                if (uShadowAtlas.w > 0.5 && msVolumeOn())
+                if (uShadowAtlas.w > 0.5 && msVolumeServes(w))
                 {
-                    lit += msVolumeAt(w);   // the traced sun's volume (no cascades)
+                    lit += msVolumeAt(w);   // the traced sun's map (no cascades, or nearer than they start)
                     continue;
                 }
 

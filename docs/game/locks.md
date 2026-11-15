@@ -328,7 +328,7 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.
 - **Task_PutInSomething** for a bed (99; the body's task type 100; `FUN_140358170`, `FUN_140358670`): a player-faction carrier pays the rent first: its own
-  cost, or the body's when that is non-negative and lower (a refusal fails the task). Once the put-down clip is below 0.2 and the bed is free for the
+  cost, or the body's when that is non-negative and lower (a refusal fails the task). What gives the body row 100 is **Unknown**: the task factory `FUN_14032ebd0` makes Task_UseBed for it, but the enter path below starts no task on the body (#718). Once the put-down clip is below 0.2 and the bed is free for the
   body, both are unlinked and the body enters the bed, then is placed at the bed's nearest type-4 node (`FUN_14038ab50`). A bed that is not free for the body at that moment ends the task
   (**Verified**, `FUN_140358670`: no new bed search, the carrier keeps the body; nothing is tested while walking); Meitou: `BedSystem.Step` tests only on arrival (`LayIn`), put-in job 106 picks again. A relation event follows
   (faction vfunc 5 with the task's +0x7c; amount **Unknown**).
@@ -337,7 +337,7 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   +0x26c (the construction position, set in the constructor `FUN_14055ca90`) and the orientation the building's; else the usage node nearest the
   character (squared 3D distance; nodes in the bad-node map +0x300 skipped), turned by Quaternion(w -0.707107, y 0.707107): the node's yaw - 90°, as for
   town nodes ([ai-tasks](ai-tasks.md#town-goals)). Data (**Verified**, base game probe): `Bed` and `Skeleton Repair Bed` hold two `Node Use` (node type 4)
-  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. `sleepinbed` holds `Bip01` at about
+  instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. A bed with exactly one node (Forgotten Buildings' `Bed with Pillow`, its node at Z -11.05 turned 180°; the mod also gives `Old Bed` one) lies at the marker but faces that node's yaw - 90° (`FUN_140549720` reads any node; #718: Meitou faced the bed's own yaw, 90° off, and the sleeper lay across). `sleepinbed` holds `Bip01` at about
   (-11.8, 6.7, -1.5) in model space (`gotobed` moves it there from the origin), so from a node the pelvis lands on the mattress centre. Meitou:
   `FixtureRegistry.LieSpot`, also applied to a sleeper bound on load (engine choice), which also takes the bed's clip again (it is not saved; without it a loaded sleeper lay on the floor at the node).
   **Bad nodes** (**Verified**): with 2 or more use nodes `getPositionMarker` skips every node in the building's bad-node map (`+0x318` / `+0x338`) and returns node 0 when all are skipped. `FUN_14054d410(building, position)` marks the node

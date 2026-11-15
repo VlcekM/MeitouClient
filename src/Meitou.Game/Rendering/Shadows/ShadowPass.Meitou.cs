@@ -376,11 +376,32 @@ public sealed unsafe partial class ShadowPass
     #region Cascade drawing
 
     /// <summary>
-    /// The sun is traced this frame (docs/render-shadows.md "Traced sun"): the rays take the sun of every lit surface at every depth, characters
-    /// included, so the receivers leave the cascades out of it; the cascades stay for what still reads them (shafts, lit dust, foam, the reflection,
-    /// impostors).
+    /// The view depth where the rays end with <see cref="FarCascades"/>: they hand the sun to cascade 0 over the band before it.
     /// </summary>
-    public bool TracedWhole { get; set; }
+    public const float TracedHandoff = 2000;
+
+    /// <summary>
+    /// The share of <see cref="TracedHandoff"/> over which the rays hand the sun to cascade 0, which starts there.
+    /// </summary>
+    public const float HandoffBand = 0.2f;
+
+    /// <summary>
+    /// The cascades past the rays with <see cref="FarCascades"/>.
+    /// </summary>
+    public const int HandoffCascades = 4;
+
+    /// <summary>
+    /// The sun is traced this frame (docs/render-shadows.md "Traced sun"): the rays take the sun of every lit surface, characters included, so the
+    /// receivers leave the cascades out of it; at every depth (no cascade is drawn), or with <see cref="FarCascades"/> as far as
+    /// <see cref="TracedHandoff"/>.
+    /// </summary>
+    public bool Traced { get; set; }
+
+    /// <summary>
+    /// While traced: the rays end at <see cref="TracedHandoff"/> and <see cref="HandoffCascades"/> cascades take the sun from there to the range
+    /// (docs/render-shadows.md "Traced near, cascades far").
+    /// </summary>
+    public bool FarCascades { get; set; }
 
     /// <summary>
     /// The last publish's cascade count while the sun is traced (0: it is not; the receivers' <c>uMsFlags.w</c>).
@@ -393,6 +414,17 @@ public sealed unsafe partial class ShadowPass
     public float TracedDepth { get; private set; }
 
     /// <summary>
+    /// The cascades drawn last with all of them redrawn started where the rays end (<see cref="Handoff"/>).
+    /// </summary>
+    bool _storedHandoff;
+
+    /// <summary>
+    /// The cascades this frame start where the rays end: traced with <see cref="FarCascades"/>, over a set range that leaves them room (the set
+    /// one, not <see cref="EffectiveRange"/>: the fog's cap and the memory guard move that from frame to frame, and each change of mode redraws all).
+    /// </summary>
+    bool Handoff => Traced && FarCascades && Settings.Range >= 2 * TracedHandoff;
+
+    /// <summary>
     /// One frame of the Meitou shadows: the splits, which cascades are drawn now (wanted, the far budget, a flight), the drawing, the blocker,
     /// terrain and landmark maps, then the receivers' blocks.
     /// </summary>
@@ -400,13 +432,13 @@ public sealed unsafe partial class ShadowPass
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
-        int count = MeitouCascades;
-        if (_atlas is not null && _atlasLayers != count) _meitouValid = false;   // a new array holds nothing: every cascade again
+        bool handoff = Handoff;
+        int count = handoff ? HandoffCascades : MeitouCascades;
+        if (_atlas is not null && (_atlasLayers != count || handoff != _storedHandoff)) ForgetCascades();
         Resize(Settings.TileSize, count);
         if (_phases.Length != count) _phases = Phases(count);
-        float near = MeitouShadowFit.QuantizedNear(view.Near);
-        var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
-        bool all = RedrawAll(splits, toSun);
+        var splits = CascadeSplits(view, handoff, count);
+        bool all = RedrawAll(splits, toSun, handoff);
 
         var gridAnchor = Anchor(view.Focus > 0 ? view.Eye + Vector3.Normalize(view.Forward) * view.Focus : view.Eye, toSun);
         int frame = _meitouFrame++;
@@ -449,6 +481,7 @@ public sealed unsafe partial class ShadowPass
             _storedSun = toSun;
             _storedSplits = splits;
             _storedMapSize = Settings.MapSize;
+            _storedHandoff = handoff;
         }
 
         _meitouValid = true;
@@ -458,9 +491,31 @@ public sealed unsafe partial class ShadowPass
     }
 
     /// <summary>
-    /// Whether every cascade is drawn again this frame (the first frame, other splits or map size, a sun that jumped); counts the reason.
+    /// Every cascade drawn again, none kept waiting: a new array holds nothing, and a stored cascade of another layout covers other depths.
     /// </summary>
-    bool RedrawAll(float[] splits, Vector3 toSun)
+    void ForgetCascades()
+    {
+        _meitouValid = false;
+        Array.Clear(_stored);
+    }
+
+    /// <summary>
+    /// The splits of <paramref name="count"/> cascades: from the camera's near plane, the first sized by its focus; past the traced sun's rays, from
+    /// the start of their handoff band to the range.
+    /// </summary>
+    float[] CascadeSplits(ShadowView view, bool handoff, int count)
+    {
+        if (handoff) return MeitouShadowFit.Splits(TracedHandoff * (1 - HandoffBand), Math.Max(EffectiveRange, 2 * TracedHandoff), count);
+
+        float near = MeitouShadowFit.QuantizedNear(view.Near);
+        return MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
+    }
+
+    /// <summary>
+    /// Whether every cascade is drawn again this frame (the first frame, other splits or map size, a sun that jumped, the rays' handoff turned on
+    /// or off); counts the reason.
+    /// </summary>
+    bool RedrawAll(float[] splits, Vector3 toSun, bool handoff)
     {
         // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
         // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is
@@ -469,7 +524,7 @@ public sealed unsafe partial class ShadowPass
         bool splitsChanged = _storedSplits is null || _storedSplits.Length != splits.Length ||
             Math.Abs(splits[^1] - _storedSplits[^1]) > RangeTolerance * _storedSplits[^1];
         bool sunJumped = Vector3.Dot(toSun, _storedSun) < MathF.Cos(SunJump);
-        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped;
+        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped || handoff != _storedHandoff;
         if (_meitouValid && all)
         {
             if (splitsChanged) AllReasons[0]++;
@@ -575,8 +630,8 @@ public sealed unsafe partial class ShadowPass
         var cascades = new ShadowCascade[published];
         for (int i = 0; i < published; i++) cascades[i] = _stored[i]!;
         Cascades = cascades;
-        TracedCascades = TracedWhole ? Math.Max(published, 1) : 0;
-        TracedDepth = TracedCascades > 0 ? cascades[TracedCascades - 1].FarDepth : 0;
+        TracedCascades = Traced ? Math.Max(published, 1) : 0;
+        TracedDepth = Traced ? TracedHandoff : 0;   // traced here only with the handoff (else RenderTraced)
         PublishMeitou(view, cascades, toSun, blockers);
     }
 
@@ -659,11 +714,10 @@ public sealed unsafe partial class ShadowPass
 
         // x, y: one layer (no virtual atlas: cascade i is layer i); w: the Meitou receiver.
         Put(data, AtlasAt, new Vector4(_atlasSize, _atlasSize, 0, 1));
-        PutMaps(ms, origin, toSun, range, blockers);
+        PutMaps(ms, origin, toSun, range, blockers, Traced);
+        PutCascadesSunMap(view, toSun, data, ms);
         Upload(data);
         _meitouBlock.Set(ms);
-        _volumePublished = false;
-        Array.Clear(_sunMapTraced);   // the sun map is not kept up while the cascades draw
 
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
         if (_terrainMap?.Sampled is not null) _boundTerrain = _terrainMap.Sampled;
@@ -671,9 +725,25 @@ public sealed unsafe partial class ShadowPass
     }
 
     /// <summary>
-    /// The Meitou block's shared part: the filter's noise and range, the terrain map, the landmark map and the traced flag.
+    /// With the cascades past the rays, the sun map for what draws no traced pixel nearer than they start; else none, and it is not kept up.
     /// </summary>
-    void PutMaps(float[] ms, Vector3 origin, Vector3 toSun, float range, bool blockers)
+    void PutCascadesSunMap(ShadowView view, Vector3 toSun, float[] data, float[] ms)
+    {
+        if (Traced)
+        {
+            PutSunMap(view, toSun, TracedHandoff, data, ms);
+            return;
+        }
+
+        _volumePublished = false;
+        Array.Clear(_sunMapTraced);
+    }
+
+    /// <summary>
+    /// The Meitou block's shared part: the filter's noise and range, the terrain map, the landmark map, whether the sun map is on
+    /// (<paramref name="sunMap"/>) and the traced flag.
+    /// </summary>
+    void PutMaps(float[] ms, Vector3 origin, Vector3 toSun, float range, bool blockers, bool sunMap)
     {
         float sunTan = MathF.Tan(SunAngle * 0.5f);
         const int p = MeitouShadowShaders.ParamsOffset;
@@ -700,6 +770,7 @@ public sealed unsafe partial class ShadowPass
             _landmarks.MarkPublished();
         }
 
+        ms[p + 34] = sunMap ? 1 : 0;   // uMsLandmark.z: the traced sun's map is on (its tiles and slices from SunMapSlot)
         ms[p + 15] = TracedCascades;   // uMsFlags.w
     }
 
@@ -730,6 +801,12 @@ public sealed unsafe partial class ShadowPass
     public const int SunMapLayers = 3;
 
     /// <summary>
+    /// The traced sun's depth map: its first tile and slice in the receiver blocks, the top ones, past the cascades drawn with it
+    /// (<see cref="HandoffCascades"/>).
+    /// </summary>
+    public const int SunMapSlot = ShadowSettings.MaxCascades - SunMapLayers;
+
+    /// <summary>
     /// The traced sun's depth map: how far towards the sun from the eye the rays start, world units.
     /// </summary>
     public const float SunMapHeight = 8000;
@@ -745,12 +822,12 @@ public sealed unsafe partial class ShadowPass
     GpuTexture? _volume;
 
     /// <summary>
-    /// <see cref="_volume"/> with its sampler (nearest, clamped), for the blocker binding.
+    /// <see cref="_volume"/> with its sampler (nearest, clamped), for <c>uShadowSunMap</c>.
     /// </summary>
     SampledTexture _volumeSampled;
 
     /// <summary>
-    /// Whether the last publish was traced: the blocker binding then carries <see cref="_volumeSampled"/>.
+    /// Whether the last publish was traced: <c>uShadowSunMap</c> then carries <see cref="_volumeSampled"/>.
     /// </summary>
     bool _volumePublished;
 
@@ -794,15 +871,15 @@ public sealed unsafe partial class ShadowPass
     public static bool SunMapSpread { get; set; } = Environment.GetEnvironmentVariable("MEITOU_SUN_MAP_SPREAD") != "0";
 
     /// <summary>
-    /// The traced sun (<see cref="TracedWhole"/>): no cascade is drawn. The terrain and landmark maps go on; the receivers that do not trace
-    /// (shafts, lit dust, foam, the skin's light entry, the reflection, impostors) read the visibility volume a ray pass fills
-    /// (<see cref="Gi.TracedSunVolume"/>) through the blocker binding, its camera in cascade 0's slots.
+    /// The traced sun at every depth (<see cref="Traced"/> without the handoff): no cascade is drawn. The terrain and landmark maps go on; the
+    /// receivers that do not trace (shafts, lit dust, foam, the skin's light entry, the reflection, impostors) read the sun map a ray pass fills
+    /// (<see cref="Gi.TracedSunVolume"/>) through <c>uShadowSunMap</c>, its tiles and slices from <see cref="SunMapSlot"/>.
     /// </summary>
     void RenderTraced(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
     {
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
-        _meitouValid = false;   // back to the cascades: every one drawn again
+        ForgetCascades();   // back to the cascades: every one drawn again, as the maps hold what was there before the rays
 
         _timer.Begin();
         if (_coarse is not null) _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);
@@ -810,9 +887,7 @@ public sealed unsafe partial class ShadowPass
         UpdateLandmarks(view, toSun, landmarks);
         _timer.End();
 
-        EnsureVolume();
         float far = Math.Max(EffectiveRange, 1000);
-        VolumeEye = view.Eye;
         Cascades = [];
         TracedCascades = 1;
         TracedDepth = far;
@@ -836,23 +911,39 @@ public sealed unsafe partial class ShadowPass
     }
 
     /// <summary>
-    /// The receiver blocks with no cascade (count 0): the first tiles take a position relative to the eye to a layer's (u, v, distance from the
-    /// plane), slice 0 is (layers, 0, 0, 1: the map is on), slice 1 (towards the sun, 0), slice 2 each layer's texel in world units; the terrain and
-    /// landmark maps as ever. Each square is snapped to its texels in world space, so what a texel holds does not change as the camera moves.
+    /// The receiver blocks with no cascade (count 0) and the sun map (<see cref="PutSunMap"/>); the terrain and landmark maps as ever.
     /// </summary>
     void PublishTraced(ShadowView view, Vector3 toSun, float far)
     {
         var data = new float[ReceiverBytes / 4];
         var ms = new float[MeitouShadowShaders.BlockBytes / 4];
+        PutSunMap(view, toSun, far, data, ms);
+        PutTracedBlocks(view, toSun, far, data, ms);
+    }
+
+    /// <summary>
+    /// Places the sun map's squares for this frame (the map made the first time) and writes them from <see cref="SunMapSlot"/>: its tiles take a
+    /// position relative to the eye to a layer's (u, v, distance from the plane); slice 0 is (layers, 0, 0, 1), slice 1 (towards the sun, the view
+    /// depth the rays end at: <paramref name="far"/>), slice 2 each layer's texel in world units. Each square is snapped to its texels in world
+    /// space, so what a texel holds does not change as the camera moves.
+    /// </summary>
+    void PutSunMap(ShadowView view, Vector3 toSun, float far, float[] data, float[] ms)
+    {
+        EnsureVolume();
+        VolumeEye = view.Eye;
         var toward = Vector3.Normalize(toSun);
         var mapRight = Vector3.Normalize(Vector3.Cross(MathF.Abs(toward.Y) > 0.99f ? Vector3.UnitX : Vector3.UnitY, toward));
         var mapUp = Vector3.Cross(toward, mapRight);
         var layers = new Vector4[SunMapLayers];
         var texels = new Vector4(0);
-        uint mask = PlaceSunMapLayers(view, far, mapRight, mapUp, toward, data, layers, ref texels);
-        SunMapMask = mask;
+        SunMapMask = PlaceSunMapLayers(view, far, mapRight, mapUp, toward, data, layers, ref texels);
         SunMap = (mapRight, mapUp, toward, layers);
-        PutTracedBlocks(view, toSun, far, data, ms, texels);
+
+        int slice = SunMapSlot * 4;
+        Put(ms, slice, new Vector4(SunMapLayers, 0, 0, 1));
+        Put(ms, slice + 4, new Vector4(toward, far));
+        Put(ms, slice + 8, texels);
+        _volumePublished = true;
     }
 
     /// <summary>
@@ -891,29 +982,25 @@ public sealed unsafe partial class ShadowPass
                 kept.Right.Y / (2 * half), kept.Up.Y / (2 * half), -kept.Toward.Y, 0,
                 kept.Right.Z / (2 * half), kept.Up.Z / (2 * half), -kept.Toward.Z, 0,
                 0.5f - x / (2 * half), 0.5f - y / (2 * half), kept.Plane - Vector3.Dot(view.Eye, kept.Toward), 1);
-            Put(data, 16 * l, tile);
+            Put(data, 16 * (SunMapSlot + l), tile);
         }
 
         return mask;
     }
 
     /// <summary>
-    /// Fills the rest of the traced frame's receiver and Meitou blocks, uploads them and binds the map in the blocker's place.
+    /// Fills the rest of the traced frame's receiver and Meitou blocks and uploads them.
     /// </summary>
-    void PutTracedBlocks(ShadowView view, Vector3 toSun, float far, float[] data, float[] ms, Vector4 texels)
+    void PutTracedBlocks(ShadowView view, Vector3 toSun, float far, float[] data, float[] ms)
     {
         Put(data, LightAt, Matrix4x4.Identity);
         Put(data, OriginAt, new Vector4(view.Eye, 1));
         Put(data, ForwardAt, new Vector4(Vector3.Normalize(view.Forward), 0));
         Put(data, AtlasAt, new Vector4(_atlasSize, _atlasSize, 0, 1));
-        Put(ms, 0, new Vector4(SunMapLayers, 0, 0, 1));
-        Put(ms, 4, new Vector4(toSun, 0));
-        Put(ms, 8, texels);
-        PutMaps(ms, view.Eye, toSun, far, false);
+        PutMaps(ms, view.Eye, toSun, far, false, true);
         Upload(data);
         _meitouBlock.Set(ms);
         if (_terrainMap?.Sampled is not null) _boundTerrain = _terrainMap.Sampled;
-        _volumePublished = true;
     }
 
     #endregion

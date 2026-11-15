@@ -170,6 +170,12 @@ public struct CombatSlot
     public bool CircleState;
 
     /// <summary>
+    /// The last tick its ask to join its target's engaged list was refused (the target's overflow counter +0x210, <c>FUN_140666e20</c>); a fighter on
+    /// a path chase does not ask (state 11). -1: never.
+    /// </summary>
+    public int RefusedTick;
+
+    /// <summary>
     /// The target is the player's pick (<see cref="AttackOrder.Picked"/>): it does not turn on a fighter that yields to it.
     /// </summary>
     public bool Picked;
@@ -239,6 +245,7 @@ public struct CombatSlot
         StumbleClip = -1,
         YieldTo = -1,
         LastTech = -1,
+        RefusedTick = -1,
     };
 
     /// <summary>
@@ -308,6 +315,7 @@ public struct CombatSlot
             h.Add(JoinedEpoch);
         }   // only once a list was emptied, so worlds without it hash as before
         if (CircleState) h.Add(0x43697263);   // only when set, so worlds without crowded fights hash as before
+        if (RefusedTick >= 0) h.Add(RefusedTick);   // only once refused, so worlds without crowded fights hash as before
         if (Picked) h.Add(true);   // only when set, so worlds without player picks hash as before
         h.Add(PickTick);
         h.Add(BlockTimerTick);

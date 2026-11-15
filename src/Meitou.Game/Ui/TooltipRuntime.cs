@@ -787,6 +787,18 @@ sealed class TooltipRuntime(PlayerInterface player)
         public int BagItems { get; init; } = -1;
 
         /// <summary>
+        /// The chance a take of the item goes unseen, for another faction's item its window's opener would steal
+        /// (<see cref="InventoryItemView.StealChance"/>); null otherwise.
+        /// </summary>
+        public float? StealChance { get; init; }
+
+        /// <summary>
+        /// The name of the character a stolen item was taken from ("": gone from the world, null: the mark names no character;
+        /// <see cref="InventoryItemView.StolenOwner"/>).
+        /// </summary>
+        public string? StolenOwner { get; init; }
+
+        /// <summary>
         /// A tooltip of the name only (<see cref="Brief"/>).
         /// </summary>
         public static ItemTip NameOnly(string record, string material, string name, int quantity) =>
@@ -803,6 +815,8 @@ sealed class TooltipRuntime(PlayerInterface player)
                 Crafter = v.Crafter,
                 Unique = v.Unique,
                 BagItems = v.BagItems,
+                StealChance = v.StealChance,
+                StolenOwner = v.StolenOwner,
             };
 
         /// <summary>
@@ -813,6 +827,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             {
                 Unique = v.Unique,
                 BagItems = v.BagItems,
+                StolenOwner = v.StolenOwner,
             };
     }
 
@@ -1090,20 +1105,34 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
-    /// A stolen good's fencing chance and its owner.
+    /// The stealing chance of an item of another faction's open window, a stolen good's fencing chance and its owner.
     /// </summary>
     void AddStolenRows(List<TooltipLine> lines, ItemTip t)
     {
+        // An item its window's opener would steal: the roll's chance (FUN_140712920 "Stealing chance:", Observed), shown as the fencing row.
+        if (t.StealChance is { } steal)
+            lines.Add(new("STEALING CHANCE:", $"{(int)(Math.Min(steal, 1) * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
+
         // A stolen good the open shop would roll on: its fencing chance above the owner, as the sale prompt shows it (Observed, the original's trade
         // tooltip; #330).
         if (t.Goods && t.Trade is { FenceChance: { } fence })
             lines.Add(new("FENCING CHANCE:", $"{(int)(fence * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
-        if (t.StolenFrom >= 0)
-        {
-            lines.Add(player.FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner
-                ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad)
-                : new("Stolen", "", TooltipTone.Bad));
-        }
+
+        // The robbed person by name ("Stolen from: Barman", Observed); a mark naming no character (the original's non-character owner) names the
+        // faction; an owner gone from the world, "Stolen" (FUN_1407a0ea0).
+        if (t.StolenFrom >= 0) lines.Add(StolenRow(t));
+    }
+
+    /// <summary>
+    /// The <c>Stolen from:</c> row of a stolen item: the robbed character's name, a faction-only mark's faction, else <c>Stolen</c>.
+    /// </summary>
+    TooltipLine StolenRow(ItemTip t)
+    {
+        var owner = t.StolenOwner ?? player.FactionName?.Invoke(t.StolenFrom);
+
+        return owner is { Length: > 0 }
+            ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad)
+            : new("Stolen", "", TooltipTone.Bad);
     }
 
     /// <summary>

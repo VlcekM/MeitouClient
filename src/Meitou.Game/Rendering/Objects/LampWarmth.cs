@@ -4,7 +4,7 @@ namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The <c>lampwarmth</c> switch (Meitou, on): a yellow lamp with more green than the game's torches (the Ceiling Lamp's E9FF9B, the Searchlight's
-/// F1FFC4, the Spotlight's F1E8B4) is drawn amber, at the brightness it had; docs/render-lights.md "What is drawn".
+/// F1FFC4, the Spotlight's F1E8B4) is drawn warmer, halfway to amber, at the brightness it had; docs/render-lights.md "What is drawn".
 /// </summary>
 public static class LampWarmth
 {
@@ -24,12 +24,17 @@ public static class LampWarmth
     const float FullAt = 0.25f;
 
     /// <summary>
+    /// The share of the way to <see cref="TorchGreen"/> a fully yellow lamp goes: half, a warm yellow between the game's tint and the torches' amber.
+    /// </summary>
+    const float Share = 0.5f;
+
+    /// <summary>
     /// A lamp's colour as drawn: <paramref name="colour"/> itself with the switch off.
     /// </summary>
     public static Vector3 Of(Vector3 colour) => Enabled ? Warm(colour) : colour;
 
     /// <summary>
-    /// <paramref name="colour"/> with its green lowered towards <see cref="TorchGreen"/> of its red, and its blue by as much, by how yellow it is,
+    /// <paramref name="colour"/> with its green lowered part of the way (<see cref="Share"/>) towards <see cref="TorchGreen"/> of its red, and its blue by as much, by how yellow it is,
     /// then scaled back to its luminance. A lamp whose blue is not its weakest channel (white, cyan, blue) or that is already as warm is unchanged.
     /// </summary>
     public static Vector3 Warm(Vector3 colour)
@@ -41,7 +46,7 @@ public static class LampWarmth
         float yellow = (MathF.Min(colour.X, colour.Y) - colour.Z) / strongest;
         if (yellow <= 0) return colour;
 
-        float weight = MathF.Min(yellow / FullAt, 1);
+        float weight = MathF.Min(yellow / FullAt, 1) * Share;
         float cut = float.Lerp(colour.Y, target, weight) / colour.Y;
         var warm = new Vector3(colour.X, colour.Y * cut, colour.Z * cut);
         return warm * (Luminance(colour) / Luminance(warm));

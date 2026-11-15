@@ -640,6 +640,7 @@ public sealed partial class CombatSystem
             {
                 s.Engaged = MayJoin(world, i, s.TargetSlot, now);
                 if (s.Engaged) s.JoinedEpoch = _read[s.TargetSlot].ListEpoch;
+                else if (!PathChasing(cold, s.TargetSlot)) s.RefusedTick = now;
             }
             bool yielded = fighting && _read[s.TargetSlot].YieldTo == i && now < _read[s.TargetSlot].YieldUntil;
             bool paused = now < s.PauseUntil;
@@ -1225,18 +1226,19 @@ public sealed partial class CombatSystem
     public int FightersAt(World world, int t) => (uint)t < (uint)world.Characters.HighWater && t < _fightersAt.Length ? _fightersAt[t] : 0;
 
     /// <summary>
-    /// The melee fighters at <paramref name="t"/>: its attackers within the engage scan's cells that still target it, are not down and do not shoot.
+    /// The fighters at <paramref name="t"/>: its engaged list (<see cref="Listed"/>, CombatClass +0x200) and the askers it refused on the last tick
+    /// (<see cref="CombatSlot.RefusedTick"/>, the overflow counter +0x210/+0x214 swapped each frame by <c>FUN_14060cc50</c>), of those that still
+    /// target it.
     /// </summary>
     int CountFightersAt(World world, int t)
     {
-        var prev = world.Characters.Previous;
-        var range = world.Grid.Range(prev[t].Position.X, prev[t].Position.Z, CombatTuning.EngageScanRadius);
-        int generation = prev[t].Generation, count = 0;
-        foreach (var (_, x, z, other) in _index.AttackersOf(t))
+        int generation = world.Characters.Previous[t].Generation, count = 0;
+        int lastTick = (int)world.Tick - 1;
+        foreach (var (_, _, _, other) in _index.AttackersOf(t))
         {
-            if (!range.Holds((x, z))) continue;
             ref readonly var o = ref _read[other];
-            if (o.TargetGeneration == generation && !o.Down && !o.Ranged) count++;
+            if (o.TargetGeneration != generation || o.Down) continue;
+            if (Listed(in o, in _read[t]) || o.RefusedTick >= lastTick) count++;
         }
         return count;
     }
@@ -1325,6 +1327,10 @@ public sealed partial class CombatSystem
     {
         var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
+
+        // The start writes the current technique (+0x150) whatever comes of it: the defence picked, or none when it is too early, the roll fails or
+        // the defender is an animal (FUN_140609290, Verified). So the next attack choice has no last technique to weigh down.
+        s.LastTech = -1;
         if (!Startable(in swing, i))
         {
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
@@ -1410,7 +1416,6 @@ public sealed partial class CombatSystem
 
         s.ReactCheckTick = now + (int)MathF.Ceiling(CombatTuning.DefenceRecheckSeconds / dt);
         s.DefendReadyTick = Math.Max(s.DefendReadyTick, now + (int)MathF.Ceiling(CombatTuning.DefenceStartedSeconds / dt));
-        s.LastTech = -1;   // the original's current technique (+0x150) is now a defence, which the next attack choice does not count as its last
         if (pick == s.ReactTech) return;   // the same technique again: its clip plays on (FUN_1405b7600 finds the playing layer)
 
         var reaction = _techniques[pick];

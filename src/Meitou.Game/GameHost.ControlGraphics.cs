@@ -196,10 +196,16 @@ sealed partial class GameHost
                 return;
         }
 
-        string label = DebugMenuRowLabel();
-        string value = DebugMenu.DebugIsTool(DebugMenu.RowIndex) ? DebugMenu.DebugTools[DebugMenu.RowIndex - Modding.DebugRowCount].State() : "";
-        con.Print($"{(DebugMenu.DebugMenuOpen ? "open" : "closed")}: {label} = {value}  {DebugMenu.DebugStatus}");
-        var reply = new { open = DebugMenu.DebugMenuOpen, row = DebugMenu.RowIndex, label, value, status = DebugMenu.DebugStatus };
+        string category = DebugMenu.DebugCategoryTitle;
+        bool atCategories = DebugMenu.DebugAtCategories;
+        string label = atCategories ? "" : DebugMenuRowLabel();
+        string value = !atCategories && DebugMenu.DebugIsTool(DebugMenu.RowIndex)
+            ? DebugMenu.DebugTools[DebugMenu.RowIndex - Modding.DebugRowCount].State()
+            : "";
+        string where = label.Length > 0 ? $"{category} > {label}" : category;
+        con.Print($"{(DebugMenu.DebugMenuOpen ? "open" : "closed")}: {where} = {value}  {DebugMenu.DebugStatus}");
+        var reply = new { open = DebugMenu.DebugMenuOpen, category, row = atCategories ? -1 : DebugMenu.RowIndex, label, value,
+            status = DebugMenu.DebugStatus };
         AgentChannel.ControlData = JsonSerializer.Serialize(reply);
     }
 

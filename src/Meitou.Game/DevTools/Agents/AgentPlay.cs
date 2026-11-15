@@ -700,10 +700,11 @@ sealed class AgentPlay(GameHost host)
         add("bandits-loot", "bandits-loot [on|off]", "read the New game option \"Bandits loot the player\" (CAMERA bl) of the running world; "
             + "on/off sets it (test aid)", ControlBanditsLoot);
 
-        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>] [--race <race name|id>]",
+        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|hostile|id|name>] [--race <race name|id>]",
             "--race: draws the character's race as that RACE (a stub race with no meshes tests the undrawable look); --faction: the faction of the spawn "
-            + "(default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; a "
-            + "faction id or name); --aggro: also arm the spawn (weapon item, default Katana) "
+            + "(default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; hostile: "
+            + "the first faction hostile to the player's, whatever the record lists; a faction id or name); --aggro: also arm the spawn (weapon item, "
+            + "default Katana) "
             + "and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') "
             + "at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); "
             + "--ko / --dead leave a body to test loot, carry and first aid on", ControlSpawnAt);
@@ -991,7 +992,7 @@ sealed class AgentPlay(GameHost host)
         if (plain.Count < 2 || !AgentWorld.Num(plain[0], out float x) || !AgentWorld.Num(plain[1], out float z) || (ko && dead)
             || (aggro && (ko || dead)))
         {
-            con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>] [--race <race name|id>]");
+            con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|hostile|id|name>] [--race <race name|id>]");
             return;
         }
 

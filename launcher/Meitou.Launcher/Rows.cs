@@ -10,6 +10,11 @@ namespace Meitou.Launcher;
 /// </summary>
 public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null) : INotifyPropertyChanged
 {
+    /// <summary>
+    /// How many of the blanked mods <see cref="BlankingNote"/> names; a patch out of place hits dozens.
+    /// </summary>
+    const int NamedBlanks = 3;
+
     /// <inheritdoc/>
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -45,6 +50,21 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     } = [];
 
     /// <summary>
+    /// The earlier mods whose file paths it empties where it sits in the list (<see cref="ModBlanking.Check"/>); empty when none, or disabled.
+    /// </summary>
+    public IReadOnlyList<BlankedFile> Blanks
+    {
+        get;
+        set
+        {
+            if (field.SequenceEqual(value)) return;
+            field = value;
+            Changed(nameof(Notes));
+            Changed(nameof(HasNotes));
+        }
+    } = [];
+
+    /// <summary>
     /// The mod's name.
     /// </summary>
     public string Name => Mod.Name;
@@ -68,7 +88,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: a code mod, an ignored RE_Kenshi plugin, its dependencies, its game version and why it will not load.
+    /// The row's notes: a code mod, an ignored RE_Kenshi plugin, its dependencies, its game version, why it will not load and the mods it
+    /// blanks.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
     {
@@ -80,12 +101,31 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
             ? Loc.Format(LauncherText.Translate("Incompatible with {1}"), string.Join(", ", c.Incompatible)) : null,
         Manifest is { GameVersion: { } g }
             ? Loc.Format(LauncherText.Translate("Built for Meitou {1} (checked when the game starts)"), g) : null,
-    }.Concat(DependencyProblems.Select(p => Loc.Format(LauncherText.Translate("Will not load: {1}"), p))).OfType<string>());
+    }
+        .Concat(DependencyProblems.Select(p => Loc.Format(LauncherText.Translate("Will not load: {1}"), p)))
+        .Append(BlankingNote)
+        .OfType<string>());
 
     /// <summary>
-    /// Whether the row shows its notes (a code mod or a native plugin).
+    /// The note for <see cref="Blanks"/>: how many records lose file paths and whose, most records first; null when none.
     /// </summary>
-    public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode;
+    string? BlankingNote
+    {
+        get
+        {
+            if (Blanks.Count == 0) return null;
+
+            string mods = string.Join(", ", Blanks.Take(NamedBlanks).Select(b => b.Mod));
+            if (Blanks.Count > NamedBlanks) mods = Loc.Format(LauncherText.Translate("{1} and {2} more"), mods, Blanks.Count - NamedBlanks);
+            string text = LauncherText.Translate("Empties file paths in {1} records of {2}: it likely belongs above them");
+            return Loc.Format(text, Blanks.Sum(b => b.Records), mods);
+        }
+    }
+
+    /// <summary>
+    /// Whether the row shows its notes (a code mod, a native plugin or a mod that blanks others).
+    /// </summary>
+    public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode || Blanks.Count > 0;
 
     /// <summary>
     /// Whether the mod is ticked; a change raises <see cref="PropertyChanged"/>.

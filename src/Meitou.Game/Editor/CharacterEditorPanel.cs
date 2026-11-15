@@ -165,6 +165,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
             listed.Add(id);
         }
         if (listed.Count == 0) return false;
+
+        // Opened in play (the original's mode 1), the editor grows back the listed humans' shaven hair (FUN_1405f4dd0).
+        if (kind != EditKind.Creation) player.Say(new InPlayEditorOpened(listed) { Tick = player.Session.World.Tick });
         Editor = new EditorSession(kind, listed, animals, surgeon, paid);
         Previews.Clear();
         player.FaithfulScreens.Open("editor");

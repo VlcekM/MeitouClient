@@ -265,6 +265,9 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
 - Plays Wwise `Initiate_Conversation`. Chooses the root and its best child, says it.
 - Opens the DialogueWindow when the said line has passing children; **the window pauses the game** (clock speed 0, the previous speed
   restored on close, `FUN_140787fb0`).
+- **A caged target** (**Observed**: neither the order check `FUN_1405d1940` nor `FUN_140684320` tests the target's imprisonment; the caged-occupant
+  menu offers Talk To, order 12; mods such as Recruitable Prisoners hold their dialogue on DC 14 / 63 and recruit from the cage, #737): a prisoner
+  is talked to, hostile or not.
 - The talking player character is the one given the Talk order; walking there is that task's precondition. AI-to-AI talk range is
   260 units (DC 16).
 - **Talk distance** (**Observed**, task 12's `isAtLocation` → `AI::isWithinChoppingRange` `FUN_14059c6d0`, character branch; constant

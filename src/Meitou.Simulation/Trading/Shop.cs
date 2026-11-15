@@ -73,8 +73,8 @@ public sealed class Shop
     /// least 18) in which each container's grid is a rectangle of its own (<see cref="Inventory.Regions"/>), so each container holds its own items
     /// and the trade window shows them all (the cells outside every container greyed, <see cref="Unused"/>). The rectangles are packed
     /// (<see cref="Pack"/>) in a few orders (by height, area, width, longer side, largest first; ties in the building's order) and the lowest packing
-    /// is kept. The original's merged section is ceil(cells / width) high; this is up to ~5 % more when the containers do not tile (Squin's shops: 3
-    /// to 13 rows, and 300 random orders found none lower).
+    /// is kept. The original's merged section is ceil(cells / width) high; this is more when the containers do not tile, and never less than the
+    /// stacked heights of the containers wider than half the stock, which share no row (the L-House bar's four 10 x 10 barrels: 58 rows for 43).
     /// </summary>
     public static Shop? ForBuilding(Meitou.Data.World.TownBuilding building, Trader terms)
     {

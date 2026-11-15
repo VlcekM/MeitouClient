@@ -366,16 +366,16 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("heal", "heal", "heal the selected characters fully (else the inspected one)", ConsoleHeal);
 
-        Add("godmode", "godmode [on|off]", "god mode for every player character (also later recruits): all stats 1000 (10 x the game's maximum), "
-            + "healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each character's own stats; no argument toggles; "
-            + "reports the state", ConsoleGodmode);
+        Add("godmode", "godmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, for every player character (also later recruits): "
+            + "all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
+            + "character's own stats; no argument toggles; reports the state", ConsoleGodmode);
 
         Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected "
             + "characters (else the lead) there and puts the camera on the spot; no argument toggles; reports the state", ConsoleTpmap);
 
-        Add("guard", "guard [on|off] [--radius <m>] [--animals]", "god-mode style safety: 4 times a second kills the hostile characters within the "
+        Add("guard", "guard [on|off] [--radius <m>] [--animals]", "auto-heal style safety: 4 times a second kills the hostile characters within the "
             + "radius (default 30 m) of the selected (else first) squad member, as kill --radius does (never the squad or its faction; "
-            + "animals only with --animals or while one attacks a player character), and heals the player's characters as godmode does; "
+            + "animals only with --animals or while one attacks a player character), and heals the player's characters as Auto heal does; "
             + "stays on until turned off, switches itself off when a game loads; no argument toggles. Not for combat, "
             + "survival or loot-source tests", ConsoleGuard);
 
@@ -570,7 +570,7 @@ sealed class DevConsoleHost(GameHost host)
     void ConsoleGodmode(IReadOnlyList<string> args, DevConsole con)
     {
         if (!Need(args, 0, 1, Self("godmode"))) return;
-        Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
+        Report(con, host.DebugMenu.DebugGodmodeApply(args.Count > 0 ? args[0] : ""));
     }
 
     /// <summary>
@@ -630,7 +630,7 @@ sealed class DevConsoleHost(GameHost host)
     void ConsoleMaxstats(IReadOnlyList<string> args, DevConsole con)
     {
         if (!Need(args, 0, 0, Self("maxstats"))) return;
-        Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.MaxSkills, ""));
+        Report(con, host.DebugMenu.DebugMaxAll());
     }
 
     /// <summary>

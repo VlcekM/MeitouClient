@@ -55,6 +55,7 @@ public class NativeShaderTests
         // Objects (step O): the buildings' dithered cross-fade on the shared mesh text, with their own push block.
         yield return ("objects", BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), typeof(ObjectPush));
         yield return ("objects depth", BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), typeof(ObjectPush));
+        yield return ("objects see-through", BuildingLodShaders.VertexNative(), BuildingLodShaders.BlendedNative(), typeof(ObjectPush));
         // The terrain (step O): the patches, the TERRAIN-mode meshes, and their shadow depth.
         yield return ("terrain patch", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), typeof(TerrainPush));
         yield return ("terrain patch no normal", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(normalMaps: false),

@@ -3,15 +3,15 @@ using System.Numerics;
 namespace Meitou.Simulation.Movement;
 
 /// <summary>
-/// The speed caps of the characters in <see cref="SpeedMode.Group"/>: the player's speed groups, gathered once per tick (serial, in
+/// The speed caps of the characters in <see cref="SpeedMode.Group"/>: the player's speed groups and squads, gathered once per tick (serial, in
 /// <see cref="MovementSystem.Schedule"/>) and read by the parallel <see cref="MovementSystem.Move"/>, and the NPCs' slowest squad member.
 /// </summary>
 internal sealed class GroupSpeeds
 {
     /// <summary>
-    /// One speed group of this tick: its speed, its members' mean position and the sum of their velocities.
+    /// One speed group of this tick: its speed, its members' mean position, the sum of their velocities and how many they are.
     /// </summary>
-    readonly record struct SpeedGroupState(float Speed, Vector2 Centre, Vector2 Direction);
+    readonly record struct SpeedGroupState(float Speed, Vector2 Centre, Vector2 Direction, int Count);
 
     /// <summary>
     /// The player's speed groups of this tick, by key (serial Schedule; read by the parallel Move).
@@ -19,23 +19,30 @@ internal sealed class GroupSpeeds
     readonly Dictionary<int, SpeedGroupState> _speedGroups = [];
 
     /// <summary>
+    /// The lowest top speed of this tick among a player squad's members ordered to Group speed, not down and not carried, by squad id.
+    /// </summary>
+    readonly Dictionary<int, float> _playerSquads = [];
+
+    /// <summary>
     /// <c>SpeedGroup::getSpeed</c> (<c>1407f5740</c>, docs/game/pathfinding.md "Speed groups"), once per tick: a group's speed is the lowest top
-    /// speed of its members not down and not carried, its centre their mean position, its direction the sum of their velocities (last tick's).
+    /// speed of its members not down and not carried, its centre their mean position, its direction the sum of their velocities (last tick's);
+    /// also each player squad's slowest member in Group speed.
     /// </summary>
     public void Gather(World world)
     {
         _speedGroups.Clear();
+        _playerSquads.Clear();
         var table = world.Characters;
         var prev = table.Previous;
         var acc = new Dictionary<int, (float Speed, Vector2 Sum, int N, Vector2 Dir)>();
 
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!prev[s].Alive || table.Cold(s) is not { SpeedGroup: >= 0, RunSpeed: SpeedMode.Group } c || c.Medical is { Incapacitated: true }
-                || !c.CarriedBy.IsNone)
-            {
+            if (!prev[s].Alive || table.Cold(s) is not { RunSpeed: SpeedMode.Group } c || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone)
                 continue;
-            }
+
+            if (c.IsPlayer && c.SquadId >= 0) AddToSquad(c.SquadId, prev[s].MaxSpeed);
+            if (c.SpeedGroup < 0) continue;
 
             if (!acc.TryGetValue(c.SpeedGroup, out var a)) a = (float.MaxValue, Vector2.Zero, 0, Vector2.Zero);
 
@@ -43,18 +50,24 @@ internal sealed class GroupSpeeds
                 a.Dir + new Vector2(prev[s].Velocity.X, prev[s].Velocity.Z));
         }
 
-        foreach (var (key, a) in acc) _speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir);
+        foreach (var (key, a) in acc) _speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir, a.N);
     }
 
     /// <summary>
-    /// The speed cap of a character in <see cref="SpeedMode.Group"/>: in a player's speed group, the group's speed, × max(0.8, 1 - 0.001 × its
-    /// distance to the centre) for one ahead of the centre along the group's direction; otherwise (an NPC) the slowest of its squad
-    /// (<see cref="SlowestOfSquad"/>).
+    /// Lowers a player squad's slowest Group speed to <paramref name="top"/>.
+    /// </summary>
+    void AddToSquad(int squadId, float top) => _playerSquads[squadId] = MathF.Min(_playerSquads.GetValueOrDefault(squadId, float.MaxValue), top);
+
+    /// <summary>
+    /// The speed cap of a character in <see cref="SpeedMode.Group"/>: in a player's speed group of two or more, the group's speed, × max(0.8,
+    /// 1 - 0.001 × its distance to the centre) for one ahead of the centre along the group's direction; a player's character without one (its
+    /// group is runtime only, so none after a load; or a group of one) the slowest of its squad in Group speed (engine choice, #729); otherwise
+    /// (an NPC) the slowest of its squad walking (<see cref="SlowestOfSquad"/>).
     /// </summary>
     public float Of(World world, int slot, CharacterCold cold, Vector3 at)
     {
-        if (cold.SpeedGroup < 0 || !_speedGroups.TryGetValue(cold.SpeedGroup, out var g))
-            return SlowestOfSquad(world, cold);
+        if (cold.SpeedGroup < 0 || !_speedGroups.TryGetValue(cold.SpeedGroup, out var g) || g.Count < 2)
+            return cold.IsPlayer ? _playerSquads.GetValueOrDefault(cold.SquadId, float.MaxValue) : SlowestOfSquad(world, cold);
 
         var off = new Vector2(at.X, at.Z) - g.Centre;
         return Vector2.Dot(off, g.Direction) > 0 ? g.Speed * MathF.Max(0.8f, 1 - 0.001f * off.Length()) : g.Speed;

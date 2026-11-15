@@ -741,7 +741,9 @@ public sealed partial class CombatSystem : IProjectileSource
         var cover = new BoltCover(world.Seed, Rng.Key(table.IdOf(v)), p.Id);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, _combat, events);
+        var (part, damage, absorbed) = world.Player.OnePunch && p.ShooterIsPlayer
+            ? HitResolver.LandLethal(dc.Medical, ctx, DebugCheats.OnePunchDamage, false, true, events)
+            : HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, _combat, events);
         FloatHit(world, v, dc, p.ShooterIsPlayer, part, damage, absorbed);
         Sound(world, SoundKind.BoltHit, v, p.Shooter, prev[v].Position, armoured: absorbed.Cut + absorbed.Blunt + absorbed.Pierce > 0, robot: false);
         Splash(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce);

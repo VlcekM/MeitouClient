@@ -20,6 +20,16 @@ public sealed class CharacterStats
     readonly float[] _values = new float[StatsInfo.Count];
 
     /// <summary>
+    /// The code mods' modifiers, made on first use (<see cref="Modifiers"/>).
+    /// </summary>
+    StatModifiers? _modifiers;
+
+    /// <summary>
+    /// The levels in code mods' skills, made on first use (<see cref="ModSkills"/>).
+    /// </summary>
+    ModSkillLevels? _modSkills;
+
+    /// <summary>
     /// Stats that read as 1 for a character built without data (the editor's default of a STATS field).
     /// </summary>
     public CharacterStats()
@@ -29,14 +39,45 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// The value of a stat (0 for a number without storage); <see cref="StatsEnumerated.HiveMedic"/> and <see cref="StatsEnumerated.Vet"/> read
-    /// <see cref="StatsEnumerated.Medic"/>. Setting a number without storage does nothing.
+    /// The value of a stat: the stored value plus the <see cref="Modifiers"/> (0 for a number without storage); <see cref="StatsEnumerated.HiveMedic"/>
+    /// and <see cref="StatsEnumerated.Vet"/> read <see cref="StatsEnumerated.Medic"/>. Setting writes the stored value; a number without storage does
+    /// nothing. Code that trains or keeps a stat reads <see cref="Stored"/>, so a modifier is never baked in.
     /// </summary>
     public float this[StatsEnumerated stat]
     {
-        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? Value(s) : 0;
         set { if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) _values[(int)s] = value; }
     }
+
+    /// <summary>
+    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage).
+    /// </summary>
+    public float Stored(StatsEnumerated stat) => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+
+    /// <summary>
+    /// The code mods' temporary amounts on this character's stats (docs/modding.md "Stat modifiers"), made on first use.
+    /// </summary>
+    public StatModifiers Modifiers => _modifiers ??= new();
+
+    /// <summary>
+    /// The modifiers if any were ever made (state hash only).
+    /// </summary>
+    internal StatModifiers? ModifiersOrNull => _modifiers;
+
+    /// <summary>
+    /// The levels in code mods' skills (docs/modding.md "Skills"), made on first use; read and train them through <see cref="ModSkill"/>.
+    /// </summary>
+    public ModSkillLevels ModSkills => _modSkills ??= new();
+
+    /// <summary>
+    /// The mod skill levels if any were ever made.
+    /// </summary>
+    internal ModSkillLevels? ModSkillsOrNull => _modSkills;
+
+    /// <summary>
+    /// A storage's value with its modifiers.
+    /// </summary>
+    float Value(StatsEnumerated storage) => _values[(int)storage] + (_modifiers?[storage] ?? 0);
 
     /// <summary>
     /// The read-time stat multiplier (<c>CharStats</c> +0x34): 1 for people here; an animal's is its age (<c>CharStatsAnimal</c> sets it from the
@@ -46,52 +87,52 @@ public sealed class CharacterStats
     public float Scale { get; set; } = 1;
 
     /// <summary>
-    /// The stored strength.
+    /// The strength, with its modifiers.
     /// </summary>
-    public float Strength => _values[(int)StatsEnumerated.Strength];
+    public float Strength => Value(StatsEnumerated.Strength);
     /// <summary>
-    /// The stored dexterity.
+    /// The dexterity, with its modifiers.
     /// </summary>
-    public float Dexterity => _values[(int)StatsEnumerated.Dexterity];
+    public float Dexterity => Value(StatsEnumerated.Dexterity);
     /// <summary>
-    /// The stored toughness (unscaled; the formulas read <see cref="ScaledToughness"/>).
+    /// The toughness, with its modifiers (unscaled; the formulas read <see cref="ScaledToughness"/>).
     /// </summary>
-    public float Toughness => _values[(int)StatsEnumerated.Toughness];
+    public float Toughness => Value(StatsEnumerated.Toughness);
 
     /// <summary>
     /// The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.
     /// </summary>
     public float ScaledToughness => Toughness * Scale;
     /// <summary>
-    /// The stored athletics.
+    /// The athletics, with its modifiers.
     /// </summary>
-    public float Athletics => _values[(int)StatsEnumerated.Athletics];
+    public float Athletics => Value(StatsEnumerated.Athletics);
 
     /// <summary>
-    /// The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach
-    /// a save.
+    /// The values a character had before the debug "Set stats to 1000" raised them (null while not boosted); the save writes these, so boosted stats
+    /// never reach a save.
     /// </summary>
-    float[]? _godOriginal;
+    float[]? _boostOriginal;
 
     /// <summary>
-    /// Whether the debug god mode (<see cref="Boost"/>) holds this character's stats raised.
+    /// Whether the debug stat boost (<see cref="Boost"/>) holds this character's stats raised.
     /// </summary>
-    public bool Boosted => _godOriginal is not null;
+    public bool Boosted => _boostOriginal is not null;
 
     /// <summary>
     /// The values <see cref="Unboost"/> restores, or null while not boosted (state hash only).
     /// </summary>
-    internal float[]? GodOriginal => _godOriginal;
+    internal float[]? BoostOriginal => _boostOriginal;
 
     /// <summary>
-    /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to
+    /// The debug stat boost (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to
     /// <paramref name="value"/>. Does nothing while already boosted, so the first values stay the ones that come back. Training while boosted changes
     /// nothing visible (the XP curve gives a stat this high no gain) and anything it adds is dropped by <see cref="Unboost"/>.
     /// </summary>
     public void Boost(float value)
     {
-        if (_godOriginal is not null) return;
-        _godOriginal = (float[])_values.Clone();
+        if (_boostOriginal is not null) return;
+        _boostOriginal = (float[])_values.Clone();
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) _values[i] = value;
     }
@@ -101,15 +142,27 @@ public sealed class CharacterStats
     /// </summary>
     public void Unboost()
     {
-        if (_godOriginal is null) return;
-        Array.Copy(_godOriginal, _values, _values.Length);
-        _godOriginal = null;
+        if (_boostOriginal is null) return;
+        Array.Copy(_boostOriginal, _values, _values.Length);
+        _boostOriginal = null;
     }
 
     /// <summary>
-    /// A copy of the values by stat number.
+    /// A copy of the stored values by stat number (no modifiers).
     /// </summary>
     public float[] ToArray() => (float[])_values.Clone();
+
+    /// <summary>
+    /// A copy of the values with their modifiers by stat number (what the stats window shows).
+    /// </summary>
+    public float[] ToEffectiveArray()
+    {
+        var values = ToArray();
+        if (_modifiers is null) return values;
+        for (int i = 1; i < values.Length; i++)
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) values[i] += _modifiers[(StatsEnumerated)i];
+        return values;
+    }
 
     /// <summary>
     /// The core gain (<c>FUN_1408c5df0</c>, <b>Observed</b>): f = ((cap - stat) / cap)^2; <c>amount * f</c> is added only when 0 &lt; amount &lt;= 20
@@ -215,19 +268,21 @@ public sealed class CharacterStats
     /// <summary>
     /// Writes the saved STATS floats (docs/formats/save.md): the stat's field name (<c>strength</c>, <c>attack</c>, <c>toughness2</c>, <c>mass
     /// combat</c>...) to its value. The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not
-    /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value.
+    /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value. The code mods'
+    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, none without them.
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
-        var written = _godOriginal ?? _values;   // a boosted character is saved with the values it had before
+        var written = _boostOriginal ?? _values;   // a boosted character is saved with the values it had before
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = written[i];
+        _modSkills?.WriteSave(floats);
     }
 
     /// <summary>
     /// Reads the saved STATS floats written by <see cref="WriteSave"/> (a missing key keeps the default), except that a save without
     /// <c>lockpicking</c> gets half the character's thievery and one without <c>toughness2</c> its defence as toughness (<c>FUN_14064b6a0</c>,
-    /// docs/game/character-stats.md).
+    /// docs/game/character-stats.md). Every mod skill level is kept, registered or not.
     /// </summary>
     public static CharacterStats ReadSave(IReadOnlyDictionary<string, float> floats)
     {
@@ -237,6 +292,7 @@ public sealed class CharacterStats
         if (!floats.ContainsKey("lockpicking")) stats._values[(int)StatsEnumerated.Lockpicking] = stats._values[(int)StatsEnumerated.Thieving] * 0.5f;
         // FUN_14064b6a0: toughness = defence
         if (!floats.ContainsKey("toughness2")) stats._values[(int)StatsEnumerated.Toughness] = stats._values[(int)StatsEnumerated.MeleeDefence];
+        stats._modSkills = ModSkillLevels.ReadSave(floats);
         return stats;
     }
 }

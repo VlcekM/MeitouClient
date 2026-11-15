@@ -472,11 +472,16 @@ public static class Enhancements
             () => Characters.PreviewStudio.Bar, v => Characters.PreviewStudio.Bar = v,
             "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with "
                 + "your graphics settings"),
-        new("lampwarmth", "Lamp warmth", "the game's colours", "amber",
+        new("lampwarmth", "Lamp warmth", "the game's colours", "warmer",
             () => Objects.LampWarmth.Enabled, v => Objects.LampWarmth.Enabled = v,
             "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly "
-                + "yellow-green on walls and skin; Meitou draws such lamps amber, towards the game's own torch colour and as bright as they were; "
+                + "yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; "
                 + "torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"),
+        new("glass", "Glass bottles", "solid", "see-through",
+            () => Objects.GlassBottles.Enabled, v => Objects.GlassBottles.Enabled = v,
+            "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, "
+                + "reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid "
+                + "(docs/render-objects.md \"See-through items\")"),
     ];
 
     #endregion

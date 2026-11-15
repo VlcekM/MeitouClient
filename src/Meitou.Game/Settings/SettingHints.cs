@@ -66,8 +66,8 @@ static class SettingHints
         "Far water clarity" => "Adjust underwater visibility at a distance.",
         "Water see-through distance" => "Distance over which submerged scenery stays visible.",
         "Shadow distance" => "How far shadows are drawn; zero disables them.",
-        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, or ray-traced shadows "
-            + "(needs ray tracing, turns on global illumination).",
+        WorldFrame.SunShadowsChoice => "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near "
+            + "and soft cascades further away (both need ray tracing and turn on global illumination).",
         "Ambient occlusion type" => "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate).",
         WorldFrame.GiChoice => "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. "
             + "Needs ray tracing.",
@@ -161,8 +161,11 @@ static class SettingHints
         WorldFrame.WetWorldSwitch => "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. "
             + "Off: as the original.",
         WorldFrame.TracedGrassSwitch => "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland.",
+        WorldFrame.TracedFarCascadesSwitch => "Ray-traced shadows near the camera only; four soft cascades take over further away, where "
+            + "distant trees and buildings keep their shadows.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
+        "Glass bottles" => "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside.",
         "Blood on weapons and gear" => "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them.",
         "Soft grazing sun" => "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches.",
         "Reflections" => "Glossy and wet surfaces mirror their surroundings instead of one sky picture.",

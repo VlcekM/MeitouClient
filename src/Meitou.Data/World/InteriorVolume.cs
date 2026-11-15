@@ -228,6 +228,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     Vector3[] _maskCorners = [];
 
     /// <summary>
+    /// The drawn interior mask meshes' triangles in world space (three corners each), read on first use: what cuts the terrain.
+    /// </summary>
+    Lazy<Vector3[]>? _drawnMask;
+
+    /// <summary>
     /// Where a ray first meets the indoor space (the <c>interior mask</c> collision) within <paramref name="maxDistance"/>, or null: what hides the
     /// characters and items inside or behind a building seen from outside from the pointer.
     /// </summary>
@@ -245,6 +250,57 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
                 best = t;
         }
         return best;
+    }
+
+    /// <summary>
+    /// How far along the ray it leaves the volume's box (footprint box by height range); null when it misses the box or the box is behind it.
+    /// </summary>
+    public float? BoxExit(Vector3 origin, Vector3 direction)
+    {
+        if (Footprint.Length < 3) return null;
+
+        var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
+        var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
+        float near = 0, far = float.MaxValue;
+        for (int i = 0; i < 3; i++)
+        {
+            if (MathF.Abs(direction[i]) < 1e-9f)
+            {
+                if (origin[i] < min[i] || origin[i] > max[i]) return null;
+
+                continue;
+            }
+
+            float a = (min[i] - origin[i]) / direction[i];
+            float b = (max[i] - origin[i]) / direction[i];
+            near = MathF.Max(near, MathF.Min(a, b));
+            far = MathF.Min(far, MathF.Max(a, b));
+            if (near > far) return null;
+        }
+
+        return far;
+    }
+
+    /// <summary>
+    /// Whether the terrain met <paramref name="groundDistance"/> along the ray is cut by this building's drawn interior mask (the mask meshes, not
+    /// the collision): the renderer's rule, more than 1 past the mask's nearest face (0 when the eye is inside it, an odd count of faces ahead) and
+    /// before its farthest (docs/render-interior-cut.md). False without a mask mesh.
+    /// </summary>
+    public bool CutsGround(Vector3 origin, Vector3 direction, float groundDistance)
+    {
+        var corners = _drawnMask?.Value ?? [];
+        float near = float.MaxValue, far = float.MinValue;
+        int faces = 0;
+        for (int i = 0; i + 2 < corners.Length; i += 3)
+        {
+            if (FloorSurfaces.RayTriangle(origin, direction, corners[i], corners[i + 1], corners[i + 2]) is not { } t) continue;
+
+            (near, far, faces) = (MathF.Min(near, t), MathF.Max(far, t), faces + 1);
+        }
+
+        if (faces == 0) return false;
+        if (faces % 2 == 1) near = 0;
+        return groundDistance > near + 1 && groundDistance < far;
     }
 
     /// <summary>
@@ -345,6 +401,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             _pieces = [.. pieces],
             _floors = new Lazy<FloorSurfaces>(() => FloorSurfaces.For(db, building, placementId, position, rotation, node, collision)),
             _roofCover = new Lazy<RoofCover>(() => RoofCover.For(db, building, placementId, position, rotation, collision)),
+            _drawnMask = new Lazy<Vector3[]>(() => [.. meshes.SelectMany(m => collision.RenderTriangles(m)).Select(v => Vector3.Transform(v, node))]),
         };
     }
 

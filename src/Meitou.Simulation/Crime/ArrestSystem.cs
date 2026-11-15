@@ -1244,6 +1244,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var tc = table.Cold(t)!;
         if (tc.Medical is not { Incapacitated: true } || !tc.CarriedBy.IsNone || Captives is null)
         {
+            DropStripClip(gc);
             a.Phase = ArrestPhase.Fight;
             a.Time = 0;
             return true;
@@ -1346,10 +1347,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (table.TryResolveNext(a.Guard, out int g) && table.Cold(g) is { } gc)
         {
             gc.Engaged = false;
+            DropStripClip(gc);
             if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
         }
         Note(world, kind, a.Guard, a.Target, a.Faction, 0);
         return false;
+    }
+
+    /// <summary>
+    /// Takes the strip's kneel off a guard leaving it unfinished (the target died, got up or was taken, the guard was recalled): an idle character
+    /// plays its action clip, so a kept one had him kneel on by the body under his own goal's text (#698).
+    /// </summary>
+    static void DropStripClip(CharacterCold gc)
+    {
+        if (gc.ActionClip == Kidnap.CaptiveSystem.ProcessClip) gc.ActionClip = null;
     }
 
     /// <summary>

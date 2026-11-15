@@ -38,6 +38,12 @@ public readonly record struct FarmView(float Growth, float Death, int Harvested,
 }
 
 /// <summary>
+/// The power of the level building the HUD shows when it draws power (docs/game/ui-screens.md "Selected building"): what it asks of its town's frame
+/// now (0 for a light outdoors by day) and what the frame grants it. Display only.
+/// </summary>
+public readonly record struct LevelPowerView(string Instance, float Demand, float Granted);
+
+/// <summary>
 /// The resource richness of the building the HUD shows (docs/game/ui-screens.md "Selected building"): a mine's or rock's <c>world resource mining</c>
 /// and its yield, for the stats panel's first line. Display only.
 /// </summary>

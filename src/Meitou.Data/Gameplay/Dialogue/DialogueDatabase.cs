@@ -434,6 +434,17 @@ public sealed class DialogueSet
             return _trades == 2;
         }
     }
+
+    /// <summary>
+    /// Whether a line under any of the set's dialogues has the effect <paramref name="action"/> (conditions not checked): the debug menu's Recruit
+    /// row asks it for <see cref="DialogueActions.JoinSquadWithEdit"/> and <see cref="DialogueActions.JoinSquadFast"/>.
+    /// </summary>
+    public bool HasEffect(int action)
+    {
+        var seen = new HashSet<DialogueNode>();
+        bool Walk(DialogueNode n) => seen.Add(n) && (n.Effects.Any(e => e.Action == action) || n.Children.Any(Walk));
+        return ByEvent.Values.Any(nodes => nodes.Any(Walk));
+    }
 }
 
 /// <summary>

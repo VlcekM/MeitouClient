@@ -48,6 +48,10 @@ public sealed partial class ProductionSystem
     /// The construction targets of the level generators, by building record and database version.
     /// </summary>
     readonly Dictionary<string, (int Version, float Target)> _npcTargets = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The level buildings by key with the index of the town they stand in, for <see cref="LevelPowerOf"/>; built for one population data.
+    /// </summary>
+    (PopulationData Data, Dictionary<string, (int Town, TownBuilding Building)> ByKey)? _levelBuildings;
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -251,6 +255,68 @@ public sealed partial class ProductionSystem
         }
 
         return draws;
+    }
+
+    /// <summary>
+    /// The power of the level building <paramref name="key"/> when it draws power (<see cref="NpcDraws"/>, a light only outside daytime): its draw and
+    /// what its town's frame grants it, the town's generators (<see cref="NpcOutput"/>) shared out over the town's draws and the player's machines
+    /// of that frame this tick as <see cref="ShareOut"/> does, in ascending demand. Null for any other instance; read only.
+    /// </summary>
+    public LevelPowerView? LevelPowerOf(World world, string? key)
+    {
+        if (key is null || LevelBuilding(world, key) is not { } found) return null;
+
+        var (index, b) = found;
+        if (b.Destroyed || Data(b.BuildingId) is not { IsConsumer: true, Function: >= 0 } data) return null;
+
+        float demand = data.IsLight && world.Daytime ? 0 : MathF.Abs(data.PowerOutput);
+        if (demand <= 0) return new LevelPowerView(key, 0, 0);
+
+        var machines = _grids.GetValueOrDefault(-index - 1)?.Where(m => m.Data.IsConsumer).Select(m => m.Demand) ?? [];
+        float granted = GrantOf(demand, NpcOutput(world, index), NpcDraws(world, index), [.. machines]);
+        return new LevelPowerView(key, demand, granted);
+    }
+
+    /// <summary>
+    /// The level building of <paramref name="key"/> with its town's index; null when no town holds one.
+    /// </summary>
+    (int Town, TownBuilding Building)? LevelBuilding(World world, string key)
+    {
+        if (world.SystemOf<PopulationSystem>()?.Data is not { } data) return null;
+
+        if (_levelBuildings is not { } known || known.Data != data)
+        {
+            var byKey = new Dictionary<string, (int, TownBuilding)>(StringComparer.Ordinal);
+            foreach (var site in data.Sites)
+                foreach (var b in site.Buildings) byKey.TryAdd(b.Key, (site.Index, b));
+
+            _levelBuildings = known = (data, byKey);
+        }
+
+        return known.ByKey.TryGetValue(key, out var found) ? found : null;
+    }
+
+    /// <summary>
+    /// What a draw of <paramref name="demand"/> among the town's <paramref name="npc"/> draws gets of <paramref name="supply"/>, the player's
+    /// <paramref name="machines"/> of the frame drawing too: in ascending demand each takes at most an equal share of what is left, a town draw
+    /// before a machine of equal demand.
+    /// </summary>
+    static float GrantOf(float demand, float supply, List<float> npc, List<float> machines)
+    {
+        var all = npc.Select(d => (Demand: d, Machine: false)).Concat(machines.Select(d => (Demand: d, Machine: true)))
+            .OrderBy(d => d.Demand)
+            .ThenBy(d => d.Machine)
+            .ToList();
+        int left = all.Count;
+        foreach (var (draw, machine) in all)
+        {
+            float give = MathF.Min(supply / Math.Max(1, left--), draw);
+            if (!machine && draw == demand) return give;
+
+            supply -= give;
+        }
+
+        return 0;
     }
 
     /// <summary>

@@ -148,17 +148,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void SpawnCorpse(World world, Squad squad, StoredMember m, Vector2 delta, bool moved, Vector2 position)
     {
-        var walk = world.Walkability;
-        var at = m.Position;
-        if (moved)
-        {
-            float x = at.X + delta.X, z = at.Z + delta.Y;
-            if (!walk.IsWalkable(x, z))
-                (x, z) = WalkableSpots.Nearest(walk, new Vector2(x, z), out var near, 32) ? (near.X, near.Y) : (position.X, position.Y);
-
-            at = new Vector3(x, walk.GroundHeight(x, z), z);
-        }
-
+        var at = moved ? MovedSpot(world.Walkability, m.Position, delta, position) : m.Position;
         m.Cold.SquadId = squad.Id;
         var hot = new CharacterHot
         {
@@ -171,6 +161,22 @@ public sealed partial class PopulationSystem
             WalkSpeed = m.Cold.Race?.WalkSpeed ?? 15,
         };
         squad.Members.Add(world.Characters.Spawn(hot, m.Cold, world.Tick));
+    }
+
+    /// <summary>
+    /// Where a stored member of a stand-in that travelled <paramref name="delta"/> is made: its stored spot moved along, on the ground there
+    /// (<see cref="GroundLevel"/>: not the top floor of a ruin the stand-in walked under off screen, #731), else on the ground of the nearest
+    /// walkable point, else at the stand-in's <paramref name="position"/>.
+    /// </summary>
+    static Vector3 MovedSpot(IWalkability walk, Vector3 stored, Vector2 delta, Vector2 position)
+    {
+        var p = new Vector2(stored.X + delta.X, stored.Z + delta.Y);
+        if (GroundLevel(walk, p) is { } y) return new Vector3(p.X, y, p.Y);
+        if (WalkableSpots.Nearest(walk, p, out var near, 32) && GroundLevel(walk, near) is { } nearY)
+            return new Vector3(near.X, nearY, near.Y);
+
+        float standY = GroundLevel(walk, position) ?? walk.GroundHeight(position.X, position.Y);
+        return new Vector3(position.X, standY, position.Y);
     }
 
     /// <summary>
@@ -240,15 +246,7 @@ public sealed partial class PopulationSystem
         var cold = m.Cold;
         bool leads = m.Leader || ReferenceEquals(m, successor);
         cold.SquadId = squad.Id;
-        var at = m.Position;
-        if (moved)
-        {
-            float x = at.X + delta.X, z = at.Z + delta.Y;
-            if (!walk.IsWalkable(x, z))
-                (x, z) = WalkableSpots.Nearest(walk, new Vector2(x, z), out var near, 32) ? (near.X, near.Y) : (position.X, position.Y);
-
-            at = new Vector3(x, walk.GroundHeight(x, z), z);
-        }
+        var at = moved ? MovedSpot(walk, m.Position, delta, position) : m.Position;
 
         var hot = new CharacterHot
         {
