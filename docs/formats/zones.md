@@ -191,7 +191,8 @@ readers below): every game-data file the game loaded is one layer, in its load o
 
 A mod's folder is flat: zone files, `leveldata.level`, `interiors.level` (**Observed**: all 179 such folders in a 1368-mod install are flat
 and lower-case). Meitou (`WorldLevelData.Load`) builds the same list from the load order: the base folder, the core files' sub-folders,
-then each mod's `leveldata` folder when it exists (a `.mod` Meitou cannot read stops the data load, so no failed mod's layer is used), merged with
+then each mod's `leveldata` folder when it exists, leaving out a core `.mod` or mod that fails to load
+([fcs-mod](fcs-mod.md#files-that-fail-to-load)), merged with
 `GameDatabase.Apply`. **Verified** (`meitou-tools objects`, Workshop mod GuildQuests in the load order): its `leveldata/zone.20.33.zone`
 places the Adventurers Guild, its sign and banners. A file the reader refuses is left out with a `LevelFileNotLoaded` issue (**Observed**: Great Frontiers - World
 Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174

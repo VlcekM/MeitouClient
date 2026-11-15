@@ -56,6 +56,7 @@ static partial class WorldFrame
             db = preloaded ?? GameDatabase.Load(LoadOrder.FromInstall(install));
             Console.WriteLine($"game data {db.Records.Count} records ({watch.ElapsedMilliseconds} ms)");
             LogIssues("game data", db.Issues);
+            Title.DataLoadErrors.Log(db, install);
         }
 
         if (StartPoint(install, o, db) is not { } start)
