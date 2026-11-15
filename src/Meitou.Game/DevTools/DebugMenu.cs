@@ -153,6 +153,11 @@ sealed class DebugMenu(GameHost host)
         /// Recruits the first target into the player's faction and active squad, then opens the character editor on it.
         /// </summary>
         Recruit,
+
+        /// <summary>
+        /// Opens the faction relations sub-view.
+        /// </summary>
+        FactionRelations,
     }
 
     /// <summary>
@@ -164,7 +169,7 @@ sealed class DebugMenu(GameHost host)
         "Edit character", "Damage (cut)",
         "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Set stats to 1000", "Auto heal", "Move instantly",
             "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
-            "Drop item", "Recruit",
+            "Drop item", "Recruit", "Faction relations",
     ];
 
     /// <summary>
@@ -198,7 +203,8 @@ sealed class DebugMenu(GameHost host)
         {
             new("Character", [(int)DebugRow.EditCharacter, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
                 (int)DebugRow.GiveItem]),
-            new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.UnlockResearch]),
+            new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.FactionRelations,
+                (int)DebugRow.UnlockResearch]),
             new("World / Spawn", [.. worldRows]),
             new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
                 (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
@@ -245,6 +251,11 @@ sealed class DebugMenu(GameHost host)
     /// The Edit character row's sub-view: quick actions, Appearance and every stat by category.
     /// </summary>
     readonly DebugCharacterEditor _characterEditor = new(host);
+
+    /// <summary>
+    /// The Faction relations row's sub-view: a faction, then its relation with every other one.
+    /// </summary>
+    readonly DebugRelationsEditor _relationsEditor = new(host);
 
     /// <summary>
     /// The menu is open; opening it shows the categories again.
@@ -652,7 +663,7 @@ sealed class DebugMenu(GameHost host)
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacter or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
             or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
-            or DebugRow.DropItem or DebugRow.Recruit));
+            or DebugRow.DropItem or DebugRow.Recruit or DebugRow.FactionRelations));
 
     /// <summary>
     /// The rows that open the body part list.
@@ -695,6 +706,12 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
+        if (_relationsEditor.Open)
+        {
+            _relationsEditor.Scroll(lines);
+            return;
+        }
+
         if (DebugParts is { } parts)
         {
             _debugPart = Math.Clamp(_debugPart + lines, 0, parts.Length - 1);
@@ -722,6 +739,7 @@ sealed class DebugMenu(GameHost host)
         {
             if (_itemPicker.Open) return true;
             if (_characterEditor.Open) return _characterEditor.TakesText;
+            if (_relationsEditor.Open) return _relationsEditor.TakesText;
             return !DebugAtCategories && DebugHasField(_debugRow);
         }
     }
@@ -749,6 +767,12 @@ sealed class DebugMenu(GameHost host)
         if (_characterEditor.Open)
         {
             _characterEditor.Key(key);
+            return;
+        }
+
+        if (_relationsEditor.Open)
+        {
+            _relationsEditor.Key(key);
             return;
         }
 
@@ -866,6 +890,9 @@ sealed class DebugMenu(GameHost host)
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacter:
                 _characterEditor.Begin();
                 break;
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.FactionRelations:
+                _debugStatus = _relationsEditor.Begin();
+                break;
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.Recruit:
                 RecruitAndEdit();
                 break;
@@ -952,6 +979,7 @@ sealed class DebugMenu(GameHost host)
         host.Modding.EnsureDebugFields();
         if (_itemPicker.Open) _itemPicker.Type(c);
         else if (_characterEditor.Open) _characterEditor.Type(c);
+        else if (_relationsEditor.Open) _relationsEditor.Type(c);
         else if (!DebugAtCategories && DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
@@ -1459,6 +1487,12 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
+        if (_relationsEditor.Open)
+        {
+            _relationsEditor.Draw(o, width, height, top, scale, close, atRight, pass);
+            return;
+        }
+
         var world = host.Session.World;
         var here = host.Session.Camera.Current.Target;
         var lines = new List<MenuLine>();
@@ -1531,6 +1565,7 @@ sealed class DebugMenu(GameHost host)
     {
         if (_itemPicker.Open) return _itemPicker.Contains(at);
         if (_characterEditor.Open) return _characterEditor.Contains(at);
+        if (_relationsEditor.Open) return _relationsEditor.Contains(at);
         return _panelRect is { } rect && Inside(rect, at);
     }
 
@@ -1551,6 +1586,12 @@ sealed class DebugMenu(GameHost host)
         if (_characterEditor.Open)
         {
             _characterEditor.Click(at);
+            return;
+        }
+
+        if (_relationsEditor.Open)
+        {
+            _relationsEditor.Click(at);
             return;
         }
 
@@ -1737,6 +1778,9 @@ sealed class DebugMenu(GameHost host)
                     break;
                 case DebugRow.Recruit:
                     value = "Enter: recruit and edit";
+                    break;
+                case DebugRow.FactionRelations:
+                    value = "Enter: edit relations";
                     break;
                 case DebugRow.ExplodeClick:
                     rowOn = ExplodeClickOn;

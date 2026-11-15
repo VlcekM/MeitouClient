@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
@@ -25,6 +26,12 @@ public abstract record DebugCommand : SimCommand;
 /// Adds <see cref="Delta"/> cats to the player's money (negative takes it away, never below 0).
 /// </summary>
 public sealed record DebugMoney(long Delta) : DebugCommand;
+
+/// <summary>
+/// Sets the relation of faction <see cref="A"/> and faction <see cref="B"/> (every other faction when null) to <see cref="Value"/> (-100 to 100),
+/// both ways, with the game's threshold messages when one is the player's faction (the debug menu's Faction relations sub-view).
+/// </summary>
+public sealed record DebugSetRelation(int A, int? B, float Value) : DebugCommand;
 
 /// <summary>
 /// Puts the characters (the selection when empty) on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.
@@ -715,6 +722,9 @@ static class DebugCheats
             case DebugDamageMultiplier multiplier when data is not null:
                 data.BodyOptions.GlobalDamageMultiplier = multiplier.Multiplier;
                 break;
+            case DebugSetRelation relation when data is not null:
+                SetRelation(world, data.Relations, relation);
+                break;
             case DebugClearBounties clear:
                 world.Post($"Bounties cleared: {ClearBounties(world, clear)}.");
                 break;
@@ -1018,6 +1028,22 @@ static class DebugCheats
             world.Post($"{displaced.Name} came off and did not fit the inventory; destroyed (nothing dropped).");
 
         return worn;
+    }
+
+    /// <summary>
+    /// Sets the relations of <see cref="DebugSetRelation"/> both ways through <see cref="PlayerRelations.Add"/>, so the player's row goes to the
+    /// other side's table and a crossed threshold posts its message.
+    /// </summary>
+    static void SetRelation(World world, FactionRelations relations, DebugSetRelation set)
+    {
+        if (!relations.Contains(set.A)) return;
+        float value = Math.Clamp(set.Value, -100, 100);
+        for (int b = 0; b < relations.Count; b++)
+        {
+            if (b == set.A || (set.B is { } only && b != only)) continue;
+            PlayerRelations.Add(world, relations, set.A, b, value - relations.Get(set.A, b));
+            PlayerRelations.Add(world, relations, b, set.A, value - relations.Get(b, set.A));
+        }
     }
 
     /// <summary>
