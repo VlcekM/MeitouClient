@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
@@ -52,9 +53,10 @@ public sealed partial class ProductionSystem
     int _townBuildingsRevision = -1;
 
     /// <summary>
-    /// The towns' buildings whose record is a farm, with the faction owning their town (<see cref="TownFarms"/>); null until looked for.
+    /// The towns' buildings whose record works with nobody at it (a farm, an unattended producer), with the faction owning their town
+    /// (<see cref="TownSelfRunning"/>); null until looked for.
     /// </summary>
-    List<(TownBuilding Building, int Owner)>? _townFarms;
+    List<(TownBuilding Building, int Owner)>? _townSelfRunning;
 
     /// <summary>
     /// The counter of a town farm's random start among its farm draws (above the plantings' and the harvest rolls').
@@ -88,7 +90,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The towns' buildings by run-time key with the faction owning their town, made again when the lists change
-    /// (<see cref="PopulationData.BuildingsRevision"/>, which also drops <see cref="_townFarms"/>); null without towns.
+    /// (<see cref="PopulationData.BuildingsRevision"/>, which also drops <see cref="_townSelfRunning"/>); null without towns.
     /// </summary>
     Dictionary<string, (TownBuilding Building, int Owner)>? TownBuildingIndex()
     {
@@ -97,7 +99,7 @@ public sealed partial class ProductionSystem
 
         _townBuildingsRevision = data.BuildingsRevision;
         _townBuildings = new(StringComparer.Ordinal);
-        _townFarms = null;
+        _townSelfRunning = null;
         foreach (var site in data.Sites)
         {
             int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
@@ -140,21 +142,29 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The towns' farms in the active zones have their machines (serial): a farm grows whether anyone works it, so its crop is there to harvest or
-    /// loot when the player comes (the original makes every building of a loaded zone, FarmBuilding among them); a ruin has none.
+    /// The towns' self-running machines in the active zones have their machines (serial): a farm grows and an unattended producer (an automatic well,
+    /// max operators 0) works whether anyone is there, so their output is there to harvest or loot when the player comes (the original makes every
+    /// building of a loaded zone, FarmBuilding and ProductionBuilding among them, and ProductionBuilding::vfunc_28 runs an unattended one each
+    /// frame, #763); a ruin has none.
     /// </summary>
-    void TownFarms(World world)
+    void TownSelfRunning(World world)
     {
         if (world.ActiveZones is not { } active || TownBuildingIndex() is not { } buildings) return;
 
-        _townFarms ??= [.. buildings.Values.Where(b => Data(b.Building.BuildingId) is { Farm: not null })];
-        foreach (var (building, owner) in _townFarms)
+        _townSelfRunning ??= [.. buildings.Values.Where(b => RunsAlone(Data(b.Building.BuildingId)))];
+        foreach (var (building, owner) in _townSelfRunning)
         {
             var zone = WorldLayout.ZoneOf(building.Position.X, building.Position.Z);
             if (!active.Contains(zone) || world.Machines.Find(TownWorkId(building)) is not null) continue;
             if (!world.Fixtures.IsDestroyed(building)) TownWork(world, building, owner);
         }
     }
+
+    /// <summary>
+    /// Whether a town machine of <paramref name="data"/> works with nobody at it: a farm, or a producer with no operators
+    /// (<see cref="MachineData.Unattended"/>).
+    /// </summary>
+    static bool RunsAlone(MachineData? data) => data is { Farm: not null } or { Unattended: true, IsProducer: true };
 
     /// <summary>
     /// A town building's machine as the holder of its faction's goods (<see cref="Crime.StealSource"/>: the building is its own container, its

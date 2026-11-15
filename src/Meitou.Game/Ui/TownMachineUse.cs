@@ -13,7 +13,8 @@ namespace Meitou.Game.Ui;
 /// menu verbs", the Building row): with characters selected the pointer over one is the class's (<c>mine</c> for function 1 or 27, else
 /// <c>use</c>); a quick right click operates it (87, <see cref="OperateOrder"/> on its <c>townwork:</c> site, with Shift the Operating machine job);
 /// held, the menu offers Use and, once its machine exists, Loot (26): the selection walks to it and its window opens beside the character's
-/// inventory, where taking from it is a theft from the town's faction.
+/// inventory, where taking from it is a theft from the town's faction. An automatic one (max operators 0, an automatic well) has no Use: Loot takes
+/// its place, for the quick click too (the original's Auto-Haul 152 there is not made for a town machine).
 /// </summary>
 sealed class TownMachineUse(PlayerInterface player)
 {
@@ -59,7 +60,8 @@ sealed class TownMachineUse(PlayerInterface player)
         string site = SiteOf(hit.Building);
         ContextMenuWindow.ContextMenu? Menu(Vector2 at) => player.ContextMenuWindow.Menu(hit.Info.Name, at, Verbs(site, hit));
 
-        if (!player.ContextMenuWindow.ContextPressOn(p, Menu, () => Use(site))) Use(site);
+        Action quick = Automatic(site) ? () => Loot(site, hit) : () => Use(site);
+        if (!player.ContextMenuWindow.ContextPressOn(p, Menu, quick)) quick();
         return true;
     }
 
@@ -82,14 +84,21 @@ sealed class TownMachineUse(PlayerInterface player)
     static string SiteOf(PlacedBuilding building) => ProductionSystem.TownWorkPrefix + building.Placement.Key;
 
     /// <summary>
-    /// The menu's verbs: Use (87), then Loot (26) once the machine exists.
+    /// The menu's verbs: Use (87), then Loot (26) once the machine exists; an automatic machine's Loot alone.
     /// </summary>
     List<(string Caption, Action Give)> Verbs(string site, (PlacedBuilding Building, WorldBuildingInfo Info, Vector2[] Hull, float Y, float T) hit)
     {
-        var verbs = new List<(string, Action)> { ("Use", () => Use(site)) };
+        var verbs = new List<(string, Action)>();
+        if (!Automatic(site)) verbs.Add(("Use", () => Use(site)));
         if (player.Production.Machine(site) is not null) verbs.Add(("Loot", () => Loot(site, hit)));
         return verbs;
     }
+
+    /// <summary>
+    /// Whether the town machine of <paramref name="site"/> runs with no operator (raw max operators 0); its machine exists once its zone is active
+    /// (<c>ProductionSystem.TownSelfRunning</c>).
+    /// </summary>
+    bool Automatic(string site) => player.Production.Machine(site) is { IsAutomatic: true };
 
     /// <summary>
     /// The selection operates the machine (with Shift as the Operating machine job).

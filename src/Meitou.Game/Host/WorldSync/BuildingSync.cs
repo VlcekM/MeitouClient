@@ -466,14 +466,14 @@ sealed class BuildingSync(GameHost host)
     }
 
     /// <summary>
-    /// Whether a town building of record <paramref name="record"/> is a machine its workers operate (<c>ProductionSystem.TownOperate</c>: a farm or
-    /// a producer, with an output and operators), cached in <paramref name="known"/>.
+    /// Whether a town building of record <paramref name="record"/> is a machine (a farm or a producer with an output: one its workers operate,
+    /// <c>ProductionSystem.TownOperate</c>, or one that runs alone, an automatic well), cached in <paramref name="known"/>.
     /// </summary>
     static bool TownMachine(Data.GameDatabase db, Dictionary<string, bool> known, string record)
     {
         if (known.TryGetValue(record, out bool machine)) return machine;
 
-        machine = db.Find(record) is { } r && MachineData.From(db, r) is { Output: not null, Unattended: false } data
+        machine = db.Find(record) is { } r && MachineData.From(db, r) is { Output: not null } data
             && (data.IsProducer || data.Farm is not null);
         known[record] = machine;
         return machine;

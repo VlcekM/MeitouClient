@@ -903,7 +903,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var research = world.Research;
         research.Rate = 0;
         int bench = ResetOperators(world);
-        TownFarms(world);
+        TownSelfRunning(world);
         TownWorkers(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.
