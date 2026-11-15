@@ -180,7 +180,7 @@ sealed class BloodFootprints(GameHost host)
         }
 
         var across = new Vector2(step.Along.Y, -step.Along.X);
-        Deposit(store, trail, step.Right, step.At, across, Boot(look), look.BodyMesh, _now);
+        Deposit(store, trail, step.Right, step.At, across, Boot(look), look, _now);
     }
 
     /// <summary>
@@ -197,6 +197,15 @@ sealed class BloodFootprints(GameHost host)
     /// </summary>
     static CharacterPart? Boot(CharacterAppearance look) =>
         look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
+
+    /// <summary>
+    /// The prosthetic leg worn on that side (LIMB_REPLACEMENT <c>slot</c> 52 left, 53 right); null for a natural leg.
+    /// </summary>
+    static CharacterPart? Prosthetic(CharacterAppearance look, bool right)
+    {
+        int slot = right ? 53 : 52;
+        return look.Parts.FirstOrDefault(part => part.Record.Type == FcsRecordType.LimbReplacement && part.Record.GetInt("slot") == slot);
+    }
 
     /// <summary>
     /// The body or either foot can touch a cell's decals when it straddles the edge.
@@ -282,7 +291,7 @@ sealed class BloodFootprints(GameHost host)
         for (; travel <= length; travel += StepLength)
         {
             var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Stride(store, trail, at, across, boot, look.BodyMesh, now);
+            if (HasFoot(actor, trail.Right)) Stride(store, trail, at, across, boot, look, now);
             trail.Right = !trail.Right;
         }
         trail.Distance = length - travel + StepLength;
@@ -292,19 +301,19 @@ sealed class BloodFootprints(GameHost host)
     /// A stride's footfall for a body with no pose, beside the path. A drawn body is always within the trails' reach (240, more than
     /// <see cref="Range"/>), so its steps come from <see cref="Footfall"/>.
     /// </summary>
-    void Stride(TerrainDecalStore store, Trail trail, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
+    void Stride(TerrainDecalStore store, Trail trail, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
     {
         bool right = trail.Right;
         var point = Xz(at) + across * (right ? -1 : 1);
         at.X = point.X;
         at.Z = point.Y;
-        Deposit(store, trail, right, at, across, boot, body, now);
+        Deposit(store, trail, right, at, across, boot, look, now);
     }
 
     /// <summary>
     /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
     /// </summary>
-    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, string body, double now)
+    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
     {
         ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
         var point = Xz(at);
@@ -316,17 +325,19 @@ sealed class BloodFootprints(GameHost host)
         var source = SourceColour(store, point);
         if (source is null && !Wet(sole, now)) return;
 
+        // A boot, else a prosthetic leg, prints a hard sole (its lowest vertices' outline); a natural foot the body's skin.
         bool bootOnThisFoot = boot is not null && boot.HideSide != (right ? 2 : 1);
-        string? mesh = bootOnThisFoot ? host.Assets.FindMesh(boot!.Mesh) : host.Assets.FindMesh(body);
+        var hard = bootOnThisFoot ? boot : Prosthetic(look, right);
+        string? mesh = host.Assets.FindMesh(hard?.Mesh ?? look.BodyMesh);
         if (source is { } colour)
         {
             sole = Sole.Wet(colour, now);
-            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: !bootOnThisFoot);
+            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: hard is null);
             return;
         }
 
         uint alpha = (uint)(50 + 45 * sole.Steps);
-        byte variant = (byte)((bootOnThisFoot ? 0 : 2) + (right ? 1 : 0));
+        byte variant = (byte)((hard is null ? 2 : 0) + (right ? 1 : 0));
         at.Y = host.Gpu.Terrain.HeightAt(point.X, point.Y);
         host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh);
         sole.Steps--;
