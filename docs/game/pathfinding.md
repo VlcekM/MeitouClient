@@ -644,9 +644,9 @@ nearest reachable point and a straight provisional tail (the terrain search, und
 a way round through an unloaded zone within one block is not found). **Observed**: Hub→(-36000,-6000) and Hub→Squin arrive; "6 dudes"
 save, scratch harness with the host's zone loading: Fog Islands (-80620,-24171) → the squad at (-31620,11420), 60.5k units, arrives
 (17,506 ticks); before, it walked to the nearest reachable point and stopped on a cliff 10.6k short.
-**Observed** (#755 save, `probe move --stream`, zone 20.32's cache removed): a walker reaching the Hub's south gate, which straddles the 21.32/20.32
+**Observed** (#755 save, `probe move --stream`, zone 20.32's cache removed): a walker reaching the Hub's ruined `Defensive Gate IV` (`4617-Newwworld-INGAME`), which straddles the 21.32/20.32
 border with its floor 42 above the terrain, before 20.32 was built stood 1 unit past the border at the terrain height (under the gate floor) for the
-11.6 s the build took, then went on at the floor height. With 20.32 cached it still went live about 4 s after it was asked for.
+11.6 s the build took, then went on at the floor height. With 20.32 cached it went live 1.6 to 6.5 s after it was asked for.
 When a door shut for paths at run time (`NavDoors`: its building's doors all locked) turns the search back and the way with every door open crosses
 it, the tail goes first to the point of that door's polygons nearest the reachable end (`NavQuery.ClosedDoorOnTheWay`), so the walker meets the leaf
 and the lock stops it ([doors](../simulation.md#cages-beds-and-locks)); a straight tail can pass beside a gate's post, out of the leaf's reach.
