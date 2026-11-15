@@ -1403,7 +1403,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// Whether the looker senses <paramref name="slot"/> now (<c>FUN_1408593d0</c>: seen by <c>FUN_140857b10</c>, else heard by
     /// <c>FUN_140857500</c>). A sneaking target of another side fills the spot meters of a looker that keeps them (<see cref="Scan.Meters"/>,
     /// exposing the sneaker), and counts as seen in view only once its meter was full before this look, or when it is the looker's own fight target
-    /// (engine choice: a chaser does not lose its quarry to the meter).
+    /// (engine choice: a chaser does not lose its quarry to the meter). Any other target is seen by the sight test, ending with the sight ray where
+    /// <see cref="SightRay.Applies"/> asks for it.
     /// </summary>
     static bool SenseOne(ref Scan s, int slot, CharacterCold c, out bool seen, out bool heard)
     {
@@ -1433,7 +1434,14 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
             seen = v > 0 && (full || slot == s.FightTarget);
         }
-        else seen = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth) > 0;
+        else
+        {
+            seen = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth) > 0;
+
+            // can-see ends with the sight ray for a pair with one side the player's (FUN_140857b10)
+            if (seen && s.Cold is { } me && SightRay.Applies(me, c))
+                seen = SightRay.Clear(s.World.Walkability, s.Fights?.Buildings, s.Eye, other.Position);
+        }
 
         if (!seen && s.Effects is { } fx)
         {

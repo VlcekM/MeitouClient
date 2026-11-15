@@ -37,8 +37,8 @@ Meitou (`SightMap`): every sight test (aggro, dialogue sightings, crime witnesse
 rules. Rooms are the registered towns' buildings' `interior mask` volumes and lamps their lights, plus the lanterns characters carry
 (`CharacterAppearance.Lights` at the owner, its place and floor) and the lamps of completed player buildings (outdoor lights; ruins and the player's buildings have no room); a lit lamp of another building's interior is not counted indoors (floors are
 compared only within the character's building). With the `interiorlamps` switch on (Meitou, default) interior lamps count at
-any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. The ray for a pair where the target or the looker is the player's (not both) or the target sneaks (`SightRay`; the town early return and
-the other target states are left out, and aggro's plain test of a non-sneaking target has none); no weather, no posture factor; the 0.75 / 0.5 light gate is
+any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. The ray for a pair where the target or the looker is the player's (not both) or the target sneaks (`SightRay`, aggro's plain test included; the town
+early return and the other target states are left out; headless, one player character among 34 NPCs: no measurable tick cost); no weather, no posture factor; the 0.75 / 0.5 light gate is
 evaluated every tick for everyone. The overhead and floor queries are redone only when a character moves (headless, Release:
 0.29 ms per tick for 840 characters, 540 indoors, standing). Observed in the data (headless probe of five big towns' 60
 lit rooms): standing under an interior lamp gives light 0.7-2.9, 444 of 462 lamps lighting the floor below them; the Hub's
