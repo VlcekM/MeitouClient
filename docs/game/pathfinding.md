@@ -131,7 +131,7 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
   overlapping characters apart, which `MovementSystem` separation does.
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead
-  nowhere (no neighbour or tile link, not the zone border, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
+  nowhere (no neighbour or tile link, not a zone-border edge the next zone links or that borders an unloaded zone, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
   the radius is RACE `pathfind footprint radius`. Before, only the end point was tested, and with the 2-unit edge tolerance a step could cross a thin wall (Observed: on the Hub's
   navmesh about 3% of 1-unit random moves crossed a wall edge, none with the sweep).
 
@@ -258,10 +258,12 @@ A polygon within `EdgeTolerance` counts across a zone border too (`NavWorld.TryE
 choice). **Observed** (#774, the issue's save, Iron Valley zone 33.24 at 4614,-36197, `meitou-tools probe --nav`): a hole in the mesh east of the
 zone line x 4608, about 36 square, which the original's `tile33.24` lacks too; a character in it got a path whose first point lay on the line, the
 stand test there looked only in zone 33 and found nothing, and it stood for good, its attackers stalled at the hole's edge. Now it walks out and the fight goes on.
-How it got in (**Observed**, scratch probe on that save: 1-unit `Slide` steps east from 4600): `Slide` counts every edge on the zone line as open, also where the
-next zone is loaded and has nothing across, so the sweep never stops at x 4608; root motion (`AnimationSystem.Relocate`) then makes a step with the ground at hand
-even though its end has no mesh, and inside the hole every step is made. The walk and the combat approach test the end point and stop at the edge (the
-ninjas' ring round the hole). **Unknown**: whether the original's agent meets a wall on such an edge.
+How it got in (**Observed**, scratch probe on that save: 1-unit `Slide` steps east from 4600): `Slide` counted every edge on the zone line as open, also where
+the next zone was loaded with nothing across, and root motion (`AnimationSystem.Relocate`) makes a step with the ground at hand though its end has no mesh; the
+walk and the combat approach test the end point and stopped at the edge (the ninjas' ring round the hole). Now such an unlinked edge is a wall (engine choice;
+**Unknown** whether the original's agent meets one there): the same steps stop 2.5 short of the line, and cross it where zone 32 and 33 link (z -36230).
+A wall never stops a body behind it (off the mesh across it), so one in a hole or beyond the line moves back onto the mesh freely (engine reading of the
+original's "closes on" rule above; with two-sided walls the change trapped a body west of an unlinked line, z -36150).
 **No path at all** (the start sits on a pocket of the mesh with no way out: inside a cage whose walls are not a navmesh cut, or a walker shoved into solid geometry): a player's move order
 is kept instead of being dropped when its goal is within 64 units (`StraightOrderReach`) and walkable at the walker's height: the walker heads straight at
 the goal, the step test still refusing what cannot be walked (**engine choice**, `MovementSystem.ApplyAnswers`); a goal further off or off the mesh still drops the
