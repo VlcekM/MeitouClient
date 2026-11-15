@@ -564,7 +564,10 @@ public static class SaveLoader
         // Town-bound platoons are the town's own: its residents, bar squads, slaves and farm animals. They stay home, and the town makes none of its
         // own.
         int siteFaction = data.SiteFactions.Count > origin ? data.SiteFactions[origin] : -1;
-        bool travels = campaign || Travels(platoon, job, data.Sites[origin].Town, siteFaction >= 0 ? data.Factions[siteFaction] : null);
+        // A code mod's spawn roams whatever its template is (ModPlatoonSave).
+        bool modSpawn = ModPlatoonSave.Spawned(platoon.Record);
+        bool travels = campaign || modSpawn
+            || Travels(platoon, job, data.Sites[origin].Town, siteFaction >= 0 ? data.Factions[siteFaction] : null);
         int faction = data.FactionIndex(platoon.FactionId);
 
         // A platoon without characters (no file, or none in it) has nothing to make: a town's stays in the save as it is, a travelling one is a
@@ -575,11 +578,12 @@ public static class SaveLoader
 
         var sp = SavedOf(platoon, context, unmade, hasCharacters, travels);
 
-        ulong key = Rng.Mix(Rng.StableHash(platoon.Name));
+        ulong key = (modSpawn ? ModPlatoonSave.Key(platoon.Record) : null) ?? Rng.Mix(Rng.StableHash(platoon.Name));
         int size = Math.Max(platoon.CharCount, platoon.Characters.Count);
 
-        // A campaign's stand-in with no characters is made from its template: the plan gives its size (the men its campaign counts).
-        if (size == 0 && campaign && data.Db.Find(platoon.SquadTemplate) is { } sizeRecord && SquadFactory.IsTemplate(sizeRecord))
+        // A campaign's or a code mod's stand-in with no characters is made from its template: the plan gives its size (the men its campaign
+        // counts).
+        if (size == 0 && (campaign || modSpawn) && data.Db.Find(platoon.SquadTemplate) is { } sizeRecord && SquadFactory.IsTemplate(sizeRecord))
             size = SquadFactory.Plan(data.Db, SquadTemplate.From(sizeRecord), 1, world.Seed, key, data.States).TotalMembers;
 
         var p = new Platoon
@@ -601,6 +605,8 @@ public static class SaveLoader
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
             Target = MissionTownOf(platoon.Record, data),
+            ModSpawned = modSpawn,
+            ModTag = ModPlatoonSave.Tag(platoon.Record),
         };
         Register(world, platoon, loaded, context, p, sp, unmade, travels);
     }
