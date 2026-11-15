@@ -5,11 +5,11 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The placed contents of the world from <c>data/newland/leveldata/</c> (docs/formats/zones.md): zone files
-/// (buildings), <c>leveldata.level</c> (towns, roads) and optionally <c>interiors.level</c>. Files come in
-/// layers: the folder itself, then one sub-folder per game-data file of the load order that has one (base
-/// game: <c>Newwworld</c>, <c>Dialogue</c>, <c>rebirth</c>). Layers are merged per file with the FCS rules of
-/// <see cref="GameDatabase"/>; that the game merges them this way is an assumption.
+/// The placed contents of the world from <c>data/newland/leveldata/</c> (docs/formats/zones.md, "Mods"): zone files (buildings),
+/// <c>leveldata.level</c> (towns, roads) and optionally <c>interiors.level</c>. Files come in layers, one per game-data file in load order:
+/// the folder itself for <c>gamedata.base</c>, a core file's sub-folder named after it (<c>Newwworld</c>, <c>Dialogue</c>, <c>rebirth</c>),
+/// a mod's <c>leveldata</c> folder beside its <c>.mod</c> file. Each file is merged over the earlier layers' with the FCS rules of
+/// <see cref="GameDatabase"/>, as the game reads level files with its game-data loader.
 /// </summary>
 public sealed class WorldLevelData
 {
@@ -233,7 +233,7 @@ public sealed class WorldLevelData
     /// </summary>
     void ApplyLayer(WorldLevelLayer layer)
     {
-        foreach (var path in Directory.EnumerateFiles(layer.Directory, "zone.*.zone").Order(StringComparer.Ordinal))
+        foreach (var path in layer.ZoneFiles())
         {
             if (!ZoneCoordinate.TryParseFileName(path, out var zone)) continue;
             if (!Zones.TryGetValue(zone, out var db))
@@ -420,6 +420,21 @@ public sealed class WorldLevelLayer(string name, string directory)
     /// How many level files the folder gave.
     /// </summary>
     public int FileCount { get; internal set; }
+
+    /// <summary>
+    /// The folder's zone files (<c>zone.X.Y.zone</c>), in ordinal order.
+    /// </summary>
+    public IEnumerable<string> ZoneFiles() => System.IO.Directory.EnumerateFiles(Directory, "zone.*.zone").Order(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every file of the folder the loader reads: <see cref="ZoneFiles"/>, then the level and interiors files (named whether or not they exist).
+    /// </summary>
+    public IEnumerable<string> Files() =>
+    [
+        .. ZoneFiles(),
+        GameFiles.Resolve(Path.Combine(Directory, WorldLevelData.LevelFileName)),
+        GameFiles.Resolve(Path.Combine(Directory, WorldLevelData.InteriorsFileName)),
+    ];
 
     public override string ToString() => Name.Length == 0 ? "(base)" : Name;
 }

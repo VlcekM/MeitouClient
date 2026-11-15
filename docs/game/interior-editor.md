@@ -30,8 +30,9 @@ version. Layout data: [zones](../formats/zones.md) (`interiors.level`, `serialis
   interiors in this town", when the town record's `buildings replacements` is not empty (`FUN_1407779c0`).
   **Observed**.
 - **Where it saves**: the level editor's Save Mod writes into the mod named by `editor`
-  ([settings](../formats/settings.md); [level editor](level-editor.md)). Mods ship layouts as `mods/<mod>/leveldata/interiors.level`
-  (Unofficial Patches, CATO V4). The base game has `data/newland/leveldata/interiors.level`. **Observed**.
+  ([settings](../formats/settings.md); [level editor](level-editor.md)). Mods ship layouts as `<mod folder>/leveldata/interiors.level`
+  (**Observed**: Unofficial Patches, CATO V4), read after the base game's `data/newland/leveldata/interiors.level` and the core files'
+  (**Verified**, [zones](../formats/zones.md#mods)).
 
 ## Meitou
 
@@ -46,8 +47,5 @@ F10 → Tools → "Interior editor..." (`InteriorEditorHost`). Read only.
 - Not done: interior edit mode, placing/moving/deleting parts, save, delete, clear, clear nodes.
   Saving, when added, must write to Meitou's own folder or a separate mod, never into `data/` or
   an installed mod.
-
-## Unknowns
-
-- Meitou does not read `mods/<mod>/leveldata/` (only `data/newland/leveldata/<mod>/`), so mod layouts
-  such as the ones above are not shown.
+- The layouts listed are the merged `interiors.level` of every level layer, the loaded mods' among them
+  ([zones](../formats/zones.md#mods)).

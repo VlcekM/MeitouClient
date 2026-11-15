@@ -38,7 +38,7 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// Hash of the buildings that shape the zone's mesh (id, position, rotation, destroyed) in the style of the original's zone hash
+    /// Hash of the buildings that shape the zone's mesh (id, position with height, full rotation, destroyed) in the style of the original's zone hash
     /// (docs/game/pathfinding.md, "Hash"): the cache key of a built mesh. Changes when a mod adds, moves or removes a building.
     /// </summary>
     public uint BuildingHash(ZoneCoordinate zone, float margin = DefaultMargin)
@@ -53,6 +53,9 @@ internal sealed partial class ZoneGeometryGatherer
             hash = Combine(hash, (uint)Stable(b.BuildingId));
             hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Rotation.W));
             hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Rotation.Y));
+            hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Position.Y));
+            hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Rotation.X));
+            hash = Combine(hash, (uint)BitConverter.SingleToInt32Bits(b.Rotation.Z));
             hash = Combine(hash, destroyed ? 1u : 0u);
             if (StateOf(b) is { } state)
                 hash = Combine(hash, (uint)Stable(b.LayoutName(state, exterior: true) + "|" + b.LayoutName(state, exterior: false)));
