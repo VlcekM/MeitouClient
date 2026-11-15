@@ -999,7 +999,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 return c.Slave is { State: 1 } ? ("scavenge", id, loot)
                     : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
             if (c.Prison is not null) return ("search", id, loot);
-            if (c.InCombat || !(c.WarParty || c.Slave is { State: 1 }) || !world.CanTalk(id, lead.Id))
+            if (c.InCombat || !(c.IsDiplomat || c.Slave is { State: 1 }) || !world.CanTalk(id, lead.Id))
             {
                 // Fighting back at someone attacking the squad is defence, not an assault on its faction.
                 bool defence = c.FightsPlayer;

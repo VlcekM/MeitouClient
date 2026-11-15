@@ -937,15 +937,19 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   and area tests, [perception](perception.md#the-attack-on-sight-tests)); `FUN_14059e300` picks the target. Before those tests an entry is skipped when its posture is not 0
   (vfunc 0x368; staying low, crawling) and it stands in a building (**Verified**, finder body; Meitou `MedicalState.Prone` and `SightMap.BuildingOf`), the posture test being replaced for a chained slave
   of the looker's faction (`FUN_14032e2a0`: chain flag `+0x320`, owner faction the looker's) by its slave state (`FUN_1405c8aa0`): skipped while 1, a target once 2 (escaped); also needed: global `DAT_142133f54` set or the
-  target's campaign force null or its `+0xc0` non-zero (not modelled), and the platoon-side object's vfunc `0xb0` null (not modelled). Factor 1 with a target, else 0. This is the attack on sight.
+  target's campaign (`FUN_1409c4b90`, **Verified** by disassembly: its faction's war manager forces record for its platoon, none without a platoon) null or in a phase other than 0 (`+0xc0`): a campaign
+  still marching to its target is not attacked on sight. `DAT_142133f54` (initial 0) has this one reader and no writer in the decompile (**Observed**). Meitou `AggroSystem.FinderDrops`,
+  `CharacterFacts.MarchingToCampaign`. Also needed: the platoon-side object's vfunc `0xb0` null (not modelled). Factor 1 with a target, else 0. This is the attack on sight.
 - 144 TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME ("Home territory aggression", finder `FUN_14059fd70`, **Verified** stub): SENSE_ENEMY
   entries (mask 4, 0x208) within 1.3 x the home town's radius (`FUN_140926d50`, factor `DAT_14169bb40` = 1.3, read-only; ground-plane squared distance, strict; a
   NEST_MARKER home contains nobody), or outside it in the looker's own building (**Observed**: the enemy's and the looker's building hands match, the looker's not null; the
   looker indoors), skipping a slave whose owner's faction is an ally (a slave of a neutral or enemy owner is a target); with no home town it is
   `FUN_14059fa70` (the same mask and tests, no circle). Meitou: the squad's town (`Blackboard.Town`), else its nest (a NEST town, 1250 x mult, round the nest centre; a save's wild squads have none), and `TownData.Radius`. 21 ATTACK_ENEMIES_AND_NEUTRALS
   (`FUN_14059f720`) takes mask 6 (neutral or enemy, 0x308) and drops a faction the looker's coexists with (one way, neutrals too); `FUN_1408569a0`
-  then drops, for an NPC looker not hostile to the target's faction and without TEMP_ENEMY on it, a campaign force's member (and a target whose squad
-  record +0xc0 is 0, not modelled).
+  (leave alone, also in `FUN_14059fa70`) then drops, for a looker whose faction has no player flag (`+0x250`), whose squad holds no TEMP_ENEMY on the target
+  (`FUN_140678960` tag 4) and whose faction is not hostile to the target's (relation above -30, `FUN_1406b25d0`), a target with diplomatic status (`FUN_140796240` flag 0: NPC class 5,
+  biome not factored in) or whose campaign is in phase 0 (`FUN_1409c4b90`); **Verified** by decompile and disassembly. Meitou `AggroSystem.FinderDrops` (21, and 144 with no home circle;
+  the player-faction branch is not modelled).
 - 143 PROTECT_OWN_SQUAD ("Protect close allies"): effect `!isAggressionTowards` (state 16, evaluator `FUN_14059de10`: the target
   resolves to a character whose AI-side object is set and byte +0x2b0 is set). Finder `FUN_14099d510` scores
   each squad mate (the platoon's active members, the looker included) that passes `FUN_140855960(sense, mate, 1)` (**Verified**: the looker itself; else a mate in its own sensed map that is seen or

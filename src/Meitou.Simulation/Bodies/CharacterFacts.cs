@@ -49,6 +49,22 @@ public static class CharacterFacts
         && cold.NpcClass != FundamentalType.Bandit;
 
     /// <summary>
+    /// <c>Character::isDiplomaticStatus(factorInBiome)</c> (<c>FUN_140796240</c>, <b>Verified</b> by disassembly): NPC class 5 Diplomat and, with
+    /// <paramref name="factorInBiome"/>, standing in a biome group of its own faction's <c>biomes</c>
+    /// (<see cref="Population.PopulationData.InHomeBiome"/>). The war manager lookup of its platoon it also makes is discarded.
+    /// </summary>
+    public static bool DiplomaticStatus(CharacterCold cold, System.Numerics.Vector3 at, Population.PopulationData? data, bool factorInBiome) =>
+        cold.NpcClass == FundamentalType.Diplomat && (!factorInBiome || data?.InHomeBiome(cold.Faction, at) == true);
+
+    /// <summary>
+    /// The campaign its faction's war manager holds the character's platoon in (<c>FUN_1409c4b90</c>, <b>Verified</b> by disassembly: none without a
+    /// platoon) is still in phase 0, marching to its target (the record's <c>+0xc0</c>). Read by the attack-on-sight finder and the leave-alone test.
+    /// </summary>
+    public static bool MarchingToCampaign(World world, CharacterCold cold) =>
+        cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { PlatoonId: >= 0 } squad
+        && world.Platoons.Find(squad.PlatoonId)?.Campaign is { Phase: 0 };
+
+    /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is
     /// unconscious to everyone), ragdolled or carried. A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so
     /// <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.

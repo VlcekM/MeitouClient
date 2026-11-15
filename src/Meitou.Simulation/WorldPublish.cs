@@ -500,8 +500,6 @@ public sealed partial class World
         s.NoLootGuilt = cold is { } guilt
             && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl }
                 && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
-        s.WarParty = cold is { SquadId: >= 0 } warCold && Squads.Find(warCold.SquadId) is { PlatoonId: >= 0 } warSquad
-            && Platoons.Find(warSquad.PlatoonId)?.Campaign is not null;
         s.Body = cold?.Medical is { } med && cold.Race is { } race ? BodyOf(cold, med, race, state[i].Task, extraBloodLoss) : null;
     }
 

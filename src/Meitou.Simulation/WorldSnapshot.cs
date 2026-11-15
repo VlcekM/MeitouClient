@@ -452,7 +452,9 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool IsTrader { get; internal set; }
     /// <summary>
-    /// The character's NPC class is Diplomat (the standing Pick Up verb skips it, <c>FUN_1407a6bc0</c>).
+    /// The character's NPC class is Diplomat: <c>isDiplomaticStatus</c> with no biome test (<c>FUN_140796240</c> flag 0), as the standing Pick Up
+    /// verb (<c>FUN_1407a6bc0</c>), the Kidnap branch (<c>FUN_140796f80</c>) and the quick right click's talk to a hostile
+    /// (<c>FUN_1407fb410</c>) read it.
     /// </summary>
     public bool IsDiplomat { get; internal set; }
     /// <summary>
@@ -669,11 +671,6 @@ public sealed class CharacterSnapshot
     /// its faction is not real (<c>FUN_1407fb410</c>, docs/game/ui-input.md "Quick right click").
     /// </summary>
     public bool NoLootGuilt { get; internal set; }
-    /// <summary>
-    /// Its squad is a campaign force of its faction (<c>FactionWarMgr</c> has its platoon, <c>FUN_140796240</c>): a raiding or war party member the
-    /// quick right click can still talk to.
-    /// </summary>
-    public bool WarParty { get; internal set; }
     /// <summary>
     /// Wears locked armour (shackles, <see cref="Items.ItemInstance.IsLocked"/>): the portrait's <c>Slave</c> overlay.
     /// </summary>

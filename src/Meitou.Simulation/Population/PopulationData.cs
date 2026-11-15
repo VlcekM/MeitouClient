@@ -549,6 +549,21 @@ public sealed class PopulationData
     }
 
     /// <summary>
+    /// Whether the BIOME_GROUP at <paramref name="at"/> is one of <paramref name="faction"/>'s FACTION <c>biomes</c>
+    /// (<c>FactionWarMgr::isBiomeHomeTerritory</c> <c>FUN_1409c3b30</c> over the list the war manager reads from <c>biomes</c> at <c>+0x88</c>,
+    /// <c>FUN_1409cabd0</c>, <b>Verified</b>). False without a biome map, outside every group or for no faction.
+    /// </summary>
+    public bool InHomeBiome(int faction, Vector3 at)
+    {
+        if ((uint)faction >= (uint)Factions.Count || BiomeGroupAt(new Vector2(at.X, at.Z)) is not { } group) return false;
+
+        foreach (var link in Factions[faction].Biomes)
+            if (link.Id == group) return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// The trader's next town (the town chooser <c>FUN_14092c5e0</c> as <c>Package_WanderingTrader</c> calls it, docs/game/ai.md "Package classes",
     /// Verified by code): towns other than <paramref name="exclude"/> of type town, village, slave camp or military (mask 0x6c) or any player town
     /// (<paramref name="outposts"/>), public or of <paramref name="faction"/>, not hostile to it and not in its <c>no-go zones</c>; the 4 nearest to

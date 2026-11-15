@@ -224,7 +224,7 @@ are set by `FUN_1408580d0` (**Verified**): 4 dead (the only bit then set), 3 dow
 12 the looker is a slave whose owner (hand at looker `+0x328`: a character or a squad) calls the target an enemy (owner's slot 125; goal 41's filter), 13 the target's faction has a player flag (`+0x250`), 14 crawling or
 staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's `+0xdc` (vfunc 0x70) 1 or 2, 5 / 6 slave state 1 / 2, 9 imprisoned (`+0x2f8` 2). A tag filter `FUN_140853960(m1, m2)` keeps entries with `tag & m1` non-zero and `tag & m2` zero. The combat finders read it ([ai-tasks](ai-tasks.md#combat-goals)).
 - Not the looker's enemy (Character slot 125, `vfunc_125` at 0x3e8): ALLY when slot 126 (0x3f0) says ally, else NEUTRAL.
-- Enemy: NEUTRAL when `FUN_140796240` holds (the target's platoon is a campaign force, [ui-input](ui-input.md); Meitou `AggroSystem` Visit), else ENEMY (unless the looker's platoon object lacks a sensor that accepts it).
+- Enemy: NEUTRAL when the target has diplomatic status (`Character::isDiplomaticStatus` `FUN_140796240`, flag = the looker is not with the player, `FUN_140856bc0`), else ENEMY (unless the looker's platoon object lacks a sensor that accepts it); a TEMP_ENEMY tag does not change it. **Verified** by disassembly: the function returns NPC class (`+0x1a0` -> `+0xdc`) = 5 Diplomat and, with the flag, `FactionWarMgr::isBiomeHomeTerritory` (`FUN_1409c3b30`: the BIOME_GROUP at the target's position is in its faction's war manager list `+0x88`, filled from FACTION `biomes` by `FUN_1409cabd0`); the war manager forces lookup it also makes is discarded. So a player-side looker never senses an enemy diplomat as ENEMY, another looker not while the diplomat stands in its faction's biomes; a campaign force's member is sensed like anyone. Meitou `AggroSystem.Regards`, `CharacterFacts.DiplomaticStatus`.
 - **Slot 125** (`CharacterAnimal::vfunc_125`, shared by all characters): never the same faction. Across platoons the looker's squad's
   TEMP_ENEMY tag (or, for a looker whose faction has +0x250, the target's tag on it) makes an enemy and TEMP_ALLY prevents one. A disguise
   (uniform faction at +0x108 while +0x100 > 0.6 and +0x110 <= 0) stands in for the target's faction. A slave target: not when its owner
@@ -240,7 +240,7 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   succeeds (callers: police hit, caught stealing, fencing, kidnapping seen, uniform theft, body put-down; not through the direct setter `FUN_140852c80`, e.g. attack orders and
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
   a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
-  `FUN_1408569a0` is left out.
+  `FUN_1408569a0` is left out here (for an NPC looker it never drops a target its faction is hostile to); the finders apply it ([ai-tasks](ai-tasks.md#combat-goals)).
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
