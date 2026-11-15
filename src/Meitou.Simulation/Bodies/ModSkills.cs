@@ -65,7 +65,8 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
     public float Level(CharacterStats stats) => stats.ModSkillsOrNull?.Get(Id) ?? Start;
 
     /// <summary>
-    /// Sets <paramref name="stats"/>' level in the skill; from the mod's system in the tick (the character's own partition in a parallel phase).
+    /// Sets <paramref name="stats"/>' level in the skill; from the mod's system in the tick (the character's own partition in a parallel phase, where
+    /// no other character's levels may be read).
     /// </summary>
     public void Set(CharacterStats stats, float level) => stats.ModSkills.Set(Id, level);
 

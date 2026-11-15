@@ -150,7 +150,8 @@ holds refuses the second mod.
   lists the skill at the foot of a stats-window column (`SkillColumn`: Weapons, Combat, Thievery, Sciences, under that column's last heading)
   with its whole level, and a click shows the description pane with the mod's lines and the next-level bar. The mod's systems read
   `skill.Level(stats)` (`Start`, default 1, until set), `Set` it, or `Gain(stats, amount)` on the game's curve (`CharacterStats.CoreGain`, no
-  race multiplier) in the tick (the character's own partition in a parallel phase); the game's own actions never train it. Levels live in
+  race multiplier) in the tick: a character's own in its partition of a parallel phase, another's only outside the parallel phases; the
+  game's own actions never train it. Levels live in
   `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
   ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
   mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a

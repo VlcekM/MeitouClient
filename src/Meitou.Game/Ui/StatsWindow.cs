@@ -52,6 +52,17 @@ sealed class StatsWindow(PlayerInterface player)
     ];
 
     /// <summary>
+    /// The rows a skill column fits at full row height (the column is 296 layout pixels high, rows 20), and the most it takes with code mods'
+    /// skills, whose rows then share its height.
+    /// </summary>
+    const int ColumnLines = 14, MaxColumnLines = 18;
+
+    /// <summary>
+    /// The prefix of a code mod's skill in <see cref="SelectedStat"/> and its rows' actions, before its index in <see cref="ModSkills.All"/>.
+    /// </summary>
+    const string ModSkillPrefix = "mod:";
+
+    /// <summary>
     /// The stats window's geometry: 980 x 650 at the inventory scale, the attributes and skills titles placed, the derived stats hidden.
     /// </summary>
     internal void BindStatsGeometry(MyGuiLayout layout, UiBindings bindings)
@@ -78,17 +89,6 @@ sealed class StatsWindow(PlayerInterface player)
         if (layout.Find("lbSkills") is { } skills)
             bindings.RelativePositions[skills] = new(0.272f, 0.0163934f, 0.723f, 0.0327869f);
     }
-
-    /// <summary>
-    /// The rows a skill column fits at full row height (the column is 296 layout pixels high, rows 20), and the most it takes with code mods'
-    /// skills, whose rows then share its height.
-    /// </summary>
-    const int ColumnLines = 14, MaxColumnLines = 18;
-
-    /// <summary>
-    /// The prefix of a code mod's skill in <see cref="SelectedStat"/> and its rows' actions, before its index in <see cref="ModSkills.All"/>.
-    /// </summary>
-    const string ModSkillPrefix = "mod:";
 
     /// <summary>
     /// How many more code mods' skills <paramref name="column"/> takes besides <paramref name="pending"/> unregistered ones: the column's lines up
