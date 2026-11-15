@@ -41,9 +41,10 @@ public sealed partial class UiBindings
     public Func<UiControl, float>? TextHeight { get; set; }
 
     /// <summary>
-    /// The ComboBox whose popup list is open (set by the host).
+    /// The ComboBoxes whose popup list shows (set by the host): the open one and any <c>SmoothShow</c> list still fading out, each with its alpha
+    /// (1, or the fade's: MyGUI <c>ControllerFadeAlpha</c>) and whether it takes input (not while it fades out).
     /// </summary>
-    public string? OpenCombo { get; set; }
+    public Dictionary<string, (float Alpha, bool Enabled)> OpenCombos { get; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -650,7 +651,7 @@ public static partial class MyGuiPresentation
         props["ComboSelected"] = selected.ToString(Inv);
 
         var list = w.Children.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplatePart") == "List");
-        if (b.OpenCombo != w.Name || items.Count == 0 || list is null) return;
+        if (!b.OpenCombos.TryGetValue(w.Name, out var shown) || items.Count == 0 || list is null) return;
         float scale = b.TemplateScale;
         float line = HeightLine(list, b);
         var client = PartOf(list, "Client");
@@ -672,37 +673,50 @@ public static partial class MyGuiPresentation
         properties.Remove("TemplateReferenceWidth");
         properties.Remove("TemplateReferenceHeight");
         var popup = list with { Position = new(bounds.X, y, bounds.Width, length), RealPosition = false, Properties = properties };
-        deferred.Add(() => visit(popup, viewport, viewport, enabled, 1));
+        deferred.Add(() => VisitPopup(result, popup, viewport, enabled && shown.Enabled, shown.Alpha, visit));
+    }
+
+    /// <summary>
+    /// Arranges a combo box's popup list; a disabled one (fading out) is left out of picking with all its parts, as MyGUI picks no disabled
+    /// widget nor anything under it (<c>Widget::getLayerItemByPoint</c>), so a press goes to what lies below.
+    /// </summary>
+    static void VisitPopup(List<UiControl> result, MyGuiWidget popup, UiRect viewport, bool enabled, float alpha, VisitWidget visit)
+    {
+        int from = result.Count;
+        visit(popup, viewport, viewport, enabled, alpha);
+        if (enabled) return;
+
+        for (int i = from; i < result.Count; i++) result[i] = result[i] with { Pickable = false };
     }
 
     /// <summary>
     /// A MultiListBox with bound columns (Verified against MyGUI 3.2.2 MultiListBox.cpp): per column a header button (<c>SkinButton</c>, in
-    /// <c>HeaderPlace</c>, caption, sort arrow image Up / Down / None) and a sub-list (<c>SkinList</c>, in <c>Client</c>); Fixed columns keep their
-    /// width, Fill columns share the rest; the sub-lists share one selection and scroll position, and only the last shows its bar.
+    /// <c>HeaderPlace</c>, caption, sort arrow image Up / Down / None) and a sub-list (<c>SkinList</c>, in <c>Client</c>), at the widths of
+    /// <see cref="ColumnWidths"/>, a <c>SkinSeparator</c> widget in the <c>WidthSeparator</c> gap after each column but the last; the sub-lists share
+    /// one selection and scroll position, and only the last shows its bar. The widths follow the client's on every arrangement (MyGUI
+    /// <c>updateColumns</c> on a resize when a column is Fill or the header has its <c>Empty</c> part); MyGUI has no user column resizing.
     /// </summary>
     static void MultiColumns(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, bool enabled, float alpha,
         VisitWidget visit)
     {
         var columns = b.Columns[w.Name];
         int hi = IndexOfPart(result, w, "HeaderPlace"), ci = IndexOfPart(result, w, "Client");
-        var buttonPrototype = w.Children.FirstOrDefault(c => c.Properties.GetValueOrDefault("ColumnPrototype") == "button");
-        var listPrototype = w.Children.FirstOrDefault(c => c.Properties.GetValueOrDefault("ColumnPrototype") == "list");
+        var buttonPrototype = ColumnPrototype(w, "button");
+        var listPrototype = ColumnPrototype(w, "list");
+        var separatorPrototype = ColumnPrototype(w, "separator");
         if (hi < 0 || ci < 0 || buttonPrototype is null || listPrototype is null) return;
 
         var header = result[hi];
         var client = result[ci];
         var headerClip = header.Bounds.Intersect(header.Clip ?? header.Bounds);
         var clientClip = client.Bounds.Intersect(client.Clip ?? client.Bounds);
-        float scale = b.TemplateScale, used = columns.Where(c => !c.Fill).Sum(c => c.Width * scale);
-        int fills = columns.Count(c => c.Fill), lastFill = -1;
-        for (int i = 0; i < columns.Count; i++) if (columns[i].Fill) lastFill = i;
-        float share = fills > 0 ? MathF.Floor(Math.Max(0, client.Bounds.Width - used) / fills) : 0;
-        float rest = fills > 0 ? Math.Max(0, client.Bounds.Width - used) - share * fills : 0;
+        int gap = SeparatorWidth(w, b.TemplateScale);
+        int[] widths = ColumnWidths(columns, b.TemplateScale, (int)MathF.Floor(client.Bounds.Width), gap);
         var (sortColumn, ascending) = b.Sorts.TryGetValue(w.Name, out var sort) ? sort : (-1, true);
         float x = 0;
         for (int i = 0; i < columns.Count; i++)
         {
-            float width = columns[i].Fill ? share + (i == lastFill ? rest : 0) : columns[i].Width * scale;
+            float width = Math.Max(0, widths[i]);
             string name = $"{w.Name}@column{i}";
             var button = CloneAs(buttonPrototype, name + "-header", new(x, 0, width, header.Bounds.Height), null);
             b.Text[button.Name] = columns[i].Caption;
@@ -725,9 +739,51 @@ public static partial class MyGuiPresentation
                 ["ListBar"] = i == columns.Count - 1 ? "true" : "false",
             });
             visit(list, client.Bounds, clientClip, enabled, alpha);
-            x += width;
+            x += widths[i];
+
+            if (separatorPrototype is not null && gap != 0 && i < columns.Count - 1)
+            {
+                var separator = CloneAs(separatorPrototype, name + "-separator", new(x, 0, gap, client.Bounds.Height), null);
+                visit(separator, client.Bounds, clientClip, enabled, alpha);
+            }
+
+            x += gap;
         }
         props["ListKey"] = w.Name;
+    }
+
+    /// <summary>
+    /// The hidden column prototype <paramref name="kind"/> (button, list, separator) of MultiListBox <paramref name="w"/>; null when it has none.
+    /// </summary>
+    static MyGuiWidget? ColumnPrototype(MyGuiWidget w, string kind) =>
+        w.Children.FirstOrDefault(c => c.Properties.GetValueOrDefault("ColumnPrototype") == kind);
+
+    /// <summary>
+    /// A MultiListBox's <c>WidthSeparator</c> user string (0 when missing; MyGUI reads an int) in pixels at the template scale.
+    /// </summary>
+    static int SeparatorWidth(MyGuiWidget w, float scale) =>
+        int.TryParse(w.UserStrings.GetValueOrDefault("WidthSeparator"), NumberStyles.Integer, Inv, out int gap) ? (int)MathF.Floor(gap * scale) : 0;
+
+    /// <summary>
+    /// The column widths of MyGUI 3.2.2 <c>MultiListBox::updateColumns</c>, in integer pixels: a Fixed column its width (at the template scale,
+    /// below 0 taken as 0); the free space (client width less the gaps between columns and the Fixed widths) shared by the Fill columns, each the
+    /// free space divided by their count when it is above 0 (else 0), the last of them the remainder too, so it can be negative.
+    /// </summary>
+    static int[] ColumnWidths(IReadOnlyList<UiColumn> columns, float scale, int clientWidth, int gap)
+    {
+        int[] widths = [.. columns.Select(c => c.Fill ? 0 : Math.Max(0, (int)MathF.Floor(c.Width * scale)))];
+        int fills = columns.Count(c => c.Fill);
+        int free = clientWidth - (columns.Count == 0 ? 0 : (columns.Count - 1) * gap) - widths.Sum();
+        int star = fills != 0 && free > 0 ? free / fills : 0;
+        int lastFill = -1;
+        for (int i = 0; i < columns.Count; i++) if (columns[i].Fill) lastFill = i;
+
+        for (int i = 0; i < columns.Count; i++)
+        {
+            if (columns[i].Fill) widths[i] = i == lastFill ? star + free - star * fills : star;
+        }
+
+        return widths;
     }
 
     /// <summary>

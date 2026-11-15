@@ -876,7 +876,8 @@ sealed partial class GameHost(
 
         string credits = Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "";
         Player.Frontend.ConfigureFrontend(Scene.Database,
-            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, [Install.SaveDirectory, .. Install.UserSaveDirectories]), credits);
+            () => Data.Save.SaveCatalog.Scan(Simulation.Saving.QuickSave.DefaultRoot, [Install.SaveDirectory, .. Install.UserSaveDirectories]), credits,
+            () => Config.ContinueFolder(Install));
 
         // A record defined again, or changed with nothing to change, is how mods are built and what the game itself merges
         // (docs/formats/fcs-mod.md): logged, not a problem.

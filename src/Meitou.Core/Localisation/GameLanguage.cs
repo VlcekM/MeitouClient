@@ -141,7 +141,7 @@ public sealed record GameLanguage(string Code, bool IsDefault, string? OverlayFo
     /// <summary>
     /// The <c>key=value</c> lines of settings.cfg (keys case-sensitive, values trimmed); empty when the file is missing.
     /// </summary>
-    static Dictionary<string, string> ReadSettings(string file)
+    public static Dictionary<string, string> ReadSettings(string file)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         try

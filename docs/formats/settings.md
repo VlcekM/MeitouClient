@@ -149,7 +149,7 @@ into bus gains ([audio.md](../audio.md#volumes)). Meitou applies them at once fr
 | `Auto save` | bool | 1 | Auto save | [save.md](save.md#autosave-fun_14047be70) |
 | `Auto save time (minutes)` | float; slider 1 … 30 | 10 | Auto save time (minutes) | same |
 | `User save location` | bool | 1 (see save.md) | User Save Location | Saves in `%LOCALAPPDATA%\kenshi\save` (1) or the install (0); [save.md](save.md) |
-| `continue` | string | — | none | Save the "Continue" button loads; written after every save ([save.md](save.md)) |
+| `continue` | string | — | none | Save the "Continue" button loads; written after every save ([save.md](save.md)). Meitou reads it while it has no save of its own (`UserConfig.ContinueFolder`) |
 | `autosaveindex` | int | 0 | none | Rotating autosave slot ([save.md](save.md#saveload-contract)) |
 | `editor` | string, a mod name | none | none (level editor) | Written when the in-game level editor saves a mod ("Save Mod", FUN_140777ce0); read when the editor opens to preselect that mod in its mod list (FUN_14077be90; an unknown name selects the first). Absent from the install's file (the editor was never used) |
 
