@@ -117,9 +117,23 @@ e.g. `19765-zone39.16-INGAME`). **Verified** (decompile): the counter is the zon
 records: each step takes the next number not used as a record's int id (`FUN_1406bc560`), and every record a load adds takes one too (the
 loader makes it with int id -1, `FUN_14066a920`, and `FUN_1406bf780` numbers such a record; the file's own int ids are not kept). Loading a
 file restarts it at 0, numbers the file's new records, then raises it to the file's `nextId` (`FUN_1406c0b50`); a zone loads each layer's zone file
-in load order, then the save's (`FUN_1409ffad0`; a missing file changes nothing), so the last file read sets it. A new building's id is retried
+in load order, then the save's (`FUN_1409ffad0`; a missing file changes nothing), so the last file read sets it. An id is retried
 with the next number while `FUN_1406c2e40` refuses it (every caller of `FUN_140386770` loops so); it refuses an id the building list already holds
-when that entry's field +0x70 is non-zero (**Observed** reading: the entry's target length, so a cleared entry is taken over). **Observed**
+with a non-empty target, so a cleared entry is taken over (**Verified**: the list is a `std::map` whose `operator[]`, `FUN_140100670`, returns node +0x40
+as the entry; `FUN_1406c2e40` stores the target's stringID at entry +0x20; `FUN_1400fe350` reads a string's length at +0x10; so the tested node
++0x70 is the target's length).
+
+**Verified** (decompile) when numbers are taken: only `FUN_140386770` and `FUN_1406bf780` compose `-INGAME` ids. `FUN_140386770`'s callers are the
+serialise context `FUN_140386d20` (Building, item, character serialise), TownBase/Nest vtable slot 17 (`FUN_14036e8f0`) and Town slot 85
+(`FUN_140376b80`); none is the building factory. A building gets its id when first serialised: `FUN_140386d20` keeps the building's own id
+(Building +0x100, empty from the constructor `FUN_14055ca90`) or takes a new one and writes it back. The zone save (`FUN_14036dde0`, run by
+`saveGame` and by every zone unload, [zone files](save.md#zone-files)) empties the container without resetting the counter (`FUN_1406bf510`,
+`FUN_1406bf1a0`), makes `0-buildinglist` (`FUN_1406c0750`: one number), then serialises each building of the zone into it (`FUN_14036c9e0`, slot 17,
+`FUN_140552320`): a new id is checked against that fresh list, then the `<id>-S23` state record (`FUN_140387610`) takes the next number. Every record
+the save makes takes one, and `GameDataContainer::save` (`FUN_1406bd570`) writes the counter as the file's `nextId`. **Observed** (original saves
+bench-bases-2026-10-27, METARU, Barkeeper-test-1; scratch probe of their 326 non-empty zone files): every file's highest record int id is `nextId` or
+`nextId` - 1; every gap in its run of record ids is the number of a `-zoneX.Y-INGAME` building id of its list (38 of 38 files with gaps); in
+Barkeeper-test-1 each such building's `-S23` state has its id's number + 1 (1314 of 1314); counters reach 378329 (bench-bases zone 20.32). **Observed**
 (merged base-game level data, probe of the `0-buildinglist` records): 107 building-list
 entries in 28 zones have `-zoneX.Y-INGAME` ids (one, `2-zone52.55-INGAME`, cleared); some lie above their zone's `nextId` (zone 14.56: `2459`,
 `nextId` 1949, rebirth's 1940). Instance ids are unique only within one zone file: **Observed** (base load order, scratch probe over
