@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   upload:
-    if: github.repository == 'TheIvoryDisaster/MeitouClient' && github.ref == 'refs/heads/fork'
+    if: github.repository == 'Meitou-Modding-Ecosystem/MeitouClient' && github.ref == 'refs/heads/fork'
     runs-on: ubuntu-latest
     permissions:
       contents: read

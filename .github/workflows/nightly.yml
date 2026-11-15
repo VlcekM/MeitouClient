@@ -184,12 +184,12 @@ jobs:
 
   # Copies the zips to the repository's Azure debug container (azure-infra: lifecycle deletes them after 3 days), at
   # <run id>/<attempt>/ so a rerun never overwrites. Signs in by GitHub OIDC to the meitouclient-debug-upload managed identity, whose
-  # federated credential trusts only the fork's `fork` branch (subject repo:TheIvoryDisaster/MeitouClient:ref:refs/heads/fork), so it
-  # runs only there. Fork-only: `fork` is upstream plus this; `master` mirrors VlcekM/MeitouClient, so upstream PRs never carry it.
+  # federated credential trusts only Meitou-Modding-Ecosystem/MeitouClient's `fork` branch (ID-form subject), so it runs only there.
+  # Fork-only: `fork` is upstream plus this; `master` mirrors VlcekM/MeitouClient, so upstream PRs never carry it.
   # Independent of the release: an upload failure doesn't stop the release, and the release doesn't wait for the upload.
   upload-debug:
     needs: [version, package]
-    if: github.repository == 'TheIvoryDisaster/MeitouClient' && github.ref == 'refs/heads/fork'
+    if: github.repository == 'Meitou-Modding-Ecosystem/MeitouClient' && github.ref == 'refs/heads/fork'
     runs-on: ubuntu-latest
     permissions:
       contents: read
