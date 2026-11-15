@@ -338,8 +338,7 @@ Kidnap (`LookEveryTicks` 15). **Observed** (`--log-spikes`, ~1,400 characters lo
 and assemble race appearance, gear, stats and bodies. Counts, roles, offsets, caps, spawn weights
 and world-state gating follow [population research](game/factions-squads-towns.md).
 Missing references become `SquadPlan.Problems`; world states are answered live (`WorldStates`, see Campaigns under the off-screen tier). Residents are housed by the original's building rules with housemates and
-default residents ([town residents](game/factions-squads-towns.md#town-residents)); prisoners/cages remain
-incomplete. A town that unloads turns each squad it made into a pinned platoon holding a `StoredSquad`
+default residents ([town residents](game/factions-squads-towns.md#town-residents)). A town that unloads turns each squad it made into a pinned platoon holding a `StoredSquad`
 (`PopulationStored.cs`): each living member's own cold state (name, look, body, kit, bounties, crime marks) with its place,
 cleared of path, AI, carry, treatment, combat and stealth state, plus the squad's home building, shop, purse and AI package.
 The town then holds squads and makes none of its own; the platoon is made of the same characters when the town's zone is
@@ -1082,10 +1081,12 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   `item function` 9; the best is consumed when hardness reaches 0) or break (strength > 3 x hardness). Another character's shackles: a pending
   code 7 against the wearer's slave owner faction (none for a wearer without an owner). The lock is saved on the item (`lock lvl`, `locked`, `broken`, `hardness`). Shackled characters show the portrait Slave overlay.
 - **Spawn prisoners** (`PopulationSystem.MakePrisoners`; facts: [squad factory](game/factions-squads-towns.md#squad-factory)): a housed squad's `prisoners` templates are made
-  as squads of the template's faction (else the owner's) and each member is imprisoned in a random free cage of the home building with the factory's FOREVER sentence
-  (`SpawnSentence`, 9999999 h: never served, so no release round frees it; getting out is Escaping Prison). Engine choice: members beyond the free cages
-  are not made (the original destroys the first one left without a cage and leaves the rest free). Observed: Cat (`Dust King Prisoner`) caged in the Dust King
-  Tower's watchtower; Tengu's Vault and the Tower of Abuse have no cages in their homes, so none are made. A caged prisoner is no aggro target (engine choice).
+  whole at the owner squad's spot as squads of the template's faction (else the owner's), and each member in turn is imprisoned in a random free cage of the home building
+  with the factory's FOREVER sentence (`SpawnSentence`, 9999999 h: never served, so no release round frees it; getting out is Escaping Prison); the first member left
+  without a cage is destroyed (a unique stays claimed: `FUN_1405067e0`, the only erase, is called by the unload and spawn-mode-3 releases alone) and the rest of that
+  squad stay free, as do later entries' squads but their first member. **Observed** (headless probe, base game): all 11 of `Tengu's vault prisoners` caged in the
+  Ancient Citadel's `Prison` layout (49 Prisoner Cages and a Prisoner Pole, 50 cages); Agnu in the Ancient Lab's `Labs5` (8 cages). A caged prisoner is no aggro
+  target (engine choice).
 - **Putting shackles on** (`PutShacklesOrder`, verb "Put on Shackles"; engine stand-in for dragging them onto the target's armour slot, which the held item does not do yet): a
   selected character carrying unworn, unbroken shackles walks to a live NPC that is down or caged and wears none, and within `ShackleReach` puts them on, locked again
   (re-locking is an engine choice); what the target wears in that slot goes into its inventory. No crime is booked. Prisoner Shackles take the boots slot.

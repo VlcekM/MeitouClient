@@ -1018,36 +1018,80 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// A housed squad's <c>prisoners</c> (the squad factory <c>FUN_140583a10</c>, <b>Observed</b>; docs/simulation.md "Cages, beds and locks"): only
     /// with a home building, each entry a squad of its template's <c>faction</c> (else the owner squad's), each member imprisoned in a random free
     /// cage of the home, its lock set, with a sentence of <see cref="SpawnSentence"/> hours (<b>Verified</b>: the factory writes the sentence length,
-    /// Character <c>+0x190</c>, which the served test <c>FUN_1405c9f00</c> reads), so it is never served and getting out is an escape.
-    /// <b>Engine choice</b>: members beyond the free cages are not made (the original destroys the first member left without a cage and leaves the
-    /// rest of that squad free).
+    /// Character <c>+0x190</c>, which the served test <c>FUN_1405c9f00</c> reads), so it is never served and getting out is an escape. Every entry's
+    /// squad is made whole at the owner squad's spot; the first member left without a cage is destroyed and the rest of that squad stay free
+    /// (<b>Verified</b>, <c>FUN_140583a10</c>).
     /// </summary>
     void MakePrisoners(World world, BuiltSquad owner, Squad squad, TownSite site, float radius, SiteState state)
     {
         var links = owner.Plan.Template.Prisoners;
         if (links.Count == 0 || owner.Home is not { } home) return;
-        var table = world.Characters;
-        var cages = world.Fixtures.OfBuilding(home.Key).Where(f => f.Kind == Locks.FixtureKind.Cage && Locks.FixtureRegistry.IsFree(table, f)).ToList();
+
+        var cages = world.Fixtures.OfBuilding(home.Key)
+            .Where(f => f.Kind == Locks.FixtureKind.Cage && Locks.FixtureRegistry.IsFree(world.Characters, f))
+            .ToList();
         ulong homeKey = Rng.StableHash(home.Key);
         int picks = 0;
-        for (int e = 0; e < links.Count && cages.Count > 0; e++)
+        for (int e = 0; e < links.Count; e++)
         {
-            if (_data.Db.Find(links[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
-            var faction = (uint)squad.Faction < (uint)_data.Factions.Count ? _data.Factions[squad.Faction] : null;
-            ulong key = Rng.Mix(SeedSalts.PrisonerSquad ^ homeKey ^ (ulong)e << 48);
-            var at = new Vector2(cages[0].Position.X, cages[0].Position.Z);
-            if (BuildOne(SquadTemplate.From(record), squad.Faction, faction, key, world.Seed, at) is not { } built) continue;
-            if (built.Members.Count > cages.Count) built = built with { Members = built.Members.Take(cages.Count).ToList() };
-            var prisoners = SpawnSquad(world, built with { NearY = cages[0].Position.Y + SpotLift }, site, radius);
-            state.Squads.Add(prisoners.Id);
-            foreach (var id in prisoners.Members)
-            {
-                int pick = Rng.Int(Rng.Hash(world.Seed, homeKey, RngPurpose.Spawn, SeedSalts.PrisonerCage + (ulong)picks++), cages.Count);
-                var cage = cages[pick];
-                cages.RemoveAt(pick);
-                if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
-            }
+            if (BuildPrisoners(world, owner, squad, links[e].Id, homeKey, e) is not { } built) continue;
+            var prisoners = SpawnSquad(world, built, site, radius);
+            CagePrisoners(world, prisoners, cages, homeKey, ref picks);
+
+            if (prisoners.Members.Count > 0) state.Squads.Add(prisoners.Id);
+            else world.Squads.Remove(prisoners.Id);
         }
+    }
+
+    /// <summary>
+    /// One <c>prisoners</c> entry built as a squad of its template's <c>faction</c> (else the owner squad's) at the owner squad's spot, where the
+    /// factory makes it; null for a missing or non-template record or an empty squad.
+    /// </summary>
+    BuiltSquad? BuildPrisoners(World world, BuiltSquad owner, Squad squad, string templateId, ulong homeKey, int entry)
+    {
+        if (_data.Db.Find(templateId) is not { } record || !SquadFactory.IsTemplate(record)) return null;
+
+        var faction = (uint)squad.Faction < (uint)_data.Factions.Count ? _data.Factions[squad.Faction] : null;
+        ulong key = Rng.Mix(SeedSalts.PrisonerSquad ^ homeKey ^ (ulong)entry << 48);
+        var built = BuildOne(SquadTemplate.From(record), squad.Faction, faction, key, world.Seed, owner.Position);
+        return built is null ? null : built with { NearY = owner.NearY };
+    }
+
+    /// <summary>
+    /// Cages a made prisoner squad's members in order, each in a random one of <paramref name="cages"/> (taken from the list); the first member
+    /// reached with none left is destroyed and the rest stay free (<c>FUN_140583a10</c>).
+    /// </summary>
+    void CagePrisoners(World world, Squad prisoners, List<Locks.Fixture> cages, ulong homeKey, ref int picks)
+    {
+        var table = world.Characters;
+        foreach (var id in prisoners.Members.ToList())
+        {
+            if (cages.Count == 0)
+            {
+                DestroyPrisoner(world, prisoners, id);
+                return;
+            }
+
+            int pick = Rng.Int(Rng.Hash(world.Seed, homeKey, RngPurpose.Spawn, SeedSalts.PrisonerCage + (ulong)picks++), cages.Count);
+            var cage = cages[pick];
+            cages.RemoveAt(pick);
+            if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
+        }
+    }
+
+    /// <summary>
+    /// A prisoner the factory had no cage for leaves the world and its squad, which counts it neither made nor lost. A unique stays claimed: no
+    /// destroy erases its entry (<c>FUN_1405067e0</c>'s only callers are the unload and spawn-mode-3 releases).
+    /// </summary>
+    void DestroyPrisoner(World world, Squad prisoners, CharacterId id)
+    {
+        var table = world.Characters;
+        world.Uniques.Left(id);
+        RemoveMember(world, id);
+
+        prisoners.Members.Remove(id);
+        prisoners.SpawnSize = prisoners.Members.Count;
+        if (prisoners.Leader == id) prisoners.Leader = SquadRegistry.Successor(prisoners.Members, table);
     }
 
     /// <summary>
