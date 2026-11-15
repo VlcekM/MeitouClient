@@ -6,6 +6,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
@@ -26,7 +27,7 @@ public abstract record DebugCommand : SimCommand;
 public sealed record DebugMoney(long Delta) : DebugCommand;
 
 /// <summary>
-/// Puts the characters on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.
+/// Puts the characters (the selection when empty) on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.
 /// </summary>
 public sealed record DebugTeleport(IReadOnlyList<CharacterId> Characters, Vector3 Target) : DebugCommand;
 
@@ -47,16 +48,48 @@ public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : Deb
 public sealed record DebugSetStats(IReadOnlyList<CharacterId> Characters, IReadOnlyList<StatsEnumerated> Stats, float Value) : DebugCommand;
 
 /// <summary>
-/// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats
-/// at <see cref="DebugCheats.GodStat"/> (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second;
-/// off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
+/// Recruits the character into the player's faction and active squad (the debug menu's Recruit row): refused when it has no dialogue line that makes
+/// it join (DA 3 / 18) or the active squad is full (<see cref="DialogueSystem.RecruitRefusal"/>).
+/// </summary>
+public sealed record DebugRecruit(CharacterId Character) : DebugCommand;
+
+/// <summary>
+/// Turns the debug "Set stats to 1000" on or off (<see cref="PlayerState.StatsTo1000"/>). While on, every player character (also one recruited later)
+/// has all stats at <see cref="DebugCheats.Stat1000"/> (10 x the game's maximum of 100); off, each gets back exactly the stats it had.
+/// </summary>
+public sealed record DebugStats1000(bool On) : DebugCommand;
+
+/// <summary>
+/// Turns the debug "Auto heal" on or off (<see cref="PlayerState.AutoHeal"/>): while on, every living player character is healed
+/// <see cref="DebugCheats.HealPerSecond"/> times a second.
+/// </summary>
+public sealed record DebugAutoHeal(bool On) : DebugCommand;
+
+/// <summary>
+/// Turns the debug "Move instantly" on or off (<see cref="PlayerState.InstantMove"/>): while on, a player-issued move teleports the selected
+/// characters instead of walking them.
+/// </summary>
+public sealed record DebugInstantMove(bool On) : DebugCommand;
+
+/// <summary>
+/// Turns the debug "One-punch man mode" on or off (<see cref="PlayerState.OnePunch"/>): while on, every hit landed by a player character kills.
+/// </summary>
+public sealed record DebugOnePunch(bool On) : DebugCommand;
+
+/// <summary>
+/// Turns the debug "No stumbling" on or off (<see cref="PlayerState.NoStumble"/>): while on, a hit no longer staggers a player character.
+/// </summary>
+public sealed record DebugNoStumble(bool On) : DebugCommand;
+
+/// <summary>
+/// The console's god mode: "Set stats to 1000" and "Auto heal" together (<see cref="PlayerState.StatsTo1000"/>, <see cref="PlayerState.AutoHeal"/>).
 /// </summary>
 public sealed record DebugGodmode(bool On) : DebugCommand;
 
 /// <summary>
 /// Turns the debug guard on or off (<see cref="PlayerState.Guard"/>): while on, four times a second the hostile characters within
 /// <see cref="Radius"/> metres of the selected (else first) player character are killed as <c>kill --radius</c> kills (<see cref="DebugKillArea"/>;
-/// animals only with <see cref="Animals"/> or while one attacks a player character) and the player characters are healed as god mode heals them.
+/// animals only with <see cref="Animals"/> or while one attacks a player character) and the player characters are healed as "Auto heal" heals them.
 /// </summary>
 public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false) : DebugCommand;
 
@@ -248,9 +281,24 @@ public sealed record DebugUnlockResearch : DebugCommand;
 
 /// <summary>
 /// Spawns a character of record <see cref="Record"/> (of the RACE <see cref="Race"/> when given: control channel `spawn-at --race`) at
-/// <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).
+/// <see cref="At"/>, alone in a squad of <see cref="Faction"/> when it names one ("player": the player's faction; <see cref="HostileFaction"/>: the
+/// first faction hostile to the player's; else a faction id or name), else of the faction its record lists (the first hostile one for a record that
+/// lists none). <see cref="PopulationSystem"/> applies it.
 /// </summary>
-public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null, string? Race = null) : DebugCommand;
+public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null, string? Race = null) : DebugCommand
+{
+    /// <summary>
+    /// The <see cref="Faction"/> that means the first faction hostile to the player's: the debug menu's "Spawn NPC (hostile)" row, whatever faction
+    /// the record lists.
+    /// </summary>
+    public const string HostileFaction = "hostile";
+
+    /// <summary>
+    /// The spawn must aggro: its members get the "Attack enemies" goal (16) even though their synthetic template lists no packages (the debug menu's
+    /// "Spawn NPC (hostile)" row).
+    /// </summary>
+    public bool Aggro { get; init; }
+}
 
 /// <summary>
 /// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass
@@ -330,50 +378,66 @@ public sealed record DebugPutItem(string Container, string Record, int Quantity)
 public sealed record DebugClearBuilding(string Key) : DebugCommand;
 
 /// <summary>
-/// The debug commands' work: god mode, explosions, kills, damage and the level editor's buildings.
+/// The debug commands' work: the stat and heal cheats, explosions, kills, damage and the level editor's buildings.
 /// </summary>
 static class DebugCheats
 {
     /// <summary>
-    /// The value every stat gets in god mode: 10 x the normal maximum of 100.
+    /// The value every stat gets with "Set stats to 1000": 10 x the normal maximum of 100.
     /// </summary>
-    public const float GodStat = 1000;
+    public const float Stat1000 = 1000;
     /// <summary>
-    /// How often god mode heals: this many times a second (the tick is 1/30 s).
+    /// How often "Auto heal" heals: this many times a second (the tick is 1/30 s).
     /// </summary>
-    public const int GodHealPerSecond = 5;
+    public const int HealPerSecond = 5;
     /// <summary>
     /// How often the guard kills and heals: this many times a second.
     /// </summary>
     public const int GuardPerSecond = 4;
+    /// <summary>
+    /// The cut damage a "One-punch man mode" hit deals to the part it lands on: enough to kill through blood loss; a body that does not bleed is
+    /// killed outright after the hit.
+    /// </summary>
+    public const float OnePunchDamage = 10000;
 
     /// <summary>
-    /// The god mode's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; the heal only on its cadence). Raises the stats of each living player
-    /// character that is not yet raised, heals it (<see cref="MedicalState.Heal"/>: parts, blood, wounds and bleeding, knock-out; stumps and crushed
-    /// limbs come back; hunger refilled). A character that is dead, no longer a player character or met while the mode is off gets its own stats
-    /// back, so nothing raised outlives the mode, a death or a squad change; the save writes the kept values
-    /// (<see cref="CharacterStats.WriteSave"/>).
+    /// The "Set stats to 1000" upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick): raises the stats of each living player character that is
+    /// not yet raised. A character that is dead, no longer a player character or met while the cheat is off gets its own stats back, so nothing
+    /// raised outlives the cheat, a death or a squad change; the save writes the kept values (<see cref="CharacterStats.WriteSave"/>).
     /// </summary>
-    public static void GodTick(World world, PopulationData? data, CharacterAssembly? assembly, bool force = false)
+    public static void StatsTick(World world, bool force = false)
     {
         var table = world.Characters;
-        bool on = world.Player.Godmode;
+        bool on = world.Player.StatsTo1000;
         if (!on && !force) return;
-        int cadence = (int)Math.Max(1, MathF.Round(1 / (world.TickSeconds * GodHealPerSecond)));
-        bool heal = on && (force || world.Tick % cadence == 0);
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { Stats: { } stats } cold) continue;
             bool wanted = on && cold.IsPlayer && cold.Medical is { Dead: false };
-            if (!wanted) { stats.Unboost(); continue; }
-            stats.Boost(GodStat);
-            if (!heal || cold.Medical is not { } medical) continue;
+            if (wanted) stats.Boost(Stat1000);
+            else stats.Unboost();
+        }
+    }
+
+    /// <summary>
+    /// The "Auto heal" upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; heals on its cadence): heals each living player character
+    /// (<see cref="MedicalState.Heal"/>: parts, blood, wounds and bleeding, knock-out; stumps and crushed limbs come back; hunger refilled).
+    /// </summary>
+    public static void HealTick(World world, PopulationData? data, CharacterAssembly? assembly, bool force = false)
+    {
+        if (!world.Player.AutoHeal) return;
+        int cadence = (int)Math.Max(1, MathF.Round(1 / (world.TickSeconds * HealPerSecond)));
+        if (!force && world.Tick % cadence != 0) return;
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { IsPlayer: true, Medical: { Dead: false } medical } cold) continue;
             HealPlayer(world, data, assembly, table, s, cold, medical);
         }
     }
 
     /// <summary>
-    /// The god mode's heal of one living player character, also the guard's: parts, limbs, blood, wounds, knock-out, hunger.
+    /// The heal of one living player character, shared by "Auto heal" and the guard: parts, limbs, blood, wounds, knock-out, hunger.
     /// </summary>
     static void HealPlayer(World world, PopulationData? data, CharacterAssembly? assembly, CharacterTable table, int slot, CharacterCold cold,
         MedicalState medical)
@@ -630,18 +694,14 @@ static class DebugCheats
             case DebugHeal heal when data is not null:
                 Heal(world, data, assembly, heal);
                 break;
-            case DebugGodmode god:
-                world.Player.Godmode = god.On;
-                GodTick(world, data, assembly, force: true);   // on: boosted and healed at once; off: every raised character gets its stats back
-                break;
-            case DebugGuard guard:
-                (world.Player.Guard, world.Player.GuardRadius, world.Player.GuardAnimals) = (guard.On, guard.Radius, guard.Animals);
-                break;
             case DebugMaxSkills max:
                 MaxSkills(world, max);
                 break;
             case DebugSetStats set:
                 SetStats(world, set);
+                break;
+            case DebugRecruit recruit when data is not null:
+                Recruit(world, data, recruit);
                 break;
             case DebugDamage damage when data is not null:
                 foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
@@ -679,7 +739,64 @@ static class DebugCheats
             case DebugGiveItem give when data is not null:
                 Give(world, data, assembly, give);
                 break;
+            default:
+                ApplyPlayerSwitch(world, data, assembly, command);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Applies the debug menu's player-wide switches (stats 1000, auto heal, instant move, one punch, no stumbling, godmode, guard); other
+    /// commands are left alone.
+    /// </summary>
+    private static void ApplyPlayerSwitch(World world, PopulationData? data, CharacterAssembly? assembly, DebugCommand command)
+    {
+        switch (command)
+        {
+            case DebugStats1000 stats:
+                world.Player.StatsTo1000 = stats.On;
+                StatsTick(world, force: true);   // on: boosted at once; off: every raised character gets its stats back
+                break;
+            case DebugAutoHeal autoHeal:
+                world.Player.AutoHeal = autoHeal.On;
+                HealTick(world, data, assembly, force: true);   // on: healed at once
+                break;
+            case DebugInstantMove instant:
+                world.Player.InstantMove = instant.On;
+                break;
+            case DebugOnePunch onePunch:
+                world.Player.OnePunch = onePunch.On;
+                break;
+            case DebugNoStumble noStumble:
+                world.Player.NoStumble = noStumble.On;
+                break;
+            case DebugGodmode god:
+                (world.Player.StatsTo1000, world.Player.AutoHeal) = (god.On, god.On);
+                StatsTick(world, force: true);   // on: boosted and healed at once; off: every raised character gets its stats back
+                HealTick(world, data, assembly, force: true);
+                break;
+            case DebugGuard guard:
+                (world.Player.Guard, world.Player.GuardRadius, world.Player.GuardAnimals) = (guard.On, guard.Radius, guard.Animals);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/> allows
+    /// it, and the result reaches the message log.
+    /// </summary>
+    static void Recruit(World world, PopulationData data, DebugRecruit recruit)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(recruit.Character, out int slot)) return;
+        if (DialogueSystem.RecruitRefusal(world, data, recruit.Character) is { } refusal)
+        {
+            world.Post(refusal);
+            return;
+        }
+
+        if (DialogueSystem.JoinPlayer(world, data, slot))
+            world.Post($"{table.Cold(slot)!.Name} joined your squad.");
     }
 
     /// <summary>
@@ -688,8 +805,9 @@ static class DebugCheats
     static void Teleport(World world, DebugTeleport teleport)
     {
         var table = world.Characters;
+        var who = teleport.Characters.Count > 0 ? teleport.Characters : world.Player.Selection.ToArray();
         int k = 0;
-        foreach (var id in teleport.Characters)
+        foreach (var id in who)
         {
             if (!table.TryResolveNext(id, out int slot)) continue;
             float x = teleport.Target.X + 10 * k++, z = teleport.Target.Z;

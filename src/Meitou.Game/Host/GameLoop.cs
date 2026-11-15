@@ -176,9 +176,9 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     Silk.NET.Input.CursorMode _cursorBeforeOrbit = Silk.NET.Input.CursorMode.Normal;
     /// <summary>
-    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler (its release is not the game's).
+    /// A drag on the settings panel is under way, Shift is held, and a click went to the profiler or the debug menu (their releases are not the game's).
     /// </summary>
-    bool _panelDrag, _shiftDown, _profilerClick;
+    bool _panelDrag, _shiftDown, _profilerClick, _debugMenuClick;
     /// <summary>
     /// The highlight key (Alt) is held, as of the last control tick.
     /// </summary>
@@ -822,9 +822,16 @@ sealed class GameLoop(GameHost host)
     // ---- keyboard ----
 
     /// <summary>
-    /// Whether a text field takes the keys (the settings panel, the debug menu, the dev console, an edited UI field).
+    /// Whether a text field takes the keys (the settings panel, the debug menu's field, the dev console, an edited UI field).
     /// </summary>
-    bool TextFieldFocused() => _panel?.Visible == true || host.DebugMenu.DebugMenuOpen || host.DevConsoleHost.ConsoleOpen || host.Player.UiEditing;
+    bool TextFieldFocused() => _panel?.Visible == true || host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText
+        || host.DevConsoleHost.ConsoleOpen || host.Player.UiEditing;
+
+    /// <summary>
+    /// Whether a held key repeats: a text field's erase and caret keys, or the debug menu's arrows (its list scrolls with them).
+    /// </summary>
+    bool Repeats(SilkKey k) => k is SilkKey.Backspace or SilkKey.Delete or SilkKey.Left or SilkKey.Right or SilkKey.Up or SilkKey.Down
+        && (TextFieldFocused() || host.DebugMenu.DebugMenuOpen);
 
     /// <summary>
     /// Repeats a held erase or caret key in a text field (<see cref="_heldEditKey"/>): when its time has come, again 30 times a second; a release or
@@ -833,7 +840,7 @@ sealed class GameLoop(GameHost host)
     void RepeatEditKey()
     {
         if (_heldEditKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
-        if (!held.Keyboard.IsKeyPressed(held.Key) || !TextFieldFocused())
+        if (!held.Keyboard.IsKeyPressed(held.Key) || !Repeats(held.Key))
         {
             _heldEditKey = null;
             return;
@@ -849,9 +856,7 @@ sealed class GameLoop(GameHost host)
     {
         kb.KeyDown += (keyboard, k, _) =>
         {
-            _heldEditKey = k is SilkKey.Backspace or SilkKey.Delete or SilkKey.Left or SilkKey.Right or SilkKey.Up or SilkKey.Down
-                && TextFieldFocused()
-                ? (keyboard, k, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
+            _heldEditKey = Repeats(k) ? (keyboard, k, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
             OnKeyDown(keyboard, k);
         };
         kb.KeyUp += (_, k, _) =>
@@ -881,7 +886,7 @@ sealed class GameLoop(GameHost host)
         if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DevConsole.Type(value);
         else if (_panel?.Visible == true) _panel.TextInput(value);
         else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
-        else if (host.DebugMenu.DebugMenuOpen) host.DebugMenu.DebugMenuText(value);
+        else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
         else if (_photo.TextInput(value)) { }   // a preset's name being typed
         else host.Player.UiText(value);
     }
@@ -952,9 +957,12 @@ sealed class GameLoop(GameHost host)
             host.DebugMenu.DebugParts = null;
             return true;
         }
+        // The debug menu takes every key while its selection takes typed text, else only the navigation and activation keys; the rest are the game's.
         if (host.DebugMenu.DebugMenuOpen)
         {
-            if (ModalKeyOf(k) is { } menuKey) host.DebugMenu.DebugMenuKey(menuKey);
+            if (ModalKeyOf(k) is not { } menuKey) return false;
+            if (!host.DebugMenu.DebugMenuTakesText && !DebugMenu.DebugMenuTakesKey(menuKey)) return false;
+            host.DebugMenu.DebugMenuKey(menuKey);
             return true;
         }
         // The pick & collision inspector's menu (opened from F10's Tools row, DebugMenu): while open it takes every key, like F10's (before the game
@@ -1160,8 +1168,14 @@ sealed class GameLoop(GameHost host)
                 return;
             }
 
-            if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
+            // The debug menu takes the wheel over its panel while it is open; elsewhere the wheel zooms the camera as usual.
+            if (PanelLive() && _overlay is not null && host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuContains(at))
+            {
+                host.DebugMenu.Scroll(wheel.Y);
+                return;
+            }
+            if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
                 host.Session.Input.AddWheel(wheel.Y);
         };
@@ -1186,6 +1200,13 @@ sealed class GameLoop(GameHost host)
             return;
         }
         if (PanelLive() && _panel?.Contains(at) == true) return;
+        // The debug menu takes the left clicks on its panel while it is open; a click elsewhere is the interface's and the world's.
+        if (select && PanelLive() && _overlay is not null && host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuContains(at))
+        {
+            host.DebugMenu.DebugMenuClick(at);
+            _debugMenuClick = true;
+            return;
+        }
         if (select && PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true) return;
         if (select && PanelLive() && host.Sandbox.SandboxToggleClick(at)) return;
         // F12's legend opens and closes rows
@@ -1249,9 +1270,10 @@ sealed class GameLoop(GameHost host)
         }
 
         bool cinemaDrag = _cinema.MouseUp();
-        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
+        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && !_debugMenuClick && _panel?.Visible != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
         _profilerClick = false;
+        _debugMenuClick = false;
         _panel?.MouseUp();
         _panelDrag = false;
         if (physical is { } button) host.Session.Input.SetMouseButton(button, false);
@@ -1829,9 +1851,6 @@ sealed class GameLoop(GameHost host)
             panelsBottom = overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", _stats, panelsBottom, laidOut: host.DebugOverlays.StatsLaidOut);
             host.DebugOverlays.FindStatsToggles(overlay.CharWidth);
         }
-        if (host.DebugMenu.DebugMenuOpen)
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
-                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
         if (host.Player.WorldMap.MapPick is not null && host.Player.WorldMap.MapTabShown) host.DebugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.ExplodeClickOn) host.DebugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.InspectorMenuOpen) host.DebugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
@@ -1839,6 +1858,10 @@ sealed class GameLoop(GameHost host)
         if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DrawConsole(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.Draw(overlay, size.X, size.Y);
         host.DebugMenu.Profiler?.DrawVram(overlay, size.X, size.Y);
+        // The debug menu is drawn last, over every other debug panel (the console, the profiler, the editors and the hints).
+        if (host.DebugMenu.DebugMenuOpen)
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
+                atRight: host.DebugMenu.StatsVisible, scale: DebugTextScale());
     }
 
     /// <summary>

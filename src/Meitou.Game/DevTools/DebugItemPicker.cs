@@ -240,6 +240,11 @@ sealed class DebugItemPicker(GameHost host)
     }
 
     /// <summary>
+    /// The mouse wheel: moves the highlight by <paramref name="lines"/> rows (stopping at the ends), so the list scrolls with it.
+    /// </summary>
+    internal void Scroll(int lines) => MoveCursor(lines, wrap: false);
+
+    /// <summary>
     /// Enter: into the highlighted category, item or quality; on a quality, or an item without one, the item drops.
     /// </summary>
     void Choose()
@@ -347,6 +352,7 @@ sealed class DebugItemPicker(GameHost host)
         _dropCount = drop == _lastDrop ? _dropCount + 1 : 1;
         _lastDrop = drop;
         Status = $"dropped {_dropCount} x {label} at {target.X:0}, {target.Z:0}";
+        host.DebugMenu.ApplyWhilePaused();
     }
 
     #endregion
@@ -452,19 +458,35 @@ sealed class DebugItemPicker(GameHost host)
     #region Drawing
 
     /// <summary>
+    /// The list's lines as last drawn, with their rectangles; a click hit-tests them.
+    /// </summary>
+    readonly List<(int Index, Vector4 Rect)> _drawnLines = [];
+
+    /// <summary>
+    /// The "back" button's rectangle as last drawn (a click on it steps back, as Esc does); null before the first draw.
+    /// </summary>
+    Vector4? _backButton;
+
+    /// <summary>
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the sub-view's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
     /// Draws the sub-view in the debug menu's place: the heading, the search text, the list in a window of at most <see cref="MaxRows"/> lines that
     /// scrolls with the highlight (and a scroll bar when the list is longer), the keys and the last drop. All sizes are multiplied by
     /// <paramref name="scale"/> (the framebuffer's pixels per point).
     /// </summary>
-    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight)
+    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight,
+        DebugOverlay.OverlayPass? pass = null)
     {
         float charWidth = o.CharWidth * scale, lineHeight = o.LineHeight * scale, pad = 10 * scale, y0 = top + 16 * scale;
         string title = $"Drop item   ({close} closes)";
         string search = _step == Step.Quality ? $"Quality of {_chosen?.Name}" : $"Search: {_search}_";
         string hint = _step == Step.Quality
-            ? "Up/Down pick   Enter drop at the camera target   Esc back"
-            : "Up/Down pick   Left/Right page   type to search all items   Enter choose / drop   Esc back";
-        int room = Math.Clamp((int)((height * MaxPanelHeight - y0 - 2 * pad) / lineHeight) - 6, 5, MaxRows);
+            ? "Up/Down or click pick   Enter drop at the camera target   Esc back"
+            : "Up/Down or click pick   Left/Right page   type to search all items   Enter choose / drop   Esc back";
+        int room = Math.Clamp((int)((height * MaxPanelHeight - y0 - 2 * pad) / lineHeight) - 7, 5, MaxRows);
         int first = ScrollTo(room), count = Math.Min(room, _lines.Count - first);
         string crumb = $"{Breadcrumb()}   ({(_lines.Count > room ? $"{first + 1}-{first + count} of " : "")}{_lines.Count})";
 
@@ -472,9 +494,10 @@ sealed class DebugItemPicker(GameHost host)
         for (int i = first; i < first + count; i++) chars = Math.Max(chars, _lines[i].Text.Length + 2);
         chars = Math.Max(chars, Math.Max(search.Length, Status.Length));
 
-        float bar = 8 * scale, w = chars * charWidth + 2 * pad + bar, h = (count + (Status.Length > 0 ? 7 : 6)) * lineHeight + 2 * pad;
+        float bar = 8 * scale, w = chars * charWidth + 2 * pad + bar, h = (count + (Status.Length > 0 ? 8 : 7)) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
 
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float y = y0 + pad;
@@ -484,12 +507,15 @@ sealed class DebugItemPicker(GameHost host)
         y += lineHeight;
         o.TextScaled(search, x0 + pad, y, DebugOverlay.TextColour, scale);
         y += 1.5f * lineHeight;
+        _drawnLines.Clear();
         DrawLines(o, x0, y, w - bar, first, count, scale);
         DrawScrollBar(o, x0 + w - pad / 2 - 4 * scale, y, count * lineHeight, first, count, scale);
         y += (count + 0.5f) * lineHeight;
+        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale);
+        y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, dim, scale);
         if (Status.Length > 0) o.TextScaled(Status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
@@ -505,6 +531,31 @@ sealed class DebugItemPicker(GameHost host)
     }
 
     /// <summary>
+    /// Whether <paramref name="at"/> lies on the panel as last drawn.
+    /// </summary>
+    internal bool Contains(Vector2 at) => _panelRect is { } rect && DebugMenu.Inside(rect, at);
+
+    /// <summary>
+    /// A left click on the sub-view: the "back" button steps back as Esc does; a line is picked and chosen as Enter does; a click elsewhere does nothing.
+    /// </summary>
+    internal void Click(Vector2 at)
+    {
+        if (_backButton is { } back && at.X >= back.X && at.X <= back.Z && at.Y >= back.Y && at.Y <= back.W)
+        {
+            StepBack();
+            return;
+        }
+
+        foreach (var (index, rect) in _drawnLines)
+        {
+            if (at.X < rect.X || at.X > rect.Z || at.Y < rect.Y || at.Y > rect.W) continue;
+            _cursor[(int)_step] = index;
+            Choose();
+            return;
+        }
+    }
+
+    /// <summary>
     /// The <paramref name="count"/> lines from <paramref name="first"/>, the highlighted one marked.
     /// </summary>
     void DrawLines(DebugOverlay o, float x0, float y, float w, int first, int count, float scale)
@@ -514,6 +565,7 @@ sealed class DebugItemPicker(GameHost host)
         {
             bool current = i == _cursor[(int)_step];
             if (current) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            _drawnLines.Add((i, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
             o.TextScaled((current ? "> " : "  ") + _lines[i].Text, x0 + pad, y, DebugOverlay.TextColour, scale);
         }
     }

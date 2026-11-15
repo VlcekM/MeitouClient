@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
@@ -2664,6 +2665,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly Dictionary<(AiPackage, AiRole), IReadOnlyList<AiGoal>> _combatGoals = [];
 
     /// <summary>
+    /// The "Attack enemies" goal (16) for a debug spawn that must aggro (<see cref="Squad.DebugAggro"/>), made on first use; null when the data has
+    /// none.
+    /// </summary>
+    AiGoal? _attackEnemiesGoal;
+
+    /// <summary>
     /// The BuildingFunction bits the finder of a new home looks through: 0x13, BF_ANY, MINE and REFINERY (the house function's number 19 passed as a
     /// bit mask, as the worker finder's 0x41a is read, <b>Observed</b>); a building with no functionality counts as BF_ANY.
     /// </summary>
@@ -2772,7 +2779,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
 
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
+            if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
         }
+    }
+
+    /// <summary>
+    /// The "Attack enemies" goal (16) of the AI_TASK records, for a debug spawn that must aggro; null when the data has none.
+    /// </summary>
+    AiGoal? AttackEnemiesGoal()
+    {
+        if (_attackEnemiesGoal is { } known) return known;
+        var task = data.Db.OfType(FcsRecordType.AiTask).Select(AiTask.From).FirstOrDefault(t => t.Type == TaskType.AttackEnemies);
+        return _attackEnemiesGoal = task is null ? null : new AiGoal(task, 0, 100, 1f);
     }
 
     /// <summary>

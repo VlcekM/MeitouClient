@@ -115,6 +115,11 @@ public sealed class Squad
     /// </summary>
     public int SpawnSize { get; set; }
     /// <summary>
+    /// A debug spawn that must aggro (the F10 menu's "Spawn NPC (hostile)"): its members get the "Attack enemies" goal (16) even though their
+    /// synthetic template lists no packages. Not saved or hashed.
+    /// </summary>
+    public bool DebugAggro { get; set; }
+    /// <summary>
     /// The members.
     /// </summary>
     public List<CharacterId> Members { get; } = [];

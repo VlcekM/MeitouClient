@@ -33,11 +33,12 @@ public sealed partial class PopulationSystem
     /// <paramref name="variant"/> above 0 is a bystander with a look of its own: of the faction <paramref name="player"/> picks, in a squad of its
     /// own that is not the player's. <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes
     /// two NPCs of one faction. <paramref name="race"/> (a RACE id) forces the look's race (the control channel's <c>spawn-at --race</c>).
+    /// <paramref name="aggro"/> marks the squad as a debug spawn that must aggro (<see cref="Squad.DebugAggro"/>).
     /// Before the first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug
     /// menu call it.
     /// </summary>
     public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null,
-        string? race = null)
+        string? race = null, bool aggro = false)
     {
         int chosen = SandboxFaction(player, faction);
 
@@ -50,6 +51,7 @@ public sealed partial class PopulationSystem
         var built = new BuiltSquad(plan, at, chosen, [new BuiltMember(member, look)]);
         bool playerSquad = player && variant == 0 && faction is null;
         var squad = SpawnSquad(world, built, null, 100, playerSquad, idle: true, yaw: yaw);
+        squad.DebugAggro = aggro;
         var id = squad.Leader;
         if (playerSquad)
         {
@@ -64,7 +66,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A <see cref="DebugSpawn"/>: in <see cref="DebugSpawn.Faction"/> when it names one ("player": the player's faction, so the character can be
-    /// selected and ordered; else a faction id or name), else in the faction its record lists (the first hostile one for a record that lists none).
+    /// selected and ordered; <see cref="DebugSpawn.HostileFaction">hostile</see>: the first faction hostile to the player's, whatever the record
+    /// lists; else a faction id or name), else in the faction its record lists (the first hostile one for a record that lists none).
     /// </summary>
     void SpawnDebug(World world, DebugSpawn spawn)
     {
@@ -73,14 +76,22 @@ public sealed partial class PopulationSystem
         {
             if (name.Equals("player", StringComparison.OrdinalIgnoreCase))
             {
-                SpawnSandbox(world, spawn.Record, spawn.At, player: true, variant: variant, race: spawn.Race);
+                SpawnSandbox(world, spawn.Record, spawn.At, player: true, variant: variant, race: spawn.Race, aggro: spawn.Aggro);
+                return;
+            }
+
+            if (name.Equals(DebugSpawn.HostileFaction, StringComparison.OrdinalIgnoreCase))
+            {
+                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: SandboxFaction(false, null),
+                    race: spawn.Race, aggro: spawn.Aggro);
                 return;
             }
 
             int named = FactionNamed(name);
             if (named >= 0)
             {
-                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: named, race: spawn.Race);
+                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: named, race: spawn.Race,
+                    aggro: spawn.Aggro);
                 return;
             }
         }
@@ -89,7 +100,8 @@ public sealed partial class PopulationSystem
             ?.GetReferences("faction")
             .Select(f => _data.FactionIndex(f.TargetStringId))
             .FirstOrDefault(i => i >= 0) ?? -1;
-        SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null, race: spawn.Race);
+        SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null, race: spawn.Race,
+            aggro: spawn.Aggro);
     }
 
     /// <summary>

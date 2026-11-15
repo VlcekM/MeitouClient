@@ -10,9 +10,9 @@ public readonly record struct StatModifier(string Key, StatsEnumerated Stat, flo
 
 /// <summary>
 /// A character's stat modifiers (Meitou, for code mods; docs/modding.md "Stat modifiers"): keyed amounts added to the stored stats on every read of
-/// <see cref="CharacterStats"/>, before every multiplier. Training, saving and god mode keep the stored values, so a modifier is never trained or
-/// saved; it is state (hashed) but not persisted, so the mod sets it again after a load. Medic, HiveMedic and Vet share one storage, as their values
-/// do. Change it outside the parallel phases (docs/simulation.md "Threading"): other characters' work reads the stats.
+/// <see cref="CharacterStats"/>, before every multiplier. Training, saving and the debug stat boost keep the stored values, so a modifier is never
+/// trained or saved; it is state (hashed) but not persisted, so the mod sets it again after a load. Medic, HiveMedic and Vet share one storage, as
+/// their values do. Change it outside the parallel phases (docs/simulation.md "Threading"): other characters' work reads the stats.
 /// </summary>
 public sealed class StatModifiers
 {

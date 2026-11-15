@@ -164,9 +164,29 @@ sealed class DebugCharacterEditor(GameHost host)
     string _status = "";
 
     /// <summary>
-    /// The sub-view is shown (the debug menu gives it every key).
+    /// The list's lines as last drawn, with their rectangles; a click hit-tests them.
+    /// </summary>
+    readonly List<(int Index, Vector4 Rect)> _drawnLines = [];
+
+    /// <summary>
+    /// The "back" button's rectangle as last drawn (a click on it steps back, as Esc does); null before the first draw.
+    /// </summary>
+    Vector4? _backButton;
+
+    /// <summary>
+    /// The panel's rectangle as last drawn (x0, y0, x1, y1); a click outside it is not the sub-view's.
+    /// </summary>
+    Vector4? _panelRect;
+
+    /// <summary>
+    /// The sub-view is shown (the debug menu gives it the keys).
     /// </summary>
     internal bool Open { get; private set; }
+
+    /// <summary>
+    /// Whether the sub-view takes typed text: a category's stat values (the root list only picks, so the rest of the keys are the game's).
+    /// </summary>
+    internal bool TakesText => _step == Step.Category;
 
     /// <summary>
     /// Makes the root list: the quick actions, Appearance, then every category.
@@ -235,6 +255,39 @@ sealed class DebugCharacterEditor(GameHost host)
     }
 
     /// <summary>
+    /// Whether <paramref name="at"/> lies on the panel as last drawn.
+    /// </summary>
+    internal bool Contains(Vector2 at) => _panelRect is { } rect && DebugMenu.Inside(rect, at);
+
+    /// <summary>
+    /// A left click on the sub-view: the "back" button steps back as Esc does; a root line is picked and chosen as Enter does; a category row is only
+    /// picked (Enter sets it).
+    /// </summary>
+    internal void Click(Vector2 at)
+    {
+        if (_backButton is { } back && at.X >= back.X && at.X <= back.Z && at.Y >= back.Y && at.Y <= back.W)
+        {
+            StepBack();
+            return;
+        }
+
+        foreach (var (index, rect) in _drawnLines)
+        {
+            if (at.X < rect.X || at.X > rect.Z || at.Y < rect.Y || at.Y > rect.W) continue;
+            if (_step == Step.Root)
+            {
+                if (RootLines[index].Title) return;
+                _rootCursor = index;
+                Choose();
+                return;
+            }
+
+            _categoryCursor = index;
+            return;
+        }
+    }
+
+    /// <summary>
     /// A typed character: the highlighted stat's value, replacing the pre-filled one on the first keystroke.
     /// </summary>
     internal void Type(char c)
@@ -272,7 +325,7 @@ sealed class DebugCharacterEditor(GameHost host)
     {
         if (_step == Step.Root)
         {
-            MoveRoot(delta);
+            MoveRoot(delta, wrap);
             return;
         }
 
@@ -284,20 +337,30 @@ sealed class DebugCharacterEditor(GameHost host)
     }
 
     /// <summary>
-    /// Moves the root's highlight by <paramref name="delta"/> lines, skipping the separators.
+    /// The mouse wheel: moves the highlight by <paramref name="lines"/> rows (stopping at the ends), so the list scrolls with it.
     /// </summary>
-    void MoveRoot(int delta)
+    internal void Scroll(int lines) => Move(lines, wrap: false);
+
+    /// <summary>
+    /// Moves the root's highlight by <paramref name="delta"/> rows, skipping the separators; round the ends or stopping at them.
+    /// </summary>
+    void MoveRoot(int delta, bool wrap = true)
     {
-        int at = _rootCursor;
-        for (int n = 0; n < RootLines.Length; n++)
+        int n = RootLines.Length, step = Math.Sign(delta), left = Math.Abs(delta), at = _rootCursor;
+        while (left > 0)
         {
-            at = (at + delta + RootLines.Length) % RootLines.Length;
-            if (!RootLines[at].Title)
+            int next = at + step;
+            if (next < 0 || next >= n)
             {
-                _rootCursor = at;
-                return;
+                if (!wrap) break;
+                next = (next + n) % n;
             }
+
+            at = next;
+            if (!RootLines[at].Title) left--;
         }
+
+        _rootCursor = at;
     }
 
     /// <summary>
@@ -391,6 +454,7 @@ sealed class DebugCharacterEditor(GameHost host)
         _fields[_categoryCursor] = Format(value);
         _edited[_categoryCursor] = false;
         _status = $"{StatsWindow.StatLabel(stat)} {Format(value)} for {NameOf(targets[0])}";
+        host.DebugMenu.ApplyWhilePaused();
     }
 
     /// <summary>
@@ -406,6 +470,7 @@ sealed class DebugCharacterEditor(GameHost host)
 
         host.Session.World.Commands.Enqueue(new DebugSetStats(targets, stats, 100) { Tick = host.Session.World.Tick });
         _status = $"{what} 100 for {NameOf(targets[0])}";
+        host.DebugMenu.ApplyWhilePaused();
     }
 
     /// <summary>
@@ -473,39 +538,44 @@ sealed class DebugCharacterEditor(GameHost host)
     /// highlight (and a scroll bar when the list is longer), the keys and the last action. All sizes are multiplied by <paramref name="scale"/> (the
     /// framebuffer's pixels per point).
     /// </summary>
-    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight)
+    internal void Draw(DebugOverlay o, int width, int height, float top, float scale, string close, bool atRight,
+        DebugOverlay.OverlayPass? pass = null)
     {
         float lineHeight = o.LineHeight * scale;
         float pad = 10 * scale;
         float y0 = top + 16 * scale;
         string title = $"Edit character   ({close} closes)";
         string hint = _step == Step.Root
-            ? "Up/Down pick   Enter choose   Esc back"
-            : "Up/Down pick   type a value   Enter set   Esc back";
+            ? "Up/Down or click pick   Enter choose   Esc back"
+            : "Up/Down or click pick   type a value   Enter set   Esc back";
 
         var lines = DisplayLines();
-        int room = Math.Clamp((int)((height * MaxPanelHeight - y0 - 2 * pad) / lineHeight) - 7, 5, MaxRows);
+        int room = Math.Clamp((int)((height * MaxPanelHeight - y0 - 2 * pad) / lineHeight) - 8, 5, MaxRows);
         int first = ScrollTo(room, lines.Count);
         int count = Math.Min(room, lines.Count - first);
         string crumbLine = CrumbLine(first, count, room, lines.Count);
 
         float bar = 8 * scale;
         float w = PanelChars(title, hint, crumbLine, lines, first, count) * o.CharWidth * scale + 2 * pad + bar;
-        float h = (count + (_status.Length > 0 ? 7 : 6)) * lineHeight + 2 * pad;
+        float h = (count + (_status.Length > 0 ? 8 : 7)) * lineHeight + 2 * pad;
         float x0 = atRight ? Math.Max(8 * scale, width - w - 16 * scale) : 16 * scale;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        _panelRect = new Vector4(x0, y0, x0 + w, y0 + h);
 
         float y = y0 + pad;
         o.TextScaled(title, x0 + pad, y, DebugOverlay.TextColour, scale);
         y += 1.5f * lineHeight;
         o.TextScaled(crumbLine, x0 + pad, y, Dim, scale);
         y += 1.5f * lineHeight;
+        _drawnLines.Clear();
         DrawLines(o, x0, y, w - bar, first, count, lines, scale);
         DrawScrollBar(o, x0 + w - pad / 2 - 4 * scale, y, count * lineHeight, first, count, lines.Count, scale);
         y += (count + 0.5f) * lineHeight;
+        _backButton = DebugMenu.DrawBackButton(o, x0 + pad, y, scale);
+        y += lineHeight;
         o.TextScaled(hint, x0 + pad, y, Dim, scale);
         if (_status.Length > 0) o.TextScaled(_status, x0 + pad, y + lineHeight, new Vector4(1f, 0.9f, 0.4f, 1), scale);
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
@@ -575,6 +645,7 @@ sealed class DebugCharacterEditor(GameHost host)
             bool current = i == cursor;
             if (current) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             var (text, title) = lines[i];
+            _drawnLines.Add((i, new Vector4(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight)));
             o.TextScaled((current ? "> " : "  ") + text, x0 + pad, y, title ? Dim : DebugOverlay.TextColour, scale);
         }
     }

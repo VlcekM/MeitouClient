@@ -85,7 +85,7 @@ c help                                # one usage line per command; `c help <nam
 | `find-item` | `find-item <text> [--type armour\|weapon\|item\|crossbow\|container] [--limit n] [--stats]` |
 | `firstaid` | `firstaid <id>` |
 | `follow` | `follow <id> [--guard]` |
-| `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the highlighted row and its value) |
+| `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the category, the highlighted row and its value) |
 | `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
 | `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id or name>] [--model <id or name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |
@@ -134,7 +134,7 @@ c help                                # one usage line per command; `c help <nam
 | `screenshot` | `screenshot <png path>` |
 | `select` | `select <id...> \| select --squad \| select --none  [--add]` |
 | `spawn` | `spawn "<character record>"` |
-| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|id\|name>] [--race <race name\|id>]` (`--race` draws it as that RACE, e.g. a stub race with no meshes; faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; an id or a name forces that faction) |
+| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|hostile\|id\|name>] [--race <race name\|id>]` (`--race` draws it as that RACE, e.g. a stub race with no meshes; faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; `hostile` the first faction hostile to the player's whatever the record lists; an id or a name forces that faction) |
 | `speed` | `speed <0\|1\|2\|5>` |
 | `stance` | `stance block\|hold\|passive\|ranged\|taunt\|sneak\|jobs [on\|off]` |
 | `state` | `state` |

@@ -55,10 +55,34 @@ public sealed class PlayerState
     #region Debug cheats
 
     /// <summary>
-    /// The debug god mode is on (<see cref="DebugGodmode"/>). Not saved and not hashed: a loaded game starts with it off and the saved (original)
-    /// stats.
+    /// The debug "Set stats to 1000" is on: every living player character has all stats at 1000. Not saved and not hashed: a loaded game starts with
+    /// it off and the saved (original) stats.
     /// </summary>
-    public bool Godmode { get; set; }
+    public bool StatsTo1000 { get; set; }
+
+    /// <summary>
+    /// The debug "Auto heal" is on: every living player character is healed five times a second. Not saved and not hashed: a loaded game starts with
+    /// it off.
+    /// </summary>
+    public bool AutoHeal { get; set; }
+
+    /// <summary>
+    /// The debug "Move instantly" is on: a player-issued move (a right click on the ground or the map) teleports the selected characters instead of
+    /// walking them. Not saved and not hashed: a loaded game starts with it off.
+    /// </summary>
+    public bool InstantMove { get; set; }
+
+    /// <summary>
+    /// The debug "One-punch man mode" is on: every hit landed by a player character kills. Not saved and not hashed: a loaded game starts with it
+    /// off.
+    /// </summary>
+    public bool OnePunch { get; set; }
+
+    /// <summary>
+    /// The debug "No stumbling" is on: a hit no longer staggers a player character (its swing, reaction and task go on). Not saved and not hashed: a
+    /// loaded game starts with it off.
+    /// </summary>
+    public bool NoStumble { get; set; }
 
     /// <summary>
     /// The debug guard is on (<see cref="DebugGuard"/>): kills hostiles within <see cref="GuardRadius"/> of the lead and heals the player's

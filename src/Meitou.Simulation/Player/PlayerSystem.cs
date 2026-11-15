@@ -366,7 +366,8 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     /// </summary>
     public void SlowWorld(World world)
     {
-        DebugCheats.GodTick(world, data, _assembly);
+        DebugCheats.StatsTick(world);
+        DebugCheats.HealTick(world, data, _assembly);
         DebugCheats.GuardTick(world, data, _assembly);
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);

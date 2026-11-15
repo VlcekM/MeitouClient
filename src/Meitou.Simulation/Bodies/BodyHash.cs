@@ -8,7 +8,8 @@ namespace Meitou.Simulation.Bodies;
 static class BodyHash
 {
     /// <summary>
-    /// Adds the stats (and, while god mode boosts them, the values kept aside) and the medical state to <paramref name="h"/>; a missing one adds -1.
+    /// Adds the stats (and, while the debug stat boost raises them, the values kept aside) and the medical state to <paramref name="h"/>; a
+    /// missing one adds -1.
     /// </summary>
     public static void Add(ref StateHasher h, CharacterStats? stats, MedicalState? medical)
     {
@@ -17,9 +18,9 @@ static class BodyHash
         {
             foreach (float v in stats.ToArray()) h.Add(v);
 
-            // Debug god mode keeps the real values aside; they come back on Unboost, so they are state. Only while boosted, so normal hashes are
-            // unchanged.
-            if (stats.GodOriginal is { } original)
+            // The debug stat boost keeps the real values aside; they come back on Unboost, so they are state. Only while boosted, so normal hashes
+            // are unchanged.
+            if (stats.BoostOriginal is { } original)
             {
                 h.Add(0x476F6444);
                 foreach (float v in original) h.Add(v);
