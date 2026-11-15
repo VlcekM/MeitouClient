@@ -1458,6 +1458,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     public static float PathAcceleration(CharacterCold cold) => (cold.Race?.PathfindAcceleration ?? 24) * 10;
 
     /// <summary>
+    /// The fastest a walker <paramref name="dist"/> from its last point may go this tick and still stop on it at <paramref name="acceleration"/>:
+    /// sqrt(2 a d) for the distance left after the tick's step (v = -a dt + sqrt((a dt)^2 + 2 a d)), never more than the distance in one tick.
+    /// The original's agent, stepped every frame, follows sqrt(2 a d) to a stop (<b>Observed</b>, docs/game/pathfinding.md); taken at the tick's
+    /// start, the 30 Hz step lagged it and the walker reached its goal at a jog and stopped dead (#742).
+    /// </summary>
+    static float StopSpeed(float dist, float acceleration, float dt)
+    {
+        float step = acceleration * dt;
+        return -step + MathF.Sqrt(step * step + 2 * acceleration * dist);
+    }
+
+    /// <summary>
     /// The water state of a character (<see cref="Speed.WaterState"/>, a race's own characters only, not a carried body): the original reads the
     /// height it stands at, which in water is the seabed, while here a character on the water keeps the navmesh's flat water surface for its height,
     /// so the depth is taken from what it stands on below (<see cref="IWalkability.WaterBed"/>: a floor just under it, else the terrain) while it is
@@ -1677,8 +1689,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             s.Desired = PathSpeed(world, i, p, n, cold, s.Water);
 
             // Braking into the last point, never past it.
-            if (last)
-                s.Desired = MathF.Min(s.Desired, MathF.Min(MathF.Sqrt(2 * PathAcceleration(cold) * dist), dist / s.Dt));
+            if (last) s.Desired = MathF.Min(s.Desired, StopSpeed(dist, PathAcceleration(cold), s.Dt));
             else if (!cold.InCombat)
             {
                 var past = PastCorner(p, cold.Path[n.PathCursor + 1]);
