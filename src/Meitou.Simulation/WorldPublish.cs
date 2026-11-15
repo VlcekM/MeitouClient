@@ -336,6 +336,7 @@ public sealed partial class World
                     Charges = e.item.Charges,
                     MaxCharges = e.item.MaxCharges,
                     Unique = e.item.Unique,
+                    ModTag = e.item.ModTag,
                     StealChance = steal
                 })
                 .ToArray()));
@@ -833,6 +834,7 @@ public sealed partial class World
             Charge = shown.Item.ChargeFraction,
             Company = shown.Item.CompanyId,
             Crafter = shown.Item.Crafter,
+            ModTag = shown.Item.ModTag,
             Level = shown.Item.Level,
             Charges = shown.Item.Charges,
             MaxCharges = shown.Item.MaxCharges,

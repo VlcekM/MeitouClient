@@ -323,6 +323,10 @@ public sealed class PlatoonRegistry
     /// </summary>
     public int NextId() => _nextId++;
     /// <summary>
+    /// The id <see cref="NextId"/> gives next, not taken.
+    /// </summary>
+    public int PeekId => _nextId;
+    /// <summary>
     /// Takes the next id of a save's never-made town squad (see <see cref="_nextReserved"/>).
     /// </summary>
     public int NextReservedId() => _nextReserved--;

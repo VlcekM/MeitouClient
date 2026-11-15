@@ -1310,12 +1310,13 @@ public sealed partial class PopulationSystem
         if (_data.Db.Find(templateId) is not { Type: FcsRecordType.SquadTemplate } record) return -1;
 
         var template = SquadTemplate.From(record);
-        int id = world.Platoons.NextId();
+        int id = world.Platoons.PeekId;   // taken only once the spawn succeeds, so a refusal leaves the world as it was
         ulong key = Rng.Mix(SeedSalts.ModPlatoon ^ (ulong)id << 8 ^ (ulong)faction << 40);
         var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
         if (plan.TotalMembers == 0 || ModSpot(world, key, around, minRadius, maxRadius) is not { } spot) return -1;
 
         var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        world.Platoons.NextId();
         world.Platoons.Add(new Platoon
         {
             Id = id,
