@@ -229,11 +229,47 @@ public sealed partial class ProductionSystem
     {
         _npcSupply.Clear();
         _npcDraws.Clear();
-        foreach (var town in _grids.Where(g => g.Key < 0 && g.Value.Count > 0).Select(g => g.Key))
+        foreach (var town in _grids.Where(g => g.Value.Count > 0).Select(g => g.Key))
         {
+            if (town > 0)
+            {
+                if (TownlessDraws(world, town) is { Count: > 0 } townless) _npcDraws[town] = townless;
+                continue;
+            }
+
             _npcSupply[town] = NpcOutput(world, -town - 1);
             _npcDraws[town] = NpcDraws(world, -town - 1);
         }
+    }
+
+    /// <summary>
+    /// The draws of the town-less level buildings whose nearest town is grid <paramref name="grid"/> (<see cref="TownlessGrid"/>).
+    /// </summary>
+    List<float> TownlessDraws(World world, int grid)
+    {
+        var draws = new List<float>();
+        foreach (var b in world.SystemOf<PopulationSystem>()?.Data.Townless ?? [])
+        {
+            if (b.Destroyed || TownlessGrid(world, b) != grid) continue;
+
+            if (Draw(world, b.RecordId, outdoors: true) is { } draw) draws.Add(draw);
+        }
+
+        return draws;
+    }
+
+    /// <summary>
+    /// The grid of a level building no town takes: its handle is dropped on import, so its power town is the nearest non-nest town however far
+    /// (<c>FUN_1409f9180</c>, <see cref="TownLookup.NearestKey"/>), a player town's included; resolved again when the player towns move.
+    /// </summary>
+    int TownlessGrid(World world, TownlessBuilding b)
+    {
+        string id = TownlessMark + b.Key;
+        if (_powerTowns.TryGetValue(id, out var known) && known.Layout == _townLayout) return known.Town;
+
+        int found = TownLookup.NearestKey(world, b.Position);
+        _powerTowns[id] = (found, _townLayout);
+        return found;
     }
 
     /// <summary>
@@ -258,6 +294,7 @@ public sealed partial class ProductionSystem
                 if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(drawn);
         }
 
+        draws.AddRange(TownlessDraws(world, -(index + 1)));
         return draws;
     }
 
@@ -273,36 +310,65 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// The mark before a town-less building's key among <see cref="_powerTowns"/>, apart from the sites' ids.
+    /// </summary>
+    const string TownlessMark = "townless:";
+
+    /// <summary>
     /// The power of the level building <paramref name="key"/> when it draws power (<see cref="NpcDraws"/>, a light only outside daytime): its draw and
-    /// what its town's frame grants it, the town's generators (<see cref="NpcOutput"/>) shared out over the town's draws and the player's machines
-    /// of that frame this tick as <see cref="ShareOut"/> does, in ascending demand. Null for any other instance; read only.
+    /// what its frame grants it, the frame's supply shared out over its town draws and the player's machines of that frame this tick as
+    /// <see cref="ShareOut"/> does, in ascending demand: an NPC town's generators (<see cref="NpcOutput"/>), or for a town-less building nearest to a
+    /// player town that town's generators of the last tick (batteries left out). Null for any other instance; read only.
     /// </summary>
     public LevelPowerView? LevelPowerOf(World world, string? key)
     {
         if (key is null || LevelObject(world, key) is not { } found) return null;
 
-        var (index, record, outdoors) = found;
+        var (grid, record, outdoors) = found;
         if (Draw(world, record, outdoors) is not { } demand) return null;
         if (demand <= 0) return new LevelPowerView(key, 0, 0);
+        if (grid == NoPowerTown) return new LevelPowerView(key, demand, 0);
 
-        var machines = _grids.GetValueOrDefault(-index - 1)?.Where(m => m.Data.IsConsumer).Select(m => m.Demand) ?? [];
-        float granted = GrantOf(demand, NpcOutput(world, index), NpcDraws(world, index), [.. machines]);
+        var machines = _grids.GetValueOrDefault(grid) ?? [];
+        var consumers = machines.Where(m => m.Data.IsConsumer).Select(m => m.Demand).ToList();
+        float granted = grid < 0
+            ? GrantOf(demand, NpcOutput(world, -grid - 1), NpcDraws(world, -grid - 1), consumers)
+            : GrantOf(demand, machines.Where(m => m.Data.IsGenerator).Sum(m => m.Demand), TownlessDraws(world, grid), consumers);
         return new LevelPowerView(key, demand, granted);
     }
 
     /// <summary>
-    /// The standing level building or layout object of <paramref name="key"/> (a layout object's key is its house's, "/" and more,
-    /// <see cref="TownLayoutBuilding.Id"/>) with its town's index, its record and whether it stands outdoors; null for any other.
+    /// The standing level object of <paramref name="key"/> with its grid (a level town's <c>-(index + 1)</c>, a town-less building's
+    /// <see cref="TownlessGrid"/>), its record and whether it stands outdoors; null for any other. It is a level building, a town-less one, an
+    /// object of a house's layout (<see cref="TownLayoutBuilding.Id"/>: the house's key and "/") or a house's bed or seat spot (the house's key and
+    /// "@", <see cref="LevelSpot"/>).
     /// </summary>
-    (int Town, string Record, bool Outdoors)? LevelObject(World world, string key)
+    (int Grid, string Record, bool Outdoors)? LevelObject(World world, string key)
     {
         if (LevelBuilding(world, key) is { } found)
-            return found.Building.Destroyed ? null : (found.Town, found.Building.BuildingId, true);
+            return found.Building.Destroyed ? null : (-(found.Town + 1), found.Building.BuildingId, true);
 
-        if (key.IndexOf('/') is not (> 0 and var end) || LevelBuilding(world, key[..end]) is not { Building.Destroyed: false } house) return null;
+        if (world.SystemOf<PopulationSystem>()?.Data.Townless.FirstOrDefault(b => b.Key == key) is { Destroyed: false } townless)
+            return (TownlessGrid(world, townless), townless.RecordId, true);
+
+        if (key.IndexOfAny(['/', '@']) is not (> 0 and var end)) return null;
+        if (LevelBuilding(world, key[..end]) is not { Building.Destroyed: false } house) return null;
+
+        int grid = -(house.Town + 1);
+        if (key[end] == '@') return LevelSpot(world, key, house.Building) is { } spot ? (grid, spot.Record, spot.Outdoors) : null;
 
         var item = house.Building.LayoutBuildings.FirstOrDefault(i => i.Id == key);
-        return item is null ? null : (house.Town, item.RecordId, item.Outdoors);
+        return item is null ? null : (grid, item.RecordId, item.Outdoors);
+    }
+
+    /// <summary>
+    /// The record of a house's bed or seat spot <paramref name="key"/> and whether it stands outdoors: a spot of the house's interior layout is
+    /// indoors, the building's own when it stands alone (a bed or throne with no interior) outdoors; null for no such spot.
+    /// </summary>
+    static (string Record, bool Outdoors)? LevelSpot(World world, string key, TownBuilding house)
+    {
+        string? record = world.Fixtures.Find(key)?.RecordId is { Length: > 0 } bed ? bed : world.Fixtures.FindSeat(key)?.Record;
+        return record is null ? null : (record, !house.HasInterior);
     }
 
     /// <summary>

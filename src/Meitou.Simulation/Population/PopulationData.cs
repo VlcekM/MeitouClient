@@ -478,6 +478,11 @@ public sealed class PopulationData
     public Construction.LevelBuildingIds? LevelBuildingIds { get; set; }
 
     /// <summary>
+    /// The level buildings that draw power and that no town takes (<see cref="TownBuildings.Townless"/>); empty without level data.
+    /// </summary>
+    public IReadOnlyList<TownlessBuilding> Townless { get; set; } = [];
+
+    /// <summary>
     /// The town buildings' rooms and lamps for the sight tests (<see cref="SightMap"/>); null: everyone outdoors and unlit.
     /// </summary>
     public ISightSource? Sight { get; set; }

@@ -356,6 +356,12 @@ public sealed record TownDisposal(string Id, string RecordId, Vector3 Position);
 public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoors);
 
 /// <summary>
+/// A level building no town takes that draws power (<see cref="TownBuildings.Townless"/>): its <see cref="BuildingPlacement.Key"/>, BUILDING, position
+/// and whether the level data has it destroyed.
+/// </summary>
+public sealed record TownlessBuilding(string Key, string RecordId, Vector3 Position, bool Destroyed);
+
+/// <summary>
 /// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the
 /// game's import decides (<see cref="TownBuildingBuilder.MemberOf"/>, docs/formats/zones.md "Town membership"). Buildings the level data marks
 /// destroyed are kept (the game rebuilds a non-player building on import: <c>FUN_140552b70</c> keeps <c>destroyed</c> only for the player's; the
@@ -436,6 +442,20 @@ public static class TownBuildings
             if (!result.TryGetValue(town, out var list)) result[town] = list = [];
             list.Add(building);
         }
+        return result;
+    }
+
+    /// <summary>
+    /// The level buildings that draw power and that no town takes (docs/formats/zones.md "Town membership"), in placement order: each draws on the
+    /// power frame of the nearest town (docs/game/buildings-production.md "Power").
+    /// </summary>
+    public static List<TownlessBuilding> Townless(GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight)
+    {
+        var builder = new TownBuildingBuilder(db, levels, null, terrainHeight, contents: false);
+        var result = new List<TownlessBuilding>();
+        foreach (var b in levels.Buildings())
+            if (builder.Townless(b) is { } townless) result.Add(townless);
+
         return result;
     }
 

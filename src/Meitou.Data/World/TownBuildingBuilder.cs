@@ -101,6 +101,20 @@ public sealed class TownBuildingBuilder
     static bool IsBuildingHandle(GameRecord state) => state.GetInt("handleTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("handleI");
 
     /// <summary>
+    /// A level building that draws power (<c>power output</c> below 0) and that no town takes (<see cref="MemberOf"/>); null for any other.
+    /// </summary>
+    public TownlessBuilding? Townless(BuildingPlacement b)
+    {
+        if (_db.Find(b.BuildingId) is not { } found || found.GetInt("power output") >= 0) return null;
+        if (BuildingPlacements.Resolve(b, _db, _levels, _terrainHeight) is not { } resolved) return null;
+
+        var record = resolved.Record;
+        if (record.GetBool("is node") || record.GetBool("is foliage") || MemberOf(_towns, resolved.Position, record) is not null) return null;
+
+        return new TownlessBuilding(b.Key, record.StringId, resolved.Position, resolved.Destroyed);
+    }
+
+    /// <summary>
     /// The turret post of a building whose functionality is BF_TURRET; null otherwise.
     /// </summary>
     TurretPost? TurretOf(BuildingPlacement b, ResolvedBuilding resolved, GameRecord? functionality, GameRecord? state)
