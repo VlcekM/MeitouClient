@@ -1208,7 +1208,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (item.Contents is not null)
         {
-            // An empty bag moves itself (a copy would have no contents inventory); its receipt is replaced (none: this undid a sale).
+            // An empty bag moves itself with its contents inventory; its receipt is replaced (none: this undid a sale).
             int moved = TransferContainer(stock, buy.Item, into, buy.Section, buy.X, buy.Y, buy.Equip, cold);
             if (moved > 0) item.Buyback = receipt;
             if (moved > 0 && InventoryCommands.IsEquipmentSection(item.Section)) _assembly.RefreshEquipment(cold);
