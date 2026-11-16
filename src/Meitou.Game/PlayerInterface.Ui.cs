@@ -237,6 +237,17 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// The tick buttons the interface extensions add to the squad AI tab (<see cref="UiHost.SquadAiOptions"/>), given the snapshot the tab is laid
+    /// out from; none without such an extension.
+    /// </summary>
+    internal IReadOnlyList<UiSquadAiOption> ModSquadAiOptions(WorldSnapshot snapshot)
+    {
+        if (!_uiHost.HasSquadAiOptions) return [];
+
+        return _uiHost.SquadAiOptions(new UiSquadAiContext(snapshot, () => Session.World.Tick, Say));
+    }
+
+    /// <summary>
     /// Future code-mod loader entry point; disposal removes the extension's owned registrations.
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);

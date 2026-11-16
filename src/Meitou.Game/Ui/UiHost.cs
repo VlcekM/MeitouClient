@@ -8,6 +8,34 @@ namespace Meitou.Game.Ui;
 public sealed record UiDiagnostic(string Extension, string Operation, Exception Error);
 
 /// <summary>
+/// A tick button an extension adds to the squad overview's AI tab (<see cref="UiRegistration.AddSquadAiOptions"/>): its caption, its tooltip,
+/// whether it shows ticked, and what pressing it does (on the host's thread).
+/// </summary>
+public sealed record UiSquadAiOption(string Caption, string Tooltip, bool Ticked, Action Press);
+
+/// <summary>
+/// What an extension's AI tab options get: the snapshot the tab is laid out from and, read when asked, the tick; and the command queue, through which
+/// a press changes the world.
+/// </summary>
+public sealed class UiSquadAiContext(Simulation.WorldSnapshot snapshot, Func<long> tick, Action<Simulation.SimCommand> enqueue)
+{
+    /// <summary>
+    /// The snapshot the tab is laid out from (the one on screen).
+    /// </summary>
+    public Simulation.WorldSnapshot Snapshot { get; } = snapshot;
+
+    /// <summary>
+    /// The world's tick now, for a command's <see cref="Simulation.SimCommand.Tick"/>.
+    /// </summary>
+    public long Tick => tick();
+
+    /// <summary>
+    /// Queues a command for the world.
+    /// </summary>
+    public void Enqueue(Simulation.SimCommand command) => enqueue(command);
+}
+
+/// <summary>
 /// What an action handler gets: the frame's data and the control's argument.
 /// </summary>
 public sealed record UiActionContext(UiFrameContext Frame, string Argument);
@@ -157,6 +185,11 @@ public sealed class UiHost
     readonly List<(string Owner, string Target, Func<UiFrameContext, UiNode> Factory)> _controlOverrides = [];
 
     /// <summary>
+    /// The squad AI tab option sources, with their owners, in registration order.
+    /// </summary>
+    readonly List<(string Owner, Func<UiSquadAiContext, IEnumerable<UiSquadAiOption>> Options)> _squadAiOptions = [];
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -263,6 +296,12 @@ public sealed class UiHost
     }
 
     /// <summary>
+    /// Adds a squad AI tab option source for <paramref name="owner"/>.
+    /// </summary>
+    internal void AddSquadAiOptions(string owner, Func<UiSquadAiContext, IEnumerable<UiSquadAiOption>> options) =>
+        _squadAiOptions.Add((owner, options));
+
+    /// <summary>
     /// Adds a contribution to <paramref name="slot"/> for <paramref name="owner"/>.
     /// </summary>
     internal void Contribute(string owner, string slot, UiMode? mode, int order, Func<UiFrameContext, UiNode> factory) =>
@@ -278,6 +317,7 @@ public sealed class UiHost
     /// </summary>
     internal void Remove(string owner)
     {
+        _squadAiOptions.RemoveAll(o => o.Owner == owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -364,6 +404,57 @@ public sealed class UiHost
         var factory = useOverrides ? _controlOverrides.LastOrDefault(o => o.Target == id).Factory ?? entry.Factory : entry.Factory;
         return factory(context);
     }
+
+    /// <summary>
+    /// Whether any extension adds squad AI tab options (<see cref="SquadAiOptions"/>).
+    /// </summary>
+    public bool HasSquadAiOptions => _squadAiOptions.Count > 0;
+
+    /// <summary>
+    /// The tick buttons the extensions add to the squad AI tab, in registration order (a copy of the sources is walked, so a source may register or
+    /// dispose). A source that throws, or names an option without a caption or press, is reported once as a <see cref="Diagnostic"/> and dropped
+    /// (it is asked on every layout pass while the tab is open). An option's press that throws is reported each time.
+    /// </summary>
+    public IReadOnlyList<UiSquadAiOption> SquadAiOptions(UiSquadAiContext context)
+    {
+        var options = new List<UiSquadAiOption>();
+        foreach (var entry in _squadAiOptions.ToArray())
+        {
+            try
+            {
+                var added = entry.Options(context).ToList();
+                if (added.Any(o => o is null || string.IsNullOrWhiteSpace(o.Caption) || o.Press is null))
+                    throw new InvalidOperationException("A squad AI option needs a caption and a press.");
+
+                options.AddRange(added.Select(o => o with { Tooltip = o.Tooltip ?? "", Press = GuardedPress(entry.Owner, o) }));
+            }
+            catch (Exception e)
+            {
+                _squadAiOptions.Remove(entry);
+                Diagnostic?.Invoke(new UiDiagnostic(entry.Owner, "squad AI options (dropped)", e));
+            }
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// An option's press that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
+    /// extension is removed.
+    /// </summary>
+    Action GuardedPress(string owner, UiSquadAiOption option) => () =>
+    {
+        if (!_extensions.Contains(owner)) return;
+
+        try
+        {
+            option.Press();
+        }
+        catch (Exception e)
+        {
+            Diagnostic?.Invoke(new UiDiagnostic(owner, $"squad AI option {option.Caption}", e));
+        }
+    };
 
     #endregion
 
@@ -600,6 +691,18 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(factory);
         _host.OverrideControl(Id, target, factory);
+    }
+
+    /// <summary>
+    /// Adds tick buttons to the squad overview's AI tab, after the game's own (docs/modding.md "Registration surface"): <paramref name="options"/>
+    /// runs on the host's thread every frame the tab is open, so it must be cheap, and while a tick may be in flight, so it must not touch the world;
+    /// a pressed option changes the world through commands (<see cref="UiSquadAiContext.Enqueue"/>).
+    /// </summary>
+    public void AddSquadAiOptions(Func<UiSquadAiContext, IEnumerable<UiSquadAiOption>> options)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(options);
+        _host.AddSquadAiOptions(Id, options);
     }
 
     /// <summary>
