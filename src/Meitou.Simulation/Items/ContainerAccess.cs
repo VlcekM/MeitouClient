@@ -114,7 +114,8 @@ public static class ContainerAccess
         TaskStart.Start(world, slot, walk ? request : request with { Task = CharacterTask.Idle });
 
         // In reach the window opens at once, so also while paused (the order applies between ticks), as the original's loot task start opens it.
-        if (!walk && world.Player.OpeningContainer is { } wanted && world.Player.ContainerWalker == world.Characters.IdOf(slot))
+        var player = world.Player;
+        if (!walk && player.OpeningContainer is { } wanted && wanted == order.Site && player.ContainerWalker == world.Characters.IdOf(slot))
             Open(world, slot, wanted);
     }
 
