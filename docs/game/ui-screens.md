@@ -925,10 +925,36 @@ Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a sec
 Inventory opening geometry (**Verified**, `FUN_1406e4960`; constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5): independent character
 windows start at the integer margin `0.05 × min(screen width, screen height)`, after other inventory windows on that row. A full row advances by
 twice the margin, trying up to five rows. A linked target starts immediately at its partner's right edge and top; each character's bag precedes
-that character, with no six-pixel gap. Meitou no longer centres or deliberately overlaps the loot row. A dragged main window retains its top when
-linked loot opens. Pinned characters use the same independent placement search. A selected machine's standalone left-centred position remains
-**Observed**, from the screenshots below; the order-opened container goes right of the looter and returns to standalone placement when the
-inventory closes. Meitou retains fractional coordinates.
+that character, with no six-pixel gap; nothing keeps the row on the screen, so a row wider than it runs off the right edge. Pinned characters use
+the same independent placement search. A selected building's own window (`FUN_1406e6640`) puts its bottom-left corner on a point the HUD
+stores when it is built (`FUN_14072d3b0`): the collapsed information panel's `ExtendingPanel` left edge, and its top less 1 % of the screen
+height (`DAT_141682ad8` = 0.01), so it sits just above the panel and scales with the HUD. **Observed** with the harness (1.0.65): the collapsed
+`ExtendingPanel` is 333 x 363 with its top at 717 at 1920 x 1080, 277 x 302 with its top at 598 at 1600 x 900, its left at 0 in both, so the
+point is (0, 706) and (0, 589).
+Meitou retains fractional coordinates.
+
+The inventory windows' manager (`DAT_1421337b0`, **Verified**, decompile) keeps one main window (the first living character of the player's
+opened), one target (a container, building, body, trader or a second own character) and the selected building's own window. Closing the main
+window closes the target and closing the target closes the main one (`FUN_1406e53d0`), whatever closes it: the inventory key (`FUN_140724980` →
+`FUN_1406e6f10` closes the lead's open window), a window's close button, or the target going away. An order that opens a looter with a target
+(`FUN_1407918a0`: loot, container, storage, trade) first closes every inventory window (`FUN_1406e5740`), then opens the looter at the margin
+(bag first) and the target at its right edge (`FUN_1406e4960`). Selecting a building opens its own window (`FUN_1406e6640`) beside a target
+already shown, and a selection change closes only that own window (`FUN_140729c80` → `FUN_1406e67f0`), so a storage opened by order stays
+open. Opening the own window sets only its own position; nothing else moves. Every inventory window is entered in the manager's link table
+when made (`FUN_1406e5260` → `FUN_14070f2a0`; an order then sets the pair's trade and take/put flags), and a right click on an item moves it
+to the first other window in that table, that window's bag first (`FUN_140714a20` → `FUN_14070dcd0`, the move `FUN_140713d20`). The table
+is a tree keyed by the window's address, so with three windows of different owners open the partner is not fixed. Meitou (`WorldMap`): an
+item of the inventory goes to the shown (target) window, one of a machine window to the inventory. Esc (`FUN_140917120`): with an inventory window, the prospecting window, the options panel or the overview shown, one press closes every
+inventory window (`FUN_1406e5740`) and hides the options, prospecting and in-game New Game panels (with its advanced options), and no game menu
+opens. **Observed** with the harness (1.0.65, 1920 x 1080, 2026-11-17): Esc with only the overview open closes it and opens no menu; Esc with
+the inventory and the overview, or the inventory and the stats window, closes both in one press, and the next Esc opens the game menu; Esc
+with only the stats window open closes it and opens no menu; the inventory opened with [I] has its top-left corner at (54, 54), the margin.
+A search order on a barrel (Stoat, `Barkeeper-test-1`) opened, top-left corners: the looter's bag (54, 54) 240 x 296, the looter (294, 54)
+498 x 618, the barrel's STORAGE (792, 54) 190 x 227, edge to edge. [I] then closed all three; [I] again opened only the bag and the looter, at
+the same places. Meitou (`InventoryLayout.PlaceWindowRow`, `ProductionWindows`
+(`OwnMachine`, the `-own` machine screens), `TradeWindows`, `PlayerInterface.EscapeCloseAll`, #834): the same for loot, containers, storages
+and trade, the order closing the pinned windows; a storage of the player's still selected goes back to its own window when the inventory
+closes, as observed below; Esc closes the inventory, prospecting, overview, stats, New Game and settings windows together.
 
 Opening (**Observed**, owner's screenshots of the original, 2026-10-24): selecting a machine, bench or storage shows its window alone, with no inventory.
 A right click that sends a character to a storage opens the character's inventory with the storage window beside it; once the inventory closes, the

@@ -32,6 +32,33 @@ sealed class ProductionWindows(PlayerInterface player)
     internal string? ShownMachine, ClosedMachine;
 
     /// <summary>
+    /// The selected building's own window while the shown window is an order's target (<see cref="OwnSuffix"/> screens; null: none), and one whose
+    /// window the player closed (not reopened until the selection changes).
+    /// </summary>
+    internal string? OwnMachine;
+
+    /// <summary>
+    /// A selected building whose own window the player closed beside a target, and the building selected when the target opened (the order closed
+    /// its window; only a selection change opens one again).
+    /// </summary>
+    string? _ownClosed, _targetSelection;
+
+    /// <summary>
+    /// The selected building's name when the shown window opened: its caption once the selection moves on.
+    /// </summary>
+    string? _shownName;
+
+    /// <summary>
+    /// The suffix of the second set of machine screens, the selected building's own window shown beside an order's target.
+    /// </summary>
+    internal const string OwnSuffix = "-own";
+
+    /// <summary>
+    /// Every machine screen: the shown window's three kinds and the selected building's own window's.
+    /// </summary>
+    internal static readonly string[] MachineScreens = ["building", "bench", "storage", "building-own", "bench-own", "storage-own"];
+
+    /// <summary>
     /// Whether the shown building window is currently placed beside its looter's inventory.
     /// </summary>
     bool _machineLinked;
@@ -67,7 +94,24 @@ sealed class ProductionWindows(PlayerInterface player)
         : "bench";
 
     /// <summary>
-    /// Opens the selected machine's window and closes it when the selection moves on.
+    /// Whether <paramref name="screen"/> is a machine window (<see cref="MachineScreens"/>).
+    /// </summary>
+    internal static bool IsMachineScreen(string screen) => MachineScreens.Contains(screen);
+
+    /// <summary>
+    /// The kind of a machine screen (building, bench or storage), the selected building's own window's as the shown one's; any other screen as is.
+    /// </summary>
+    internal static string MachineKind(string screen) =>
+        screen.EndsWith(OwnSuffix, StringComparison.Ordinal) && IsMachineScreen(screen) ? screen[..^OwnSuffix.Length] : screen;
+
+    /// <summary>
+    /// The site a machine screen shows: the selected building's own window's (<see cref="OwnMachine"/>), else the shown one's.
+    /// </summary>
+    internal string? SiteOf(string screen) => screen.EndsWith(OwnSuffix, StringComparison.Ordinal) ? OwnMachine : ShownMachine;
+
+    /// <summary>
+    /// Opens the selected machine's window and closes it when the selection moves on; beside an order's target, the selected building's own
+    /// window opens as a second machine window.
     /// </summary>
     internal void SyncMachineScreens()
     {
@@ -76,29 +120,28 @@ sealed class ProductionWindows(PlayerInterface player)
         var focus = player.BuildingSelection.BuildingFocus();
 
         // A rock's natural site is no registry building: its machine, once mined, is enough.
-        var m = SiteMachine(focus?.SiteId);
-        if (m is not null && m.Inputs.Count == 0 && m.Output is null && m.Storage is null && m.Craft is null) m = null;
+        var selected = SiteMachine(focus?.SiteId);
+        if (selected is { Inputs.Count: 0, Output: null, Storage: null, Craft: null }) selected = null;
 
-        // An open container takes the window.
-        m = player.Session.CurrentSnapshot.Machines.FirstOrDefault(c => c.IsContainer) ?? m;
+        SyncShownMachine(selected);
+        SyncOwnMachine(selected);
+    }
+
+    /// <summary>
+    /// The shown window: an order's target (an open container, a storage opened by order) or else the selected machine's own window.
+    /// </summary>
+    void SyncShownMachine(MachineSnapshot? selected)
+    {
+        // An open container takes the window; a storage opened by order is the inventory's target, not the selection's window, so a selection
+        // change leaves it open (FUN_140729c80 closes only the selected building's own window, Verified).
+        var m = player.Session.CurrentSnapshot.Machines.FirstOrDefault(c => c.IsContainer) ?? OrderedStorage() ?? selected;
         if (ClosedMachine is not null && ClosedMachine != m?.Site) ClosedMachine = null;
 
-        if (ShownMachine is not null && (m is null || m.Site != ShownMachine))
-        {
-            player.FaithfulScreens.Close("building");
-            player.FaithfulScreens.Close("bench");
-            player.FaithfulScreens.Close("storage");
-            ShownMachine = null;
-            player.Build.StorageWithInventory = null;
-        }
+        if (ShownMachine is not null && (m is null || m.Site != ShownMachine)) HideShownMachine();
 
         if (ShownMachine is not null && Machine(ShownMachine) is { } shown && !player.FaithfulScreens.IsOpen(MachineScreen(shown)))
         {
-            if (shown.IsContainer) player.Say(new CloseContainer { Tick = player.Session.World.Tick });
-
-            ClosedMachine = ShownMachine;
-            ShownMachine = null;
-            player.Build.StorageWithInventory = null;
+            ShownMachineClosed(shown);
             return;
         }
 
@@ -108,39 +151,190 @@ sealed class ProductionWindows(PlayerInterface player)
         bool linked = !alone && player.FaithfulScreens.IsOpen("inventory");
         if (ShownMachine == m.Site)
         {
-            if (_machineLinked != linked) PositionMachine(MachineScreen(m), m.Site, linked);
+            // The looter's window closing closes the container or storage opened with it (FUN_1406e53d0, Verified); a storage of the player's
+            // still selected goes back to its own window, as its selection shows it again (Observed, docs/game/ui-screens.md).
+            if (_machineLinked && !linked && (m.IsContainer || m.Site != selected?.Site))
+            {
+                player.FaithfulScreens.Close(MachineScreen(m));
+                ShownMachineClosed(m);
+            }
+            else if (_machineLinked != linked) PositionMachine(MachineScreen(m), m.Site, linked);
+
             return;
         }
 
+        if (alone && OwnMachine == m.Site)
+            PromoteOwnMachine(m);
+        else
+            OpenMachine(m, alone);
+    }
+
+    /// <summary>
+    /// The target gone, the selected building's own window stays where it is and becomes the shown one (the original's own window is not touched
+    /// when the target closes, <c>FUN_1406e53d0</c>).
+    /// </summary>
+    void PromoteOwnMachine(MachineSnapshot m)
+    {
+        string from = OwnScreen(m), to = MachineScreen(m);
+        var offset = player.FaithfulScreens.GetOffset(from);
+        CloseOwnMachine();
+        player.InterfaceSounds.SoundScreens.Remove(from);
+
+        (ShownMachine, _shownName, _targetSelection) = (m.Site, player.BuildingSelection.Selected?.Name, m.Site);
+        (_placedMachine, _machineLinked, _standaloneMachineOffset) = (m.Site, false, null);
+        player.FaithfulScreens.Open(to);
+        player.FaithfulScreens.SetOffset(to, offset);
+        player.InterfaceSounds.SoundScreens.Add(to);
+    }
+
+    /// <summary>
+    /// The player's storage shown beside the looter's inventory after a storage order, whatever is selected now; null for none.
+    /// </summary>
+    MachineSnapshot? OrderedStorage() =>
+        _machineLinked && ShownMachine is not null && player.Build.StorageWithInventory == ShownMachine ? Machine(ShownMachine) : null;
+
+    /// <summary>
+    /// Whether the shown window is an order's target (an open container, or a window linked beside the looter's inventory).
+    /// </summary>
+    bool ShownIsTarget() => Machine(ShownMachine) is { } m && (m.IsContainer || _machineLinked);
+
+    /// <summary>
+    /// The selected building's own window beside an order's target (<c>DAT_1421337b0</c> keeps it apart from the target, <b>Verified</b>:
+    /// selecting a building opens it, <c>FUN_1406e6640</c>; a selection change closes only it, <c>FUN_140729c80</c>): opened when the selection
+    /// changes to another machine while the target is shown, closed with the selection or the target; a window the player closed stays closed
+    /// until the selection changes.
+    /// </summary>
+    void SyncOwnMachine(MachineSnapshot? selected)
+    {
+        if (OwnMachine is not null && Machine(OwnMachine) is { } own && !player.FaithfulScreens.IsOpen(OwnScreen(own)))
+            (_ownClosed, OwnMachine) = (OwnMachine, null);
+
+        if (_ownClosed is not null && _ownClosed != selected?.Site) _ownClosed = null;
+        if (_targetSelection is not null && _targetSelection != selected?.Site) _targetSelection = null;
+
+        // The target gone, the selected building's own window waits to become the shown one (PromoteOwnMachine).
+        if (ShownMachine is null && OwnMachine is not null && OwnMachine == selected?.Site) return;
+
+        bool wanted = ShownIsTarget() && selected is not null && selected.Site != ShownMachine && selected.Site != _targetSelection
+            && selected.Site != _ownClosed;
+        var want = wanted ? selected : null;
+        if (OwnMachine is not null && OwnMachine != want?.Site) CloseOwnMachine();
+        if (want is null || OwnMachine == want.Site) return;
+
+        OwnMachine = want.Site;
+        string screen = OwnScreen(want);
+        player.ScrollBars.InventoryScroll.Remove(screen);
+        player.FaithfulScreens.Open(screen);
+        player.InventoryLayout.PlaceMachineWindow(screen);
+    }
+
+    /// <summary>
+    /// The screen of the selected building's own window for machine <paramref name="m"/>.
+    /// </summary>
+    static string OwnScreen(MachineSnapshot m) => ScreenFor(m, own: true);
+
+    /// <summary>
+    /// The screen machine <paramref name="m"/> shows in: the shown window's, or with <paramref name="own"/> the selected building's own window's.
+    /// </summary>
+    internal static string ScreenFor(MachineSnapshot m, bool own) => MachineScreen(m) + (own ? OwnSuffix : "");
+
+    /// <summary>
+    /// Closes the selected building's own window.
+    /// </summary>
+    void CloseOwnMachine()
+    {
+        foreach (string screen in MachineScreens.Where(s => s.EndsWith(OwnSuffix, StringComparison.Ordinal))) player.FaithfulScreens.Close(screen);
+
+        OwnMachine = null;
+    }
+
+    /// <summary>
+    /// Closes the shown window once its machine is no longer selected or its container no longer open; a container's window linked beside the
+    /// looter's inventory takes the inventory with it (<c>FUN_1406e53d0</c>, <b>Verified</b>: closing the target window closes the main one).
+    /// </summary>
+    void HideShownMachine()
+    {
+        // A linked window that is not the player's storage opened by order is a container.
+        bool container = _machineLinked && player.Build.StorageWithInventory != ShownMachine;
+        player.FaithfulScreens.Close("building");
+        player.FaithfulScreens.Close("bench");
+        player.FaithfulScreens.Close("storage");
+        if (container) player.InventoryWindows.CloseInventory();
+
+        ShownMachine = null;
+        player.Build.StorageWithInventory = null;
+    }
+
+    /// <summary>
+    /// The shown window was closed: a container closes in the world, and a window linked beside the looter's inventory closes the inventory too
+    /// (<c>FUN_1406e53d0</c>, <b>Verified</b>: closing the target window closes the main one). It stays closed until the selection changes.
+    /// </summary>
+    void ShownMachineClosed(MachineSnapshot shown)
+    {
+        if (shown.IsContainer) player.Say(new CloseContainer { Tick = player.Session.World.Tick });
+        if (_machineLinked) player.InventoryWindows.CloseInventory();
+
+        ClosedMachine = ShownMachine;
+        ShownMachine = null;
+        player.Build.StorageWithInventory = null;
+    }
+
+    /// <summary>
+    /// Shows machine <paramref name="m"/>'s window: alone, or with the character's inventory beside it, laid out as an order opens the pair.
+    /// </summary>
+    void OpenMachine(MachineSnapshot m, bool alone)
+    {
         ShownMachine = m.Site;
+        _shownName = player.BuildingSelection.Selected?.Name;
+        _targetSelection = player.BuildingSelection.BuildingFocus()?.SiteId;
         string screen = MachineScreen(m);
         player.ScrollBars.InventoryScroll.Remove(screen);
 
         // The character's inventory opens with an order-driven container window (the original's order 26 opens the looter's own window and the
         // target's together) and with a machine's; selecting a selected machine, storage, bench or mined rock shows its window alone (the original's
-        // windows of a selected ore storage and electrical workbench have no inventory beside them).
-        if (!alone && player.Selected().Count > 0 && !player.FaithfulScreens.IsOpen("inventory"))
-            player.FaithfulScreens.Open("inventory");
+        // windows of a selected ore storage and electrical workbench have no inventory beside them). The order first closes every other
+        // inventory window (FUN_1407918a0 calls the close-all FUN_1406e5740, Verified): the pinned ones here.
+        if (!alone && player.Selected().Count > 0)
+        {
+            player.InventoryWindows.ClosePinnedInventories();
+            if (!player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
+        }
 
         player.FaithfulScreens.Open(screen);
-        PositionMachine(screen, m.Site, !alone && player.FaithfulScreens.IsOpen("inventory"));
+        PositionMachine(screen, m.Site, !alone && player.FaithfulScreens.IsOpen("inventory"), opening: true);
     }
 
     /// <summary>
-    /// Links a building beside the looter or restores its prior standalone position when the character inventory closes.
+    /// Links a building beside the looter (from the opening margin when <paramref name="opening"/>) or restores its prior standalone position when
+    /// the character inventory closes.
     /// </summary>
-    void PositionMachine(string screen, string site, bool linked)
+    void PositionMachine(string screen, string site, bool linked, bool opening = false)
     {
         if (_placedMachine != site) _standaloneMachineOffset = null;
         else if (linked && !_machineLinked) _standaloneMachineOffset = player.FaithfulScreens.GetOffset(screen);
 
-        if (!linked && _machineLinked && _standaloneMachineOffset is { } offset)
-            player.FaithfulScreens.SetOffset(screen, offset);
-        else
-            player.InventoryLayout.PlaceMachineWindow(screen, linked);
-
+        // The link is recorded first: a linked window is placed in the inventory's window row, which asks for it (LinkedScreen).
+        var restore = !linked && _machineLinked ? _standaloneMachineOffset : null;
         _placedMachine = site;
         _machineLinked = linked;
+
+        if (restore is { } offset)
+            player.FaithfulScreens.SetOffset(screen, offset);
+        else if (linked)
+            player.InventoryLayout.PlaceWindowRow(opening);
+        else
+            player.InventoryLayout.PlaceMachineWindow(screen);
+    }
+
+    /// <summary>
+    /// The shown machine's or container's window while it is open linked beside the looter's inventory, else null.
+    /// </summary>
+    internal string? LinkedScreen()
+    {
+        if (!_machineLinked || Machine(ShownMachine) is not { } m) return null;
+
+        string screen = MachineScreen(m);
+        return player.FaithfulScreens.IsOpen(screen) ? screen : null;
     }
 
     /// <summary>
@@ -161,22 +355,20 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     internal void BindMachineScreen(string id, UiBindings b)
     {
-        var m = Machine(ShownMachine);
+        var m = Machine(SiteOf(id));
+        string kind = MachineKind(id);
 
-        if (id == "storage")
+        if (kind == "storage")
         {
-            BindStorageScreen(m, b);
+            BindStorageScreen(id, m, b);
             return;
         }
 
-        string caption = m is { IsContainer: true }
-            ? player.Build.Services?.ItemName(m.Record) ?? "CONTAINER"
-            : player.BuildingSelection.Selected?.Name ?? "BUILDING";
-        b.Text["Root"] = caption.ToUpperInvariant();
+        b.Text["Root"] = MachineCaption(id, m).ToUpperInvariant();
 
-        if (id == "bench")
+        if (kind == "bench")
         {
-            BindBenchScreen(m, b);
+            BindBenchScreen(id, m, b);
             return;
         }
 
@@ -191,14 +383,26 @@ sealed class ProductionWindows(PlayerInterface player)
         BindInputs(m, b);
         BindOutput(m, b);
         BindColumnTitles(m, b);
-        BindBuildingGeometry(m, b);
+        BindBuildingGeometry(id, m, b);
+    }
+
+    /// <summary>
+    /// A machine window's caption: a container's item name, the selected building's name for its own window, the name the shown window opened
+    /// with otherwise.
+    /// </summary>
+    string MachineCaption(string id, MachineSnapshot? m)
+    {
+        if (m is { IsContainer: true }) return player.Build.Services?.ItemName(m.Record) ?? "CONTAINER";
+
+        string? name = id.EndsWith(OwnSuffix, StringComparison.Ordinal) ? player.BuildingSelection.Selected?.Name : _shownName;
+        return name ?? player.BuildingSelection.Selected?.Name ?? "BUILDING";
     }
 
     /// <summary>
     /// The original's generic container window: caption STORAGE, the limited item as heading, and Max Capacity (red "(Full)" once the stack is
     /// full).
     /// </summary>
-    void BindStorageScreen(MachineSnapshot? m, UiBindings b)
+    void BindStorageScreen(string id, MachineSnapshot? m, UiBindings b)
     {
         b.Text["Root"] = "STORAGE";
         b.Text["TypeText"] = m?.StorageLimitName ?? "";
@@ -226,7 +430,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (m?.Storage is { } sg)
         {
-            player.InventoryLayout.BindContainerGeometry("storage", b, sg.Width, sg.Height);
+            player.InventoryLayout.BindContainerGeometry(id, b, sg.Width, sg.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -236,7 +440,7 @@ sealed class ProductionWindows(PlayerInterface player)
     /// A research bench's window: the RESEARCH button (hidden below tech level 1), the layout's ARRANGE under the grid and the window sized
     /// around its storage grid.
     /// </summary>
-    void BindBenchScreen(MachineSnapshot? m, UiBindings b)
+    void BindBenchScreen(string id, MachineSnapshot? m, UiBindings b)
     {
         b.Disabled.Remove("ResearchButton");
         b.Actions["ResearchButton"] = "ResearchButton";
@@ -248,7 +452,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (m?.Storage is { } grid)
         {
-            player.InventoryLayout.BindContainerGeometry("bench", b, grid.Width, grid.Height);
+            player.InventoryLayout.BindContainerGeometry(id, b, grid.Width, grid.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -360,9 +564,9 @@ sealed class ProductionWindows(PlayerInterface player)
     /// <summary>
     /// Fits all building panels and their frame in the same binding pass, from the layout and section dimensions rather than a previous frame.
     /// </summary>
-    void BindBuildingGeometry(MachineSnapshot machine, UiBindings bindings)
+    void BindBuildingGeometry(string id, MachineSnapshot machine, UiBindings bindings)
     {
-        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout("building"), player.Width, player.Height,
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
             player.InterfaceScale, player.UiScale);
         var cell = player.InventoryCellSize;
         var furnace = FurnaceGrid(machine);
@@ -416,9 +620,9 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     internal void AddMachineContent(string id, List<UiControl> controls)
     {
-        if (Machine(ShownMachine) is not { } m) return;
+        if (Machine(SiteOf(id)) is not { } m) return;
 
-        if (id is "bench" or "storage")
+        if (MachineKind(id) is "bench" or "storage")
         {
             AddStorageGrid(id, controls, m);
             return;
@@ -564,15 +768,17 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     internal void MachineAction(MyGuiEvent e)
     {
-        if (e.Screen == "bench" && e.Widget == "ResearchButton")
+        string kind = MachineKind(e.Screen);
+        string? site = SiteOf(e.Screen);
+        if (kind == "bench" && e.Widget == "ResearchButton")
         {
             player.FaithfulScreens.Open("overview");
             player.FaithfulScreens.SetTab("overview", "TabsMain", TutorialPanel.ResearchTab);
         }
-        else if (e.Screen is "bench" or "storage" && e.Widget == "ArrangeButton" && ShownMachine is not null)
-            player.Say(new ArrangeMachine(ShownMachine) { Tick = player.Session.World.Tick });
-        else if (e.Screen == "building" && e.Widget == "QueueButton" && ShownMachine is not null)
-            OpenCraftTab(ShownMachine);
+        else if (kind is "bench" or "storage" && e.Widget == "ArrangeButton" && site is not null)
+            player.Say(new ArrangeMachine(site) { Tick = player.Session.World.Tick });
+        else if (kind == "building" && e.Widget == "QueueButton" && site is not null)
+            OpenCraftTab(site);
     }
 
     /// <summary>

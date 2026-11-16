@@ -823,8 +823,11 @@ sealed class WorldMap(PlayerInterface player)
         if (!player.FaithfulScreens.IsOpen("inventory") || player.InventoryWindows.InventoryOwner() is not { ItemGrid: { } grid } lead)
             return false;
 
-        var shown = player.Production.Machine(player.Production.ShownMachine);
-        var machine = shown is not null && player.FaithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
+        // An item of a machine window comes out of that window's machine; the inventory's go to the shown (target) window.
+        string machineScreen = ProductionWindows.IsMachineScreen(screen) ? screen : "storage";
+        var shown = player.Production.Machine(player.Production.SiteOf(machineScreen));
+        bool own = machineScreen.EndsWith(ProductionWindows.OwnSuffix, StringComparison.Ordinal);
+        var machine = shown is not null && player.FaithfulScreens.IsOpen(ProductionWindows.ScreenFor(shown, own)) ? shown : null;
         bool loot = player.FaithfulScreens.IsOpen("loot") && lead.Id == player.Session.CurrentSnapshot.LootOpener;
 
         if (machine is not null && control.Properties.TryGetValue("MachineItem", out var raw))

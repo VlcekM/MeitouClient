@@ -310,6 +310,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             {
                 Motion.LastFrameAt = 0;
                 Player.SetSettingsOpen(true);
+                Player.CloseOptions = () => Visible = false;
             }
 
             if (!value) save();
@@ -1292,7 +1293,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             }
             else if (ActiveChoice is not null) ActiveChoice = null;
             else if (Search.Active) Search.Clear();
-            else Visible = false;
+
+            // Closing it is the original's Esc close-all (FUN_140917120): the other windows it closes go with it.
+            else Player.EscapeCloseAll();
 
             return true;
         }

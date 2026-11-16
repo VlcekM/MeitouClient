@@ -35,40 +35,80 @@ sealed class TradeWindows(PlayerInterface player)
     bool _tradeCloseSent;
 
     /// <summary>
-    /// Opens the trader beside the inventory when a trade opens, and ends the trade when the player closes its window.
+    /// The trader's window opened with the customer's inventory: closing either closes the other (<c>FUN_1406e53d0</c>, <b>Verified</b>: the trader is
+    /// the target window, closed together with the main one).
+    /// </summary>
+    bool _tradeLinked;
+
+    /// <summary>
+    /// Opens the trader beside the inventory when a trade opens, and ends the trade when the player closes its window or the customer's.
     /// </summary>
     internal void SyncTradeScreens()
     {
         if (player.FaithfulScreens is null) return;
 
         var trade = player.Session.CurrentSnapshot.Trade;
-
         if (trade is null)
         {
-            if (!ShownTrader.IsNone && player.FaithfulScreens.IsOpen("trader")) player.FaithfulScreens.Close("trader");
-
-            ShownTrader = CharacterId.None;
-            _tradeCloseSent = false;
+            TradeGone();
             return;
         }
 
         if (trade.Trader != ShownTrader)
         {
-            ShownTrader = trade.Trader;
-            _tradeCloseSent = false;
-            player.FaithfulScreens.ResetScroll("trader");
-            if (!player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
-
-            player.FaithfulScreens.Open("trader");
-            PlaceTradeWindows();
+            OpenTradeWindows(trade.Trader);
             return;
         }
+
+        // The customer's window closing closes the trader's; the trader's closing ends the trade and closes the customer's.
+        if (_tradeLinked && player.FaithfulScreens.IsOpen("trader") && !player.FaithfulScreens.IsOpen("inventory"))
+            player.FaithfulScreens.Close("trader");
 
         if (!player.FaithfulScreens.IsOpen("trader") && !_tradeCloseSent)
         {
             player.Say(new CloseTrade { Tick = player.Session.World.Tick });
             _tradeCloseSent = true;
+            UnlinkTrade();
         }
+    }
+
+    /// <summary>
+    /// The trade ended in the world: its window closes, and the customer's opened with it.
+    /// </summary>
+    void TradeGone()
+    {
+        if (!ShownTrader.IsNone && player.FaithfulScreens.IsOpen("trader")) player.FaithfulScreens.Close("trader");
+
+        UnlinkTrade();
+        ShownTrader = CharacterId.None;
+        _tradeCloseSent = false;
+    }
+
+    /// <summary>
+    /// Closes the customer's inventory opened with the trader's window, once.
+    /// </summary>
+    void UnlinkTrade()
+    {
+        if (_tradeLinked) player.InventoryWindows.CloseInventory();
+
+        _tradeLinked = false;
+    }
+
+    /// <summary>
+    /// Opens the trader's window with the customer's inventory; the order first closes every other inventory window (<c>FUN_1407918a0</c> calls
+    /// the close-all <c>FUN_1406e5740</c>, <b>Verified</b>): the pinned ones here.
+    /// </summary>
+    void OpenTradeWindows(CharacterId trader)
+    {
+        ShownTrader = trader;
+        _tradeCloseSent = false;
+        player.FaithfulScreens.ResetScroll("trader");
+        player.InventoryWindows.ClosePinnedInventories();
+        if (!player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
+
+        player.FaithfulScreens.Open("trader");
+        _tradeLinked = player.FaithfulScreens.IsOpen("inventory");
+        PlaceTradeWindows();
     }
 
     /// <summary>
@@ -627,6 +667,12 @@ sealed class TradeWindows(PlayerInterface player)
     CharacterId _shownLoot = CharacterId.None, _closedLoot = CharacterId.None;
 
     /// <summary>
+    /// The loot window opened with the looter's inventory: closing either closes the other (<c>FUN_1406e53d0</c>, <b>Verified</b>: the main and the
+    /// target window close together).
+    /// </summary>
+    bool _lootLinked;
+
+    /// <summary>
     /// The loot's bag window is wanted (OPEN BAG in the loot window toggles it).
     /// </summary>
     internal bool LootBagOpen = true;
@@ -694,36 +740,72 @@ sealed class TradeWindows(PlayerInterface player)
         var open = player.Session.CurrentSnapshot.OpenLoot;
         if (_closedLoot != open) _closedLoot = CharacterId.None;
 
+        // The looter's window closing closes the body's.
+        if (_lootLinked && player.FaithfulScreens.IsOpen("loot") && !player.FaithfulScreens.IsOpen("inventory"))
+            player.FaithfulScreens.Close("loot");
+
         if (!_shownLoot.IsNone && _shownLoot == open && !player.FaithfulScreens.IsOpen("loot"))
         {
             player.Say(new CloseContainer { Tick = player.Session.World.Tick });
+            LootWindowGone();
             (_closedLoot, _shownLoot) = (open, CharacterId.None);
             return;
         }
 
         if (_shownLoot != open && (open.IsNone || open != _closedLoot))
         {
-            if (!_shownLoot.IsNone) player.FaithfulScreens.Close("loot");
+            if (!_shownLoot.IsNone)
+            {
+                player.FaithfulScreens.Close("loot");
+                LootWindowGone();
+            }
 
             _shownLoot = open;
-
-            if (!open.IsNone)
-            {
-                if (player.Selected().Count > 0 && !player.FaithfulScreens.IsOpen("inventory"))
-                    player.FaithfulScreens.Open("inventory");
-
-                player.FaithfulScreens.Open("loot");
-
-                // The original opens both characters' bags with the window (the looted one's is open by default); OPEN BAG still toggles them
-                // afterwards. The looter's remembered OPEN BAG choice is kept: a bag opened here closes with the window.
-                if (player.InventoryWindows.InventoryOwner() is { } mine && player.InventoryWindows.BagOpen.Add(mine.Id))
-                    LootOpenedBag = mine.Id;
-
-                player.InventoryLayout.PlaceWindowRow();
-                player.ScrollBars.InventoryScroll.Remove("loot-bag");
-            }
+            if (!open.IsNone) OpenLootWindows();
         }
 
+        SyncLootBag();
+    }
+
+    /// <summary>
+    /// The loot window closed: the looter's inventory opened with it closes too.
+    /// </summary>
+    void LootWindowGone()
+    {
+        if (_lootLinked) player.InventoryWindows.CloseInventory();
+
+        _lootLinked = false;
+    }
+
+    /// <summary>
+    /// Opens the loot window with the looter's inventory, laid out from the opening margin; the order first closes every other inventory window
+    /// (<c>FUN_1407918a0</c> calls the close-all <c>FUN_1406e5740</c>, <b>Verified</b>): the pinned ones here.
+    /// </summary>
+    void OpenLootWindows()
+    {
+        if (player.Selected().Count > 0)
+        {
+            player.InventoryWindows.ClosePinnedInventories();
+            if (!player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
+        }
+
+        player.FaithfulScreens.Open("loot");
+        _lootLinked = player.FaithfulScreens.IsOpen("inventory");
+
+        // The original opens both characters' bags with the window (the looted one's is open by default); OPEN BAG still toggles them
+        // afterwards. The looter's remembered OPEN BAG choice is kept: a bag opened here closes with the window.
+        if (player.InventoryWindows.InventoryOwner() is { } mine && player.InventoryWindows.BagOpen.Add(mine.Id))
+            LootOpenedBag = mine.Id;
+
+        player.InventoryLayout.PlaceWindowRow(opening: true);
+        player.ScrollBars.InventoryScroll.Remove("loot-bag");
+    }
+
+    /// <summary>
+    /// The loot's bag window is open while the loot window is, OPEN BAG wants it and the body wears a bag.
+    /// </summary>
+    void SyncLootBag()
+    {
         bool want = player.FaithfulScreens.IsOpen("loot") && LootBagOpen && LootBody() is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } };
         if (want == player.FaithfulScreens.IsOpen("loot-bag")) return;
 

@@ -48,15 +48,22 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// Places the bag window: in the window row while a loot window is open, else beside the inventory on its left.
+    /// Places the bag window: in the window row while a loot or linked container window is open (<see cref="InWindowRow"/>), else beside the
+    /// inventory on its left.
     /// </summary>
     internal void PlaceBagWindow()
     {
-        if (player.FaithfulScreens.IsOpen("loot"))
+        if (InWindowRow())
             PlaceWindowRow();
         else
             PlaceInventoryBeside("bag", left: true);
     }
+
+    /// <summary>
+    /// Whether the inventory's windows are laid out as one row (<see cref="PlaceWindowRow"/>): a loot window, or a machine or container window
+    /// linked beside the inventory, is open.
+    /// </summary>
+    internal bool InWindowRow() => player.FaithfulScreens.IsOpen("loot") || player.Production.LinkedScreen() is not null;
 
     /// <summary>
     /// The open windows' bounds by screen, as laid out now.
@@ -89,7 +96,7 @@ sealed class InventoryLayout(PlayerInterface player)
         var occupied = roots.Where(p => p.Key != "inventory" && InventoryWindows.ScreenKind(p.Key) is "inventory" or "bag")
             .Select(p => p.Value).ToArray();
         var position = InventoryPlacement.FindSpace(player.Width, player.Height, own.Width, occupied);
-        foreach (string machine in new[] { "building", "bench", "storage" })
+        foreach (string machine in ProductionWindows.MachineScreens)
         {
             if (roots.TryGetValue(machine, out var r)) position.X = Math.Max(position.X, r.X + r.Width);
         }
@@ -98,15 +105,22 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// Places linked loot windows edge to edge at the opening margin: limbs, own bag, own inventory, looted bag, looted character.
+    /// Places the linked windows edge to edge (<c>FUN_1406e4960</c>, <b>Verified</b>: each character's bag before it, the linked target at its
+    /// partner's right edge and top, nothing held on the screen): limbs, own bag, own inventory, the linked machine or container, looted bag, looted
+    /// character. <paramref name="opening"/>, an order opening the pair: from the opening margin with its top at the margin, where the original's
+    /// looter window opens once the order has closed every inventory window (<c>FUN_1407918a0</c>, <b>Verified</b>); otherwise from the inventory
+    /// where it is, at the margin at the least.
     /// </summary>
-    internal void PlaceWindowRow()
+    internal void PlaceWindowRow(bool opening = false)
     {
         var roots = WindowRoots();
-        var row = new[] { "limbs", "bag", "inventory", "loot-bag", "loot" }.Where(roots.ContainsKey).ToArray();
+        string linked = player.Production.LinkedScreen() ?? "";
+        var row = new[] { "limbs", "bag", "inventory", linked, "loot-bag", "loot" }.Where(roots.ContainsKey).ToArray();
         float margin = InventoryPlacement.Margin(player.Width, player.Height);
         float before = row.TakeWhile(s => s != "inventory").Sum(s => roots[s].Width);
         var own = roots.GetValueOrDefault("inventory", new(margin, margin, 0, 0));
+        if (opening) own = own with { X = margin + before, Y = margin };
+
         float x = Math.Max(margin, own.X - before), y = own.Y;
         foreach (string screen in row)
         {
@@ -120,11 +134,11 @@ sealed class InventoryLayout(PlayerInterface player)
     /// <summary>
     /// The limbs window's place (<c>FUN_1406e4960</c>, <b>Verified</b>): its right edge on the left edge of the inventory (of its bag window when
     /// that is open), its top at the margin (5% of the smaller screen side); when that is off the screen, at the left edge with the inventory and its
-    /// bag pushed right of it. Not moved with the inventory afterwards. With a loot window open it joins the window row instead.
+    /// bag pushed right of it. Not moved with the inventory afterwards. With a loot or linked container window open it joins the window row instead.
     /// </summary>
     internal void PlaceLimbsWindow()
     {
-        if (player.FaithfulScreens.IsOpen("loot"))
+        if (InWindowRow())
         {
             PlaceWindowRow();
             return;
@@ -151,30 +165,17 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left
-    /// edge, vertically centred; an open inventory (with its bag) under it moves right of it.
+    /// A selected building's own window's place (<c>FUN_1406e6640</c>, <b>Verified</b>): its bottom-left corner on the HUD's anchor above the
+    /// information panel (<see cref="PlayerInterface.OwnWindowAnchor"/>); nothing else moves. Linked beside the looter's inventory, a window is
+    /// placed in the window row instead (<see cref="PlaceWindowRow"/>).
     /// </summary>
-    internal void PlaceMachineWindow(string id, bool linked = false)
+    internal void PlaceMachineWindow(string id)
     {
-        if (linked)
-        {
-            PlaceInventoryBeside(id, left: false);
-            return;
-        }
-
         var roots = WindowRoots();
-        if (!roots.TryGetValue(id, out var window)) return;
+        if (!roots.TryGetValue(id, out var window) || player.OwnWindowAnchor() is not { } anchor) return;
 
-        var move = new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y);
+        var move = new Vector2(anchor.X - window.X, anchor.Y - window.Height - window.Y);
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
-        float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
-        float push = window.Width - left;
-        if (push <= 0) return;
-
-        foreach (string screen in new[] { "inventory", "bag" })
-        {
-            if (roots.ContainsKey(screen)) player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(push, 0));
-        }
     }
 
     /// <summary>
@@ -187,15 +188,15 @@ sealed class InventoryLayout(PlayerInterface player)
 
         float x = left ? own.X - other.Width : own.X + own.Width;
 
-        // A bag placed on the left must stay at the opening margin and right of an open machine or container window (the original opens the
-        // bag, then the character, from there); a linked window on the right only has to stay on the screen.
+        // A bag placed on the left must stay at the opening margin and right of an open machine or container window on the anchor's left (the
+        // original opens the bag, then the character, from there); a linked window on the right only has to stay on the screen.
         float floor = 0;
         if (left)
         {
             floor = InventoryPlacement.Margin(player.Width, player.Height);
-            foreach (string machine in new[] { "building", "bench", "storage" })
+            foreach (string machine in ProductionWindows.MachineScreens)
             {
-                if (roots.TryGetValue(machine, out var r) && machine != id) floor = Math.Max(floor, r.X + r.Width);
+                if (roots.TryGetValue(machine, out var r) && machine != id && r.X < own.X) floor = Math.Max(floor, r.X + r.Width);
             }
         }
 
