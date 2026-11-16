@@ -221,14 +221,15 @@ public static class ModList
     {
         var deps = new HashSet<ModInfo>();
         foreach (var dependency in mod.Header?.Dependencies ?? [])
-            if (byName.TryGetValue(StripExtension(dependency), out var other) && other != mod) deps.Add(other);
+            if (byName.TryGetValue(DependencyName(dependency), out var other) && other != mod) deps.Add(other);
         return deps;
     }
 
     /// <summary>
-    /// <paramref name="name"/> without the text from its last dot, unless that dot is the first character (the launcher's rule for dependencies).
+    /// The mod a <c>.mod</c> header's dependency entry names: <paramref name="name"/> without the text from its last dot, unless that dot is the
+    /// first character (the original launcher's rule, docs/formats/overview.md "Load order"). Every check of header dependencies matches by it.
     /// </summary>
-    static string StripExtension(string name)
+    public static string DependencyName(string name)
     {
         int dot = name.LastIndexOf('.');
         return dot >= 1 ? name[..dot] : name;

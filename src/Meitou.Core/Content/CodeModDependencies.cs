@@ -79,8 +79,11 @@ public static class CodeModDependencies
                 if (EnabledIndexOf(m => m.Id == id, list) is var at and >= 0 && at != i)
                     constraints.Add((at, i, $"code: loads after '{id}'"));
             foreach (var file in list[i].HeaderDependencies ?? [])
-                if (EnabledIndexOf(m => m.Name + ".mod" == file, list) is var at and >= 0 && at != i)
+            {
+                string name = ModList.DependencyName(file);
+                if (EnabledIndexOf(m => m.Name == name, list) is var at and >= 0 && at != i)
                     constraints.Add((at, i, $"data: its .mod header needs {file}"));
+            }
         }
         return constraints;
     }
