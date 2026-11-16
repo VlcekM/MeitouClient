@@ -94,6 +94,11 @@ public sealed partial class MyGuiScreenHost
         /// Whether the player dragged the window (it may then leave the screen, <see cref="KeepVisible"/>); a placement by the host clears it.
         /// </summary>
         public bool Dragged;
+
+        /// <summary>
+        /// The host's fixed top-left for the window before the offset (<see cref="UiBindings.WindowPosition"/>); null: centred.
+        /// </summary>
+        public Vector2? FixedOrigin;
     }
 
     /// <summary>
@@ -688,6 +693,7 @@ public sealed partial class MyGuiScreenHost
         }
 
         if (s.FirstViewport == default) s.FirstViewport = viewport;
+        s.FixedOrigin = b.WindowPosition;
 
         bool first = true;
 
@@ -793,7 +799,8 @@ public sealed partial class MyGuiScreenHost
 
         var vp = s.Viewport;
         var size = s.PlacedSize;
-        float x = (vp.X - size.X) / 2 + want.X, y = (vp.Y - size.Y) / 2 + want.Y;
+        var origin = Origin(s, vp, size);
+        float x = origin.X + want.X, y = origin.Y + want.Y;
 
         if (s.Snap)
         {
@@ -805,8 +812,13 @@ public sealed partial class MyGuiScreenHost
 
         s.Dragged = true;
         (x, y) = OnScreen(s, vp, size, x, y);
-        s.Offset = new(x - (vp.X - size.X) / 2, y - (vp.Y - size.Y) / 2);
+        s.Offset = new Vector2(x, y) - origin;
     }
+
+    /// <summary>
+    /// The window's top-left before the screen's offset: the host's fixed position, else centred in the viewport.
+    /// </summary>
+    static Vector2 Origin(Screen s, Vector2 vp, Vector2 size) => s.FixedOrigin ?? (vp - size) / 2;
 
     /// <summary>
     /// A press on a grip: a widget with the user string <c>Scale</c> (four multipliers of the pointer's travel for left, top, width, height) or
@@ -867,6 +879,6 @@ public sealed partial class MyGuiScreenHost
 
         var vp = s.Viewport;
         s.Size = new(w, h);
-        s.Offset = new(x - (vp.X - w) / 2, y - (vp.Y - h) / 2);
+        s.Offset = new Vector2(x, y) - Origin(s, vp, new(w, h));
     }
 }
