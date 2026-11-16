@@ -513,6 +513,24 @@ public sealed class CharacterCold
     public float MedicalBudgetSeconds { get; set; }
 
     /// <summary>
+    /// The top speed S a recompute would give now (<see cref="Bodies.TopSpeedDelay"/>), from the last body step (null: none yet). Derived, not hashed
+    /// or saved.
+    /// </summary>
+    public float? TopSpeedNow { get; set; }
+
+    /// <summary>
+    /// The stats' top speed S (CharStats <c>+0x17c</c>, the information panel's run speed) as last recomputed (<see cref="Bodies.TopSpeedDelay"/>;
+    /// null: not yet). Derived, not hashed or saved.
+    /// </summary>
+    public float? StatsTopSpeed { get; set; }
+
+    /// <summary>
+    /// The mover's top speed (CharMovement <c>+0xb4</c>, <see cref="CharacterHot.MaxSpeed"/>), one periodic update behind <see cref="StatsTopSpeed"/>
+    /// (<see cref="Bodies.TopSpeedDelay"/>; null: not yet). Derived, not hashed or saved.
+    /// </summary>
+    public float? MoverTopSpeed { get; set; }
+
+    /// <summary>
     /// The original's <c>CharBody::amIdle</c> (<see cref="BodySystem"/>): standing still out of combat with no task, refreshed only while the
     /// character is not down, so a knock-out keeps the value it had before. Derived, not hashed or saved.
     /// </summary>

@@ -53,7 +53,8 @@ public static class Speed
     /// <summary>
     /// S = (V - 11) x leg factor x hunger factor x the fitted legs' athletics multipliers x encumbrance factor x <paramref name="statsFactor"/> (the
     /// gear factor <c>CharStats+0x18</c>, 1 for none, <see cref="Combat.Fighter.AthleticsFactor"/>) + 11, never below 11; shallow water caps it at
-    /// 45. A crawler moves at <see cref="CrawlSpeed"/> or <see cref="StayingLowSpeed"/> instead.
+    /// 45. A crawler moves at <see cref="CrawlSpeed"/> or <see cref="StayingLowSpeed"/> instead. In stealth mode the part over 11 is capped too
+    /// (<see cref="Player.Orders.TopSpeed"/>).
     /// </summary>
     public static float Run(RaceData race, CharacterStats stats, MedicalState medical, float encumbranceFactor, bool shallowWater = false,
         float statsFactor = 1)
@@ -66,6 +67,13 @@ public static class Speed
         s = MathF.Max(s, Minimum);
         return shallowWater ? MathF.Min(s, ShallowWaterCap) : s;
     }
+
+    /// <summary>
+    /// The sneaking cap on the part X of S over 11 (<b>Verified</b>, <c>FUN_140886460</c> in stealth mode <c>FUN_1405c9750</c>; constants 0.1,
+    /// 0.9 and 12 read from the binary): min(X, lerp(12, X, max((s - 0.1) / 0.8, 0))) for the stealth term s; t is not clamped above, so from s
+    /// 0.9 on a top part under 12 is cut slightly too.
+    /// </summary>
+    public static float SneakCap(float x, float stealth) => MathF.Min(x, 12 + (x - 12) * MathF.Max((stealth - 0.1f) / 0.8f, 0));
 
     /// <summary>
     /// The speed of a crippled character and of a voluntary crawler (<b>Verified</b>, <c>FUN_140886460</c>: a final override after the water and

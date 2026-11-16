@@ -303,12 +303,17 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         events ??= [];
         events.Clear();
         medical.Tick(dt, ctx, events);
-        n.MaxSpeed = Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
         cold.SwimSpeed = Speed.Swim(race, stats, medical, encumbrance);
+        float now = TopSpeedNow(world, i, cold, race, stats, medical, encumbrance);
+        cold.TopSpeedNow = now;
+        TopSpeedDelay.Stats(cold, now);
+        n.MaxSpeed = TopSpeedDelay.Mover(cold);
 
         TrainOnTheStep(world, i, cold, stats, race, medical, in n, carrying, encumbrance, dt);
+
+        // The panel reads the stats' S (CharStats +0x17c), which takes a change one periodic update before the mover does.
         if (cold.IsPlayer || table.IdOf(i) == world.Player.Inspected)
-            cold.Extended = ExtendedOf(cold, stats, race, medical, n.MaxSpeed, encumbrance, in ctx, carrying);
+            cold.Extended = ExtendedOf(cold, stats, race, medical, TopSpeedDelay.Stats(cold, now), encumbrance, in ctx, carrying);
         n.Health = Math.Clamp(medical.Blood / MathF.Max(MedicalState.BloodCapacity(race, stats.Strength), 1) * 100, 0, 100);
         foreach (var e in events)
         {
@@ -504,6 +509,20 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (!medical.Incapacitated)
             cold.AmIdle = Still(cold, in n) && n.Task == (byte)CharacterTask.Idle && !CharacterFacts.GettingUp(cold, world.Tick);
         return cold.AmIdle;
+    }
+
+    /// <summary>
+    /// The top speed S as a recompute would make it now (<c>FUN_140886460</c>, docs/game/pathfinding.md "Speed and orders"): the run speed, in
+    /// stealth mode with the sneaking cap (<see cref="Orders.TopSpeed"/>), then the water state (<see cref="Speed.InWater"/>, of the last movement
+    /// step), a crawler's speed overriding both.
+    /// </summary>
+    static float TopSpeedNow(World world, int i, CharacterCold cold, RaceData race, CharacterStats stats, MedicalState medical, float encumbrance)
+    {
+        float run = Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
+        if (medical.Crawling || medical.Prone) return run;
+
+        float top = Orders.TopSpeed(run, cold, CharacterFacts.StealthMode(world, i, cold));
+        return Speed.InWater(cold.WaterState, top, race, cold.SwimSpeed);
     }
 
     /// <summary>

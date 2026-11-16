@@ -604,10 +604,11 @@ static class HudTips
     }
 
     /// <summary>
-    /// The extended lines' tooltips (<c>FUN_140895350</c>); the run speed's rows are the host's (<see cref="ExtendedTips"/>).
+    /// The extended lines' tooltips (<c>FUN_140895350</c>); the run speed's rows are the host's (<see cref="ExtendedTips"/>), the sneak row only in
+    /// <paramref name="stealthMode"/> (<see cref="CharacterFacts.StealthMode"/>).
     /// </summary>
-    public static ExtendedTips Extended(
-        CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, ExtendedStats x, GameConstants? constants)
+    public static ExtendedTips Extended(CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, ExtendedStats x,
+        GameConstants? constants, bool stealthMode)
     {
         float e = cold.Fighter?.EncumbranceFactor ?? 1;
         bool carrying = !cold.Carrying.IsNone;
@@ -654,7 +655,7 @@ static class HudTips
         else if (x.Idle) hunger.Add((Loc.Tr("Idle:"), Mult(MedicalState.IdleHungerRate)));
 
         // FUN_140895350's sneak row: t = max((s - 40) / 60, 0) of the stealth term s, which is in 0..1, then lerp(12, S, t), so the cap reads 12.
-        float? sneak = (cold.Orders & CharacterOrders.Sneak) != 0 ? 12 + (x.RunSpeed - 12) * MathF.Max((Orders.Stealth(cold) - 40) / 60, 0) : null;
+        float? sneak = stealthMode ? 12 + (x.RunSpeed - 12) * MathF.Max((Orders.Stealth(cold) - 40) / 60, 0) : null;
         return new ExtendedTips(
             athletics, strength, toughness, hunger, stats.Athletics, Speed.LegFactor(med), med.LegItemFactor(StatsEnumerated.Athletics), sneak,
             cold.Fighter?.AthleticsFactor ?? 1);

@@ -955,16 +955,18 @@ public sealed partial class World
         int mode = combat?.StatsDisplayMode(id, cold, moving) ?? (cold.Fighter is { Unarmed: false } ? 0 : 1);
         var hc = combat?.HudNumbers(this, id.Slot, cold);
         var lines = HudTips.Lines(cold, med, stats, hc, constants, inBuilding, inside, mode);
+        bool combatMode = combat is not null && CharacterFacts.InCombatMode(combat, Characters, id, cold, true, true);
         var extended = cold.Extended is { } x0 && _systems.OfType<BodySystem>().FirstOrDefault() is { } bodies
-            ? bodies.WithCombatMode(x0, cold, combat is not null && CharacterFacts.InCombatMode(combat, Characters, id, cold, true, true))
+            ? bodies.WithCombatMode(x0, cold, combatMode)
             : cold.Extended;
+        bool stealthMode = (cold.Orders & CharacterOrders.Sneak) != 0 && !combatMode;
         return new HudView(med.Blood, MedicalState.BloodCapacity(race, stats.Strength, med.HasStatsObject, med.ScaleK, med.ScaleZ), med.Bleeding,
             cold.Fighter?.EncumbranceFactor ?? 1, lines.AsReadOnly(), extended)
         {
             BleedRate = race.BleedRate,
             Fed = med.Fed,
             Robot = race.IsRobot,
-            ExtendedTips = extended is { } x ? HudTips.Extended(cold, med, race, stats, x, constants) : null,
+            ExtendedTips = extended is { } x ? HudTips.Extended(cold, med, race, stats, x, constants, stealthMode) : null,
             Skill = SkillLine(id, cold, med, race, stats, hot, combat, mode),
             KoPoint = constants is null ? null : MedicalState.KoPoint(constants, stats.ScaledToughness),
             StatReadouts = HudTips.StatsWindow(cold, med, race, stats, hc, constants, db)
@@ -1031,7 +1033,8 @@ public sealed partial class World
         {
             float s = Orders.Stealth(cold);
             int total = (int)(s * 100), trained = (int)stats[StatsEnumerated.Stealth];
-            float t = MathF.Max(0, (s - 0.1f) / 0.8f), top = hot.MaxSpeed;
+            // FUN_14088f9a0's "Max speed:" lerps once more from the stats' S (the panel's run speed), which already carries the sneaking cap.
+            float t = MathF.Max(0, (s - 0.1f) / 0.8f), top = cold.StatsTopSpeed ?? hot.MaxSpeed;
             return new(StatsEnumerated.Stealth, "Stealth:", total)
             {
                 Base = trained,
@@ -1048,7 +1051,7 @@ public sealed partial class World
         {
             Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats.Athletics), (int)((1 - Speed.LegFactor(med)) * 100),
                 (int)((1 - encumbrance) * 100), cold.Fighter?.AthleticsFactor ?? 1, (int)((med.LegItemFactor(StatsEnumerated.Athletics) - 1) * 100),
-                hot.MaxSpeed)
+                cold.StatsTopSpeed ?? hot.MaxSpeed)   // FUN_14088e780's "Total speed:", the stats' S
         };
     }
 

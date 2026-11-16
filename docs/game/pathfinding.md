@@ -39,7 +39,7 @@ Havok paths, local steering and unloaded-platoon movement are distinct code path
 ## Speed and orders
 
 **Observed** S=max(11,(V-11)*leg*hunger*replacement*encumbrance*statScale+11),
-V=lerp(speedMin,speedMax,athletics/100)*(0.5+0.5*slot115). After the water states `FUN_140886460` overrides S: 7 while
+V=lerp(speedMin,speedMax,athletics/100)*(0.5+0.5*slot115). In stealth mode (`Character::isStealthMode` `FUN_1405c9750`: the stealth flag and not `isInCombatMode(1, 1)`, melee or ranged; **Verified**, disassembly) the product X is capped before the +11: X=min(X,lerp(12,X,max((s-0.1)/0.8,0))), s the stealth term (**Verified**, `FUN_140886460` and its constants 0.1, 0.9, 12). The walk mode's cap and the water states start from that S, and a fighter sneaks at full speed. The mover's top speed (CharMovement `+0xb4` `maxSpeed`, which `SpeedGroup::getSpeed` reads) gets S through the animation (**Verified**, decompile; names KenshiLib): `Character::threadedUpdatePeriodic` (`FUN_1405d00b0`) runs the medical periodic update, whose `FUN_140646860` sets the animation's max speed (`+0x19c`, `FUN_14051c960`) to CharStats `+0x17c`; then CharStats `periodicUpdate` (`FUN_140883b70`, skipped while unconscious or dead) recomputes S (`FUN_1408866b0` → `FUN_140886460`); then `CharMovement::periodicUpdate` (`FUN_140660dc0`) copies the animation's value to `+0xb4`. S is also recomputed on each medical turn of a character in view (`+0x1a9`, `FUN_1405c7d40`). So a sneaker slows its speed group, and any change of S (injuries, hunger, encumbrance, gear, sneaking, crawling, the water state) reaches the mover on the second periodic update after it (tier A, 8 characters a frame round the list, [game loop](game-loop.md#the-character-update-budget)), or on the first when a medical turn in view came between; the panel's run speed (S) changes at the first recompute. Only the stats' init (`FUN_14064cb30`) and a load (`Character::loadFromSerialise` `FUN_140626f50` → `CharStats::updateStats` `FUN_14064b6a0`) recompute S at once; a race change (`setRace` `FUN_1405c93d0`, from the character editor `FUN_140538360`) or a stat's growth waits for the chain. A new mover's top speed is 70 until its first periodic update (CharMovement constructor `FUN_140664ec0`). Meitou: the body step works out S as a recompute would now (`BodySystem.TopSpeedNow`: `Speed.Run`, `Orders.TopSpeed` with `Speed.SneakCap`, `Speed.InWater` at the last movement step's water state, the crawl speeds over all); `MedicalTimeBudget` runs the periodic round beside the medical ones (a tick per frame) and `TopSpeedDelay` keeps the stats' S and the mover's; `CharacterHot.MaxSpeed` is the mover's (70 before its first periodic turn, again for a character coming back into the world), which the walk modes and speed groups read, and the panel and its tooltips read the stats'. The crawl speeds reach the mover the same way: movement adds no crawl override of its own. After the water states `FUN_140886460` overrides S: 7 while
 the posture is 1 (staying low), then 5 when medical `+0x160` (a leg down) is set (**Observed** literals; Meitou `Speed.Run`).
 **Verified** (nav agent `FUN_140147ca0` / `FUN_140147fd0`, `FUN_140144440`): the agent's velocity moves toward the wanted one by at most
 a × dt, a = RACE `pathfind acceleration` (Havok units, ×10 in world units; 24 for people, so about 0.2 s to full speed; 3 Murloc, 200 wasps),
@@ -137,7 +137,7 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
 
 ### Water states
 
-**Verified** (`FUN_1405c7fd0`, `FUN_140886460`, `FUN_140885eb0`; Meitou `Speed.WaterState/InWater/Swim`, `MovementSystem.WaterStateAt`):
+**Verified** (`FUN_1405c7fd0`, `FUN_140886460`, `FUN_140885eb0`; Meitou `Speed.WaterState/InWater/Swim`, `MovementSystem.WaterStateAt`; the water state enters S, [speed](#speed-and-orders)):
 - State of a character at height Y with body size g (`vtable 0x390`, 1 for humans): 0 when Y+2 is above 100 (the water level). Else 3 (deep) when 15g+Y <= 100,
   2 (waist) when 6g+Y <= 100, else 1 (shallow) only for a race with `swims` (race +0x79), otherwise 0. A carried character uses its carrier's.
 - Top speed S replaces the run speed: state 1 caps it at 45; in 2/3 a race that does **not** swim (skeletons, fishmen, robots) walks the bottom at 2 x race `walk speed`; a swimmer's
@@ -165,11 +165,10 @@ Squad formations: [squads travelling together](#squads-travelling-together). Off
 
 ### Water costs
 
-**Engine choice** (not the original's, which charges water faces one flat factor, RACE `water avoidance` a + 1, or 1 / (1 − a) below 0, halved for the player
-faction): the own builder bands terrain water triangles by their shallowest corner's depth (`Speed.WetStateOfDepth`, size 1) into areas shallow 2, waist 4, deep 5
-(`NavArea`). A path request's `WaterCost` per state is max(avoidance factor, land top speed / `Speed.InWater` speed); a non-swimmer's shallows take its land speed. A human
-swimming at 6 with top speed 40 pays 6.7 in deep water, at least the flat factor everywhere. `CoarseRoute` bands its cells by centre depth the same way, never below 1.
-Bands are at size 1, so larger races (Garru, Leviathan) are charged as if they swam where they wade.
+**Verified** (decompile): the path request (`FUN_1403aad30`) sets one factor on its `WaterCostModifier`, whose cost (`FUN_1403b57e0`) multiplies a water face's
+(material 3) cost by it at any depth, with no speed term; the factor is RACE `water avoidance` a + 1, or 1 / (1 − a) below 0, halved for the player faction. Meitou:
+`WaterCost.Of` gives every state that factor. The own builder still bands terrain water triangles by their shallowest corner's depth (`Speed.WetStateOfDepth`, size 1)
+into areas shallow 2, waist 4, deep 5 (`NavArea`), and `CoarseRoute` its cells by centre depth (never below 1); with one factor the bands cost alike.
 
 ## Squads travelling together
 

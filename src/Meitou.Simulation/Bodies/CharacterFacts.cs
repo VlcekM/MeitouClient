@@ -152,6 +152,18 @@ public static class CharacterFacts
         combat.IsInCombatMode(table, id, cold, melee, ranged);
 
     /// <summary>
+    /// <c>Character::isStealthMode</c> (<c>FUN_1405c9750</c>, <b>Verified</b> disassembly: it calls <c>isInCombatMode(1, 1)</c> first): the Sneak
+    /// order, and not in combat mode, melee or ranged.
+    /// </summary>
+    internal static bool StealthMode(World world, int slot, CharacterCold cold)
+    {
+        if ((cold.Orders & Player.CharacterOrders.Sneak) == 0) return false;
+
+        var table = world.Characters;
+        return world.SystemOf<CombatSystem>() is not { } combat || !combat.IsInCombatMode(table, table.IdOf(slot), cold, melee: true, ranged: true);
+    }
+
+    /// <summary>
     /// Slot 126, "A regards B as friendly" (<c>FUN_1407923d0</c>, <see cref="DialogueSystem.RegardsFriendly(World, int, int)"/>), by slot.
     /// </summary>
     internal static bool RegardsFriendly(DialogueSystem dialogue, World world, int a, int b) => dialogue.RegardsFriendly(world, a, b);

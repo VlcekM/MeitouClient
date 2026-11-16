@@ -146,7 +146,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
   dodge (no prone one exists). The attack pick (`FUN_1408876d0`) applies the same test (**Verified**: disassembly 1408877d4-1408877f9 rejects burden above the maximum, then the prone mismatch, whatever the burden; the decompile prints a spurious `<` or `==` split): a crawler
   attacks only with `ground attack L/R`. Nothing in the fight code ends a crawler's fight.
 - Speed (`FUN_140886460`, **Verified**): a final override after the water and sneak caps, 5.0 crippled, 7.0 at posture 1. The crippled flag
-  (medical +0x160) is set only by the medical tick, so nobody is crippled before their first one (Meitou: `Speed.Crippled`, `MedicalState.Crawling`).
+  (medical +0x160) is set only by the medical tick, so nobody is crippled before their first one; being part of S, it reaches the mover through the periodic updates ([speed](pathfinding.md#speed-and-orders); Meitou: `Speed.Run`'s `CrawlSpeed`, `MedicalState.Crawling`, `TopSpeedDelay`).
 - The get-up task (65, `FUN_14033ca10` / `FUN_140334a20`, **Verified**) of a character with posture > 0 ends at
   once and sets posture 1 (voluntary crawl), which the medical tick does not turn back into 2. The planner's
   `isTargetDown` (`FUN_14099a5a0`, **Verified**) counts as down: no target, carried, unconscious, dead, in a bed or cage, or posture ≥ 2 (a non-character target is up); `iAmProne` is posture ≠ 0. Meitou: `ProductionSystem.TargetDown` (Staying close).

@@ -84,6 +84,7 @@ public sealed partial class PopulationSystem
         c.DrawnWeapon = default;
         c.ModeOverride = null;
         c.SpeedOverride = 0;
+        Bodies.TopSpeedDelay.Forget(c);
         c.PaceCap = null;
         c.Ordered = false;
         c.InCombat = false;

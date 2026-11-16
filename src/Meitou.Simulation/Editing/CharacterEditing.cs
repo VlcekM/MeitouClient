@@ -226,9 +226,8 @@ public static class CharacterEditing
             cold.Stats = stats;
             cold.Medical = medical;
             cold.FootprintRadius = raceData.PathfindFootprintRadius;
-            ref var hot = ref world.Characters.Next[slot];
-            hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1);
-            hot.WalkSpeed = raceData.WalkSpeed;
+            // The top speed follows through the periodic updates, as after the original's setRace (TopSpeedDelay).
+            world.Characters.Next[slot].WalkSpeed = raceData.WalkSpeed;
         }
 
         // The look: the new record wearing what the character wears now.

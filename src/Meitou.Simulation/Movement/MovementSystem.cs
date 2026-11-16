@@ -30,8 +30,8 @@ namespace Meitou.Simulation.Movement;
 /// <item>Paths: a character that wants one is flagged in Think; the Schedule step of the next tick asks the <see cref="PathService"/>;
 /// an answer is applied in a serial step, so a path is never read while it is replaced.</item>
 /// </list>
-/// Water states cap or replace the top speed (<see cref="WaterStateAt"/>, <see cref="Speed.InWater"/>). In water a fighter's footwork is scaled too
-/// (x0.75 / 0.5 / 0.4). Not modelled yet (Unknown or later): slopes (the original has no slope penalty), the RACE <c>combat move speed mult</c>. Far
+/// Water states cap or replace the top speed, inside S (<see cref="WaterStateAt"/>, <see cref="Bodies.TopSpeedDelay"/>). In water a fighter's
+/// footwork is scaled too (x0.75 / 0.5 / 0.4). Not modelled yet (Unknown or later): slopes (the original has no slope penalty), the RACE <c>combat move speed mult</c>. Far
 /// trips take the roads in the path layer (<see cref="CharacterCold.RoadPreference"/>).
 /// <item>Followers (the original's <c>Task_Follow</c>, docs/game/pathfinding.md "Squads travelling together"): a squad mate aims at its
 /// <see cref="Formation.Layout"/> slot turned onto a heading that eases toward the leader's, one second ahead of the leader; anyone else keeps a
@@ -597,7 +597,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             var splice = SpliceTarget(next[i], cold);
             var to = splice ?? new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y, nearY), next[i].Goal.Y);
             cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius,
-                WaterCost.Of(cold.WaterFactor, next[i].MaxSpeed, cold.Race, cold.SwimSpeed), cold.RoadPreference);
+                WaterCost.Of(cold.WaterFactor), cold.RoadPreference);
             if (splice is null) cold.SplicePath = null;
             else cold.SpliceRequest = cold.LastSplice = cold.PathRequest;
 
@@ -1708,7 +1708,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (!reached)
         {
             s.Dir = to / dist;
-            s.Desired = PathSpeed(world, i, p, n, cold, s.Water);
+            s.Desired = PathSpeed(world, i, p, n, cold);
 
             // Braking into the last point, never past it.
             if (last) s.Desired = MathF.Min(s.Desired, StopSpeed(dist, PathAcceleration(cold), s.Dt));
@@ -1737,9 +1737,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// The speed a path walker wants: its mode's cap (a carrier's walk raised to a run, a squad's force speed raising it) or a follower's own speed,
-    /// within its top speed in water, then capped in its footwork, by its group, by sneaking, by a campaign's pace, and a crawler's.
+    /// within its top speed (the mover's S, which carries the sneaking cap and the water state, <see cref="Bodies.TopSpeedDelay"/>), then capped in
+    /// its footwork, by its group and by a campaign's pace; a crawler's speed is part of S.
     /// </summary>
-    float PathSpeed(World world, int i, in CharacterHot p, in CharacterHot n, CharacterCold cold, int water)
+    float PathSpeed(World world, int i, in CharacterHot p, in CharacterHot n, CharacterCold cold)
     {
         byte mode = cold.ModeOverride ?? n.Mode;
 
@@ -1752,7 +1753,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (!cold.IsPlayer && cold.Ai?.Squad is { ForceSpeed: < Squad.NoForceSpeed } forcing && mode < forcing.ForceSpeed)
             mode = forcing.ForceSpeed;
 
-        float top = water > 0 && cold.Race is { } race ? Speed.InWater(water, n.MaxSpeed, race, cold.SwimSpeed) : n.MaxSpeed;
+        float top = n.MaxSpeed;
         float desired = cold.SpeedOverride > 0
             ? cold.SpeedOverride
             : n.Task == (byte)CharacterTask.Follow
@@ -1766,14 +1767,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow)
             desired = MathF.Min(desired, _groupSpeeds.Of(world, i, cold, p.Position));
 
-        if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0)
-            desired = MathF.Min(desired, Orders.SneakSpeed(desired, Orders.Stealth(cold)));
-
         if (cold.PaceCap is { } pace && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat)
             desired = MathF.Min(desired, pace);   // a campaign follower near its trail point
-
-        if (cold.Medical is { Crawling: true } && cold.CarriedBy.IsNone)
-            desired = Speed.Crippled;   // the final override, after water and sneaking
 
         return desired;
     }
@@ -1788,13 +1783,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         if (dist > 1e-3f)
         {
-            float top = s.Water > 0 && cold.Race is { } race ? Speed.InWater(s.Water, n.MaxSpeed, race, cold.SwimSpeed) : n.MaxSpeed;
             s.Dir = gap / dist;
-            s.Desired = MathF.Min(MathF.Min(cold.FollowSpeed, top), dist / s.Dt);
-            if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0)
-                s.Desired = MathF.Min(s.Desired, Orders.SneakSpeed(s.Desired, Orders.Stealth(cold)));
-
-            if (cold.Medical is { Crawling: true }) s.Desired = MathF.Min(s.Desired, Speed.Crippled);
+            s.Desired = MathF.Min(MathF.Min(cold.FollowSpeed, n.MaxSpeed), dist / s.Dt);
         }
     }
 

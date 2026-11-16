@@ -621,7 +621,8 @@ static class SaveProbe
 
     /// <summary>
     /// Orders the character named like <paramref name="name"/> alone to walk to (<paramref name="x"/>, <paramref name="z"/>), then every 40 ticks,
-    /// <paramref name="rounds"/> times, each of its squad mates' speed: order mode, walk mode, speed group, task, path, top and current speed (#729).
+    /// <paramref name="rounds"/> times, each of its squad mates' speed: order mode, walk mode, speed group, task, path, sneak, top speed, the
+    /// information panel's run speed and current speed (#729, #841).
     /// </summary>
     static void Pace(ProbeWorld probe, string name, float x, float z, int rounds)
     {
@@ -647,8 +648,9 @@ static class SaveProbe
         var c = t.Cold(slot)!;
         bool path = ((MoveFlags)n.Flags & MoveFlags.HasPath) != 0;
         float speed = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
+        bool sneak = (c.Orders & Meitou.Simulation.Player.CharacterOrders.Sneak) != 0;
         Console.WriteLine($"tick {probe.World.Tick} {c.Name,-10} order={c.RunSpeed} mode={n.Mode} group={c.SpeedGroup} task={(CharacterTask)n.Task} "
-            + $"path={path} top={n.MaxSpeed:F1} speed={speed:F1}");
+            + $"path={path} sneak={sneak} top={n.MaxSpeed:F1} panel={c.Extended.RunSpeed:F1} speed={speed:F1}");
     }
 
     /// <summary>

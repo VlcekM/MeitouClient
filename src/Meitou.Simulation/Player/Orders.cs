@@ -235,15 +235,22 @@ public static class Orders
     }
 
     /// <summary>
-    /// The sneaking speed (docs/game/pathfinding.md "Sneaking", Observed): X = speed - 11, X = min(X, lerp(12, X, clamp((s - 0.1) / 0.8))), then X +
-    /// 11, at least 11. A clumsy sneaker creeps at 23 units a second; from stealth 90 on the cap is gone.
+    /// The sneaking speed (docs/game/pathfinding.md "Speed and orders"): <see cref="Bodies.Speed.SneakCap"/> on speed - 11, then + 11, at least
+    /// 11. A clumsy sneaker creeps at 23 units a second; from stealth 90 on the cap is gone.
     /// </summary>
-    public static float SneakSpeed(float speed, float stealth)
+    public static float SneakSpeed(float speed, float stealth) =>
+        MathF.Max(Bodies.Speed.SneakCap(speed - Bodies.Speed.Minimum, stealth) + Bodies.Speed.Minimum, Bodies.Speed.Minimum);
+
+    /// <summary>
+    /// The top speed S (CharStats <c>+0x17c</c>, <c>FUN_140886460</c>, docs/game/pathfinding.md "Speed and orders"): the run speed
+    /// <paramref name="run"/> (<see cref="Bodies.Speed.Run"/>), in <paramref name="stealthMode"/> (<see cref="Bodies.CharacterFacts.StealthMode"/>)
+    /// with the sneaking cap; a crawler keeps its crawl speed, which overrides the cap. The walk mode, water and the panel all start from it.
+    /// </summary>
+    public static float TopSpeed(float run, CharacterCold cold, bool stealthMode)
     {
-        float x = speed - 11;
-        float t = Math.Clamp((stealth - 0.1f) / 0.8f, 0, 1);
-        x = MathF.Min(x, 12 + (x - 12) * t);
-        return MathF.Max(x + 11, 11);
+        if (!stealthMode || cold.Medical is { Crawling: true } or { Prone: true }) return run;
+
+        return SneakSpeed(run, Stealth(cold));
     }
 
     /// <summary>
