@@ -280,7 +280,14 @@ sealed class ProjectileFlight
                     continue;
                 }
 
-                combat.BoltHit(world, p, v, intended);
+                // A hit a code mod's filter cancels flies on past the victim, as past a friend.
+                if (!combat.BoltHit(world, p, v, intended))
+                {
+                    p.Passed = v;
+                    after = best;
+                    continue;
+                }
+
                 _projectiles.RemoveAt(k--);
                 return true;
             }

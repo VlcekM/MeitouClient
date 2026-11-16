@@ -69,9 +69,12 @@ public sealed partial class ProductionSystem
         if (m.BurnLevel > 0.001f && output.Progress < 0.999f) return;
         int iron = (int)FurnaceMetal(grid);
         output.Count += Math.Max(iron, 0);
+        var smelted = world.ItemUseObservers.Active ? grid.Items.ToArray() : [];
         grid.Items.Clear();
         Incinerate(m);
         world.Machines.Touch();
+        foreach (var item in smelted)
+            ItemUseObservers.Report(world, ItemUseKind.MachineInput, item.Record, CharacterId.None, m.Site, item.Quantity, true);
     }
 
     /// <summary>

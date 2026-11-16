@@ -180,9 +180,20 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
-        if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
+        UseUpTool(world, cutter, c, null);
         l.Broken = true;
         return true;
+    }
+
+    /// <summary>
+    /// The cutter's best tool is used up (observers hear it, <see cref="Items.ItemUseKind.Tool"/>, with the fixture's id when there is one).
+    /// </summary>
+    static void UseUpTool(World world, int cutter, CharacterCold c, string? site)
+    {
+        if (BestTool(c) is not { } tool) return;
+
+        c.Inventory!.RemoveOne(tool);
+        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Tool, tool.Record, world.Characters.IdOf(cutter), site, 1, true);
     }
 
     /// <summary>
@@ -198,7 +209,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
         l.Hardness = 0;
-        if (BestTool(c) is { } tool) c.Inventory!.RemoveOne(tool);
+        UseUpTool(world, cutter, c, target.Id);
         l.Broken = true;
         world.Fixtures.Touch(target);
         return true;

@@ -15,7 +15,8 @@ sealed class ItemUses
     internal SimulationExtensions? Extensions { get; set; }
 
     /// <summary>
-    /// Runs the handler of the clicked item's record; true when it used the click, false when the click goes on as a quick move.
+    /// Runs the handler of the clicked item's record; true when it used the click, false when the click goes on as a quick move. Units the handler
+    /// took out of the inventory are reported to observers (<see cref="ItemUseKind.ModUse"/>).
     /// </summary>
     internal bool Use(World world, QuickMoveItem quick)
     {
@@ -28,7 +29,14 @@ sealed class ItemUses
         var item = root.All().ElementAtOrDefault(quick.Item.Index);
         if (!Eligible(root, item, quick.Item)) return false;
 
-        return handler(new ItemUse(world, quick.Character, item!, root));
+        int before = item!.Quantity;
+        bool used = handler(new ItemUse(world, quick.Character, item, root));
+        if (!world.ItemUseObservers.Active) return used;
+
+        int gone = root.All().Contains(item) ? before - item.Quantity : before;
+        if (gone > 0) ItemUseObservers.Report(world, ItemUseKind.ModUse, item.Record, quick.Character, null, gone, true);
+
+        return used;
     }
 
     /// <summary>

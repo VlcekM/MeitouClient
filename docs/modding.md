@@ -126,6 +126,32 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
+  blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
+  armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
+  was the chosen target, and the `DamagePacket` as it leaves the weapon (cut, blunt, pierce, stun, bleed multiplier, armour penetration).
+  The filter may change `Packet` (a changed value finite and, but for armour penetration, not negative) or set `Cancelled`; nothing else it
+  changes is taken back. A cancelled melee blow is a miss in every respect, a cancelled bolt flies on past the victim as past a friend, and
+  a cancelled execution blow does no damage: the captive jobs that strike it keep striking, and the kill job's scream still plays, until one
+  lands. A melee blow's "hit dealt" experience follows the filtered packet. Filters run in system order, each seeing the hit as the earlier
+  ones left it, until one cancels. They run serially where the hit lands (melee in Commit, bolts in `CombatSystem.Schedule`, executions in
+  the captives' `SlowWorld`), may read the world and change their own hashed state, must not change characters or other world state or call
+  combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
+  and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
+  faulted registrations enter the state hash. Without a filter no payload is made.
+- **Items used up:** a registered system implementing `IItemUseObserver` receives `ItemUsedUp(World, in ItemUsed)` inside the step that
+  used an item, once the item has changed: the tick, the `ItemUseKind`, the item record's string id, the user (none for a machine, a
+  research order or an upgrade pulling from the building's own stock), the building it went into or came from (a construction, machine or
+  research bench site, a cut fixture; else null), the amount (charges for `Eaten`, `FirstAid` and `Ammunition`, where one bolt shot is one
+  charge; else units) and whether a whole unit left the inventory or storage. The kinds: food bites (each bite, the eater's own, its
+  backpack's or a squad mate's backpack's food; a limb counts as the bite it gave), first-aid, robot and splint kit charges spent, crossbow
+  shots, building materials delivered or pulled from the building itself (a later dismantle's refund is not reported), tools broken
+  cutting locks or shackles, maps read, blueprints learned, machine inputs (production, crafting, generator fuel, farm water, furnace
+  smelting), research costs, and the units of the clicked stack a mod's item use took out of the user's inventory, whatever the handler
+  did with them (charges or other items it spends are not seen). Every use runs in a serial step; callbacks run in system order, may read
+  the world and change their own hashed state, and must not change items, characters or other world state, since the step may still be
+  walking them: gameplay changes go through commands. Without an observer no payload is made. A throwing callback is logged and disabled
+  for that world; faulted registrations enter the state hash.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
@@ -188,6 +214,15 @@ holds refuses the second mod.
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
   `new UiNode(id, UiNodeKind.Image) { Image = Path.Combine(context.Folder, "face.png") }`; a CHARACTER record's portrait is
   `{ Portrait = "<string id>" }` on the same kind of node ([native UI](native-ui.md#layout-input-and-lifetime)).
+- **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
+  (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
+  must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
+  (`Kenshi_MapMarkers`: Town, Village, Outpost, Ruin, Camp, Nest, Workcamp, SmallPlace, Character, Movement, NewDiscovered; names are
+  exact), a tint, an optional label (shown from zoom level 1) and tooltip (rows split by new lines, a tab between a row's label and value,
+  as a place's), the least zoom level it shows at and a size against the group's image. They are drawn after the towns, camps and outposts
+  and before the tracked squads and the player's characters, centred on their point and sized as a place's are. A mod keeps its markers
+  itself (in its `IModSaveData` to keep them across a load). A source that throws or gives a marker with a group the marker set lacks, a
+  point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2 is logged once and dropped.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
@@ -234,7 +269,13 @@ holds refuses the second mod.
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
   kept off screen whatever the keep switches say, is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
   added when no walkable point is found); `Platoon.ModTag` is a free string, saved when set, that finds a mod's platoon again after a load,
-  when platoon ids are given anew; the `VisitTown` command sends a squad running a wandering trader package to a
+  when platoon ids are given anew; `PopulationSystem.SpawnIntoPlayerSquad` makes one
+  character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
+  starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
+  player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
+  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). It returns the character's id, or none and adds nothing
+  for another squad, another record type, a point that is not finite or not walkable, a unique already claimed, or the recruit's caps
+  (`max squad size`, `max faction size`); the `VisitTown` command sends a squad running a wandering trader package to a
   player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
   trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null

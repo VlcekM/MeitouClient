@@ -8,6 +8,31 @@ namespace Meitou.Game.Ui;
 public sealed record UiDiagnostic(string Extension, string Operation, Exception Error);
 
 /// <summary>
+/// A marker an extension puts on the world map (<see cref="UiRegistration.AddMapMarkers"/>): the world point it stands on (X, Z), its image group
+/// in the game's map marker set (<c>Kenshi_MapMarkers</c>: Town, Village, Outpost, Ruin, Camp, Nest, Workcamp, SmallPlace, Character, Movement,
+/// NewDiscovered), its tint (RGBA, 0 to 1), a label under it from zoom level 1 (null: none), its tooltip (null: none), the least zoom level it
+/// shows at (0, the whole map, to 2) and its size against the group's image.
+/// </summary>
+public sealed record UiMapMarker(System.Numerics.Vector2 At, string Group, System.Numerics.Vector4 Colour, string? Label = null,
+    string? Tooltip = null, int FromLevel = 0, float Scale = 1);
+
+/// <summary>
+/// What an extension's map markers get: the snapshot the map is drawn from and its zoom level (0, the whole map, to 2).
+/// </summary>
+public sealed class UiMapContext(Simulation.WorldSnapshot snapshot, int level)
+{
+    /// <summary>
+    /// The snapshot the map is drawn from (the one on screen).
+    /// </summary>
+    public Simulation.WorldSnapshot Snapshot { get; } = snapshot;
+
+    /// <summary>
+    /// The map's zoom level: 0 shows the whole map, 2 is the closest.
+    /// </summary>
+    public int Level { get; } = level;
+}
+
+/// <summary>
 /// What an action handler gets: the frame's data and the control's argument.
 /// </summary>
 public sealed record UiActionContext(UiFrameContext Frame, string Argument);
@@ -123,12 +148,17 @@ public sealed class UiHost
     readonly HashSet<string> _extensions = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The world map marker sources, with their owners, in registration order.
+    /// </summary>
+    readonly List<(string Owner, Func<UiMapContext, IEnumerable<UiMapMarker>> Markers)> _mapMarkers = [];
+
+    /// <summary>
     /// The data of the last arranged frame (the actions get it); null before the first.
     /// </summary>
     UiFrameContext? _frame;
 
     /// <summary>
-    /// An extension failed (a contribution's build or an action).
+    /// An extension failed (a contribution's build, an action or a map marker source).
     /// </summary>
     public event Action<UiDiagnostic>? Diagnostic;
 
@@ -220,6 +250,11 @@ public sealed class UiHost
         _contributions.Add((owner, slot, mode, order, factory));
 
     /// <summary>
+    /// Adds a world map marker source for <paramref name="owner"/>.
+    /// </summary>
+    internal void AddMapMarkers(string owner, Func<UiMapContext, IEnumerable<UiMapMarker>> markers) => _mapMarkers.Add((owner, markers));
+
+    /// <summary>
     /// Removes everything <paramref name="owner"/> registered.
     /// </summary>
     internal void Remove(string owner)
@@ -230,6 +265,7 @@ public sealed class UiHost
         _overrides.RemoveAll(o => o.Owner == owner);
         _controlOverrides.RemoveAll(o => o.Owner == owner);
         _contributions.RemoveAll(c => c.Owner == owner);
+        _mapMarkers.RemoveAll(m => m.Owner == owner);
         _extensions.Remove(owner);
     }
 
@@ -258,6 +294,50 @@ public sealed class UiHost
         var factory = useOverrides ? _controlOverrides.LastOrDefault(o => o.Target == id).Factory ?? entry.Factory : entry.Factory;
         return factory(context);
     }
+
+    /// <summary>
+    /// Whether any extension adds world map markers (<see cref="MapMarkers"/>).
+    /// </summary>
+    public bool HasMapMarkers => _mapMarkers.Count > 0;
+
+    /// <summary>
+    /// The markers the extensions add to the world map, with their owners, in registration order (a copy of the sources is walked, so a source may
+    /// register or dispose). A source that throws, or gives a marker whose group <paramref name="knownGroup"/> does not know, with a point, tint or
+    /// size not finite, a size not above 0 or a zoom level outside 0 to 2, is reported once as a <see cref="Diagnostic"/> and dropped (it is asked
+    /// every frame the map is shown).
+    /// </summary>
+    public IReadOnlyList<(string Owner, UiMapMarker Marker)> MapMarkers(UiMapContext context, Func<string, bool> knownGroup)
+    {
+        var markers = new List<(string Owner, UiMapMarker Marker)>();
+        foreach (var entry in _mapMarkers.ToArray())
+        {
+            try
+            {
+                var added = entry.Markers(context).ToList();
+                int bad = added.FindIndex(m => !ValidMarker(m, knownGroup));
+                if (bad >= 0)
+                    throw new InvalidOperationException($"A map marker needs a known group, a finite point and tint, and a size: {added[bad]}.");
+
+                markers.AddRange(added.Select(m => (entry.Owner, m)));
+            }
+            catch (Exception e)
+            {
+                _mapMarkers.Remove(entry);
+                Diagnostic?.Invoke(new UiDiagnostic(entry.Owner, "map markers (dropped)", e));
+            }
+        }
+
+        return markers;
+    }
+
+    /// <summary>
+    /// Whether a map marker names a group <paramref name="knownGroup"/> knows and has a finite point and tint, a finite size above 0 and a zoom
+    /// level from 0 to 2.
+    /// </summary>
+    static bool ValidMarker(UiMapMarker? m, Func<string, bool> knownGroup) =>
+        m is not null && !string.IsNullOrWhiteSpace(m.Group) && knownGroup(m.Group) && float.IsFinite(m.At.X) && float.IsFinite(m.At.Y)
+        && float.IsFinite(m.Colour.X + m.Colour.Y + m.Colour.Z + m.Colour.W)
+        && float.IsFinite(m.Scale) && m.Scale > 0 && m.FromLevel is >= 0 and <= 2;
 
     #endregion
 
@@ -504,6 +584,17 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(factory);
         _host.Contribute(Id, slot, mode, order, factory);
+    }
+
+    /// <summary>
+    /// Adds markers to the world map (docs/modding.md "Map markers"): <paramref name="markers"/> is asked on the host's thread each frame the map is
+    /// shown, after the places and before the player's characters, so it must not touch the world; it reads the snapshot it is given.
+    /// </summary>
+    public void AddMapMarkers(Func<UiMapContext, IEnumerable<UiMapMarker>> markers)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(markers);
+        _host.AddMapMarkers(Id, markers);
     }
 
     /// <summary>
