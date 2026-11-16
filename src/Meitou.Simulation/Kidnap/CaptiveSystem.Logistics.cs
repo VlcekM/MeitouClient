@@ -210,6 +210,7 @@ public sealed partial class CaptiveSystem
         if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && Taken(f.Id)) return false;
         if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
         c = table.Cold(s)!;
+        if (Spared(cold, c)) return false;
 
         // 217 (FUN_1408cc600): dropped for a down or crippled occupant, or one two squad mates already work.
         if (export)
