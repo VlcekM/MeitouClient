@@ -332,6 +332,7 @@ public sealed class SightMap
         Array.Resize(ref _floorOf, size);
         Array.Resize(ref _probed, size);
         Array.Resize(ref _low, size);
+        Array.Resize(ref _player, size);
         Array.Resize(ref _facing, size);
     }
 
@@ -346,6 +347,7 @@ public sealed class SightMap
         int was = _place[s];
         _place[s] = -1;
         _low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
+        _player[s] = prev[s].Alive && table.Cold(s) is { IsPlayer: true };
         _facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
         if (!prev[s].Alive || _rooms.Count == 0)
         {
@@ -445,6 +447,10 @@ public sealed class SightMap
     /// Each character crawling or staying low at the last update (the sight test's ground posture).
     /// </summary>
     bool[] _low = [];
+    /// <summary>
+    /// Each character of the player's faction at the last update (its sight has no view cone, <see cref="AllRound"/>).
+    /// </summary>
+    bool[] _player = [];
     /// <summary>
     /// Each character's sight-cone forward: its drawn facing (<see cref="CharacterAnimation.DrawYaw"/>), else its facing.
     /// </summary>
@@ -664,11 +670,10 @@ public sealed class SightMap
     /// </summary>
     public float Range(int looker, int target, float outdoor)
     {
-        int lp = Known(looker) ? _place[looker] : -1, tp = Known(target) ? _place[target] : -1;
-        bool lTop = Known(looker) && _onTop[looker], tTop = Known(target) && _onTop[target];
-        if (lp != tp && !lTop && !tTop) return 0;
-        float range = Inside(looker) ? IndoorSight : outdoor;
-        range *= 0.5f + 0.5f * Daylight;
+        if (!SharePlace(looker, target)) return 0;
+        int lp = Known(looker) ? _place[looker] : -1;
+        bool lTop = Known(looker) && _onTop[looker];
+        float range = BareRange(looker, outdoor);
         if (lTop) range *= 2;
         float ll = Light(looker), tl = Light(target);
         float contrast = Math.Clamp(tl - ll + 1, 0, 2);
@@ -681,10 +686,11 @@ public sealed class SightMap
     /// The whole sight test of a looker at <paramref name="eye"/>, its cone along its drawn facing as the schedule phase found it (FUN_140852f70
     /// reads the drawn node), on the character in <paramref name="target"/> at <paramref name="at"/>: the view factor
     /// (<see cref="AggroSystem.Visibility"/>, or <see cref="AggroSystem.SneakVisibility"/> with the target's <paramref name="stealth"/> when it
-    /// sneaks) within <see cref="Range"/>.
+    /// sneaks) within <see cref="Range"/>. A looker of the player's faction has no cone (<see cref="AllRound"/>).
     /// </summary>
     public float Sees(int looker, int target, Vector3 eye, Vector3 at, float outdoor, float stealth = -1)
     {
+        if (Known(looker) && _player[looker]) return AllRound(looker, target, eye, at, outdoor);
         float range = Range(looker, target, outdoor);
         if (!(range > 0)) return 0;
         // A target crawling or staying low is half as visible (FUN_140852f70: ground posture x0.5, before the sneaking factors).
@@ -694,5 +700,35 @@ public sealed class SightMap
         return stealth >= 0
             ? AggroSystem.SneakVisibility(eye, yaw, at, range, stealth, posture)
             : AggroSystem.Visibility(eye, yaw, at, range, posture);
+    }
+
+    /// <summary>
+    /// The places rule of the sight test (<c>FUN_140857b10</c>): looker and target share a place (outdoors, or one building), or either stands on
+    /// top.
+    /// </summary>
+    bool SharePlace(int looker, int target)
+    {
+        int lp = Known(looker) ? _place[looker] : -1, tp = Known(target) ? _place[target] : -1;
+        bool lTop = Known(looker) && _onTop[looker], tTop = Known(target) && _onTop[target];
+        return lp == tp || lTop || tTop;
+    }
+
+    /// <summary>
+    /// The looker's sight range R (<c>FUN_140851bc0</c>): 500 inside a building, else <paramref name="outdoor"/> (race multiplier and weather
+    /// applied), times lerp(daylight, 0.5, 1).
+    /// </summary>
+    float BareRange(int looker, float outdoor) => (Inside(looker) ? IndoorSight : outdoor) * (0.5f + 0.5f * Daylight);
+
+    /// <summary>
+    /// The sight test of a looker of the player's faction (<c>FUN_140857b10</c>, <b>Verified</b> in the running original: the view-cone test
+    /// <c>FUN_140852f70</c> runs only for a looker whose faction has no player flag, <c>+0x250</c>): seen (1) when they share a place
+    /// (<see cref="SharePlace"/>) and the target is within R (<see cref="BareRange"/>, 3D); no cone, light, posture, on-top or stealth factor. A
+    /// sneaker still has to fill the looker's spot meter, and the sight ray still ends the test (<see cref="SightRay"/>).
+    /// </summary>
+    float AllRound(int looker, int target, Vector3 eye, Vector3 at, float outdoor)
+    {
+        if (!SharePlace(looker, target)) return 0;
+        float range = BareRange(looker, outdoor);
+        return Vector3.DistanceSquared(eye, at) <= range * range ? 1 : 0;
     }
 }

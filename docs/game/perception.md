@@ -11,6 +11,12 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
   ([weather](../formats/weather.md#effects-on-characters), **Verified**; Meitou `AggroSystem.RangeOf`).
 - **Cone**: v = (cos a - 0.2) / 0.8, zero past 78.46 deg. Crawling/ground posture x0.5; sneaking x0.75 (v >= 0.5) or x0.5,
   then x lerp(stealth, 1, 0.6). Stealth scales skill x carry 0.75 x crawl 2 x load/equipment/race/injury, clamped 0..1.
+- **A looker of the player's faction** (faction `+0x250`) has no cone: `FUN_140857b10` calls the cone and light test `FUN_140852f70` only for
+  a looker without the player flag; a player one gets v = 1.0 (`DAT_14167c308`) when d (3D) <= R, else 0, so no light, contrast, posture,
+  on-top or sneak factor (control flow read in the decompile; **Verified** in the running original, 1.0.65, harness `peek` of the sense
+  entries' FOV score `+0x24` in a town: a lone player character's seen entries all held 1.0, at bearings all round it, while the NPCs' held cone
+  values from 0.04 to 0.99). A sneaker still fills its spot meter with that v, and the ray still ends the test. Meitou: `SightMap.AllRound` (with a cone, a kneeling player medic on Heal All saw none of the downed behind it and stood idle:
+  #843's save, headless probe `medic`).
 - **Seen** (`FUN_140852f70`, **Verified** literals): d <= lerp(ambient, F, 1) x contrast x R x v, R x2 when the looker is on
   top (below); contrast = clamp(target light - looker light + 1, 0, 2), ambient = clamp(mean of both, 0, 1); F = 0.2 when the
   looker is inside a building (character vfunc +0x78, the building it is in; **Observed**), else 0.4. v must exceed 0.01.
@@ -303,7 +309,7 @@ is not the looker's ally becomes a target only when both tests pass:
 | Vision range inside a building | 500 (no race multiplier) | **Verified** (literal) | `FUN_140851bc0`, `FUN_140852f70` |
 | Night | range x lerp(daylight, 0.5, 1): half at night | **Verified** (literals), daylight factor in [game-loop.md](game-loop.md#frame-clocks) | `FUN_140851bc0` |
 | Weather (dust storm / other affecting weather) | range x lerp(s(1 - P), 1, 0.4 / 0.75), unclamped | **Verified** (decompile) | `FUN_140851bc0` |
-| View cone | factor v = (cos a - 0.2) / 0.8; nothing beyond a = 78.5 degrees; a measured from the drawn facing (AnimationClass slot 0xc0 on Character +0x448: a stored +0x330 vector when non-zero, else the drawn node's direction), which lags the commanded one | **Verified** (literals; the slot reads +0x330, else node +0xd0); that +0xd0 is the drawn forward **Observed**; +0x330's writer **Unknown** | `FUN_140852f70`, `FUN_1405b22d0`; Meitou `SightMap` (`CharacterAnimation.DrawYaw`) |
+| View cone | none for a looker of the player's faction (v = 1 within R, **Verified** in the original, `FUN_140857b10`); else factor v = (cos a - 0.2) / 0.8; nothing beyond a = 78.5 degrees; a measured from the drawn facing (AnimationClass slot 0xc0 on Character +0x448: a stored +0x330 vector when non-zero, else the drawn node's direction), which lags the commanded one | **Verified** (literals; the slot reads +0x330, else node +0xd0); that +0xd0 is the drawn forward **Observed**; +0x330's writer **Unknown** | `FUN_140852f70`, `FUN_1405b22d0`; Meitou `SightMap` (`CharacterAnimation.DrawYaw`) |
 | Seen when | v > 0.01 and d <= lerp(light, 0.2 or 0.4, 1) x contrast x R x v | **Observed** (control flow), constants **Verified** | `FUN_140852f70`, `FUN_140857b10` |
 | Sneaking / crawling target | v x0.5 crawling; x0.75 or x0.5 sneaking; x lerp(stealth, 1, 0.6) | **Verified** (literals) | `FUN_140852f70`; Meitou `SightMap.Sees` (crawling or staying low) |
 | Spot time of a sneaker | lerp(v, 0.5 + 5 s, 0.5) x lerp(f, 4, 1) s; meter > 1 = seen; forgets at dt / 260 | **Verified** (literals), flow **Observed** | `FUN_140856cb0`, `FUN_140853aa0` |

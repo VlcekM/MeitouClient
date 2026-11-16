@@ -71,6 +71,7 @@ static class SaveProbe
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("medic", >= 1): MedicProbe.Run(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 30, a.Count > 2 ? int.Parse(a[2]) : 20); return true;
             case ("turrets", >= 4):
                 TurretProbe.Run(probe, a[0], int.Parse(a[1]), new Vector2(float.Parse(a[2]), float.Parse(a[3])),
                     a.Count > 4 ? int.Parse(a[4]) : 10, a.Count > 5 ? int.Parse(a[5]) : 40);
@@ -1576,6 +1577,7 @@ static class SaveProbe
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
+              medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
               turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
