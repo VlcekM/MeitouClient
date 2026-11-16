@@ -435,6 +435,11 @@ sealed class UserConfig
     /// </summary>
     public bool AnimalsPickUp { get; set; }
     /// <summary>
+    /// Cage guards do not turn a caged member of their own faction into a slave (Advanced settings, a Meitou option; off by default, as the game
+    /// enslaves them; <c>CaptiveSettings.SpareOwnFaction</c>).
+    /// </summary>
+    public bool CagesSpareOwn { get; set; }
+    /// <summary>
     /// Fixes of the game's own bugs (Fixes settings; on: fixed, off: as the game does; docs/audio.md): doors and gates sound when they break, a biome
     /// entered before its bank loads gets the right day or night ambience, and the wind bed stops when the wind does.
     /// </summary>

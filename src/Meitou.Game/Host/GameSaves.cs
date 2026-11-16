@@ -660,6 +660,8 @@ sealed class GameSaves(GameHost host)
             population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
         foreach (var ai in host.Session.World.Systems.OfType<Simulation.Ai.AiSystem>()) ai.Settings.TownAttacks = gameplay.TownAttacks;
         foreach (var combat in host.Session.World.Systems.OfType<Simulation.Combat.CombatSystem>()) combat.StuckLimit = gameplay.HarpoonLimit;
+        foreach (var captives in host.Session.World.Systems.OfType<Simulation.Kidnap.CaptiveSystem>())
+            captives.Settings.SpareOwnFaction = host.Config.CagesSpareOwn;
     }
 
     /// <summary>
@@ -693,6 +695,7 @@ sealed class GameSaves(GameHost host)
                 FastZoneHopping = Gameplay.FastZoneHopping,
             },
             Ai = new Simulation.Ai.AiSettings { TownAttacks = Gameplay.TownAttacks },
+            Captives = new Simulation.Kidnap.CaptiveSettings { SpareOwnFaction = host.Config.CagesSpareOwn },
             Construction = new Simulation.Construction.ConstructionSettings { BuildingSpeed = (settings ?? Difficulty)[5], EdgeGap = SiteEdgeGap },
             Production = new Simulation.Production.ProductionSettings { ProductionOption = (settings ?? Difficulty)[3],
                 ResearchOption = (settings ?? Difficulty)[4], EdgeGap = SiteEdgeGap, UnloadedProduction = host.Config.UnloadedProduction },

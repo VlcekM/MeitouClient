@@ -1511,6 +1511,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
+        Config.CagesSpareOwn = false;
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;
         Player.Frontend.FixLoadButton = Config.FixLoadButton = true;
         Config.FixGunnerFacing = true;

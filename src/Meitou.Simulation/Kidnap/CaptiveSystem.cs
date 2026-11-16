@@ -69,6 +69,11 @@ public sealed record CaptiveSettings
     /// </summary>
     public float ProcessSeconds { get; init; } = 3;
     /// <summary>
+    /// Cage guards leave a caged member of their own faction who is no slave alone instead of making it a slave (Meitou option, off as the game: its
+    /// finders have no faction test; <c>CaptiveSystem.Spared</c>, asked by the processing and gathering finders). Set while the game runs.
+    /// </summary>
+    public bool SpareOwnFaction { get; set; }
+    /// <summary>
     /// Watching slaves (183) looks at the cages within this distance of the watcher (<b>Observed</b>: 180, <c>FUN_1408cd630</c>).
     /// </summary>
     public float WatchRange { get; init; } = 180;
@@ -1190,7 +1195,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// non-enemy cage outdoors in its home town, one indoors in a public building, else an ally; <c>FUN_1408db510</c>), holding a live character no
     /// other job works. 260 takes an awake occupant that is no slave; 183 one on the worker's floor and in its building (or both outdoors) within
     /// <see cref="CaptiveSettings.WatchRange"/> in 3D, whose owner (if any) is an ally and that is not a slave of an owner that still looks one
-    /// (<c>FUN_1408ca3d0</c>; its flag <c>0x3e0</c> is taken as slave state 1, <b>Unknown</b>).
+    /// (<c>FUN_1408ca3d0</c>; its flag <c>0x3e0</c> is taken as slave state 1, <b>Unknown</b>). With <see cref="CaptiveSettings.SpareOwnFaction"/>
+    /// neither takes an occupant of the worker's own faction that is no slave.
     /// </summary>
     Fixture? ProcessTarget(World world, int slot, CharacterCold cold, int site, bool watching)
     {
@@ -1203,6 +1209,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
             var c = table.Cold(s)!;
+            if (Spared(cold, c)) continue;
+
             if (watching)
             {
                 // The cage must be on the watcher's floor and in its building (two outdoor parties have the same, null, handle) and within 180 in 3D
@@ -1220,6 +1228,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         return null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="worker"/> leaves caged <paramref name="c"/> alone: <see cref="CaptiveSettings.SpareOwnFaction"/> is on and it is of
+    /// the worker's own faction and no slave.
+    /// </summary>
+    bool Spared(CharacterCold worker, CharacterCold c) => Settings.SpareOwnFaction && c.SlaveState == 0 && c.Faction == worker.Faction;
 
     /// <summary>
     /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>: it walks the watcher's sensed list, masks 0x60 / 0x110):
