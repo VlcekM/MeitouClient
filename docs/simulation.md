@@ -1047,7 +1047,9 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
   inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of its outer point, [locks](game/locks.md)); when no member's goal is in its
   hours, a free member with 86 Opening up in its hours unlocks the home while it counts as locked (87: a round locked it, or every door is locked and whole, as from the level state; squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
-  (195): occupied unlocked cages of the faction in its town are locked. **Keys** (engine): a worker whose target is behind
+  (195): occupied unlocked cages of the faction in its town are locked. **Gates** (`OpenGate`, row 180's need of an open gate, [locks](game/locks.md#doors)):
+  a free member whose current goal is 180 Man the gate runs the unlock round on its gate (`Blackboard.Gate`, else a gate home) while the gate's first
+  door is closed or closing and whole; a locked one only when the door is its faction's (78 needs isObjectMine) (#816). **Keys** (engine): a worker whose target is behind
   its own faction's or home's shut doors unlocks them standing before it walks (the sim doesn't know door positions); an
   arrest's guard walking to such a cage has them opened at once. Rounds and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
@@ -1879,7 +1881,7 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
 - States (`PlanContext.Holds`): location, distance, bed, sitting, home (within 20 of the home), home town, town, weapon drawn, weapon carried
   (`hasWeapon`), carrying, a first aid kit carried (23), the immediate threat (39, `CombatSystem.ImmediateThreat`), deep water (139), a leg down that could be fixed (103, `MedicalState.LegsMessedUp`), inside the home building (107, `AI::iAmInsideTargetBuilding` for a non-building target) and strangers in a private home (141, so a resident does not
   go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; moving, getting up, arms, power, buildings, doors, gates, accessibility, machine operator slots and readiness are
-  held true (movement and the lock-up round deal with doors; the bashers' `DoorPlan` evaluates them); machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
+  held true (movement and the lock rounds deal with doors, gate guards' gates included; the bashers' `DoorPlan` evaluates them); machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
   machine; no finder gives one yet, the town workers' buildings are level data, [Blocked output](game/buildings-production.md#blocked-output)); every other state is false.
 
 Combat goals (`AiBehaviour.Fight`, `AiSystem.Fights.cs`; [combat goals](game/ai-tasks.md#combat-goals)): 16, 21, 144 and 34 attack whom their finder picks (`AggroSystem.FindFoe`:

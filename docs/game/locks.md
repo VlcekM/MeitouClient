@@ -192,6 +192,16 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `DESTINATION_IS_ACCESSIBLE` and 60 `LOCATION_IS_ACCESSIBLE` in list B, which tasks 85 / 84 make true: they are `Task_Blank` goal-style rows (**Verified**, the factory list) whose finder picks the door and whose effect 52 / 53 is
   provided by `Task_OpenDoor` 72 / 74, the task that opens it ([ai-tasks](ai-tasks.md)). Nothing closes a door behind a walker: only the lock tasks list a closed door (`!52`), and no
   AI package lists tasks 73/75 (**Observed**: TaskData and package census).
+- **Gate guards open their gate**: row 180 Man the gate (desire AI slot 19 `FUN_140641550`, constant 1; AI_TASK `targeting` 4 HOME_GATE)
+  lists 91 and 52 DOOR_IS_OPEN in list B (**Verified**, `FUN_140319a60`). 52 (`FUN_1405a3ad0`, **Verified**) takes a building target's door
+  (vfunc `0x3e0`) and holds when it is open (1), or opening (2) with `doa` above 0.8. So the planner gives the guard on that goal 72 Opening door
+  and, for a locked gate, 78 Unlocking door first (B 70 isObjectMine, `FUN_1405a3c10`, whose last test is the object's faction against the
+  character's) (**Observed**, the planner's chain as for 81): a gate the level data leaves closed and locked (29 town gates, e.g. Mud Town's
+  `6475-Newwworld-INGAME` Makeshift Gate) stands open once its guard plans. The five `Gate guard` packages give the leader Man the gate 0-24 and
+  hold no lock goal (**Verified**, data), and the door's state `+0x380` is set only by the open (`FUN_140297040`), close (`FUN_140298c50`) and
+  update functions, a snap shut (`FUN_1402991c0`) and `FUN_140299000`, which the initial door state (`FUN_140553210`) calls (**Observed**, the
+  field writers and callers): no relation to the player closes a gate. Meitou: `LockSystem.OpenGate`
+  ([simulation](../simulation.md#arrest-and-jail) "Rounds", "Gates"; #816).
 - **Door panel** (player's building, the HUD lines of a selected house: [ui-screens](ui-screens.md#selected-building)): open/close button `FUN_140546fb0`: an open door closes; otherwise an effectively locked
   one is unlocked first, then opened (**Verified**). Meitou: a door still moving counts by where it heads and turns back (an opening one closes, a
   closing one reopens); the original's open/close act only from closed / open, so a slow gate ignores the button for seconds.

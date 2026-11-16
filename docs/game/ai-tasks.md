@@ -1318,7 +1318,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   is a GatewayBuilding (vfunc `0x3d8`). The guard walks to its first door's point `+0x3bc` and turns along `+0x3bc - +0x3c8`. A door's
   two points (`FUN_14029cc90`) are its leaf's centre ± 15 (constant `0x14168a258`) along the leaf's thin axis, dropped to the ground;
   Meitou takes the fallback gate nearest the squad (one `Blackboard.Gate` per squad), not nearest each guard (engine choice, one guard per gate squad in practice).
-  which side `+0x3bc` is depends on a door body offset. Gate BUILDING records have no nodes (**Verified**, the merged
+  which side `+0x3bc` is depends on a door body offset. Its list B needs the gate open (52), so the guard unlocks and opens it first
+  ([locks](locks.md#doors) "Gate guards open their gate"). Gate BUILDING records have no nodes (**Verified**, the merged
   load order's Defensive Gates II-V), the door setup makes the gate's guard posts at run time (Gate posts above).
 
 ## Perma-jobs

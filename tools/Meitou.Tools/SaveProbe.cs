@@ -80,6 +80,10 @@ static class SaveProbe
             case ("pace", >= 3): Pace(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("move", >= 3): Move(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
+            case ("doors", >= 1):
+                if (a.Count > 5) Move(probe, a[3], float.Parse(a[4]), float.Parse(a[5]), 0);
+                Doors(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40);
+                return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("captors", _): Captors(probe, a.Count > 0 ? int.Parse(a[0]) : 15, a.Count > 1 && a[1] == "walk"); return true;
             case ("obey", >= 2):
@@ -177,6 +181,58 @@ static class SaveProbe
             probe.Tick(interval);
         }
     }
+
+    /// <summary>
+    /// The doors within <paramref name="radius"/> of the leader every <paramref name="interval"/> ticks, <paramref name="rounds"/> times: each
+    /// one's motion, open amount and lock, and the squads whose home it is with their leader's goal (#816: gates and shop doors left shut). With
+    /// <c>name x z</c> after the counts, that character is first ordered to walk there.
+    /// </summary>
+    static void Doors(ProbeWorld probe, float radius, int rounds, int interval)
+    {
+        var world = probe.World;
+        for (int round = 0; round < rounds; round++)
+        {
+            Console.WriteLine($"tick {world.Tick} hour={world.Hour:F2}");
+            foreach (var door in world.Fixtures.All)
+            {
+                if (door.Kind != FixtureKind.Door || Vector3.Distance(door.Position, probe.LeaderPosition) > radius) continue;
+                Console.WriteLine($"  {DoorLine(probe, door)}");
+            }
+
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// One door of <see cref="Doors"/>: its state and the squads living in its building.
+    /// </summary>
+    static string DoorLine(ProbeWorld probe, Fixture door)
+    {
+        var world = probe.World;
+        var squads = world.Squads.All
+            .Where(q => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key == door.Building)
+            .Select(q => $"{q.Id}:'{q.Name}' goal={LeaderGoal(probe, q.Leader.Slot)}");
+        return $"{door.Id} {door.HostRecordId} at=<{door.Position.X:F0}, {door.Position.Z:F0}> gate={door.IsGate} owner={probe.Faction(door.Owner)} {door.Motion} open={door.OpenAmount:F2} "
+            + $"locked={door.Lock?.Locked} wants={door.WantsLock} broken={door.DoorBroken} restored={door.Restored} auto={door.AutoOpened}/{door.LastPass} "
+            + $"level={LevelDoor(world, door)} homes=[{string.Join(", ", squads)}]";
+    }
+
+    /// <summary>
+    /// The level data's state of a door (its building's GAMESTATE_BUILDING <c>state</c> and <c>locked</c> keys), for a home building only.
+    /// </summary>
+    static string LevelDoor(World world, Fixture door)
+    {
+        var home = world.Squads.All.Select(q => q.Ai?.OwnHome ?? q.HomeBuilding).FirstOrDefault(h => h?.Key == door.Building);
+        if (home?.LevelState is not { } level) return "-";
+
+        string i = door.DoorIndex.ToString(CultureInfo.InvariantCulture);
+        return $"{level.GetInt("state" + i, -1)}/{level.GetBool("locked" + i)}";
+    }
+
+    /// <summary>
+    /// The goal of the squad leader in <paramref name="slot"/> (none: -1).
+    /// </summary>
+    static string LeaderGoal(ProbeWorld probe, int slot) => slot < 0 ? "none" : $"{probe.Characters.Cold(slot)?.Ai?.Goal?.Task.Type}";
 
     /// <summary>
     /// The homes of the squads within <paramref name="radius"/> of the leader: the level state's public flags (what the building panel shows), the
