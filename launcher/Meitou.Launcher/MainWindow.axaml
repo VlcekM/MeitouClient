@@ -240,6 +240,10 @@
                   <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Click="SuggestionPage_Click"
                           Content="{Binding SuggestionLabel}" IsVisible="{Binding SuggestionPage, Converter={x:Static ObjectConverters.IsNotNull}}"
                           ToolTip.Tip="{Binding SuggestionTip}" />
+                  <!-- An RE_Kenshi mod Meitou does not cover: the public wishlist, to ask for it -->
+                  <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Click="RequestPage_Click"
+                          Content="{Binding RequestLabel}" IsVisible="{Binding RequestPage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="{Binding RequestTip}" />
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Classes="name" Text="{Binding Name}" />
                     <TextBlock Classes="desc" Text="{Binding Detail}" />

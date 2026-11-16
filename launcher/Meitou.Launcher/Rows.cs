@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Meitou.Content;
 using Meitou.Localisation;
@@ -128,8 +129,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin and a suggested code mod, its dependencies, its game version, why
-    /// it will not load and the mods it blanks.
+    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin and a suggested code mod, an update since the cover was matched,
+    /// its dependencies, its game version, why it will not load and the mods it blanks.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
     {
@@ -137,6 +138,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
         Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         SuggestionNote,
+        UpdatedNote,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
         Manifest is { LoadAfter.Count: > 0 } a ? Loc.Format(LauncherText.Translate("Loads after {1}"), string.Join(", ", a.LoadAfter)) : null,
         Manifest is { Incompatible.Count: > 0 } c
@@ -161,6 +163,39 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     string? SuggestionNote => Suggestion is not { } r ? null
         : SuggestionInstalled ? Loc.Format(LauncherText.Translate("One Meitou mod that does the same: {1} (installed)"), r.By)
         : Loc.Format(LauncherText.Translate("One Meitou mod that does the same: {1}"), r.By);
+
+    /// <summary>
+    /// The note for a covered workshop mod updated after the version its cover was matched against (<see cref="CoveredMods.UpdatedSince"/>): the
+    /// update's date, and that features it added may be missing; null otherwise.
+    /// </summary>
+    string? UpdatedNote
+    {
+        get
+        {
+            var items = BuiltIn?.Items ?? Suggestion?.Items;
+            if (items is null || CoveredMods.UpdatedSince(Mod, items) is not { } updated) return null;
+
+            string date = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            return Loc.Format(LauncherText.Translate("Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"), date);
+        }
+    }
+
+    /// <summary>
+    /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in nor has a suggestion for, so the
+    /// player can ask for it; null otherwise, and the row shows no Request button.
+    /// </summary>
+    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Suggestion is null ? CoveredMods.Wishlist : null;
+
+    /// <summary>
+    /// The text of the button that opens <see cref="RequestPage"/>.
+    /// </summary>
+    public string? RequestLabel => RequestPage is null ? null : LauncherText.Translate("Request it");
+
+    /// <summary>
+    /// The tip of the button that opens <see cref="RequestPage"/>.
+    /// </summary>
+    public string? RequestTip => RequestPage is null ? null
+        : LauncherText.Translate("Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one");
 
     /// <summary>
     /// The note for <see cref="Blanks"/>: how many records lose file paths and whose, most records first; null when none.
@@ -209,6 +244,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         Changed(nameof(PageTip));
         Changed(nameof(SuggestionLabel));
         Changed(nameof(SuggestionTip));
+        Changed(nameof(RequestLabel));
+        Changed(nameof(RequestTip));
     }
 
     /// <summary>

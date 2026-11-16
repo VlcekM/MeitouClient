@@ -1205,6 +1205,14 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// A click on the Request button of an RE_Kenshi mod Meitou does not cover opens the public wishlist, where the player asks for it.
+    /// </summary>
+    async void RequestPage_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ModRow { RequestPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
+    }
+
+    /// <summary>
     /// A mod selected: its details (description, the dependencies with those not enabled above it, folder).
     /// </summary>
     void ModListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)

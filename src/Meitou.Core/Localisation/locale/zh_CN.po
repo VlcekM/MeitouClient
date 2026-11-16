@@ -215,6 +215,15 @@ msgstr "一个功能相同的 Meitou 模组：{1}"
 msgid "One Meitou mod that does the same: {1} (installed)"
 msgstr "一个功能相同的 Meitou 模组：{1}（已安装）"
 
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "于 {1} 在创意工坊更新，晚于 Meitou 上次核对：可能缺少部分新功能"
+
+msgid "Request it"
+msgstr "申请支持"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "打开 Meitou 的 RE_Kenshi 模组公开愿望单，可在那里申请支持此模组"
+
 msgid "View {1}"
 msgstr "查看 {1}"
 

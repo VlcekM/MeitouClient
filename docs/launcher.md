@@ -297,6 +297,11 @@ interpolated string, which no translation could match.
   (a workshop mod by its item, a local copy by its `.mod` name), has a View button opening its workshop page. The first listing in which
   such a mod is enabled and its suggestion is not installed asks once for all of them whether to open those pages (the launcher has no Steam subscribe call, so the player subscribes there); each mod asked about is kept in
   `launcher.json` (`OfferedSuggestions`) and not asked again. Not asked while another question or the first-start dialog is open.
+- Each covered workshop item names the Steam update it was matched against. When the installed copy is newer (its `timeupdated` in
+  `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new
+  features may be missing. A local copy has no date and gets no such note.
+- Any other RE_Kenshi plugin (not built in, no suggestion) keeps the ignored-DLLs note and has a Request button opening the public wishlist
+  of RE_Kenshi mods (`CoveredMods.Wishlist`, the roadmap's compatibility sheet), where players ask for one to be covered.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
   ([Trust](modding.md#trust)).
 - A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code

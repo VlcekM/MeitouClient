@@ -210,6 +210,15 @@ msgstr "Um mod do Meitou que faz o mesmo: {1}"
 msgid "One Meitou mod that does the same: {1} (installed)"
 msgstr "Um mod do Meitou que faz o mesmo: {1} (instalado)"
 
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "Atualizado na Oficina em {1}, depois da última verificação do Meitou: alguns recursos novos podem faltar"
+
+msgid "Request it"
+msgstr "Pedir"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "Abre a lista pública de pedidos de mods RE_Kenshi para o Meitou, onde você pode pedir este"
+
 msgid "View {1}"
 msgstr "Ver {1}"
 

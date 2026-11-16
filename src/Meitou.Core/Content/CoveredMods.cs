@@ -1,17 +1,22 @@
 namespace Meitou.Content;
 
 /// <summary>
-/// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id, and the Meitou setting the
-/// feature became.
+/// A Steam workshop item a covered mod was matched against: its id and Steam's update time (Unix seconds) of the version that was compared.
 /// </summary>
-public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting);
+public sealed record MatchedItem(ulong Id, long Updated);
+
+/// <summary>
+/// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id, the Meitou setting the
+/// feature became, and the workshop items it was matched against (none when it is matched by its code mod id, whatever its version).
+/// </summary>
+public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting, MatchedItem[] Items);
 
 /// <summary>
 /// An RE_Kenshi mod whose plugin does not run in Meitou, with a code mod on the Steam workshop that does the same, offered as a suggestion
 /// (other ports may exist): the RE_Kenshi mod's <c>.mod</c> name and the workshop items that carry it, and the suggested mod's title,
 /// <c>.mod</c> name and workshop item.
 /// </summary>
-public sealed record SuggestedMod(string ModName, ulong[] WorkshopIds, string By, string ByModName, ulong ByWorkshopId);
+public sealed record SuggestedMod(string ModName, MatchedItem[] Items, string By, string ByModName, ulong ByWorkshopId);
 
 /// <summary>
 /// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod) and the launcher
@@ -20,14 +25,15 @@ public sealed record SuggestedMod(string ModName, ulong[] WorkshopIds, string By
 public static class CoveredMods
 {
     /// <summary>
-    /// xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (workshop 3679678086).
+    /// xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (workshop 3679678086, matched against its 2026-11-07 update).
     /// </summary>
-    public static readonly BuiltInMod RekenshiXp = new("Player XP Only x10 RE", null, "Squad XP in the Advanced settings");
+    public static readonly BuiltInMod RekenshiXp =
+        new("Player XP Only x10 RE", null, "Squad XP in the Advanced settings", [new(3679678086, 1794078276)]);
 
     /// <summary>
-    /// Its code mod port "[MeitouClient] Player-Only XP x10" (workshop 3838916871).
+    /// Its code mod port "[MeitouClient] Player-Only XP x10" (workshop 3838916871), matched by its code mod id whatever its version.
     /// </summary>
-    public static readonly BuiltInMod XpPort = new(null, "player-only-xp", "Squad XP in the Advanced settings");
+    public static readonly BuiltInMod XpPort = new(null, "player-only-xp", "Squad XP in the Advanced settings", []);
 
     /// <summary>
     /// The mods Meitou has built in.
@@ -35,13 +41,18 @@ public static class CoveredMods
     public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort];
 
     /// <summary>
-    /// The RE_Kenshi mods with a suggested code mod: Emkej's "Loot-Scoot-Execute" (workshop 3675700748, and its "MCM fork" 3813852124), with
-    /// "[MeitouClient] Execution".
+    /// The RE_Kenshi mods with a suggested code mod: Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update,
+    /// and its "MCM fork" 3813852124, its 2026-11-13 update), with "[MeitouClient] Execution".
     /// </summary>
     public static IReadOnlyList<SuggestedMod> Suggested { get; } =
     [
-        new("Loot-Scoot-Execute", [3675700748, 3813852124], "[MeitouClient] Execution", "Execution", 3838346946),
+        new("Loot-Scoot-Execute", [new(3675700748, 1777211773), new(3813852124, 1794544300)], "[MeitouClient] Execution", "Execution", 3838346946),
     ];
+
+    /// <summary>
+    /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
+    /// </summary>
+    public static Uri Wishlist { get; } = new("https://docs.google.com/spreadsheets/d/1h6HXRgT1MbioPtgj3enuXIdevj2JWaRU8qSz-99Haoo/edit?gid=0#gid=0");
 
     /// <summary>
     /// The entry that has <paramref name="mod"/> built in, by its <c>.mod</c> name or its code mod's id; null when none does.
@@ -64,7 +75,21 @@ public static class CoveredMods
         if (!mod.HasNativePlugin || mod.HasCode) return null;
 
         ulong? item = WorkshopId(mod);
-        return Suggested.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.WorkshopIds.Contains(id)));
+        return Suggested.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.Items.Any(i => i.Id == id)));
+    }
+
+    /// <summary>
+    /// When the workshop copy of <paramref name="mod"/> was updated, if after the version <paramref name="items"/> was matched against
+    /// (<see cref="WorkshopUpdates"/>); null for a local mod, an item the table does not name, a record file that cannot be read or has no
+    /// entry for it, or no newer update.
+    /// </summary>
+    public static DateTimeOffset? UpdatedSince(ModInfo mod, IReadOnlyList<MatchedItem> items)
+    {
+        if (WorkshopId(mod) is not { } id || items.FirstOrDefault(i => i.Id == id) is not { } matched) return null;
+
+        return WorkshopUpdates.TimeUpdated(mod.Folder, id) is { } updated && updated > matched.Updated
+            ? DateTimeOffset.FromUnixTimeSeconds(updated)
+            : null;
     }
 
     /// <summary>
