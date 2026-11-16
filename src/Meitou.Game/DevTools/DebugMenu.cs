@@ -167,9 +167,9 @@ sealed class DebugMenu(GameHost host)
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
         "Edit character", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Set stats to 1000", "Auto heal", "Move instantly",
-            "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
-            "Drop item", "Recruit", "Faction relations",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Gigachad Mode (set stats to 1000)", "Auto heal",
+            "Move instantly", "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target",
+            "Explode on click", "Drop item", "Recruit", "Faction relations",
     ];
 
     /// <summary>
