@@ -41,7 +41,7 @@ public sealed partial class AiSystem
         if (PickWork(world, self, town, epoch, type, HeldWork(world, self)) is not { } building) return null;
 
         return new ObedientWorkplace(building, _work.ClipOf(building), _work.FunctionalityOf(building), _work.HungerRateOf(building),
-            WorkRangeOf(building), WorkOwnerOf(world, town));
+            WorkRangeOf(building), town.Owner(world, data));
     }
 
     /// <summary>

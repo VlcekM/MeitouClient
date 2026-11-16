@@ -1543,7 +1543,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (playerFaction >= 0 && cold.Faction == playerFaction) return true;
         var town = Ai.AiSystem.TownAt(_data, world, at);
         if (town.IsNone) return false;
-        int owner = FactionOfTown(world, town);
+        int owner = town.Owner(world, _data);
         var relations = _data.Relations;
         if (owner == cold.Faction || owner >= 0 && relations.Contains(owner) && relations.Contains(cold.Faction)
             && relations.IsAlly(owner, cold.Faction))

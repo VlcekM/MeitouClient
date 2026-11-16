@@ -1129,7 +1129,7 @@ public sealed partial class PopulationSystem
         int player = PlayerFactionOf(world);
         if (player < 0 || squad.Faction == player || world.SystemOf<Locks.LockSystem>()?.Regions is not { } regions) return;
         var place = squad.Position;
-        if (AiSystem.TownAt(_data, world, place) is not { IsNone: false } town || FactionOfTown(world, town) != player || regions.CodeAt(place) != 0)
+        if (AiSystem.TownAt(_data, world, place) is not { IsNone: false } town || town.Owner(world, _data) != player || regions.CodeAt(place) != 0)
             return;
 
         var table = world.Characters;

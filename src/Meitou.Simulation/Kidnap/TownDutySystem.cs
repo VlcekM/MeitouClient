@@ -448,8 +448,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return 0;
         }
 
-        int owner = town.PlayerTown > 0 ? world.Buildings.FindTown(town.PlayerTown)?.Owner ?? -1 : town.Site < data.SiteFactions.Count
-                ? data.SiteFactions[town.Site] : -1;
+        int owner = town.Owner(world, data);
         if (owner != c.Faction && owner != faction && !world.Fixtures.OwnsPropertyIn(town.Site, faction))
         {
             why = "a town the player does not live in";
@@ -1506,8 +1505,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         bool listed = squad.Town >= 0 && town.Site >= 0 && data.Sites[town.Site].Town.Type == Data.Gameplay.TownType.Town;
         var search = listed ? CampaignTown.OfSite(squad.Town) : town;
         if (register && search.Site >= 0) world.Fixtures.RegisterSite(world, data, search.Site);
-        int townOwner = search.PlayerTown > 0 ? world.Buildings.FindTown(search.PlayerTown)?.Owner ?? -1 : search.Site < data.SiteFactions.Count
-                ? data.SiteFactions[search.Site] : -1;
+        int townOwner = search.Owner(world, data);
         bool Usable(int owner) => listed || owner == cold.Faction || townOwner < 0 || owner == townOwner;
         (string, Vector2)? best = null;
         float bestD = float.MaxValue;
