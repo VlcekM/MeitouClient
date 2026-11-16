@@ -1151,12 +1151,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>
     /// Whether the character is one of the player's that the player leads (a member of an independent squad is clicked as another faction's).
     /// </summary>
-    bool Own(CharacterId id)
-    {
-        var snapshot = Session.CurrentSnapshot;
-        bool independent = snapshot.IndependentSquads.Any(s => s.Members.Contains(id));
-        return !independent && snapshot.Characters.FirstOrDefault(c => c.Id == id) is { IsPlayer: true };
-    }
+    bool Own(CharacterId id) => !Independent(id) && Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { IsPlayer: true };
+
+    /// <summary>
+    /// Whether the character is in one of the player's squads the player does not lead (<see cref="WorldSnapshot.IndependentSquads"/>).
+    /// </summary>
+    internal bool Independent(CharacterId id) => Session.CurrentSnapshot.IndependentSquads.Any(s => s.Members.Contains(id));
 
     /// <summary>
     /// Shows <paramref name="target"/> (another faction's character or your own dead one; <see cref="CharacterId.None"/> for nobody) in the HUD
