@@ -155,7 +155,7 @@ holds refuses the second mod.
   `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
   ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
   mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
-  full column refuses the mod. Not shown in the HUD's stat lines or the debug character editor.
+  full column refuses the mod. Not shown in the HUD's stat lines.
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own

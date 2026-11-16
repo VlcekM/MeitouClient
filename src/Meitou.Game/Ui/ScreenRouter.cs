@@ -1,5 +1,6 @@
 using System.Globalization;
 using Meitou.Data.Ui;
+using Meitou.Game.DevTools;
 using Meitou.Simulation;
 
 namespace Meitou.Game.Ui;
@@ -31,6 +32,7 @@ sealed class ScreenRouter(PlayerInterface player)
         if (e.Screen == "editor") player.CharacterEditor.EditorAction(e);
         else if (e.Screen == "file") player.CharacterEditor.Files.FileDialogAction(e);
         else if (e.Screen == FeedbackPanel.FeedbackScreen) player.FeedbackPanel.FeedbackFormAction(e);
+        else if (e.Screen == DebugCharactersLayout.Screen) player.CharactersWindow.Action(e);
         else if (player.Frontend.HandleFrontendAction(e)) player.UpdateMenuPause();
         else if (e.Screen == "stats" && e.Action == "select") player.StatsWindow.SelectedStat = e.Text;
         else if (e.Screen == "stats" && e.Action.StartsWith("stat:", StringComparison.Ordinal)) player.StatsWindow.SelectedStat = e.Action[5..];
@@ -91,6 +93,12 @@ sealed class ScreenRouter(PlayerInterface player)
         if (id == FeedbackPanel.FeedbackScreen)
         {
             player.FeedbackPanel.BindFeedbackScreen(b);
+            return b;
+        }
+
+        if (id == DebugCharactersLayout.Screen)
+        {
+            player.CharactersWindow.Bind(b);
             return b;
         }
 
@@ -226,6 +234,12 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     internal void AddFaithfulContent(string id, List<UiControl> controls)
     {
+        if (id == DebugCharactersLayout.Screen)
+        {
+            player.CharactersWindow.AddContent(controls);
+            return;
+        }
+
         if (AddFrontendContent(id, controls) || AddFeatureContent(id, controls)) return;
 
         // The bag window has no caption buttons (the vanilla screenshot): OPEN BAG closes it.
