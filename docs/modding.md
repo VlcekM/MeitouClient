@@ -220,7 +220,7 @@ holds refuses the second mod.
   a plain right click (a row makes the character offer a menu). Shift does not turn a mod row into a job; the row reads `Shift` itself. Menus
   that stay empty or fixed get no mod rows: no selection, a body the first selected carries (Put Down only), a body someone outside the player's
   faction carries; an animals-only selection keeps only the original's animal verbs. A source that throws, or returns a row without a caption
-  or action, and a row's action that throws, are logged and skipped.
+  or action, is logged once and dropped for the session; a row's action that throws is logged.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.

@@ -298,25 +298,27 @@ public sealed class UiHost
     public bool HasMenuVerbs => _menuVerbs.Count > 0;
 
     /// <summary>
-    /// The rows the extensions add to a character's right-click menu, in registration order; a source that throws, or names a row without a caption
-    /// or action, is reported as a <see cref="Diagnostic"/> and adds nothing to this menu. A row's action that throws is reported the same way.
+    /// The rows the extensions add to a character's right-click menu, in registration order (a copy of the sources is walked, so a source may
+    /// register or dispose). A source that throws, or names a row without a caption or action, is reported once as a <see cref="Diagnostic"/> and
+    /// dropped (it is asked every frame a character is under the cursor). A row's action that throws is reported each time.
     /// </summary>
     public IReadOnlyList<UiMenuVerb> CharacterMenuVerbs(UiMenuContext context)
     {
         var rows = new List<UiMenuVerb>();
-        foreach (var (owner, verbs) in _menuVerbs)
+        foreach (var entry in _menuVerbs.ToArray())
         {
             try
             {
-                var added = verbs(context).ToList();
-                if (added.Any(v => string.IsNullOrWhiteSpace(v.Caption) || v.Choose is null))
+                var added = entry.Verbs(context).ToList();
+                if (added.Any(v => v is null || string.IsNullOrWhiteSpace(v.Caption) || v.Choose is null))
                     throw new InvalidOperationException("A menu row needs a caption and an action.");
 
-                rows.AddRange(added.Select(v => v with { Choose = Guarded(owner, v) }));
+                rows.AddRange(added.Select(v => v with { Choose = Guarded(entry.Owner, v) }));
             }
             catch (Exception e)
             {
-                Diagnostic?.Invoke(new UiDiagnostic(owner, "menu verbs", e));
+                _menuVerbs.Remove(entry);
+                Diagnostic?.Invoke(new UiDiagnostic(entry.Owner, "menu verbs (dropped)", e));
             }
         }
 
@@ -324,10 +326,13 @@ public sealed class UiHost
     }
 
     /// <summary>
-    /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input.
+    /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
+    /// extension is removed.
     /// </summary>
     Action Guarded(string owner, UiMenuVerb row) => () =>
     {
+        if (!_extensions.Contains(owner)) return;
+
         try
         {
             row.Choose();
