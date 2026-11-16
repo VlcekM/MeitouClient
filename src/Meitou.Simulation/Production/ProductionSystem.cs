@@ -1920,12 +1920,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// Put an item into a container's grid (<see cref="ContainerAccess.ContainerFor"/>): at a free cell, or with X below 0 where it first fits
     /// (<see cref="PutInMachine.Count"/> units); a bag or limb item is refused like the machine's. A worn item re-dresses the character, so a
-    /// weapon put away leaves its hand (#761).
+    /// weapon put away leaves its hand (#761). Any container takes it, a building shop's stock one too, whose goods it then joins, as the original
+    /// (docs/game/locks.md "Containers"); its stolen mark as <see cref="PutInGrid"/>.
     /// </summary>
     void PutInContainer(World world, Locks.Fixture container, CharacterCold cold, PutInMachine put)
     {
-        // engine choice: a shop's stock is not a place to leave things
-        if (ContainerAccess.ShopOf(world, container) is not null) { world.Post("That stock is the shop's."); return; }
         var root = cold.Inventory!;
         var storage = container.Contents!;
         var item = root.All().ElementAtOrDefault(put.Item.Index);
@@ -1937,7 +1936,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (owner is null) return;
 
         bool worn = InventoryCommands.IsEquipmentSection(item.Section);
-        if (!PutInGrid(owner, item, storage, put)) return;
+        if (!PutInGrid(owner, item, storage, put, container.Owner)) return;
 
         world.Machines.Touch();
         if (worn) Assembly?.RefreshEquipment(cold);
@@ -1945,9 +1944,22 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Moves an item from <paramref name="owner"/> into a storage grid: with X below 0 where it first fits (<see cref="PutInMachine.Count"/>
-    /// units), else at the free cell asked for. False when nothing moved.
+    /// units), else at the free cell asked for. False when nothing moved. The units put in take <see cref="Player.HeldItemTheft.PutMark"/> for the
+    /// grid's <paramref name="faction"/> (back with the faction they were stolen from, unmarked) before they stack; what stays keeps its mark.
     /// </summary>
-    static bool PutInGrid(Inventory owner, ItemInstance item, Inventory storage, PutInMachine put)
+    static bool PutInGrid(Inventory owner, ItemInstance item, Inventory storage, PutInMachine put, int faction)
+    {
+        var mark = item.Mark;
+        item.Mark = Player.HeldItemTheft.PutMark(item, faction);
+        bool moved = MoveIntoGrid(owner, item, storage, put);
+        if (owner.Items.Contains(item)) item.Mark = mark;   // what stayed keeps its mark
+        return moved;
+    }
+
+    /// <summary>
+    /// The move of <see cref="PutInGrid"/>.
+    /// </summary>
+    static bool MoveIntoGrid(Inventory owner, ItemInstance item, Inventory storage, PutInMachine put)
     {
         if (put.X < 0) return InventoryCommands.MoveUnits(owner, item, InventoryCommands.ClickCount(item, put.Count), storage) > 0;
         if (put.Y < 0 || put.X > storage.Width - item.Width || put.Y > storage.Height - item.Height
@@ -2079,7 +2091,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return false;
         }
 
-        return PutInGrid(owner, item, storage, put);
+        return PutInGrid(owner, item, storage, put, Player.HeldItemTheft.OwnerOf(world, put.Site));
     }
 
     /// <summary>

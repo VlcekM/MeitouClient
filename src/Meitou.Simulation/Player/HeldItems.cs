@@ -360,7 +360,8 @@ sealed class HeldItems(PopulationData? data)
         // the old marks.
         bool changes = into != held.From, death = item.Death;
         var mark = item.Mark;
-        if (changes) (item.Death, item.Mark) = (false, HeldItemTheft.MarkFor(world, held, target.Owner, overwrite: false));
+        string? site = into.Holder == ItemHolder.Site ? into.Site : null;
+        if (changes) (item.Death, item.Mark) = (false, HeldItemTheft.MarkFor(world, held, target.Owner, overwrite: false, site));
         var p = new Placing(world, held, into, target, x, y, limit, buy, sell, trade, changes, death, mark);
         if (under is [var other])
         {
@@ -417,7 +418,7 @@ sealed class HeldItems(PopulationData? data)
                 if (ContainerAccess.ContainerFor(world, into.Site, held.Actor, out var opener) is { } container)
                 {
                     var grid = container.Contents!;
-                    bool open = opener is not null && world.Player.OpenContainer == into.Site && ContainerAccess.ShopOf(world, container) is null;
+                    bool open = opener is not null && world.Player.OpenContainer == into.Site;
                     return open ? new(grid, grid, "main", grid.Width, grid.Height, null, container, null) : null;
                 }
 

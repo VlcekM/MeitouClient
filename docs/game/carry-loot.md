@@ -193,6 +193,13 @@ player's) only when `InventoryGUI::isStealing(source window, other window)` (`FU
 
 The mark does not ask `isItOkForMeToLoot` (that only picks the crime), so a bandit's or bounty holder's gear is stolen from its faction too.
 Right click and drag mark only an item with no owner yet; a give to a portrait (`FUN_140712490`) calls `notifyTheftFrom` whatever the owner (**Verified** call sites).
+`isStealing` also holds for a move out of the player's window into another faction's (a container, #851); the crime and roll are skipped for a source of
+the player's faction (`FUN_1407916d0`), an ownerless item stays unmarked, and a marked one put into the window of its from-owner, or of an owner of the
+from-owner's faction, loses its mark (owner set to the null handle, vfunc 0x2b0; **Observed**, both paths). Meitou: `HeldItemTheft.PutMark`, for a container or storage machine whose
+owner is the mark's faction (the drag through `MarkFor`, the right click in `ProductionSystem.PutInGrid`), before the units stack; units left behind keep the mark.
+A drag out of a window not the player's into a container or storage machine (another faction's or the player's) marks an ownerless item from the source's owner and leaves a marked one
+as it is, whatever its owner (**Observed**, `FUN_140715560`: the mark needs the source window not the player's, the clearing the player's); Meitou
+`HeldItemTheft.MarkFor` / `TheftMark`.
 
 Meitou: `CrimeSystem.IsStealing` (character and container overloads) gates `Pickpocket`, `Steal` and the marks (`MarksTheft`, container takes);
 the player's-windows and trade terms are the callers' own-faction tests and the separate trade window.
