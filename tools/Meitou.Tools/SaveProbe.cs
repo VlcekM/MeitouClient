@@ -71,6 +71,10 @@ static class SaveProbe
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
+            case ("turrets", >= 4):
+                TurretProbe.Run(probe, a[0], int.Parse(a[1]), new Vector2(float.Parse(a[2]), float.Parse(a[3])),
+                    a.Count > 4 ? int.Parse(a[4]) : 10, a.Count > 5 ? int.Parse(a[5]) : 40);
+                return true;
             case ("anim", >= 1): AnimationProbe.Run(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 30, a.Count > 2 ? a[2] : null); return true;
             case ("assault", >= 1): Assault(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("pace", >= 3): Pace(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
@@ -1403,6 +1407,7 @@ static class SaveProbe
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
+              turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said

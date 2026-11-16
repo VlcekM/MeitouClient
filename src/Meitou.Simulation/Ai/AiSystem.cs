@@ -1849,7 +1849,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A turret guard: to the gun of the turret its squad claimed for it, facing its way; without one it stands.
+    /// A turret guard: runs to the gun of the turret its squad claimed for it, facing its way; without one it stands. The move-task start
+    /// (<c>FUN_140332390</c>, <b>Verified</b>) sets an NPC's move to run (mode 2) when its target is a building whose use task (vfunc <c>0x418</c>) is
+    /// 146, which <c>TurretBuilding</c> returns (<c>FUN_140440550</c>).
     /// </summary>
     void ActTurret(World world, int slot, AiMind mind, Blackboard board)
     {
@@ -1859,7 +1861,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             var spot = TurretSpot(world, turret);
 
-            if (GoToSpot(world, slot, mind, Flat(spot), GiveUp.Post, SpeedMode.Walk, TurretSlack, spot.Y))
+            if (GoToSpot(world, slot, mind, Flat(spot), GiveUp.Post, SpeedMode.Free, TurretSlack, spot.Y))
             {
                 table.Next[slot].Yaw = turret.Yaw;   // at the gun, facing its way
                 Become(world, slot, CharacterTask.Idle);

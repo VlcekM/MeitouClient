@@ -1924,8 +1924,9 @@ signal 17, goals Stay home and Patrol hometown, no Relaxing) reserve no table, a
 
 Turret goals (149, 222, 234, 146) man a turret of the squad's town: a placed BUILDING with a
 `BUILDING_FUNCTIONALITY` function 12 (`TownBuilding.Turret`: its `use range` and `gun turret`
-GUN_DATA). In member order each slot claims the nearest free turret and walks to a spot behind its
-gun, facing its way; the home-building goal (222) takes only a turret mounted on its home (the
+GUN_DATA). In member order each slot claims the nearest free turret and runs to a spot behind its
+gun, facing its way (**Verified**: the move-task start `FUN_140332390` sets a non-player mover to mode 2 when its target building's
+use task, vfunc `0x418`, is 146, which `TurretBuilding` returns, `FUN_140440550`; `AiSystem.ActTurret`, `SpeedMode.Free`); the home-building goal (222) takes only a turret mounted on its home (the
 state's `mounted` handle). Claim order and gunner spot are engine choices. The goals are done while
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
 enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).

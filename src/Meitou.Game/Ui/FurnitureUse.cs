@@ -358,11 +358,11 @@ sealed class FurnitureUse(PlayerInterface player)
     }
 
     /// <summary>
-    /// The pointer over a container (docs/game/ui-input.md "Building hover and click", StorageBuilding): <c>search</c> for the player's own or an
-    /// unowned one, else <c>lockpick</c> while locked and <c>scavenge</c> when not.
+    /// The pointer over a container (docs/game/ui-input.md "Building hover and click", StorageBuilding slot 130 <c>FUN_1405476c0</c>, shared by
+    /// UseableStuff): <c>use</c> for the player's own, any other (an unowned one too) <c>lockpick</c> while locked and <c>scavenge</c> when not.
     /// </summary>
     internal string ContainerPointer(ContainerSpot container) =>
-        container.Owner < 0 || container.Owner == player.Session.World.Player.Faction ? "search" : container.Locked ? "lockpick" : "scavenge";
+        container.Owner == player.Session.World.Player.Faction ? "use" : container.Locked ? "lockpick" : "scavenge";
 
     #endregion
 
