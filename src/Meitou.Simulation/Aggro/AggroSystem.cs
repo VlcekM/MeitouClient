@@ -1701,7 +1701,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// Slot 126 of the master (<c>FUN_1407923d0</c>, the rule of <see cref="Dialogue.DialogueSystem"/>'s <c>RegardsFriendly</c> for an NPC owner):
     /// never when the master squad holds TEMP_ENEMY on the character, always with TEMP_ALLY or a love tag, else the master's faction is allied to the
-    /// character's (the same faction is <see cref="MasterSpares"/>'s first test).
+    /// faction the character passes for: <c>FUN_1408569a0</c> asks with the disguise flag set, so a working uniform's faction stands in for its own
+    /// in this last test (<c>FUN_1407c0520</c>, <see cref="Crime.ArrestSystem.SeenFaction"/>, <b>Verified</b>); the same-faction test, which is
+    /// <see cref="MasterSpares"/>'s first, reads the real one.
     /// </summary>
     static bool MasterRegardsFriendly(ref Scan s, Squad master, int slot, CharacterCold c)
     {
@@ -1712,7 +1714,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if ((tags >> Dialogue.MemoryTag.TempAlly & 1) != 0 || (entry?.Long & Dialogue.MemoryTag.LoveMask) is > 0) return true;
         }
 
-        return s.Relations.Contains(master.Faction) && s.Relations.Contains(c.Faction) && s.Relations.IsAlly(master.Faction, c.Faction);
+        int seen = Crime.ArrestSystem.SeenFaction(c);
+        return s.Relations.Contains(master.Faction) && s.Relations.Contains(seen) && s.Relations.IsAlly(master.Faction, seen);
     }
 
     /// <summary>

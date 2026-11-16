@@ -241,9 +241,11 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
   a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`.
 - **`FUN_1408569a0`'s obedient-slave branch** (**Verified**, decompile): for a looker whose faction has +0x250, in slave state 1, holding job 187 (`FUN_140597380`), whose owner hand
-  resolves and whose owner calls the target friendly (slot 126 `FUN_1407923d0`, asked to read the target's disguise), it holds, so slot 125 says not an enemy: an obedient player slave takes
+  resolves and whose owner calls the target friendly (slot 126 `FUN_1407923d0`, asked to read the target's disguise: only its last test, the alliance, takes the faction a working uniform
+  gives, `FUN_1407c0520`; the same-faction and tag tests read the real one), it holds, so slot 125 says not an enemy: an obedient player slave takes
   none of its master's friends for an enemy (the tags still make one). Meitou (`AggroSystem.MasterSpares`): both slave-looker rules, the owner being the slave's master squad
-  (`CharacterCold.SlaveMaster`; its faction, its squad memory for slot 126's tags); slot 126's disguise is left out. The rest of `FUN_1408569a0` (for an NPC looker it never drops a
+  (`CharacterCold.SlaveMaster`, after a load from the save's or the job's owner handle; its faction, its squad memory for slot 126's tags, the disguise through
+  `ArrestSystem.SeenFaction`). The rest of `FUN_1408569a0` (for an NPC looker it never drops a
   target its faction is hostile to) is applied by the finders, not here ([ai-tasks](ai-tasks.md#combat-goals)).
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
