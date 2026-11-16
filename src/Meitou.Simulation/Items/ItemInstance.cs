@@ -308,10 +308,18 @@ public sealed class ItemInstance
     public FcsRecord? Saved { get; set; }
 
     /// <summary>
-    /// A copy of this item with another quantity (a stack split off; never used for a backpack, whose contents are not copied). Fewer units than
-    /// the stack's are full ones: the stack keeps its partly used unit (<see cref="Charges"/>), which only a copy of the whole stack carries.
+    /// A copy of this item with another quantity (a stack split off). A bag gets its own empty inventory with the same size and stack bonuses;
+    /// its contents are not copied. Fewer units than the stack's are full ones: the stack keeps its partly used unit (<see cref="Charges"/>),
+    /// which only a copy of the whole stack carries.
     /// </summary>
-    public ItemInstance WithQuantity(int quantity) => Copied(quantity, null);
+    public ItemInstance WithQuantity(int quantity) => Copied(quantity, Contents is { } bag
+        ? new Inventory(bag.Width, bag.Height)
+        {
+            StackBonusMinimum = bag.StackBonusMinimum,
+            StackBonusMult = bag.StackBonusMult,
+            Limited = bag.Limited,
+        }
+        : null);
 
     /// <summary>
     /// A copy of the whole stack, a bag with a copy of what it holds (the trader window's copy of a building shop's goods,
