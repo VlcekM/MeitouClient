@@ -209,7 +209,7 @@ public static class CorpseDisposal
         if (!carry.LetGo(world, carrier) || !table.IsAlive(body)) return false;
 
         if (label.Length > 0) world.Floaters?.Enqueue(Floater.Label(machine + new Vector3(0, 5, 0), label));
-        if (table.TryResolveNext(body, out int b)) world.EmitSound(SoundKind.FedToMachine, b, table.Next[b].Position);
+        if (table.TryResolveNext(body, out int b)) world.EmitSound(SoundKind.FedToMachine, b, table.Next[b].Position, armour: world.BodyArmourMaterial(b));
 
         world.Uniques.Left(body);
         table.Remove(body);
