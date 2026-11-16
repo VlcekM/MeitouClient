@@ -8,15 +8,17 @@ using Meitou.Simulation.Bodies;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// Visual-only transfer from wet terrain blood to moving characters' feet. Sampled from the shown world on both renderers.
+/// A human foot settling on the ground, found from the posed body by the ground trails (docs/render-terrain.md "Ground trails"): the character, which
+/// foot, the sole's centre on the ground and the way its toes point.
+/// </summary>
+readonly record struct Footfall(CharacterSnapshot Actor, bool Right, Vector3 At, Vector2 Along);
+
+/// <summary>
+/// Visual-only transfer from wet terrain blood to moving characters' feet (docs/game/blood-decals.md "Bloody footprints"). Every step is a ground
+/// trails' footfall (<see cref="Footfall"/>) of a drawn body; a body with no pose leaves none.
 /// </summary>
 sealed class BloodFootprints(GameHost host)
 {
-    /// <summary>
-    /// Distance between walking contacts, across the ground.
-    /// </summary>
-    const float StepLength = 4.2f;
-
     /// <summary>
     /// Seconds a print remains on the terrain, and seconds blood stays wet on a sole.
     /// </summary>
@@ -39,7 +41,7 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Last sampled position and the gait's progress for a single character.
+    /// A walker near blood: where it was last seen and the blood on its soles.
     /// </summary>
     sealed class Trail(Vector3 position)
     {
@@ -47,18 +49,6 @@ sealed class BloodFootprints(GameHost host)
         /// Last position of the character.
         /// </summary>
         public Vector3 Position = position;
-        /// <summary>
-        /// Ground distance travelled since the last footfall.
-        /// </summary>
-        public float Distance = StepLength / 2;
-        /// <summary>
-        /// Which foot takes the next step.
-        /// </summary>
-        public bool Right;
-        /// <summary>
-        /// Whether the last sample moved, used to wet the feet when starting from a pool.
-        /// </summary>
-        public bool Moving;
         /// <summary>
         /// Last shown tick in which the character was eligible.
         /// </summary>
@@ -85,12 +75,33 @@ sealed class BloodFootprints(GameHost host)
     long _tick = -1;
 
     /// <summary>
+    /// The game time of the last snapshot examined, for the footfalls raised between snapshots.
+    /// </summary>
+    double _now;
+
+    /// <summary>
     /// Clears the feet's residual blood when the game loads another world.
     /// </summary>
     public void Clear()
     {
         _trails.Clear();
         _tick = -1;
+    }
+
+    /// <summary>
+    /// Whether footfalls are wanted at all: the switch is on and there is blood on the terrain.
+    /// </summary>
+    public bool Wanted(TerrainDecalStore? store) => host.WorldOptions.MeitouFootprints && store is { Count: > 0 };
+
+    /// <summary>
+    /// Whether a character's footfalls are wanted: a walking human by blood, or one with blood left on a sole.
+    /// </summary>
+    public bool Wants(TerrainDecalStore store, CharacterSnapshot actor)
+    {
+        if (!Walks(actor, out _)) return false;
+        if (_trails.TryGetValue(actor.Id, out var trail) && (Wet(trail.Left, _now) || Wet(trail.RightSole, _now))) return true;
+
+        return HasNearbyDecals(store, Xz(actor.Position));
     }
 
     /// <summary>
@@ -113,10 +124,10 @@ sealed class BloodFootprints(GameHost host)
         _tick = snapshot.Tick;
 
         var focus = Xz(host.Camera.Target);
-        double now = _tick * (double)host.Session.World.TickSeconds;
+        double now = _now = _tick * (double)host.Session.World.TickSeconds;
         foreach (var actor in snapshot.Characters)
         {
-            if (actor.Down || actor.Body is { Crawling: true } || actor.Appearance is not { Animal: null } look) continue;
+            if (!Walks(actor, out _)) continue;
             var here = Xz(actor.Position);
             if (Vector2.DistanceSquared(focus, here) > Range * Range) continue;
 
@@ -129,13 +140,54 @@ sealed class BloodFootprints(GameHost host)
 
             if (!inDecalCell && !Wet(trail.Left, now) && !Wet(trail.RightSole, now)) continue;
             trail.Seen = _tick;
-            Advance(store, trail, actor, look, now);
+            Follow(trail, actor);
         }
 
         foreach (var (id, trail) in _trails)
             if (trail.Seen != _tick) _gone.Add(id);
         foreach (var id in _gone) _trails.Remove(id);
         _gone.Clear();
+    }
+
+    /// <summary>
+    /// A footfall from the posed body: wets that foot in a source, or leaves a print where it settled while the sole is still wet.
+    /// </summary>
+    public void Footfall(TerrainDecalStore store, in Footfall step)
+    {
+        if (!Wanted(store) || !Walks(step.Actor, out var look) || !HasFoot(step.Actor, step.Right)) return;
+
+        if (!_trails.TryGetValue(step.Actor.Id, out var trail))
+        {
+            if (!HasNearbyDecals(store, Xz(step.At))) return;
+            _trails.Add(step.Actor.Id, trail = new Trail(step.Actor.Position) { Seen = _tick });
+        }
+
+        var across = new Vector2(step.Along.Y, -step.Along.X);
+        Deposit(store, trail, step.Right, step.At, across, Boot(look), look, _now);
+    }
+
+    /// <summary>
+    /// A human on its feet, the only kind that leaves these prints.
+    /// </summary>
+    static bool Walks(CharacterSnapshot actor, out CharacterAppearance look)
+    {
+        look = actor.Appearance!;
+        return !actor.Down && actor.Body is not { Crawling: true } && actor.Appearance is { Animal: null };
+    }
+
+    /// <summary>
+    /// The boots worn, whose sole the print takes; null barefoot.
+    /// </summary>
+    static CharacterPart? Boot(CharacterAppearance look) =>
+        look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
+
+    /// <summary>
+    /// The leg fitted on that side (LIMB_REPLACEMENT <c>slot</c> 52 left, 53 right: a prosthetic, or a Human or Hive leg); null for the body's own.
+    /// </summary>
+    static CharacterPart? Prosthetic(CharacterAppearance look, bool right)
+    {
+        int slot = right ? 53 : 52;
+        return look.Parts.FirstOrDefault(part => part.Record.Type == FcsRecordType.LimbReplacement && part.Record.GetInt("slot") == slot);
     }
 
     /// <summary>
@@ -157,72 +209,23 @@ sealed class BloodFootprints(GameHost host)
     }
 
     /// <summary>
-    /// Wets both feet where a walker begins moving out of a pool.
+    /// Follows the walker's position; a jump longer than <see cref="MaxMovement"/> is a relocation (a teleport, a load), which dries its soles.
     /// </summary>
-    void WetFeet(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, Vector3 at, Vector2 across, double now)
-    {
-        if (!OnTerrain(at)) return;
-
-        var point = Xz(at);
-        if (HasFoot(actor, false) && SourceColour(store, point + across) is { } left) trail.Left = Sole.Wet(left, now);
-        if (HasFoot(actor, true) && SourceColour(store, point - across) is { } right) trail.RightSole = Sole.Wet(right, now);
-    }
-
-    /// <summary>
-    /// Uses distance along the motion segment to keep steps spaced consistently at different frame rates.
-    /// </summary>
-    void Advance(TerrainDecalStore store, Trail trail, CharacterSnapshot actor, CharacterAppearance look, double now)
+    static void Follow(Trail trail, CharacterSnapshot actor)
     {
         var from = trail.Position;
         trail.Position = actor.Position;
-        var movement = Xz(actor.Position - from);
-        float length = movement.Length();
-        if (length > MaxMovement || MathF.Abs(actor.Position.Y - from.Y) > MaxMovement)
-        {
+        if (Xz(actor.Position - from).Length() > MaxMovement || MathF.Abs(actor.Position.Y - from.Y) > MaxMovement)
             trail.Left = trail.RightSole = default;
-            trail.Distance = StepLength / 2;
-            trail.Moving = false;
-            return;
-        }
-        if (length <= .002f)
-        {
-            trail.Moving = false;
-            return;
-        }
-
-        var forward = movement / length;
-        var across = new Vector2(forward.Y, -forward.X);
-        if (!trail.Moving) WetFeet(store, trail, actor, from, across, now);
-        trail.Moving = true;
-
-        float travel = StepLength - trail.Distance;
-        if (travel > length)
-        {
-            trail.Distance += length;
-            return;
-        }
-
-        var boot = look.Parts.FirstOrDefault(static part => part.Slot == AttachSlot.Boots && part.Record.Type == FcsRecordType.Armour);
-        for (; travel <= length; travel += StepLength)
-        {
-            var at = Vector3.Lerp(from, actor.Position, travel / length);
-            if (HasFoot(actor, trail.Right)) Footfall(store, trail, actor.Id, at, across, boot, now);
-            trail.Right = !trail.Right;
-        }
-        trail.Distance = length - travel + StepLength;
     }
 
     /// <summary>
     /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
     /// </summary>
-    void Footfall(TerrainDecalStore store, Trail trail, CharacterId actor, Vector3 at, Vector2 across, CharacterPart? boot, double now)
+    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
     {
-        bool right = trail.Right;
         ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
-        var point = Xz(at) + across * (right ? -1 : 1);
-        (point, across) = FootPlacement(actor, right, point, across);
-        at.X = point.X;
-        at.Z = point.Y;
+        var point = Xz(at);
         if (!OnTerrain(at))
         {
             if (at.Y < WorldWater.Height + .5f) sole = default;
@@ -231,42 +234,25 @@ sealed class BloodFootprints(GameHost host)
         var source = SourceColour(store, point);
         if (source is null && !Wet(sole, now)) return;
 
+        // A boot prints its sole's outline. A foot, the body's or a fitted leg's, prints its skin sole, else (a robot's frame) its outline; with no
+        // mesh, the generic mask: a boot's for a boot or a prosthetic, the bare one for a natural foot.
         bool bootOnThisFoot = boot is not null && boot.HideSide != (right ? 2 : 1);
-        string? mesh = bootOnThisFoot ? host.Assets.FindMesh(boot!.Mesh) : null;
+        var leg = Prosthetic(look, right);
+        string? mesh = host.Assets.FindMesh(bootOnThisFoot ? boot!.Mesh : leg?.Mesh ?? look.BodyMesh);
         if (source is { } colour)
         {
             sole = Sole.Wet(colour, now);
-            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh);
+            if (mesh is not null) host.Gpu.Decals?.PrepareFootprint(mesh, bare: !bootOnThisFoot);
+            if (leg is not null && host.Assets.FindMesh(look.BodyMesh) is { } own) host.Gpu.Decals?.PrepareFootprint(own, bare: true);
             return;
         }
 
         uint alpha = (uint)(50 + 45 * sole.Steps);
-        byte variant = (byte)((bootOnThisFoot ? 0 : 2) + (right ? 1 : 0));
+        byte variant = (byte)((bootOnThisFoot || leg is not null ? 0 : 2) + (right ? 1 : 0));
         at.Y = host.Gpu.Terrain.HeightAt(point.X, point.Y);
-        host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh);
+        host.Gpu.Decals?.AddFootprint(at, across, alpha << 24 | sole.Colour, PrintLife, variant, mesh, skin: !bootOnThisFoot,
+            host.Assets.FindMesh(look.BodyMesh));
         sole.Steps--;
-    }
-
-    /// <summary>
-    /// The current sole centre and heading from the last visible pose. While a foot is in the air or unposed, use the stride position.
-    /// </summary>
-    (Vector2 Point, Vector2 Across) FootPlacement(CharacterId actor, bool right, Vector2 point, Vector2 across)
-    {
-        if (host.Gpu.Characters is not { } characters) return (point, across);
-
-        long key = host.DrawKey(actor);
-        var foot = characters.BonePosition(key, right ? "Bip01 R Foot" : "Bip01 L Foot");
-        var toe = characters.BonePosition(key, right ? "Bip01 R Toe0" : "Bip01 L Toe0");
-        if (foot is not { } heel || toe is not { } tip) return (point, across);
-
-        var centre = Xz(Vector3.Lerp(heel, tip, .46f));
-        var forward = Xz(tip - heel);
-        float floor = host.Gpu.Terrain.HeightAt(centre.X, centre.Y);
-        bool grounded = Vector2.DistanceSquared(centre, point) <= 6.25f && forward.LengthSquared() >= .09f && MathF.Abs(tip.Y - floor) <= 1.15f;
-        if (!grounded) return (point, across);
-
-        forward = Vector2.Normalize(forward);
-        return (centre, new Vector2(forward.Y, -forward.X));
     }
 
     /// <summary>

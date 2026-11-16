@@ -573,18 +573,21 @@ public sealed unsafe partial class TerrainDecalRenderer
     internal void ClearFootprints() => _footprints.Clear();
 
     /// <summary>
-    /// Starts preparing the equipped sole mask while the foot is still inside the pool.
+    /// Starts preparing the sole mask (the equipped footwear's, or a <paramref name="bare"/> body's feet) while the foot is still inside the pool.
     /// </summary>
-    internal void PrepareFootprint(string mesh) => _soles.Prepare(mesh);
+    internal void PrepareFootprint(string mesh, bool bare = false) => _soles.Prepare(mesh, bare);
 
     /// <summary>
-    /// Records a ground imprint at the terrain's height with an individual pressure pattern.
+    /// Records a ground imprint at the terrain's height with an individual pressure pattern. A <paramref name="skin"/> mesh with no foot of its own
+    /// (a fitted leg's cap) gives way to <paramref name="body"/>'s.
     /// </summary>
-    internal void AddFootprint(Vector3 at, Vector2 across, uint abgr, float life, byte variant, string? mesh)
+    internal void AddFootprint(Vector3 at, Vector2 across, uint abgr, float life, byte variant, string? mesh, bool skin, string? body = null)
     {
         if (_footprints.Count >= MaxFootprints) return;
 
-        var sole = mesh is null ? null : _soles.For(mesh, (variant & 1) != 0);
+        bool right = (variant & 1) != 0;
+        var sole = mesh is null ? null : _soles.For(mesh, right, bare: skin);
+        if (sole is null && skin && body is not null && mesh is not null && _soles.Footless(mesh)) sole = _soles.For(body, right, bare: true);
         if (sole is null) EnsureGenericFootprints();
 
         uint sample = unchecked(++_footprintSerial * 2654435761u);

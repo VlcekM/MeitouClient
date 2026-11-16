@@ -2883,6 +2883,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         host.Gpu.GameHours = host.Session.Clock.HoursSinceStart;
         host.BloodDecals.UpdateBlood();
+        host.UpdateTrails();   // no trail renderer here: only the footfalls for the blood prints
         host.Modding.UpdateModHits();
         if (_characters is not null)
         {
