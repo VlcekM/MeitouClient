@@ -1544,23 +1544,30 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     public bool GoalDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role, Meitou.Data.Gameplay.Ai.TaskType type)
     {
-        IReadOnlyList<Meitou.Data.Gameplay.Ai.AiGoal>? goals = null;
-        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } p)
-        {
-            if (inst.Phase > 2) return false;
-            if (CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == p.Id) is not { } id) return false;
-
-            goals = _data.Ai.Package(id)?.Goals(role);
-        }
-        else if (squad.Ai is { Roles: { } roles }) goals = roles[(int)role];
-
-        if (goals is null) return false;
+        if (GoalsOf(world, squad, role) is not { } goals) return false;
 
         int hour = world.Hour;
         for (int k = 0; k < goals.Count; k++)
             if (goals[k].Task.Type == type && goals[k].InWindow(hour)) return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// <paramref name="role"/>'s goals in the package the squad runs now (a campaign's phase package, else its blackboard's), in list order; null
+    /// for none.
+    /// </summary>
+    public IReadOnlyList<Meitou.Data.Gameplay.Ai.AiGoal>? GoalsOf(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role)
+    {
+        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } p)
+        {
+            if (inst.Phase > 2) return null;
+            if (CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == p.Id) is not { } id) return null;
+
+            return _data.Ai.Package(id)?.Goals(role);
+        }
+
+        return squad.Ai is { Roles: { } roles } ? roles[(int)role] : null;
     }
 
     /// <summary>
