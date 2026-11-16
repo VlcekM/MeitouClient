@@ -237,6 +237,17 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// The tick buttons the interface extensions add to the squad AI tab (<see cref="UiHost.SquadAiOptions"/>), given the snapshot the tab is laid
+    /// out from; none without such an extension.
+    /// </summary>
+    internal IReadOnlyList<UiSquadAiOption> ModSquadAiOptions(WorldSnapshot snapshot)
+    {
+        if (!_uiHost.HasSquadAiOptions) return [];
+
+        return _uiHost.SquadAiOptions(new UiSquadAiContext(snapshot, () => Session.World.Tick, Say));
+    }
+
+    /// <summary>
     /// Future code-mod loader entry point; disposal removes the extension's owned registrations.
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
@@ -251,6 +262,18 @@ sealed partial class PlayerInterface
     /// </summary>
     internal IReadOnlyList<(string Owner, UiMapMarker Marker)> ModMapMarkers(UiMapContext context, Func<string, bool> knownGroup) =>
         _uiHost.MapMarkers(context, knownGroup);
+
+    /// <summary>
+    /// The rows the interface extensions add to <paramref name="target"/>'s right-click menu (<see cref="UiHost.CharacterMenuVerbs"/>); none
+    /// without such an extension.
+    /// </summary>
+    internal IEnumerable<(string Caption, Action Give)> ModMenuVerbs(CharacterSnapshot target)
+    {
+        if (!_uiHost.HasMenuVerbs) return [];
+
+        var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
+        return _uiHost.CharacterMenuVerbs(context).Select(v => (v.Caption, v.Choose));
+    }
 
     /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.

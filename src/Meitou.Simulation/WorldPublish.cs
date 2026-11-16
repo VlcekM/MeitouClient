@@ -246,6 +246,7 @@ public sealed partial class World
             KnownFactions = Player.KnownFactions,
             SquadAi = Player.SquadAi,
             PlayerSquads = PublishSquads(),
+            IndependentSquads = PublishIndependentSquads(),
             ActiveSquad = Player.Squad,
             OpenLoot = Player.OpenLoot,
             LootOpener = Player.LootOpener,
@@ -344,7 +345,13 @@ public sealed partial class World
     /// <summary>
     /// The sneaker's watchers of the last <see cref="AggroSystem.WatcherSeconds"/> that are still about, where they stand now.
     /// </summary>
-    SquadView[] PublishSquads() => [.. SquadManagement.PlayerSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+    SquadView[] PublishSquads() => [.. SquadManagement.LedSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+
+    /// <summary>
+    /// The player's squads the player does not lead, for <see cref="WorldSnapshot.IndependentSquads"/>.
+    /// </summary>
+    SquadView[] PublishIndependentSquads() =>
+        [.. SquadManagement.PlayerSquads(this).Where(s => s.Independent).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
 
     #endregion
 

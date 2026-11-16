@@ -352,7 +352,7 @@ public static class SaveLoader
         {
             world.Player.Squad = shown.Id;
         }
-        else if (SquadManagement.PlayerSquads(world) is { Count: > 0 } squads)
+        else if (SquadManagement.LedSquads(world) is { Count: > 0 } squads)
             world.Player.Squad = (squads.FirstOrDefault(s => s.Members.Count > 0) ?? squads[0]).Id;
     }
 

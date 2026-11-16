@@ -18,62 +18,69 @@ public static class PlayerRelations
     {
         int player = relations.PlayerFaction;
         if (player < 0 || faction == player || !relations.Contains(faction)) return;
-        Event(world, relations, faction, player, kind, x);
+        Event(world, relations, faction, player, kind, x, CharacterId.None, CharacterId.None);
     }
 
     /// <summary>
     /// Slot 5 of <paramref name="a"/>'s table about <paramref name="b"/> (<see cref="FactionRelations.Event"/>); when <paramref name="b"/> is the
     /// player's faction the threshold message of the change is posted, as the game's slot does (<c>FUN_1406b2d20</c> tests the other faction's player
-    /// flag).
+    /// flag). <paramref name="doer"/> and <paramref name="victim"/> are passed on to the observers.
     /// </summary>
-    public static void Event(World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x, int doer = -1, int victim = -1)
+    public static void Event(
+        World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x, CharacterId doer, CharacterId victim)
     {
         var (before, after) = relations.Event(a, b, kind, x);
         if (before == after) return;
+
         Posted(world, relations, a, b, before, after);
+        Observed(world, relations, a, b, before, after, new(RelationCauseType.Deed, kind, doer, victim));
 
         // A blow or a bandage changes the relation a little each time: only a crossing is logged, its text made only then.
         bool always = kind is not (RelationEventKind.Hit or RelationEventKind.FirstAid);
         if (!always && Crossing(before, after).Length == 0) return;
-        string cause = doer >= 0 && victim >= 0 ? $"{kind} of {EventLog.Who(world, victim)} by {EventLog.Who(world, doer)}" : kind.ToString();
-        Logged(world, relations, a, b, before, after, cause);
+
+        Logged(world, relations, a, b, before, after, Describe(world, new(RelationCauseType.Deed, kind, doer, victim)));
     }
 
     /// <summary>
-    /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side.
+    /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side; the observers get
+    /// <paramref name="cause"/>.
     /// </summary>
-    public static void Add(World world, FactionRelations relations, int a, int b, float delta, string? cause = null)
+    public static void Add(World world, FactionRelations relations, int a, int b, float delta, RelationCause cause, string? log = null)
     {
         var (before, after) = relations.Add(a, b, delta);
         if (before == after) return;
+
         Posted(world, relations, a, b, before, after);
-        Logged(world, relations, a, b, before, after, cause ?? "a change");
+        Observed(world, relations, a, b, before, after, cause);
+        Logged(world, relations, a, b, before, after, log ?? Describe(world, cause));
     }
 
     /// <summary>
     /// Faction <paramref name="a"/> declares war on <paramref name="b"/> (<see cref="FactionRelations.DeclareWar"/>, the dialogue's DECLARE_WAR):
     /// "War breaks out between {1} and {2}" when the war flag was clear, and the threshold message when <paramref name="b"/> is the player's faction.
-    /// Nothing when <paramref name="a"/> is already hostile.
+    /// Nothing when <paramref name="a"/> is already hostile. The observers see a change of the relation or of the war flag.
     /// </summary>
-    public static void DeclareWar(World world, FactionRelations relations, int a, int b)
+    public static void DeclareWar(World world, FactionRelations relations, int a, int b, CharacterId speaker)
     {
         var (before, after, started) = relations.DeclareWar(a, b);
         if (started) world.Post(Loc.Tr("War breaks out between {1} and {2}", relations.Factions[a].Name, relations.Factions[b].Name));
-        if (before == after) return;
-        Posted(world, relations, a, b, before, after);
-        Logged(world, relations, a, b, before, after, "war declared (dialogue)");
+        if (before != after) Posted(world, relations, a, b, before, after);
+        if (started || before != after) Observed(world, relations, a, b, before, after, new(RelationCauseType.WarDeclared, speaker));
+        if (before != after) Logged(world, relations, a, b, before, after, "war declared (dialogue)");
     }
 
     /// <summary>
     /// Faction <paramref name="a"/> ends its war with <paramref name="b"/> (<see cref="FactionRelations.EndWar"/>, the dialogue's END_WAR), with the
-    /// threshold message as above.
+    /// threshold message as above. The observers see a change of the relation or of the war flag.
     /// </summary>
-    public static void EndWar(World world, FactionRelations relations, int a, int b)
+    public static void EndWar(World world, FactionRelations relations, int a, int b, CharacterId speaker)
     {
+        bool atWar = relations.AtWar(a, b);
         var (before, after) = relations.EndWar(a, b);
-        if (before == after) return;
-        Posted(world, relations, a, b, before, after);
-        Logged(world, relations, a, b, before, after, "war ended (dialogue)");
+        if (before != after) Posted(world, relations, a, b, before, after);
+        if (atWar || before != after) Observed(world, relations, a, b, before, after, new(RelationCauseType.WarEnded, speaker));
+        if (before != after) Logged(world, relations, a, b, before, after, "war ended (dialogue)");
     }
 
     /// <summary>
@@ -87,6 +94,22 @@ public static class PlayerRelations
             $"{relations.Factions[a].Name} towards {relations.Factions[b].Name}: {before:0.##} -> {after:0.##}{crossing}; {cause}");
         world.Events.Line(world, "relation", text);
     }
+
+    /// <summary>
+    /// The event log's cause text of <paramref name="cause"/>: a deed's kind with its victim and doer when both are known.
+    /// </summary>
+    static string Describe(World world, RelationCause cause) => cause.Type switch
+    {
+        RelationCauseType.Deed when !cause.Actor.IsNone && !cause.Target.IsNone =>
+            $"{cause.Deed} of {EventLog.Who(world, cause.Target.Slot)} by {EventLog.Who(world, cause.Actor.Slot)}",
+        RelationCauseType.Deed => cause.Deed.ToString(),
+        RelationCauseType.Crime => "a friend's crime witnessed",
+        RelationCauseType.Trade => "a character sold or bought free",
+        RelationCauseType.Dialogue => "a dialogue line",
+        RelationCauseType.WarDeclared => "war declared (dialogue)",
+        RelationCauseType.WarEnded => "war ended (dialogue)",
+        _ => "a change",
+    };
 
     /// <summary>
     /// " (now hostile)" and the like when the change crosses the hostile or the ally line; empty otherwise.
@@ -109,6 +132,15 @@ public static class PlayerRelations
         // The player's row is kept in the other faction's table: either way round the other faction names the message.
         int other = a == relations.PlayerFaction ? b : b == relations.PlayerFaction ? a : -1;
         if (other >= 0 && Notice(relations.Factions[other].Name, before, after) is { } text) world.Post(text);
+    }
+
+    /// <summary>
+    /// Passes a change to the world's observers (<see cref="IRelationChangeObserver"/>), the player's row as the other faction's view of the player.
+    /// </summary>
+    static void Observed(World world, FactionRelations relations, int a, int b, float before, float after, RelationCause cause)
+    {
+        if (a == relations.PlayerFaction && a >= 0) (a, b) = (b, a);
+        world.RelationObservers.Observe(world, new RelationChange(world.Tick, a, b, before, after, cause));
     }
 
     /// <summary>
@@ -173,7 +205,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     {
         var table = world.Characters;
         if (table.Cold(doer) is not { } d || table.Cold(victim) is not { } v || d.Faction == v.Faction || x == 0) return;
-        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x, doer, victim);
+        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x, table.IdOf(doer), table.IdOf(victim));
     }
 
     /// <summary>

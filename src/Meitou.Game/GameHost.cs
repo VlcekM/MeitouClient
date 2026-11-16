@@ -1126,7 +1126,7 @@ sealed partial class GameHost(
             return [.. d.Relations.Factions
                 .Select((f, i) => (f, i))
                 .Where(p => p.i != own && known.Contains(p.i) && !p.f.NotReal && p.f.Id != "GENERATION_TEMPLATE_FACTION")
-                .Select(p => (p.f.Name, d.Relations.Get(own, p.i)))];
+                .Select(p => new FactionListRow(p.i, p.f.Name, d.Relations.Get(own, p.i)))];
         };
 
         // Its info panel's contracts and events, read from the live world as the list above is (a collection changed mid-read shows the panel empty

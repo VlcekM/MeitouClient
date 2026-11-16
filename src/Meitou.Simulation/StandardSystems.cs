@@ -553,7 +553,7 @@ public static class StandardSystems
             // The relation events of deeds (blows, first aid, cagings) go with the live relations, which the aggro part brings.
             _deeds = Has(StandardParts.Aggro) ? new FactionDeeds(_data.Relations, _data) : null;
             if (_combat is not null && Has(StandardParts.Aggro)) (_combat.Relations, _combat.Deeds) = (_data.Relations, _deeds);
-            if (_combat is not null) _combat.Buildings = _o.RagdollEnvironment;
+            if (_combat is not null) (_combat.Buildings, _combat.Extensions) = (_o.RagdollEnvironment, _o.Extensions);
             if (_ai is not null && _combat is not null) _ai.ThreatSource = _combat;
             if (_combat is not null)
                 (_combat.TurretGuns, _combat.Towns) = (new Meitou.Data.Gameplay.Combat.TurretCatalog(_data.Db), _data);

@@ -48,13 +48,25 @@ sealed class ModRegistrations
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
     /// <summary>
+    /// The combat move sources, in registration order.
+    /// </summary>
+    public List<CombatMoveSource> CombatMoves { get; } = [];
+    /// <summary>
     /// The item use handlers by item record string id.
     /// </summary>
     public Dictionary<string, ItemUseHandler> ItemUses { get; } = new(StringComparer.Ordinal);
     /// <summary>
+    /// The mod's own job types and their names.
+    /// </summary>
+    public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
+    /// <summary>
     /// The equipment slots, in registration order.
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
+    /// <summary>
+    /// The wear rules, in registration order.
+    /// </summary>
+    public List<Data.Gameplay.WearRule> WearRules { get; } = [];
     /// <summary>
     /// The medical meters, in registration order.
     /// </summary>
@@ -75,6 +87,10 @@ sealed class ModRegistrations
     /// The combat hit feeds.
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
+    /// <summary>
+    /// The faction tab list arrangers.
+    /// </summary>
+    public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
     /// The mod's settings group; null when it registered none.
     /// </summary>
@@ -101,6 +117,25 @@ sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
 }
 
 /// <summary>
+/// A mod's arrangement of the faction tab's list (<see cref="ModContext.ArrangeFactionList"/>); faulted once it threw.
+/// </summary>
+sealed class ModFactionList(string owner, Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> run)
+{
+    /// <summary>
+    /// The id of the mod that registered it.
+    /// </summary>
+    public string Owner => owner;
+    /// <summary>
+    /// The rows to show for the rows given.
+    /// </summary>
+    public Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> Run => run;
+    /// <summary>
+    /// Set once it threw; a faulted arranger is not called again.
+    /// </summary>
+    public bool Faulted { get; set; }
+}
+
+/// <summary>
 /// A system a mod's factory made, for its save data: the mod and the name it was registered under.
 /// </summary>
 sealed record ModSystemTag(string ModId, string Name);
@@ -118,6 +153,10 @@ sealed class ModRegistry
     /// The owner of each item record's use, by record string id.
     /// </summary>
     readonly Dictionary<string, string> _itemUseOwners = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The owner of each mod job type.
+    /// </summary>
+    readonly Dictionary<Data.Gameplay.Ai.TaskType, string> _jobTypeOwners = [];
     /// <summary>
     /// The mod and name each world's mod system was made under (weakly held, gone with the world).
     /// </summary>
@@ -139,6 +178,10 @@ sealed class ModRegistry
     /// Every mod's combat hit feeds, in load order.
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
+    /// <summary>
+    /// Every mod's faction tab list arrangers, in load order.
+    /// </summary>
+    public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
     /// The record types' names by type number.
     /// </summary>
@@ -179,17 +222,25 @@ sealed class ModRegistry
         foreach (var (code, handler) in r.Effects)
             Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
+        foreach (var source in r.CombatMoves) Simulation.CombatMoves.Add(new ModCombatMove(mod, source));
         foreach (var (record, handler) in r.ItemUses)
         {
             _itemUseOwners[record] = mod;
             Simulation.ItemUses[record] = Guarded(mod, record, handler);
         }
+        foreach (var (type, name) in r.JobTypes)
+        {
+            _jobTypeOwners[type] = mod;
+            Simulation.JobTypes[type] = name;
+        }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
+        foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
         foreach (var skill in r.Skills) ModSkills.Add(skill);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
+        FactionLists.AddRange(r.FactionLists);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 
@@ -202,6 +253,22 @@ sealed class ModRegistry
             throw new InvalidOperationException($"The use of item '{record}' is taken by mod '{owner}'.");
         if (pending.ItemUses.ContainsKey(record))
             throw new InvalidOperationException($"The use of item '{record}' is registered twice by mod '{mod}'.");
+    }
+
+    /// <summary>
+    /// Throws when job type <paramref name="type"/> is below the mods' range or another mod (or this one) holds it already.
+    /// </summary>
+    public void CheckJobTypeFree(Data.Gameplay.Ai.TaskType type, ModRegistrations pending, string mod)
+    {
+        if ((int)type < SimulationExtensions.FirstModCode)
+        {
+            string reason = $"Mod job types start at {SimulationExtensions.FirstModCode}; lower numbers are the game's tasks.";
+            throw new ArgumentOutOfRangeException(nameof(type), type, reason);
+        }
+        if (_jobTypeOwners.TryGetValue(type, out var owner))
+            throw new InvalidOperationException($"Job type {type} is taken by mod '{owner}'.");
+        if (pending.JobTypes.ContainsKey(type))
+            throw new InvalidOperationException($"Job type {type} is registered twice by mod '{mod}'.");
     }
 
     /// <summary>

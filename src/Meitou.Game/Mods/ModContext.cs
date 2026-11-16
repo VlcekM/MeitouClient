@@ -219,6 +219,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A rule asked whether a wearer may wear an item (docs/modding.md "Wear rules"): <paramref name="rule"/> gets the item's record id, the
+    /// wearer's RACE id and whether it is an animal, after the item's own race lists pass, and false refuses the item everywhere a race limit
+    /// applies. It may run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw counts as
+    /// yes and is logged once.
+    /// </summary>
+    public void AddWearRule(Data.Gameplay.WearRule rule)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(rule);
+        Pending.WearRules.Add(rule);
+    }
+
+    /// <summary>
     /// A bar on the medical panel after Hunger (docs/modding.md "Medical meters") labelled <paramref name="label"/>: the mod's systems set each
     /// character's reading in the tick with <see cref="Simulation.Bodies.ModMeter.Set"/>, and the panel shows it for the selected or inspected
     /// character. A label another meter has, or a fifth meter of all mods together, refuses it.
@@ -253,6 +266,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A combat move for a character the game plays nothing for (docs/modding.md "Combat moves"): <paramref name="source"/> answers a
+    /// <see cref="CombatMove"/> (technique and progress) or null; the first mod's answer wins. It runs in the animation's parallel step for every
+    /// stepping character, and what it answers is part of the hashed world (the move's layers and root motion), so it must be cheap,
+    /// deterministic, thread-safe and read-only. A fault (a throw, no technique, a progress that is not finite) drops the source from the next tick.
+    /// </summary>
+    public void AddCombatMove(CombatMoveSource source)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(source);
+        Pending.CombatMoves.Add(source);
+    }
+
+    /// <summary>
     /// A right click on an item of <paramref name="record"/> (an item record's string id) in a player character's own inventory window, with no
     /// other character's window open (docs/modding.md "Item use"): <paramref name="handler"/> runs in a serial step of the tick and may change the
     /// world. It returns true when it used the click (removing a used-up item itself), false to let the click equip or move the item as usual. One
@@ -265,6 +291,21 @@ public sealed class ModContext
         if (string.IsNullOrWhiteSpace(record)) throw new ArgumentException("An item use needs a record id.", nameof(record));
         _registry.CheckItemUseFree(record, Pending, Id);
         Pending.ItemUses[record] = handler;
+    }
+
+    /// <summary>
+    /// A job type of the mod's own (docs/modding.md "Mod jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up, so
+    /// never a game task), which the mod puts in characters' job lists and runs itself. The jobs panel names it <paramref name="name"/>; a save keeps
+    /// it in its place in the list under Meitou keys (the original's list never holds it), and a load puts it back while the type is registered.
+    /// One mod per type.
+    /// </summary>
+    public void AddJobType(Data.Gameplay.Ai.TaskType type, string name)
+    {
+        CheckOpen();
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A job type needs a name.", nameof(name));
+
+        _registry.CheckJobTypeFree(type, Pending, Id);
+        Pending.JobTypes[type] = name;
     }
 
     /// <summary>
@@ -294,6 +335,19 @@ public sealed class ModContext
         CheckOpen();
         ArgumentNullException.ThrowIfNull(view);
         Pending.HitFeeds.Add(new ModHitFeed(Id, view));
+    }
+
+    /// <summary>
+    /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,
+    /// sorted by name, and returns the rows to show in order: reordered, renamed, left out, or with headings (<see cref="FactionListRow.Faction"/>
+    /// -1). Called on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in load order. A throw or a null is
+    /// logged and the arranger is not called again.
+    /// </summary>
+    public void ArrangeFactionList(Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> arrange)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(arrange);
+        Pending.FactionLists.Add(new ModFactionList(Id, arrange));
     }
 
     /// <summary>

@@ -85,6 +85,17 @@ public static class SquadManagement
     }
 
     /// <summary>
+    /// The player's squads the player leads, in order (<see cref="PlayerSquads"/> without the <see cref="Squad.Independent"/> ones): the squad tabs,
+    /// the squads screen, Tab and the squad commands, and what <c>max squads</c> counts.
+    /// </summary>
+    public static List<Squad> LedSquads(World world)
+    {
+        var list = PlayerSquads(world);
+        list.RemoveAll(s => s.Independent);
+        return list;
+    }
+
+    /// <summary>
     /// The player's characters alive (what CONSTANTS <c>max faction size</c> counts).
     /// </summary>
     public static int FactionHeads(World world)
@@ -130,9 +141,9 @@ public static class SquadManagement
     internal static void KeepActive(World world)
     {
         if (!world.Player.Exists) return;
-        var active = world.Squads.Find(world.Player.Squad) is { } s && Mine(world, s) ? s : null;
+        var active = Own(world, world.Player.Squad);
         if (active is { Members.Count: > 0 }) return;
-        var squads = PlayerSquads(world);
+        var squads = LedSquads(world);
         var next = squads.FirstOrDefault(q => q.Members.Count > 0);
         if (next is not null || active is null) world.Player.Squad = (next ?? squads.FirstOrDefault())?.Id ?? -1;
     }
@@ -150,7 +161,7 @@ public static class SquadManagement
                 if (data is null) return;
 
                 // The original counts the squad boxes against `max squads` (FUN_140491b50).
-                if (PlayerSquads(world).Count >= constants!.MaxSquads)
+                if (LedSquads(world).Count >= constants!.MaxSquads)
                 {
                     world.Post("Maximum number of squads reached.");
                     return;
@@ -170,7 +181,7 @@ public static class SquadManagement
                     world.Post("The squad needs to be empty before it can be removed.");
                     return;
                 }
-                if (PlayerSquads(world).Count == 1)
+                if (LedSquads(world).Count == 1)
                 {
                     world.Post("You must have at least one squad.");
                     return;
@@ -185,7 +196,7 @@ public static class SquadManagement
                 break;
             case ReorderSquadCommand reorder:
                 if (Own(world, reorder.Squad) is not { } moved) return;
-                var order = PlayerSquads(world);
+                var order = LedSquads(world);
                 order.Remove(moved);
                 order.Insert(reorder.Index < 0 || reorder.Index > order.Count ? order.Count : reorder.Index, moved);
                 Renumber(order);
@@ -201,9 +212,9 @@ public static class SquadManagement
     }
 
     /// <summary>
-    /// The player's squad of id <paramref name="id"/>; null when there is none.
+    /// The player's squad of id <paramref name="id"/> that the player leads; null when there is none.
     /// </summary>
-    static Squad? Own(World world, int id) => world.Squads.Find(id) is { } s && Mine(world, s) ? s : null;
+    static Squad? Own(World world, int id) => world.Squads.Find(id) is { Independent: false } s && Mine(world, s) ? s : null;
 
     /// <summary>
     /// Whether a squad is the player's: of the player's faction, no platoon's and not the squad of the dead.
@@ -281,7 +292,7 @@ public static class SquadManagement
     /// </summary>
     static void NextSquad(World world)
     {
-        var squads = PlayerSquads(world);
+        var squads = LedSquads(world);
         if (squads.Count < 2) return;
         int at = squads.FindIndex(s => s.Id == world.Player.Squad);
         for (int k = 1; k < squads.Count; k++)

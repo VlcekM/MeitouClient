@@ -244,6 +244,7 @@ public sealed partial class World : IDisposable
             RegisterCombatHitObserver(this._systems[k], k);
             CombatHitFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
+            RelationObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
@@ -387,6 +388,10 @@ public sealed partial class World : IDisposable
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
     internal Combat.CombatHitFilters CombatHitFilters { get; } = new();
+    /// <summary>
+    /// The systems observing changed faction relations (<see cref="IRelationChangeObserver"/>).
+    /// </summary>
+    internal RelationObservers RelationObservers { get; } = new();
     /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
@@ -577,6 +582,7 @@ public sealed partial class World : IDisposable
         RegisterCombatHitObserver(system, _systems.Count - 1);
         CombatHitFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
+        RelationObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
     }
@@ -669,7 +675,7 @@ public sealed partial class World : IDisposable
 
         // 8. Publish.
         Squads.Refresh(table, Player.Faction);
-        Player.Prune(table);
+        Player.Prune(table, Squads);
         table.Phase = TablePhase.Outside;
         table.EndTick();
         Events.EndTick(this);
@@ -1068,6 +1074,7 @@ public sealed partial class World : IDisposable
         HashCombatHitObserverFaults(ref h);
         CombatHitFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
+        RelationObservers.HashFaults(ref h);
         return h.Value;
     }
 

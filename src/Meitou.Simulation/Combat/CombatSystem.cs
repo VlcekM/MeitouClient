@@ -199,6 +199,24 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public FactionDeeds? Deeds { get; set; }
 
     /// <summary>
+    /// What the code mods add (their combat moves, <see cref="ModMove"/>); null: none. Set before the first tick.
+    /// </summary>
+    public SimulationExtensions? Extensions
+    {
+        get;
+        set
+        {
+            field = value;
+            _modMoves = value is { CombatMoves.Count: > 0 } mods ? new ModCombatMoves(mods.CombatMoves) : null;
+        }
+    }
+
+    /// <summary>
+    /// The mods' combat moves with this world's faults; null without any.
+    /// </summary>
+    ModCombatMoves? _modMoves;
+
+    /// <summary>
     /// The crime system the player's assaults and hits on the police are reported to (null: no crimes).
     /// </summary>
     public Crime.CrimeSystem? Crimes { get; set; }
@@ -266,7 +284,22 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// Adds every slot's fight state and zone hits, the log's length, the bolts and the turret manning to <paramref name="hasher"/>.
+    /// The first mod's move (<see cref="SimulationExtensions.CombatMoves"/>) for a character the combat system holds in no move or reaction of its
+    /// own (not attacking, blocking, dodging, stunned, stumbling or down, as of the last finished tick); null without one. Parallel-safe.
+    /// </summary>
+    public CombatMove? ModMove(World world, CharacterId id, long tick)
+    {
+        if (_modMoves is not { } mods) return null;
+
+        var s = StateOf(id);
+        if (s.Down || s.AttackTech >= 0 || s.ReactTech >= 0 || s.StumbleClip >= 0 || tick < s.StunUntil) return null;
+
+        return mods.Move(world, id, tick);
+    }
+
+    /// <summary>
+    /// Adds every slot's fight state and zone hits, the log's length, the bolts, the turret manning and the mods' faulted combat moves to
+    /// <paramref name="hasher"/>.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
@@ -280,6 +313,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         hasher.Add(_log.Count);
         _projectiles.Hash(ref hasher);
         _turretManning.Hash(ref hasher);
+        _modMoves?.Hash(ref hasher);
     }
 
     /// <summary>

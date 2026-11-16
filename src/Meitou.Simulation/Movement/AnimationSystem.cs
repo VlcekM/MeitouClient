@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Player;
 
@@ -569,7 +570,7 @@ public sealed class AnimationSystem(
             speed = a.SmoothSpeed(speed, CharacterAnimation.WindowFor(dt));
             var id = table.IdOf(i);
             var ragdoll = Ragdolls is { } r ? new RagdollView(r.HasRagdoll(cold), r.WasWhole(id)) : default;
-            var view = ViewOf(id, world.Tick, cold, dt);
+            var view = ViewOf(world, id, cold, dt);
             var task = (CharacterTask)next[i].Task;
             var root = Update(a, cold, speed, dt, world.Seed, Rng.Key(id), world.Tick, wantedLower, wantedUpper, view, task, ragdoll, approaching);
             if (root != Vector2.Zero) Relocate(world, i, ref next[i], root);
@@ -694,12 +695,12 @@ public sealed class AnimationSystem(
     /// What the combat system says about a character for its animation: the technique playing and its progress, and the last hit taken (the last
     /// finished tick's state).
     /// </summary>
-    CombatView ViewOf(CharacterId id, long tick, CharacterCold cold, float tickSeconds)
+    CombatView ViewOf(World world, CharacterId id, CharacterCold cold, float tickSeconds)
     {
         if (combat is null) return CombatView.None;
 
         var slot = combat.StateOf(id);
-        var (technique, progress) = TechniqueOf(id, tick, cold, tickSeconds);
+        var (technique, progress) = TechniqueOf(world, id, cold, tickSeconds);
         string? part = slot.HitPart >= 0 && cold.Medical is { } body && slot.HitPart < body.Parts.Count
             ? body.Parts[slot.HitPart].Template.StringId
             : null;
@@ -707,16 +708,19 @@ public sealed class AnimationSystem(
     }
 
     /// <summary>
-    /// The clip index and progress of the technique or crossbow pose the character plays (-1 and 0 when none).
+    /// The clip index and progress of the technique or crossbow pose the character plays, else of a mod's move (<see cref="CombatSystem.ModMove"/>;
+    /// not while carried or getting up); -1 and 0 when none.
     /// </summary>
-    (int Technique, float Progress) TechniqueOf(CharacterId id, long tick, CharacterCold cold, float tickSeconds)
+    (int Technique, float Progress) TechniqueOf(World world, CharacterId id, CharacterCold cold, float tickSeconds)
     {
+        long tick = world.Tick;
         if (combat!.Playing(id, tick) is { } playing)
             return (Library.IndexOfTechnique(playing.Technique.StringId), playing.Progress);
 
         if (combat.RangedPoseOf(id, tick, tickSeconds) is { } pose) return RangedClip(pose, cold);
+        if (!cold.CarriedBy.IsNone || CharacterFacts.GettingUp(cold, tick)) return (-1, 0);
 
-        return (-1, 0);
+        return combat.ModMove(world, id, tick) is { } move ? (Library.IndexOfTechnique(move.Technique.StringId), move.Progress) : (-1, 0);
     }
 
     /// <summary>

@@ -152,7 +152,7 @@ once a level was set. Every such key is read back and saved again, so a save kee
 | Platoon file name | **Verified** (56/56): `<faction name>_<n>.platoon` where `<n>` is a per-faction counter; the PLATOON record's `content file` is `platoon/<platoon stringID>.platoon` |
 | Zone file name | **Verified** (13/13 and by `FUN_14036c070`): `zone.<X>.<Y>.zone`, X and Y the zone grid indices ([terrain.md](terrain.md#world-coordinates)) |
 
-### Folder layout — layout/example
+### Folder layout - layout/example
 
 ```
 <name>/
@@ -365,8 +365,8 @@ character that changed squads is written anew in its new platoon and leaves the 
 A squad's member order is its platoon file's INSTANCE_COLLECTION order: Meitou reads the members in that order (the first leads) and, when saving,
 rewrites the collection in the squad's current order, slots and handles unchanged, so a reorder on the squads screen survives a reload.
 Meitou-only, for an [autonomous squad](../simulation.md#autonomous-player-squads) (`Saving/AutonomySave`): `meitou autonomous` (bool), its packages in the
-NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou home` (string: a town building key or a player building id) while a home is
-assigned. Other player platoons' AI keys stay as read.
+NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou independent` (bool) for one the player does not lead; `meitou home` (string: a town building key or a player building id) while a home is
+assigned; `meitou autonomy owner` (string: the manifest id of the code mod that switched it on) while it names one. Other player platoons' AI keys stay as read.
 
 ### Missing character records
 
@@ -582,11 +582,13 @@ of the record 33 away). Meitou-only keys `meitou in something` (int) /
 and again when a saved or stored platoon comes in, since a town's saved platoons are made after it registers. Unchanged held state keeps
 the original keys as read; a changed one without a building handle writes `in something` 0 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 
-Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs`, `pjob<i>`, `pjobT<i>` ([perma-jobs](../game/ai-tasks.md#perma-jobs)), plus
-Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle); a job on a character writes that character's handle once
-every character has one, as `tjobT<i>`, so one new to the save is named too. The squad AI options are CAMERA bools (**Verified**, writer
-`FUN_1403eb710`; the key of each option and new-game values in [squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine
-(not `stay`, `eject`), an absent one keeps its default.
+Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs`, `pjob<i>`, `pjobT<i>`
+([perma-jobs](../game/ai-tasks.md#perma-jobs)), plus Meitou's string `meitou pjob<i>` (the job's building id, which wins on load over the handle).
+A mod's own job type ([mod jobs](../modding.md#registration-surface)) is not in that list: int `meitou mjob<k>` (task type), int `meitou mjobAt<k>`
+(its place: how many game jobs come before it) and string `meitou mjob<k>` (its building id) keep it, and the `pjob` numbers skip it. A job on a
+character writes that character's handle once every character has one, as `pjobT<i>`, so one new to the save is named too. The squad AI
+options are CAMERA bools (**Verified**, writer `FUN_1403eb710`; the key of each option and new-game values in
+[squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine (not `stay`, `eject`), an absent one keeps its default.
 
 ### Order queue
 

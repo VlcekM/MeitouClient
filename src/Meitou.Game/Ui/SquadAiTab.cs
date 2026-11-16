@@ -10,8 +10,8 @@ namespace Meitou.Game.Ui;
 /// <summary>
 /// The overview's AI tab (docs/game/ai-tasks.md "Squad AI options"): a tick button per squad AI option in <c>AIOptions</c>, the hovered one's
 /// tooltip (a static tooltip, PlayerInterface.TooltipRuntime.AddHoverLabel) in <c>AIToolTip</c> (captions and tooltips are the original's,
-/// <c>FUN_140005e11</c>; the row order follows their order in the exe, <b>Observed</b>), and the Follow Formation combo. The changes are
-/// <see cref="SquadAiCommand"/>s and <see cref="SquadFormationCommand"/>s.
+/// <c>FUN_140005e11</c>; the row order follows their order in the exe, <b>Observed</b>), the mods' tick buttons after them, and the Follow
+/// Formation combo. The changes are <see cref="SquadAiCommand"/>s and <see cref="SquadFormationCommand"/>s, and the mods' own commands.
 /// </summary>
 sealed class SquadAiTab(PlayerInterface player)
 {
@@ -59,36 +59,67 @@ sealed class SquadAiTab(PlayerInterface player)
     string? _formationComboPlace;
 
     /// <summary>
+    /// The press action prefix of the mods' tick buttons (then the button's index in <see cref="_modOptions"/>).
+    /// </summary>
+    const string ModOptionAction = "ai-mod-option:";
+
+    /// <summary>
+    /// The tick buttons the mods' interface extensions added when the tab was last laid out; a press runs the one shown.
+    /// </summary>
+    IReadOnlyList<UiSquadAiOption> _modOptions = [];
+
+    /// <summary>
     /// The AI tab's content while it is the overview's open tab: a tick button per option (ticked when the player faction has it on), then the
-    /// formation line.
+    /// mods' tick buttons (<see cref="PlayerInterface.ModSquadAiOptions"/>), then the formation line.
     /// </summary>
     internal void AddAiContent(List<UiControl> controls)
     {
         if (player.FaithfulScreens.GetTab("overview", "TabsMain") != AiTab || controls.FirstOrDefault(c => c.Name == "AIOptions") is not { } panel)
+        {
+            _modOptions = [];
             return;
+        }
 
-        var on = player.Session.CurrentSnapshot.SquadAi;
+        var snapshot = player.Session.CurrentSnapshot;
+        var on = snapshot.SquadAi;
+        _modOptions = player.ModSquadAiOptions(snapshot);
+        int rows = AiOptionRows.Length + _modOptions.Count;
 
-        // The original's panel is sized for its nine lines and the formation; lines shrink when the Meitou-only ones do not fit.
-        float line = MathF.Min(MathF.Max(22, 30 * player.UiScale), panel.Bounds.Height / (AiOptionRows.Length + 1));
+        // The original's panel is sized for its nine lines and the formation; lines shrink when the Meitou-only and the mods' ones do not fit.
+        float line = MathF.Min(MathF.Max(22, 30 * player.UiScale), panel.Bounds.Height / (rows + 1));
 
         for (int i = 0; i < AiOptionRows.Length; i++)
         {
-            bool ticked = (on & AiOptionRows[i].Option) != 0;
-            var bounds = new UiRect(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line - 4);
-            controls.Add(new($"ai-option-{i}", "Button", bounds, Loc.Tr(AiOptionRows[i].Caption),
-                "ai-option:" + i.ToString(CultureInfo.InvariantCulture), "Kenshi_TickButton1Skin", true,
-                new Dictionary<string, string>(UiTooltips.TextProperties(AiOptionRows[i].Tip, "static:AIToolTip"))
-                {
-                    ["Checked"] = ticked ? "true" : "false",
-                    ["StateSelected"] = ticked ? "true" : "false",
-                    ["FontName"] = "Kenshi_PaintedTextFont_Medium",
-                    ["TextAlign"] = "Center",
-                },
-                Vector4.Zero, Pickable: true, Clip: panel.Bounds));
+            var (option, caption, tip) = AiOptionRows[i];
+            string action = "ai-option:" + i.ToString(CultureInfo.InvariantCulture);
+            controls.Add(OptionButton($"ai-option-{i}", Loc.Tr(caption), action, tip, (on & option) != 0, panel.Bounds, i, line));
         }
 
-        AddFormationRow(controls, panel.Bounds, AiOptionRows.Length * line, line - 4);
+        for (int k = 0; k < _modOptions.Count; k++)
+        {
+            var mod = _modOptions[k];
+            string action = ModOptionAction + k.ToString(CultureInfo.InvariantCulture);
+            int row = AiOptionRows.Length + k;
+            controls.Add(OptionButton($"ai-mod-option-{k}", mod.Caption, action, mod.Tooltip, mod.Ticked, panel.Bounds, row, line));
+        }
+
+        AddFormationRow(controls, panel.Bounds, rows * line, line - 4);
+    }
+
+    /// <summary>
+    /// A tick button in row <paramref name="row"/> of the panel, its tooltip shown in <c>AIToolTip</c>.
+    /// </summary>
+    static UiControl OptionButton(string name, string caption, string action, string tip, bool ticked, UiRect panel, int row, float line)
+    {
+        var bounds = new UiRect(panel.X + 6, panel.Y + row * line, panel.Width - 12, line - 4);
+        var properties = new Dictionary<string, string>(UiTooltips.TextProperties(tip, "static:AIToolTip"))
+        {
+            ["Checked"] = ticked ? "true" : "false",
+            ["StateSelected"] = ticked ? "true" : "false",
+            ["FontName"] = "Kenshi_PaintedTextFont_Medium",
+            ["TextAlign"] = "Center",
+        };
+        return new(name, "Button", bounds, caption, action, "Kenshi_TickButton1Skin", true, properties, Vector4.Zero, Pickable: true, Clip: panel);
     }
 
     /// <summary>
@@ -139,7 +170,8 @@ sealed class SquadAiTab(PlayerInterface player)
     }
 
     /// <summary>
-    /// An overview event for the AI tab: a formation picked in the combo, or a tick button pressed (the option flips).
+    /// An overview event for the AI tab: a formation picked in the combo, a tick button pressed (the option flips) or a mod's tick button pressed
+    /// (its press runs).
     /// </summary>
     internal void AiAction(MyGuiEvent e)
     {
@@ -147,6 +179,14 @@ sealed class SquadAiTab(PlayerInterface player)
         {
             if (int.TryParse(e.Text, CultureInfo.InvariantCulture, out int formation) && Enum.IsDefined((SquadFormation)formation))
                 player.Say(new SquadFormationCommand((SquadFormation)formation) { Tick = player.Session.World.Tick });
+
+            return;
+        }
+
+        if (e.Action.StartsWith(ModOptionAction, StringComparison.Ordinal))
+        {
+            if (int.TryParse(e.Action.AsSpan(ModOptionAction.Length), CultureInfo.InvariantCulture, out int k) && (uint)k < (uint)_modOptions.Count)
+                _modOptions[k].Press();
 
             return;
         }

@@ -317,7 +317,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         var table = world.Characters;
         var player = world.Player;
         var candidates = select.Characters.Where(id =>
-            table.TryResolveNext(id, out int slot) && table.Cold(slot)!.IsPlayer).ToArray();
+            table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } c && !world.Squads.IsIndependent(c.SquadId)).ToArray();
         if (candidates.Length == 0)
         {
             if (select.Clear && !select.Additive && select.Characters.Count == 0) player.Selection.Clear();
@@ -384,7 +384,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         DebugCheats.HealTick(world, data, _assembly);
         DebugCheats.GuardTick(world, data, _assembly);
         SquadManagement.BuryDead(world, data?.Db);
-        world.Player.Prune(world.Characters);
+        world.Player.Prune(world.Characters, world.Squads);
         SquadManagement.KeepActive(world);
         PickUps.PickUpWorkers(world, _assembly);
         ContainerAccess.ContainerWorkers(world);

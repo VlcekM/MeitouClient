@@ -69,7 +69,7 @@ public sealed partial class DialogueSystem
         {
             return selectedSquad;
         }
-        return SquadManagement.PlayerSquads(world).FirstOrDefault();
+        return SquadManagement.LedSquads(world).FirstOrDefault();
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public sealed partial class DialogueSystem
     static void ExtraSquadAtTheCap(World world, PopulationData data, Squad active, GameConstants limits)
     {
         if (PlayerHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
-            || SquadManagement.PlayerSquads(world).Count < limits.MaxSquads)
+            || SquadManagement.LedSquads(world).Count < limits.MaxSquads)
         {
             return;
         }

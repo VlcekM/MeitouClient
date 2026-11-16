@@ -534,7 +534,8 @@ New-game start data seeds squad/appearance/gear/money; the start's characters ar
 character editor while `PlayerState.InCreation` ([characters](characters.md#character-editor)); original start
 relation/research semantics remain partly unknown. Picking/HUD are host responsibilities, never simulation input.
 Squads: `SquadManagement` orders the player's squads (`Squad.Index`), keeps `PlayerState.Squad` the active one and applies the squads screen's
-commands with the original's limits ([Squads tab](game/ui-screens.md#squads-tab)); the snapshot's `PlayerSquads` lists them for the UI.
+commands with the original's limits ([Squads tab](game/ui-screens.md#squads-tab)); the snapshot's `PlayerSquads` lists the ones the player leads for
+the UI ([independent squads](#autonomous-player-squads) are in `IndependentSquads`).
 
 ### Order toggles
 
@@ -1836,6 +1837,16 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   machines](game/buildings-production.md#npc-town-machines)). Operator
   slots are shared: the player's job operators fill the AI's (`ReserveWork`), the AI's holders count against the jobs' (`OperatorsOf`), and a
   member on a player job holds no AI slot.
+- **Independent** (`SetSquadAutonomy(id, true, Independent: true)`, `Squad.Independent`; cleared by `SetSquadAutonomy(id, true)` and with
+  autonomy; refused for the last squad the player leads): the player does not lead it. Its members stay the player's faction (counted by
+  `max faction size`) but cannot be selected (`SelectCommand` skips them, the selection's upkeep drops them), so they take no orders from the
+  interface, and a click on one inspects it as another faction's (the snapshot's `IndependentSquads`); it has no squad tab, is not on the
+  squads screen or Tab, the squad commands (move, rename, reorder, remove) refuse it, and it does not count against `max squads`
+  (`SquadManagement.LedSquads`). Saved as `meitou independent`.
+- **Owner** (`SetSquadAutonomy(..., Owner:)`, `Squad.AutonomyOwner`, saved as `meitou autonomy owner`): the manifest id of the last code mod that
+  switched it on naming itself (a command naming none keeps it). After a load, before the first tick, a squad whose owner is not running (not
+  installed, refused or failed to start) is switched off and loses its home, with a notice (`SquadAutonomy.DropUnowned`, from
+  `GameMods.DropUnownedAutonomy`); one with no owner stays as saved.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
 - **Not built**: the outpost's gates and turrets are not yet goal targets of its residents; a work building; the contract's mission target over a

@@ -142,13 +142,16 @@ valid input is clamped to the slider range and uses its existing rounding rules.
 Provisional ApiVersion1: IUiExtension registered explicitly with UiHost.Register, returning
 IDisposable. No automatic mod-DLL scanning/loading; incompatible versions/duplicate module IDs
 or keys rejected. Keys namespace extension-id:local-name. Failed registration rolls back;
-disposal removes factories/styles/overrides/actions/contributions/map marker sources; re-register supported.
+disposal removes factories/styles/overrides/actions/contributions/map marker sources/menu row sources/squad AI
+options; re-register supported.
 
 RegisterControl builds UiNodes; RegisterStyle supplies state colours/alignment/skin/font/scale/
 TextPadding UiInsets; OverrideStyle scoped replacement. RegisterAction receives read-only frame
 context/string argument; disabled controls never call it. Contribute supplies ordered slot tree
 with optional UI-mode restriction. OverrideControl can extend context.CreateBaseControl(id).
 AddMapMarkers adds world map markers from a per-frame source (modding.md "Map markers").
+AddSquadAiOptions adds tick buttons to the overview's AI tab; a press queues SimCommands
+([modding](modding.md#registration-surface)).
 Source/test interfaces are authoritative for signatures; samples in Ui extension tests.
 
 Builtin `meitou` actions drive the original controls in both modes. UiSlots:

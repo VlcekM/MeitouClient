@@ -9,10 +9,13 @@ namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// Lets the AI run a player's squad, or takes it back (<see cref="Squad.Autonomous"/>, docs/simulation.md "Autonomous player squads"). Turning it
-/// off drops the squad's packages and its members' minds; a squad that is not the player's is left alone. Meitou only: the original's AI plans for
-/// no player squad.
+/// off drops the squad's packages and its members' minds; a squad that is not the player's is left alone. <paramref name="Independent"/> (only with
+/// <paramref name="On"/>): the player does not lead it (<see cref="Squad.Independent"/>), refused for the last squad the player leads; on without it
+/// leads it again. <paramref name="Owner"/>: the code mod that sets it (its manifest id, <see cref="Squad.AutonomyOwner"/>), kept while it is on; a
+/// load without that mod running gives the squad back to the player (<see cref="SquadAutonomy.DropUnowned"/>). Meitou only: the original's AI
+/// plans for no player squad.
 /// </summary>
-public sealed record SetSquadAutonomy(int SquadId, bool On) : SimCommand;
+public sealed record SetSquadAutonomy(int SquadId, bool On, bool Independent = false, string? Owner = null) : SimCommand;
 
 /// <summary>
 /// Gives a player's squad its home (<see cref="Squad.AssignedHome"/>): a town building's <see cref="TownBuilding.Key"/> or a player-built
@@ -42,7 +45,7 @@ public sealed class SquadAutonomy(PopulationData data)
         {
             case SetSquadAutonomy a:
                 squad = PlayerSquad(world, a.SquadId);
-                if (squad is not null) Switch(world, squad, a.On);
+                if (squad is not null) Switch(world, squad, a.On, a.Independent, a.Owner);
                 return true;
             case SetSquadHome h:
                 squad = PlayerSquad(world, h.SquadId);
@@ -63,10 +66,15 @@ public sealed class SquadAutonomy(PopulationData data)
     }
 
     /// <summary>
-    /// Turns the squad's autonomy on or off; off drops its board, its saved AI and its members' minds (<see cref="Release"/>).
+    /// Turns the squad's autonomy on or off, and its independence with it (never for the last squad the player leads; the selection's upkeep drops
+    /// an independent squad's members and shows another squad); on notes the mod that names itself (one that names none, or an empty id, keeps the
+    /// noted one), off forgets it and drops the squad's board, its saved AI and its members' minds (<see cref="Release"/>).
     /// </summary>
-    static void Switch(World world, Squad squad, bool on)
+    static void Switch(World world, Squad squad, bool on, bool independent, string? owner)
     {
+        squad.Independent = on && independent && SquadManagement.LedSquads(world).Any(s => s != squad);
+        string? kept = owner is { Length: > 0 } ? owner : squad.AutonomyOwner;
+        squad.AutonomyOwner = on ? kept : null;
         if (squad.Autonomous == on) return;
 
         squad.Autonomous = on;
@@ -75,6 +83,26 @@ public sealed class SquadAutonomy(PopulationData data)
         DropMinds(world, squad);
         squad.Ai = null;
         squad.SavedAi = null;
+    }
+
+    /// <summary>
+    /// Gives back to the player every squad a code mod made autonomous whose mod is not running now (<paramref name="running"/>: whether a mod id
+    /// runs): it is switched off (its independence, board, saved AI and members' minds go) and loses its home too. Between ticks after a load,
+    /// before the first. Returns how many.
+    /// </summary>
+    public static int DropUnowned(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.AutonomyOwner is not { } owner || running(owner)) continue;
+
+            Switch(world, squad, false, false, null);
+            squad.AssignedHome = null;
+            dropped++;
+        }
+
+        return dropped;
     }
 
     /// <summary>

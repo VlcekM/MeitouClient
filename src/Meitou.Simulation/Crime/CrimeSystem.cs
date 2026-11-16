@@ -413,7 +413,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (c.Pending is not { } p) continue;
             if (!Reacts(world, wc, c, p)) continue;
             if (Friendly(wf, c.Faction) && Betrays(p.Code))
-                PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta, $"a friend's crime witnessed ({p.Code})");
+                PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta, new(RelationCauseType.Crime, culpritId),
+                    $"a friend's crime witnessed ({p.Code})");
             p.Timer = WitnessTimer;
             c.RecentlyWanted = RecentlyWantedSeconds;
             var witness = table.IdOf(w);

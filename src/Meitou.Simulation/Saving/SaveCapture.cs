@@ -828,8 +828,9 @@ public static partial class SaveCapture
         if (orders) Orders.Write(g, cold);
         if (orders && sc.Ai is { } ai)
         {
-            PermaJobSave.Write(ai, cold, world.Buildings, buildings, who => HandOf(world, who));
-            DeferJobTargets(ai, cold);
+            var modJobs = world.SystemOf<PlayerSystem>()?.Extensions?.JobTypes;
+            PermaJobSave.Write(ai, cold, world.Buildings, buildings, who => HandOf(world, who), modJobs);
+            DeferJobTargets(ai, cold, modJobs);
         }
 
         if (orders && sc.Ai is { } queueAi)
@@ -898,15 +899,12 @@ public static partial class SaveCapture
     /// <summary>
     /// Holds back the target handles of the character's jobs on a character until every character has one (<see cref="MemoryPass.JobTargets"/>).
     /// </summary>
-    static void DeferJobTargets(FcsRecord ai, CharacterCold cold)
+    static void DeferJobTargets(FcsRecord ai, CharacterCold cold, IReadOnlyDictionary<Data.Gameplay.Ai.TaskType, string>? modJobs)
     {
         if (s_memoryPass is not { } pass) return;
 
-        for (int i = 0; i < cold.Jobs.Count; i++)
-        {
-            var job = cold.Jobs[i];
+        foreach (var (i, job) in PermaJobSave.GameJobs(cold, modJobs))
             if (job.Site is null && !job.Character.IsNone) pass.JobTargets.Add((ai, PermaJobSave.TargetKey(i), job.Character));
-        }
     }
 
     /// <summary>
