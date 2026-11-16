@@ -64,6 +64,10 @@ public sealed class ZoneNavMesh
     /// </summary>
     public int[]? DoorOf { get; internal set; }
     /// <summary>
+    /// The side points of the gates placed in this zone (<see cref="GateSide"/>, the gate-code pass's gate list); null when there are none.
+    /// </summary>
+    public GateSide[]? GateSides { get; internal set; }
+    /// <summary>
     /// The walkable collision triangles the polygons stand for, for exact heights (<see cref="NavSurfaces"/>); null when none were kept.
     /// </summary>
     public NavSurfaces? Surfaces { get; internal set; }
@@ -156,6 +160,7 @@ public sealed class ZoneNavMesh
         BoundsMax = BoundsMax,
         DoorIds = DoorIds,
         DoorOf = DoorOf,
+        GateSides = GateSides,
         Surfaces = Surfaces,
         Terrain = Terrain,
         Heights = Heights,
@@ -210,6 +215,7 @@ public sealed class ZoneNavMesh
             BoundsMax = BoundsMax,
             DoorIds = DoorIds,
             DoorOf = doorOf,
+            GateSides = GateSides,
             Surfaces = Surfaces,
             Terrain = Terrain,
             Heights = HeightsOf(heights),

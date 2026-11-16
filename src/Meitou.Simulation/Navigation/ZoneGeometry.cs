@@ -235,6 +235,17 @@ internal sealed class ZoneGeometry
     public List<(Vector2 At, float Base)> DoorMarkers { get; } = [];
 
     /// <summary>
+    /// The first doors of the gates placed in the zone (placement key, door record, door frame, node), until every surface is gathered (then they
+    /// become <see cref="GateSides"/>).
+    /// </summary>
+    public List<(string Building, Meitou.Data.GameRecord Door, Meitou.Data.World.DoorFrame Frame, Matrix4x4 Node)> GateDoors { get; } = [];
+
+    /// <summary>
+    /// The side points of the zone's gates (<see cref="GateSide"/>), made from <see cref="GateDoors"/>.
+    /// </summary>
+    public List<GateSide> GateSides { get; } = [];
+
+    /// <summary>
     /// Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
     /// </summary>
     public List<Vector3> Seeds { get; } = [];
@@ -305,6 +316,11 @@ internal sealed class ZoneGeometry
     /// floor-0 parts (group 9), what the origin ray seed tests.
     /// </summary>
     public List<(int First, int Last)> FloorRanges { get; } = [];
+
+    /// <summary>
+    /// The triangle ranges of the exterior's floor-0 building parts (group 9), what a gate door's inner marker is dropped onto.
+    /// </summary>
+    public List<(int First, int Last)> Floor0Ranges { get; } = [];
 
     /// <summary>
     /// Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>);

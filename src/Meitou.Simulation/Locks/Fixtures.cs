@@ -281,7 +281,7 @@ public sealed class Fixture
 
     /// <summary>
     /// Doors: the index in the building's <c>doors</c> list (the save's suffix), the motion state, the open amount 0..1, the door's own broken flag,
-    /// <c>gatecode</c> (kept as read) and <c>wants lock</c>.
+    /// <c>gatecode</c> and <c>wants lock</c>.
     /// </summary>
     public int DoorIndex { get; init; } = -1;
     /// <summary>
@@ -297,9 +297,11 @@ public sealed class Fixture
     /// </summary>
     public bool DoorBroken { get; set; }
     /// <summary>
-    /// Doors: the <c>gatecode</c>, kept as read (-1: none).
+    /// Doors: the door's gate code (DoorStuff <c>+0x378</c>, saved as <c>gatecode</c>; docs/game/pathfinding.md "Gate codes"): 0 for a new door, -1
+    /// once restored from a building state (the loader sets it and does not read the key, <c>FUN_1402a06a0</c>), a gate's first code once a gate-code
+    /// pass applied. Derived like a path: not hashed.
     /// </summary>
-    public int GateCode { get; set; } = -1;
+    public int GateCode { get; set; }
     /// <summary>
     /// Doors: <c>wants lock</c>.
     /// </summary>

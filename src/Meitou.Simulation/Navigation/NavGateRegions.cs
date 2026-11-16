@@ -1,225 +1,97 @@
 using System.Numerics;
-using Meitou.Data.World;
 using Meitou.Simulation.Locks;
 
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The gate codes of a <see cref="NavWorld"/> (docs/game/pathfinding.md "Gate codes"; the original's gate-code pass floods its navmesh from the
-/// gates, <c>FUN_1402ed460</c>). From each polygon beside a gate's door polygons a flood spreads over the walkable polygons without entering any
-/// gate's door; a flood that stays within <see cref="OutsideExtent"/> of where it started, never reaches the edge of the loaded world and stays
-/// under <see cref="PolygonBudget"/> is a walled region and gets the next code from 1; any other is the open world, 0, as is every polygon no
-/// flood reached. Gates are visited by instance id, so the same world gives the same codes. Engine choices: the extent, the budget and the loaded
-/// world's edge stand in for the original's face limit ("FloodFill ... LIMIT REACHED"), whose value is <b>Unknown</b>. Immutable once made; safe
-/// from any thread.
+/// The gate codes of a <see cref="NavWorld"/>: the original's gate-code pass run over Meitou's navmesh (docs/game/pathfinding.md "Gate codes";
+/// <c>FUN_1402ef4a0</c>). The gates are the loaded GatewayBuildings with a first door, by their side points (<see cref="GateSide"/>); each gets a
+/// first and a second code, and the faces of the regions flooded from them get theirs. Immutable once made; safe from any thread.
 /// </summary>
 public sealed class NavGateRegions : IGateRegions
 {
     /// <summary>
-    /// How far (X/Z) a region may reach from its first polygon and still be walled in (engine choice: above the largest walled town).
+    /// No gates and no navmesh: every point is off the navmesh (-1).
     /// </summary>
-    public const float OutsideExtent = 4000;
-
-    /// <summary>
-    /// How many polygons a walled region may hold (engine choice).
-    /// </summary>
-    public const int PolygonBudget = 200_000;
-
-    /// <summary>
-    /// How far from a point the polygon it stands on is looked for.
-    /// </summary>
-    public const float FindDistance = 40;
-
-    /// <summary>
-    /// No regions: every point is off the navmesh (-1) and there are no gates.
-    /// </summary>
-    public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], []);
+    public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], [], [], []);
 
     /// <summary>
     /// The navmesh the codes label; points are looked up on it.
     /// </summary>
     readonly NavWorld _world;
     /// <summary>
-    /// The gate code of each labelled polygon by its polygon key; a polygon not in it is the open world (0).
+    /// The code written into each labelled face, by polygon key; a face not in it has none.
     /// </summary>
     readonly Dictionary<long, int> _codes;
+    /// <summary>
+    /// The unlabelled interior polygons' codes, their buildings' (<see cref="GateInteriorCodes"/>).
+    /// </summary>
+    readonly Dictionary<long, int> _inside;
 
     /// <summary>
-    /// Wraps a labelling made by <see cref="Label"/>.
+    /// Wraps a pass's result.
     /// </summary>
-    NavGateRegions(NavWorld world, Dictionary<long, int> codes, IReadOnlyList<GateLink> gates)
+    NavGateRegions(NavWorld world, Dictionary<long, int> codes, Dictionary<long, int> inside, IReadOnlyList<GateLink> gates,
+            IReadOnlyList<string> log)
     {
-        this._world = world;
-        this._codes = codes;
+        _world = world;
+        _codes = codes;
+        _inside = inside;
         Gates = gates;
+        Log = log;
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<GateLink> Gates { get; }
 
     /// <summary>
-    /// The number of walled regions (codes 1..n).
+    /// What the pass reported, in the original's words where it logs (a flood without a start face, a flood that failed, several code 0 regions).
     /// </summary>
-    public int RegionCount { get; private init; }
-
-    /// <inheritdoc/>
-    public int CodeAt(Vector3 at) => _world.TryFindPolygon(at, FindDistance, out var p, out _) ? _codes.GetValueOrDefault(p.Key) : -1;
+    public IReadOnlyList<string> Log { get; }
 
     /// <summary>
-    /// Labels <paramref name="world"/>; <paramref name="isGate"/> tells which door owners (building instance ids) are gates.
+    /// The code of an object at <paramref name="at"/>: <c>NavMesh::getGateCode</c> there, except that in an interior it is its building's
+    /// (<see cref="GateInteriorCodes"/>; the original keeps each object's code on the object, and what is inside a building takes the building's).
     /// </summary>
-    public static NavGateRegions Label(NavWorld world, Func<string, bool> isGate)
+    public int CodeAt(Vector3 at)
     {
-        var (gateOf, gates) = CollectGateDoors(world, isGate);
-        var codes = new Dictionary<long, int>();
-        if (gates.Count == 0) return new NavGateRegions(world, codes, []);
+        if (!GateFaces.TryFace(_world, at, out var face)) return -1;
 
-        var outside = new HashSet<long>();
-        var links = new List<GateLink>();
-        var visited = new List<NavRef>();
-        var queue = new Queue<NavRef>();
-        var seen = new HashSet<long>();
-        int next = 1;
-        foreach (var (id, doors) in gates)
-        {
-            var sides = new SortedSet<int>();
-            foreach (var door in doors)
-            {
-                foreach (var seed in Around(world, door))
-                {
-                    if (gateOf.ContainsKey(seed.Key) || !world.Mesh(seed.Zone).Kept[seed.Polygon]) continue;
-
-                    if (codes.TryGetValue(seed.Key, out int code))
-                    {
-                        sides.Add(code);
-                        continue;
-                    }
-
-                    if (outside.Contains(seed.Key))
-                    {
-                        sides.Add(0);
-                        continue;
-                    }
-
-                    if (Flood(world, seed, gateOf, visited, queue, seen))
-                    {
-                        foreach (var r in visited)
-                            codes[r.Key] = next;
-
-                        sides.Add(next++);
-                    }
-                    else
-                    {
-                        foreach (var r in visited)
-                            outside.Add(r.Key);
-
-                        sides.Add(0);
-                    }
-                }
-            }
-
-            links.Add(new GateLink(id, [.. sides]));
-        }
-
-        return new NavGateRegions(world, codes, links) { RegionCount = next - 1 };
+        return _inside.TryGetValue(face.Key, out int code) ? code : GateFaces.CodeOf(_world, _codes, face);
     }
 
     /// <summary>
-    /// The door polygons of the gates, by polygon key and by gate (instance id, sorted).
+    /// Runs the gate-code pass over <paramref name="world"/>: the gates are the side points its zone meshes hold
+    /// (<see cref="ZoneNavMesh.GateSides"/>), by zone (X, then Z) and then as gathered, each building once. The connection tests keep
+    /// <paramref name="footprint"/> clear: the default race's <c>pathfind footprint radius</c> (<c>FUN_1402ef4a0</c>).
     /// </summary>
-    static (Dictionary<long, string> GateOf, SortedDictionary<string, List<NavRef>> Gates) CollectGateDoors(NavWorld world, Func<string, bool> isGate)
+    public static NavGateRegions Label(NavWorld world, float footprint = GateCodeFlood.DefaultFootprint)
     {
-        var gateOf = new Dictionary<long, string>();
-        var gates = new SortedDictionary<string, List<NavRef>>(StringComparer.Ordinal);
-        var known = new Dictionary<string, bool>(StringComparer.Ordinal);
-        for (int slot = 0; slot < world.ZoneCount; slot++)
-        {
-            var m = world.Mesh(slot);
-            if (m.DoorOf is not { } doorOf || m.DoorIds is not { } ids) continue;
+        var gates = GatesOf(world);
+        if (gates.Count == 0) return new NavGateRegions(world, [], GateInteriorCodes.Of(world, []), [], []);
 
-            for (int p = 0; p < m.PolygonCount; p++)
-            {
-                if (doorOf[p] < 0 || !m.Kept[p]) continue;
-
-                string id = ids[doorOf[p]];
-                if (!known.TryGetValue(id, out bool gate)) known[id] = gate = isGate(id);
-
-                if (!gate) continue;
-
-                var r = new NavRef(slot, p);
-                gateOf[r.Key] = id;
-                if (!gates.TryGetValue(id, out var list)) gates[id] = list = [];
-
-                list.Add(r);
-            }
-        }
-
-        return (gateOf, gates);
+        var pass = new GateCodePass(world, gates, footprint);
+        pass.Run();
+        var links = gates.Select((g, i) => new GateLink(g.Building, [pass.First[i], pass.Second[i]])).ToList();
+        return new NavGateRegions(world, pass.Codes, GateInteriorCodes.Of(world, pass.Codes), links, pass.Log);
     }
 
     /// <summary>
-    /// Floods from <paramref name="seed"/> over kept polygons, not into gate doors; true when the region is walled in (bounded, under budget, not at
-    /// the loaded world's edge). <paramref name="visited"/> holds what it reached (all of it when walled in; a part when not).
+    /// The gate list (<c>FUN_1402eab70</c>) of the loaded meshes.
     /// </summary>
-    static bool Flood(NavWorld world, NavRef seed, Dictionary<long, string> gateOf, List<NavRef> visited, Queue<NavRef> queue, HashSet<long> seen)
+    static List<GateSide> GatesOf(NavWorld world)
     {
-        visited.Clear();
-        queue.Clear();
-        seen.Clear();
-        var start = world.Mesh(seed.Zone).Centre(seed.Polygon);
-        queue.Enqueue(seed);
-        seen.Add(seed.Key);
-        while (queue.Count > 0)
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var gates = new List<GateSide>();
+        var slots = Enumerable.Range(0, world.ZoneCount)
+            .OrderBy(s => world.Mesh(s).ZoneX)
+            .ThenBy(s => world.Mesh(s).ZoneZ);
+        foreach (int s in slots)
         {
-            var r = queue.Dequeue();
-            visited.Add(r);
-            var m = world.Mesh(r.Zone);
-            var c = m.Centre(r.Polygon);
-            if (MathF.Abs(c.X - start.X) > OutsideExtent || MathF.Abs(c.Z - start.Z) > OutsideExtent
-                || visited.Count > PolygonBudget || AtOpenEdge(world, m, r.Polygon))
-                return false;
-
-            foreach (var n in Around(world, r))
-            {
-                if (gateOf.ContainsKey(n.Key) || !seen.Add(n.Key) || !world.Mesh(n.Zone).Kept[n.Polygon]) continue;
-
-                queue.Enqueue(n);
-            }
+            foreach (var side in world.Mesh(s).GateSides ?? [])
+                if (seen.Add(side.Building)) gates.Add(side);
         }
 
-        return true;
-    }
-
-    /// <summary>
-    /// The polygons next to <paramref name="r"/>: in its mesh, and across the zone borders.
-    /// </summary>
-    static IEnumerable<NavRef> Around(NavWorld world, NavRef r)
-    {
-        foreach (int q in world.Mesh(r.Zone).NeighboursOf(r.Polygon))
-            yield return new NavRef(r.Zone, q);
-
-        foreach (var link in world.LinksOf(r).ToArray())
-            yield return link.To;
-    }
-
-    /// <summary>
-    /// A polygon touching a border of its zone whose neighbour zone has no mesh loaded: the flood may go on beyond what is known.
-    /// </summary>
-    static bool AtOpenEdge(NavWorld world, ZoneNavMesh m, int polygon)
-    {
-        const float slack = 1;
-        foreach (int v in m.Polygons[polygon])
-        {
-            var p = m.Vertices[v];
-            if (p.X <= m.BoundsMin.X + slack && !world.Contains(new ZoneCoordinate(m.ZoneX - 1, m.ZoneZ))) return true;
-
-            if (p.X >= m.BoundsMax.X - slack && !world.Contains(new ZoneCoordinate(m.ZoneX + 1, m.ZoneZ))) return true;
-
-            if (p.Z <= m.BoundsMin.Y + slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ - 1))) return true;
-
-            if (p.Z >= m.BoundsMax.Y - slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ + 1))) return true;
-        }
-
-        return false;
+        return gates;
     }
 }

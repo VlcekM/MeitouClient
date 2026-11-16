@@ -106,6 +106,7 @@ internal static class NavInteriors
             BoundsMax = hi,
             DoorIds = doorIds.Count > 0 ? [.. doorIds] : null,
             DoorOf = doorIds.Count > 0 ? [.. doorOf] : null,
+            GateSides = exterior.GateSides,
             Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(i => i.Mesh.Surfaces?.Corners ?? []))]),
             Terrain = exterior.Terrain,
             Heights = ZoneNavMesh.HeightsOf(heights),

@@ -95,7 +95,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     ForceInput(world, force);
                     break;
                 case GateRegionsCommand regions:
-                    GateInputs(regions);
+                    GateInputs(world, regions);
                     break;
             }
         }
