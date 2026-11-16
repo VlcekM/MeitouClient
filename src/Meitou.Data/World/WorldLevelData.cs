@@ -476,6 +476,12 @@ public sealed record BuildingPlacement(
     public bool WithoutInterior { get; init; }
 
     /// <summary>
+    /// The player's own building (a site the player built or repairs): only such a WALKABLE linked wall gets seeds on its top
+    /// (docs/game/pathfinding.md "Generator", seeds).
+    /// </summary>
+    public bool PlayerOwned { get; init; }
+
+    /// <summary>
     /// Its interior and exterior layout names when not its state's: a town override's or a loaded save's residents named them
     /// (<see cref="TownBuildings.Relay"/>, docs/game/factions-squads-towns.md "Town residents"); null leaves the state's.
     /// </summary>

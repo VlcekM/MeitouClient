@@ -68,10 +68,6 @@ sealed class InterfaceSounds(PlayerInterface player)
     /// </summary>
     readonly Dictionary<string, bool> _soundBuildings = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// The slider that last sounded (it sounds once until another is moved); null for none.
-    /// </summary>
-    string? _lastSliderSound;
 
     /// <summary>
     /// Where interface sounds go (the host's audio); null without audio.
@@ -297,6 +293,8 @@ sealed class InterfaceSounds(PlayerInterface player)
     {
         if (UiSound is null || e.Action.StartsWith("inventory-scroll", StringComparison.Ordinal)) return;
 
+        if (e.Screen is "new-game" or "import" && SoundForAdvancedSlider(e)) return;
+
         switch (InventoryWindows.ScreenKind(e.Screen))
         {
             case "title" or "menu" or "new-game" or "save" or "load" or "message" or "file": Sound("General_Click"); break;
@@ -314,21 +312,30 @@ sealed class InterfaceSounds(PlayerInterface player)
             case "editor":
                 if (e.Widget == "ConfirmButton") Sound("Create_Character");
                 else if (e.Widget is "BodyTabButton" or "FaceTabButton" or "HairTabButton") Sound("Tab");
-                // Slider: the first event of each drag (a row's bar, named by its row). A list row's arrows click.
-                else if (e.Action == "scroll")
-                {
-                    if (e.Widget != _lastSliderSound) Sound("Slider");
-                    _lastSliderSound = e.Widget;
-                }
-                else if (e.Action == "step" || e.Widget.EndsWith("Button", StringComparison.Ordinal)
-                    || e.Widget.EndsWith("Arrow", StringComparison.Ordinal))
+                // The bars are silent (only a data panel's editable slider posts Slider); a list row's arrows click.
+                else if (e.Action != "scroll" && (e.Action == "step" || e.Widget.EndsWith("Button", StringComparison.Ordinal)
+                    || e.Widget.EndsWith("Arrow", StringComparison.Ordinal)))
                 {
                     Sound("General_Click");
                 }
                 break;
         }
+    }
 
-        if (e.Screen != "editor") _lastSliderSound = null;
+    /// <summary>
+    /// The advanced options' sliders, the original's data-panel editable sliders (<c>DataPanelLine_SliderEditable</c>, <c>FUN_1406f8c60</c>): its
+    /// bar's mouse-pressed handler posts <c>Slider</c>, so a press on the track or an arrow sounds once and the drag after it is silent. False for
+    /// another event.
+    /// </summary>
+    bool SoundForAdvancedSlider(MyGuiEvent e)
+    {
+        bool track = e.Action.StartsWith("advanced-slider:", StringComparison.Ordinal);
+        bool arrow = e.Action.StartsWith("advanced-less:", StringComparison.Ordinal)
+            || e.Action.StartsWith("advanced-more:", StringComparison.Ordinal);
+        if (!track && !arrow) return false;
+
+        if (arrow || e.Press) Sound("Slider");
+        return true;
     }
 
     /// <summary>

@@ -349,9 +349,10 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The obedient player slaves at their workplace on goal 189 (<see cref="CharacterCold.SlaveWork"/>; serial, after the AI's workers): as the
-    /// AI's plan for 189 (87 needs <c>!63</c> and <c>!62</c>; 92 provides <c>!63</c>), a full output is emptied into the inventory (row 92), else a
-    /// machine with its inputs is operated (row 87, <see cref="TownOperate"/>). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only
-    /// pretends.
+    /// AI's plan for 189 (87's list B in order: <c>!63</c>, whose provider is 92; <c>!62</c>, whose provider is 93), a full output is emptied into
+    /// the inventory (row 92), else an empty input is filled from what it carries (row 93, <see cref="FillInputs"/>), else the machine is operated
+    /// (row 87, <see cref="TownOperate"/>). Fetching an input from another machine and putting output away are walks of the job
+    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only pretends.
     /// </summary>
     void ObedientWorkers(World world, float dt)
     {
@@ -365,9 +366,26 @@ public sealed partial class ProductionSystem
             if (m is null || !Live(world, m)) continue;
 
             if (m.OutputBlocked) TakeOutput(world, cold, m);
-            else if (!m.HasEmptyInputs) TownOperate(world, i, cold, m, dt);
+            else if (m.HasEmptyInputs) FillInputs(world, cold, m);
+            else TownOperate(world, i, cold, m, dt);
         }
     }
+
+    /// <summary>
+    /// Row 92 at another town machine for an obedient player slave's errand (the source row 94 found): its output goes into the inventory while
+    /// there is room (<see cref="TakeOutput"/>). Serial phases only.
+    /// </summary>
+    internal void TakeTownOutput(World world, CharacterCold cold, TownBuilding building, int owner)
+    {
+        if ((world.Machines.Find(TownWorkId(building)) ?? TownWork(world, building, owner)) is { } m && Live(world, m)) TakeOutput(world, cold, m);
+    }
+
+    /// <summary>
+    /// State 82 <c>gotInventoryRoomForResources</c> of a machine (<c>FUN_14059bd80</c>, <b>Verified</b>): the inventory or the worn backpack has room
+    /// for a unit of its output item.
+    /// </summary>
+    internal bool RoomForOutput(CharacterCold cold, Machine m) =>
+        m.Output is { } o && cold.Inventory is { } inv && _items.Create(o.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit);
 
     /// <summary>
     /// Whether a worker stands at the town building within <paramref name="reach"/>, idle or resting.

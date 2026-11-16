@@ -279,7 +279,7 @@ public sealed partial class MyGuiScreenHost
         {
             Blur();
             _legacy = new(id, c.Name, c.Action, c.Argument, c.Bounds);
-            Slide(p);
+            Slide(p, press: true);
             return true;
         }
 
@@ -302,14 +302,14 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
-    /// Raises the legacy slider's action with the pointer's share of its track.
+    /// Raises the legacy slider's action with the pointer's share of its track; <paramref name="press"/> for the button going down on it.
     /// </summary>
-    void Slide(Vector2 p)
+    void Slide(Vector2 p, bool press = false)
     {
         if (_legacy is not { } s) return;
 
         float t = s.Track.Width > 0 ? Math.Clamp((p.X - s.Track.X) / s.Track.Width, 0, 1) : 0;
-        Activated?.Invoke(new(s.Screen, s.Widget, s.Action, s.Argument, t));
+        Activated?.Invoke(new(s.Screen, s.Widget, s.Action, s.Argument, t, press));
     }
 
     /// <summary>

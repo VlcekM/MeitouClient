@@ -60,6 +60,13 @@ sealed class WorkFunctionality(PopulationData data)
     }
 
     /// <summary>
+    /// The BUILDING_FUNCTIONALITY (string id) of a home piece pretend-operated (a workstation or training dummy), null without one: its
+    /// <c>animation events</c> go on the work clip as for a worker's building (<see cref="FunctionalityOf"/>).
+    /// </summary>
+    public string? PieceFunctionalityOf(HomeSpot piece) =>
+        data.Db.Find(piece.Record ?? "")?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
+
+    /// <summary>
     /// The BUILDING_FUNCTIONALITY (string id) of a worker's building, null without one: <c>Task_OperateMachine</c>, which the original runs for 189 /
     /// 190's act-outs (87, 221), adds its <c>animation events</c> to the work clip each update (docs/audio.md "Machine work").
     /// </summary>

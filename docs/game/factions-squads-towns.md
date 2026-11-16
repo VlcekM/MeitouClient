@@ -176,7 +176,7 @@ campaigns: [campaigns](#campaigns).
 **Persistent platoons** (**Verified** by code): a zone's unload (`ZoneMapContent::deactivate`, `FUN_1409fe980`) touches no platoon; each platoon checks
 itself (`FUN_1404febd0`) and after 4 s outside every loaded zone (`FUN_1406bab60`, `FUN_1407ec570`) becomes an `UnloadedPlatoon` (`FUN_1407ef4b0`, its characters
 copied into an in-memory record container, no file written) when its `persistent` flag (+0x115) is set or it is in a live campaign, else it is destroyed
-(`FUN_1406ba9d0`). Town residents are made persistent (`FUN_14057f820`, with `sqt` 1); pool refills, homeless squads and `FUN_1409c4150` are not. A
+(`FUN_1406ba9d0`). A carry a member is in is let go at the unload and its link kept in the record ([save](../formats/save.md), carry links). Town residents are made persistent (`FUN_14057f820`, with `sqt` 1); pool refills, homeless squads and `FUN_1409c4150` are not. A
 non-persistent unloaded platoon is activated after 60 s (`FUN_1407ee790`) and then destroyed, so it lasts about 64 s out of range. An unloaded platoon
 becomes active through a dwell timer (+0x78, **Verified** `FUN_1407ebf30`, `FUN_1407ef040`): 5 s when it becomes unloaded; while the zone at its
 position is ready, outside the zone's box the timer is set to 2 s, inside it counts down, and the platoon activates below 0. The box
@@ -304,8 +304,8 @@ included), else 0.025 (outside every town too).
 | dialogue | `FUN_140680560` | DA 4 slot 4, DA 5 slot 9, DA 13 slot 8, DA 14 slot 7, always the **speaker's** faction about the target's ([dialogue](dialogue.md#effects)) |
 
 - No other caller of slot 7 or 8 was found: wars start and end only by dialogue (`FactionWarMgr` campaigns do not call them).
-- A campaign changes how others treat its members only through its phase: attack on sight (16) skips a member of a campaign in phase 0, and the leave-alone test of 21
-  spares a non-hostile one ([ai-tasks](ai-tasks.md#combat-goals)); they are sensed like anyone. Diplomats (NPC class 5) are sensed NEUTRAL by enemies inside their faction's
+- A campaign changes how others treat its members only through its phase: attack on sight (16) skips a member of a campaign in phase 0, and the leave-alone test of every
+  target score spares a non-hostile one ([ai-tasks](ai-tasks.md#combat-goals)); they are sensed like anyone. Diplomats (NPC class 5) are sensed NEUTRAL by enemies inside their faction's
   `biomes` (by the player's side anywhere) and assaulting them there is code 9 ([perception](perception.md#sense-tags-who-is-an-enemy), [economy](economy.md)); **Verified** by disassembly of `FUN_140796240`.
 - Kind 8 is not a drift: nothing moves relations back over time.
 - Status `+0xac` (Character slot 61 `FUN_140598b90` returns it) is summed by the perception (`FUN_140854370`) as a threat value. Meitou rates every striker above both thresholds (kinds 1 and 3; engine choice).
