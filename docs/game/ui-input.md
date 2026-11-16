@@ -714,6 +714,7 @@ is world-free, so a mod's `AddCommand` can register into it later.
 | `money <delta>` | add or (negative) take away cats, never below 0 |
 | `heal` | heal the selected (else the inspected) characters fully |
 | `maxstats` | every stat 100, same targets |
+| `animalage [<age>\|pup\|teen\|adult\|elder] [--id <c:slot.gen>]` | show each animal's name and trader-style age (`Adult (85)`), or set it. Numeric input is a fraction **0 to 1.5**, never x100; presets are 0.2 / 0.5 / 1 / 1.2. Targets the explicit id, else the inspected creature (wild animals too), else the selection; non-animals are skipped with a note. Works paused. |
 | `give "<item record>" [qty] [quality]` | as the menu's give: to the first selected; name matched as the menu does |
 | `spawn "<character record>"` | a hostile character at the cursor |
 | `tpcursor` | teleport the selected to the point under the cursor |
@@ -721,6 +722,11 @@ is world-free, so a mod's `AddCommand` can register into it later.
 | `tp <town name>` | teleport the selected to a placed town, name case-insensitive, exact else shortest prefix match; its position is the town's centre in the level data (`TownSite.Position`); nest markers are skipped |
 | `kill` | kill the selected: `DebugKill` calls `MedicalState.Kill` (medical state dead, orders dropped), no entity is removed |
 | `research` | finish every research |
+
+`animalage` uses `BodySystem.SetAnimalAge`, also used by natural growth: live age/stat multiplier, part HP multipliers, blood capacity and hunger
+size factor update together. An explicit edit refreshes drawn size immediately in either direction, including adult/elder ages. It preserves base
+skills, wounds, current blood, hunger and the species' growth rate; normal growth resumes below 1.1. It neither respawns nor heals the animal.
+Other age-dependent gameplay reads the new live age; speed and other tick-derived values refresh on their usual simulation step.
 
 ## Expression reference
 
