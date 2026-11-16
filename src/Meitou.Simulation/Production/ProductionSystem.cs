@@ -612,9 +612,34 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var table = world.Characters;
         int n = 0;
         for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { } cold) continue;
+
+            bool job = table.Next[i].Task == (byte)CharacterTask.Operate && cold.OperateSite == site;
+            if (job || cold.Ai?.WorkPost?.RuntimeKey == site) n++;
+        }
+
+        return n;
+    }
+
+    /// <summary>
+    /// The characters operating machine <paramref name="site"/> on a job (task Operate).
+    /// </summary>
+    internal static int JobOperatorsOf(World world, string site)
+    {
+        var table = world.Characters;
+        int n = 0;
+        for (int i = 0; i < table.HighWater; i++)
             if (table.Next[i].Alive && table.Next[i].Task == (byte)CharacterTask.Operate && table.Cold(i)?.OperateSite == site) n++;
         return n;
     }
+
+    /// <summary>
+    /// Whether the player-built machine <paramref name="site"/> has power, as its operator needs (<see cref="Powered(World, BuildSite, Machine)"/>);
+    /// false for one that is not there.
+    /// </summary>
+    internal bool Powered(World world, string site) =>
+        world.Buildings.Find(site) is { } built && world.Machines.Find(site) is { } m && Powered(world, built, m);
 
     /// <summary>
     /// The ground distance between two points.

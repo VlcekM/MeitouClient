@@ -318,9 +318,17 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The machine a town building has made, null before its town registered or a worker came.
+    /// The machine a town building has made, null before its town registered or a worker came; for an outpost's workplace (a stand-in known by its
+    /// site id, <see cref="TownBuilding.RuntimeKey"/>) the player's own machine.
     /// </summary>
-    public static Machine? TownWorkOf(World world, TownBuilding building) => world.Machines.Find(TownWorkId(building));
+    public static Machine? TownWorkOf(World world, TownBuilding building) => world.Machines.Find(building.RuntimeKey ?? TownWorkId(building));
+
+    /// <summary>
+    /// The machine a worker works at a town building: <see cref="TownWorkOf"/>, else a town building's machine made now (<see cref="TownWork"/>);
+    /// an outpost's workplace has no machine made for it.
+    /// </summary>
+    Machine? MachineFor(World world, TownBuilding building, int owner) =>
+        TownWorkOf(world, building) ?? (building.RuntimeKey is null ? TownWork(world, building, owner) : null);
 
     /// <summary>
     /// The workers of town machines at their building this tick (serial, before the players' operators): the AI's workers that stand at their
@@ -340,10 +348,11 @@ public sealed partial class ProductionSystem
             var mind = cold.Ai!;
             var building = mind.WorkOperate ?? mind.CollectFrom ?? mind.FillTo!;
             if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(n, building, mind.WorkRange)) continue;
-            if ((world.Machines.Find(TownWorkId(building)) ?? TownWork(world, building, mind.WorkOwner)) is not { } m || !Live(world, m)) continue;
+            if (MachineFor(world, building, mind.WorkOwner) is not { } m || !Live(world, m)) continue;
             if (mind.FillTo is not null) FillInputs(world, cold, m);
             else if (mind.CollectFrom is not null) TakeOutput(world, cold, m);
-            else if (mind.WorkOperate is not null) TownOperate(world, i, cold, m, dt);
+            else if (mind.WorkOperate is not null && (building.RuntimeKey is not { } site || Powered(world, site)))
+                TownOperate(world, i, cold, m, dt);
         }
     }
 
@@ -377,7 +386,7 @@ public sealed partial class ProductionSystem
     /// </summary>
     internal void TakeTownOutput(World world, CharacterCold cold, TownBuilding building, int owner)
     {
-        if ((world.Machines.Find(TownWorkId(building)) ?? TownWork(world, building, owner)) is { } m && Live(world, m)) TakeOutput(world, cold, m);
+        if (MachineFor(world, building, owner) is { } m && Live(world, m)) TakeOutput(world, cold, m);
     }
 
     /// <summary>

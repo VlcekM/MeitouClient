@@ -221,13 +221,16 @@ public sealed partial class AiSystem
         }
 
         /// <summary>
-        /// The player's machine a <see cref="Targets.Machine"/> target stands at (matched by its position; read-only, the production tick is the only
-        /// writer). No finder gives such a target yet: the goals Meitou plans against machines are NPC town work, whose buildings are level data, and
-        /// the player's own machine work is the job system's.
+        /// The player's machine a <see cref="Targets.Machine"/> target stands at, or a <see cref="Targets.Work"/> target's machine: an outpost
+        /// workplace's real machine (its site id), else the town work machine there (matched by position; read-only, the production tick is the only
+        /// writer).
         /// </summary>
         Production.Machine? MachineAt(in PlanTarget t)
         {
             if (t.Kind is not (Targets.Machine or Targets.Work)) return null;
+            if (t.Kind == Targets.Work && OutpostWorkplaceAt(t.Position) is { RuntimeKey: { } site })
+                return _world.Machines.Find(site);
+
             foreach (var m in _world.Machines.All)
             {
                 if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z
@@ -239,9 +242,22 @@ public sealed partial class AiSystem
         }
 
         /// <summary>
-        /// The workplaces of the board's town (none outside a town).
+        /// The workplaces of the board's town, a site's or an outpost's (none outside a town).
         /// </summary>
-        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => _board.Town >= 0 ? _system.Places(_board.Town).Workplaces : [];
+        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => _system.WorkplacesOf(_board.HomeTown);
+
+        /// <summary>
+        /// The outpost workplace standing at <paramref name="at"/> when the board's town is an outpost; null otherwise.
+        /// </summary>
+        Meitou.Data.World.TownBuilding? OutpostWorkplaceAt(Vector3 at)
+        {
+            if (_board.Outpost <= 0) return null;
+
+            foreach (var b in Workplaces())
+                if (b.Position.X == at.X && b.Position.Z == at.Z) return b;
+
+            return null;
+        }
 
         /// <summary>
         /// The flat distance to a target (0 for none).
@@ -432,7 +448,7 @@ public sealed partial class AiSystem
                     if (_mind.Goal?.Task.Type == type && _mind.WorkPost is { } held)
                         return new PlanTarget(Targets.Work, new Vector3(held.Position.X, float.NaN, held.Position.Z));
 
-                    return _system.PickWork(_world, _world.Characters.IdOf(_slot), _board.Town,
+                    return _system.PickWork(_world, _world.Characters.IdOf(_slot), _board.HomeTown,
                             _mind.WorkEpoch + (_mind.WorkActive ? 1 : 0), type) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
                 case TaskType.GetRidOfResourcesInMyInventory or TaskType.EmptyMachineOutputs or TaskType.DitchAllResources:

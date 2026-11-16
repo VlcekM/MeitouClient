@@ -19,10 +19,13 @@ public sealed partial class AiSystem
     /// </summary>
     internal bool HasWorkplaces(World world, CharacterId self, Vector3 at, TaskType type)
     {
-        if (TownAt(at) is not (>= 0 and var site) || !WorkAllowed(world, self.Slot, site)) return false;
+        if (TownAt(at) is not (>= 0 and var site)) return false;
+
+        var town = Population.CampaignTown.OfSite(site);
+        if (!WorkAllowed(world, self.Slot, town)) return false;
 
         var held = HeldWork(world, self);
-        return WorkplacesFor(site, type).Any(b => HasFreeSlot(b, held));
+        return WorkplacesFor(town, type).Any(b => HasFreeSlot(b, held));
     }
 
     /// <summary>
@@ -32,11 +35,13 @@ public sealed partial class AiSystem
     /// </summary>
     internal ObedientWorkplace? WorkAt(World world, CharacterId self, Vector3 at, int epoch, TaskType type)
     {
-        if (TownAt(at) is not (>= 0 and var site) || PickWork(world, self, site, epoch, type, HeldWork(world, self)) is not { } building)
-            return null;
+        if (TownAt(at) is not (>= 0 and var site)) return null;
+
+        var town = Population.CampaignTown.OfSite(site);
+        if (PickWork(world, self, town, epoch, type, HeldWork(world, self)) is not { } building) return null;
 
         return new ObedientWorkplace(building, _work.ClipOf(building), _work.FunctionalityOf(building), _work.HungerRateOf(building),
-            WorkRangeOf(building), WorkOwnerOf(site));
+            WorkRangeOf(building), WorkOwnerOf(world, town));
     }
 
     /// <summary>

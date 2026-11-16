@@ -224,9 +224,9 @@ holds refuses the second mod.
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
   `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
   (`BuildSite.Id`); null clears it. A player-built home in one of the faction's outposts makes the outpost the squad's town: its patrols and
-  going home use it ([rules](simulation.md#autonomous-player-squads)). The player's orders and jobs come first. The switch, package and home
-  are saved with the squad. Off drops the package and the members' minds. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`,
-  `PopulationData.Sites[i].Buildings`.
+  going home and town work on the outpost's own machines use it ([rules](simulation.md#autonomous-player-squads)). The player's orders and
+  jobs come first. The switch, package and home are saved with the squad. Off drops the package and the members' minds. Ids:
+  `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
 - **World hooks** (engine API, not in the original; serial phases): `PopulationSystem.RequestCampaign` queues a

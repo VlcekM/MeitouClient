@@ -11,21 +11,26 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     /// <summary>
-    /// The faction owning a town's buildings (its machine's owner), -1 for none.
+    /// The faction owning a town's buildings (its machine's owner): a site's faction, an outpost's owner; -1 for none.
     /// </summary>
-    int WorkOwnerOf(int town) => town >= 0 && town < data.SiteFactions.Count ? data.SiteFactions[town] : -1;
+    int WorkOwnerOf(World world, Population.CampaignTown town)
+    {
+        if (town.Site >= 0) return town.Site < data.SiteFactions.Count ? data.SiteFactions[town.Site] : -1;
+
+        return world.Buildings.FindTown(town.PlayerTown)?.Owner ?? -1;
+    }
 
     /// <summary>
     /// The building the plan's current step works at: a machine step (87, 92, 93) or the walk to it names its own building (the fetch from another
     /// machine's output, rows 94 and 92, is at that machine), else the building the goal picked.
     /// </summary>
-    TownBuilding? StepBuilding(AiMind mind, int town)
+    TownBuilding? StepBuilding(AiMind mind, Population.CampaignTown town)
     {
         bool machineStep = mind.Step is TaskType.OperateMachinery or TaskType.CollectOutputResource or TaskType.FillMachine
             or TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast;
         if (!machineStep || mind.Plan[0].Target is not { Kind: Targets.Work } at) return mind.WorkBuilding;
 
-        foreach (var b in Places(town).Workplaces)
+        foreach (var b in WorkplacesOf(town))
             if (b.Position.X == at.Position.X && b.Position.Z == at.Position.Z) return b;
 
         return mind.WorkBuilding;
