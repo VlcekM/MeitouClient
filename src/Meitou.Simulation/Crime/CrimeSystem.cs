@@ -412,7 +412,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);
             if (c.Pending is not { } p) continue;
             if (!Reacts(world, wc, c, p)) continue;
-            if (Friendly(wf, c.Faction) && Betrays(p.Code)) PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta);
+            if (Friendly(wf, c.Faction) && Betrays(p.Code))
+                PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta, $"a friend's crime witnessed ({p.Code})");
             p.Timer = WitnessTimer;
             c.RecentlyWanted = RecentlyWantedSeconds;
             var witness = table.IdOf(w);
@@ -425,7 +426,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                     && fight.TargetGeneration == culpritId.Generation))
             {
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, w, culprit);
-                world.Defer(new Combat.AttackOrder([witness], culpritId) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+                world.Defer(new Combat.AttackOrder([witness], culpritId)
+                {
+                    Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = $"the victim saw the crime ({p.Code})",
+                });
             }
             bool first = !p.Witnessed;
             if (first)
@@ -713,7 +717,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
                 last = c;
             }
-            if (last >= 0) world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last)) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+            if (last >= 0)
+            {
+                world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last))
+                {
+                    Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "investigating an alarm",
+                });
+            }
         }
     }
 
@@ -807,6 +817,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
         if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
+        world.Events.Line(world, "crime", CrimeLine(world, kind, culprit, code, faction, amount, witness));
+    }
+
+    /// <summary>
+    /// The event log's line of a crime event.
+    /// </summary>
+    static string CrimeLine(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
+    {
+        string who = EventLog.Who(world, culprit), against = EventLog.FactionName(world, faction);
+        return kind switch
+        {
+            CrimeEventKind.Pending => $"{who} committed {code} against {against}",
+            CrimeEventKind.Witnessed => $"{EventLog.Who(world, witness)} saw {who} commit {code}",   // the faction noted is the witness's
+            CrimeEventKind.Booked => $"{against} put a bounty on {who} for {code}: {amount} in all",
+            CrimeEventKind.Expired => $"{who}'s bounty with {against} expired",
+            _ => $"{kind}: {who}, {code}, {against}",
+        };
     }
 
     #endregion

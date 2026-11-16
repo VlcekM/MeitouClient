@@ -391,7 +391,13 @@ public sealed partial class CarrySystem
 
         // a player character: attackTarget's replan, the step decides (EngagedDefence.Engage)
         if (DecisionSystem.Decides(target)) _engaged.Engage(world, Aggro, t, i);
-        else world.Defer(new AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
+        else
+        {
+            world.Defer(new AttackOrder([targetId], attackerId)
+            {
+                Tick = world.Tick + 1, Defensive = true, Cause = "a failed knock-out attempt on it",
+            });
+        }
     }
 
     #endregion

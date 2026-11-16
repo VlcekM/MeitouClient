@@ -342,7 +342,13 @@ public sealed partial class DialogueSystem
                 if (c.Fighter?.CanAttack == true) fighters.Add(m);
             }
         }
-        if (fighters.Count > 0) world.Defer(new Combat.AttackOrder(fighters, target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+        if (fighters.Count > 0)
+        {
+            world.Defer(new Combat.AttackOrder(fighters, target)
+            {
+                Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "a town-wide alarm (dialogue)",
+            });
+        }
     }
 
     /// <summary>

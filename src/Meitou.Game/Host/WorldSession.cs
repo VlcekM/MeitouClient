@@ -148,6 +148,7 @@ public sealed class WorldSession : IDisposable
         next.BenchFacingFix = World.BenchFacingFix;
         next.BagSearchFix = World.BagSearchFix;
         next.TakeIntoBackpack = World.TakeIntoBackpack;
+        next.ActionLog = World.ActionLog;
         try
         {
             setup?.Invoke(next);

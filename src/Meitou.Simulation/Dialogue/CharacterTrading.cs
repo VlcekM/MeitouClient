@@ -468,7 +468,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     void ChangeTowardPlayer(World world, int faction, int amount)
     {
         if (world.Player.Faction < 0 || faction == world.Player.Faction || !data.Relations.Contains(faction)) return;
-        system.ChangeRelation(world, faction, world.Player.Faction, amount);
+        system.ChangeRelation(world, faction, world.Player.Faction, amount, "a character sold or bought free");
     }
 
     /// <summary>

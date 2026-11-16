@@ -2398,7 +2398,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (t < 0) return;
 
             var targetId = table.IdOf(t);
-            world.Defer(new AttackOrder([table.IdOf(slot)], targetId) { Tick = world.Tick + 1, Source = TaskSource.Job, Job = k });
+            world.Defer(new AttackOrder([table.IdOf(slot)], targetId)
+            {
+                Tick = world.Tick + 1, Source = TaskSource.Job, Job = k, Cause = "an attack job of its list",
+            });
             owner.Started++;
             world.Sounds?.Enqueue(new SoundEvent(SoundKind.Alert, table.IdOf(slot), targetId, table.Next[t].Position));   // its alert voice
         }
@@ -2455,7 +2458,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             if (t < 0) return;
 
             var targetId = table.IdOf(t);
-            world.Defer(new AttackOrder([table.IdOf(slot)], targetId) { Tick = world.Tick + 1 });
+            world.Defer(new AttackOrder([table.IdOf(slot)], targetId)
+            {
+                Tick = world.Tick + 1, Cause = "holding its ground: an enemy came in range",
+            });
             owner.Started++;
             world.Sounds?.Enqueue(new SoundEvent(SoundKind.Alert, table.IdOf(slot), targetId, table.Next[t].Position));   // its alert voice
         }

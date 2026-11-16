@@ -419,6 +419,24 @@ public sealed partial class AiSystem
     readonly Dictionary<int, int> _pendingFights = [];
 
     /// <summary>
+    /// The goal causes made so far (<see cref="GoalCause"/>), one string per row.
+    /// </summary>
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<TaskType, string> GoalCauses = new();
+
+    /// <summary>
+    /// The cause the event log gives an AI goal's fight (<see cref="AttackOrder.Cause"/>): its goal row.
+    /// </summary>
+    static string GoalCause(TaskType goal) => GoalCauses.GetOrAdd(goal, MakeGoalCause);
+
+    /// <summary>
+    /// The cause text of a goal row.
+    /// </summary>
+    static string MakeGoalCause(TaskType goal) =>
+        goal == TaskType.SelfPreservation
+            ? "self preservation: it was threatened"
+            : $"its goal {TaskDataTable.Of(goal)?.Text ?? goal.ToString()} ({(int)goal})";
+
+    /// <summary>
     /// Starts the fights the thinks asked for (serial, slot order; docs/game/ai-tasks.md "Combat goals"): an attack goal's as a goal's attack (row
     /// 16), a protect goal's and Self preservation's as a defence (row 13; a self-defence is not in the aggro log), both of the goal's provenance,
     /// for the next tick; the fight is the AI's own (<see cref="AiMind.FightFrom"/>), so the character thinks in it. A character fighting by then, or
@@ -445,7 +463,10 @@ public sealed partial class AiSystem
 
             if (!table.TryResolveNext(foe, out int f) || table.Cold(f) is not { Medical.Incapacitated: false }) continue;
             bool self = goal == TaskType.SelfPreservation, protects = self || Protects(goal);
-            world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Source = TaskSource.Goal, Defensive = protects });
+            world.Defer(new AttackOrder([table.IdOf(s)], foe)
+            {
+                Tick = world.Tick + 1, Source = TaskSource.Goal, Defensive = protects, Cause = GoalCause(goal),
+            });
             mind.FightFrom = world.Tick + 1;
             _pendingFights[f] = _pendingFights.GetValueOrDefault(f) + 1;
 

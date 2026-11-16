@@ -349,7 +349,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                         if (world.Characters.TryResolveNext(_trader, out int who) && world.Characters.Cold(who) is { } tc
                             && AggroSystem.IsEnemy(_data.Relations, world.Player.Faction, tc.Faction))
                         {
-                            world.Defer(new Combat.AttackOrder([_customer], _trader) { Tick = world.Tick + 1 });
+                            world.Defer(new Combat.AttackOrder([_customer], _trader)
+                            {
+                                Tick = world.Tick + 1, Cause = "an order to trade with a hostile trader",
+                            });
                         }
 
                         Close(world);

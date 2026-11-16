@@ -38,7 +38,11 @@ public sealed partial class DialogueSystem
     {
         var mc = Cold(world, me);
         if (mc is not null) RunLocks(c, line, mc);
-        if (line.Interrupt is { } interrupt) _interrupts[me] = interrupt;
+        if (line.Interrupt is { } interrupt)
+        {
+            _interrupts[me] = interrupt;
+            world.DialogueLines.Line(world, "interrupt", $"{EventLog.Who(world, me)}: next talk opens {interrupt}");
+        }
         RunRelationChanges(world, line);
         CrowdTrigger(world, c, line, me);
         var target = c.Player;
@@ -452,8 +456,14 @@ public sealed partial class DialogueSystem
     {
         if ((tc.Faction != world.Player.Faction && !tc.IsPlayer) || mc.SquadId < 0) return;
         if (world.Squads.Find(mc.SquadId) is not { Leader: { IsNone: false } leader }) return;
-        if (_open?.Npc == leader || _npcApproaches.Has(leader)) return;
+        string who = $"{EventLog.Who(world, leader)} to {EventLog.Who(world, target)}";
+        if (_open?.Npc == leader || _npcApproaches.Has(leader))
+        {
+            world.DialogueLines.Line(world, "walkup", $"{who}: DA 2 ignored, " + (_open?.Npc == leader ? "already talking" : "already walking up"));
+            return;
+        }
         if (!world.Characters.TryResolveNext(leader, out int l) || !Awake(world.Characters, l)) return;
+        world.DialogueLines.Line(world, "walkup", $"{who}: starts walking up (DA 2)");
         _npcApproaches.Add(world, leader, target);
         Hold(world, l);
     }
@@ -477,9 +487,10 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// Changes the relation of factions <paramref name="a"/> and <paramref name="b"/> by the amount, posting the notice when one is the player's.
     /// </summary>
-    internal void ChangeRelation(World world, int a, int b, int amount)
+    internal void ChangeRelation(World world, int a, int b, int amount, string cause = "a dialogue line")
     {
         var (before, after) = _data.Relations.Add(a, b, amount);
+        if (before != after) PlayerRelations.Logged(world, _data.Relations, a, b, before, after, cause);
         int other = a == world.Player.Faction ? b : a;
         if (b == world.Player.Faction || a == world.Player.Faction)
             if (PlayerRelations.Notice(_data.Factions[other].Name, before, after) is { } text) world.Post(text);
@@ -510,7 +521,7 @@ public sealed partial class DialogueSystem
             return;
         }
         if (table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true })
-            world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
+            world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "a dialogue line (attack)" });
     }
 
     #endregion

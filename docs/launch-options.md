@@ -147,6 +147,7 @@ An option whose Effect names a settings row sets that row for the run only: the 
 | `--sway-step <s>` | seconds | | Grass sway advanced per frame (motion check, with screenshot or bench). |
 | `--orbit-step <deg>` | degrees | | With `--screenshot`: the camera orbits this much per frame (upscaler motion vectors). |
 | `--wireframe` | | off | Wireframe view. |
+| `--action-log <who>` | `off`, `squad` or `everyone` | everyone | Which characters' task changes, and why, go to `log_actions.txt` beside log.txt (simulation.md "Action log"); F10 "Action log" switches it while playing. |
 | `--debug <n>` | 1 or 2 | off | 1: blend-map slot weights; 2: layer weights. |
 | `--debug-shadows <n>` | 1 to 4 | off | 1: the four cascade maps; 2: shadow term by cascade; 3: term multiplied over the picture; 4: the traced sun (blue cascades, green lit, red shadowed) and a log line on why a frame traces. |
 | `--help` / `-h` | | | Print the usage. |

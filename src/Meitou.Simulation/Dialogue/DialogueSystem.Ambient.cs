@@ -535,13 +535,28 @@ public sealed partial class DialogueSystem
                 world.Said(NameOf(world, speaker), text, world.Characters.Cold(n) is { IsPlayer: true });
             }
             foreach (var e in line.Effects) if (e.Action == DialogueActions.BubbleWait) seconds = MathF.Max(seconds, e.Value);
+            LogBubble(world, c, line, speaker, text);
             if (c.Ended || NextBubble(world, c, line) is not { } next)
             {
+                string why = c.Ended ? " (ended by an effect)"
+                    : line.Children.Count == 0 ? " (last line)"
+                    : " (no next line passes, or its speaker is busy)";
+                world.DialogueLines.Line(world, "bubble", $"{EventLog.Who(world, c.Npc)}: chain of {DialogueLog.Node(c.Root)} ends{why}");
                 EndBubbles(world, c);
                 _bubbles.RemoveAt(k--);
             }
             else _bubbles[k] = new Bubble(c, next.Line, world.Tick + (long)MathF.Ceiling(seconds / world.TickSeconds), next.Speaker, Chained: true);
         }
+    }
+
+    /// <summary>
+    /// The dialogue log's line for a bubble line said: speaker, target, text, event, root, line and effects.
+    /// </summary>
+    static void LogBubble(World world, Conversation c, DialogueNode line, CharacterId speaker, string text)
+    {
+        var to = speaker == c.Player ? c.Npc : c.Player;
+        world.DialogueLines.Line(world, "bubble", $"{EventLog.Who(world, speaker)} to {EventLog.Who(world, to)}: \"{text}\" "
+            + $"({DialogueLog.Event(c.Event)}, root {DialogueLog.Node(c.Root)}, line {DialogueLog.Node(line)}{DialogueLog.Effects(line)})");
     }
 
     /// <summary>

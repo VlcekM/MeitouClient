@@ -109,7 +109,10 @@ sealed class EngagedDefence : IDecisionSource
         int a = EngagedFoe(world, slot);
         var id = table.IdOf(slot);
         _engagements.RemoveAll(e => e.Victim == id);
-        world.Defer(new AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
+        world.Defer(new AttackOrder([id], table.IdOf(a))
+        {
+            Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal, Cause = "defending itself while engaged",
+        });
     }
 
     #endregion

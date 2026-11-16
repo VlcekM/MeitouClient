@@ -58,6 +58,7 @@ static class WorldCommandLine
           --day <n>                the game day the weather schedule starts at (default 0)
           --clouds <0..1>          cloud density c (test override)
           --no-audio               no sound (the biome ambience and weather beds from the game's Wwise banks)   --audio-gain <dB> raise or lower the whole mix (0 = the game's levels)
+          --action-log <who>       off, squad or everyone (default): each character's task changes, and why, to log_actions.txt (F10)
           --no-particles           no weather particles  --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO, ground relief, light shafts or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
           --benchmark-baseline     the benchmarks' settings: a 1920x1080 window, the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (the viewer: options after it override; the game: fixed)
@@ -312,7 +313,18 @@ static class WorldCommandLine
     }
 
     /// <summary>
-    /// How the run goes: audio, the window, keys and shots, the A/B and benchmark modes, and the frame logs.
+    /// The <c>--action-log</c> value: off, squad or everyone.
+    /// </summary>
+    static Simulation.Ai.ActionLogScope ActionLogScopeOf(string value) => value.ToLowerInvariant() switch
+    {
+        "off" => Simulation.Ai.ActionLogScope.Off,
+        "squad" => Simulation.Ai.ActionLogScope.Squad,
+        "everyone" => Simulation.Ai.ActionLogScope.Everyone,
+        _ => throw new ArgumentException($"--action-log takes off, squad or everyone, not '{value}'"),
+    };
+
+    /// <summary>
+    /// How the run goes: audio, the window, keys and shots, the A/B and benchmark modes, the frame logs and the action log.
     /// </summary>
     static bool ParseRun(WorldOptions o, OptionReader r)
     {
@@ -320,6 +332,7 @@ static class WorldCommandLine
         {
             case "--no-audio": o.NoAudio = true; break;
             case "--audio-gain": o.AudioGainDb = r.Float(); break;
+            case "--action-log": o.ActionLog = ActionLogScopeOf(r.Next()); break;
             case "--show-keys": o.ShowKeys = true; break;
             case "--play-shots": o.PlayShots = true; break;
             case "--no-vsync": o.VSync = false; break;

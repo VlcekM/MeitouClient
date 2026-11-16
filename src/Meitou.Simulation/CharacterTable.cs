@@ -1397,6 +1397,16 @@ public sealed class CharacterCold
     /// The task the start path last set (see <see cref="TaskSetTick"/>).
     /// </summary>
     internal byte TaskSet;
+
+    /// <summary>
+    /// The table boundary (<see cref="CharacterTable.Ticks"/>, a paused step counting) of the last end through <see cref="TaskStart.End"/>, and its
+    /// reason (<see cref="Ended"/>): the action log's (<see cref="ActionLog"/>). Not saved or hashed.
+    /// </summary>
+    internal long EndedTick = -1;
+    /// <summary>
+    /// Why the task ended at <see cref="EndedTick"/>.
+    /// </summary>
+    internal TaskEnd Ended;
 }
 
 /// <summary>
