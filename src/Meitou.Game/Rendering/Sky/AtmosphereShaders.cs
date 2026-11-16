@@ -117,9 +117,12 @@ static class AtmosphereShaders
         uniform samplerCube uAtmoSpecular;
         uniform sampler2D uAtmoAmbientMap;
         uniform vec4 uAtmoCloud;      // x strength, y legacy density offset or volume coverage, z base height, w 1 volume transmission map
-        uniform vec4 uAtmoCloudWind;  // legacy: xy wind shift; volume: xy map origin, z map span
+        uniform vec4 uAtmoCloudWind;  // legacy: xy wind shift; volume: xy map origin, z map span; w the clouds the sky draws (0 none, 1 layer, 2 volume)
         uniform sampler2D uAtmoClouds;
         uniform sampler2D uAtmoCloudsTile;
+        uniform vec4 uAtmoLayerLight, uAtmoLayerSun, uAtmoLayerWind, uAtmoLayerMeitou;   // the cloud layer as the sky pass draws it (CloudPassValues)
+        uniform vec4 uAtmoLayerKey, uAtmoLayerKeyDir, uAtmoLayerAmbient;
+        uniform sampler2D uAtmoLayerClouds, uAtmoLayerTile, uAtmoLayerNormal;
         {{CloudShadow}}
         uniform vec4 uWeatherWet;     // the weather's shared surface values (WeatherSurfaces): x wetness, y rainAmount = saturate(rain / 50), z gameTime (hours), w the water's height
         uniform vec4 uWeatherDust;    // xyz: dustAmount (current, inside, slope; docs/formats/weather.md "Dust")
@@ -342,6 +345,8 @@ static class AtmosphereShaders
         // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains and by the feet that step in it (wetSteps; WetPuddles is this
         // rule on the CPU, which finds those feet); round it a rim of soaked ground. world: the fragment;
         // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm).
+        // Its open water (any water over the ground, not the rim) sets atmoPuddle: kenshiLight reflects the sky the dome draws there (atmoSkyReflection).
+        bool atmoPuddle = false;
         void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, float hollow, inout vec3 n, inout vec4 surface)
         {
             float even = smoothstep(0.955, 0.99, level.y);
@@ -355,6 +360,7 @@ static class AtmosphereShaders
             surface.rgb *= mix(1.0, 0.82, rim) * mix(1.0, mix(0.8, 0.5, smoothstep(0.0, 0.2, over)), water);
             surface.a = mix(mix(surface.a, max(surface.a, 0.6), rim), 0.95, water);
             if (water <= 0.0) return;
+            atmoPuddle = true;
             vec3 up = vec3(0.0, 1.0, 0.0);
             float fine = 1.0 - smoothstep(0.6, 1.5, pixel);
             if (fine > 0.0)
@@ -453,6 +459,59 @@ static class AtmosphereShaders
             return colour * uAtmoTint;
         }
         vec3 atmoSky(vec3 dir) { float n; return atmoSky(dir, n); }
+        // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
+        // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
+        // (uAtmoFogColour). So a weather whose fog completes before the far clip (dust storms 25000, Ashlands 35000, farClip 50000) replaces the whole sky with a flat fog colour.
+        vec3 atmoSkyFog(vec3 colour)
+        {
+            if (uAtmoFog.z <= 0.0 || uAtmoHaze.w <= 0.0) return colour;
+            float amount = clamp(uAtmoFog.w * uAtmoHaze.w, 0.0, 1.0);
+            float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+            return mix(colour, uAtmoFogColour, curve);
+        }
+        vec3 hazeTarget(vec3 offset);
+        // The volume clouds' horizon (the sky pass, after the volume image): the far land's Kenshi haze target over shallow rays, which a finite volume misses,
+        // closed at full cover even with the Meitou surface haze at 0.93. coverage: the cloud density c.
+        vec3 atmoCloudHorizon(vec3 colour, vec3 dir, float coverage)
+        {
+            vec3 haze = mix(hazeTarget(dir * max(uAtmoFog.w, uAtmoHaze.z)), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
+            float closure = max(min(uAtmoAltitude.y, 1.0), uAtmoHazeCloud.a);
+            float horizon = (1.0 - smoothstep(0.05, 0.15, dir.y)) * (1.0 - uAtmoAltitude.x) * closure * smoothstep(0.0, 0.05, coverage);
+            return mix(colour, haze, horizon);
+        }
+        {{CloudLayerShaders.Reflected}}
+        // The volume clouds' cover towards d from the point from: 1 - the sun transmission of the volume's map where the ray meets the clouds' base (the
+        // cloud shadows' map, the density c beyond it); the density c alone while the map is not bound (cloud shadows off).
+        float atmoVolumeCover(vec3 d, vec3 from, float coverage)
+        {
+            if (uAtmoCloud.w < 0.5 || from.y >= uAtmoCloud.z) return coverage;
+
+            vec2 hit = from.xz + d.xz * ((uAtmoCloud.z - from.y) / d.y);
+            vec2 uv = (hit - uAtmoCloudWind.xy) / uAtmoCloudWind.z;
+            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return coverage;
+            return 1.0 - textureLod(uAtmoClouds, uv, 0.0).r;
+        }
+        // The clouds the dome draws over the sky towards dir (uAtmoCloudWind.w: 0 none, 1 the cloud layer, 2 the volume): the layer as the sky pass draws it
+        // (CloudLayerShaders, the same source and values); the volume's cover seen from the point from (atmoVolumeCover) in horizonClouds' colour
+        // (uAtmoHazeCloud.rgb, the cloud pass's own light), then its horizon as the dome's. The density c: CloudLayer.DensityOffset (uAtmoLayerSun.w) undone.
+        vec3 atmoSkyClouds(vec3 sky, vec3 dir, vec3 from)
+        {
+            if (uAtmoCloudWind.w < 0.5) return sky;
+
+            if (uAtmoCloudWind.w < 1.5)
+            {
+                vec4 layer = atmoCloudLayer(dir, sky);
+                return mix(sky, layer.rgb, layer.a);
+            }
+
+            vec3 d = normalize(vec3(dir.x, max(dir.y, 0.0005), dir.z));
+            float offset = (uAtmoLayerSun.w - {{F(CloudLayer.DensityOffset(0))}}) / {{F(CloudLayer.DensityOffset(1) - CloudLayer.DensityOffset(0))}};
+            float coverage = clamp(offset, 0.0, 1.0);
+            return atmoCloudHorizon(mix(sky, uAtmoHazeCloud.rgb, atmoVolumeCover(d, from, coverage)), dir, coverage);
+        }
+        // The sky the dome draws towards dir from the point from, with its clouds and fog but without its stars and planets: what a puddle's water mirrors
+        // (atmoSkyReflection).
+        vec3 atmoSkySeen(vec3 dir, vec3 from) { return atmoSkyFog(atmoSkyClouds(atmoSky(dir), dir, from)); }
 
         {{ShadowShaders.Functions}}
         // ---- the deferred lighting pass (deferred.hlsl main_fs, lightingFunctions.hlsl; docs/formats/lighting.md) ----
@@ -467,6 +526,20 @@ static class AtmosphereShaders
             if (uAtmoMaps.x < 0.5) return {{V3(new(1.09f, 1.20f, 1.51f))}};
             vec4 t = textureLod(uAtmoIrradiance, n, {{F(KenshiLighting.IrradianceLevel)}});
             return t.rgb * t.a * 4.0;
+        }
+        // The sky a surface reflects towards dominant, before the BRDF: the game's specular cube times the ambient map's colour and the environment factor.
+        // The cube (mp_specularity.dds) is a still of a green landscape under a blue sky, which a surface of the game's glosses (wet ground up to 0.5) blurs;
+        // a puddle's water (puddle: atmoPuddle, gloss 0.95) mirrored its trees, so it takes the sky the dome draws from the point from (atmoSkySeen: time of
+        // day, clouds and weather included), from the cube at its outline's gloss (0.6) to the dome's alone at 0.9, so the outline has no edge. The SSR
+        // shade's sky reads the same by its gloss.
+        vec3 atmoSkyReflection(vec3 dominant, float gloss, vec3 ambient, float env, bool puddle, vec3 from)
+        {
+            float dome = puddle ? smoothstep(0.6, 0.9, gloss) : 0.0;
+            vec3 seen = dome > 0.0 ? atmoSkySeen(dominant, from) : vec3(0.0);
+            if (dome >= 1.0) return seen;
+
+            vec4 r = textureLod(uAtmoSpecular, dominant, (1.0 - gloss) * 7.0);
+            return mix(r.rgb * r.a * 10.0 * ambient * env, seen, dome);
         }
         float kenshiEnvBrdf(float gloss, float nv)
         {
@@ -522,7 +595,8 @@ static class AtmosphereShaders
         // What a lit fragment writes to the GI resolve's surface target (GiResolveShaders.WithAlbedo; RGBA32UI, 0: no probes here), set by kenshiLight:
         // x, y the shading normal's octahedral position (16 bits each), z sqrt(albedo) red | green << 8, w blue | takes the probes << 8 | interior << 9 | gloss << 10
         // (with the reflections on: 1 + gloss * 62, else 0) | traced << 16 | receiver << 17 (with the traced sun, docs/render-shadows.md "Traced sun": also from the
-        // programs that read the probes themselves) | lamp receiver << 19 (a character, with its normal and albedo, while the lamps are traced).
+        // programs that read the probes themselves) | lamp receiver << 19 (a character, with its normal and albedo, while the lamps are traced) | puddle << 20
+        // (atmoPuddle, with the reflections on; a lamp receiver's bits 20-31 are its own, CharacterShaders).
         uvec4 giAlbedoOut = uvec4(0u);
         bool giInterior = false;
         // The sun term the traced sun's pass adds where its rays reach (location 2, GiResolveShaders.WithAlbedo), before the haze, and the kind of surface, set before kenshiLight:
@@ -625,6 +699,7 @@ static class AtmosphereShaders
                 uint stored = c.b | (useGi ? 256u : 0u) | (giInterior ? 512u : 0u);
                 if ((giFlags & 2) != 0) stored |= (uint(gloss * 62.0 + 0.5) + 1u) << 10;
                 stored |= giAlbedoOut.w & 458752u;   // the traced sun's bits 16-18, written above
+                if ((giFlags & 2) != 0 && atmoPuddle) stored |= 1048576u;   // the reflections' sky is the dome's (SsrShaders ssrPuddle)
                 giAlbedoOut = uvec4(o, c.r | (c.g << 8), stored);
             }
             else
@@ -643,8 +718,7 @@ static class AtmosphereShaders
             {
                 float nv = clamp(dot(v, n), 0.0, 1.0);
                 vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + roughness));
-                vec4 r = textureLod(uAtmoSpecular, dominant, (1.0 - gloss) * 7.0);
-                envSpecular = kenshiEnvBrdf(gloss, nv, specColour) * r.rgb * r.a * 10.0 * am.rgb * env * specularOcclusion;
+                envSpecular = kenshiEnvBrdf(gloss, nv, specColour) * atmoSkyReflection(dominant, gloss, am.rgb, env, atmoPuddle, world) * specularOcclusion;
             }
             vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;
             // The game's point and spot lights, lit like the sun (docs/render-lights.md); none while uLightGrid.w is 0.

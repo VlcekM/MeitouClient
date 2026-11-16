@@ -501,7 +501,8 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The night sky's clocks: the starfield shifts with the game hours since the load, the planets turn with the day and hour.
+    /// The night sky's clocks: the starfield shifts with the game hours since the load, the planets turn with the day and hour; and the eye and a
+    /// pixel's angle, which the clouds' parallax and the puddles' cloud lookups take.
     /// </summary>
     static void SetNightSky(ref FrameState f)
     {
@@ -513,6 +514,7 @@ static partial class WorldFrame
         sky.Clock = f.Scene.Clock;
         sky.StarSeconds = (float)(gpu.HeatHazeHours / HeatHaze.HoursPerSecond % 3600);   // the twinkle's clock: still for a picture
         sky.Eye = f.Eye;
+        sky.PixelAngle = 2 * MathF.Tan(f.Camera.FieldOfView / 2) / Math.Max(f.RenderHeight, 1);
     }
 
     /// <summary>

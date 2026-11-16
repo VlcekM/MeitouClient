@@ -62,6 +62,28 @@ sealed class SkyTextures : IDisposable
     public SampledImage? CloudsSmooth => _cloudsSmooth;
 
     /// <summary>
+    /// The cloud layer's density texture as the sky pass reads it: the smoothed copy with the Meitou clouds (<paramref name="lit"/>), else the game's.
+    /// </summary>
+    public SampledTexture LayerDensity(bool lit) =>
+        (lit ? _cloudsSmooth : _cloudsTexture) is { } t ? t.Sampled() : default;
+
+    /// <summary>
+    /// The cloud layer's tile as the sky pass reads it (<see cref="LayerDensity"/>).
+    /// </summary>
+    public SampledTexture LayerTile(bool lit) =>
+        (lit ? _cloudsTileSmooth : _cloudsTileTexture) is { } t ? t.Sampled() : default;
+
+    /// <summary>
+    /// The cloud layer's normal map.
+    /// </summary>
+    public SampledTexture LayerNormal() => _cloudsNormalTexture is { } t ? t.Sampled() : default;
+
+    /// <summary>
+    /// The sky has the cloud layer's three textures (<c>uHas.z</c>).
+    /// </summary>
+    public bool HasCloudLayer => _cloudsTexture is not null && _cloudsNormalTexture is not null && _cloudsTileTexture is not null;
+
+    /// <summary>
     /// The cloud tile's smoothed copy, or null.
     /// </summary>
     public SampledImage? CloudsTileSmooth => _cloudsTileSmooth;
@@ -163,7 +185,7 @@ sealed class SkyTextures : IDisposable
     /// </summary>
     public void SetPresence(SkyProg program)
     {
-        bool clouds = _cloudsTexture is not null && _cloudsNormalTexture is not null && _cloudsTileTexture is not null;
+        bool clouds = HasCloudLayer;
         float stars = _starsTexture is not null ? 1f : 0f;
         float planet0 = _planetTextures[0] is not null ? 1f : 0f, planet1 = _planetTextures[1] is not null ? 1f : 0f;
         program.P.Set(program.Has, stars, planet0, clouds ? 1f : 0f, planet1);

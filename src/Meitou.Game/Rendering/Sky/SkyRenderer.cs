@@ -443,6 +443,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         // showed as grain and contour bands once the clouds were lit). The condition is on a uniform, so the derivatives stay defined.
         float cloudsRed(vec2 uv) { if (uCloudMeitou.x > 0.5) return texture(uCloudsSmooth, uv).r; return texture(uClouds, uv).r; }
         float cloudsTileRed(vec2 uv) { if (uCloudMeitou.x > 0.5) return texture(uCloudsTileSmooth, uv).r; return texture(uCloudsTile, uv).r; }
+        vec3 cloudsNormal(vec2 uv) { return texture(uCloudsNormal, uv).rgb; }
+        float cloudsSmooth(vec2 uv) { return texture(uCloudsSmooth, uv).r; }
+        {{CloudLayerShaders.Dome}}
         void main()
         {
             vec4 a = uInverseViewProjection * vec4(vNdc, DEPTH_NEAREST, 1.0);   // the near plane, then the far one, under either depth convention
@@ -520,87 +523,17 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec4 cloud = texture(uVolumeImage, vNdc * 0.5 + 0.5);
                 col = col * (1.0 - cloud.a) + cloud.rgb;
                 // Match the far land's Kenshi haze target. The planar layer supplied this horizon band;
-                // a finite volume misses shallow rays, which otherwise exposes a crisp seam at hazed mountains.
-                vec3 haze = mix(hazeTarget(dir * max(uAtmoFog.w, uAtmoHaze.z)), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-                // Full cloud cover is opaque at the horizon even with Meitou surface haze at 0.93.
-                float closure = max(min(uAtmoAltitude.y, 1.0), uAtmoHazeCloud.a);
-                float horizon = (1.0 - smoothstep(0.05, 0.15, dir.y)) * (1.0 - uAtmoAltitude.x)
-                              * closure * smoothstep(0.0, 0.05, uSkyExtra.y);
-                col = mix(col, haze, horizon);
+                // a finite volume misses shallow rays, which otherwise exposes a crisp seam at hazed mountains (AtmosphereShaders atmoCloudHorizon).
+                col = atmoCloudHorizon(col, dir, uSkyExtra.y);
             }
             else if (uHas.z > 0.5 && uSkyExtra.y > 0.0)
             {
-                vec3 d = normalize(vec3(dir.x, max(dir.y, 0.0005), dir.z));
-                float o = uCloudSun.w;
-                const float MULT = {{F(CloudLayer.DensityMultiplier)}}, SCALE = {{F(CloudLayer.Scale)}}, HEIGHT = {{F(CloudLayer.Height)}};
-                vec2 wind = uCloudWind.xy;
-                const vec2 SHIFT = vec2({{F(CloudLayer.SecondLookupShift.X)}}, {{F(CloudLayer.SecondLookupShift.Y)}});
-                // The plane hit: the cloud point is d · height / d.y, the texture coordinate its xz · scale.
-                vec2 uv = d.xz * (HEIGHT / d.y) * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
-                float density = cloudsRed(uv + wind);
-                vec3 normal = -(2.0 * texture(uCloudsNormal, uv + wind).rgb - 1.0);
-                normal = vec3(normal.x, normal.z, normal.y);   // the shader swaps y and z
-                density = clamp((density + o) * MULT, 0.0, 1.0);
-                // The fake volume: the direction bent along the normal map, the plane raised where the cloud is thin.
-                vec3 nd = normalize(d + {{F(CloudLayer.VolumetricDisplacement)}} * d.y * vec3(normal.x, 0.0, normal.z));
-                float vh = (HEIGHT + HEIGHT * (1.0 - density) * {{F(CloudLayer.HeightVolume)}} * d.y) / nd.y;
-                uv = nd.xz * vh * SCALE * uCloudMeitou.y + uCloudMeitou.zw;
-                density = (cloudsRed(uv + wind + SHIFT) + o) * MULT;
-                float tile = cloudsTileRed(uv - wind);
-                density += tile * {{F(CloudLayer.TileWeight)}};
-                vec3 pixel = uCloudLight.rgb + uCloudSun.rgb * (1.0 - density * 0.1);
-                float top = 1.0, dark = 1.0;   // the colour's ceiling (the game's 1, saturate; the Meitou clouds' brighter edges towards the sun) and the share of Darkness
-                if (uCloudMeitou.x > 0.5)
-                {
-                    // Meitou clouds (MeitouClouds in Meitou.Data, docs/formats/clouds.md "Meitou clouds"): the same layer lit by the key light through the cloud's
-                    // depth towards it, the lesser of the path up through the layer (the pixel's density over the light's height) and the path sideways across it
-                    // (density taps along the light's direction on the plane), with a two-lobed phase, plus the sky's light as the ambient.
-                    vec3 L = uCloudKeyDir.xyz;
-                    vec2 lxz = dot(L.xz, L.xz) > 1e-8 ? normalize(L.xz) : vec2(0.0);
-                    vec2 at = uv + wind + SHIFT;
-                    float side = 0.0;
-                    for (int k = 1; k <= {{MeitouClouds.LightSteps}}; k++)
-                        side += clamp((texture(uCloudsSmooth, at + lxz * ({{F(MeitouClouds.LightStep)}} * float(k))).r + o) * MULT, 0.0, 1.0);
-                    float thick = max(density, 0.0);
-                    // A light below the layer (the sun just set, the cloud still sees it) shines on the underside the eye sees: a short path.
-                    float up = L.y > 0.0 ? thick * min(1.0 / L.y, {{F(MeitouClouds.MaxSlant)}}) : thick * 0.25;
-                    float across = (side + 0.5 * clamp(thick, 0.0, 1.0)) * {{F(MeitouClouds.SidePath)}};
-                    float depth = min(up, across);
-                    float through = {{F(1 - MeitouClouds.MultipleShare)}} * exp(-{{F(MeitouClouds.Extinction)}} * depth)
-                                  + {{F(MeitouClouds.MultipleShare)}} * exp(-{{F(MeitouClouds.Extinction * MeitouClouds.MultipleExtinction)}} * depth);
-                    float c = dot(d, L);
-                    float phase = {{F(MeitouClouds.ForwardShare)}} * {{F(1 - MeitouClouds.ForwardG * MeitouClouds.ForwardG)}} / pow(max({{F(1 + MeitouClouds.ForwardG * MeitouClouds.ForwardG)}} - {{F(2 * MeitouClouds.ForwardG)}} * c, 1e-6), 1.5)
-                                + {{F(1 - MeitouClouds.ForwardShare)}} * {{F(1 - MeitouClouds.BackwardG * MeitouClouds.BackwardG)}} / pow(max({{F(1 + MeitouClouds.BackwardG * MeitouClouds.BackwardG)}} - {{F(2 * MeitouClouds.BackwardG)}} * c, 1e-6), 1.5);
-                    vec3 ambient = mix(uCloudAmbient.rgb, skyBehind / sqrt(SKYX_EXPOSURE), {{F(MeitouClouds.AmbientFromSky)}});
-                    ambient = mix(ambient, vec3(dot(ambient, vec3(0.2126, 0.7152, 0.0722))), uCloudAmbient.a)
-                                 * (1.0 - {{F(MeitouClouds.BaseDarkening)}} * clamp(0.5 * thick, 0.0, 1.0));
-                    pixel = uCloudKey.rgb * (through * phase * {{F(MeitouClouds.KeyGain)}}) + ambient * {{F(MeitouClouds.AmbientGain)}};
-                    top = 8.0;
-                    dark = {{F(MeitouClouds.DarknessShare)}};
-                }
-                // The horizon band: from 0.05 to 0.15 of d.y the layer gives way to the uniform alpha o + 0.5 (horizonClouds.a).
-                float band = clamp(10.0 * clamp(d.y - {{F(CloudLayer.DistanceAttenuation)}}, 0.0, 1.0), 0.0, 1.0);
-                density += band;
-                pixel *= 1.0 - clamp(density, 0.0, 1.0) * uCloudLight.a * dark;
-                // Below d.y = 0.05 the alpha is the uniform horizon value, but the colour above still followed the texture lookups, whose uv runs to hundreds of units
-                // there (height / d.y): minified to a few texels they sparkle (a row of white ticks along the horizon). The colour gives way to the plain
-                // horizonClouds colour below d.y = 0.05 (from 0.01 up; above 0.05 the layer is untouched): the game's own horizon cloud colour, darkened
-                // like the layer (an undarkened target drew a white band at c = 1, docs/formats/sky.md), and the colour the haze is pulled to.
-                vec3 plain = clamp(uCloudLight.rgb + uCloudSun.rgb * (1.0 - 0.1 * (o + 0.2) * MULT), 0.0, 1.0) * (1.0 - uCloudLight.a);
-                pixel = mix(plain, pixel, clamp((d.y - 0.01) / 0.04, 0.0, 1.0));
-                float alpha = density * clamp(1.0 - tile + o, 0.0, 1.0);
-                alpha = mix(o + 0.5, alpha, band);
-                col = mix(col, clamp(pixel, 0.0, top) * sqrt(SKYX_EXPOSURE), clamp(alpha, 0.0, 1.0));
+                // The layer (CloudLayerShaders, the source the puddles' reflection shares).
+                vec4 layer = skyCloudLayer(dir, skyBehind);
+                col = mix(col, layer.rgb, layer.a);
             }
-            // The game's fog pass runs over the sky too (post/fog.hlsl atmosphere_fog_fs): a pixel with no geometry has distance = farClip, its atmosphere term is
-            // dropped and the weather's term alone remains, alpha = ease-in-out(saturate(farClip / fog distance)) x fogColour.a, colour = fog colour x sunColour.w
-            // (uAtmoFogColour). So a weather whose fog completes before the far clip (dust storms 25000, Ashlands 35000, farClip 50000) replaces the whole sky with a flat fog colour.
-            if (uAtmoFog.z > 0.0 && uAtmoHaze.w > 0.0)
-            {
-                float amount = clamp(uAtmoFog.w * uAtmoHaze.w, 0.0, 1.0);
-                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
-                col = mix(col, uAtmoFogColour, curve);
-            }
+            // The game's fog pass over the sky (AtmosphereShaders atmoSkyFog).
+            col = atmoSkyFog(col);
             fragColour = vec4(col, 1.0);
         }
         """;
@@ -811,6 +744,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// The eye in world units, for the Meitou clouds' parallax (the sky pass's matrix is a rotation only); the frame sets it.
     /// </summary>
     public Vector3 Eye { get; set; }
+
+    /// <summary>
+    /// The angle a pixel of the main view spans at its centre (radians; set by the frame), for the lookups of the cloud layer a puddle mirrors.
+    /// </summary>
+    public float PixelAngle { get; set; }
 
     /// <summary>
     /// The Meitou <c>cloudfog</c> switch: the cloud shadows fade near and inside placed fog blocks (<see cref="CloudShadowScale"/>), which they would
@@ -1295,12 +1233,38 @@ public sealed unsafe class SkyRenderer : IDisposable
             {
                 var w = CloudLayer.TextureShift(_cloudOffset);
                 return VolumeShadows
-                    ? new Vector4(Clouds.ShadowOrigin.X, Clouds.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
-                    : new Vector4(w.X, w.Y, 0, 0);
+                    ? new Vector4(Clouds.ShadowOrigin.X, Clouds.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, DomeClouds)
+                    : new Vector4(w.X, w.Y, 0, DomeClouds);
             }, Valid);
         g.Publish("uAtmoClouds", () => VolumeShadows ? Clouds.ShadowMap : _state.Valid && _textures.CloudsSmooth is { } t ? t.Sampled() : default);
         g.Publish("uAtmoCloudsTile", () => _state.Valid && _textures.CloudsTileSmooth is { } t ? t.Sampled() : default);
+        PublishCloudLayer(g);
     }
+
+    /// <summary>
+    /// The cloud layer as the sky pass draws it, for a puddle's reflection (<see cref="CloudLayerShaders.Reflected"/>): its values (<see
+    /// cref="CloudPassValues"/>, the sky pass's) and its textures as the sky pass reads them.
+    /// </summary>
+    void PublishCloudLayer(FrameGlobals g)
+    {
+        bool Valid() => _state.Valid;
+        g.PublishUniform("uAtmoLayerLight", () => CloudPass().Light, Valid);
+        g.PublishUniform("uAtmoLayerSun", () => CloudPass().Sun, Valid);
+        g.PublishUniform("uAtmoLayerWind", () => CloudPass().Wind, Valid);
+        g.PublishUniform("uAtmoLayerMeitou", () => CloudPass().Meitou, Valid);
+        g.PublishUniform("uAtmoLayerKey", () => CloudPass().Key, Valid);
+        g.PublishUniform("uAtmoLayerKeyDir", () => CloudPass().KeyDir, Valid);
+        g.PublishUniform("uAtmoLayerAmbient", () => CloudPass().Ambient, Valid);
+        g.Publish("uAtmoLayerClouds", () => _state.Valid ? _textures.LayerDensity(LitClouds) : default);
+        g.Publish("uAtmoLayerTile", () => _state.Valid ? _textures.LayerTile(LitClouds) : default);
+        g.Publish("uAtmoLayerNormal", () => _state.Valid ? _textures.LayerNormal() : default);
+    }
+
+    /// <summary>
+    /// The cloud layer's values the sky pass takes now (<see cref="SetSkyUniforms"/>) and the frame globals give the puddles.
+    /// </summary>
+    CloudPassValues CloudPass() =>
+        CloudPassValues.Of(in _state, CloudDensity, CloudLayer.TextureShift(_cloudOffset), LitClouds, !Clouds.VolumeImage.IsNull, Eye, PixelAngle);
 
     /// <summary>
     /// This apply's atmosphere uniforms, computed once per <see cref="FrameGlobals.ApplyCount"/>.
@@ -1387,7 +1351,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         program.SetCelestialAxes(Clock, Day, Hour);
         program.SetExtra(PlanetFill, coverage, StarHours);
         program.SetPlanets(Day, Hour, PlanetTurn);
-        program.SetClouds(in _state, coverage, CloudLayer.TextureShift(_cloudOffset), LitClouds, !Clouds.VolumeImage.IsNull, Eye);
+        program.SetClouds(CloudPass());
         _textures.SetPresence(program);
         BindSkyTextures(program);
     }
@@ -1420,6 +1384,17 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// Whether the land is shaded by the volume's shadow map this frame (else by the flat layer's, or not at all).
     /// </summary>
     bool VolumeShadows => VolumeEnabled && CloudShadows && Clouds.ShadowsReady;
+
+    /// <summary>
+    /// The clouds the physical sky draws, as <c>uAtmoCloudWind.w</c> tells the puddles' reflection (<c>AtmosphereShaders</c> <c>atmoSkyClouds</c>): 2 the
+    /// volume (a prepared volume image with the lit clouds, <see cref="SetSkyUniforms"/>), 1 the cloud layer (its three textures and a density over 0,
+    /// as the sky pass's <c>uHas.z</c> and <c>uSkyExtra.y</c>), 0 none.
+    /// </summary>
+    float DomeClouds =>
+        !Physical || !_state.Valid ? 0
+        : LitClouds && !Clouds.VolumeImage.IsNull ? 2
+        : _textures.HasCloudLayer && CloudDensity > 0 ? 1
+        : 0;
 
     /// <summary>
     /// The cloud slab of this frame: the base height, the density and the wind's texture shift.

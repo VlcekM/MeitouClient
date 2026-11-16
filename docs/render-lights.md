@@ -39,7 +39,7 @@ The game draws these lights in both looks, so this is not a Faithful / Meitou sw
     cyan lamps are unchanged. Applied where the rows are written, so the probes, tiles and the editor bar's fill follow.
   - Pulsing and shimmering lights get the game's effect factor on the CPU, from a clock in seconds × 60.
 - **Native and legacy.** The legacy programs take the uniform and the three samplers by name. The native frame block has `lightGrid` at
-  8608 and the three bindless indices at 8624, 8628 and 8632 (`FrameConstants` is 8640 bytes).
+  8608 and the three bindless indices at 8624, 8628 and 8632.
 - **Probe GI** ([render-gi.md](render-gi.md)). The probe trace binds the same textures (bindings 10–12, `uLightGrid` in its parameters)
   and adds the lights' diffuse light at each hit (`LAMP_DIFFUSE_ONLY`), so lamp light bounces too. Interior lamps additionally use
   a ray from the hit towards the lamp; intervening geometry blocks the bounce source. The lamp's owning fixture is excluded from its

@@ -1005,7 +1005,9 @@ public sealed unsafe class WaterRenderer : IDisposable
             spec *= mix(1.0, 0.04 + 0.96 * exp2((-5.55473 * lh - 6.98316) * lh), uAtmoAltitude.z);
             float cosv = max(dot(toEyeDir, n), 0.0);
             float schlick = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
+            // The game sky's colour under the weather's fog, as the dome draws it (AtmosphereShaders atmoSkyFog): a dust storm's water mirrors its fog.
             vec3 reflected = skyColour(reflect(-toEyeDir, n), false);
+            if (uAtmoParams.x > 0.5) reflected = atmoSkyFog(reflected);
             if (uReflect > 0.5)
             {
                 vec4 rc = uReflectionViewProjection * vec4(vWorld, 1.0);

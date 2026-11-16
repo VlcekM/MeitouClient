@@ -60,7 +60,8 @@ River coverage and biome scum are incomplete; object-contact foam and character 
 
 Water combines Fresnel, normal distortion, depth absorption/refraction, sky/scene reflection,
 caustics, crest light/glitter and persistent foam. Surface colour/clarity depend on biome/Tab
-settings. Foam uses diffuse sun/ambient/weather lighting, reads the sun shadow and cloud-shadow
+settings. Meitou water's sky colour (where the mirrored scene is not, or past its border) is the game sky's under the weather's fog over the sky
+(`atmoSkyFog`, as the dome), so a dust storm's water mirrors its fog; Faithful's is the bare sky. Foam uses diffuse sun/ambient/weather lighting, reads the sun shadow and cloud-shadow
 tile, and dims at night, not emissive white. Metal uses the same native bindless water program as
 Vulkan; there is no Metal-only water fragment. The reflected scene remains mirrored around Y100
 despite waves. Reflect level/range, frustum,

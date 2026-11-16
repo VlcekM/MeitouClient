@@ -1228,6 +1228,7 @@ static partial class WorldFrame
         var vp = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), post.JitterPixels, post.RenderWidth, post.RenderHeight);
         gpu.Sky.SetEye(eye, gpu.Terrain.HeightAt, float.NegativeInfinity);
         gpu.Sky.Eye = eye;
+        gpu.Sky.PixelAngle = 2 * MathF.Tan(camera.FieldOfView / 2) / Math.Max(post.RenderHeight, 1);
         gpu.Sky.Clock = scene.Clock;
         gpu.Sky.Hour = hour;
         gpu.Sky.StarSeconds = seconds;

@@ -91,7 +91,7 @@ must write that target (`WithAlbedo`, `none` for unlit ones), including the GPU-
 an unwritten output is undefined (in practice the surface behind, whose GI then lands on the
 front fragment; seen on grass and on crossbow bolts, i.e. `DebrisRenderer`, until it used `WithAlbedo`). Resolved surfaces lose the
 per-fragment specular-occlusion term unless [Reflections](#reflections) run. Strong depth/normal discontinuities need rejection.
-Surface bit9 marks interiors; bits 10-15 the reflections' gloss, bit 16 traced and 17-18 the receiver are the traced sun's (the target is RGBA32UI); signed low-resolution depth preserves that class (0 empty, negative
+Surface bit9 marks interiors; bits 10-15 the reflections' gloss, bit 16 traced and 17-18 the receiver are the traced sun's, bit 20 (with the reflections on) a puddle's water on a surface without bit 19 (the target is RGBA32UI); signed low-resolution depth preserves that class (0 empty, negative
 interior). Upsampling rejects the other class so the gain cannot bleed onto outdoor surfaces.
 
 ## Hybrid GI
@@ -158,7 +158,7 @@ without probes, and on interiors with **Indoor GI** off, reflections run with no
 - **Rays** (needs a probe trace this frame and storage on RGBA16F): the same ray for every glossy texel, against the traced scene and its characters, up to 4000 units,
   lit as a probe ray (no specular, no haze). A character hit takes its part's diffuse and head maps (mip 1 here, 4 for the probes), the darkening the colour pass applies and the hair's tint; skin tone, dyes and vests are left out. A hit replaces the march (world space first); a miss keeps what the march found (grass, water, particles are not traced) and
   proves the sky open past it. No rays: the march, then the sky, occluded.
-- **Shade** (same size): `seen - sky`, hazed as the fragment was, per unit of BRDF. `sky` is `kenshiLight`'s read of the cube, recomputed, so nothing is counted twice;
+- **Shade** (same size): `seen - sky`, hazed as the fragment was, per unit of BRDF. `sky` is `kenshiLight`'s read of the cube (a puddle's, bit 20: the dome's sky, `atmoSkyReflection`), recomputed, so nothing is counted twice;
   `seen` mixes occluded sky to the hit by gloss 0.25-0.45. Every surface passes here: **specular occlusion** is recovered from the resolve's texel
   (`1 + lum((probes - sky) * share) / lum(sky)`, clamped: `kenshiLight`'s ratio) and needs no extra read of the probes.
 - **Cone** (in Shade): the hits within the disc a rough surface's cone covers at their distance (radius = distance x half the roughness squared, at most 16 texels; 16 samples find the distance, 32 average) are averaged on a fixed spiral, over texels of this surface only.

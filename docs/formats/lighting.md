@@ -41,6 +41,10 @@ colour  = albedo · (diffuse + envDiff) + sunSpecular + envSpecular + albedo · 
 | +Z | (1.33, 1.45, 1.80) |
 | −Z | (1.19, 1.39, 1.79) |
 
+**Observed** (the six faces decoded, RGB x alpha): `mp_specularity.dds` (`deferred.material`) is a still of a landscape: a road between rocks,
+green trees, mountains and towers under a blue sky with clouds and the sun. **Verified** (`forward/water.material`): the original's water reads
+`mp_specuwatery.dds` instead (512², one level; **Observed**: a cloudy sky over a coast).
+
 ## Expression reference
 
 - The main lighting pass: ` sun = sunColour.rgb · sunColour.w · ambientParams.w · ambientMap.a · 2 diffuse = π · max(N·L, 0) · sun · shadow · (1 − 0.04) (translucent pixels also take light from behind) envDiff = irradiance(N) · (1 − 0.04) · ambientMap.rgb · envColour.w · clamp(5 L.y + 0.2, 0.1, 1) colour = albedo · (diffuse + envDiff) + sunSpecular + envSpecular + albedo · emissive `

@@ -181,14 +181,15 @@ static class SsrShaders
         uniform sampler2D uHit, uGiLow;
         uniform float uDiv, uHasGi;
 
+        // A puddle's water (kenshiLight's bit 20 on a surface that is no lamp receiver, bit 19, whose bits 20-31 are its own).
+        bool ssrPuddle(uvec4 surface) { return (surface.w & 1572864u) == 1048576u; }
         // The sky's reflection as kenshiLight reads it, before the BRDF.
-        vec3 ssrSky(vec3 n, vec3 v, float gloss, vec3 ambient)
+        vec3 ssrSky(vec3 p, vec3 n, vec3 v, float gloss, vec3 ambient, bool puddle)
         {
             if (uAtmoMaps.y < 0.5) return vec3(0.0);
             float rough = 1.0 - gloss * 0.99;
             vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + rough));
-            vec4 r = textureLod(uAtmoSpecular, dominant, (1.0 - gloss) * 7.0);
-            return r.rgb * r.a * 10.0 * ambient * uAtmoLight.w;
+            return atmoSkyReflection(dominant, gloss, ambient, uAtmoLight.w, puddle, p);
         }
         // The probes' light against the sky's at this texel: GiResolveShaders.Resolve stored (probes - sky) x share x haze, so 1 + its luminance over the sky's is
         // kenshiLight's mix(1, probes / sky, share), the clamp included.
@@ -249,7 +250,7 @@ static class SsrShaders
             float gloss = ssrGloss(surface);
             vec3 ambient = atmoAmbientMapAt(p).rgb;
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
-            vec3 sky = ssrSky(n, v, gloss, ambient);
+            vec3 sky = ssrSky(p, n, v, gloss, ambient, ssrPuddle(surface));
             vec3 occluded = sky * ssrOcclusion(cell, n, transmittance, ambient);
             vec3 seen = ssrWeight(gloss) > 0.0 ? mix(occluded, ssrCone(cell, p, n, z, gloss, sky, occluded), ssrWeight(gloss)) : occluded;
             fragColour = vec4((seen - sky) * transmittance, (surface.w & 512u) != 0u ? -z : z);

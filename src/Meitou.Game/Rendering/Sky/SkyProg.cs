@@ -161,28 +161,18 @@ sealed class SkyProg : IDisposable
         P.Set(Extra, planetFill, coverage, Starfield.Shift(starHours), 0);
 
     /// <summary>
-    /// The cloud pass's light and the wind's texture <paramref name="shift"/> from <paramref name="s"/> and the <paramref name="coverage"/>, and the
-    /// Meitou clouds' (<paramref name="lit"/>; <paramref name="volume"/>: a prepared volume image) key, ambient and parallax round <paramref
-    /// name="eye"/>.
+    /// The cloud layer's uniforms (<see cref="CloudPassValues"/>).
     /// </summary>
-    public void SetClouds(in SkyRenderer.State s, float coverage, Vector2 shift, bool lit, bool volume, Vector3 eye)
+    public void SetClouds(in CloudPassValues v)
     {
         var p = P;
-        // The cloud pass: zenithLight and Darkness, sunColour.rgb and DensityOffset, the wind offset's texture shift.
-        var zenith = s.CloudZenith;
-        p.Set(CloudLight, zenith.X, zenith.Y, zenith.Z, CloudLayer.Darkness(coverage));
-        p.Set(CloudSun, s.CloudSun.X, s.CloudSun.Y, s.CloudSun.Z, CloudLayer.DensityOffset(coverage));
-        p.Set(CloudWind, shift.X, shift.Y, 0, 0);
-        var key = s.CloudKey;
-        var keyDir = s.CloudKeyDirection;
-        var ambient = s.CloudAmbient;
-        // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow
-        // falls here; the game's follow the eye.
-        var (parallaxScale, parallaxOffset) = lit ? MeitouClouds.Parallax(eye.X, eye.Y, eye.Z) : (1f, Vector2.Zero);
-        p.Set(CloudMeitou, lit ? (volume ? 2 : 1) : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
-        p.Set(CloudKey, key.X, key.Y, key.Z, 0);
-        p.Set(CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
-        p.Set(CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
+        p.Set(CloudLight, v.Light);
+        p.Set(CloudSun, v.Sun);
+        p.Set(CloudWind, v.Wind);
+        p.Set(CloudMeitou, v.Meitou);
+        p.Set(CloudKey, v.Key);
+        p.Set(CloudKeyDir, v.KeyDir);
+        p.Set(CloudAmbient, v.Ambient);
     }
 
     /// <summary>

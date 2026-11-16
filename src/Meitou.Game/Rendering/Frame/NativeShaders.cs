@@ -108,6 +108,16 @@ static partial class NativeShaders
             float wetClock;
             float wetWorld;
             vec4 wetSplash[8];
+            vec4 atmoLayerLight;
+            vec4 atmoLayerSun;
+            vec4 atmoLayerWind;
+            vec4 atmoLayerMeitou;
+            vec4 atmoLayerKey;
+            vec4 atmoLayerKeyDir;
+            vec4 atmoLayerAmbient;
+            uint atmoLayerClouds;
+            uint atmoLayerTile;
+            uint atmoLayerNormal;
         } frame;
 
         """;
@@ -221,6 +231,16 @@ static partial class NativeShaders
         ["uAtmoCloudWind"] = "frame.atmoCloudWind",
         ["uAtmoClouds"] = "textures2D[frame.atmoClouds]",
         ["uAtmoCloudsTile"] = "textures2D[frame.atmoCloudsTile]",
+        ["uAtmoLayerLight"] = "frame.atmoLayerLight",
+        ["uAtmoLayerSun"] = "frame.atmoLayerSun",
+        ["uAtmoLayerWind"] = "frame.atmoLayerWind",
+        ["uAtmoLayerMeitou"] = "frame.atmoLayerMeitou",
+        ["uAtmoLayerKey"] = "frame.atmoLayerKey",
+        ["uAtmoLayerKeyDir"] = "frame.atmoLayerKeyDir",
+        ["uAtmoLayerAmbient"] = "frame.atmoLayerAmbient",
+        ["uAtmoLayerClouds"] = "textures2D[frame.atmoLayerClouds]",
+        ["uAtmoLayerTile"] = "textures2D[frame.atmoLayerTile]",
+        ["uAtmoLayerNormal"] = "textures2D[frame.atmoLayerNormal]",
         ["uAtmoIrradiance"] = "texturesCube[frame.atmoIrradiance]",
         ["uAtmoSpecular"] = "texturesCube[frame.atmoSpecular]",
         ["uAtmoAmbientMap"] = "textures2D[frame.atmoAmbientMap]",
@@ -416,7 +436,7 @@ static partial class NativeShaders
 /// <summary>
 /// The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 8848)]
+[StructLayout(LayoutKind.Explicit, Size = 8976)]
 unsafe struct FrameConstants
 {
     /// <summary>
@@ -624,7 +644,8 @@ unsafe struct FrameConstants
     [FieldOffset(8656)] public Vector4 AtmoCloud;
 
     /// <summary>
-    /// <c>uAtmoCloudWind</c>: legacy clouds, xy the wind shift; volume clouds, xy the map's origin and z its span.
+    /// <c>uAtmoCloudWind</c>: legacy clouds, xy the wind shift; volume clouds, xy the map's origin and z its span; w the clouds the sky draws (0 none, 1
+    /// the layer, 2 the volume).
     /// </summary>
     [FieldOffset(8672)] public Vector4 AtmoCloudWind;
 
@@ -660,6 +681,57 @@ unsafe struct FrameConstants
     [FieldOffset(8720)] public fixed float WetSplash[32];
 
     /// <summary>
+    /// <c>uAtmoLayerLight</c>: the cloud layer as the sky pass draws it (<c>CloudPassValues</c>, <c>CloudLayerShaders.Reflected</c>), zenithLight and
+    /// Darkness.
+    /// </summary>
+    [FieldOffset(8848)] public Vector4 AtmoLayerLight;
+
+    /// <summary>
+    /// <c>uAtmoLayerSun</c>: the cloud pass's sunColour.rgb and DensityOffset.
+    /// </summary>
+    [FieldOffset(8864)] public Vector4 AtmoLayerSun;
+
+    /// <summary>
+    /// <c>uAtmoLayerWind</c>: xy the wind's texture shift, z the angle a pixel of the main view spans.
+    /// </summary>
+    [FieldOffset(8880)] public Vector4 AtmoLayerWind;
+
+    /// <summary>
+    /// <c>uAtmoLayerMeitou</c>: x 2 the volume, 1 the Meitou lit layer, 0 the game's; yzw the layer's parallax.
+    /// </summary>
+    [FieldOffset(8896)] public Vector4 AtmoLayerMeitou;
+
+    /// <summary>
+    /// <c>uAtmoLayerKey</c>: the Meitou clouds' key light.
+    /// </summary>
+    [FieldOffset(8912)] public Vector4 AtmoLayerKey;
+
+    /// <summary>
+    /// <c>uAtmoLayerKeyDir</c>: towards the Meitou clouds' key light.
+    /// </summary>
+    [FieldOffset(8928)] public Vector4 AtmoLayerKeyDir;
+
+    /// <summary>
+    /// <c>uAtmoLayerAmbient</c>: the Meitou clouds' ambient, a its greying.
+    /// </summary>
+    [FieldOffset(8944)] public Vector4 AtmoLayerAmbient;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoLayerClouds</c>, the layer's density texture as the sky pass reads it.
+    /// </summary>
+    [FieldOffset(8960)] public uint AtmoLayerClouds;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoLayerTile</c>, the layer's tile as the sky pass reads it.
+    /// </summary>
+    [FieldOffset(8964)] public uint AtmoLayerTile;
+
+    /// <summary>
+    /// The bindless index of <c>uAtmoLayerNormal</c>, the layer's normal map.
+    /// </summary>
+    [FieldOffset(8968)] public uint AtmoLayerNormal;
+
+    /// <summary>
     /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
     /// </summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -671,6 +743,8 @@ unsafe struct FrameConstants
         ("uGiParams", 8512, 16), ("uGiGrid", 8528, 64),
         ("uLightGrid", 8608, 16), ("uAtmoNight", 8640, 16), ("uAtmoCloud", 8656, 16), ("uAtmoCloudWind", 8672, 16),
         ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4), ("uWetWorld", 8704, 4), ("uWetSplash", 8720, 128),
+        ("uAtmoLayerLight", 8848, 16), ("uAtmoLayerSun", 8864, 16), ("uAtmoLayerWind", 8880, 16), ("uAtmoLayerMeitou", 8896, 16),
+        ("uAtmoLayerKey", 8912, 16), ("uAtmoLayerKeyDir", 8928, 16), ("uAtmoLayerAmbient", 8944, 16),
     ];
 
     /// <summary>
@@ -687,6 +761,8 @@ unsafe struct FrameConstants
         ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
         ("uLampTiles", BindlessKind.Texture2D, 8636),
         ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
+        ("uAtmoLayerClouds", BindlessKind.Texture2D, 8960), ("uAtmoLayerTile", BindlessKind.Texture2D, 8964),
+        ("uAtmoLayerNormal", BindlessKind.Texture2D, 8968),
     ];
 }
 
