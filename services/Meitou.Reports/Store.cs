@@ -9,7 +9,7 @@ namespace Meitou.Reports;
 sealed record FeedbackRow(
     long Id, DateTimeOffset At, string Token, string Title, string? Body, string Version, string? Commit, string Platform, string[] Mods,
     string[] Wants, long? ScreenshotSize, long? SaveSize, long? LogSize,
-    int? Issue, string? IssueUrl, string? Discord, long? NavmeshSize, string? Location);
+    int? Issue, string? IssueUrl, string? Discord, long? NavmeshSize, string? Location, string[]? Workshop);
 
 /// <summary>
 /// The feedback table in PostgreSQL. Reporters are only ever stored as salted hashes.
@@ -46,6 +46,7 @@ sealed class Store(NpgsqlDataSource db)
             alter table feedback add column if not exists discord text;
             alter table feedback add column if not exists navmesh_size bigint;
             alter table feedback add column if not exists location text;
+            alter table feedback add column if not exists workshop text[];
             """);
         await cmd.ExecuteNonQueryAsync();
     }
@@ -55,14 +56,14 @@ sealed class Store(NpgsqlDataSource db)
     #region Feedback
 
     /// <summary>
-    /// Stores a new feedback form under its token (not yet sent: no issue).
+    /// Stores a new feedback form under its token (not yet sent: no issue); <paramref name="workshop"/> holds each mod's workshop item id ("" none).
     /// </summary>
     public async Task AddFeedback(string token, string reporter, string title, string? body, string version, string? commit, string platform,
-        string[] mods, string[] wants, string? discord, string? location)
+        string[] mods, string[] workshop, string[] wants, string? discord, string? location)
     {
         await using var cmd = db.CreateCommand("""
-            insert into feedback (token, reporter, title, body, version, commit, platform, mods, wants, discord, location)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            insert into feedback (token, reporter, title, body, version, commit, platform, mods, wants, discord, location, workshop)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """);
         cmd.Parameters.Add(new() { Value = token });
         cmd.Parameters.Add(new() { Value = reporter });
@@ -75,6 +76,7 @@ sealed class Store(NpgsqlDataSource db)
         cmd.Parameters.Add(new() { Value = wants, NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text });
         cmd.Parameters.Add(new() { Value = (object?)discord ?? DBNull.Value, NpgsqlDbType = NpgsqlDbType.Text });
         cmd.Parameters.Add(new() { Value = (object?)location ?? DBNull.Value, NpgsqlDbType = NpgsqlDbType.Text });
+        cmd.Parameters.Add(new() { Value = workshop, NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text });
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -95,7 +97,8 @@ sealed class Store(NpgsqlDataSource db)
     public async Task<FeedbackRow?> GetFeedback(string token)
     {
         await using var cmd = db.CreateCommand("""
-            select id, at, title, body, version, commit, platform, mods, wants, screenshot_size, save_size, log_size, issue, issue_url, discord, navmesh_size, location
+            select id, at, title, body, version, commit, platform, mods, wants, screenshot_size, save_size, log_size, issue, issue_url, discord, navmesh_size, location,
+                workshop
             from feedback where token = $1
             """);
         cmd.Parameters.Add(new() { Value = token });
@@ -106,7 +109,7 @@ sealed class Store(NpgsqlDataSource db)
             r.IsDBNull(5) ? null : r.GetString(5), r.GetString(6), r.GetFieldValue<string[]>(7), r.GetFieldValue<string[]>(8),
             Size(9), Size(10), Size(11), r.IsDBNull(12) ? null : r.GetInt32(12), r.IsDBNull(13) ? null : r.GetString(13), r.IsDBNull(14) ? null
                     : r.GetString(14),
-            Size(15), r.IsDBNull(16) ? null : r.GetString(16));
+            Size(15), r.IsDBNull(16) ? null : r.GetString(16), r.IsDBNull(17) ? null : r.GetFieldValue<string[]>(17));
     }
 
     /// <summary>

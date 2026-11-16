@@ -71,7 +71,8 @@ FCS differs: `InheritFiles` fixes gamedata.base, Newwworld.mod, Dialogue.mod, co
 Nizu.mod, Mohamad.mod, rebirth.mod and also searches cfg entries under `data/`.
 
 **Observed:** `.info` XML `ModData` stores id/name/tags/visibility/lastUpdate; no defined `.info`
-string in the engine. Resource scan skips `_`-prefixed files.
+string in the engine. Its `id` is the mod's Steam workshop item: a downloaded item's `_<name>.info` holds its folder's number (Forgotten
+Buildings, 1679230269), and a local mod uploaded from its own folder keeps one with its item's id; a mod never uploaded has none. Resource scan skips `_`-prefixed files.
 
 ## Resource lookup and mod overrides
 

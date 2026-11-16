@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
@@ -9,12 +10,13 @@ using Meitou.Game.Ui;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// One feedback report as the host hands it over: the form, the game's details, the screenshot and the navmesh screenshot being encoded, the camera's
-/// location and the save being written (a temporary folder), each null when not sent, and the paths of the logs sent (none, log.txt, the action
-/// and dialogue logs).
+/// One feedback report as the host hands it over: the form, the game's details (with each load order entry's workshop item, null when none), the
+/// screenshot and the navmesh screenshot being encoded, the camera's location and the save being written (a temporary folder), each null when not
+/// sent, and the paths of the logs sent (none, log.txt, the action and dialogue logs).
 /// </summary>
 sealed record FeedbackPackage(FeedbackForm Form, string Version, string Commit, string Platform, IReadOnlyList<string> Mods,
-    Task<byte[]>? Screenshot, Task<byte[]>? Navmesh, string? Location, string? SaveFolder, Task? SaveWritten, IReadOnlyList<string> Logs);
+    IReadOnlyList<ulong?> Workshop, Task<byte[]>? Screenshot, Task<byte[]>? Navmesh, string? Location, string? SaveFolder, Task? SaveWritten,
+    IReadOnlyList<string> Logs);
 
 /// <summary>
 /// A sent report's GitHub issue, or why it was not sent.
@@ -120,6 +122,7 @@ static class FeedbackSender
             ["platform"] = p.Platform,
             ["discord"] = p.Form.Discord,
             ["mods"] = new JsonArray([.. p.Mods.Select(m => (JsonNode)m)]),
+            ["workshop"] = new JsonArray([.. p.Workshop.Select(id => (JsonNode?)id?.ToString(CultureInfo.InvariantCulture))]),
             ["screenshot"] = png is not null,
             ["navmesh"] = navPng is not null,
             ["location"] = p.Location,
