@@ -170,6 +170,12 @@ holds refuses the second mod.
   the mods' folders, by bare name), drawn with its own material as a loose mesh: no shadow, no outline or picking
   ([character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)). Set it in the tick from the mod's system, as `DrawAnchor`;
   display only: not saved, not hashed, read by no system, so set it again after a load.
+- **Mod jobs:** `AddJobType(type, name)` claims a task type number from 1000 up (`SimulationExtensions.FirstModCode`; the game's tasks stay
+  below it; one mod per type). The mod puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` of its system); like the
+  game's jobs, they are worked only while the character's jobs switch is on. Taking a mod job off the list does not stop a task the mod already
+  started from it, so the mod checks that the job is still listed. The jobs panel names them `name`. A save keeps each in its place in the list
+  under Meitou keys (`meitou mjob<k>`, [save](formats/save.md)), out of the original's `pjob` list, with its building id but not a character
+  target; a load puts it back while the type is registered and drops it otherwise.
 - **Item use:** `AddItemUse(record, handler)`, one mod per item record string id. A right click on such an item in a player character's own
   inventory window (or its bag), with no other character's window open and no trade, runs `handler(ItemUse)` (world, user, item, that
   character's inventory) in the player system's serial step, before the click would equip or move it (`ItemUses`, `src/Meitou.Simulation/Player`),
