@@ -387,6 +387,11 @@ sealed partial class GameHost
     EditorStances EditorStances => field ??= new(this);
 
     /// <summary>
+    /// The idle of the animal the editor shows, drawn when it is shown.
+    /// </summary>
+    EditorAnimalIdles EditorAnimalIdles => field ??= new(this);
+
+    /// <summary>
     /// The looks with the tool an operator holds.
     /// </summary>
     internal HeldToolLooks HeldLooks => field ??= new(this);
@@ -645,9 +650,8 @@ sealed partial class GameHost
         bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || PortraitWanted(c.Id);
         var poses = LayerPoses(c, before, alpha, posed);
         if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
-        // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
-        else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
-            poses = [.. poses.Select(p => p with { Time = CharacterEditor.Bar.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
+        // The animal the editor shows plays an idle drawn when it was shown, in real time (the world stands paused behind the editor).
+        else if (Player.CharacterEditor.IsEditorAnimal(c.Id)) poses = EditorAnimalIdles.Poses(c.Id, c.RecordId, poses);
         // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
         if (inBar is { } place)
         {

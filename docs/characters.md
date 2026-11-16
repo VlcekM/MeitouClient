@@ -280,7 +280,21 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   CONFIRM and CHANGE CHARACTER stay. Meitou:
   `EditorSession.Animals`, `BindAnimalEditor`; an animal's rename is an `EditCharacter` with no look, accepted in every kind (a bought animal's
   goes through `EditKind.Recruit`; [animals](game/animals.md#buying-animals)); in the Meitou bar an animal not shown is not
-  drawn (no seat).
+  drawn (no seat). The shown animal moves while the world stands paused (**Verified**, decompile): showing a character without humanoid
+  stats (`FUN_1405efd60`, vtable 0x250 null) draws an idle with its animation's idle pick (AnimationClass slot 25 `FUN_14051f320`, the draw
+  `FUN_14051ec80`) into the window (`+0x2c8`); each frame the window (`FUN_1405f16a0`) asserts that idle (`FUN_1405b7ac0`: the record's
+  `play speed` `+0x74` as the rate, weight 1) and steps the layers (`FUN_1405b6d00`, no idle pick) by the real frame time (`DAT_142133790`).
+  Asserting (`FUN_1405b5270`) keeps a layer already playing the clip, brings one fading out of it back with its time, else starts one at its
+  first frame; a one-shot holds its last frame. Before the draw, the character shown before and the new one each get their whole update
+  once (Character slot 28 `FUN_1405cf130` -> AnimationClass slot 6, layers stepped) by the paused frame time, 0.01 s (`FUN_140788a00`,
+  `DAT_141682ad8`), plus the time it put by: each frame `FUN_1405c9f60` adds the frame time to `+0xc0` only while the character fails its
+  view test (beyond the camera's range or outside its view), and slot 28 spends it. **Observed** (harness screenshots): the editor's
+  characters stand together where the camera looks, so none is put by. The idle's rate has no size factor (the world's idle update `FUN_14051d3b0` passes `+0x74`
+  alike; only movement clips take F, `FUN_14051de70`). **Verified** (Kenshi harness, 1.0.65, Guy with a dog, game clock unchanged, frame
+  diffs over 32 CHANGE CHARACTER shows of the Bonedog): a show left it looping (40 s and more), moving about 2.5 s and then still (its
+  one-shot `idle noloop`, 2.53 s), or still; in a run of 20 a still show came only after a held one-shot (6 of 6), and a held one-shot never
+  played again (0 of 10). Meitou: `EditorAnimalIdles` (the draw by `idle chance`, an animal not shown keeping its layers) and
+  `EditorAnimalLayers` (the assert and the step, by the simulation's layer rules), the 0.01 s update on each show.
 - **Races**: RACE_GROUP name on RACE, RACE name on SUBRACE; a race is listed if not an animal, in a group, has its editor limits XML, `playable`
   (mode 0) and, with a `force race` list, in it (none left: "Game start has no valid races", the list is unrestricted). Showing a character in
   mode 0 (`FUN_1405efd60`) whose race isn't listed switches it to the first group's first race (a race missing from its group: that group's
