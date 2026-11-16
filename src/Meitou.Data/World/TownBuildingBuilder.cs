@@ -111,7 +111,8 @@ public sealed class TownBuildingBuilder
         var record = resolved.Record;
         if (record.GetBool("is node") || record.GetBool("is foliage") || MemberOf(_towns, resolved.Position, record) is not null) return null;
 
-        return new TownlessBuilding(b.Key, record.StringId, resolved.Position, resolved.Destroyed);
+        var state = b.StateId is not null && _levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+        return new TownlessBuilding(b.Key, record.StringId, resolved.Position, resolved.Destroyed, b.Zone, state);
     }
 
     /// <summary>

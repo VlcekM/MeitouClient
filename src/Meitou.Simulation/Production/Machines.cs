@@ -199,7 +199,7 @@ public sealed class CraftState
 /// A complete player building that works or stores (docs/simulation.md "Production"): its recipe slots, storage grid and farm. Made by
 /// <see cref="ProductionSystem"/> when the site completes (or loads complete) and dropped with the site; serial phases only.
 /// </summary>
-public sealed class Machine
+public sealed class Machine : IPowerDraw
 {
     /// <summary>
     /// The site id of the building.
