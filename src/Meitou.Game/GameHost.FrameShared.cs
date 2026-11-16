@@ -155,6 +155,7 @@ sealed partial class GameHost
         {
             Console.WriteLine($"relations {message}");
             Player.Notice(message);
+            if (message.StartsWith("animalage: ", StringComparison.Ordinal)) DevConsoleHost.DevConsole.Print(message);
             if (DevConsoleHost.ExplodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal))
             {
                 asker.Print(message);

@@ -129,12 +129,25 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// original reads slot 0x390 each time). The drawn size follows only in steps: once the age has moved more than 0.05 past
     /// <see cref="CharacterCold.ShownAge"/> it is noted, and below 0.95 the look is refreshed to it.
     /// </summary>
-    static void Age(CharacterCold cold, AnimalData animal, CharacterStats stats, MedicalState medical, float dt)
+    static void Age(CharacterCold cold, AnimalData animal, CharacterStats stats, float dt)
     {
         if (stats.Scale >= AnimalData.GrowUntil || animal.AgePerSecond <= 0) return;
-        stats.Scale += dt * animal.AgePerSecond;
-        medical.SetAnimalBody(animal.Scale(stats.Scale), animal.HpMult);
-        if (stats.Scale - cold.ShownAge > AnimalData.ResizeStep && stats.Scale < AnimalData.ResizeBelow) cold.ShownAge = stats.Scale;
+        SetAnimalAge(cold, stats.Scale + dt * animal.AgePerSecond);
+    }
+
+    /// <summary>
+    /// Updates an animal's live age, stat multiplier and medical size through the growth path. An explicit debug edit also refreshes the drawn
+    /// size immediately, in either direction; natural growth keeps its stepped refresh below 0.95. No wounds, blood or base skills are changed.
+    /// Returns false for an incomplete animal body or an invalid age.
+    /// </summary>
+    public static bool SetAnimalAge(CharacterCold cold, float age, bool refreshLook = false)
+    {
+        if (!float.IsFinite(age) || age < 0 || cold is not { Animal: { } animal, Stats: { } stats, Medical: { } medical }) return false;
+
+        stats.Scale = age;
+        medical.SetAnimalBody(animal.Scale(age), animal.HpMult);
+        if (refreshLook || age - cold.ShownAge > AnimalData.ResizeStep && age < AnimalData.ResizeBelow) cold.ShownAge = age;
+        return true;
     }
 
     /// <summary>
@@ -268,7 +281,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (medical.Dead) return;
         stats.XpRate = AggroSystem.PlayerSide(world, cold) ? Options.SquadXp : Options.OthersXp;
         if (!TryStartStep(world, i, cold, medical, out float dt)) return;
-        if (cold.Animal is { } animal) Age(cold, animal, stats, medical, dt);
+        if (cold.Animal is { } animal) Age(cold, animal, stats, dt);
 
         // The light level the stat multiplier's light term reads (the original's Character +0xd8, kept by the senses).
         medical.Light = world.Sight.Light(i);

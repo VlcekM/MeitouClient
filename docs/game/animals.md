@@ -146,6 +146,8 @@ moving an item out of its inventory clears it, and a loot take (or an item moved
 
 Meitou: `BodySystem.Age` grows `CharacterStats.Scale` (`CharacterCold.Age`, what gameplay reads) and resets the body's size each tick, `CharacterCold.ShownAge`
 is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the original), the save writes and reads `age`.
+Growth and the Meitou-only [`animalage` console command](ui-input.md#dev-console) share `BodySystem.SetAnimalAge`; explicit edits also refresh
+`ShownAge` immediately, including shrinking an animal and setting an adult or elder. Natural growth retains the step gate described above.
 
 ## Pack animals
 
