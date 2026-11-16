@@ -7,14 +7,15 @@ public sealed partial class UiBindings
 {
     /// <summary>
     /// Whether <paramref name="other"/> binds the same data, so that <see cref="MyGuiPresentation.Arrange"/> makes the same controls from it (a host
-    /// reuses the last arrangement then). Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> is
-    /// compared by identity.
+    /// reuses the last arrangement then). Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> and
+    /// <see cref="TextWidths"/> are compared by identity.
     /// </summary>
     public bool ContentEquals(UiBindings other) =>
         TemplateScale == other.TemplateScale && FitWindowToViewport == other.FitWindowToViewport && WindowPosition == other.WindowPosition
-        && TextHeight == other.TextHeight && Same(OpenCombos, other.OpenCombos)
+        && TextHeight == other.TextHeight && TextWidths == other.TextWidths && Same(OpenCombos, other.OpenCombos)
         && Same(Text, other.Text) && Same(Actions, other.Actions) && Hidden.SetEquals(other.Hidden) && Disabled.SetEquals(other.Disabled)
-        && HiddenWidgets.SetEquals(other.HiddenWidgets) && Same(Positions, other.Positions) && Same(RelativePositions, other.RelativePositions)
+        && HiddenWidgets.SetEquals(other.HiddenWidgets) && Same(Positions, other.Positions) && Same(MadeSizes, other.MadeSizes)
+        && Same(RelativePositions, other.RelativePositions)
         && Same(SelectedTabs, other.SelectedTabs) && Same(Progress, other.Progress) && Same(States, other.States)
         && Same(SelectedItems, other.SelectedItems) && Same(ScrollOffsets, other.ScrollOffsets) && Same(Sorts, other.Sorts)
         && Same(Canvas, other.Canvas)

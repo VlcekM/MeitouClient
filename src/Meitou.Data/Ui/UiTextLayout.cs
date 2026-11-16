@@ -49,15 +49,33 @@ public readonly record struct UiInsets(float Left, float Top, float Right, float
 public static class UiTextLayout
 {
     /// <summary>
-    /// The rectangle a control's text lays out in: its skin's first text part aligned in its bounds (clipped to them), less its <c>TextPadding</c>.
+    /// The rectangle a control's text lays out in: its <see cref="TextRegion"/> (clipped to its bounds), less its <c>TextPadding</c>.
     /// </summary>
-    public static UiRect ContentRect(MyGuiResources resources, UiControl control)
+    public static UiRect ContentRect(MyGuiResources resources, UiControl control, float scale = 1)
     {
         var area = control.Bounds;
-        if (resources.Skins.TryGetValue(control.Skin, out var skin) && skin.Parts.FirstOrDefault(p => p.Type is "SimpleText" or "EditText") is { } text)
-            area = text.Offset.AlignTo(area, skin.Width, skin.Height, text.Align).Intersect(area);
+        if (TextRegion(resources, control, scale) is { } region) area = region.Intersect(area);
         if (control.Properties.TryGetValue("TextPadding", out var padding)) area = UiInsets.Parse(padding).Apply(area);
 
         return area;
+    }
+
+    /// <summary>
+    /// The skin's first text part of a control (MyGUI's <c>SimpleText</c> or <c>EditText</c>); null when its skin has none.
+    /// </summary>
+    public static MyGuiSkinPart? TextPart(MyGuiResources resources, UiControl control) =>
+        resources.Skins.TryGetValue(control.Skin, out var skin) ? skin.Parts.FirstOrDefault(p => p.Type is "SimpleText" or "EditText") : null;
+
+    /// <summary>
+    /// A control's text region (MyGUI's <c>TextBox::getTextRegion</c>): its skin's text part, in the skin's pixels scaled at load by
+    /// <paramref name="scale"/> as Kenshi's MyGUI does (<see cref="MyGuiScale"/>), aligned from the scaled skin size to the control's bounds; null
+    /// when its skin has no text part.
+    /// </summary>
+    public static UiRect? TextRegion(MyGuiResources resources, UiControl control, float scale = 1)
+    {
+        if (!resources.Skins.TryGetValue(control.Skin, out var skin) || TextPart(resources, control) is not { } text) return null;
+
+        var offset = MyGuiScale.Coord(text.Offset, scale);
+        return offset.AlignTo(control.Bounds, MyGuiScale.Size(skin.Width, scale), MyGuiScale.Size(skin.Height, scale), text.Align);
     }
 }

@@ -68,6 +68,12 @@ public sealed partial class UiBindings
     /// </summary>
     public Dictionary<string, UiRect> Positions { get; } = new(StringComparer.Ordinal);
     /// <summary>
+    /// The size a widget of <see cref="Positions"/> was made at, by widget name, when the code sized it since (a window's resize grip; MyGUI's
+    /// <c>setSize</c> / <c>setCoord</c>): its children are aligned from that size. Without one, the bound position is where the widget was made, and
+    /// its children are made in it.
+    /// </summary>
+    public Dictionary<string, (float Width, float Height)> MadeSizes { get; } = new(StringComparer.Ordinal);
+    /// <summary>
     /// Parent-relative runtime geometry, including anonymous layout panels.
     /// </summary>
     public Dictionary<MyGuiWidget, UiRect> RelativePositions { get; } = [];
@@ -119,22 +125,30 @@ public static partial class MyGuiPresentation
     {
         var result = new List<UiControl>();
         var deferred = new List<Action>();   // popups (combo lists), visited after every root so they draw last
-        void Visit(MyGuiWidget w, UiRect parent, UiRect clip, bool parentEnabled = true, float parentAlpha = 1)
+        void Visit(MyGuiWidget w, UiParent parent, UiRect clip, bool parentEnabled = true, float parentAlpha = 1)
         {
             if (bindings.Hidden.Contains(w.Name) || bindings.HiddenWidgets.Contains(w)) return;
+            // A MultiListItem is a column of its MultiListBox, which lays it out (MultiColumns).
+            if (w.Type == "MultiListItem") return;
             var props = new Dictionary<string, string>(w.Properties, StringComparer.Ordinal);
             if (bindings.Properties.TryGetValue(w.Name, out var overrides)) foreach (var p in overrides) props[p.Key] = p.Value;
             if (props.GetValueOrDefault("Visible") == "false") return;
 
             float alpha = WidgetAlpha(props, parentAlpha);
             if (alpha < 1) props["Alpha"] = alpha.ToString(Inv);
-            var bounds = WidgetBounds(bindings, w, props, parent);
+            var placed = Place(bindings, w, props, parent);
+            var bounds = placed.Bounds;
 
             // A ProgressBar template (TrackSkin) keeps its frame; its fill is added in TrackPlace (AddTrackFill). Any other bound widget is cut to
             // the fraction.
             bool progress = bindings.Progress.TryGetValue(w.Name, out float fraction);
             string? trackSkin = progress ? w.UserStrings.GetValueOrDefault("TrackSkin") : null;
-            if (progress && trackSkin is null) bounds = bounds with { Width = bounds.Width * Math.Clamp(fraction, 0, 1) };
+            if (progress && trackSkin is null)
+            {
+                bounds = bounds with { Width = bounds.Width * Math.Clamp(fraction, 0, 1) };
+                placed = MadeAt(placed, bounds, null);
+            }
+            var self = AsParent(w, props, placed, bounds);
 
             string caption = WidgetCaption(layout, bindings, w, props);
             string action = WidgetAction(bindings, w, props);
@@ -151,20 +165,20 @@ public static partial class MyGuiPresentation
                 var captions = bindings.TabCaptions.GetValueOrDefault(w.Name);
                 int buttons = captions?.Count ?? pages.Length;
                 int selected = Math.Clamp(bindings.SelectedTabs.GetValueOrDefault(w.Name), 0, Math.Max(0, buttons - 1));
-                foreach (var child in w.Children.Where(c => c.Type != "TabItem")) Visit(child, bounds, childClip, enabled, alpha);
+                foreach (var child in w.Children.Where(c => c.Type != "TabItem")) Visit(child, self, childClip, enabled, alpha);
                 AddTabButtons(result, bindings, w, props, bounds, clip, pages, captions, buttons, selected, enabled);
                 if (pages.Length > 0) Visit(pages[captions is null ? selected : 0], bounds, childClip, enabled, alpha);
             }
             // An ItemBox scrolls like a ScrollView (MyGUI 3.2 ItemBox derives ScrollViewBase): its bars show only when a bound canvas overflows the
             // client.
-            else if (w.Type is "ScrollView" or "ItemBox") VisitScrollView(result, bindings, w, props, bounds, childClip, enabled, alpha, Visit);
-            else foreach (var child in w.Children) Visit(child, ChildParent(props, bounds), childClip, enabled, alpha);
+            else if (w.Type is "ScrollView" or "ItemBox") VisitScrollView(result, bindings, w, props, self, childClip, enabled, alpha, Visit);
+            else foreach (var child in w.Children) Visit(child, self, childClip, enabled, alpha);
             if (trackSkin is not null) AddTrackFill(result, w, trackSkin, fraction, enabled);
             AddWidgetContent(result, bindings, w, props, bounds, clip, enabled, alpha, new(0, 0, width, height), Visit, deferred);
         }
 
-        foreach (var root in layout.Roots.OrderBy(w => LayerOrder(layers, w)))
-            Visit(root, new(0, 0, width, height), new(0, 0, width, height));
+        var screen = new UiRect(0, 0, width, height);
+        foreach (var root in layout.Roots.OrderBy(w => LayerOrder(layers, w))) Visit(root, screen, screen);
         for (int i = 0; i < deferred.Count; i++) deferred[i]();
         return result;
     }
@@ -186,18 +200,141 @@ public static partial class MyGuiPresentation
         * (float.TryParse(props.GetValueOrDefault("Alpha"), NumberStyles.Float, Inv, out float own) ? Math.Clamp(own, 0, 1) : 1);
 
     /// <summary>
-    /// A widget's screen rectangle: the bound position, else its runtime or real position in <paramref name="parent"/>, else a template's
-    /// reference-sized one aligned in it, else its layout position relative to it.
+    /// A parent as MyGUI's children see it: a child's position becomes pixels once, against the parent's size when the child is made, and is aligned
+    /// again only when the parent is sized (docs/formats/mygui.md "Align and pixel rounding"). <paramref name="Now"/> is where the children go;
+    /// <paramref name="Name"/> (null for a bare rectangle) and <paramref name="Owner"/> (its template owner; null when it is no template part) tell
+    /// its template parts from its layout children; <paramref name="Made"/> is its size when it was made (at the origin) and <paramref name="Sized"/> whether it was sized since.
+    /// A template part also has <paramref name="AtOwner"/>, its rectangle once its owner took its own size (the size the owner's layout children are
+    /// made in), <paramref name="AtOwnerSized"/> whether it was sized getting there, and <paramref name="Later"/> whether it was sized after that;
+    /// any other widget has its made size and <paramref name="Sized"/> there.
     /// </summary>
-    static UiRect WidgetBounds(UiBindings bindings, MyGuiWidget w, Dictionary<string, string> props, UiRect parent) =>
-        bindings.Positions.TryGetValue(w.Name, out var positioned) ? positioned
-        : bindings.RelativePositions.TryGetValue(w, out var relative) ? relative.RelativeTo(parent, true)
-        : w.RealPosition ? w.Position.RelativeTo(parent, true)
-        : props.TryGetValue("TemplateReferenceWidth", out var rw) && props.TryGetValue("TemplateReferenceHeight", out var rh)
-            ? new UiRect(w.Position.X * bindings.TemplateScale, w.Position.Y * bindings.TemplateScale,
-                    w.Position.Width * bindings.TemplateScale, w.Position.Height * bindings.TemplateScale)
-                .AlignTo(parent, float.Parse(rw, Inv) * bindings.TemplateScale, float.Parse(rh, Inv) * bindings.TemplateScale, w.Align)
-            : w.Position.RelativeTo(parent, false);
+    readonly record struct UiParent(UiRect Now, string? Name, string? Owner, UiRect Made, bool Sized, UiRect AtOwner, bool AtOwnerSized, bool Later)
+    {
+        /// <summary>
+        /// A parent that is only a rectangle (the screen, a popup's viewport, a run-time column's place): made at its size, never sized since.
+        /// </summary>
+        public static implicit operator UiParent(UiRect r) =>
+            new(r, null, null, new(0, 0, r.Width, r.Height), false, new(0, 0, r.Width, r.Height), false, false);
+    }
+
+    /// <summary>
+    /// How a widget is placed (<see cref="ChainOf"/>): whether it is a template part of its parent's template, the parent's rectangle now, the
+    /// parent's size the widget was made in and whether the parent was sized since; for a part also the parent's rectangle once the owner took its
+    /// own size, whether the parent was sized getting there, and whether it was sized after that.
+    /// </summary>
+    readonly record struct UiChain(bool Part, UiRect Parent, float MadeWidth, float MadeHeight, bool Sized, UiRect OwnerParent, bool OwnerSized,
+        bool Later);
+
+    /// <summary>
+    /// A placed widget: its screen rectangle, how it was placed, its rectangle in its parent when made and, for a template part, its rectangle once
+    /// the owner took its own size; whether the code placed it (<paramref name="Coded"/>) and sized it since it was made (<paramref name="Resized"/>).
+    /// </summary>
+    readonly record struct UiPlaced(UiRect Bounds, UiChain Chain, UiRect Made, UiRect AtOwner, bool Coded, bool Resized);
+
+    /// <summary>
+    /// A widget's screen rectangle as MyGUI's history of it gives (docs/formats/mygui.md "Align and pixel rounding"): its rectangle when made
+    /// (<see cref="MadeRect"/>) aligned by its parent's sizes since, in whole pixels when the parents are, unless the code placed it (bound
+    /// <see cref="UiBindings.Positions"/> as given, or <see cref="UiBindings.RelativePositions"/> in the parent's size now as
+    /// <c>Widget::setRealCoord</c> converts them; <see cref="MadeAt"/>).
+    /// </summary>
+    static UiPlaced Place(UiBindings bindings, MyGuiWidget w, Dictionary<string, string> props, UiParent parent)
+    {
+        var chain = ChainOf(props, parent, bindings.TemplateScale);
+        var made = MadeRect(w, props, chain, bindings.TemplateScale);
+        var aligned = Follow(made, chain.Parent, chain.MadeWidth, chain.MadeHeight, w.Align, chain.Sized);
+        var atOwner = chain.Part ? Follow(made, chain.OwnerParent, chain.MadeWidth, chain.MadeHeight, w.Align, chain.OwnerSized) : made;
+        var placed = new UiPlaced(aligned, chain, made, atOwner, false, false);
+
+        if (bindings.Positions.TryGetValue(w.Name, out var positioned))
+            return MadeAt(placed, positioned, bindings.MadeSizes.TryGetValue(w.Name, out var size) ? size : null);
+        if (bindings.RelativePositions.TryGetValue(w, out var relative)) return MadeAt(placed, relative.RelativeTo(chain.Parent, true), null);
+
+        return placed;
+    }
+
+    /// <summary>
+    /// <paramref name="placed"/> where the code put it, <paramref name="bounds"/>: made there, so its children are made in that size, unless the code
+    /// says it was made at another <paramref name="madeSize"/> and sized since (<see cref="UiBindings.MadeSizes"/>), which aligns them.
+    /// </summary>
+    static UiPlaced MadeAt(UiPlaced placed, UiRect bounds, (float Width, float Height)? madeSize)
+    {
+        var (width, height) = madeSize ?? (bounds.Width, bounds.Height);
+        var made = new UiRect(0, 0, width, height);
+        bool resized = width != bounds.Width || height != bounds.Height;
+        return placed with { Bounds = bounds, Made = made, AtOwner = made, Coded = true, Resized = resized };
+    }
+
+    /// <summary>
+    /// How a widget is placed in <paramref name="parent"/>. A template part of it (its <c>TemplateOwner</c> is the parent) is made in the template's
+    /// root size (<c>TemplateReferenceWidth</c> / <c>Height</c> scaled as Kenshi's MyGUI scales a <c>ResourceLayout</c>) and aligned at once to the
+    /// owner's own size; a part of the same template as the parent is made in the parent's size as made; a layout widget in the size its parent had
+    /// when the layout's widgets were made.
+    /// </summary>
+    static UiChain ChainOf(IReadOnlyDictionary<string, string> props, UiParent parent, float scale)
+    {
+        // An unnamed owner's parts have an empty TemplateOwner: the key, not its text, marks a part.
+        if (!props.TryGetValue("TemplateOwner", out var owner)) return LayoutChain(parent);
+
+        if (owner == parent.Name)
+        {
+            float rootWidth = MyGuiScale.Size(Num(props, "TemplateReferenceWidth", parent.Made.Width), scale);
+            float rootHeight = MyGuiScale.Size(Num(props, "TemplateReferenceHeight", parent.Made.Height), scale);
+            return new(true, parent.Now, rootWidth, rootHeight, true, parent.Made, true, parent.Sized);
+        }
+
+        if (owner == parent.Owner)
+            return new(true, parent.Now, parent.Made.Width, parent.Made.Height, parent.Sized, parent.AtOwner, parent.AtOwnerSized, parent.Later);
+
+        return LayoutChain(parent);
+    }
+
+    /// <summary>
+    /// A layout widget's chain: made in the size its parent had when the layout's widgets were made, aligned when the parent was sized after that.
+    /// </summary>
+    static UiChain LayoutChain(UiParent parent) =>
+        new(false, parent.Now, parent.AtOwner.Width, parent.AtOwner.Height, parent.Later, default, false, false);
+
+    /// <summary>
+    /// A widget's rectangle in its parent when it was made, in whole pixels: a template part's <c>position</c> scaled (<see cref="MyGuiScale"/>), a
+    /// layout widget's as written, and either's <c>position_real</c> as <c>int(fraction x the parent's size then)</c>
+    /// (<c>CoordConverter::convertFromRelative</c>; Kenshi scales no fraction).
+    /// </summary>
+    static UiRect MadeRect(MyGuiWidget w, IReadOnlyDictionary<string, string> props, UiChain chain, float scale)
+    {
+        var parent = new UiRect(0, 0, chain.MadeWidth, chain.MadeHeight);
+        if (!chain.Part) return w.RealPosition ? w.Position.RelativeTo(parent, true) : w.Position;
+
+        return props.TryGetValue("TemplateRealPosition", out var real)
+            ? UiRect.Parse(real).RelativeTo(parent, true)
+            : MyGuiScale.Coord(w.Position, scale);
+    }
+
+    /// <summary>
+    /// <paramref name="made"/> in <paramref name="parent"/>: aligned from the parent's made size (<c>Widget::_setAlign</c>) when the parent was
+    /// <paramref name="sized"/> since, else only moved with it.
+    /// </summary>
+    static UiRect Follow(UiRect made, UiRect parent, float madeWidth, float madeHeight, string align, bool sized) => sized
+        ? made.AlignTo(parent, madeWidth, madeHeight, align)
+        : made with { X = parent.X + made.X, Y = parent.Y + made.Y };
+
+    /// <summary>
+    /// The widget at <paramref name="bounds"/> as its children see it. It was sized since they were made when it stretches on an axis and its own
+    /// parent was sized (<c>_setAlign</c> calls <c>setSize</c> then, even at an unchanged size; one it only moves gets <c>setPosition</c>), or, when
+    /// the code placed it, when the code says it sized it since. A ScrollView client's canvas (<c>CanvasOrigin</c>) is a parent made at its size.
+    /// </summary>
+    static UiParent AsParent(MyGuiWidget w, IReadOnlyDictionary<string, string> props, UiPlaced placed, UiRect bounds)
+    {
+        if (props.TryGetValue("CanvasOrigin", out var canvas)) return UiRect.Parse(canvas);
+
+        bool stretches = UiRect.Stretches(w.Align);
+        bool sized = placed.Coded ? placed.Resized : placed.Chain.Sized && stretches;
+        var made = new UiRect(0, 0, placed.Made.Width, placed.Made.Height);
+        string? owner = placed.Chain.Part ? props.GetValueOrDefault("TemplateOwner") : null;
+        if (!placed.Chain.Part || placed.Coded) return new(bounds, w.Name, owner, made, sized, made, false, sized);
+
+        bool later = placed.Chain.Later && stretches;
+        return new(bounds, w.Name, owner, made, sized, placed.AtOwner, placed.Chain.OwnerSized && stretches, later);
+    }
 
     /// <summary>
     /// A widget's caption, in the player's language. A caption written in the layout is the source string of the player's language (the layouts
