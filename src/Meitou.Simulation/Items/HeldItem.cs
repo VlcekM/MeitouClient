@@ -127,7 +127,7 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     /// <summary>
     /// Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer).
     /// </summary>
-    public bool WearableBy(string? race, bool animal = false) => ItemInstance.Wearable(WornOnlyBy, WornNeverBy, race, animal);
+    public bool WearableBy(string? race, bool animal = false) => ItemInstance.Wearable(WornOnlyBy, WornNeverBy, race, animal, Record);
 }
 
 /// <summary>

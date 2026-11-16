@@ -219,6 +219,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A rule asked whether a wearer may wear an item (docs/modding.md "Wear rules"): <paramref name="rule"/> gets the item's record id, the
+    /// wearer's RACE id and whether it is an animal, after the item's own race lists pass, and false refuses the item everywhere a race limit
+    /// applies. It may run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw counts as
+    /// yes and is logged once.
+    /// </summary>
+    public void AddWearRule(Data.Gameplay.WearRule rule)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(rule);
+        Pending.WearRules.Add(rule);
+    }
+
+    /// <summary>
     /// A bar on the medical panel after Hunger (docs/modding.md "Medical meters") labelled <paramref name="label"/>: the mod's systems set each
     /// character's reading in the tick with <see cref="Simulation.Bodies.ModMeter.Set"/>, and the panel shows it for the selected or inspected
     /// character. A label another meter has, or a fifth meter of all mods together, refuses it.
