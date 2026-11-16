@@ -71,7 +71,7 @@ public sealed class LoadOrder
             return order;
 
         var available = FindMods(install);
-        foreach (var name in ParseModsCfg(File.ReadAllLines(modsCfg)))
+        foreach (var name in ParseModsCfg(ModList.ReadLines(modsCfg)))
         {
             if (order.Entries.Any(e => e.Name == name + ".mod"))
                 continue;

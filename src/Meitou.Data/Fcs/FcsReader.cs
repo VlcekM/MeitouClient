@@ -60,20 +60,22 @@ public static class FcsReader
     }
 
     /// <summary>
-    /// Whether the file at <paramref name="path"/> opens and starts with a file type this reader knows: what decides whether the game loads a data
-    /// file at all (docs/formats/fcs-mod.md, "Files that fail to load"); damage past it does not.
+    /// The header of the file at <paramref name="path"/> (type 16 or 17: version, author, description, dependencies, references); null when the file
+    /// does not open, has another type or its header does not parse.
     /// </summary>
-    public static bool HasKnownType(string path)
+    public static FcsFile? TryReadHeader(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
-            Span<byte> type = stackalloc byte[4];
-            return stream.ReadAtLeast(type, 4, throwOnEndOfStream: false) == 4 && IsKnownType(BitConverter.ToInt32(type));
+            using var r = new BinaryReader(stream, Encoding, leaveOpen: true);
+            var file = new FcsFile();
+            ReadHeader(r, file);
+            return file.FileType == FcsFileType.V15 ? null : file;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FcsFormatException)
         {
-            return false;
+            return null;
         }
     }
 
