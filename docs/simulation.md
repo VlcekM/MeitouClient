@@ -1085,10 +1085,10 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   `item function` 9; the best is consumed when hardness reaches 0) or break (strength > 3 x hardness). Another character's shackles: a pending
   code 7 against the wearer's slave owner faction (none for a wearer without an owner). The lock is saved on the item (`lock lvl`, `locked`, `broken`, `hardness`). Shackled characters show the portrait Slave overlay.
 - **Spawn prisoners** (`PopulationSystem.MakePrisoners`; facts: [squad factory](game/factions-squads-towns.md#squad-factory)): a housed squad's `prisoners` templates are made
-  whole at the owner squad's spot as squads of the template's faction (else the owner's), and each member in turn is imprisoned in a random free cage of the home building
+  at the owner squad's spot as squads of the template's faction (else the owner's), and each member in turn is imprisoned in a random free cage of the home building
   with the factory's FOREVER sentence (`SpawnSentence`, 9999999 h: never served, so no release round frees it; getting out is Escaping Prison); the first member left
-  without a cage is destroyed (a unique stays claimed: `FUN_1405067e0`, the only erase, is called by the unload and spawn-mode-3 releases alone) and the rest of that
-  squad stay free, as do later entries' squads but their first member. **Observed** (headless probe, base game): all 11 of `Tengu's vault prisoners` caged in the
+  without a cage is destroyed (Meitou never makes it, `SpawnSquad`'s `unmade`, as a town spawns in the inputs phase, where no character may be removed; a unique
+  stays claimed: `FUN_1405067e0`, the only erase, is called by the unload and spawn-mode-3 releases alone) and the rest of that squad stay free, as do later entries' squads but their first member. **Observed** (headless probe, base game): all 11 of `Tengu's vault prisoners` caged in the
   Ancient Citadel's `Prison` layout (49 Prisoner Cages and a Prisoner Pole, 50 cages); Agnu in the Ancient Lab's `Labs5` (8 cages). A caged prisoner is no aggro
   target (engine choice).
 - **Putting shackles on** (`PutShacklesOrder`, verb "Put on Shackles"; engine stand-in for dragging them onto the target's armour slot, which the held item does not do yet): a

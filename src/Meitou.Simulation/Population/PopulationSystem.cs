@@ -1052,7 +1052,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         for (int e = 0; e < links.Count; e++)
         {
             if (BuildPrisoners(world, owner, squad, links[e].Id, homeKey, e) is not { } built) continue;
-            var prisoners = SpawnSquad(world, built, site, radius);
+
+            // The member reached when the cages run out is destroyed at once; it is never made here, since the inputs phase that spawns a town may
+            // not remove a character.
+            var prisoners = SpawnSquad(world, built, site, radius, unmade: cages.Count);
             CagePrisoners(world, prisoners, cages, homeKey, ref picks);
 
             if (prisoners.Members.Count > 0) state.Squads.Add(prisoners.Id);
@@ -1076,39 +1079,21 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// Cages a made prisoner squad's members in order, each in a random one of <paramref name="cages"/> (taken from the list); the first member
-    /// reached with none left is destroyed and the rest stay free (<c>FUN_140583a10</c>).
+    /// reached with none left is destroyed and the rest stay free (<c>FUN_140583a10</c>). The destroyed one was never made (<see cref="SpawnSquad"/>'s
+    /// <c>unmade</c>), so the members after the caged ones are the free ones.
     /// </summary>
     void CagePrisoners(World world, Squad prisoners, List<Locks.Fixture> cages, ulong homeKey, ref int picks)
     {
         var table = world.Characters;
         foreach (var id in prisoners.Members.ToList())
         {
-            if (cages.Count == 0)
-            {
-                DestroyPrisoner(world, prisoners, id);
-                return;
-            }
+            if (cages.Count == 0) return;
 
             int pick = Rng.Int(Rng.Hash(world.Seed, homeKey, RngPurpose.Spawn, SeedSalts.PrisonerCage + (ulong)picks++), cages.Count);
             var cage = cages[pick];
             cages.RemoveAt(pick);
             if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
         }
-    }
-
-    /// <summary>
-    /// A prisoner the factory had no cage for leaves the world and its squad, which counts it neither made nor lost. A unique stays claimed: no
-    /// destroy erases its entry (<c>FUN_1405067e0</c>'s only callers are the unload and spawn-mode-3 releases).
-    /// </summary>
-    void DestroyPrisoner(World world, Squad prisoners, CharacterId id)
-    {
-        var table = world.Characters;
-        world.Uniques.Left(id);
-        RemoveMember(world, id);
-
-        prisoners.Members.Remove(id);
-        prisoners.SpawnSize = prisoners.Members.Count;
-        if (prisoners.Leader == id) prisoners.Leader = SquadRegistry.Successor(prisoners.Members, table);
     }
 
     /// <summary>
@@ -1182,10 +1167,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Makes a built squad in the world: its members as characters at their spots, its home noted for its template.
+    /// Makes a built squad in the world: its members as characters at their spots, its home noted for its template. <paramref name="unmade"/>: the
+    /// index among the members (after the unique gate) of a prisoner the factory destroys at once for want of a cage (<see cref="CagePrisoners"/>),
+    /// which is left out: the squad counts it neither made nor lost, and a unique it was stays claimed, as no destroy erases its entry
+    /// (<c>FUN_1405067e0</c>'s only callers are the unload and spawn-mode-3 releases).
     /// </summary>
     Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false,
-        float yaw = 0, bool pinned = false, HashSet<int>? gated = null, bool wild = false)
+        float yaw = 0, bool pinned = false, HashSet<int>? gated = null, bool wild = false, int unmade = -1)
     {
         var table = world.Characters;
         var squad = NewSquad(world, built, site, radius, platoonId, pinned, wild);
@@ -1198,8 +1186,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         var builtMembers = idle || player && gated is null ? built.Members : GateUniques(world, built, squad.Id, gated);
         var leaderPlan = builtMembers.FirstOrDefault(m => m.Plan.Role == SquadRole.Leader)?.Plan;
         bool hasLeader = leaderPlan is not null;
-        foreach (var member in builtMembers)
+        for (int i = 0; i < builtMembers.Count; i++)
         {
+            if (i == unmade) continue;
+
+            var member = builtMembers[i];
             var id = SpawnMember(world, built, squad, member, hasLeader, player, idle, yaw, site);
             squad.Members.Add(id);
             if (member.Plan.Role == SquadRole.Leader && squad.Leader.IsNone) squad.Leader = id;
