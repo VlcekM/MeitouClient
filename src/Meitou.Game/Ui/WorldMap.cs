@@ -329,6 +329,11 @@ sealed class WorldMap(PlayerInterface player)
     readonly Dictionary<string, bool> _knownGroups = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Mod to how many of its map markers this frame has named so far (<see cref="AddModMarkers"/>).
+    /// </summary>
+    readonly Dictionary<string, int> _modMarkerCounts = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The placed towns (the population's sites, in the order of <see cref="WorldSnapshot.Towns"/>); the host sets it.
     /// </summary>
     public Func<IReadOnlyList<TownSite>>? MapTowns { get; set; }
@@ -623,13 +628,14 @@ sealed class WorldMap(PlayerInterface player)
         if (!player.HasModMapMarkers) return;
 
         var markers = player.ModMapMarkers(new UiMapContext(snapshot, frame.Level), KnownGroup);
-        string? previous = null;
-        int k = 0;
+
+        // Counted per mod, not per run of a mod's markers: a mod's sources need not sit together in registration order.
+        _modMarkerCounts.Clear();
         for (int i = 0; i < markers.Count; i++)
         {
             var (owner, m) = markers[i];
-            k = owner == previous ? k + 1 : 0;
-            previous = owner;
+            _modMarkerCounts.TryGetValue(owner, out int k);
+            _modMarkerCounts[owner] = k + 1;
             if (frame.Level < m.FromLevel) continue;
 
             string name = $"map-mod-{owner}-{k}";
