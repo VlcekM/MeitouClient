@@ -15,8 +15,9 @@ public sealed partial class CombatSystem
     /// One blow of <c>Task_KillPrisoner</c> (goals 134, 135, docs/game/ai-tasks.md "Prisoner fate", <b>Observed</b>): the attacker's weapon packet
     /// (or its fists') lands on the target with no reach, block or dodge test (the target is caged), through its armour and toughness as a landed
     /// melee hit; the floater, sound, blood, KO, death and severed-limb effects follow as in <see cref="Apply"/>. The killing of a captive is no
-    /// crime (engine choice: the original's call passes no crime). <paramref name="blow"/> numbers the blows for the armour cover roll. True when the
-    /// target died of it. Serial phases only.
+    /// crime (engine choice: the original's call passes no crime). <paramref name="blow"/> numbers the blows for the armour cover roll. A code mod's
+    /// hit filter may change the packet or cancel the blow, which then does nothing here (<see cref="ICombatHitFilter"/>; the caller's job strikes
+    /// again). True when the target died of it. Serial phases only.
     /// </summary>
     public bool Execute(World world, int a, int d, int blow)
     {
@@ -35,6 +36,7 @@ public sealed partial class CombatSystem
                 race.StringId, fighter.DamageOutput, _combat)
             : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId,
                 fighter.DamageOutput, _combat);
+        if (!world.CombatHitFilters.Pass(world, CombatHitSource.Execution, table.IdOf(a), table.IdOf(d), 0, blow, true, ref packet)) return false;
 
         var ctx = MakeContext(world, d, dc);
         var events = _hitEvents;

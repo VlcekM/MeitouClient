@@ -728,18 +728,22 @@ public sealed partial class CombatSystem : IProjectileSource
     /// A bolt in a body (<c>FUN_140439c90</c>): a packet of pierce = the bolt's damage, bleed 2, no penetration, through the hit pipeline with hit
     /// direction 6 (the part by its <c>hit</c> weight alone), armour and toughness, the global damage multiplier applied once more there
     /// (<b>Observed</b>, so bolts scale with its square). No block, no dodge. The victim takes "hit taken" XP; the shooter gains none for a hit. A
-    /// heavy hit staggers as a melee one does.
+    /// heavy hit staggers as a melee one does. False, nothing done, when a code mod's hit filter cancels it (<see cref="ICombatHitFilter"/>): the
+    /// bolt flies on past the victim.
     /// </summary>
-    internal void BoltHit(World world, in Projectile p, int v, bool intended)
+    internal bool BoltHit(World world, in Projectile p, int v, bool intended)
     {
         var table = world.Characters;
         var prev = table.Previous;
         var dc = table.Cold(v);
-        if (dc is null || dc.Medical is null || dc.Race is null) return;
+        if (dc is null || dc.Medical is null || dc.Race is null) return true;
+
+        var packet = new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
+        var shooter = new CharacterId(p.Shooter, p.ShooterGeneration);
+        if (!world.CombatHitFilters.Pass(world, CombatHitSource.Projectile, shooter, table.IdOf(v), p.Id, -1, intended, ref packet)) return false;
 
         int now = (int)world.Tick;
         ref var d = ref _write[v];
-        var packet = new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
         var ctx = MakeContext(world, v, dc);
         var events = _hitEvents;
         events.Clear();
@@ -783,10 +787,12 @@ public sealed partial class CombatSystem : IProjectileSource
 
         if (observe && part >= 0)
         {
-            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Projectile, new(p.Shooter, p.ShooterGeneration), table.IdOf(v),
+            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Projectile, shooter, table.IdOf(v),
                 p.Id, -1, part, damage, absorbed, prev[v].Position, p.Direction, prev[v].Yaw,
                 -1, false, intended, wasAlive, wasIncapacitated));
         }
+
+        return true;
     }
 
     /// <summary>

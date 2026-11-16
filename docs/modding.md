@@ -126,6 +126,19 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
+  blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
+  armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
+  was the chosen target, and the `DamagePacket` as it leaves the weapon (cut, blunt, pierce, stun, bleed multiplier, armour penetration).
+  The filter may change `Packet` (a changed value finite and, but for armour penetration, not negative) or set `Cancelled`; nothing else it
+  changes is taken back. A cancelled melee blow is a miss in every respect, a cancelled bolt flies on past the victim as past a friend, and
+  a cancelled execution blow does no damage: the captive jobs that strike it keep striking, and the kill job's scream still plays, until one
+  lands. A melee blow's "hit dealt" experience follows the filtered packet. Filters run in system order, each seeing the hit as the earlier
+  ones left it, until one cancels. They run serially where the hit lands (melee in Commit, bolts in `CombatSystem.Schedule`, executions in
+  the captives' `SlowWorld`), may read the world and change their own hashed state, must not change characters or other world state or call
+  combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
+  and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
+  faulted registrations enter the state hash. Without a filter no payload is made.
 - **Items used up:** a registered system implementing `IItemUseObserver` receives `ItemUsedUp(World, in ItemUsed)` inside the step that
   used an item, once the item has changed: the tick, the `ItemUseKind`, the item record's string id, the user (none for a machine, a
   research order or an upgrade pulling from the building's own stock), the building it went into or came from (a construction, machine or

@@ -242,6 +242,7 @@ public sealed partial class World : IDisposable
         for (int k = 0; k < this._systems.Count; k++)
         {
             RegisterCombatHitObserver(this._systems[k], k);
+            CombatHitFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
@@ -367,6 +368,10 @@ public sealed partial class World : IDisposable
     /// The systems observing items used up (<see cref="Items.IItemUseObserver"/>).
     /// </summary>
     internal Items.ItemUseObservers ItemUseObservers { get; } = new();
+    /// <summary>
+    /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
+    /// </summary>
+    internal Combat.CombatHitFilters CombatHitFilters { get; } = new();
     /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
@@ -555,6 +560,7 @@ public sealed partial class World : IDisposable
         _dialogues ??= system as Dialogue.IDialogueSource;
         _ragdolls ??= system as Ragdolls.IRagdollSource;
         RegisterCombatHitObserver(system, _systems.Count - 1);
+        CombatHitFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
@@ -1043,6 +1049,7 @@ public sealed partial class World : IDisposable
         foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
 
         HashCombatHitObserverFaults(ref h);
+        CombatHitFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
         return h.Value;
     }
