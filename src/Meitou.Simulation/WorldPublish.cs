@@ -323,21 +323,7 @@ public sealed partial class World
             : null;
         var storage = new InventoryView(grid.Width, grid.Height, 0, 0,
             Array.AsReadOnly(grid.Items
-                .Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "main", item.X, item.Y, item.Width, item.Height,
-                    item.Quantity, item.Weight, item.Quality)
-                {
-                    Material = item.MaterialId,
-                    Rotated = item.Rotated,
-                    Colour = item.ColourId,
-                    Charge = item.ChargeFraction,
-                    Company = item.CompanyId,
-                    Level = item.Level,
-                    Charges = item.Charges,
-                    MaxCharges = item.MaxCharges,
-                    Unique = item.Unique,
-                    ModTag = item.ModTag,
-                    StealChance = steal
-                })
+                .Select((item, index) => InventoryItemView.Of(index, item) with { Section = "main", StealChance = steal })
                 .ToArray()));
         return new Production.MachineSnapshot(id, f.RecordId, [], null, storage, null, 0, 0, 0) { IsContainer = true };
     }
