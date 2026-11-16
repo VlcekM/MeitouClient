@@ -217,7 +217,8 @@ public static class InventoryCommands
 
     /// <summary>
     /// Whether <see cref="MoveInto"/> would place one unit of <paramref name="item"/> in <paramref name="into"/> (a dry run, nothing changes): the
-    /// worn bag first when <paramref name="bagFirst"/>, then a free equipment slot, then the main grid. The trade window's right click asks the
+    /// worn bag first when <paramref name="bagFirst"/>, then a free equipment slot, then the main grid, the unit no death item (as it arrives, so it
+    /// joins the stacks it tops up). The trade window's right click asks the
     /// taker's inventory, else its backpack, before the steal roll and refuses the take without room (<c>FUN_140713d20</c>: <c>Inventory</c> slot 4
     /// <c>FUN_14074afa0</c> before <c>Character</c> slot 83 <c>FUN_140794810</c>, <b>Verified</b> decompile), so a full thief gets no roll.
     /// </summary>
@@ -225,9 +226,13 @@ public static class InventoryCommands
     {
         int w = item.Rotated ? item.Height : item.Width;
         int h = item.Rotated ? item.Width : item.Height;
-        return bagFirst && into.Backpack?.Contents is { } bag && bag.HasRoomIn("backpack_content", item)
+        bool death = item.Death;
+        item.Death = false;
+        bool room = bagFirst && into.Backpack?.Contents is { } bag && bag.HasRoomIn("backpack_content", item)
             || EquipCell(into, item, w, h, wearer) is not null
             || !MainClosed(wearer) && into.HasRoomIn("main", item);
+        item.Death = death;
+        return room;
     }
 
     /// <summary>

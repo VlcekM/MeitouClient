@@ -139,7 +139,7 @@ public sealed partial class CrimeSystem
     /// <summary>
     /// <see cref="PendSteal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods.
     /// </summary>
-    bool PendSteal(World world, int thief, StealSource container, CrimeCode code)
+    public bool PendSteal(World world, int thief, StealSource container, CrimeCode code)
     {
         if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container))
             return false;

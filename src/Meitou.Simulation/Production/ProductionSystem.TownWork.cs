@@ -230,19 +230,23 @@ public sealed partial class ProductionSystem
         IsTownWork(site) && TownWorkSite(site) is { } s ? new(site, s.Owner, site[TownWorkPrefix.Length..], s.Position, s.Record) : null;
 
     /// <summary>
-    /// A take out of another faction's town machine (<see cref="Take"/>): the Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>; true:
-    /// caught, nothing moves), else the stolen mark the taken items get (<see cref="Crime.CrimeSystem.OwnerMark"/>; none for any other take).
+    /// A take out of another faction's town machine (<see cref="Take"/>): the stolen mark the taken items get
+    /// (<see cref="Crime.CrimeSystem.OwnerMark"/>; none for any other take), then, when the taker has <paramref name="room"/> for them with it, the
+    /// Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>), else the Theft alone (no roll, no thievery XP, #796). True: caught or no
+    /// room, nothing moves.
     /// </summary>
-    static bool CaughtTaking(World world, Crime.StealSource? goods, CharacterId taker, CharacterCold cold, out StolenMark mark)
+    static bool CaughtTaking(World world, Crime.StealSource? goods, CharacterId taker, CharacterCold cold, Func<StolenMark, bool> room,
+        out StolenMark mark)
     {
         mark = StolenMark.None;
         if (goods is not { Owner: >= 0 } g || g.Owner == cold.Faction || !Crime.CrimeSystem.IsStealing(world, g)) return false;
-        if (world.SystemOf<Crime.CrimeSystem>() is { } crimes && world.Characters.TryResolveNext(taker, out int thief)
-            && crimes.Steal(world, thief, g, Crime.CrimeCode.Theft))
-            return true;
 
         mark = Crime.CrimeSystem.OwnerMark(world, g.Building, g.Owner);
-        return false;
+        bool fits = room(mark);
+        if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !world.Characters.TryResolveNext(taker, out int thief)) return !fits;
+
+        if (!fits) crimes.PendSteal(world, thief, g, Crime.CrimeCode.Theft);
+        return !fits || crimes.Steal(world, thief, g, Crime.CrimeCode.Theft);
     }
 
     /// <summary>

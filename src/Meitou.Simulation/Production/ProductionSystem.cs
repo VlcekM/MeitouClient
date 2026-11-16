@@ -2052,7 +2052,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Site(world, take.Site) is not { Complete: true } site || world.Machines.Find(take.Site) is not { } m
             || !Near(world, take.Character, site, out var cold))
             return;
-        if (CaughtTaking(world, TownGoods(take.Site), take.Character, cold, out var mark)) return;
+        if (CaughtTaking(world, TownGoods(take.Site), take.Character, cold, with => RoomFor(world, m, cold, take, with), out var mark)) return;
 
         var root = cold.Inventory!;
         if (take.Slot == -1)
@@ -2078,6 +2078,35 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (take.Slot == -2) m.Output!.Count -= moved;
         else m.Inputs[take.Slot].Count -= moved;
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Whether the take out of town machine <paramref name="m"/> finds room for one unit with the stolen mark <paramref name="mark"/> (a dry run): a
+    /// stored item as <see cref="TakeStored"/> moves it, an output or input unit as <see cref="Placed"/> adds it. A take that moves nothing for other
+    /// reasons (a bad index, a crafted item) counts as room, so its own refusal stands.
+    /// </summary>
+    bool RoomFor(World world, Machine m, CharacterCold cold, TakeFromMachine take, StolenMark mark)
+    {
+        if (take.Slot == -1)
+        {
+            if (m.Storage is not { } storage || take.Index < 0 || take.Index >= storage.Items.Count) return true;
+
+            var item = storage.Items[take.Index];
+            var kept = item.Mark;
+            if (mark != StolenMark.None && kept == StolenMark.None) item.Mark = mark;
+            bool room = InventoryCommands.HasRoomFor(cold.Inventory!, item, take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, cold);
+            item.Mark = kept;
+            return room;
+        }
+        if (take.Slot == -2 && m.Craft is not null) return true;
+
+        string record = take.Slot == -2 ? m.Output?.Recipe.Item ?? ""
+            : take.Slot >= 0 && take.Slot < m.Inputs.Length ? m.Inputs[take.Slot].Item
+            : "";
+        if (_items.Create(record, 1) is not { } unit) return true;
+
+        unit.Mark = mark;
+        return cold.Inventory!.HasRoomFor(unit);
     }
 
     /// <summary>
