@@ -12,15 +12,26 @@ KenshiLib facade. The public wishlist of RE_Kenshi mods decides which plugins ge
 
 A mod's ordinary data and assets load through the normal readers either way.
 
-**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)). Built-in mods (`BuiltInMods`,
+**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)). Covered mods are one table,
+`CoveredMods` (Meitou.Core), read by the game and by the launcher's Mods page. Built-in mods (`BuiltInMods`,
 Meitou.Game): at start, each enabled mod the table names, by `.mod` name or code-mod id, that was not taken in before
 (`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. A covered code mod is not run (counted as
 disabled), so the feature never applies twice, and a save made while it ran does not report it gone.
 
-| Mod | Meitou setting | Taken in |
+| Mod | Meitou setting | Matched against | Taken in |
+| --- | --- | --- | --- |
+| Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`, workshop 3679678086) | Squad XP | its 2026-11-07 update | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run). Per-skill `stat_<SKILL>` lines are not kept |
+| Its code-mod port (`player-only-xp`) | Squad XP | any version (by its id) | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
+
+Suggested mods: the RE_Kenshi plugin still loads only its data, and the launcher suggests a code mod on the Steam workshop that does the
+same (one option; other ports may exist). Nothing is taken in.
+
+| Mod | Suggested code mod | Matched against |
 | --- | --- | --- |
-| Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`) | Squad XP | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run). Per-skill `stat_<SKILL>` lines are not kept |
-| Its code-mod port (`player-only-xp`) | Squad XP | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
+| Loot-Scoot-Execute (Emkej, `Loot-Scoot-Execute`, workshop 3675700748; its MCM fork 3813852124) | [MeitouClient] Execution (`Execution`, workshop 3838346946) | 2026-04-26 update; the fork's 2026-11-13 update |
+
+The date each entry was matched against is Steam's `timeupdated` of that workshop item when it was compared; what the launcher shows
+for a newer installed copy, and for other plugins, is in [launcher](../launcher.md).
 
 The research behind not loading the DLLs (2026-10-11) follows. External findings are **Observed** in
 upstream source or documentation, not Verified by running plugins. Links track upstream branches and may

@@ -290,6 +290,18 @@ interpolated string, which no translation could match.
   cache; a cold start with a long list is not measured), and the list is walked again on every change.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
+- A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
+  the setting it became, instead of the plugin or code-mod note; a covered code mod adds that it is not run.
+- An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or
+  workshop item) names it as one mod that does the same, not a requirement (other ports may exist), and, while the list does not hold it
+  (a workshop mod by its item, a local copy by its `.mod` name), has a View button opening its workshop page. The first listing in which
+  such a mod is enabled and its suggestion is not installed asks once for all of them whether to open those pages (the launcher has no Steam subscribe call, so the player subscribes there); each mod asked about is kept in
+  `launcher.json` (`OfferedSuggestions`) and not asked again. Not asked while another question or the first-start dialog is open.
+- Each covered workshop item names the Steam update it was matched against. When the installed copy is newer (its `timeupdated` in
+  `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new
+  features may be missing. A local copy has no date and gets no such note.
+- Any other RE_Kenshi plugin (not built in, no suggestion) keeps the ignored-DLLs note and has a Request button opening the public wishlist
+  of RE_Kenshi mods (`CoveredMods.Wishlist`, the roadmap's compatibility sheet), where players ask for one to be covered.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
   ([Trust](modding.md#trust)).
 - A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code

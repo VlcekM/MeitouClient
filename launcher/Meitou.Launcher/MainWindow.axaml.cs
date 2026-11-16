@@ -912,9 +912,56 @@ public sealed partial class MainWindow : Window
         _modsReady = true;
         ShowDependencyProblems();
         QueueBlankingCheck();
+        MarkSuggestions();
         ModsEmpty.IsVisible = _mods.Count == 0;
         ModsEmpty.Text = Tr(gameInstall is null ? "Set the Kenshi folder in Settings to list its mods."
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
+        OfferSuggestions();
+    }
+
+    /// <summary>
+    /// Tells each row of an RE_Kenshi mod with a suggested code mod whether the list holds it (<see cref="CoveredMods.Suggested"/>).
+    /// </summary>
+    void MarkSuggestions()
+    {
+        var mods = _mods
+            .Select(r => r.Mod)
+            .ToList();
+        foreach (var row in _mods)
+            if (row.Suggestion is { } suggested) row.SuggestionInstalled = CoveredMods.HasSuggestion(suggested, mods);
+    }
+
+    /// <summary>
+    /// Once per mod, in one question for all of them: the enabled RE_Kenshi mods with a suggested code mod that is not installed, with an
+    /// offer (not a requirement: other ports may exist) to open the suggested mods' Steam workshop pages, where the player subscribes (the
+    /// launcher has no Steam subscribe call). Asked or not, each is remembered (<see cref="LauncherConfig.OfferedSuggestions"/>), and the row
+    /// keeps its button. Not over another question or the first-start dialog: the next listing asks.
+    /// </summary>
+    async void OfferSuggestions()
+    {
+        if (SetupHost.IsVisible) return;
+
+        var rows = _mods
+            .Where(r => r.Enabled && r.SuggestionPage is not null && !_config.OfferedSuggestions.Contains(r.Name))
+            .ToList();
+        if (rows.Count == 0) return;
+
+        _config.OfferedSuggestions.AddRange(rows.Select(r => r.Name));
+        _config.Save();
+
+        var lines = rows.Select(r => Tr("{1}: {2}", r.Name, r.Suggestion!.By));
+        string text = Tr("The plugins of these RE_Kenshi mods do not run in Meitou.") + " "
+            + Tr("One Meitou mod on the Steam workshop that does the same (others may too):") + "\n"
+            + string.Join("\n", lines) + "\n" + Tr("Want to look at them on Steam?");
+        var pages = rows
+            .Select(r => r.SuggestionPage)
+            .OfType<Uri>()
+            .Distinct()
+            .ToList();
+        string open = pages.Count == 1 ? Tr("Open its page") : Tr("Open {1} pages", pages.Count);
+        if (!await AskAsync(Tr("Meitou mods you might like"), text, open, Tr("No thanks"))) return;
+
+        foreach (var page in pages) await this.Launcher.LaunchUriAsync(page);
     }
 
     /// <summary>
@@ -1147,6 +1194,22 @@ public sealed partial class MainWindow : Window
     async void ModPage_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: ModRow { WorkshopPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
+    }
+
+    /// <summary>
+    /// A click on the View button of an RE_Kenshi mod with a suggested code mod opens that mod's Steam workshop page.
+    /// </summary>
+    async void SuggestionPage_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ModRow { SuggestionPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
+    }
+
+    /// <summary>
+    /// A click on the Request button of an RE_Kenshi mod Meitou does not cover opens the public wishlist, where the player asks for it.
+    /// </summary>
+    async void RequestPage_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ModRow { RequestPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
     }
 
     /// <summary>
