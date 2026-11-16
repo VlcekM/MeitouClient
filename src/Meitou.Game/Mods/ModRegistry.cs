@@ -56,6 +56,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
     /// <summary>
+    /// The wear rules, in registration order.
+    /// </summary>
+    public List<Data.Gameplay.WearRule> WearRules { get; } = [];
+    /// <summary>
     /// The medical meters, in registration order.
     /// </summary>
     public List<ModMeter> Meters { get; } = [];
@@ -185,6 +189,7 @@ sealed class ModRegistry
             Simulation.ItemUses[record] = Guarded(mod, record, handler);
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
+        foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
         foreach (var skill in r.Skills) ModSkills.Add(skill);
         Ui.AddRange(r.Ui);

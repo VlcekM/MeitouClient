@@ -46,11 +46,13 @@ public sealed class ItemInstance
     /// <summary>
     /// Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer, no limit).
     /// </summary>
-    public bool WearableBy(string? race, bool animal = false) => Wearable(WornOnlyBy, WornNeverBy, race, animal);
+    public bool WearableBy(string? race, bool animal = false) => Wearable(WornOnlyBy, WornNeverBy, race, animal, Record);
     /// <summary>
-    /// Whether a wearer of <paramref name="race"/> passes the only and never lists (<see cref="RaceLimiter.Allows"/>).
+    /// Whether a wearer of <paramref name="race"/> passes the only and never lists and the mods' wear rules for the item record
+    /// <paramref name="item"/> (<see cref="RaceLimiter.Allows(string[], string[], string?, bool, string?)"/>).
     /// </summary>
-    internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => RaceLimiter.Allows(only, never, race, animal);
+    internal static bool Wearable(string[] only, string[] never, string? race, bool animal, string item) =>
+        RaceLimiter.Allows(only, never, race, animal, item);
     /// <summary>
     /// Shackles' lock (level = ARMOUR <c>lock level</c> clamped 0..100, its <c>hardness</c>, locked when made: <c>FUN_14089a440</c>); null for other
     /// items.
