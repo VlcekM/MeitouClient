@@ -76,6 +76,11 @@ sealed class WorldPicking(PlayerInterface player)
     const float FaceMargin = 1;
 
     /// <summary>
+    /// The open amount from which a door's leaf no longer ends a move click's ray: half open (engine choice).
+    /// </summary>
+    const float DoorOpenPast = 0.5f;
+
+    /// <summary>
     /// The slope past which a collision face is no ground: the navigation slope limit, as the floor pick's.
     /// </summary>
     static readonly float SteepCos = MathF.Cos(40 * MathF.PI / 180);
@@ -153,7 +158,7 @@ sealed class WorldPicking(PlayerInterface player)
             // inside, and a click on a closed house's wall goes in.
             if (candidate.Plot || HasRooms?.Invoke(b.Key) == true || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
 
-            var mesh = CollisionMeshOf(b.BuildingId);
+            var mesh = ClosedMeshOf(b.BuildingId, b.Key);
             float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
             var hull = candidate.Footprint.Place(b.Position, b.Rotation);
             if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax) is null)
@@ -176,7 +181,7 @@ sealed class WorldPicking(PlayerInterface player)
             if (HasRooms?.Invoke(site.Id) == true || player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
             if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
 
-            var mesh = CollisionMeshOf(site.Record);
+            var mesh = ClosedMeshOf(site.Record, site.Id);
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
             var hull = footprint.Place(site.Position, yaw);
             float y = site.Position.Y;
@@ -185,6 +190,23 @@ sealed class WorldPicking(PlayerInterface player)
             if (RayMeshHit((origin, direction), mesh, site.Position, yaw) is { } hit && hit.T < nearest.T)
                 nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
         }
+    }
+
+    /// <summary>
+    /// The collision triangles of building record <paramref name="record"/> placed as <paramref name="placement"/>, without the parts of its doors
+    /// that are open (an open gate's leaves): a click through an open gateway goes to the ground beyond it.
+    /// </summary>
+    IReadOnlyList<(Vector3[] Vertices, int[] Indices)> ClosedMeshOf(string record, string placement)
+    {
+        var mesh = CollisionMeshOf(record);
+        var doors = CollisionDoorsOf(record);
+        if (doors.Count != mesh.Count || !doors.Any(d => d >= 0)) return mesh;
+
+        var open = player.Session.CurrentSnapshot.Doors;
+        bool IsOpen(int door) => door >= 0 && open.TryGetValue((placement, door), out var view) && view.Open >= DoorOpenPast;
+        if (!doors.Any(IsOpen)) return mesh;
+
+        return [.. mesh.Where((_, i) => !IsOpen(doors[i]))];
     }
 
     /// <summary>
@@ -561,6 +583,11 @@ sealed class WorldPicking(PlayerInterface player)
     readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
     /// <summary>
+    /// Each shape of <see cref="_collisionMeshes"/>' meshes, by record: the index of the door it is a part of, -1 for none.
+    /// </summary>
+    readonly Dictionary<string, IReadOnlyList<int>> _collisionDoors = [];
+
+    /// <summary>
     /// The collision triangles of building record <paramref name="record"/>, read once (empty without collision files).
     /// </summary>
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
@@ -570,6 +597,18 @@ sealed class WorldPicking(PlayerInterface player)
         var mesh = player.Build.Services?.Placement.CollisionMesh(record) ?? [];
         _collisionMeshes[record] = mesh;
         return mesh;
+    }
+
+    /// <summary>
+    /// The door index of each of <see cref="CollisionMeshOf"/>'s shapes for building record <paramref name="record"/>, read once.
+    /// </summary>
+    IReadOnlyList<int> CollisionDoorsOf(string record)
+    {
+        if (_collisionDoors.TryGetValue(record, out var known)) return known;
+
+        var doors = player.Build.Services?.Placement.CollisionMeshDoors(record) ?? [];
+        _collisionDoors[record] = doors;
+        return doors;
     }
 
     /// <summary>

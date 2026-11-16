@@ -395,6 +395,7 @@ sealed class BuildingSync(GameHost host)
             Ground = host.ActiveGround,
             Footprint = footprints.Of,
             CollisionMesh = footprints.Mesh,
+            CollisionMeshDoors = footprints.MeshDoors,
             CollisionFile = footprints.File,
             Plot = footprints.Plot,
             PartBounds = footprints.PartBounds,

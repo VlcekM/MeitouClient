@@ -93,6 +93,10 @@ public sealed class PlacementServices
     /// </summary>
     public Func<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> CollisionMesh { get; init; } = _ => [];
     /// <summary>
+    /// For each shape of <see cref="CollisionMesh"/>, in order: the index of the door it is a part of, -1 for none.
+    /// </summary>
+    public Func<string, IReadOnlyList<int>> CollisionMeshDoors { get; init; } = _ => [];
+    /// <summary>
     /// The triangles of a collision file by its record path (an item's <c>physics file</c>), in its own space; empty when it is not in the install.
     /// </summary>
     public Func<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> CollisionFile { get; init; } = _ => [];

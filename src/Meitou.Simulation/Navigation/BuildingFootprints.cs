@@ -303,10 +303,23 @@ public sealed class BuildingFootprints
     /// The triangles of a building record's collision shapes in its own space (scale applied, as the hull is): what a click on a building is tested
     /// against after its hull. Read from the cache on demand, not kept; empty without a database record or collision files.
     /// </summary>
-    public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh(string buildingId)
+    public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh(string buildingId) =>
+        [.. MeshShapes(buildingId).Select(s => (s.Vertices, s.Indices))];
+
+    /// <summary>
+    /// Each shape of <see cref="Mesh"/>, in the same order, with the index of the door whose part it belongs to in the building's <c>doors</c>
+    /// list (closed placement); -1 for a shape of any other part.
+    /// </summary>
+    public IReadOnlyList<int> MeshDoors(string buildingId) => [.. MeshShapes(buildingId).Select(s => s.Door)];
+
+    /// <summary>
+    /// The shapes behind <see cref="Mesh"/> and <see cref="MeshDoors"/>.
+    /// </summary>
+    List<(Vector3[] Vertices, int[] Indices, int Door)> MeshShapes(string buildingId)
     {
-        var result = new List<(Vector3[], int[])>();
+        var result = new List<(Vector3[], int[], int)>();
         if (_db.Find(buildingId) is not { } building) return result;
+
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
         foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
@@ -314,7 +327,7 @@ public sealed class BuildingFootprints
             string path = mesh.Source.GetPath("xml collision");
             if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
-                result.Add(([.. shape.Vertices.Select(v => v * scale)], shape.Indices));
+                result.Add(([.. shape.Vertices.Select(v => v * scale)], shape.Indices, mesh.DoorIndex));
         }
         return result;
     }
