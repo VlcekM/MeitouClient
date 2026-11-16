@@ -41,6 +41,19 @@ sealed class UseableLines(PlayerInterface player)
     public Func<string, MachineData?>? MachineData { get; set; }
 
     /// <summary>
+    /// Adds <c>[EMPTY]</c> in Title (the uppercased translation of "Empty" in brackets, no value) when the selected UseableStuff, StorageBuilding
+    /// or LightBuilding has an inventory with no items (slot 40 section 3, after <c>Town:</c>).
+    /// </summary>
+    internal void AddEmptyLine(BuildingSelection.SelectedBuilding focus, string? record, List<PlayerInterface.HudLine> state)
+    {
+        if (DataOf(record) is not { } data || !Useable(data)) return;
+        if ((player.Production.Machine(focus.SiteId) ?? MachineOf(focus))?.Storage is not { Items.Count: 0 }) return;
+
+        string caption = $"[{Loc.Tr("Empty").ToUpper(System.Globalization.CultureInfo.CurrentCulture)}]";
+        state.Add(new(caption, "", PlayerInterface.TitleColour));
+    }
+
+    /// <summary>
     /// Adds <c>Training:</c> with the dummy's stat (the editor's stat name, <c>FUN_140888440</c>) when <paramref name="record"/> is a training dummy
     /// (function 7, whatever its stat).
     /// </summary>

@@ -702,10 +702,11 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   (1.0 here, 0.3 for the public toggle, 0.4 for For sale) is the button's share of the row, at its right; at 1.0 the key is not shown
   (**Observed**: the owner's screenshots of a Defensive Gate III and a bought town house, `HudLine.ButtonWidth` in Meitou). Meitou engine choices: a moving door reads by where
   it heads (opening: open, closing: closed), and an open door that wants its lock reads `Locked` with "The door will lock when it closes.".
-- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`): 3 `Town:`, `Training:` (function 7, any `stat used`: the
+- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`): 3 `Town:`, then with an inventory (+0x430) holding no items (its count +0x18 is 0,
+  `FUN_14004a0cf`) `[EMPTY]` in Title `#492620` (the uppercased translation of "Empty" in brackets, empty value; **Observed** decompile), `Training:` (function 7, any `stat used`: the
   label `Training:` with the editor stat name `FUN_140888440` of +0x3f8 appended, no separator, as the label of an empty-valued line; **Verified**
   decompile; Meitou puts a space between), `Cost to use:`
-  `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`, `Empty`; 6 `Healing bonus:`
+  `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
   `x{1,num}` (beds), `Max Skill Level:` (training); 0xf `Money:`. Turrets, machines, generators and batteries have their own lines
   (`FUN_14030d620`, `FUN_140300090`, `FUN_140307bf0` ...: Working / No power / Out of resource / Output full, power, workers, fuel).
   A town bed (**Observed**, original-game screenshot of a Squin bar): a left click selects the bed itself, not the bar; panel:
