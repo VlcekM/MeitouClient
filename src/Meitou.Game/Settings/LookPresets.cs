@@ -128,13 +128,13 @@ sealed class LookPresets(SettingsMenu menu)
     #region Setting keys
 
     /// <summary>
-    /// The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade and the
+    /// The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the
     /// <see cref="PerformanceSwitches"/> are quality switches) and the look tabs' sliders.
     /// </summary>
     internal static IEnumerable<string> LookKeys(IEnumerable<string> switchLabels, IEnumerable<string> sliderLabels)
     {
         var switchKeys = switchLabels
-            .Where(label => label != WorldFrame.FifthCascadeSwitch && !PerformanceSwitches.Contains(label))
+            .Where(label => !PerformanceSwitches.Contains(label))
             .Where(label => SettingsMenu.GraphicsPages.Contains(SettingsMenu.GraphicsSection(label, true)))
             .Select(SettingsMenu.SwitchKey);
         var sliderKeys = sliderLabels.Where(label => SettingsMenu.Section(label) is not ("Display" or "Advanced") && IsLook(label, false));
@@ -315,7 +315,8 @@ sealed class LookPresets(SettingsMenu menu)
         "Ambient occlusion" or "Ground-truth occlusion" or WorldFrame.GtaoQualitySlider or "Lamp shadows" or "Light shafts" or "Water"
             or "Ground parallax" or "Ground displacement (tessellation)" or "Ground displacement distance (m)" or "Ground parallax distance (m)"
             or WorldFrame.ShadowMapSlider
-            or "Shadow filter 0-2 (Meitou; 0 low-end)" or "Shadow cascade 5 (Meitou)" or "Landmark distance (Meitou)" or "Distant towns (zones)"
+            or "Shadow filter 0-2 (Meitou; 0 low-end)" or WorldFrame.ShadowCascadesSlider or "Landmark distance (Meitou)" or "Distant towns (zones)"
+            or WorldFrame.MaterialDistanceSlider
             or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or "Medium foliage range" or "Terrain detail: error px (less = finer)"
             or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
             or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider or "Ground trails"

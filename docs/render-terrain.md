@@ -21,7 +21,9 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
 **Layer arrays** (`TerrainTextures`), two tiers per texture pair (a BC3 diffuse and a BC1 normal):
 - **Far arrays** hold every pair of the biomes within the material distance (`--material-distance`, default 30000; the "Terrain material distance" row, live: the draw and the streamer read it each frame) at a quarter of the layer size (512² at 2048, about 0.5 MB a pair),
   at a fixed index per pair, at most 256 (the array layers every Vulkan device has; a pair past that stays in ground colour). The R8 height array
-  and the relief texture use the same index. A biome is drawn once all its pairs are in.
+  and the relief texture use the same index. A biome is drawn once all its pairs are in. The arrays have a slot for every pair of the world up to that
+  cap whatever the distance (`FarSlots`, code reading), so the distance sets what is loaded and shaded, not the video memory. The quality tiers set it
+  (15000 Low, 20000 Medium, 30000 High, 45000 Ultra and Extreme; [native-ui](native-ui.md) "Settings").
 - **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when
   the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink, and a refused size is not asked again. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
   ([render-objects.md](render-objects.md#kept-points)), least recently needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.

@@ -142,7 +142,8 @@ transparent water/particles require explicit exclusion/compositing rules. The wa
 water plane fades out of the occlusion over the water's last 2 units along the ray, as the water's edge does
 ([water](render-water.md) "Edges"). Passes rebuild view depth through `DepthConvention.Glsl` (`depthViewZ`, `depthIsSky`):
 reversed on Vulkan, conventional on Metal; no shader hand-writes the mapping.
-SSAO: radius 6 units or 3 % of the distance, fade from 1600 to 6600 units.
+SSAO: radius 6 units or 3 % of the distance, fade from 1600 to 6600 units, 8, 12 or 20 taps by the ambient occlusion quality (`PostOptions.SsaoTaps`,
+the same row as GTAO's, 12 at the default; the taps are a loop over the `uSsaoTaps` uniform, so one program serves all three, on Vulkan and Metal).
 `layer-merge`, `fog-half`, `shafts-half`, `layers-lean` combine shafts apply, placed fog and SSAO,
 using reduced targets plus depth-aware reconstruction/mask fallback. A texel that does not fit
 must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shafts](render-shafts.md).
@@ -189,7 +190,7 @@ The Display page's `HDR output` row (the launcher and the in-game menu), `--hdr`
 Limits: no HDR metadata; pictures presented without the interface layer (the first loading screen) show gamma values as PQ. **Observed** (2026-11-12, AOC CQ27G2S over DisplayPort, Windows HDR on, RTX 4090): the swapchain takes `A2B10G10R10` HDR10 and the picture shows.
 ### GTAO
 
-The `gtao` switch (`PostOptions.Gtao`, off by default, off in every preset) replaces the SSAO gather while `ao` is on; with it off `Ssao` runs unchanged.
+The `gtao` switch (`PostOptions.Gtao`, off by default, on from the High tier) replaces the SSAO gather while `ao` is on; with it off `Ssao` runs unchanged.
 Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward scene. Own programs (`GtaoShaders`, `PostProcess.Gtao.cs`); Vulkan only, the Metal chain ignores the switch.
 
 - **Gather** (`Gather`): per pixel, slices through the view ray, each searching both ways along the screen for the horizon, with the closed-form integral.
@@ -204,7 +205,7 @@ Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward 
 - **Apply** (`Apply`): full size, after the merged layers: the merged pass's factor is grey, so `layer-merge` runs with its occlusion off and this pass multiplies over it,
   which is the old order (shafts, fog, occlusion). Four nearest occlusion texels by depth, none near: open. Then KenshiNative's curve (power 1.6, strength 0.55) and the multi-bounce fit
   per channel of the surface target's albedo (`GtaoAlbedo` where none was written). A caller without `ApplySsao` gets the grey blurred occlusion in the composite.
-- **Quality** (`--gtao-quality`, Tab slider): 0 half size, 2 x 4; 1 half size, 3 x 6 (default); 2 render size, 3 x 6. Full size remakes the occlusion's targets at that size.
+- **Quality** (`--gtao-quality`, the "Ambient occlusion quality" slider, also the SSAO's taps; GTAO is Vulkan-only): 0 half size, 2 x 4; 1 half size, 3 x 6 (default); 2 render size, 3 x 6. Full size remakes the occlusion's targets at that size.
   With a temporal upscaler the noise moves per frame.
 
 Shading normals may darken normal-mapped ground
