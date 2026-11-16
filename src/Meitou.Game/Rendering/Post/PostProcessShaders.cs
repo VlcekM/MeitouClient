@@ -69,6 +69,7 @@ static class PostProcessShaders
         uniform vec2 uNearFar;  // of the scene depth
         uniform vec2 uSize;     // full-resolution size
         uniform float uRadius, uStrength, uFadeStart, uFadeEnd;
+        uniform int uSsaoTaps;               // the occlusion's taps per pixel (PostOptions.SsaoTaps)
         uniform vec3 uRight, uUp, uBack;   // the camera's axes in the world (view space to world offsets)
         uniform vec3 uSsaoEye;
         uniform float uWaterY;               // the water plane's height (float min: no water)
@@ -188,7 +189,7 @@ static class PostProcessShaders
             float bias = 0.5 * radius + 4.0 * uTan.y * z / uSize.y;
             float spin = ign(gl_FragCoord.xy) * 6.2831853;
             float sum = 0.0;
-            const int N = 12;
+            int N = max(uSsaoTaps, 1);
             for (int i = 0; i < N; i++)
             {
                 float t = (float(i) + 0.5) / float(N);

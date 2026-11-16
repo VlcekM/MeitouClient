@@ -17,8 +17,8 @@ walking each column once. Distances and projection must match the scene depth's 
 Prepared depth/shadow/global constants and barriers precede compute/apply. Half-resolution
 scene-layer integration needs depth-aware fallback at discontinuities.
 
-**Quality** (`Light shafts quality`, High by default): High uses 160 cells across, 64 depth
-slices and 2 shadow samples per cell; Medium 128 x 48 x 2; Low 96 x 32 x 1. The apply pass stays
+**Quality** (`Light shafts quality`, High by default): Ultra uses 192 cells across, 80 depth slices and 3 shadow samples per cell
+(about 2.7 times High's samples in the injection); High 160 x 64 x 2; Medium 128 x 48 x 2; Low 96 x 32 x 1. The apply pass stays
 at the render size; the setting changes the froxel grid and sample count, not the effect's
 strength. The Low quality preset turns the shafts off (the `Light shafts` switch) rather than
 relying on the low tier. `--ab shafts-half` is a separate experiment for the merged apply pass,

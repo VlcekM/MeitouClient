@@ -62,12 +62,20 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.WaterReflectionSlider, 0, 1, 4),
         new(WorldFrame.ReflectionRangeSlider, float.NaN, 1, 6),
 
+        // The samples are 4x by default (docs/render-water.md). Low draws no reflection, but a player may turn it on: 2x, as Medium.
+        new(WorldFrame.ReflectionSamplesSlider, 1, 1, float.NaN, High: 2),
+
         // Low's shadow distance is the slider's left end: shadows off.
         new(WorldFrame.ShadowDistanceSlider, float.NegativeInfinity, 0.6f, 1.5f, Mode: "Shadows"),
         new(WorldFrame.ShadowMapSlider, float.NaN, 1, 2),
         new(WorldFrame.ShadowFilterSlider, 0, 1, 2),
-        new(WorldFrame.ShaftQualitySlider, 0, 1, 2, High: 2),
-        new(WorldFrame.GtaoQualitySlider, 0, 0, 2, High: 1),
+
+        // The count is Meitou's five at High and Ultra; Low draws no shadows and keeps the game's four.
+        new(WorldFrame.ShadowCascadesSlider, 4, 4, 5, High: 5, Extreme: 6),
+        new(WorldFrame.ShaftQualitySlider, 0, 1, 2, High: 2, Extreme: 3),
+
+        // Medium keeps the SSAO's twelve taps (its GTAO is off); High the GTAO's medium quality.
+        new(WorldFrame.GtaoQualitySlider, 0, 1, 2, High: 1),
         new(WorldFrame.ParticleSliders[1], WorldOptions.LowEndParticleDensity, 0.5f, float.NaN),
         new(WorldFrame.FilteringSlider, 0, 2, 4, High: 4),
 
@@ -75,6 +83,9 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.TextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
         new(WorldFrame.GroundDisplaceDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
         new(WorldFrame.GroundParallaxDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
+
+        // The game's 30000 at High; Low is --low-end's. Only the textured shading and its streaming depend on it: the far arrays are made once.
+        new(WorldFrame.MaterialDistanceSlider, WorldOptions.LowEndMaterialDistance, 20000, 45000, High: 30000),
     ];
 
     /// <summary>
@@ -92,7 +103,6 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal static readonly PresetToggle[] PresetToggles =
     [
-        new(WorldFrame.FifthCascadeSwitch, false, false, true),
         new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
         new("Advanced materials", false, true, true, High: true),
@@ -124,10 +134,6 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     static readonly string[] LowOffToggles = [WorldFrame.OutlineRefineSwitch, WorldFrame.RockSmoothingSwitch];
 
-    /// <summary>
-    /// The fifth shadow cascade switch's label.
-    /// </summary>
-    const string FifthCascade = WorldFrame.FifthCascadeSwitch;
 
     /// <summary>
     /// The quality preset choice's hint.
@@ -251,12 +257,10 @@ sealed class QualityTiers(SettingsMenu menu)
     internal int CurrentPreset()
     {
         bool faithful = menu.LookPresets.FaithfulLook;
-        var cascade = menu.Values.Toggles.FirstOrDefault(t => t.Label == FifthCascade);
         for (int preset = 0; preset < CustomPreset; preset++)
         {
             if (PresetPairs().All(x => SameSliderPlace(x.Preset, x.Slider, preset))
-                && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTargetHere(x.Preset, x.Default, preset)))
-                && (cascade is null || cascade.Get() == CascadeFor(preset)))
+                && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTargetHere(x.Preset, x.Default, preset))))
             {
                 return preset;
             }
@@ -359,15 +363,6 @@ sealed class QualityTiers(SettingsMenu menu)
             .Where(x => x.Index >= 0)
             .Select(x => (x.p, menu.Values.Toggles[x.Index], menu.ToggleDefaults[x.Index]));
 
-    /// <summary>
-    /// The fifth shadow cascade's state at <paramref name="preset"/>: off at Low and Medium, on at Ultra and Extreme, else its start default.
-    /// </summary>
-    bool CascadeFor(int preset) => preset switch
-    {
-        LowPreset or MediumPreset => false,
-        UltraPreset or ExtremePreset => true,
-        _ => menu.ToggleDefaults[menu.Values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)],
-    };
 
     /// <summary>
     /// Applies <paramref name="preset"/> (nothing for Custom) with the Low cut following it, and says so in the notice.
@@ -393,7 +388,7 @@ sealed class QualityTiers(SettingsMenu menu)
     }
 
     /// <summary>
-    /// Sets a tier's switches (Meitou look), Low's other cuts and render scale, High's render scale, the preset sliders and the fifth cascade.
+    /// Sets a tier's switches (Meitou look), Low's other cuts and render scale, High's render scale and the preset sliders.
     /// </summary>
     void ApplyTier(int preset)
     {
@@ -434,8 +429,6 @@ sealed class QualityTiers(SettingsMenu menu)
 
         if (preset == HighPreset) SetHighRenderScale();
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
-        if (menu.Values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset))
-            cascade.Set(CascadeFor(preset));
     }
 
     /// <summary>

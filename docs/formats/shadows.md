@@ -35,7 +35,7 @@ translucency, not ambient/environment.
 
 RTW mode2 uses separate warp/receiver pipeline; not reproduced as CSM. Settings mode/quality/
 range and original restart semantics are in tables/[settings](settings.md). Meitou soft shadows,
-minimum-radius impostor filtering, fifth cascade, fog cap and terrain-horizon sweep are engine
+minimum-radius impostor filtering, the cascade count (3 to 6, five by default), fog cap and terrain-horizon sweep are engine
 features; preserve Faithful formulas and independent switches. [Lighting](lighting.md).
 
 ### Settings (Verified: exe settings loader, writer and options screen; `settings.cfg`)

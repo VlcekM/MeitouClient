@@ -11,7 +11,7 @@ namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The Meitou shadows (the <c>shadows</c> enhancement, docs/formats/shadows.md "Meitou shadows"): the same cascade array and caster draws as the
-/// game's CSM, but five cascades (<see cref="MeitouCascades"/>) fitted over the visible depths (<see cref="MeitouShadowFit"/>), drawn on a staggered
+/// game's CSM, but three to six cascades (<see cref="MeitouCascades"/>, five by default) fitted over the visible depths (<see cref="MeitouShadowFit"/>), drawn on a staggered
 /// schedule (<see cref="Cadence"/>: 1, 2, 4, 16, 32 frames with five cascades, each kept with the matrices it was drawn with), a soft receiver with
 /// cascade blending and a fade at the range's end, contact-hardening penumbrae from a half-resolution blocker map, and the terrain's own shadow over
 /// the whole world beyond the range (<see cref="TerrainShadowMap"/>), and the landmarks' beyond it however far they are (the landmark map).
@@ -104,8 +104,16 @@ public sealed unsafe partial class ShadowPass
     public int MeitouFrames { get; private set; }
 
     /// <summary>
-    /// The Meitou shadows' number of cascades (1 to <see cref="ShadowSettings.MaxCascades"/>; <see cref="MeitouShadowFit.DefaultCascades"/>). The
-    /// Faithful CSM keeps the game's <see cref="ShadowSettings.Cascades"/>.
+    /// The fewest and most cascades the settings offer. At most six: the traced sun's depth map takes the receiver blocks' top three slots
+    /// (<see cref="SunMapSlot"/>, 5 to 7), and it is on only while the cascades are the <see cref="HandoffCascades"/> of the traced near, cascades far
+    /// mode, so cascades 0 to 5 never share a slot with it.
+    /// </summary>
+    public const int MinCascadeSetting = 3, MaxCascadeSetting = 6;
+
+    /// <summary>
+    /// The Meitou shadows' number of cascades (1 to <see cref="ShadowSettings.MaxCascades"/>; <see cref="MeitouShadowFit.DefaultCascades"/>; the
+    /// settings offer <see cref="MinCascadeSetting"/> to <see cref="MaxCascadeSetting"/>). The Faithful CSM keeps the game's
+    /// <see cref="ShadowSettings.Cascades"/>.
     /// </summary>
     public int MeitouCascades
     {
@@ -194,9 +202,17 @@ public sealed unsafe partial class ShadowPass
     /// <summary>
     /// Frames between the redraws of cascade <paramref name="i"/> of <paramref name="count"/> when nothing makes it stale (Meitou): the nearest every
     /// frame, the last three every 4th, 16th and 32nd frame (a far cascade's casters hardly move and its texels are big; 1,2,4,4 was the schedule for
-    /// four before 2026-10-08), any between every 2nd (with five: 1, 2, 4, 16, 32). <see cref="Phase"/> puts the redraws on different frames.
+    /// four before 2026-10-08), any between every 2nd (with five: 1, 2, 4, 16, 32). The second cascade is never kept longer than 4 frames: with three
+    /// cascades it is the middle one and would otherwise wait 16, while the characters it shadows move (1, 4, 32). <see cref="Phase"/> puts the
+    /// redraws on different frames.
     /// </summary>
-    public static int Cadence(int i, int count) => i == 0 ? 1 : (count - 1 - i) switch { 0 => 32, 1 => 16, 2 => 4, _ => 2 };
+    public static int Cadence(int i, int count)
+    {
+        if (i == 0) return 1;
+
+        int cadence = (count - 1 - i) switch { 0 => 32, 1 => 16, 2 => 4, _ => 2 };
+        return i == 1 ? Math.Min(cadence, 4) : cadence;
+    }
 
     /// <summary>
     /// The frame (modulo its <see cref="Cadence"/>) on which each of <paramref name="count"/> cascades is redrawn: nearest first, each takes the

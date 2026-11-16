@@ -7,8 +7,11 @@ rules: [formats/shadows.md](formats/shadows.md). Engine API: [renderer-native](r
 
 Faithful reproduces researched cascade fits/splits/casters/receiver. Meitou fits useful camera
 ranges, stable grids and soft filtering, plus terrain-horizon shadow beyond local caster range.
-Shadow-quality default2 uses4096²; Tab supports1024/2048/4096. Cascade arrays include a fifth
-Meitou cascade; consumers must use current layer count/splits, not assume four tiles everywhere.
+Shadow-quality default2 uses4096²; Tab supports1024/2048/4096. The Meitou cascade count is the "Shadow cascades" row, 3 to 6, five
+by default (`ShadowPass.MeitouCascades`; the game's CSM keeps four); consumers must use current layer count/splits, not assume four tiles
+everywhere. Past four, `MeitouShadowFit.Subdivided` puts the extra cascades into the second slice. The cap of six keeps cascades 0 to 5 off the
+traced sun's map, which takes receiver slots 5 to 7 (`SunMapSlot`) only while the cascades are the four of the traced near, cascades far
+mode (code reading; the traced sun alone draws none).
 Depth-array views, samplers, receiver blocks and frame-global publication must agree.
 Shadow maps keep conventional depth (cleared to 1, compared Less), unlike the scene's reversed one; casters write the
 cascade matrix's 0..1 depth as `gl_FragCoord.z` on both backends (no depth scale; `uShadowBias.w` is written 1, unused).
@@ -33,7 +36,9 @@ up to 2 x radius x tilt too deep, beyond the bias.
 
 ## Scheduling and casters
 
-Near cascades refresh rapidly; far cascades cache/stagger according to camera/sun changes.
+Near cascades refresh rapidly; far cascades cache/stagger according to camera/sun changes (`ShadowPass.Cadence`: 1, 4, 16, 32 frames with
+four cascades; 1, 2, 4, 16, 32 with five; three have 1, 4, 32, the second capped at 4 frames because with three it is the mid-range
+cascade the characters stand in).
 `shadow-spread` budgets one due far cascade per frame; invalidation must not reuse an incompatible
 matrix. GPU culls and CPU zone/group work lists are per cascade. `shadow-zone-box` excludes
 nonintersecting zone bounds before building lists. Record secondaries in stable caster order.
@@ -152,7 +157,7 @@ first depth to `msHandoff`), the colour taking the cascades' share; past 2000 no
 sun map stays for what draws no traced pixel nearer than cascade 0 (shafts and lit dust switch at its first depth, `msVolumeServes`; `kenshiShadowMeitou` blends map into
 cascades over the band; a traced receiver's other share there reads the cascades alone, `msCascadesOnly`). A set shadow range under 4000 traces every depth
 as without the switch (the set range: the fog cap moves the effective one each frame). Cascade 0 (1600 to about 2800 at range 10000) is redrawn every frame, cascade 1
-every 4th; in a flight only cascade 0 is published, as with the cascades. A change of layout (the switch, 4 or 5 cascades, back from the rays) drops the stored
+every 4th; in a flight only cascade 0 is published, as with the cascades. A change of layout (the switch, a new cascade count, back from the rays) drops the stored
 cascades, so every one is drawn that frame instead of one far cascade a frame over stale layers (`ForgetCascades`).
 
 ## Soft grazing sun

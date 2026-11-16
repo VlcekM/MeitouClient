@@ -70,6 +70,11 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
             Contact;
 
         /// <summary>
+        /// The taps per pixel (<see cref="PostOptions.SsaoTaps"/>).
+        /// </summary>
+        public readonly UniformHandle Taps;
+
+        /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
         public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
@@ -79,7 +84,7 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
-            Contact = P.Uniform("uContact");
+            (Contact, Taps) = (P.Uniform("uContact"), P.Uniform("uSsaoTaps"));
         }
     }
 
@@ -177,6 +182,7 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         s.P.Set(s.Size, (float)post.RenderWidth, (float)post.RenderHeight);
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
         s.P.Set(s.Strength, PostOptions.SsaoStrength);
+        s.P.Set(s.Taps, post.Options.SsaoTaps);
 
         // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
         s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);

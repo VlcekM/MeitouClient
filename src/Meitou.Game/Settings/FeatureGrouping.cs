@@ -34,7 +34,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
         // Lighting: the shadows first (the sun's switch heads them; the lamps' and the contact shadows are inside)
         new("Shadows", WorldFrame.SunShadowsChoice, [SettingsMenu.TechniqueKey(WorldFrame.SunShadowsChoice), WorldFrame.TracedGrassSwitch,
-            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.FifthCascadeSwitch,
+            WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider, WorldFrame.ShadowCascadesSlider,
             "Contact shadows", "Lamp shadows"]),
         new("Soft grazing sun", "Soft grazing sun", []),
         new("Indirect light", "Indirect light", [SettingsMenu.TechniqueKey(WorldFrame.GiChoice), "Indoor GI", WorldFrame.GiRelocateSwitch,

@@ -186,7 +186,7 @@ sealed class PostComposite : IDisposable
     /// What <see cref="ApplyScene"/> and <see cref="Draw"/> need from the frame's camera.
     /// </summary>
     public readonly record struct SceneInputs(Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect, float Near, float Far,
-        bool CharactersDrawn = true, float? WaterHeight = null);
+        bool CharactersDrawn = true, float? WaterHeight = null, int SsaoTaps = PostOptions.DefaultSsaoTaps);
 
     /// <summary>
     /// Compiles the composite, exposure and fullscreen pass programs and looks up their uniforms.
@@ -596,6 +596,7 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Size, (float)scene.Desc.Width, (float)scene.Desc.Height);
         s.P.Set(s.Radius, PostOptions.SsaoRadius);
         s.P.Set(s.Strength, PostOptions.SsaoStrength);
+        s.P.Set(s.Taps, i.SsaoTaps);
         s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);
         s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
         var r = i.View with { M41 = 0, M42 = 0, M43 = 0 };
@@ -1061,10 +1062,10 @@ sealed class PostComposite : IDisposable
         public readonly SamplerSlot Depth, Mask;
         /// <summary>
         /// The program's uniforms <c>uTan</c>, <c>uNearFar</c>, <c>uSize</c>, <c>uRadius</c>, <c>uStrength</c>, <c>uFadeStart</c>, <c>uFadeEnd</c>,
-        /// <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uSsaoEye</c>, <c>uCharacterOccluder</c>, <c>uWaterY</c>, <c>uContact</c>.
+        /// <c>uRight</c>, <c>uUp</c>, <c>uBack</c>, <c>uSsaoEye</c>, <c>uCharacterOccluder</c>, <c>uWaterY</c>, <c>uContact</c>, <c>uSsaoTaps</c>.
         /// </summary>
         public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY,
-            Contact;
+            Contact, Taps;
         /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
@@ -1075,7 +1076,7 @@ sealed class PostComposite : IDisposable
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
-            Contact = P.Uniform("uContact");
+            (Contact, Taps) = (P.Uniform("uContact"), P.Uniform("uSsaoTaps"));
         }
     }
 

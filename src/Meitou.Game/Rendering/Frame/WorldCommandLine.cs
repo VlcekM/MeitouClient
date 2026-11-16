@@ -100,7 +100,7 @@ static class WorldCommandLine
           --render-scale <0.25..1|native|ultra-quality|quality|balanced|performance|ultra>   render size per axis (Meitou default 0.67, Quality, with an upscaler, else 1)
           --no-fxaa                the game's FXAA off when no upscaler runs (the game's own FXAA setting, default on)
           --smaa                   SMAA instead of FXAA when no upscaler runs
-          --gtao-quality <0..2>    the gtao switch's budget (default 1): 0 half size, 2 x 4; 1 half size, 3 x 6; 2 render size, 3 x 6
+          --gtao-quality <0..2>    the ambient occlusion's budget (default 1). gtao: 0 half size, 2 x 4; 1 half size, 3 x 6; 2 render size, 3 x 6. SSAO: 8, 12, 20 taps
           --particle-divisor <0|1|2|4>   the weather's alpha and additive particles drawn at 1/n of the render size (0, the default: by sprite size; `--faithful particles` draws them full size)
           --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate, clouds, cache)
           --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)

@@ -54,18 +54,33 @@ rows above its tabs:
 - **Quality**: Low / Medium / High / Ultra / Extreme / Custom, always the tier the settings sit at (`CurrentPreset`; a moved slider
   makes it Custom). Each tier is meant for a class of GPU: Low a GTX 1050 to an RTX 3050, Medium an RTX 3060, High an RTX 3070 to
   4070, Ultra an RTX 4070 Ti to 4080, Extreme above. It sets the distance, foliage, grass, reflection, shadow, particle density,
-  filtering, texture, ground relief quality and depth (20 cm), shaft and GTAO quality sliders, the fifth cascade, and with the
-  Meitou look its switches (`PresetToggles`):
+  filtering, texture, terrain material distance, ground relief quality and depth (20 cm), reflection samples, shadow cascade count,
+  shaft and ambient occlusion quality sliders, and with the Meitou look its switches (`PresetToggles`):
 
   | Switch | Low | Medium | High | Ultra | Extreme |
   |---|---|---|---|---|---|
   | Advanced materials, ground trails, water contact foam, far grass cover | off | on | on | on | on |
   | Reflections, GTAO (quality Medium; High from Ultra) | off | off | on | on | on |
-  | Fifth cascade, rock smoothing, outline refinement | off | off | start default | on | on |
+  | Rock smoothing, outline refinement | off | off | start default | on | on |
   | Hybrid GI, traced sun shadows with far cascades (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
   | Traced grass shadows | off | off | off | off | on |
 
-  Extreme has Ultra's distances: it adds effects, not range. The optional effects (lamp shadows, contact shadows, depth of
+  The sliders that are not multiples of the start default (`PresetSliders`, fixed values; High is pinned):
+
+  | Slider | Low | Medium | High | Ultra | Extreme |
+  |---|---|---|---|---|---|
+  | Terrain material distance | 15000 (`--low-end`'s) | 20000 | 30000 (the game's) | 45000 | 45000 |
+  | Shadow cascades | N/A | 4 | 5 | 5 | 6 |
+  | Light shafts quality | N/A | Medium | High | High | Ultra |
+  | Ambient occlusion quality (GTAO and SSAO) | N/A | Medium | Medium | High | High |
+  | Reflection samples | N/A | 2x | 4x | 4x | 4x |
+
+  N/A: Low draws no shadows, shafts, ambient occlusion or reflection. The tier still stores a value for each, used if the player turns the
+  feature on (`keepAtLow`, the shadow distance or the reflection level): 4 cascades, Low shafts, Low ambient occlusion, 2x samples.
+  Medium's ambient occlusion is the SSAO (its GTAO is off), at the twelve taps it always had. Terrain material distance is a quality row, not part of a look: a look preset file that sets it no longer
+  applies it.
+
+  Extreme has Ultra's distances: it adds effects and quality, not range. The optional effects (lamp shadows, contact shadows, depth of
   field, bloom, metal on buildings, rain drops and puddles) are the player's at every tier. High sets render scale Quality 0.67
   (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS), not counted when reading the tier; Medium, Ultra and Extreme leave
   the scale; distances that follow a switch's side (Draw distances, Shadows) are multiples of that side's mark, so a tier reads
@@ -78,7 +93,7 @@ rows above its tabs:
 Effects with a strength are a switch plus a slider that keeps its value while off (haze, heat haze, tone map and grade, night
 grading, bloom). Bloom and the camera effects are optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn them on. Settings layout 2
 (`UserConfig.Migrate`) drops layout 1's strengths saved at the game's value with their switch off, and a tone map of 0 (the
-clamp is now the switch's off side). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
+clamp is now the switch's off side); layout 4 turns the fifth-cascade switch into the cascade count (on 5, off 4). **Open:** presets and saved values are keyed by labels; renaming one loses them (no stable ids).
 
 Tabs by subject, on two rows: Lighting, Water & reflections, Terrain, Vegetation, Objects, Characters, Sky & weather, Colour,
 Post FX, Interface (`GraphicsSection`); a feature's distances are on its own tab. Lighting starts with the Shadows feature: the
@@ -89,7 +104,7 @@ for an optional one (`Toggle.Optional`), Off | Faithful | Meitou for the sun's s
 them in one saved choice (`WorldFrame.ChoiceSliders`), which the menu shows as the master switch and a Technique row under it
 (`SettingsMenu.Techniques`: soft cascades or ray traced; SSAO or GTAO; probes or probes and cache); turning the effect back on
 returns to the technique last used. A row shows only while it acts (`RowShown`): an effect's settings while the effect is on, a
-technique's with that technique (map size, filter and fifth cascade with the cascades; grass shadows with the traced sun; contact
+technique's with that technique (map size, filter and cascade count with the cascades; grass shadows with the traced sun; contact
 shadows with the cascades; the cache's parts with the hybrid GI; GTAO quality with GTAO). The launcher shows the choices as
 drop-downs and hides by `ShownWhen`. A look row that differs from the preset has a brass name and Reset (a header for anything
 inside); a moved quality row shows as Custom. Named values are drop-downs, amounts sliders with right = more (terrain error

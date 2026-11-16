@@ -141,10 +141,15 @@ public sealed class PostOptions
     public const float ShaftSky = 0.5f;
 
     /// <summary>
-    /// The light shafts' budget: 0 low, 1 medium, 2 high (the Tab panel's slider; high by default). It sets the froxel grid and shadow samples; the
-    /// apply pass stays at the render size (docs/render-shafts.md, "Quality").
+    /// The light shafts' budget: 0 low, 1 medium, 2 high, 3 ultra (the Tab panel's slider; high by default). It sets the froxel grid and shadow
+    /// samples; the apply pass stays at the render size (docs/render-shafts.md, "Quality").
     /// </summary>
     public int ShaftQuality = 2;
+
+    /// <summary>
+    /// The highest <see cref="ShaftQuality"/>.
+    /// </summary>
+    public const int MaxShaftQuality = 3;
 
     /// <summary>
     /// The light shafts' grid: cells across the screen (down follows the aspect), depth slices, shadow samples per cell. Each follows
@@ -154,7 +159,8 @@ public sealed class PostOptions
     {
         0 => 96,
         1 => 128,
-        _ => 160,
+        2 => 160,
+        _ => 192,
     };
 
     /// <summary>
@@ -164,7 +170,8 @@ public sealed class PostOptions
     {
         0 => 32,
         1 => 48,
-        _ => 64,
+        2 => 64,
+        _ => 80,
     };
 
     /// <summary>
@@ -173,8 +180,8 @@ public sealed class PostOptions
     public int ShaftSamples => ShaftQuality switch
     {
         0 => 1,
-        1 => 2,
-        _ => 2,
+        1 or 2 => 2,
+        _ => 3,
     };
 
     /// <summary>
@@ -511,9 +518,20 @@ public sealed class PostOptions
     public bool Gtao;
 
     /// <summary>
-    /// GTAO's budget: 0 low, 1 medium, 2 high (the Tab panel's slider). It sets the slices, the steps and whether the gather runs at the render size.
+    /// The ambient occlusion's budget: 0 low, 1 medium, 2 high (the Tab panel's slider), for either technique. GTAO: the slices, the steps and whether
+    /// the gather runs at the render size; SSAO: the taps (<see cref="SsaoTaps"/>).
     /// </summary>
     public int GtaoQuality = 1;
+
+    /// <summary>
+    /// The SSAO's taps per pixel for <see cref="GtaoQuality"/>: 8, 12 (the original count) and 20, at half size at every level.
+    /// </summary>
+    public int SsaoTaps => GtaoQuality switch { 0 => 8, 1 => DefaultSsaoTaps, _ => 20 };
+
+    /// <summary>
+    /// The SSAO's taps at the medium quality.
+    /// </summary>
+    public const int DefaultSsaoTaps = 12;
 
     /// <summary>
     /// GTAO's slices for <see cref="GtaoQuality"/>.

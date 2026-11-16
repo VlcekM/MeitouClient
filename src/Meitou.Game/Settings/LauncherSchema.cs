@@ -3,6 +3,7 @@ using Meitou.Data.World;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Water;
 using Meitou.Settings;
 
@@ -120,6 +121,7 @@ static class LauncherSchema
         Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with
             { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
         Graphics(WorldFrame.ShadowFilterSlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
+        Graphics(WorldFrame.ShadowCascadesSlider, ShadowPass.MinCascadeSetting, ShadowPass.MaxCascadeSetting, 1, MeitouShadowFit.DefaultCascades),
         Graphics(WorldFrame.HazeStrengthSlider, 0, 3, 0.01f, Enhancements.MeitouHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.HazeDistanceSlider, 10000, 1000000, 1000, 250000) with { Logarithmic = true },
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
@@ -130,7 +132,7 @@ static class LauncherSchema
         Graphics(WorldFrame.ShaftStrengthSlider, 0, 1, 0.05f, new PostOptions().ShaftStrength) with { Format = "0.00" },
         Graphics(WorldFrame.ShaftAirSlider, 0, 4, 0.05f, 1) with { Format = "0.00" },
         Multiplier(WorldFrame.ShaftAirDawnSlider, 0, 6, 1) with { Step = 0.1f, Format = "0.0" },
-        Graphics(WorldFrame.ShaftQualitySlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
+        Graphics(WorldFrame.ShaftQualitySlider, 0, PostOptions.MaxShaftQuality, 1, 2) with { Labels = [.. LowMediumHigh, "Ultra"] },
         Graphics(WorldFrame.GtaoQualitySlider, 0, 2, 1, 1) with { Labels = LowMediumHigh },
         // Effects
         Graphics(WorldFrame.ParticleSliders[0], 0, 4, 1, 3) with
@@ -240,7 +242,7 @@ static class LauncherSchema
         foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null)
                      .Where(e => !LookPresets.HiddenSwitch(e.Name) && !WorldFrame.ChoiceDrivenSwitches.Contains(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
-        yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
+
         // The hybrid GI's parts (--gi-hybrid), on at start.
         yield return Switch(WorldFrame.GiRelocateSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.GiCloudShadowsSwitch, "Off", "On", true);

@@ -484,7 +484,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// <summary>
     /// The scene inputs the composite reads: the camera, projection, characters and water.
     /// </summary>
-    PostComposite.SceneInputs Inputs => new(_eye, _view, _fov, _aspect, _nearPlane, _farPlane, CharactersDrawn, WaterHeight);
+    PostComposite.SceneInputs Inputs => new(_eye, _view, _fov, _aspect, _nearPlane, _farPlane, CharactersDrawn, WaterHeight, Options.SsaoTaps);
 
     /// <summary>
     /// The seconds since the last call, for the exposure adaptation.
