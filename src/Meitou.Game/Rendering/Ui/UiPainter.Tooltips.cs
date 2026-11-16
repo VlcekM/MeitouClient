@@ -59,8 +59,28 @@ public sealed partial class UiPainter
                 ? template.Descendants("Property").FirstOrDefault(p => (string?)p.Attribute("key") == "FontName")?.Attribute("value")?.Value
                 : null)
             ?? "Kenshi_StandardFont_Medium";
-        float wrap = control.Properties.GetValueOrDefault("WordWrap") == "true" ? UiTextLayout.ContentRect(_resources, control).Width : 0;
+        float wrap = control.Properties.GetValueOrDefault("WordWrap") == "true"
+            ? UiTextLayout.ContentRect(_resources, control, Scale(viewportHeight)).Width
+            : 0;
         return MeasureText(fontName, control.Caption, viewportHeight, wrap, minimumTextPixels).Height;
+    }
+
+    /// <summary>
+    /// <paramref name="control"/>'s text widths as MyGUI's TextBox reports them (<see cref="UiBindings.TextWidths"/>): its text region's width and
+    /// its caption's text size, the widest line rounded up to whole pixels (<c>TextView</c>) plus 2 for an <c>EditText</c>'s cursor, else 1 for a
+    /// <c>TextShadow</c>; and whether the text part stretches with the control's width. Null when its skin has no text part.
+    /// </summary>
+    public (float Region, float Text, bool Stretched)? TextWidths(UiControl control, int viewportHeight, float minimumTextPixels)
+    {
+        if (UiTextLayout.TextRegion(_resources, control, Scale(viewportHeight)) is not { } region) return null;
+
+        string fontName = control.Properties.GetValueOrDefault("FontName") ?? TemplateFont(control.Skin) ?? "Kenshi_StandardFont_Medium";
+        float wrap = control.Properties.GetValueOrDefault("WordWrap") == "true" ? region.Width : 0;
+        float text = MathF.Ceiling(MeasureText(fontName, control.Caption, viewportHeight, wrap, minimumTextPixels).Width);
+        var part = UiTextLayout.TextPart(_resources, control);
+        bool editText = part?.Type == "EditText";
+        bool shadow = control.Properties.GetValueOrDefault("TextShadow") == "true";
+        return (region.Width, text + (editText ? 2 : shadow ? 1 : 0), part is not null && UiRect.StretchesWidth(part.Align));
     }
 
     /// <summary>

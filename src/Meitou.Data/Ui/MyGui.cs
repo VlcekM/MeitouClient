@@ -77,6 +77,21 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
     }
 
     /// <summary>
+    /// Whether <paramref name="align"/> stretches an axis: MyGUI's <c>Widget::_setAlign</c> then sizes the widget (<c>setSize</c> / <c>setCoord</c>),
+    /// which aligns its own children in turn; a widget that only moves (<c>setPosition</c>) leaves them as they are.
+    /// </summary>
+    public static bool Stretches(string align)
+    {
+        var flags = Flags(align);
+        return (flags & Align.HStretch) == Align.HStretch || (flags & Align.VStretch) == Align.VStretch;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="align"/> stretches the horizontal axis (a piece so aligned keeps its distance to both side edges).
+    /// </summary>
+    public static bool StretchesWidth(string align) => (Flags(align) & Align.HStretch) == Align.HStretch;
+
+    /// <summary>
     /// One axis of <see cref="AlignTo"/>: the start and length of a piece at <paramref name="start"/>, <paramref name="length"/> long, in a parent
     /// <paramref name="parent"/> long that grew by <paramref name="growth"/>, by the axis' bits <paramref name="flags"/> (<paramref name="near"/>,
     /// <paramref name="far"/>, both, or neither).

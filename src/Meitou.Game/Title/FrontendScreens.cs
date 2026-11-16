@@ -846,7 +846,7 @@ sealed class FrontendScreens(PlayerInterface player)
         // the second, newest first. Meitou adds the save's origin to the name. addColumn takes screen pixels, not the template's (the date is cut
         // off at 1440 lines in the base game).
         // Meitou: the columns are 170 and 180 pixels at 1080 lines and grow with the UI scale, so the date fits on a 4K screen (#495).
-        b.Columns["GamesList"] = [new("Name", 170, Fill: true), new("Date", 180)];
+        b.Columns["GamesList"] = [new("Name", 170, MyGuiResizingPolicy.Fill), new("Date", 180)];
         b.Sorts["GamesList"] = (1, false);
 
         // Faithful: the folder name as the original shows it; Meitou adds where the save comes from.
