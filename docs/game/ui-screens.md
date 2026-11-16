@@ -1144,7 +1144,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   as `squad index`), each the list's width less a scroll bar (`Kenshi_ScrollBarV` width, else 17 × UI scale) and 0.28 of its height. Box parts:
   `SquadNameText` (editable, at most 32 characters; the text goes into the platoon's record name), `SquadSizeText` "{1,num}/{2,num}" against
   `max squad size` (Meitou: Bad), `SquadRemoveButton`, `PortraitsPanel` with a
-  `Kenshi_SquadsPanel_PortraitCharacter` cell per member (Meitou shrinks cells to fit one row). `FactionSizeText`: Meitou shows the faction's count
+  `Kenshi_SquadsPanel_PortraitCharacter` cell per member: cells keep their size, as many to a row as fit, filled in rows, and a box whose rows
+  do not fit gets a scroll bar inside it (**Observed**, 1.0.68 at 1680 x 1050: a squad of 25 showed rows of 9, 9 and 7 with the box's scroll
+  bar; Meitou scrolls a row a wheel step). `FactionSizeText`: Meitou shows the faction's count
   against `max faction size`.
 - The constructors pass the translated captions through a locale transform taken to be upper-casing (the box's "Delete" matches its layout's "DELETE"; not seen in a run): `NewSquadButton` "ADD SQUAD", `lbSquadsDismiss` "DISMISS" (the layout's
   "NEW SQUAD" / "DRAG HERE TO DISMISS" are replaced).
