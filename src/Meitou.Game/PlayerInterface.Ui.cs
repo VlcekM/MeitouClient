@@ -526,6 +526,7 @@ sealed partial class PlayerInterface
         TradeWindows.SyncCharacterTradeScreen();
         InventoryWindows.ValidateInventoryDrag();
         CharactersWindow.Sync();
+        ItemsWindow.Sync();
         FaithfulScreens.FocusRing = UiMode == UiMode.Meitou;
     }
 
@@ -600,6 +601,7 @@ sealed partial class PlayerInterface
         if (hud) TutorialWindow.AddTutorialHighlight(controls);
         MessageRoller.AddNotice(controls);
         InventoryWindows.AddInventoryDrag(controls);
+        ItemsWindow.AddDrag(controls);
 
         var nameTags = new List<UiControl>();
         GroundItemPicks.AddItemLabels(nameTags);
@@ -660,7 +662,8 @@ sealed partial class PlayerInterface
     /// The base shows something that moves on real time or with the camera: it is arranged every frame.
     /// </summary>
     bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
-        || CharactersWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
+        || CharactersWindow.Shown || ItemsWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0
+        || FaithfulScreens.CapturesPointer;
 
     #endregion
 
@@ -694,6 +697,7 @@ sealed partial class PlayerInterface
         if (!UiVisible) return false;
         var controls = ArrangeUi();
         if (InventoryWindows.InventoryPointerDown(p)) return true;
+        if (ItemsWindow.PointerDown(p)) return true;
         if (WorldMap.MapPointerDown(p)) return true;
         if (SquadWindows.SquadPointerDown(p)) return true;
         if (FaithfulScreens.PointerDown(p))
@@ -1051,7 +1055,7 @@ sealed partial class PlayerInterface
     {
         UiInput++;
         if (!UiVisible) return false;
-        if (key == Key.Escape && InventoryWindows.CancelInventoryDrag()) return true;
+        if (key == Key.Escape && (InventoryWindows.CancelInventoryDrag() || ItemsWindow.CancelDrag())) return true;
 
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
         if (shift && key == Key.Semicolon && !FaithfulScreens.HasKeyboardFocus)

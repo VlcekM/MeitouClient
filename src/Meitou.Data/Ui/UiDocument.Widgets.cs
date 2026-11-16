@@ -341,10 +341,11 @@ public static partial class MyGuiPresentation
             };
             if (lineSkin is null) rowProperties["TextPadding"] = "4 2 4 2";
             if (lineSkin is null || props.ContainsKey("TextColour")) rowProperties["TextColour"] = ink;
+            if (items[source].Colour is { } own) rowProperties["TextColour"] = own;
             if (lineSkin is not null && selected == source) rowProperties["Checked"] = "true";
-            result.Add(new(w.Name + "@row" + source, "Button", row, CellOf(items[source], column), $"{rowAction}:{sel}:{source}", lineSkin ?? "",
-                enabled, rowProperties, lineSkin is null && selected == source ? new(0.25f, 0.24f, 0.16f, 0.95f) : default, Argument: items[source].Id,
-                Clip: rowClip));
+            result.Add(new(w.Name + "@row" + source, "Button", row, CellOf(items[source], column), $"{rowAction}:{sel}:{source}",
+                lineSkin ?? "", enabled, rowProperties, lineSkin is null && selected == source ? new(0.25f, 0.24f, 0.16f, 0.95f) : default,
+                Argument: items[source].Id, Clip: rowClip));
         }
 
         props["ListKey"] = sel;
@@ -668,14 +669,20 @@ public static partial class MyGuiPresentation
     {
         var items = b.Lists.GetValueOrDefault(w.Name) ?? [];
         int selected = b.SelectedItems.GetValueOrDefault(w.Name, -1);
-        string text = selected >= 0 && selected < items.Count ? items[selected].Caption : b.Coded(w.Name) ?? "";
+        bool picked = selected >= 0 && selected < items.Count;
+        string text = picked ? items[selected].Caption : b.Coded(w.Name) ?? "";
+        string? colour = picked ? items[selected].Colour : null;
         foreach (string part in new[] { "Button", "Client" })
         {
             if (IndexOfPart(result, w, part) is var i and >= 0)
             {
                 result[i] = result[i] with
                 {
-                    Action = $"mygui:combo:{w.Name}:toggle", Pickable = true, Enabled = enabled, Caption = part == "Client" ? text : result[i].Caption
+                    Action = $"mygui:combo:{w.Name}:toggle", Pickable = true, Enabled = enabled,
+                    Caption = part == "Client" ? text : result[i].Caption,
+                    Properties = part == "Client" && colour is not null
+                        ? new Dictionary<string, string>(result[i].Properties) { ["TextColour"] = colour }
+                        : result[i].Properties,
                 };
             }
         }
@@ -718,9 +725,11 @@ public static partial class MyGuiPresentation
     {
         int from = result.Count;
         visit(popup, viewport, viewport, enabled, alpha);
-        if (enabled) return;
-
-        for (int i = from; i < result.Count; i++) result[i] = result[i] with { Pickable = false };
+        for (int i = from; i < result.Count; i++)
+        {
+            var properties = new Dictionary<string, string>(result[i].Properties, StringComparer.Ordinal) { [PopupProperty] = "true" };
+            result[i] = result[i] with { Properties = properties, Pickable = enabled ? result[i].Pickable : false };   // a fading one is not picked
+        }
     }
 
     /// <summary>

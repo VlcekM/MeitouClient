@@ -6,9 +6,10 @@ namespace Meitou.Data.Ui;
 /// <summary>
 /// A list row; <paramref name="Cells"/> are its per-column texts in a MultiListBox (null: the caption is the first column);
 /// <paramref name="SortKeys"/>, per column, what a MultiListBox sorts it by instead of its shown cells (a date by its time, as the save list's
-/// comparator).
+/// comparator). <paramref name="Colour"/> is the row's own text colour (a <c>TextColour</c> value, "r g b" or "#rrggbb"); null: the list's.
 /// </summary>
-public sealed record UiListItem(string Id, string Caption, IReadOnlyList<string>? Cells = null, IReadOnlyList<string>? SortKeys = null);
+public sealed record UiListItem(string Id, string Caption, IReadOnlyList<string>? Cells = null, IReadOnlyList<string>? SortKeys = null,
+    string? Colour = null);
 
 /// <summary>
 /// One arranged widget as both frontends paint and hit-test it: its screen rectangle, caption, action, skin, state and properties.
@@ -117,6 +118,12 @@ public sealed partial class UiBindings
 /// </summary>
 public static partial class MyGuiPresentation
 {
+    /// <summary>
+    /// The control property of a combo box's popup list and its parts: the host draws them over the controls a screen adds after arranging (the Items
+    /// window's item cells), which would otherwise cover the list.
+    /// </summary>
+    public const string PopupProperty = "PopupControl";
+
     /// <summary>
     /// The controls of <paramref name="layout"/> on a <paramref name="width"/> x <paramref name="height"/> screen, roots in the order of their
     /// <paramref name="layers"/>, with the data and visibility of <paramref name="bindings"/>.

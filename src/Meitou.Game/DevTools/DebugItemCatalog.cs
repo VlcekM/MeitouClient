@@ -147,6 +147,31 @@ sealed class DebugItemCatalog
     public DebugItemEntry? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
+    /// The sub-categories of <paramref name="group"/> that hold items, by name with "Other" last; none for a group without any.
+    /// </summary>
+    public IReadOnlyList<string> Subs(GameDatabase db, string group) =>
+    [
+        .. Entries(db)
+            .Where(e => e.Group == group && e.Sub.Length > 0)
+            .Select(e => e.Sub)
+            .Distinct()
+            .OrderBy(s => s == "Other")
+            .ThenBy(s => s, StringComparer.OrdinalIgnoreCase),
+    ];
+
+    /// <summary>
+    /// The entries of <paramref name="group"/> (of its sub-category <paramref name="sub"/> when given), by name.
+    /// </summary>
+    public IEnumerable<DebugItemEntry> InCategory(GameDatabase db, string group, string? sub) =>
+        Entries(db).Where(e => e.Group == group && (sub is null || e.Sub == sub));
+
+    /// <summary>
+    /// The entries whose name holds <paramref name="text"/> (any part, ignoring case), by name.
+    /// </summary>
+    public IEnumerable<DebugItemEntry> Matching(GameDatabase db, string text) =>
+        Entries(db).Where(e => e.Name.Contains(text, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// The category names in the order shown.
     /// </summary>
     public static IEnumerable<string> GroupNames => Groups.Select(g => g.Group);
@@ -183,7 +208,7 @@ sealed class DebugItemCatalog
     /// player's own first), by level then name. A model of level 0 (the creatures' own) is left out. Includes the models only other makers have, such
     /// as Rebirth's Meitou grade (level 100), which the player's maker lacks.
     /// </summary>
-    static IEnumerable<DebugItemQuality> WeaponModels(GameDatabase db)
+    static IEnumerable<(string Maker, string Model, string Name, int Level)> Models(GameDatabase db)
     {
         var models = new Dictionary<string, (string Maker, string Name, int Level)>();
         var makers = db.Records.Values.Where(r => r.Type == FcsRecordType.WeaponManufacturer).OrderBy(r => r.StringId != CraftBench.PlayerWeapons);
@@ -200,9 +225,14 @@ sealed class DebugItemCatalog
         return models
             .OrderBy(m => m.Value.Level)
             .ThenBy(m => m.Value.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(m => new DebugItemQuality($"{m.Value.Name}  (level {m.Value.Level})", m.Value.Level,
-                new DebugWeaponGrade(m.Value.Maker, m.Key, m.Value.Level)));
+            .Select(m => (m.Value.Maker, m.Key, m.Value.Name, m.Value.Level));
     }
+
+    /// <summary>
+    /// The weapon models of <see cref="Models"/> as the qualities a weapon can be placed at.
+    /// </summary>
+    static IEnumerable<DebugItemQuality> WeaponModels(GameDatabase db) =>
+        Models(db).Select(m => new DebugItemQuality($"{m.Name}  (level {m.Level})", m.Level, new DebugWeaponGrade(m.Maker, m.Model, m.Level)));
 
     #endregion
 }

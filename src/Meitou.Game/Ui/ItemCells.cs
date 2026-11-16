@@ -38,11 +38,12 @@ sealed class ItemCells(PlayerInterface player)
     /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what
     /// its hover tooltip lists (the name only when null). The transparent text control handles picking and carries <paramref name="property"/>;
     /// <paramref name="colour"/> is the item's <c>color sid</c>. <paramref name="rotated"/>: the item lies turned a quarter, <paramref name="area"/>
-    /// being its turned footprint (<see cref="Meitou.Simulation.Items.ItemInstance.Rotated"/>).
+    /// being its turned footprint (<see cref="Meitou.Simulation.Items.ItemInstance.Rotated"/>). <paramref name="tipAtPointer"/>: its tooltip goes at
+    /// the pointer rather than beside the window (<see cref="TooltipRuntime.PointerAnchor"/>).
     /// </summary>
     internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity,
         TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "",
-        bool rotated = false)
+        bool rotated = false, bool tipAtPointer = false)
     {
         player.TooltipRuntime.ItemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
         string count = quantity > 1 ? quantity.ToString(CultureInfo.InvariantCulture) : "";
@@ -79,6 +80,7 @@ sealed class ItemCells(PlayerInterface player)
             [TooltipRuntime.ItemTipKey] = name,
             [property] = index.ToString(CultureInfo.InvariantCulture),
         };
+        if (tipAtPointer) properties[TooltipRuntime.PointerAnchor] = "true";
         controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero,
             TextColour: System.Numerics.Vector4.One, Pickable: pickable, TextScale: 0.9f * player.UiScale, Clip: clip));
     }

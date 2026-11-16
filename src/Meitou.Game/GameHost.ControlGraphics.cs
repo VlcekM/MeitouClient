@@ -176,6 +176,12 @@ sealed partial class GameHost
         switch (args[0].ToLowerInvariant())
         {
             case "open":
+                if (!DebugMenu.DebugMenuAvailable)
+                {
+                    con.Error("debug-menu: load a game to the world first");
+                    return;
+                }
+
                 DebugMenu.DebugMenuOpen = true;
                 break;
             case "close":

@@ -237,6 +237,17 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
         FcsRecordType.LimbReplacement];
 
     /// <summary>
+    /// A new item of <paramref name="record"/> at <paramref name="quality"/> (0 to 100; a weapon's exact grade <paramref name="exact"/> instead),
+    /// made as giving it makes it; null for an unknown record or an exact grade that is not in the data.
+    /// </summary>
+    public static Items.ItemInstance? Make(PopulationData data, string record, int quantity, int quality, DebugWeaponGrade? exact = null)
+    {
+        if (data.Items.Create(record, quantity) is not { } item) return null;
+
+        return DebugCheats.ApplyQuality(data, exact, quality, item, out _) ? item : null;
+    }
+
+    /// <summary>
     /// The <c>PLAYER_WEAPONS</c> models a weapon can be given (model record, name, level), in record order.
     /// </summary>
     public static IReadOnlyList<(string Model, string Name, int Level)> Grades(GameDatabase db) =>
@@ -377,7 +388,7 @@ public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
 
 /// <summary>
 /// Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/>
-/// radians (agent-playtest control channel: place-item; the debug menu's Drop item row).
+/// radians (agent-playtest control channel: place-item; the debug menu's Items window).
 /// </summary>
 public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand
 {
@@ -822,8 +833,8 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/> allows
-    /// it, and the result reaches the message log.
+    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/>
+    /// allows it, and the result reaches the message log.
     /// </summary>
     static void Recruit(World world, PopulationData data, DebugRecruit recruit)
     {
@@ -1082,13 +1093,20 @@ static class DebugCheats
     /// </summary>
     static bool SetQuality(World world, PopulationData data, DebugWeaponGrade? exact, int quality, Items.ItemInstance item)
     {
-        if (exact is not null && item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
-        {
-            if (exact.Apply(data.Db, item, out string bad)) return true;
+        if (ApplyQuality(data, exact, quality, item, out string bad)) return true;
 
-            world.Post(bad);
-            return false;
-        }
+        world.Post(bad);
+        return false;
+    }
+
+    /// <summary>
+    /// <see cref="SetQuality"/> without a world: false with the reason in <paramref name="error"/> when the exact grade names a record that is not
+    /// there.
+    /// </summary>
+    internal static bool ApplyQuality(PopulationData data, DebugWeaponGrade? exact, int quality, Items.ItemInstance item, out string error)
+    {
+        error = "";
+        if (exact is not null && item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow) return exact.Apply(data.Db, item, out error);
 
         if (item.Type == FcsRecordType.Armour)
             (item.Quality, item.Level) = (Math.Clamp(quality, 0, 100), Math.Clamp(quality, 0, 100));

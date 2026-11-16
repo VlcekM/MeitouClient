@@ -142,6 +142,8 @@ sealed partial class GameHost
     internal void StartSceneLoad(bool mainMenuTransition, float? destinationHour, params (string Step, Func<Task?> Run, bool DuringAscent)[] stages)
     {
         if (ActiveSceneLoad is not null) return;
+
+        DebugMenu.DebugMenuOpen = false;
         ActiveSceneLoad = new();
         bool flies = mainMenuTransition ? Player.MeitouMainMenu && Config.MainMenuTransitions
             : Player.UiMode == Data.Ui.UiMode.Meitou && Config.InGameTransitions;
