@@ -98,6 +98,14 @@ public interface IWalkability
     /// sight a fight's chase test asks, docs/game/combat.md "Combat stance"). Default: clear.
     /// </summary>
     bool LineOfSight(Vector3 from, Vector3 to) => true;
+
+    /// <summary>
+    /// The building whose interior navmesh holds the walkable face nearest <paramref name="at"/> within <paramref name="reach"/>, water and closed
+    /// doors left out (the original's closest-point query with its door and water filter, docs/game/factions-squads-towns.md "Patrol draws"); null
+    /// for an outdoor face, none in reach, or no navmesh. Default: null.
+    /// </summary>
+    string? InteriorNear(Vector3 at, float reach) => null;
+
     /// <summary>
     /// The terrain's own height at world X/Z, also under the water (where <see cref="GroundHeight(float, float)"/> is the flat water surface): the
     /// depth of the water is the water level minus this.

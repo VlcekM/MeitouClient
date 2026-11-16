@@ -979,17 +979,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float PatrolScatterMin = 500;
 
     /// <summary>
+    /// How far round a drawn patrol point the navmesh is searched for the face whose building is tested (<c>FUN_14065eaa0</c>, <c>DAT_14168dc94</c>,
+    /// <b>Verified</b>).
+    /// </summary>
+    const float PatrolFaceReach = 300;
+
+    /// <summary>
     /// Acts out 36 Patrolling town (<c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): strolls to a point drawn round its squad's town
     /// (<see cref="PatrolArea"/>, <see cref="PatrolPoint"/>) and, once the walk is over, forgets it, so the next think draws another, as the
     /// original's update sends a new move each time the last one ended.
     /// </summary>
     void Patrol(World world, int slot, AiMind mind, Blackboard board)
     {
-        var self = world.Characters.IdOf(slot);
         if (mind.Target is null)
         {
             var (centre, scatter) = PatrolArea(world, mind.Squad, board, world.Characters.Previous[slot].Position);
-            mind.Target = PatrolPoint(world, self, centre, scatter);
+            mind.Target = PatrolPoint(world, slot, centre, scatter);
         }
 
         if (mind.Target is not { } point)
@@ -1007,46 +1012,72 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
     /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: its mission town, else its home town) at a scatter of half the town's radius,
     /// at least 500; a nest squad's town is its nest (the original's <c>Nest</c> is a town: #771, Meitou had its members random-walk kilometres
-    /// away); with none, the character's own position at 1250.
+    /// away); with none, the character's own position at 1250. The centre's height is the town's (a nest's, which Meitou keeps flat, the
+    /// character's).
     /// </summary>
-    (Vector2 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
+    (Vector3 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
         var town = board.Destination.IsNone ? board.HomeTown : board.Destination;
         if (town.Site >= 0)
         {
             var site = data.Sites[town.Site];
-            return (Flat(site.Position), MathF.Max(PatrolScatterMin, site.Town.Radius * 0.5f));
+            return (site.Position, MathF.Max(PatrolScatterMin, site.Town.Radius * 0.5f));
         }
 
         if (town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is { } player)
         {
-            return (Flat(player.Position), MathF.Max(PatrolScatterMin, player.Radius * 0.5f));
+            return (player.Position, MathF.Max(PatrolScatterMin, player.Radius * 0.5f));
         }
 
         if (squad is not null && world.SystemOf<PopulationSystem>()?.NestOf(squad.Id) is { } nest)
-            return (squad.HomeCentre, MathF.Max(PatrolScatterMin, nest.Radius * 0.5f));
+            return (new Vector3(squad.HomeCentre.X, from.Y, squad.HomeCentre.Y), MathF.Max(PatrolScatterMin, nest.Radius * 0.5f));
 
-        return (Flat(from), PatrolScatter);
+        return (from, PatrolScatter);
     }
 
     /// <summary>
-    /// Where 36 Patrolling town walks next (<c>setPatrolInput</c>, docs/game/ai-tasks.md "Town goals"): the area's centre moved by up to half the
-    /// scatter in X and Z; of up to 10 draws the first on walkable ground (the original redraws a point near a building that is not public, allied or
-    /// the player's, or under water for a race that avoids it; Meitou tests the ground only). Null without a walkable draw.
+    /// Where 36 Patrolling town walks next (<c>setPatrolInput</c>, docs/game/factions-squads-towns.md "Patrol draws"): the area's centre moved by
+    /// up to half the scatter in X and Z; of up to 10 draws the first on walkable ground whose nearest navmesh face is outdoors or in a building the
+    /// walker may stroll into (<see cref="MayPatrolInto"/>). Null when every draw fails: no walk this think.
     /// </summary>
-    Vector3? PatrolPoint(World world, CharacterId self, Vector2 centre, float scatter)
+    Vector3? PatrolPoint(World world, int slot, Vector3 centre, float scatter)
     {
+        var self = world.Characters.IdOf(slot);
         ulong roll = TargetRoll(world, self, AiBehaviour.PatrolTown);
         for (int i = 0; i < 10; i++)
         {
             roll = Rng.Mix(roll);
             float x = centre.X + (Rng.Float(roll) - 0.5f) * scatter;
             roll = Rng.Mix(roll);
-            float z = centre.Y + (Rng.Float(roll) - 0.5f) * scatter;
-            if (world.Walkability.IsWalkable(x, z)) return new Vector3(x, float.NaN, z);
+            float z = centre.Z + (Rng.Float(roll) - 0.5f) * scatter;
+            if (!world.Walkability.IsWalkable(x, z)) continue;
+
+            var face = new Vector3(x, centre.Y, z);
+            if (world.Walkability.InteriorNear(face, PatrolFaceReach) is { } building && !MayPatrolInto(world, slot, building))
+                continue;
+
+            return new Vector3(x, float.NaN, z);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a patrol draw on <paramref name="building"/>'s interior navmesh stands (<c>FUN_14065eaa0</c>, <b>Verified</b>): the building has
+    /// an open door (<see cref="Locks.FixtureRegistry.HasOpenDoor"/>, the original's <c>FUN_1405499a0</c>), and it is public, or its owner faction
+    /// is the walker's own or an ally, or the player's.
+    /// </summary>
+    bool MayPatrolInto(World world, int slot, string building)
+    {
+        if (!world.Fixtures.HasOpenDoor(building)) return false;
+        if (world.Fixtures.IsPublic(building)) return true;
+
+        int owner = world.Fixtures.OwnerOf(building);
+        if (owner < 0) return false;
+
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        int faction = world.Characters.Cold(slot)?.Faction ?? -1;
+        return owner == player || faction >= 0 && Relations.Contains(faction) && Relations.Contains(owner) && Relations.IsAlly(faction, owner);
     }
 
     #endregion

@@ -61,6 +61,9 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
     public bool LineOfSight(Vector3 from, Vector3 to) => nav.LineOfSight(from, to);
 
     /// <inheritdoc/>
+    public string? InteriorNear(Vector3 at, float reach) => nav.InteriorNear(at, reach);
+
+    /// <inheritdoc/>
     public Vector3? FloorNear(float x, float z, float y, float slack) => nav.FloorNear(x, z, y, slack);
 
     /// <inheritdoc/>

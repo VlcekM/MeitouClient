@@ -712,9 +712,20 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The
-  1250 in `FUN_1405c6b30` is the order's scatter radius, used only by other modes: there the destination is jittered ±radius/2 in X/Z, and
-  a point with a building within 300 is rejected (retry, up to 10) unless that building is public, or its owner is the mover's ally or the
-  player faction, and it lies in the mover's own town (**Observed**, decompile; the earlier "radius 1250 (Observed)" reading was wrong).
+  1250 in `FUN_1405c6b30` is the order's scatter radius, used only by the other modes (the town patrol, goal 36). **Patrol draws** there
+  (**Verified**, decompile of `FUN_14065eaa0`): the destination is the order's position jittered ±radius/2 in X/Z (its Y kept), then moved to
+  the closest navmesh point within 300 (`DAT_14168dc94`), the query's filter leaving out face data 3 (water) and 5 (closed door); a face of a
+  building's own navmesh section (`FUN_1403a43c0` to the building) stands only when the building has an open door (`Building::hasAnOpenDoor`
+  `FUN_1405499a0`: none, or one open, opening or broken) and is public (vfunc `0x290`), or its faction (`+0x10`) is the mover's own or an
+  ally (`FUN_1406b2630`), or the player's (`+0x250`). A person passes the last term (Character and CharacterHuman slot 73, `0x248`, return
+  null); a CharacterAnimal returns itself there and is further tested by its slot 101 and the building's interior flag (`FUN_140547500`). A
+  face outside any building stands; a standing face then takes the water test above. A rejected face, or no face, draws again; no face on
+  the tenth draw still sends the unmoved point; ten rejections send no move. Meitou (`AiSystem.PatrolPoint`, `MayPatrolInto`): the first of
+  10 draws on walkable ground whose nearest navmesh polygon within 300 (X/Z first, the area centre's height as the tie-break; water and
+  closed doors left out, `IWalkability.InteriorNear`) is outdoors or in a building passing the person's terms (`FixtureRegistry.HasOpenDoor`,
+  `IsPublic`, `OwnerOf`); the walk goes to the drawn point. **Observed** (headless, #803 save, Sho-Battai): before, a Merchant Nomad on
+  goal 36 walked into Lord Nagata's private Bughouse, the noble's guards shooed it and the noble house fought it as a trespasser; after, no
+  patroller enters it.
   A loaded patrol draws again when the task's update finds the move ended (`FUN_1405c6b30` mode 1 returns unless the mover reports
   idle, reached or failed), so the squad walks up to 200 outside the gate, stops, and turns to the next sector or town. Off screen a new
   point is picked within 500 of the last (`FUN_1407ee790`).

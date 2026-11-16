@@ -1230,8 +1230,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   home fallback: override, campaign town, mission target, else the Ownerships home town; resolved by `FUN_1409f9100`, which takes a hand of type 13 TOWN or 85, a nest's (**Verified** by the decompile), so a nest squad patrols round its nest (that a nest platoon's Ownerships home is its nest is inferred from its save `hometown`, **Observed**); Meitou `AiSystem.PatrolArea` via `PopulationSystem.NestOf`, #771). With a town the move is an area order on the town's position with scatter
   max(500, 0.5 x the town's radius, Town vfunc 84); with none, on the character's own position with scatter 1250 (`DAT_1416f190c`). `setPatrolInput` draws the destination within ±scatter/2 in
   X and Z (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)). So a resident strolls within ±625 of a Town's centre (±250 for a Village), after its list B is met (`atDestinationTown`).
-  Meitou (`AiSystem.PatrolArea`, `PatrolPoint`): the board's `Destination`, else its home `Town`, else the own position; the first of 10 draws on walkable ground (the building and water redraws are
-  not modelled), a new draw each time a walk is over. **Observed** (headless, #370 save, The Hub): before, residents on 36 drifted to 2479 from the centre; after 3000 ticks they end 248-556 from it.
+  Meitou (`AiSystem.PatrolArea`, `PatrolPoint`): the board's `Destination`, else its home `Town`, else the own position; the first of 10 draws on
+  walkable ground that passes the building test of the [patrol draws](factions-squads-towns.md#off-screen-world), a new draw each time a walk is over.
+  **Observed** (headless, #370 save, The Hub): before, residents on 36 drifted to 2479 from the centre; after 3000 ticks they end 248-556 from it.
 - Building layouts' `is bar` / `is shop` are 0 on every exterior layout of the base game and mods checked (2 interior layouts set `is bar`, 9 `is shop`),
   so they do not mark bars and shops (**Verified** over the merged `interiors.level`).
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,

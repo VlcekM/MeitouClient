@@ -199,6 +199,27 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     bool TryStand(NavWorld w, float x, float z, float nearY, out float y) => TryStand(w, x, z, nearY, out y, out _);
 
+    /// <inheritdoc/>
+    public string? InteriorNear(Vector3 at, float reach)
+    {
+        var w = _world;
+        if (!w.TryFindPolygon(at, reach, out var face, out _, f => Filtered(w, f))) return null;
+
+        var m = w.Mesh(face.Zone);
+        return m.BuildingOf is { } of && of[face.Polygon] is var b and >= 0 ? m.BuildingIds![b] : null;
+    }
+
+    /// <summary>
+    /// Whether the original's door and water filter leaves a face out of a closest-point query: water (face data 3) and a closed door (5).
+    /// </summary>
+    bool Filtered(NavWorld w, NavRef face)
+    {
+        var m = w.Mesh(face.Zone);
+        byte area = m.Areas[face.Polygon];
+        if (NavArea.IsWater(area)) return true;
+        return area == NavArea.Door && m.DoorOf is { } of && of[face.Polygon] is var d and >= 0 && Doors.IsClosed(m.DoorIds![d]);
+    }
+
     /// <summary>
     /// <see cref="IWalkability.FloorNear"/>, kept for the loaded world it was found on: the AI asks it of the same spots at every think, and a spot
     /// with no floor near tries every point of the search.
