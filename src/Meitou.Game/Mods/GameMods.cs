@@ -86,6 +86,7 @@ sealed class GameMods(GameHost host)
         foreach (var notice in _builtInNotices) ui.Notice(notice);
         if (Mods is null) return;
         Mods.RegisterUi(ui.RegisterUiExtension);
+        if (Mods.ArrangesFactionList) ui.FactionWindow.ArrangeList = Mods.ArrangeFactionList;
         foreach (var notice in Mods.Notices) ui.Notice(notice, true);
     }
 

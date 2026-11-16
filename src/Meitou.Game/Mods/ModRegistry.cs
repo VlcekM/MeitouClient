@@ -80,6 +80,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
     /// <summary>
+    /// The faction tab list arrangers.
+    /// </summary>
+    public List<ModFactionList> FactionLists { get; } = [];
+    /// <summary>
     /// The mod's settings group; null when it registered none.
     /// </summary>
     public ModSettingsGroup? Settings { get; set; }
@@ -100,6 +104,25 @@ sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
     public Action<IReadOnlyList<CombatHit>> Run => run;
     /// <summary>
     /// Set once the feed threw; a faulted feed is not called again.
+    /// </summary>
+    public bool Faulted { get; set; }
+}
+
+/// <summary>
+/// A mod's arrangement of the faction tab's list (<see cref="ModContext.ArrangeFactionList"/>); faulted once it threw.
+/// </summary>
+sealed class ModFactionList(string owner, Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> run)
+{
+    /// <summary>
+    /// The id of the mod that registered it.
+    /// </summary>
+    public string Owner => owner;
+    /// <summary>
+    /// The rows to show for the rows given.
+    /// </summary>
+    public Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> Run => run;
+    /// <summary>
+    /// Set once it threw; a faulted arranger is not called again.
     /// </summary>
     public bool Faulted { get; set; }
 }
@@ -143,6 +166,10 @@ sealed class ModRegistry
     /// Every mod's combat hit feeds, in load order.
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
+    /// <summary>
+    /// Every mod's faction tab list arrangers, in load order.
+    /// </summary>
+    public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
     /// The record types' names by type number.
     /// </summary>
@@ -195,6 +222,7 @@ sealed class ModRegistry
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
+        FactionLists.AddRange(r.FactionLists);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 

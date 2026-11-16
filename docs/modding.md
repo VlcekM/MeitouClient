@@ -136,6 +136,11 @@ holds refuses the second mod.
   read the world, change their own hashed state and change relations (a change made through `PlayerRelations` during a callback is not
   reported again), and must not change characters or other world state. A throwing callback is logged and disabled for that world, as for
   combat; faulted registrations enter the state hash.
+- **Faction list:** `ArrangeFactionList(arrange)` arranges the Overview's Faction tab: `arrange` gets the rows the tab would show
+  (`FactionListRow`: faction, name, the player's relation), sorted by name, and returns the rows to show, in order. It can reorder, rename
+  (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),
+  for example to group factions under another. It runs on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in
+  load order. A throw or a null is logged and that arranger is not called again.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs

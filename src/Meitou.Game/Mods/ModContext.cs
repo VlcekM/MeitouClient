@@ -310,6 +310,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,
+    /// sorted by name, and returns the rows to show in order: reordered, renamed, left out, or with headings (<see cref="FactionListRow.Faction"/>
+    /// -1). Called on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in load order. A throw or a null is
+    /// logged and the arranger is not called again.
+    /// </summary>
+    public void ArrangeFactionList(Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>> arrange)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(arrange);
+        Pending.FactionLists.Add(new ModFactionList(Id, arrange));
+    }
+
+    /// <summary>
     /// A row of the debug menu (F10), after the vanilla rows. <paramref name="run"/> runs on the host's thread while a tick may be in flight: it must
     /// not touch the world, only read the context and queue commands; its return is the status line.
     /// </summary>

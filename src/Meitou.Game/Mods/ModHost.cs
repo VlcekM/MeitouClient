@@ -148,6 +148,34 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// Whether a mod arranges the faction tab's list.
+    /// </summary>
+    public bool ArrangesFactionList => _registry.FactionLists.Count > 0;
+
+    /// <summary>
+    /// The faction tab's rows as every mod's arranger leaves them, in load order, on the host's thread; one that throws (or returns null) is logged,
+    /// skipped and gets no more calls.
+    /// </summary>
+    public IReadOnlyList<FactionListRow> ArrangeFactionList(IReadOnlyList<FactionListRow> rows)
+    {
+        foreach (var list in _registry.FactionLists)
+        {
+            if (list.Faulted) continue;
+
+            try
+            {
+                rows = list.Run(rows) ?? throw new InvalidOperationException("returned no rows");
+            }
+            catch (Exception e)
+            {
+                list.Faulted = true;
+                Console.Error.WriteLine($"mod       {list.Owner}: faction list arranger disabled: {e.GetType().Name}: {e.Message}");
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>
     /// The settings the mods registered, in load order (docs/modding.md "Settings").
     /// </summary>
     public IReadOnlyList<ModSettingsGroup> Settings => _registry.Settings;
