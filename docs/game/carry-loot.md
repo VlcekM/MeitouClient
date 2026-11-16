@@ -125,7 +125,9 @@ watcher's `isIndoors` building differs from the container's (`hand::operator!=`)
 (`Building::hasAnOpenDoor`), the steal always succeeds; p = 0.3 + 1.95 x thievery/100 x t; posture-3 watcher x2, another floor x1.5.
 The floors are each object's `getFloor` (vtable `+0x60`, the RootObject's `floorNum` `+0xA4`): **Verified** with the Kenshi harness on the #796
 save, Rebirth's raised barrels read floor 1, the guards below floor 0, and a thief on the deck beside the barrels floor 1 while `_isOnARoof`
-(`+0xD5`) is set; the roof flag is only set for a character whose `isIndoors` building is set (`FUN_1405d00b0`). No watcher, or one unconscious, dead, carried or imprisoned (or a down thief): p = 1, the
+(`+0xD5`) is set; the roof flag is only set for a character whose `isIndoors` building is set (`FUN_1405d00b0`). Each movement step
+sets the floor from the surface under the character, roof or not (`FUN_1405c7c30`: `setFloor(CharMovement::getCurrentFloor())`, no roof test):
+that thief loaded with no saved `floor` key (read by `FUN_140626f50`; the original's saves write one per character) and read 1 on the roof. No watcher, or one unconscious, dead, carried or imprisoned (or a down thief): p = 1, the
 pending crime stays. Caught (`rand > p`): a watcher in bed says event 47 instead half the time (`rand > 0.5`); else it stands up, says event 8, the
 thief gets Theft timer 30 against the owner's faction and the watcher's squad a long-term STOLE_FROM_ME tag (4, `FUN_140673a20`); no faction
 relation event (none of the slot-5 callers in [factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile) is a theft

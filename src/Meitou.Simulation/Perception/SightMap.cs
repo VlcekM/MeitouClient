@@ -596,13 +596,14 @@ public sealed class SightMap
     public bool Outdoors(int slot) => !Known(slot) || _place[slot] < 0;
 
     /// <summary>
-    /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building (the original's <c>getFloor</c>); 0
-    /// outdoors or on top. Worked out on first ask after the character moved and kept; the parallel looks ask it too, and any worker writes the same
-    /// value.
+    /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building, on top of it too (the original's
+    /// <c>getFloor</c>: each movement step sets it from the surface under the character, roof or not, <c>FUN_1405c7c30</c>; <b>Verified</b> with the
+    /// Kenshi harness, #796); 0 outdoors. Worked out on first ask after the character moved and kept; the parallel looks ask it too, and any worker
+    /// writes the same value.
     /// </summary>
     public int FloorOf(int slot, Vector3 at)
     {
-        if (!Inside(slot)) return 0;
+        if (Outdoors(slot)) return 0;
         if (_floorOf[slot] < 0) _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
         return _floorOf[slot];
     }
