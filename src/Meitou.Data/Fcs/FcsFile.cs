@@ -69,6 +69,42 @@ public sealed class FcsFile
 public enum FcsFileType
 {
     /// <summary>
+    /// The oldest header-less type the game loads: no vec3 and vec4 tables, references with one value, numeric instance ids and states, no record
+    /// flags (docs/formats/fcs-mod.md, "Game loader"). <see cref="FcsWriter"/> writes the types below V15 as V17.
+    /// </summary>
+    V8 = 8,
+
+    /// <summary>
+    /// As <see cref="V8"/> with the vec3 and vec4 tables.
+    /// </summary>
+    V9 = 9,
+
+    /// <summary>
+    /// As <see cref="V9"/>.
+    /// </summary>
+    V10 = 10,
+
+    /// <summary>
+    /// As <see cref="V10"/> with the tag block and references with three values.
+    /// </summary>
+    V11 = 11,
+
+    /// <summary>
+    /// As <see cref="V11"/> without the tag block.
+    /// </summary>
+    V12 = 12,
+
+    /// <summary>
+    /// As <see cref="V11"/>.
+    /// </summary>
+    V13 = 13,
+
+    /// <summary>
+    /// As <see cref="V11"/>.
+    /// </summary>
+    V14 = 14,
+
+    /// <summary>
     /// No header at all: the next id and the records follow the type. Used by world state files (<c>.zone</c>, <c>.level</c>).
     /// </summary>
     V15 = 15,

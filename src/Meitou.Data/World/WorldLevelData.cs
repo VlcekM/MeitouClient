@@ -204,7 +204,7 @@ public sealed class WorldLevelData
     /// <summary>
     /// Loads from <paramref name="directory"/>, then one layer per <paramref name="loadOrder"/> file that has one, in load order: a core file's
     /// sub-folder named after it (extension dropped), a mod's <c>leveldata</c> folder beside its <c>.mod</c> file (Workshop or <c>mods/</c>). A file
-    /// that would not load (<see cref="FcsReader.HasKnownType"/>) adds none.
+    /// that would not load (<see cref="FcsGameLoader.Opens"/>) adds none.
     /// </summary>
     public static WorldLevelData Load(string directory, IEnumerable<LoadOrderEntry> loadOrder, bool includeInteriors = false)
     {
@@ -213,7 +213,7 @@ public sealed class WorldLevelData
         foreach (var entry in loadOrder)
         {
             // A core .mod or a mod the game failed to load has no layer; gamedata.base keeps the base folder's (docs/formats/zones.md "Mods").
-            if (entry.Path.Length > 0 && !FcsReader.HasKnownType(entry.Path)) continue;
+            if (entry.Path.Length > 0 && !FcsGameLoader.Opens(entry.Path)) continue;
 
             string name = Path.GetFileNameWithoutExtension(entry.Name);
             bool core = entry.Path.Length == 0 || LoadOrder.BaseFiles.Contains(entry.Name, StringComparer.OrdinalIgnoreCase);
