@@ -266,6 +266,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A combat move for a character the game plays nothing for (docs/modding.md "Combat moves"): <paramref name="source"/> answers a
+    /// <see cref="CombatMove"/> (technique and progress) or null; the first mod's answer wins. It runs in the animation's parallel step for every
+    /// stepping character, and what it answers is part of the hashed world (the move's layers and root motion), so it must be cheap,
+    /// deterministic, thread-safe and read-only. A fault (a throw, no technique, a progress that is not finite) drops the source from the next tick.
+    /// </summary>
+    public void AddCombatMove(CombatMoveSource source)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(source);
+        Pending.CombatMoves.Add(source);
+    }
+
+    /// <summary>
     /// A right click on an item of <paramref name="record"/> (an item record's string id) in a player character's own inventory window, with no
     /// other character's window open (docs/modding.md "Item use"): <paramref name="handler"/> runs in a serial step of the tick and may change the
     /// world. It returns true when it used the click (removing a used-up item itself), false to let the click equip or move the item as usual. One

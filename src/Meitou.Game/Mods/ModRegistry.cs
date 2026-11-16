@@ -48,6 +48,10 @@ sealed class ModRegistrations
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
     /// <summary>
+    /// The combat move sources, in registration order.
+    /// </summary>
+    public List<CombatMoveSource> CombatMoves { get; } = [];
+    /// <summary>
     /// The item use handlers by item record string id.
     /// </summary>
     public Dictionary<string, ItemUseHandler> ItemUses { get; } = new(StringComparer.Ordinal);
@@ -218,6 +222,7 @@ sealed class ModRegistry
         foreach (var (code, handler) in r.Effects)
             Claim(ModCodeKind.DialogueEffect, code, mod, () => Simulation.DialogueEffects[code] = handler);
         foreach (var (type, name) in r.RecordTypes) Claim(ModCodeKind.RecordType, type, mod, () => RecordTypes[type] = name);
+        foreach (var source in r.CombatMoves) Simulation.CombatMoves.Add(new ModCombatMove(mod, source));
         foreach (var (record, handler) in r.ItemUses)
         {
             _itemUseOwners[record] = mod;

@@ -141,6 +141,17 @@ holds refuses the second mod.
   (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),
   for example to group factions under another. It runs on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in
   load order. A throw or a null is logged and that arranger is not called again.
+- **Combat moves:** `AddCombatMove(source)`: `source(world, id, tick)` answers a `CombatMove` (a `CombatTechnique` and its progress, 0 to
+  1) or null, and the animation plays the first answer, in load order, as the character's technique (`CombatSystem.ModMove`). It is asked
+  only when the game plays nothing of its own: not while the character attacks, blocks or dodges, is stunned or stumbling, holds a crossbow
+  pose, is down, carried or getting up (as of the last finished tick). The move is animation only: it lands no blow, nobody blocks it, and
+  the combat system may start its own swing over it at any tick. A technique the animation library has no clip for plays nothing. The
+  source runs in the animation's parallel step for every stepping character, and the move enters the world: its layers are hashed and a
+  relocating clip's root motion moves the character. So it must be cheap, thread-safe, read-only and deterministic: answer from state the
+  tick has already settled (its own system's serial step, the last finished tick), never from call order or caches that change the answer,
+  and never call `ModMove` itself. A throw, a move without a technique or a progress that is not finite is a fault: logged once with the mod
+  id; the source still answers for the rest of that tick and answers nothing in that world from the next tick on, and the fault enters the
+  state hash.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
