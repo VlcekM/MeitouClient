@@ -9,10 +9,11 @@ namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// Lets the AI run a player's squad, or takes it back (<see cref="Squad.Autonomous"/>, docs/simulation.md "Autonomous player squads"). Turning it
-/// off drops the squad's packages and its members' minds; a squad that is not the player's is left alone. Meitou only: the original's AI plans for
-/// no player squad.
+/// off drops the squad's packages and its members' minds; a squad that is not the player's is left alone. <paramref name="Independent"/> (only with
+/// <paramref name="On"/>): the player does not lead it (<see cref="Squad.Independent"/>), refused for the last squad the player leads; on without it
+/// leads it again. Meitou only: the original's AI plans for no player squad.
 /// </summary>
-public sealed record SetSquadAutonomy(int SquadId, bool On) : SimCommand;
+public sealed record SetSquadAutonomy(int SquadId, bool On, bool Independent = false) : SimCommand;
 
 /// <summary>
 /// Gives a player's squad its home (<see cref="Squad.AssignedHome"/>): a town building's <see cref="TownBuilding.Key"/> or a player-built
@@ -41,7 +42,7 @@ public sealed class SquadAutonomy(PopulationData data)
         {
             case SetSquadAutonomy a:
                 squad = PlayerSquad(world, a.SquadId);
-                if (squad is not null) Switch(world, squad, a.On);
+                if (squad is not null) Switch(world, squad, a.On, a.Independent);
                 return true;
             case SetSquadHome h:
                 squad = PlayerSquad(world, h.SquadId);
@@ -62,10 +63,12 @@ public sealed class SquadAutonomy(PopulationData data)
     }
 
     /// <summary>
-    /// Turns the squad's autonomy on or off; off drops its board, its saved AI and its members' minds (<see cref="Release"/>).
+    /// Turns the squad's autonomy on or off, and its independence with it (never for the last squad the player leads; the selection's upkeep drops
+    /// an independent squad's members and shows another squad); off drops its board, its saved AI and its members' minds (<see cref="Release"/>).
     /// </summary>
-    static void Switch(World world, Squad squad, bool on)
+    static void Switch(World world, Squad squad, bool on, bool independent)
     {
+        squad.Independent = on && independent && SquadManagement.LedSquads(world).Any(s => s != squad);
         if (squad.Autonomous == on) return;
 
         squad.Autonomous = on;

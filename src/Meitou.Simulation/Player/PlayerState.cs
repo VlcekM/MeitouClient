@@ -153,17 +153,18 @@ public sealed class PlayerState
     public List<CharacterId> InventoryShown { get; } = [];
 
     /// <summary>
-    /// Drops characters that are gone (serial phases, after the commit).
+    /// Drops characters that are gone, and from the selection those of a squad the player does not lead (<see cref="Squad.Independent"/>; serial
+    /// phases, after the commit).
     /// </summary>
-    internal void Prune(CharacterTable table)
+    internal void Prune(CharacterTable table, SquadRegistry squads)
     {
         bool hadSelection = Selection.Count > 0;
-        Selection.RemoveAll(c => !table.TryResolveNext(c, out _));
+        Selection.RemoveAll(c => !table.TryResolveNext(c, out int slot) || table.Cold(slot) is { } cold && squads.IsIndependent(cold.SquadId));
         // Somebody stays selected (the original keeps one of the player's characters selected): when every selected one is gone or dead, the first
         // living one is.
         if (hadSelection && Exists && !Selection.Any(c => table.TryResolveNext(c, out int slot) && table.Cold(slot) is { DiedTick: < 0 }))
             for (int i = 0; i < table.HighWater; i++)
-                if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true, DiedTick: < 0 })
+                if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true, DiedTick: < 0 } c && !squads.IsIndependent(c.SquadId))
                 {
                     Selection.Clear();
                     Selection.Add(new CharacterId(i, table.Next[i].Generation));

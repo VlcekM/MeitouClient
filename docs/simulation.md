@@ -534,7 +534,8 @@ New-game start data seeds squad/appearance/gear/money; the start's characters ar
 character editor while `PlayerState.InCreation` ([characters](characters.md#character-editor)); original start
 relation/research semantics remain partly unknown. Picking/HUD are host responsibilities, never simulation input.
 Squads: `SquadManagement` orders the player's squads (`Squad.Index`), keeps `PlayerState.Squad` the active one and applies the squads screen's
-commands with the original's limits ([Squads tab](game/ui-screens.md#squads-tab)); the snapshot's `PlayerSquads` lists them for the UI.
+commands with the original's limits ([Squads tab](game/ui-screens.md#squads-tab)); the snapshot's `PlayerSquads` lists the ones the player leads for
+the UI ([independent squads](#autonomous-player-squads) are in `IndependentSquads`).
 
 ### Order toggles
 
@@ -1821,6 +1822,12 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the
   complete beds the player placed in it (`BuildSite.Parent`, one per member, `SquadAutonomy.HomeBed`), else the player bed search. A player-built
   home has no indoor volume: "inside" is within the home radius.
+- **Independent** (`SetSquadAutonomy(id, true, Independent: true)`, `Squad.Independent`; cleared by `SetSquadAutonomy(id, true)` and with
+  autonomy; refused for the last squad the player leads): the player does not lead it. Its members stay the player's faction (counted by
+  `max faction size`) but cannot be selected (`SelectCommand` skips them, the selection's upkeep drops them), so they take no orders from the
+  interface, and a click on one inspects it as another faction's (the snapshot's `IndependentSquads`); it has no squad tab, is not on the
+  squads screen or Tab, the squad commands (move, rename, reorder, remove) refuse it, and it does not count against `max squads`
+  (`SquadManagement.LedSquads`). Saved as `meitou independent`.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
 - **Not built**: a player outpost is no `Blackboard.Town`, so its turrets, machines and nodes are not goal targets (the player's jobs run them);

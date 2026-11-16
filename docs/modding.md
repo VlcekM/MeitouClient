@@ -233,8 +233,11 @@ holds refuses the second mod.
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
   `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
-  (`BuildSite.Id`); null clears it. The player's orders and jobs come first. The switch, package and home are saved with the squad. Off drops the
-  package and the members' minds. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
+  (`BuildSite.Id`); null clears it. The player's orders and jobs come first. `SetSquadAutonomy(squadId, true, Independent: true)` makes it a squad
+  the player does not lead: not selectable, no squad tab, no squad commands, not counted against `max squads` (for staff, caravans or companions
+  with a will of their own; orders that name its characters still apply; refused for the last squad the player leads; `SetSquadAutonomy(squadId,
+  true)` leads it again). The switch, package and home are saved with the squad. Off drops the
+  package, the members' minds and the independence. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
 - **World hooks** (engine API, not in the original; serial phases): `PopulationSystem.RequestCampaign` queues a

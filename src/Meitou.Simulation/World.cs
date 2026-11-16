@@ -648,7 +648,7 @@ public sealed partial class World : IDisposable
 
         // 8. Publish.
         Squads.Refresh(table, Player.Faction);
-        Player.Prune(table);
+        Player.Prune(table, Squads);
         table.Phase = TablePhase.Outside;
         table.EndTick();
         prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot

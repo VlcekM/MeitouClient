@@ -164,6 +164,13 @@ public sealed class Squad
     /// </summary>
     public string? AssignedHome { get; set; }
     /// <summary>
+    /// An autonomous squad the player does not lead (<see cref="Ai.SetSquadAutonomy"/>): its members stay the player's faction but cannot be
+    /// selected, so take no orders, a click on one inspects it, and it has no squad tab, takes no squad commands and does not count against
+    /// <c>max squads</c> (<see cref="SquadManagement.LedSquads"/>). Only while <see cref="Autonomous"/>, never the last led squad. Meitou only;
+    /// saved, hashed while set.
+    /// </summary>
+    public bool Independent { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -246,6 +253,11 @@ public sealed class SquadRegistry
     /// The squad with id <paramref name="id"/>; null when there is none.
     /// </summary>
     public Squad? Find(int id) => _byId.GetValueOrDefault(id);
+
+    /// <summary>
+    /// Whether squad <paramref name="id"/> is one the player does not lead (<see cref="Squad.Independent"/>).
+    /// </summary>
+    public bool IsIndependent(int id) => Find(id) is { Independent: true };
 
     /// <summary>
     /// Takes the next id.
@@ -335,6 +347,7 @@ public sealed class SquadRegistry
             if (s.Resume) hasher.Add(0x52657375);
             if (s.Dead) hasher.Add(0x44656164);
             if (s.Autonomous) hasher.Add(0x4175746F);
+            if (s.Independent) hasher.Add(0x496E6470);
             if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
