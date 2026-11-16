@@ -181,6 +181,20 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   the stock before the vendor items; the unique flag is not modelled.
 - **Count**: n = round(U(0.8, 1.2) x `vendors fill total amount` x wealth), at least 1. Items: the vendor lists share n by weight as for squads (`FUN_140959800`, **Verified**: each list's share is (v / sum) x n rounded half away from zero, and the last list takes max(what is left, its own share), so the total can exceed n; Meitou `ShopFiller.Fill`), but every list's
   money roll (`money item prob` against U(0, 1), then U[`money item min`, `money item max`]) is summed into one stack of the money item first.
+- **List entries** (`FUN_140956ba0`, **Verified**): `items` ITEM, `weapons` WEAPON (with `weapon manufacturers`), `armours` / `clothing` ARMOUR, `containers`
+  CONTAINER, `blueprints` RESEARCH (a blueprint item), `crossbows` CROSSBOW, `robotics` LIMB_REPLACEMENT, `maps` MAP_ITEM; `armour blueprints` / `crossbow blueprints` /
+  `backpack blueprints` name gear and give its `<id>.TECH.1` research's blueprint (skipped when missing), never the gear. Merged base data: `armour blueprints` 318,
+  `blueprints` 141, `crossbow blueprints` 20, `backpack blueprints` 0 entries. A `weapons` entry is stocked only when it is a `weapon types` entry of one of the list's
+  `weapon manufacturers` (the types of every listed manufacturer form a set, a weapon outside it logs "No valid manufacturer found for weapon" and is dropped, an empty
+  set skips the whole weapons branch); other lists are not gated. Every entry goes into one weighted table of the list with its v0 as the weight, a v0 of 0 counting
+  100 and a negative v0 left out (**Verified** by disassembly: every list branch, `items` and the twelve inserts, compares the weight with 0.0 and replaces a 0
+  by 100.0, `DAT_141683250`, before the insert `FUN_1405778d0`, which skips a weight not above 0). Meitou `VendorList.From`; a shop fill leaves out the entries of
+  weight 0 or less (`ShopFiller.Fill`).
+- **Draw** (`FUN_1409555d0`, **Observed**, decompile; the building filler reaches it through `FUN_140959800`, the squad filler `FUN_14095ab10` through `FUN_140959a90`): a
+  list's share is drawn one unit at a time from its table by a float roll in [0, total weight); a unit other than a weapon tops up the first item of its record whose
+  quantity is below the record's `stackable`, else a new item is made. A blueprint (item type 90) or map (102) made anew leaves the table (`FUN_140969100`) until the
+  list is next fetched for a fill (`FUN_1409592a0`, which puts the taken entries back, `FUN_140953250`), so a fill stocks each blueprint and map at most once per list;
+  the draw stops when the table is empty. Meitou `ShopFiller.Draw` (a unit tops up a stack of its record, quality and maker below its stack limit).
 - **Purse** (the platoon's money): `vendor money` < 1: trunc(clamp(0.25 x value of the placed items, 3000, 25000) x wealth); else trunc((`vendor money` + r) x wealth) with r an int from
   -0.4 x `vendor money` (the upper bound is not shown by the decompile).
 - **Wealth** = clamp(faction wealth, 0.2, 1), but the faction wealth function (`FUN_1402dd530`) is a stub returning 1.0, so wealth is always 1
@@ -656,13 +670,6 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   registered but no TaskData row uses it); how `+0x110` decays;
   whether NPC bounty hunters ever cage or hand in a captive; what the speaker-in-own-town branch of `DA_ARREST_TARGET` tests exactly.
 - **Research cost** beyond the bench queue cost, crafting costs, building purchase price, bed cost.
-- **The reading of a v0 of 0 in VENDOR_LIST lists**: Meitou counts it as 100 and keeps each entry by its target's record type (engine choices,
-  [../simulation.md "Trade"](../simulation.md#trade)). The list names and accepted types are **Verified** (`FUN_140956ba0`): `items` ITEM, `weapons` WEAPON (with
-  `weapon manufacturers`), `armours` / `clothing` ARMOUR, `containers` CONTAINER, `blueprints` RESEARCH (a blueprint item), `crossbows` CROSSBOW, `robotics`
-  LIMB_REPLACEMENT, `maps` MAP_ITEM; `armour blueprints` / `crossbow blueprints` / `backpack blueprints` name gear and give its `<id>.TECH.1` research's blueprint
-  (skipped when missing), never the gear. Merged base data: `armour blueprints` 318, `blueprints` 141, `crossbow blueprints` 20, `backpack blueprints` 0 entries.
-  A `weapons` entry is stocked only when it is a `weapon types` entry of one of the list's `weapon manufacturers` (**Verified**, `FUN_140956ba0`: the types of every listed
-  manufacturer form a set, a weapon outside it logs "No valid manufacturer found for weapon" and is dropped, an empty set skips the whole weapons branch); other lists are not gated.
 
 ## Expression reference
 

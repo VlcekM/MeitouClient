@@ -1032,7 +1032,8 @@ static class SaveProbe
 
     /// <summary>
     /// The containers within <paramref name="radius"/> of the leader: building, record, lock, own items, and the building shop whose stock
-    /// container each is, with the size its trader window starts at.
+    /// container each is, with the size its trader window starts at; then each home's squad with its template's vendor lists and, for a building
+    /// shop, its trader window as it would open now.
     /// </summary>
     static void Containers(ProbeWorld probe, float radius)
     {
@@ -1042,6 +1043,8 @@ static class SaveProbe
         {
             Console.WriteLine($"container {f.Id} building={f.Building} '{probe.Db.Find(f.RecordId)?.Name}' at {f.Position:F0} "
                 + $"locked={f.Lock?.Locked} own={f.Contents!.Items.Count}");
+            foreach (var it in f.Contents.Items)
+                Console.WriteLine($"    {it.Name} x{it.Quantity} ({it.Type}){(it.Unique ? " unique" : "")}");
 
             foreach (var q in world.Squads.All)
             {
@@ -1057,6 +1060,47 @@ static class SaveProbe
             string shop = q.Shop is { } s ? $"{s.Stock.Items.Count} items, fills={s.Fills} restock={s.NextRestockTick}" : "none";
             Console.WriteLine($"home {q.HomeBuilding!.Key} squad {q.Id} '{q.Name}' template={q.TemplateId} members={q.Members.Count} "
                 + $"shop={shop} tick={world.Tick}");
+            VendorLists(probe, q.TemplateId);
+            if (q.Shop is { Building: not null } open) ShopWindow(probe, open);
+        }
+    }
+
+    /// <summary>
+    /// The building shop's trader window as it would open now: each item's cell, top row first.
+    /// </summary>
+    static void ShopWindow(ProbeWorld probe, Meitou.Simulation.Trading.Shop shop)
+    {
+        var boxes = new List<Meitou.Simulation.Trading.StockBox>();
+
+        foreach (var id in shop.Containers)
+        {
+            if (probe.World.Fixtures.Find(id) is not { Contents: not null } f || probe.Db.Find(f.RecordId) is not { } r)
+                continue;
+
+            boxes.Add(new Meitou.Simulation.Trading.StockBox(f, Meitou.Data.Gameplay.Construction.MachineData.From(probe.Db, r)));
+        }
+
+        shop.View.Build(shop, boxes);
+        Console.WriteLine($"  window {shop.Stock.Width}x{shop.Stock.Height}:");
+        foreach (var it in shop.Stock.Items.OrderBy(i => i.Y).ThenBy(i => i.X))
+            Console.WriteLine($"    row {it.Y} col {it.X} {it.Name} x{it.Quantity} ({it.Width}x{it.Height})");
+    }
+
+    /// <summary>
+    /// A squad template's stock fields and vendor lists: each list's weight, entry count and money roll.
+    /// </summary>
+    static void VendorLists(ProbeWorld probe, string templateId)
+    {
+        if (probe.Db.Find(templateId) is not { } record || Meitou.Data.Gameplay.SquadTemplate.From(record) is not { } template) return;
+
+        Console.WriteLine($"  fill={template.VendorsFillTotalAmount} refresh={template.VendorsRefreshTime}h trader={template.IsTrader}");
+
+        foreach (var link in template.Vendors)
+        {
+            var list = probe.Db.Find(link.Id) is { } r ? Meitou.Data.Gameplay.Economy.VendorList.From(probe.Db, r) : null;
+            Console.WriteLine($"  vendors {link.Id} '{list?.Name}' v0={link.V0} entries={list?.Entries.Count} money={list?.MoneyItemProb}");
+            foreach (var e in list?.Entries ?? [])
+                Console.WriteLine($"    {e.Id} '{probe.Db.Find(e.Id)?.Name}' {e.Type} weight={e.Weight}");
         }
     }
 
@@ -1432,7 +1476,7 @@ static class SaveProbe
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
-              containers <radius>      containers near the leader: own items, building shop stock in each, homes
+              containers <radius>      containers near the leader: their items, building shop stock in each, homes with vendor lists and trader window
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors

@@ -197,13 +197,10 @@ public static class ShopFiller
             if (l == lists.Count - 1) count = Math.Max(n - assigned, count);
 
             assigned += count;
-            var entries = list.Entries.Where(e => town?.Forbidden.Contains(e.Id) != true && own?.Forbidden.Contains(e.Id) != true).ToList();
-
-            for (int k = 0; k < count && entries.Count > 0; k++)
-            {
-                if (Make(Pick(entries, ref rng), list, faction, template, market, data.Db, ref rng) is { } item)
-                    Merge(units, item);
-            }
+            var entries = list.Entries
+                .Where(e => e.Weight > 0 && town?.Forbidden.Contains(e.Id) != true && own?.Forbidden.Contains(e.Id) != true)
+                .ToList();
+            Draw(units, entries, count, list, faction, template, market, data.Db, ref rng);
 
             if (list.MoneyItemProb > 0 && rng.NextFloat() <= list.MoneyItemProb && list.MoneyItemMax >= list.MoneyItemMin)
                 cats += list.MoneyItemMin + rng.NextInt(list.MoneyItemMax - list.MoneyItemMin + 1);
@@ -288,9 +285,27 @@ public static class ShopFiller
     }
 
     /// <summary>
-    /// Puts one unit into the list: onto a stack of the same record and quality with room, else as a new item.
+    /// Draws one list's share, <paramref name="count"/> units, from its <paramref name="entries"/> into <paramref name="units"/> (<c>FUN_1409555d0</c>,
+    /// <b>Observed</b>, decompile): a blueprint or map made anew leaves the entries, so each is stocked at most once per list and fill, and the draw
+    /// ends when no entry is left.
     /// </summary>
-    static void Merge(List<ItemInstance> units, ItemInstance item)
+    static void Draw(List<ItemInstance> units, List<VendorEntry> entries, int count, VendorList list, GameRecord? faction, SquadTemplate template,
+        Market market, GameDatabase db, ref RandomStream rng)
+    {
+        for (int k = 0; k < count && entries.Count > 0; k++)
+        {
+            var entry = Pick(entries, ref rng);
+            if (Make(entry, list, faction, template, market, db, ref rng) is not { } item) continue;
+
+            if (Merge(units, item) && item.Type is FcsRecordType.Blueprint or FcsRecordType.MapItem)
+                entries.Remove(entry);
+        }
+    }
+
+    /// <summary>
+    /// Puts one unit into the list: onto a stack of the same record and quality with room, else as a new item (then true).
+    /// </summary>
+    static bool Merge(List<ItemInstance> units, ItemInstance item)
     {
         foreach (var u in units)
         {
@@ -298,11 +313,12 @@ public static class ShopFiller
                 && u.Quantity < u.StackLimit)
             {
                 u.Quantity++;
-                return;
+                return false;
             }
         }
 
         units.Add(item);
+        return true;
     }
 
     /// <summary>
