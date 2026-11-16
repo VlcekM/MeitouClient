@@ -1355,6 +1355,63 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// A code mod's player character (engine API, not in the original): one fresh character of the CHARACTER or ANIMAL_CHARACTER record
+    /// <paramref name="recordId"/>, made as a new game makes the player's (a look rolled for the player's faction, body, starting items, name),
+    /// stands idle on the ground at <paramref name="at"/> as a member of the player squad <paramref name="squadId"/>, leading it when it has no
+    /// leader. A unique character is claimed as any spawn claims it. Only a player squad: it is saved as live characters, where an NPC squad
+    /// from a save keeps only the save's members (<see cref="SpawnPlatoon"/> adds NPCs). Returns its id, or none, adding nothing, for a squad
+    /// that is not a living player squad, a record of another type, a point that is not finite or not walkable, a unique already claimed, or a
+    /// squad at <c>max squad size</c> or player faction at <c>max faction size</c> (the recruit's caps), and during the parallel phase, before a unique
+    /// is claimed. Serial phases only.
+    /// </summary>
+    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at)
+    {
+        if (world.Characters.Phase == TablePhase.Parallel) return CharacterId.None;
+        if (world.Squads.Find(squadId) is not { } squad || !SquadManagement.PlayerSquads(world).Contains(squad)) return CharacterId.None;
+        if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !world.Walkability.IsWalkable(at.X, at.Y)) return CharacterId.None;
+        if (_data.Db.Find(recordId) is not { Type: FcsRecordType.Character or FcsRecordType.AnimalCharacter } record) return CharacterId.None;
+        if (PlayerSquadFull(world, squad)) return CharacterId.None;
+        if (UniqueCharacters.IsUnique(record) && !world.Uniques.TryClaim(recordId)) return CharacterId.None;
+
+        var built = ModMember(world, squad, record, at);
+        var id = SpawnMember(world, built, squad, built.Members[0], !squad.Leader.IsNone, player: true, idle: false, yaw: 0, site: null);
+        squad.Members.Add(id);
+        if (squad.Leader.IsNone) squad.Leader = id;
+        return id;
+    }
+
+    /// <summary>
+    /// Whether a player squad takes no more members: it holds <c>max squad size</c>, or the player faction has <c>max faction size</c> living
+    /// characters (the recruit's caps, docs/game/dialogue.md "Recruiting").
+    /// </summary>
+    bool PlayerSquadFull(World world, Squad squad)
+    {
+        var limits = _data.Bodies.Constants;
+        return squad.Members.Count >= limits.MaxSquadSize || SquadManagement.FactionHeads(world) >= limits.MaxFactionSize;
+    }
+
+    /// <summary>
+    /// The built one-member squad <see cref="SpawnIntoPlayerSquad"/> makes its character from: the squad's own template (a stand-in of its id
+    /// and name when the data has none), a look rolled for its faction, and the new character's slot as its member index, so its name roll is
+    /// its own.
+    /// </summary>
+    BuiltSquad ModMember(World world, Squad squad, Meitou.Data.GameRecord record, Vector2 at)
+    {
+        var next = world.Characters.PeekNextId();
+        bool animal = record.Type == FcsRecordType.AnimalCharacter;
+        var role = squad.Leader.IsNone ? SquadRole.Leader : SquadRole.Squad1;
+        var member = new MemberPlan(record.StringId, role, next.Slot, default, animal, 1);
+        ulong key = Rng.Mix(SeedSalts.ModMember ^ Rng.Key(next));
+        var look = _data.Appearances?.Create(record.StringId, _data.Factions[squad.Faction].Id,
+            (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
+        var template = _data.Db.Find(squad.TemplateId) is { Type: FcsRecordType.SquadTemplate } t
+            ? SquadTemplate.From(t)
+            : new SquadTemplate { Id = squad.TemplateId, Name = squad.Name };
+        var plan = new SquadPlan(template, [member], [], []);
+        return new BuiltSquad(plan, at, squad.Faction, [new BuiltMember(member, look)], Grounded: true);
+    }
+
+    /// <summary>
     /// A code mod takes over a platoon's movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip orders and its
     /// stand-in stays where it is, so the mod can walk its members itself (<see cref="CharacterCold.Engaged"/> keeps the AI off a member; its
     /// self-preservation still answers an attack). False for an unknown platoon, a town's own or a campaign's. Serial phases only.

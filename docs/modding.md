@@ -245,7 +245,13 @@ holds refuses the second mod.
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
   kept off screen whatever the keep switches say, is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
   added when no walkable point is found); `Platoon.ModTag` is a free string, saved when set, that finds a mod's platoon again after a load,
-  when platoon ids are given anew; the `VisitTown` command sends a squad running a wandering trader package to a
+  when platoon ids are given anew; `PopulationSystem.SpawnIntoPlayerSquad` makes one
+  character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
+  starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
+  player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
+  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). It returns the character's id, or none and adds nothing
+  for another squad, another record type, a point that is not finite or not walkable, a unique already claimed, or the recruit's caps
+  (`max squad size`, `max faction size`); the `VisitTown` command sends a squad running a wandering trader package to a
   player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
   trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
