@@ -13,8 +13,9 @@ namespace Meitou.Game.Ui;
 /// menu verbs", the Building row): with characters selected the pointer over one is the class's (<c>mine</c> for function 1 or 27, else
 /// <c>use</c>); a quick right click operates it (87, <see cref="OperateOrder"/> on its <c>townwork:</c> site, with Shift the Operating machine job);
 /// held, the menu offers Use and, once its machine exists, Loot (26): the selection walks to it and its window opens beside the character's
-/// inventory, where taking from it is a theft from the town's faction. An automatic one (max operators 0, an automatic well) has no Use: Loot takes
-/// its place, for the quick click too (the original's Auto-Haul 152 there is not made for a town machine).
+/// inventory, where what is taken from it is marked stolen from the town's faction (no Theft when its record is no interior furniture: a well, a
+/// farm). An automatic one (max operators 0, an automatic well) has no Use: Loot takes its place, for the quick click too (the original's
+/// Auto-Haul 152 there is not made for a town machine).
 /// </summary>
 sealed class TownMachineUse(PlayerInterface player)
 {

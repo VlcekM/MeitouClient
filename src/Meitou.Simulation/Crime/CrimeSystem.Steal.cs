@@ -137,16 +137,27 @@ public sealed partial class CrimeSystem
         PendSteal(world, thief, StealSource.Of(container), code);
 
     /// <summary>
-    /// <see cref="PendSteal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods.
+    /// <see cref="PendSteal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods. A holder that is no interior
+    /// furniture (a well, a farm) is never a crime (<see cref="HasOwnerCharacter"/>).
     /// </summary>
     public bool PendSteal(World world, int thief, StealSource container, CrimeCode code)
     {
         if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container))
             return false;
+        if (!HasOwnerCharacter(world, container)) return false;
 
         SetPending(world, thief, code, container.Owner, CharacterId.None, MinTimer);
         return true;
     }
+
+    /// <summary>
+    /// Whether a take out of <paramref name="container"/> has the owner character the crime and the steal roll need (<c>FUN_14070cef0</c>,
+    /// <b>Verified</b> decompile, docs/game/carry-loot.md "Theft and witnesses"): a building's is a resident of the building it stands in, found
+    /// through Building slot 59 (<c>isIndoors</c>), which is the null handle unless the BUILDING record is <c>is interior furniture</c>. So
+    /// only a holder whose record is no interior furniture is ruled out; an unknown record keeps the crime.
+    /// </summary>
+    static bool HasOwnerCharacter(World world, StealSource container) =>
+        world.SystemOf<Construction.ConstructionSystem>()?.Data(container.RecordId) is not { IsInteriorFurniture: false };
 
     /// <summary>
     /// The chance the inventory window prints for a take out of another faction's container (<c>FUN_140712920</c> "Stealing chance:", the roll's

@@ -111,6 +111,17 @@ slave/prisoner/bounty/bandit/police/diplomat/own-property branches, not just con
 drag-drop unpermitted down-character→Theft3, other source→Looting10. Ordinary loot UI path unknown.
 Ground pickup can raise Theft inside another faction's building, and taking from another faction's container does (Theft by right-click, Looting by drag).
 
+**Verified** (decompile of the right click `FUN_140713d20`, the drag `FUN_140715560` and the give `FUN_140712490`): the three set the crime and roll
+only when the source window has an owner character (`InventoryGUI` slot 15, `FUN_14070cfe0` -> `FUN_14070cef0`), and book it against that
+character's faction, none when it is the player's (faction `+0x250`, `FUN_1407916d0`). The owner character is the window's character; a CONTAINER's
+character parent (`+0x230`); for a BUILDING, Building slot 59 (`isIndoors`, `FUN_140547530`: the null handle unless the record is `is interior
+furniture`, [lights](../formats/lights.md)) gives the building it stands in, whose resident squad (`+0xD0`, a CHARACTER or PLATOON hand; its
+active platoon `+0x1d8`) gives its leader, or another member when the leader is down (`FUN_140792b90`). So a take out of a building that is no
+interior furniture (the wells, the outdoor farms, mines, refineries and wind generators: `is interior furniture` False in gamedata.base; the indoor farms, rain collectors and generators are True) or out of furniture in a building
+nobody lives in is never a crime and has no roll; `isStealing` alone still marks the item. Meitou (`CrimeSystem.HasOwnerCharacter`, #808): no
+crime and no roll out of a holder whose record is no interior furniture; an interior one is booked against its owner faction whether anyone lives
+in its building.
+
 **Observed** steal roll (`FUN_140794810`, chance `FUN_1407944d0`; virtual names KenshiLib 1ce4a16): both inventory transfers above and the give
 set their pending crime, then roll; caught refuses the move. **Verified** (`FUN_140713d20` decompile): the right click asks the taker's
 inventory for room (`Inventory` slot 4 `FUN_14074afa0`), else its backpack, after setting the crime and before the roll (`Character` slot 83);
@@ -128,7 +139,7 @@ save, Rebirth's raised barrels read floor 1, the guards below floor 0, and a thi
 (`+0xD5`) is set; the roof flag is only set for a character whose `isIndoors` building is set (`FUN_1405d00b0`). Each movement step
 sets the floor from the surface under the character, roof or not (`FUN_1405c7c30`: `setFloor(CharMovement::getCurrentFloor())`, no roof test):
 that thief loaded with no saved `floor` key (read by `FUN_140626f50`; the original's saves write one per character) and read 1 on the roof. No watcher, or one unconscious, dead, carried or imprisoned (or a down thief): p = 1, the
-pending crime stays. Caught (`rand > p`): a watcher in bed says event 47 instead half the time (`rand > 0.5`); else it stands up, says event 8, the
+pending crime (set only with an owner character, above) stays. Caught (`rand > p`): a watcher in bed says event 47 instead half the time (`rand > 0.5`); else it stands up, says event 8, the
 thief gets Theft timer 30 against the owner's faction and the watcher's squad a long-term STOLE_FROM_ME tag (4, `FUN_140673a20`); no faction
 relation event (none of the slot-5 callers in [factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile) is a theft
 or loot path). Thievery XP 2 x 20, caught 2 x 80, none when p >= 0.98, the thief is imprisoned or its `+0x180` is 10 or more after the roll.
