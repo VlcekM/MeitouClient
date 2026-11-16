@@ -434,8 +434,8 @@ public static class SaveImport
 
     /// <summary>
     /// The zone files (<c>FUN_140377710</c>): with "Buildings" each keeps the building instances that are removals or whose state is owned by the
-    /// player faction, with their states; a zone that keeps none has no file. Without the tick no zone file stays. The loose items and every other
-    /// building are the new world's.
+    /// player faction, with every record they reach (<see cref="Reachable"/>: their states, inventories and the items in them); a zone that keeps
+    /// none has no file. Without the tick no zone file stays. The loose items and every other building are the new world's.
     /// </summary>
     static void FilterZones(SaveGame game, string playerId, ImportOptions options)
     {
@@ -464,10 +464,32 @@ public static class SaveImport
                 continue;
             }
 
-            var used = list.Instances.SelectMany(i => i.States).ToHashSet(StringComparer.Ordinal);
+            var used = Reachable(list.Instances, byId);
             zone.File.Records.RemoveAll(r => !ReferenceEquals(r, list) && !used.Contains(r.StringId));
             zone.File.SlotLists.Clear();
         }
+    }
+
+    /// <summary>
+    /// The ids of the records <paramref name="instances"/> reach in their zone file, as the original carries them across (<c>FUN_140385ab0</c>,
+    /// <b>Verified</b> by decompile): each instance's states and its target, and from every record reached its own instances' in turn. So a
+    /// building's INVENTORY_STATE keeps its INVENTORY_ITEM_STATEs, and a container among them the inventory it holds.
+    /// </summary>
+    static HashSet<string> Reachable(IEnumerable<FcsInstance> instances, Dictionary<string, FcsRecord> byId)
+    {
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        var open = new Stack<FcsInstance>(instances);
+        while (open.TryPop(out var instance))
+        {
+            foreach (string id in instance.States.Append(instance.Target))
+            {
+                if (!used.Add(id) || !byId.TryGetValue(id, out var r)) continue;
+
+                foreach (var inner in r.Instances) open.Push(inner);
+            }
+        }
+
+        return used;
     }
 
     #endregion

@@ -220,7 +220,10 @@ Reset squad positions 0x1, Buildings 0x4, Research 0x8, Dead NPCs 0x10, Relation
 4. Always (`FUN_140372560`): every non-nest town of the save gives its `discovered` and `explored` to the new town; player towns are set discovered and explored. **Dead NPCs**
    also applies the save's `replacementTown`. No town at all logs "No towns loaded." Then the towns get their [artifacts](../game/economy.md#artifacts) as in a new game.
 5. **Buildings**, zone files (`FUN_140377710`; a save whose version is below 0x245 uses `FUN_140377d10`, not read): each `zone/*.zone` keeps only the building instances that are removal entries
-   (empty target) or whose state is owned by the player faction; the others, the zone's loose items and every other record are not copied. A zone with a kept instance gets the
+   (empty target) or whose state is owned by the player faction. A kept instance is moved with everything it reaches (`FUN_140385ab0`, recursive): each state record and
+   its target record when the save's container has it, then the same for every instance of each record moved; the instance's state or target string is set to the
+   id the record has in the new container. So a player building keeps its INVENTORY_STATE, the INVENTORY_ITEM_STATEs it lists and the inventory of a container among
+   them. The other instances, the zone's loose items and the records no kept instance reaches are not copied. A zone with a kept instance gets the
    root bool `imported` = true and its file in the new working folder; at load that bool sets `ZoneMapContent::newGameFirstTimeLoaded` (`+0xa8`, `FUN_1409ffad0`), so the zone
    counts as fresh despite its file and its towns make their residents ([zone files](#zone-files)). The owner test is on the state's owner string
    (`FUN_140387dd0`; the exact key **Observed** as `owner faction ID`).
@@ -247,7 +250,9 @@ does), so the game runs with the nine difficulty globals as they stand, which ar
 (`FUN_14047ab70` copies the row's block, `FUN_140912f80`) and whatever the sliders then hold.
 
 Meitou (`SaveImport`, `GameHost.BeginImport`): the loaded save is cut down to the same parts in memory (`SaveImport.Filter`) and then loaded by `SaveLoader` as any save, so what the loader
-makes is what a load of that smaller save makes. Engine choices: the squads' `squad index` is renumbered from 0 in their old order; with Reset the members stand on a line 2 units apart at
+makes is what a load of that smaller save makes. A kept building keeps the records it reaches under their old ids (`SaveImport.Reachable`); **Observed** by a scratch
+harness importing #729's save and Beep Fan Club 1: every INVENTORY_ITEM_STATE under a player building stays (124 of 124, 566 of 566), and the imported world's player
+machines hold as many items, of the same total quantity, as the saved world's. Engine choices: the squads' `squad index` is renumbered from 0 in their old order; with Reset the members stand on a line 2 units apart at
 their squad's point, on the ground there (`PlaceOnGround`); a save without a player squad is refused instead of salvaged; imprisoned uniques not in the player's squads are dropped from the table
 (their characters are not carried) instead of tested by handle; the finished research of "off" is `_Default Start` only; the weather and decals start fresh; war states are dropped with
 the NPC platoons. A save older than 0.90.0 drops the reset, buildings, research and dead-NPC ticks (`SaveImport.AllowedFor`; the original's window disables and unticks them,
