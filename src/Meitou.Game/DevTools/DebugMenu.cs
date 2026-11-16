@@ -18,15 +18,17 @@ namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
-/// <see cref="DebugCommand"/>s. The menu opens on its categories (<see cref="DebugCategories"/>: Characters, Items (a window), Squad / Faction, World / Spawn, Combat,
-/// Cheats, then Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a
-/// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how many in
-/// green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the
-/// middle of the screen); heal and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully gives them back. Edit
-/// characters closes the menu and opens a window of its own (<see cref="DebugCharactersWindow"/>), whose characters are picked in its list, not from
-/// the selection. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's selection),
-/// else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the squad has
-/// room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move instantly,
+/// <see cref="DebugCommand"/>s. It opens only with a game loaded to the world (<see cref="DebugMenuAvailable"/>). The menu opens on its
+/// categories (<see cref="DebugCategories"/>: Characters and Items (windows of their own), Squad / Faction, World / Spawn, Combat, Cheats, then
+/// Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a sub-view,
+/// whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how many in green
+/// ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the
+/// middle of the screen); heal and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully gives them back.
+/// Characters closes the menu and opens a window of its own (<see cref="DebugCharactersWindow"/>), whose characters are picked in its list, not
+/// from the selection; Items opens the Items window (<see cref="DebugItemsWindow"/>). Recruit takes the inspected character (a click on another
+/// faction's character shows it in the HUD and keeps the squad's selection), else the first selected: it adds it to the player's faction and
+/// active squad when it has a dialogue line that makes it join and the squad has room, then opens the character editor on it. The Cheats category
+/// holds the one-time actions (Heal, Heal fully, Clear bounties, Give item) and the five debug switches (Gigachad mode, Auto heal, Move instantly,
 /// One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
 /// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
 /// "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected
@@ -69,10 +71,6 @@ sealed class DebugMenu(GameHost host)
         /// </summary>
         HealFully,
 
-        /// <summary>
-        /// Closes the menu and opens the Edit characters window.
-        /// </summary>
-        EditCharacters,
 
         /// <summary>
         /// Cuts the targets for the typed damage, on the picked part or at random.
@@ -162,17 +160,16 @@ sealed class DebugMenu(GameHost host)
     internal static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
-        "Edit characters", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Gigachad Mode (set stats to 1000)", "Auto heal",
+        "Damage (cut)", "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Gigachad mode (stats 1000)", "Auto heal",
             "Move instantly", "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target",
             "Explode on click", "Recruit", "Faction relations",
     ];
 
     /// <summary>
     /// A category of the menu: its title and its rows (a cheat's number, a mod row's, or <see cref="GameMods.DebugRowCount"/> + a tool's index).
-    /// <paramref name="OpensWindow"/>: it has no rows; opening it closes the menu and opens the Items window.
+    /// <paramref name="Open"/>: it has no rows; opening it closes the menu and runs this (a window of its own).
     /// </summary>
-    readonly record struct DebugCategory(string Title, int[] Rows, bool OpensWindow = false);
+    readonly record struct DebugCategory(string Title, int[] Rows, Action? Open = null);
 
     /// <summary>
     /// The menu's categories, in the order shown: the cheats by purpose, then the code mods' rows (skipped when no mod added one), then the tools.
@@ -198,16 +195,16 @@ sealed class DebugMenu(GameHost host)
 
         var categories = new List<DebugCategory>
         {
-            new("Characters", [(int)DebugRow.EditCharacters, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
-                (int)DebugRow.GiveItem]),
-            new("Items", [], OpensWindow: true),
+            new("Characters", [], Open: OpenCharactersWindow),
+            new("Items", [], Open: OpenItemsWindow),
             new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.FactionRelations,
                 (int)DebugRow.UnlockResearch]),
             new("World / Spawn", [.. worldRows]),
             new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
                 (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
-            new("Cheats", [(int)DebugRow.StatsTo1000, (int)DebugRow.AutoHeal, (int)DebugRow.InstantMove, (int)DebugRow.OnePunch,
-                (int)DebugRow.NoStumble, (int)DebugRow.Guard]),
+            new("Cheats", [(int)DebugRow.StatsTo1000, (int)DebugRow.OnePunch, (int)DebugRow.AutoHeal, (int)DebugRow.Heal,
+                (int)DebugRow.HealFully, (int)DebugRow.Guard, (int)DebugRow.InstantMove, (int)DebugRow.NoStumble,
+                (int)DebugRow.GiveItem, (int)DebugRow.ClearBounties]),
         };
         if (host.Modding.DebugRowCount > DebugLabels.Length)
             categories.Add(new("Mods", [.. Enumerable.Range(DebugLabels.Length, host.Modding.DebugRowCount - DebugLabels.Length)]));
@@ -233,7 +230,7 @@ sealed class DebugMenu(GameHost host)
     /// <summary>
     /// The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
     /// </summary>
-    internal readonly List<string> DebugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
+    internal readonly List<string> DebugFields = ["", "", "", "1000", "", "", "20", "", "1", "", "", ""];
 
     /// <summary>
     /// The record each typed name means, by whether a character is wanted and the text; null when none matches.
@@ -246,19 +243,29 @@ sealed class DebugMenu(GameHost host)
     readonly DebugRelationsEditor _relationsEditor = new(host);
 
     /// <summary>
-    /// The menu is open; opening it shows the categories again.
+    /// The menu is open; opening it shows the categories again. It only opens with a game loaded to the world (<see cref="DebugMenuAvailable"/>),
+    /// and closes itself when the title or a loading screen takes the screen.
     /// </summary>
     internal bool DebugMenuOpen
     {
-        get => _debugMenuOpen;
+        get
+        {
+            if (_debugMenuOpen && !DebugMenuAvailable) _debugMenuOpen = false;
+            return _debugMenuOpen;
+        }
         set
         {
-            _debugMenuOpen = value;
-            if (!value) return;
+            _debugMenuOpen = value && DebugMenuAvailable;
+            if (!_debugMenuOpen) return;
             _category = -1;
             DebugParts = null;
         }
     }
+
+    /// <summary>
+    /// The menu can be shown: a game is loaded to the world (not the title, not a loading screen).
+    /// </summary>
+    internal bool DebugMenuAvailable => !host.Player.TitleOpen && !host.Covered;
 
     /// <summary>
     /// The open flag behind <see cref="DebugMenuOpen"/>.
@@ -649,7 +656,7 @@ sealed class DebugMenu(GameHost host)
     /// Whether <paramref name="row"/> takes typed text: a mod row with a field, or a cheat row other than the switches and actions without one.
     /// </summary>
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacters or DebugRow.ForceHits
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
             or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
             or DebugRow.Recruit or DebugRow.FactionRelations));
@@ -775,10 +782,10 @@ sealed class DebugMenu(GameHost host)
         if (categories.Length == 0) return;
         _category = Math.Clamp(index, 0, categories.Length - 1);
         _categoryCursor = _category;
-        if (categories[_category].OpensWindow)
+        if (categories[_category].Open is { } open)
         {
             _category = -1;
-            OpenItemsWindow();
+            open();
             return;
         }
 
@@ -854,9 +861,7 @@ sealed class DebugMenu(GameHost host)
                     + $"force {ExplodeLevels.Values(_explodeLevel, true).Force:0.#}, dmg {ExplodeLevels.Values(_explodeLevel, true).Damage:0.#})";
                 break;
 
-            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacters:
-                OpenCharactersWindow();
-                break;
+
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.FactionRelations:
                 _debugStatus = _relationsEditor.Begin();
                 break;
@@ -1604,7 +1609,7 @@ sealed class DebugMenu(GameHost host)
             {
                 bool current = c == _categoryCursor;
                 int active = DebugActiveCount(categories[c], world);
-                string value = categories[c].OpensWindow ? "Enter: open the window" : active > 0 ? $"{active} active" : "";
+                string value = categories[c].Open is not null ? "Enter: open the window" : active > 0 ? $"{active} active" : "";
                 lines.Add(new((current ? "> " : "  ") + DebugCategoryColumns(categories[c].Title, value), current, active > 0, c, -1));
             }
             return;
@@ -1730,9 +1735,7 @@ sealed class DebugMenu(GameHost host)
                     rowOn = world.Player.NoStumble;
                     break;
 
-                case DebugRow.EditCharacters:
-                    value = "Enter: open the window";
-                    break;
+
                 case DebugRow.Recruit:
                     value = "Enter: recruit and edit";
                     break;

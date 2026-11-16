@@ -237,8 +237,8 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
         FcsRecordType.LimbReplacement];
 
     /// <summary>
-    /// A new item of <paramref name="record"/> at <paramref name="quality"/> (0 to 100; a weapon's exact grade <paramref name="exact"/> instead), made as
-    /// giving it makes it; null for an unknown record or an exact grade that is not in the data.
+    /// A new item of <paramref name="record"/> at <paramref name="quality"/> (0 to 100; a weapon's exact grade <paramref name="exact"/> instead),
+    /// made as giving it makes it; null for an unknown record or an exact grade that is not in the data.
     /// </summary>
     public static Items.ItemInstance? Make(PopulationData data, string record, int quantity, int quality, DebugWeaponGrade? exact = null)
     {
@@ -833,8 +833,8 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/> allows
-    /// it, and the result reaches the message log.
+    /// The debug menu's Recruit row: the character joins the player's faction and active squad when <see cref="DialogueSystem.RecruitRefusal"/>
+    /// allows it, and the result reaches the message log.
     /// </summary>
     static void Recruit(World world, PopulationData data, DebugRecruit recruit)
     {
@@ -1100,7 +1100,8 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// <see cref="SetQuality"/> without a world: false with the reason in <paramref name="error"/> when the exact grade names a record that is not there.
+    /// <see cref="SetQuality"/> without a world: false with the reason in <paramref name="error"/> when the exact grade names a record that is not
+    /// there.
     /// </summary>
     internal static bool ApplyQuality(PopulationData data, DebugWeaponGrade? exact, int quality, Items.ItemInstance item, out string error)
     {

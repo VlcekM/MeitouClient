@@ -628,7 +628,8 @@ sealed partial class PlayerInterface
     /// The base shows something that moves on real time or with the camera: it is arranged every frame.
     /// </summary>
     bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
-        || CharactersWindow.Shown || ItemsWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
+        || CharactersWindow.Shown || ItemsWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0
+        || FaithfulScreens.CapturesPointer;
 
     #endregion
 

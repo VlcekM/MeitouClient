@@ -343,9 +343,9 @@ public static partial class MyGuiPresentation
             if (lineSkin is null || props.ContainsKey("TextColour")) rowProperties["TextColour"] = ink;
             if (items[source].Colour is { } own) rowProperties["TextColour"] = own;
             if (lineSkin is not null && selected == source) rowProperties["Checked"] = "true";
-            result.Add(new(w.Name + "@row" + source, "Button", row, CellOf(items[source], column), $"{rowAction}:{sel}:{source}", lineSkin ?? "",
-                enabled, rowProperties, lineSkin is null && selected == source ? new(0.25f, 0.24f, 0.16f, 0.95f) : default, Argument: items[source].Id,
-                Clip: rowClip));
+            result.Add(new(w.Name + "@row" + source, "Button", row, CellOf(items[source], column), $"{rowAction}:{sel}:{source}",
+                lineSkin ?? "", enabled, rowProperties, lineSkin is null && selected == source ? new(0.25f, 0.24f, 0.16f, 0.95f) : default,
+                Argument: items[source].Id, Clip: rowClip));
         }
 
         props["ListKey"] = sel;
@@ -678,7 +678,8 @@ public static partial class MyGuiPresentation
             {
                 result[i] = result[i] with
                 {
-                    Action = $"mygui:combo:{w.Name}:toggle", Pickable = true, Enabled = enabled, Caption = part == "Client" ? text : result[i].Caption,
+                    Action = $"mygui:combo:{w.Name}:toggle", Pickable = true, Enabled = enabled,
+                    Caption = part == "Client" ? text : result[i].Caption,
                     Properties = part == "Client" && colour is not null
                         ? new Dictionary<string, string>(result[i].Properties) { ["TextColour"] = colour }
                         : result[i].Properties,

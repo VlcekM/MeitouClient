@@ -234,12 +234,5 @@ sealed class DebugItemCatalog
     static IEnumerable<DebugItemQuality> WeaponModels(GameDatabase db) =>
         Models(db).Select(m => new DebugItemQuality($"{m.Name}  (level {m.Level})", m.Level, new DebugWeaponGrade(m.Maker, m.Model, m.Level)));
 
-    /// <summary>
-    /// The weapon model levels above <paramref name="level"/> that any maker lists, each once, by level, with the name of its model: the quality
-    /// levels a mod adds past the game's own grades (Rebirth's Meitou at 100).
-    /// </summary>
-    public IReadOnlyList<(int Level, string Name)> ModelsAbove(GameDatabase db, int level) =>
-        [.. Models(db).Where(m => m.Level > level).Select(m => (m.Level, m.Name))];
-
     #endregion
 }

@@ -5,7 +5,6 @@ using Meitou.Data;
 using Meitou.Data.Ui;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
-using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Game.DevTools;
@@ -16,13 +15,13 @@ namespace Meitou.Game.DevTools;
 sealed record StockCell(DebugItemEntry Entry, DebugItemQuality? Quality, InventoryItemView View);
 
 /// <summary>
-/// The debug menu's Items window (docs/game/ui-input.md "Items window"): a window of the game's own window system (<see cref="MyGuiScreenHost"/>), not
-/// modal and standing just above the squad bar, so the portraits stay free to drop on. A search box on top; under it the item categories and the items
-/// of the picked one as two lists, and a fake trader's stock grid with what was picked (an item, at every quality it has, the worst first). A search
-/// (two characters or more, 300 ms after the last key) hides the lists and fills the stock with up to 50 matching items. A stock item is dragged by the
-/// mouse: let go over a squad bar portrait it is given to that character (what does not fit lands at the character's feet), over the world it is
-/// placed on the ground there, over any other part of the interface it goes nowhere. The stock never runs out; Shift gives five. Layout:
-/// <see cref="DebugItemsLayout"/>.
+/// The debug menu's Items window (docs/game/ui-input.md "Items window"): a window of the game's own window system
+/// (<see cref="MyGuiScreenHost"/>), not modal and standing just above the squad bar, so the portraits stay free to drop on. A search box on top;
+/// under it the item categories and the items of the picked one as two lists, and a fake trader's stock grid with what was picked (an item, at every
+/// quality it has, the worst first). A search (two characters or more, 300 ms after the last key) hides the lists and fills the stock with up to 50
+/// matching items. A stock item is dragged by the mouse: let go over a squad bar portrait it is given to that character (what does not fit lands at
+/// the character's feet), over the world it is placed on the ground there, over any other part of the interface it goes nowhere. The stock never runs
+/// out; Shift gives five. Layout: <see cref="DebugItemsLayout"/>.
 /// </summary>
 sealed class DebugItemsWindow(PlayerInterface player)
 {
@@ -74,20 +73,55 @@ sealed class DebugItemsWindow(PlayerInterface player)
     const string AllItemsId = "*", AllItemsCaption = "--- ALL ITEMS ---";
 
     /// <summary>
-    /// The quality dropdown's "Any" row: no quality filter.
+    /// The quality tiers the dropdown offers, in the order shown; each is a range of qualities (<see cref="Tiers"/>).
     /// </summary>
-    const string AnyQuality = "-1";
+    enum QualityTier
+    {
+        /// <summary>
+        /// Every quality.
+        /// </summary>
+        Any,
+        /// <summary>
+        /// The lowest band: Prototype and Shoddy, Rusted Junk to Old Refitted Blade.
+        /// </summary>
+        Low,
+        /// <summary>
+        /// The second band: Standard, Refitted Blade to Catun No.3 and Mk 0.
+        /// </summary>
+        Medium,
+        /// <summary>
+        /// The third band: High, Mk IV to Mk III.
+        /// </summary>
+        High,
+        /// <summary>
+        /// The fourth band: Specialist and Masterwork, Edge Type 1 to 3.
+        /// </summary>
+        VeryHigh,
+        /// <summary>
+        /// The item's own top quality, every variant that shares it: Masterwork for armour, Edge Type 3 for a weapon, Meitou with Rebirth.
+        /// </summary>
+        Max,
+    }
 
     /// <summary>
-    /// A quality level the dropdown offers: its label and the quality (0 to 100) it picks.
+    /// A tier of the dropdown: its label, the qualities it keeps (<paramref name="From"/> to <paramref name="To"/>, inclusive; null for every one)
+    /// and its colour. Max keeps the item's own top quality instead of a range (<see cref="Keeps"/>).
     /// </summary>
-    readonly record struct QualityLevel(string Label, int Quality);
+    readonly record struct QualityTierInfo(string Label, int? From, int? To, string Colour);
 
     /// <summary>
-    /// The game's own quality levels: the six grades, Prototype to Masterwork.
+    /// The tiers' labels, ranges and colours: the game's own grade colours where they match (ItemGrade0 grey, ItemGrade2 blue, ItemGrade3 green,
+    /// ItemGrade4 gold), white for the top; "Any" takes the list's own ink.
     /// </summary>
-    static List<QualityLevel> Grades() =>
-        [.. ArmourTooltip.GradeNames.Select((name, grade) => new QualityLevel(name, ArmourTooltip.GradeQualities[grade]))];
+    static readonly QualityTierInfo[] Tiers =
+    [
+        new("Any", null, null, ""),
+        new("Low", 0, 24, TooltipRuntime.TipHex("666666")),
+        new("Medium", 25, 44, TooltipRuntime.TipHex("4099b3")),
+        new("High", 45, 64, TooltipRuntime.TipHex("66fc80")),
+        new("Very high", 65, 99, TooltipRuntime.TipHex("fceb0d")),
+        new("Max", null, null, "1 1 1"),
+    ];
 
     /// <summary>
     /// The rows of the picked category's items, as the second list shows them: <see cref="AllItemsCaption"/> first, then the items by name.
@@ -110,19 +144,9 @@ sealed class DebugItemsWindow(PlayerInterface player)
     DebugItemEntry? _item;
 
     /// <summary>
-    /// The quality filter: -1 for any, else the quality (0 to 100) the stock is limited to, each item at the best quality it has at or below it.
+    /// The quality tier the stock is limited to.
     /// </summary>
-    int _quality = -1;
-
-    /// <summary>
-    /// The quality levels the dropdown offers: the six grades, then the model levels a mod adds above them.
-    /// </summary>
-    List<QualityLevel> _levels = Grades();
-
-    /// <summary>
-    /// The game data <see cref="_levels"/> was made for.
-    /// </summary>
-    GameDatabase? _levelsFor;
+    QualityTier _tier = QualityTier.Any;
 
     /// <summary>
     /// The search box's text as last typed and when (a <see cref="Stopwatch"/> timestamp), and the text the stock was last made for.
@@ -206,7 +230,7 @@ sealed class DebugItemsWindow(PlayerInterface player)
         var screens = player.FaithfulScreens;
         if (!screens.IsRegistered(DebugItemsLayout.Screen)) screens.Register(DebugItemsLayout.Screen, DebugItemsLayout.Build());
 
-        (_group, _sub, _item, _typed, _query, _dragCell, _quality) = (null, null, null, "", "", -1, -1);
+        (_group, _sub, _item, _typed, _query, _dragCell, _tier) = (null, null, null, "", "", -1, QualityTier.Any);
         _listed = [];
         screens.SetText(DebugItemsLayout.Screen, DebugItemsLayout.SearchBox, "");
         screens.ClearSelection(DebugItemsLayout.Screen, DebugItemsLayout.CategoriesList);
@@ -219,8 +243,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// The window's size and corner: as wide as the layout says (less on a small screen), as tall as it says or as the room above the squad bar leaves,
-    /// centred across the screen with its bottom edge a gap above the bar.
+    /// The window's size and corner: as wide as the layout says (less on a small screen), as tall as it says or as the room above the squad bar
+    /// leaves, centred across the screen with its bottom edge a gap above the bar.
     /// </summary>
     void Place()
     {
@@ -300,11 +324,12 @@ sealed class DebugItemsWindow(PlayerInterface player)
         List<DebugItemQuality?> qualities = [.. _catalog.Qualities(entry, data.Db)];
         if (qualities.Count == 0) qualities.Add(null);
 
-        if (_quality >= 0) qualities = [Best(qualities)];
-
+        int top = _tier == QualityTier.Max ? qualities.Max(q => q?.Quality ?? 0) : 0;
         foreach (var quality in qualities)
         {
             if (_stock.Count >= limit) return;
+            if (quality is null && _tier != QualityTier.Any) continue;   // an item without a quality is no tier's
+            if (quality is { } graded && !Keeps(graded.Quality, top)) continue;
             if (DebugGiveItem.Make(data, entry.Id, 1, quality?.Quality ?? 0, quality?.Exact) is not { } item) continue;
 
             _stock.Add(new(entry, quality, InventoryItemView.Of(_stock.Count, item)));
@@ -312,14 +337,15 @@ sealed class DebugItemsWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// The quality of <paramref name="qualities"/> at or below the picked one, the highest such: an item without that quality takes the highest it has
-    /// below it (armour takes Masterwork for Meitou); the lowest when none is below.
+    /// Whether the picked tier keeps a cell of quality <paramref name="quality"/>: its range, or for Max the item's own top
+    /// (<paramref name="top"/>).
     /// </summary>
-    DebugItemQuality? Best(List<DebugItemQuality?> qualities)
+    bool Keeps(int quality, int top) => _tier switch
     {
-        var below = qualities.Where(q => (q?.Quality ?? 0) <= _quality).ToList();
-        return below.Count > 0 ? below.MaxBy(q => q?.Quality ?? 0) : qualities.MinBy(q => q?.Quality ?? 0);
-    }
+        QualityTier.Any => true,
+        QualityTier.Max => quality == top,
+        _ => Tiers[(int)_tier] is { From: { } from, To: { } to } && quality >= from && quality <= to,
+    };
 
     /// <summary>
     /// Places the stock's items in a grid of <paramref name="columns"/> columns as a trader's stock is laid out: each in the first free spot reading
@@ -386,8 +412,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
     #region Bindings
 
     /// <summary>
-    /// The window's bindings: its place and size, the search label and its clear button, the help line, the two lists with their empty states, and the
-    /// stock's grid.
+    /// The window's bindings: its place and size, the search label and its clear button, the help line, the two lists with their empty states,
+    /// and the stock's grid.
     /// </summary>
     internal void Bind(UiBindings b)
     {
@@ -395,7 +421,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
         b.WindowPosition = _origin;
         b.Positions[DebugItemsLayout.Root] = new(0, 0, _size.X, _size.Y);
         b.Text[DebugItemsLayout.SearchLabel] = "Search by item name";
-        b.Text[DebugItemsLayout.HelpText] = "Drag an item onto a character's portrait or to the world, hold [shift] for x5. Note: items inventory displays only up to 100 items at once.";
+        b.Text[DebugItemsLayout.HelpText] = "Drag an item onto a character's portrait or to the world, hold [shift] for x5. "
+            + "Note: items inventory displays only up to 100 items at once.";
 
         BindClear(b);
         BindQuality(b);
@@ -404,36 +431,17 @@ sealed class DebugItemsWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// The quality dropdown: "Any", then the quality levels in their grade's colour (<see cref="QualityLevels"/>; the last grades share one).
+    /// The quality dropdown: the tiers in their colours (<see cref="Tiers"/>).
     /// </summary>
     void BindQuality(UiBindings b)
     {
         b.Text[DebugItemsLayout.QualityLabel] = "Preferred quality";
-        var levels = QualityLevels(Data);
         b.Lists[DebugItemsLayout.QualityCombo] =
         [
-            new(AnyQuality, "Any"),
-            .. levels.Select(l => new UiListItem(l.Quality.ToString(CultureInfo.InvariantCulture), l.Label,
-                Colour: TooltipRuntime.TipColour(TooltipRuntime.GradeTone(ArmourTooltip.GradeOf(l.Quality)), plate: false))),
+            .. Tiers.Select((tier, i) => new UiListItem(i.ToString(CultureInfo.InvariantCulture), tier.Label,
+                Colour: tier.Colour.Length > 0 ? tier.Colour : null)),
         ];
-        b.SelectedItems[DebugItemsLayout.QualityCombo] = _quality < 0 ? 0 : levels.FindIndex(l => l.Quality == _quality) + 1;
-    }
-
-    /// <summary>
-    /// The dropdown's levels: the six grades, then every weapon model level above the last grade that the data has (Rebirth's Meitou at 100), named as
-    /// its model is. Made once per game data.
-    /// </summary>
-    List<QualityLevel> QualityLevels(PopulationData? data)
-    {
-        if (data is null || ReferenceEquals(_levelsFor, data.Db)) return _levels;
-
-        _levels =
-        [
-            .. Grades(),
-            .. _catalog.ModelsAbove(data.Db, ArmourTooltip.GradeQualities[^1]).Select(m => new QualityLevel(m.Name, m.Level)),
-        ];
-        _levelsFor = data.Db;
-        return _levels;
+        b.SelectedItems[DebugItemsLayout.QualityCombo] = (int)_tier;
     }
 
     /// <summary>
@@ -572,7 +580,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
             if (lifted && i == _dragCell) continue;
 
             var view = _stock[i].View;
-            var at = new UiRect(grid.Bounds.X + _slots[i].X * cell, grid.Bounds.Y + _slots[i].Y * cellHeight, view.Width * cell, view.Height * cellHeight);
+            var at = new UiRect(grid.Bounds.X + _slots[i].X * cell, grid.Bounds.Y + _slots[i].Y * cellHeight, view.Width * cell,
+                view.Height * cellHeight);
             player.ItemCells.AddItemCell(controls, $"debug-stock-{i}", at, view.Record, view.Material, view.Name, view.Quantity,
                 TooltipRuntime.ItemTip.Of(view), DebugItemsLayout.CellProperty, i, grid.Clip, charge: view.Charge, colour: view.Colour,
                 rotated: view.Rotated, tipAtPointer: true);
@@ -586,7 +595,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
     bool ArrangeGrid(List<UiControl> controls, out UiControl grid)
     {
         grid = null!;
-        int viewIndex = controls.FindIndex(c => c.Name == DebugItemsLayout.StockView), gridIndex = controls.FindIndex(c => c.Name == DebugItemsLayout.StockGrid);
+        int viewIndex = controls.FindIndex(c => c.Name == DebugItemsLayout.StockView);
+        int gridIndex = controls.FindIndex(c => c.Name == DebugItemsLayout.StockGrid);
         if (viewIndex < 0 || gridIndex < 0) return false;
 
         var view = controls[viewIndex];
@@ -661,14 +671,13 @@ sealed class DebugItemsWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// Picks the quality <paramref name="id"/> of the dropdown (<see cref="AnyQuality"/> for any): the stock shows each item at the best quality it has
-    /// at or below it.
+    /// Picks the tier <paramref name="id"/> of the dropdown: the stock keeps only the cells whose quality is in its range.
     /// </summary>
     void PickQuality(string id)
     {
-        if (!int.TryParse(id, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int quality)) return;
+        if (!int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out int tier) || tier >= Tiers.Length) return;
 
-        _quality = quality;
+        _tier = (QualityTier)tier;
         Rebuild();
     }
 
@@ -775,7 +784,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
         var world = player.Session.World;
         for (int i = 0; i < quantity; i++)
         {
-            world.Commands.Enqueue(new DebugGiveItem(to, cell.Entry.Id, 1, cell.Quality?.Quality ?? 0) { Tick = world.Tick, Exact = cell.Quality?.Exact });
+            var give = new DebugGiveItem(to, cell.Entry.Id, 1, cell.Quality?.Quality ?? 0) { Tick = world.Tick, Exact = cell.Quality?.Exact };
+            world.Commands.Enqueue(give);
         }
 
         ApplyWhilePaused();
