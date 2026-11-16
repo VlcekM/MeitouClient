@@ -9,7 +9,21 @@ namespace Meitou.Simulation.Items;
 /// <summary>
 /// Snapshot identity prevents a drag started before eating/looting from moving a different item.
 /// </summary>
-public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality);
+public sealed record InventoryItemToken(int Index, string Record, string Section, int X, int Y, int Quantity, float Quality)
+{
+    /// <summary>
+    /// The item's code-mod tag as the window showed it (<see cref="ItemInstance.ModTag"/>; "" none): a right click (a mod's item use or a quick
+    /// move) acts only on an item that still carries it, so a stale click never reaches a differently tagged item in the same cell. Two items with
+    /// the same tag and token fields are not told apart.
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
+    /// The token of an item a window shows.
+    /// </summary>
+    public static InventoryItemToken Of(InventoryItemView item) =>
+        new(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality) { ModTag = item.ModTag };
+}
 /// <summary>
 /// The inventory window's ARRANGE (<c>FUN_14070f740</c>): <see cref="InventoryCommands.Arrange(Inventory, bool)"/> on the grid of the window
 /// pressed: the character's main grid, or the worn bag's when <paramref name="Bag"/>.
@@ -418,11 +432,11 @@ public static class InventoryCommands
 
     /// <summary>
     /// Whether a held item joins the stack it is dropped on (<c>FUN_140715560</c>): same record (so type), material and quality, of a type that
-    /// stacks; Meitou also keeps stolen, death and unique items apart, as <see cref="Inventory.Add"/> does.
+    /// stacks; Meitou also keeps stolen, death, unique and differently mod-tagged items apart, as <see cref="Inventory.Add"/> does.
     /// </summary>
     public static bool Stackable(ItemInstance a, ItemInstance b) => !NeverStacks(a.Type) && a.Record == b.Record && a.MaterialId == b.MaterialId
             && a.Quality == b.Quality
-        && a.Mark == b.Mark && a.Death == b.Death && a.Unique == b.Unique && a.Contents is null && b.Contents is null;
+        && a.ModTag == b.ModTag && a.Mark == b.Mark && a.Death == b.Death && a.Unique == b.Unique && a.Contents is null && b.Contents is null;
 
     /// <summary>
     /// Moves <paramref name="units"/> of <paramref name="from"/> onto the stack <paramref name="into"/>. Partial charges combine: a stack is full

@@ -387,6 +387,11 @@ public sealed class Blackboard
     /// The hours the trader stays in a town before it may go on (+0xd4, uniform [5, 8) at each start; see <see cref="TraderState"/>).
     /// </summary>
     public float TraderWait { get; set; }
+    /// <summary>
+    /// A <see cref="VisitTown"/> stay waits for the trader to reach its destination: the step there restarts <see cref="InTownSince"/>, so time
+    /// spent before the command, or in another town, does not count toward the stay (engine API, not in the original).
+    /// </summary>
+    public bool VisitArrivalPending { get; set; }
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
@@ -444,10 +449,7 @@ public sealed class Blackboard
         if (Contract is { } contract)
         {
             if (hours < ContractEnd) return;
-            _ended = (contract, MissionTarget);
-            Contract = null;
-            MissionTarget = CharacterId.None;
-            Current = null;   // the slots choose again
+            EndRunning(contract);
         }
 
         foreach (var (slot, list) in _slots.Reverse())
@@ -566,9 +568,11 @@ public sealed class Blackboard
     /// under 1 hour means 10 minutes, Observed), aimed at <paramref name="target"/> (its goals aimed at the squad's mission, as a bodyguard's, follow
     /// it). It takes precedence over the slots until it ends; then the slots choose again. Starting the contract already running does nothing (end
     /// time and target kept); a different one replaces it and the old one ends first, its end talk to the old target (<c>FUN_140272240</c>,
-    /// <c>FUN_14026a110</c>, <b>Verified</b>).
+    /// <c>FUN_14026a110</c>, <b>Verified</b>); to start it again, end it first (<see cref="EndContract"/>). <paramref name="anyRange"/>: see
+    /// <see cref="MissionAnyRange"/>.
     /// </summary>
-    public void StartContract(AiPackage package, double now, double hours, IPackageRules? rules = null, CharacterId? target = null)
+    public void StartContract(AiPackage package, double now, double hours, IPackageRules? rules = null, CharacterId? target = null,
+        bool anyRange = false)
     {
         if (Contract is { } running)
         {
@@ -579,7 +583,32 @@ public sealed class Blackboard
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         MissionTarget = target ?? CharacterId.None;
+        MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
+    }
+
+    /// <summary>
+    /// Ends the running contract now, as its hours running out would (engine API for code mods, not in the original): its end talk to its target,
+    /// and the slots choose again on the next update. False when none runs.
+    /// </summary>
+    public bool EndContract()
+    {
+        if (Contract is not { } running) return false;
+
+        EndRunning(running);
+        return true;
+    }
+
+    /// <summary>
+    /// The running contract ends: kept for its end talk (<see cref="TakeEnded"/>), the mission target cleared, and the slots choose again.
+    /// </summary>
+    void EndRunning(AiPackage contract)
+    {
+        _ended = (contract, MissionTarget);
+        Contract = null;
+        MissionTarget = CharacterId.None;
+        MissionAnyRange = false;
+        Current = null;
     }
 
     /// <summary>
@@ -604,11 +633,12 @@ public sealed class Blackboard
     /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, aimed at <paramref name="target"/> (none: the
     /// save named none, or a character that is not in the world).
     /// </summary>
-    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null)
+    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false)
     {
         Contract = package;
         ContractEnd = end;
         MissionTarget = target ?? CharacterId.None;
+        MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
     }
 
@@ -621,6 +651,12 @@ public sealed class Blackboard
     /// The squad's mission target: whom its running contract is aimed at (none without one).
     /// </summary>
     public CharacterId MissionTarget { get; private set; } = CharacterId.None;
+
+    /// <summary>
+    /// The contract's assault takes its mission target wherever it is, not only within the manoeuvre mode's reach (engine API for code mods,
+    /// <see cref="StartContract.AnyRange"/>; saved as <see cref="Saving.AiSave.AnyRangeKey"/>). False without a mission target.
+    /// </summary>
+    public bool MissionAnyRange { get; private set; }
 
     /// <summary>
     /// The contract that ended on the last <see cref="Update"/> and whom it was aimed at, until <see cref="TakeEnded"/> takes it.
@@ -661,6 +697,7 @@ public sealed class Blackboard
         hasher.Add(Contract is not null);
         hasher.Add(ContractEnd);
         if (!MissionTarget.IsNone) hasher.Add(MissionTarget);
+        if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
         hasher.Add(Route.Length);
@@ -687,6 +724,9 @@ public sealed class Blackboard
             hasher.Add(InTown.PlayerTown);
             hasher.Add(InTownSince);
         }
+
+        // Only a code mod's visit sets it, so a world without one hashes as before.
+        if (VisitArrivalPending) hasher.Add(VisitArrivalPending);
 
         if (AssaultEnemy >= 0 || AssaultDone)
         {

@@ -176,10 +176,11 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// Whether two items may share a stack: same record, material and quality (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_140715560</c>),
-    /// stolen mark, death and unique flags. The material keeps blueprints of different researches apart: they share their look record (#354).
+    /// stolen mark, death and unique flags, mod tag. The material keeps blueprints of different researches apart: they share their look record
+    /// (#354).
     /// </summary>
     static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality
-            && a.Mark == b.Mark
+            && a.ModTag == b.ModTag && a.Mark == b.Mark
         && a.Death == b.Death && a.Unique == b.Unique;
 
     /// <summary>
@@ -315,8 +316,8 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, buy-back coins, a bag's contents) to the world
-    /// hash.
+    /// Adds the items (record, place, quantity, level, quality, charges, the unique and rotated flags, a mod tag, buy-back coins, a bag's contents) to
+    /// the world hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -333,6 +334,7 @@ public sealed class Inventory(int width, int height)
             h.Add(i.Charges);
             if (i.Unique) h.Add(Rng.StableHash("Unique"));
             if (i.Rotated) h.Add(Rng.StableHash("Rotated"));
+            if (i.ModTag.Length > 0) HashTag(ref h, i.ModTag);   // only when tagged, so untagged inventories hash as before
             if (i.Buyback is { } receipt)
             {
                 h.Add(Rng.StableHash("Buyback"));
@@ -342,6 +344,15 @@ public sealed class Inventory(int width, int height)
             }
             i.Contents?.Hash(ref h);
         }
+    }
+
+    /// <summary>
+    /// Adds a code mod's item tag (<see cref="ItemInstance.ModTag"/>) to the world hash after a field marker.
+    /// </summary>
+    internal static void HashTag(ref StateHasher h, string tag)
+    {
+        h.Add(Rng.StableHash("ModTag"));
+        h.Add(Rng.StableHash(tag));
     }
 }
 

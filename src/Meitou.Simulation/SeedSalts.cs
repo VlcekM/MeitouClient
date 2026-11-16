@@ -153,4 +153,9 @@ internal static class SeedSalts
     public const ulong CampaignPass = 0xCA01UL, CampaignDraw = 0xCA02UL, CampaignFollowUp = 0xCA03UL, CampaignDelay = 0xCA04UL,
         CampaignRetry = 0xCA05UL,
         CampaignSquad = 0xCA5DUL, CampaignPlace = 0xCA90UL, CampaignTemplate = 0xCA70UL, CampaignDialogue = 0xCAD0UL, CampaignTrail = 0xCA7A0UL;
+
+    /// <summary>
+    /// A code mod's platoon (<c>PopulationSystem.SpawnPlatoon</c>): the salt XORed into its key, and counter base of its placement tries.
+    /// </summary>
+    public const ulong ModPlatoon = 0x30D5UL, ModPlatoonPlace = 0x30D90UL;
 }

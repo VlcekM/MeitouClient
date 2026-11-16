@@ -306,6 +306,7 @@ public sealed partial class AiSystem
         ulong key = (ulong)squad.Id << 32 ^ (ulong)world.Tick;
         board.TraderWait = 5 + 3 * Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, SeedSalts.AiTraderWait));
         board.TraderState = 0;
+        board.VisitArrivalPending = false;
         var at = LeaderPosition(world, squad) ?? squad.Position;
         ulong townSeed = Rng.Hash(world.Seed, key, RngPurpose.Think, SeedSalts.AiTraderTown);
         board.Destination = data.TraderTown(squad.Faction, Flat(at), board.InTown, world.Buildings.Towns, townSeed);
@@ -313,7 +314,8 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The trader's update (vtable +0x48): without a town it starts over; in its town the state goes 0 → 1 → 2 (2 is finished, so the next slot, its
-    /// bar package, takes over), and when it is ready to leave there it drops the town (<c>FUN_140288bd0</c>) to draw a new one next time. The
+    /// bar package, takes over), and when it is ready to leave there it drops the town (<c>FUN_140288bd0</c>) to draw a new one next time. A
+    /// <see cref="VisitTown"/> stay starts its clock at the first step in the town (<see cref="Blackboard.VisitArrivalPending"/>). The
     /// original also leaves 0.2 h after a flag of its leader is set (Character +0x648 → +0x70, meaning <b>Unknown</b>): not built.
     /// </summary>
     void StepTrader(World world, Squad squad, Blackboard board)
@@ -325,6 +327,12 @@ public sealed partial class AiSystem
         }
 
         if (board.InTown.IsNone || board.InTown != board.Destination) return;
+        if (board.VisitArrivalPending)
+        {
+            board.InTownSince = world.GameHours;
+            board.VisitArrivalPending = false;
+        }
+
         board.TraderState = board.TraderState == 0 ? 1 : 2;
         if (ReadyToLeave(world, board)) board.Destination = CampaignTown.None;
     }

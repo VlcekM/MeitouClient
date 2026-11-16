@@ -190,7 +190,7 @@ public sealed class GroundItems
     long _publishedAt;
 
     /// <summary>
-    /// Adds each item (id, record, quantity, position, rotation; its slot, camp and owner when set) to the world hash.
+    /// Adds each item (id, record, quantity, position, rotation; its slot, camp, owner and mod tag when set) to the world hash.
     /// </summary>
     public void Hash(ref StateHasher h)
     {
@@ -211,6 +211,7 @@ public sealed class GroundItems
                 h.Add(i.OwnedBy);
             }   // only for a slot's, so other items hash as before
             if (i.Camp is { } camp) h.Add(camp);
+            if (i.Item.ModTag.Length > 0) Inventory.HashTag(ref h, i.Item.ModTag);
         }
     }
 }

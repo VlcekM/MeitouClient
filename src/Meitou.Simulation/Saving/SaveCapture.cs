@@ -229,7 +229,20 @@ public static partial class SaveCapture
     {
         if (loaded is not null) WriteRoaming(builder.Game, world, loaded);
         WriteSavedNpcs(builder, world, data, options, clock, buildings, races);
-        return WriteFreshNpcs(builder, world, data, options, clock, buildings, races, loaded);
+        var fresh = WriteFreshNpcs(builder, world, data, options, clock, buildings, races, loaded);
+        WriteModMarks(builder.Game, world, loaded, fresh);
+        return fresh;
+    }
+
+    /// <summary>
+    /// A code mod's marks on every platoon the save holds (<see cref="ModPlatoonSave"/>).
+    /// </summary>
+    static void WriteModMarks(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    {
+        foreach (var (id, platoon) in WrittenPlatoons(game, world, loaded, fresh))
+        {
+            if (world.Platoons.Find(id) is { } p) ModPlatoonSave.Write(platoon.Record, p);
+        }
     }
 
     /// <summary>
@@ -1224,7 +1237,7 @@ public static partial class SaveCapture
         }
 
         /// <summary>
-        /// Writes the squads in the world, the stored ones and the campaign's stand-ins; returns the platoons written by world platoon id.
+        /// Writes the squads in the world, the stored ones and the campaign's and code mods' stand-ins; returns the platoons written by world platoon id.
         /// </summary>
         public Dictionary<int, SavePlatoon> Write(LoadedSave? loaded)
         {
@@ -1364,17 +1377,14 @@ public static partial class SaveCapture
         }
 
         /// <summary>
-        /// A campaign's stand-ins that never had their characters (not a save's: those are in it already).
+        /// A campaign's or a code mod's stand-ins that never had their characters (not a save's: those are in it already).
         /// </summary>
         void WriteStandIns(LoadedSave? loaded)
         {
             foreach (var p in _world.Platoons.All)
             {
-                if (p is not { Campaign: not null, State: PlatoonState.Unloaded, Saved: null } || p.Stored is { Members.Count: > 0 }
-                    || !Writable(p.Origin, p.Faction))
-                {
-                    continue;
-                }
+                bool standIn = p is { State: PlatoonState.Unloaded, Saved: null } && (p.Campaign is not null || p.ModSpawned);
+                if (!standIn || p.Stored is { Members.Count: > 0 } || !Writable(p.Origin, p.Faction)) continue;
 
                 if (loaded?.RoamingPlatoons.ContainsKey(p.Id) == true) continue;
 

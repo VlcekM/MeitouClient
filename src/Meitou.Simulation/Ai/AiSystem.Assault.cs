@@ -50,7 +50,7 @@ public sealed partial class AiSystem
     /// ragdolled); the best by the target score (<c>FUN_14059e300</c>) wins, which drops the faction's allies (unless slaves) and members it found no
     /// path to. Reads the last tick's state only (any thread in the think).
     /// </summary>
-    CharacterId AssaultTargetFor(World world, int slot, Blackboard? board, CharacterId? forcedMission = null)
+    internal CharacterId AssaultTargetFor(World world, int slot, Blackboard? board, CharacterId? forcedMission = null)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -75,8 +75,10 @@ public sealed partial class AiSystem
             // that reads a stored hand is Unknown, docs/game/ai-tasks.md).
             if (m != mission && !CharacterFacts.Knows(world, slot, m)) continue;
 
-            // Area: its home town, or the manoeuvre mode's reach (ROAM_FAR by default), or fighting it.
-            if (!(board is { Town: >= 0 } && TownAt(at) == board.Town) && !Orders.InArea(me.Manoeuvre, here, me.CentreOfMovement, at)
+            // Area: its home town, or the manoeuvre mode's reach (ROAM_FAR by default), or fighting it; a code mod's any-range mission target
+            // anywhere (Blackboard.MissionAnyRange, engine API).
+            bool anyRange = m == mission && board is { MissionAnyRange: true };
+            if (!anyRange && !(board is { Town: >= 0 } && TownAt(at) == board.Town) && !Orders.InArea(me.Manoeuvre, here, me.CentreOfMovement, at)
                 && !(fight.TargetSlot == slot && fight.TargetGeneration == prev[slot].Generation))
                 continue;
 

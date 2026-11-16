@@ -211,6 +211,31 @@ public sealed class Platoon
     /// The goal <see cref="Route"/> was worked out for.
     /// </summary>
     public Vector2? RouteGoal { get; set; }
+    /// <summary>
+    /// A code mod runs it (<c>PopulationSystem.HoldPlatoon</c>, engine API): the population gives it no trip and moves no stand-in of it; it still
+    /// loads, unloads and despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). Not saved: the mod finds it again by
+    /// <see cref="ModTag"/> and holds it again after a load.
+    /// </summary>
+    public bool Held { get; set; }
+    /// <summary>
+    /// Where a held platoon's stand-in travels off screen (<c>PopulationSystem.SendPlatoon</c>, engine API): a point, or the last position of
+    /// <see cref="ModFollow"/> while that character is alive. Null with no one to follow: it stands still. Cleared when the hold ends; not saved.
+    /// </summary>
+    public Vector2? ModGoal { get; set; }
+    /// <summary>
+    /// The character a held platoon's stand-in travels toward (<see cref="ModGoal"/>); none: the point. Not saved.
+    /// </summary>
+    public CharacterId ModFollow { get; set; } = CharacterId.None;
+    /// <summary>
+    /// Made by a code mod (<c>PopulationSystem.SpawnPlatoon</c>): kept off screen whatever the keep switches say, saved also before it first loads,
+    /// and a roaming platoon again after a load (saved as <see cref="Saving.ModPlatoonSave.SpawnKey"/>).
+    /// </summary>
+    public bool ModSpawned { get; set; }
+    /// <summary>
+    /// A free string a code mod sets to find its platoon again after a load, when platoon ids are given anew (saved as
+    /// <see cref="Saving.ModPlatoonSave.TagKey"/> only when set).
+    /// </summary>
+    public string ModTag { get; set; } = "";
 }
 
 /// <summary>
@@ -318,6 +343,10 @@ public sealed class PlatoonRegistry
     /// </summary>
     public int NextId() => _nextId++;
     /// <summary>
+    /// The id <see cref="NextId"/> gives next, not taken.
+    /// </summary>
+    public int PeekId => _nextId;
+    /// <summary>
     /// Takes the next id of a save's never-made town squad (see <see cref="_nextReserved"/>).
     /// </summary>
     public int NextReservedId() => _nextReserved--;
@@ -354,6 +383,8 @@ public sealed class PlatoonRegistry
             h.Add(p.SquadId);
             h.Add(p.UnloadAtTick);
             h.Add(p.OrderCooldown);
+            if (p.Held) h.Add(0x48656C64);   // only when held, so worlds without code mods hash as before
+            HashMod(ref h, p);
             if (p.Job != Ai.PlatoonJob.None || p.Point is not null)
             {
                 // Only for platoons whose package gives an off-screen job, so worlds without AI packages hash as before.
@@ -392,5 +423,21 @@ public sealed class PlatoonRegistry
                 h.Add(saved.Touched);
             }
         }
+    }
+
+    /// <summary>
+    /// A code mod's marks on a platoon (<see cref="Platoon.ModSpawned"/>, <see cref="Platoon.ModTag"/>, <see cref="Platoon.ModGoal"/>), each only
+    /// when set, so worlds without code mods hash as before.
+    /// </summary>
+    static void HashMod(ref StateHasher h, Platoon p)
+    {
+        if (p.ModSpawned) h.Add(0x4D6F6453);
+        if (p.ModTag.Length > 0) Items.Inventory.HashTag(ref h, p.ModTag);
+
+        if (p.ModGoal is null && p.ModFollow.IsNone) return;
+
+        h.Add(0x476F616C);
+        h.Add(p.ModGoal ?? default);
+        h.Add(p.ModFollow);
     }
 }

@@ -90,8 +90,7 @@ public static class GroundItemSave
             var old = zone is null ? [] : SaveGroundItems.Read(zone);
             var kept = old.Where(o => factory.Create(o.Item.BaseId) is null).ToList();
             var named = old.Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
-            bool unchanged = zone is not null && items.All(i => i.Item.Saved is { } s && named.Contains(s.StringId))
-                && items.Count + kept.Count == old.Count;
+            bool unchanged = zone is not null && items.All(i => AsSaved(i, named)) && items.Count + kept.Count == old.Count;
             if (unchanged) continue;
 
             if (zone is null) game.Zones[z] = zone = new SaveZone(z, new SaveFile());
@@ -104,6 +103,17 @@ public static class GroundItemSave
         }
 
         return camps;
+    }
+
+    /// <summary>
+    /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="named"/>) and with that record's
+    /// mod tag, so a code mod's retag in place rewrites the zone.
+    /// </summary>
+    static bool AsSaved(GroundItem item, HashSet<string> named)
+    {
+        if (item.Item.Saved is not { } saved || !named.Contains(saved.StringId)) return false;
+
+        return saved.Strings.GetValueOrDefault(SaveItem.ModTagKey, "") == item.Item.ModTag;
     }
 
     /// <summary>

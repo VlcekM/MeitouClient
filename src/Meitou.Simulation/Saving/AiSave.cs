@@ -35,11 +35,22 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     public const string ContractKey = "contractjob", EndKey = "jobhr", ReplacementKey = "replacementAI";
 
     /// <summary>
+    /// The PLATOON bool of a code mod's any-range contract (<see cref="Blackboard.MissionAnyRange"/>; engine key, written only when set, which the
+    /// original ignores).
+    /// </summary>
+    public const string AnyRangeKey = "meitou any range";
+
+    /// <summary>
+    /// The contract's assault takes its mission target wherever it is (<see cref="Blackboard.MissionAnyRange"/>).
+    /// </summary>
+    public bool AnyRange { get; init; }
+
+    /// <summary>
     /// What <paramref name="board"/> holds of it; null when it runs neither.
     /// </summary>
     public static AiSave? Of(Blackboard? board) =>
         board is { } b && (b.Contract is not null || b.Replacement is not null)
-            ? new AiSave(b.Contract?.Id, b.ContractEnd, b.Replacement?.Id) { Target = b.MissionTarget }
+            ? new AiSave(b.Contract?.Id, b.ContractEnd, b.Replacement?.Id) { Target = b.MissionTarget, AnyRange = b.MissionAnyRange }
             : null;
 
     /// <summary>
@@ -51,6 +62,8 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         platoon.Strings[ContractKey] = ai?.Contract ?? "";
         platoon.Strings[ReplacementKey] = ai?.Replacement ?? "";
         if (ai?.Contract is not null) platoon.Floats[EndKey] = (float)ai.ContractEnd;
+        if (ai is { Contract: not null, AnyRange: true }) platoon.Bools[AnyRangeKey] = true;
+        else platoon.Bools.Remove(AnyRangeKey);
 
         // A record without a contract keeps a null handle as it was read (its other parts are stale values).
         var target = ai?.Contract is not null ? ai.TargetHand : Hand.Null;
@@ -67,7 +80,8 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         if (contract is null && replacement is null) return null;
 
         var target = contract is null ? Hand.Null : Hand.Read(platoon, TargetKey);
-        return new AiSave(contract, platoon.Floats.GetValueOrDefault(EndKey), replacement) { TargetHand = target };
+        bool anyRange = contract is not null && platoon.Bools.GetValueOrDefault(AnyRangeKey);
+        return new AiSave(contract, platoon.Floats.GetValueOrDefault(EndKey), replacement) { TargetHand = target, AnyRange = anyRange };
     }
 
     /// <summary>
@@ -80,6 +94,6 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         if (Contract is null || ai.Package(Contract) is not { } contract) return;
 
         var target = Target.IsNone ? characterOf?.Invoke(TargetHand) ?? CharacterId.None : Target;
-        board.ResumeContract(contract, ContractEnd, rules, target);
+        board.ResumeContract(contract, ContractEnd, rules, target, AnyRange);
     }
 }

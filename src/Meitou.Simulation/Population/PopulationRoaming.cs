@@ -180,10 +180,12 @@ public sealed partial class PopulationSystem
     /// <c>persistent</c>, an occupier of a town, docs/game/ai.md "Package classes"; never a platoon declared <see cref="Platoon.Dead"/>, which clears
     /// the flag), else not in spawn mode 3 (<see cref="Platoon.ReplacedHome"/>) and held by a faction campaign whose record is not in phase 2
     /// (<see cref="CampaignKept"/>; the original's empty-squad refusal is <c>RemoveWiped</c> before this runs). The Meitou switches
-    /// (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest.
+    /// (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest, and a code mod's spawn is always kept
+    /// (<see cref="Platoon.ModSpawned"/>; engine API).
     /// </summary>
     bool Kept(Platoon p) => !p.Dead
-        && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers))
+        && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p) || p.ModSpawned
+            || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers))
         || CampaignKept(p);
 
     /// <summary>
@@ -194,13 +196,16 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// One stand-in's off-screen step (any thread): the Faithful orphan timer (a stand-in out of range counts up; despawned in the serial pass past
-    /// the limit), then its travel (<see cref="StandIn"/>).
+    /// the limit), then its travel (<see cref="StandIn"/>, or a code mod's <see cref="ModTravel"/> while held).
     /// </summary>
     void StepOffscreen(World world, Platoon p, float dt)
     {
         if (!Kept(p) && (p.ReplacedHome || !Wanted(p))) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
-        if (p.OrphanSeconds <= OrphanLimitSeconds) StandIn(world, p, dt);
+        if (p.OrphanSeconds > OrphanLimitSeconds) return;
+
+        if (p.Held) ModTravel(world, p, dt);
+        else StandIn(world, p, dt);
     }
 
     /// <summary>
@@ -245,13 +250,7 @@ public sealed partial class PopulationSystem
         // Job 0 of a persistent platoon becomes GOHOME (FUN_1407ee790, Verified): it stands still too, whatever its distance from home (9216 only
         // picks GOHOME over the idle hook); only a non-persistent one takes the engine's travel.
         if (p.Job == PlatoonJob.None && (PersistentPlatoon(p) || AiSystem.Occupies(_data.Ai, p.Package))) return;
-        var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
-        if (!zone.IsInsideGrid) return;
-        if (_active.Contains(zone))
-        {
-            var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, StandInStopTrim);
-            if (p.Position.X >= minX && p.Position.X <= maxX && p.Position.Y >= minZ && p.Position.Y <= maxZ) return;
-        }
+        if (WaitsToLoad(p.Position)) return;
 
         if (MissionGoal(p) is >= 0 and var mission)
         {
@@ -287,6 +286,20 @@ public sealed partial class PopulationSystem
         }
 
         Travel(p, goal, StandInSpeed(p, d) * dt);
+    }
+
+    /// <summary>
+    /// A stand-in stops off the zone grid and inside the trimmed box of a loaded zone, where it waits to be made (<c>FUN_1407ee790</c>,
+    /// <b>Verified</b>).
+    /// </summary>
+    bool WaitsToLoad(Vector2 at)
+    {
+        var zone = WorldLayout.ZoneOf(at.X, at.Y);
+        if (!zone.IsInsideGrid) return true;
+        if (!_active.Contains(zone)) return false;
+
+        var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, StandInStopTrim);
+        return at.X >= minX && at.X <= maxX && at.Y >= minZ && at.Y <= maxZ;
     }
 
     /// <summary>
@@ -664,6 +677,7 @@ public sealed partial class PopulationSystem
         }
 
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
+        if (p.Held) return;   // a code mod runs it (HoldPlatoon)
 
         // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when
         // it gives way.
@@ -1287,6 +1301,159 @@ public sealed partial class PopulationSystem
         world.Platoons.Add(platoon);
         ChooseNext(world, platoon);
         Activate(world, platoon);
+    }
+
+    #endregion
+
+    #region Code-mod spawns
+
+    /// <summary>
+    /// Placement tries of a code mod's platoon (<see cref="SpawnPlatoon"/>; engine choice, as a campaign squad's 8).
+    /// </summary>
+    const int ModPlaceTries = 8;
+
+    /// <summary>
+    /// A code mod's spawn (engine API, not in the original): an unloaded platoon of the squad template <paramref name="templateId"/> for
+    /// <paramref name="faction"/>, homed at the site <paramref name="homeSite"/>, at a walkable point between <paramref name="minRadius"/> and
+    /// <paramref name="maxRadius"/> of <paramref name="around"/> (<see cref="ModSpot"/>; never outside that ring). Its package and job come from the
+    /// template (<see cref="PlatoonJobs.For"/>), so a trader template walks as a trader; it loads like any roaming platoon near the player (its squad
+    /// id is then <see cref="Platoon.SquadId"/>), is kept off screen whatever the keep switches say and is saved also before it first loads
+    /// (<see cref="Platoon.ModSpawned"/>). Its purse starts at <paramref name="money"/>. Returns the platoon id, or -1,
+    /// adding nothing, for an unknown template, faction or site, a point or radius that is not finite, a template that plans no one, or a ring with
+    /// no walkable point found. Serial phases only.
+    /// </summary>
+    public int SpawnPlatoon(World world, int faction, string templateId, int homeSite, Vector2 around, float minRadius, float maxRadius,
+        long money = 0)
+    {
+        if (faction < 0 || faction >= _data.Factions.Count || homeSite < 0 || homeSite >= _data.Sites.Count) return -1;
+        if (!float.IsFinite(around.X) || !float.IsFinite(around.Y) || !float.IsFinite(minRadius) || !float.IsFinite(maxRadius)) return -1;
+        if (_data.Db.Find(templateId) is not { Type: FcsRecordType.SquadTemplate } record) return -1;
+
+        var template = SquadTemplate.From(record);
+        int id = world.Platoons.PeekId;   // taken only once the spawn succeeds, so a refusal leaves the world as it was
+        ulong key = Rng.Mix(SeedSalts.ModPlatoon ^ (ulong)id << 8 ^ (ulong)faction << 40);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
+        if (plan.TotalMembers == 0 || ModSpot(world, key, around, minRadius, maxRadius) is not { } spot) return -1;
+
+        var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        world.Platoons.NextId();
+        world.Platoons.Add(new Platoon
+        {
+            Id = id,
+            Origin = homeSite,
+            TemplateId = template.Id,
+            Faction = faction,
+            Key = key,
+            Size = plan.TotalMembers,
+            Position = spot,
+            Package = package?.Id,
+            Job = job,
+            Money = Math.Max(0, money),
+            ModSpawned = true,
+        });
+        return id;
+    }
+
+    /// <summary>
+    /// A code mod takes over a platoon's movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip orders and its
+    /// stand-in stays where it is, so the mod can walk its members itself (<see cref="CharacterCold.Engaged"/> keeps the AI off a member; its
+    /// self-preservation still answers an attack). False for an unknown platoon, a town's own or a campaign's. Serial phases only.
+    /// </summary>
+    public static bool HoldPlatoon(World world, int platoon, bool held)
+    {
+        if (world.Platoons.Find(platoon) is not { Pinned: false, Campaign: null } p) return false;
+
+        p.Held = held;
+        if (held) return true;
+
+        // Given back, the population's travel takes over again.
+        p.ModGoal = null;
+        p.ModFollow = CharacterId.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Sends a held platoon's stand-in toward a point off screen, or stops it (null) (engine API, <see cref="Platoon.ModGoal"/>): it travels as a
+    /// roaming stand-in does (by the roads, at the engine's travel speed), stops within <see cref="PopulationSettings.RoamArrivalRadius"/> of the
+    /// point, and waits to be made at a loaded zone like any stand-in; once loaded, the mod walks its members. False for a platoon not held
+    /// (<see cref="HoldPlatoon"/>) or a point that is not finite. Serial phases only.
+    /// </summary>
+    public static bool SendPlatoon(World world, int platoon, Vector2? point)
+    {
+        if (world.Platoons.Find(platoon) is not { Held: true } p) return false;
+        if (point is { } at && !(float.IsFinite(at.X) && float.IsFinite(at.Y))) return false;
+
+        p.ModGoal = point;
+        p.ModFollow = CharacterId.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Sends a held platoon's stand-in toward a character off screen (<see cref="SendPlatoon(World, int, Vector2?)"/>): toward its last position
+    /// while it is alive, then it stops where it is. False for a platoon not held or a character not alive. Serial phases only.
+    /// </summary>
+    public static bool SendPlatoon(World world, int platoon, CharacterId follow)
+    {
+        if (world.Platoons.Find(platoon) is not { Held: true } p || !world.Characters.IsAlive(follow)) return false;
+
+        p.ModGoal = null;
+        p.ModFollow = follow;
+        return true;
+    }
+
+    /// <summary>
+    /// A followed character's goal is worked out again only once it is this far from the last one, so the road route is not found every step.
+    /// </summary>
+    const float ModFollowSlack = 200;
+
+    /// <summary>
+    /// A held platoon's off-screen step (any thread; only this platoon changes): on toward its mod's goal (<see cref="SendPlatoon(World, int,
+    /// Vector2?)"/>) until it arrives or waits to be made.
+    /// </summary>
+    void ModTravel(World world, Platoon p, float dt)
+    {
+        if (ModGoalOf(world, p) is not { } goal || WaitsToLoad(p.Position)) return;
+
+        float d = Vector2.Distance(p.Position, goal);
+        if (d <= _settings.RoamArrivalRadius) return;
+
+        Travel(p, goal, StandInSpeed(p, d) * dt);
+    }
+
+    /// <summary>
+    /// Where a held platoon heads: its point, or its followed character's last position (kept within <see cref="ModFollowSlack"/> of the route's
+    /// goal); null for none, or a followed character no longer alive.
+    /// </summary>
+    static Vector2? ModGoalOf(World world, Platoon p)
+    {
+        if (p.ModFollow.IsNone) return p.ModGoal;
+        if (!world.Characters.IsAlive(p.ModFollow)) return null;
+
+        var at3 = world.Characters.Previous[p.ModFollow.Slot].Position;
+        var at = new Vector2(at3.X, at3.Z);
+        return p.RouteGoal is { } last && Vector2.Distance(last, at) < ModFollowSlack ? last : at;
+    }
+
+    /// <summary>
+    /// A walkable point in the ring round <paramref name="around"/> (<see cref="SpawnPlatoon"/>; radii below 0 count as 0, a smaller outer one as the
+    /// inner one): uniform angle and distance, tried <see cref="ModPlaceTries"/> times. Null when none is walkable (engine choice: the centre is no
+    /// fallback, as it lies outside a ring with an inner radius).
+    /// </summary>
+    static Vector2? ModSpot(World world, ulong key, Vector2 around, float minRadius, float maxRadius)
+    {
+        float inner = Math.Max(0, Math.Min(minRadius, maxRadius));
+        float outer = Math.Max(inner, maxRadius);
+        for (int k = 0; k < ModPlaceTries; k++)
+        {
+            ulong angleKey = Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.ModPlatoonPlace + (ulong)(2 * k));
+            ulong distanceKey = Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.ModPlatoonPlace + (ulong)(2 * k + 1));
+            float angle = Rng.Float(angleKey) * MathF.Tau;
+            float distance = inner + Rng.Float(distanceKey) * (outer - inner);
+            var spot = around + distance * new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+            if (world.Walkability.IsWalkable(spot.X, spot.Y)) return spot;
+        }
+
+        return null;
     }
 
     #endregion

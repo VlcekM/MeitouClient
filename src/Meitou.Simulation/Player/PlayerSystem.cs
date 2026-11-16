@@ -17,7 +17,7 @@ public sealed record RenameFactionCommand(string Name) : SimCommand;
 
 /// <summary>
 /// Applies the player's selection and stop commands (step 1 of the tick). Move orders are the movement system's. The item on the mouse is
-/// <see cref="HeldItems"/>, a right click in an own window <see cref="QuickMoves"/>.
+/// <see cref="HeldItems"/>, a right click in an own window <see cref="ItemUses"/> (a mod's item) or <see cref="QuickMoves"/>.
 /// </summary>
 public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITaskOwner
 {
@@ -37,6 +37,11 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     readonly QuickMoves _quickMoves = new(data);
 
     /// <summary>
+    /// The right clicks on items a code mod handles, tried before <see cref="_quickMoves"/>.
+    /// </summary>
+    readonly ItemUses _itemUses = new();
+
+    /// <summary>
     /// The pick-ups of loose items and the walks to containers (row 3 "Collecting item").
     /// </summary>
     readonly PickUps _pickUps = new();
@@ -50,6 +55,15 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     /// The owner of the pick-up and container orders (row 3) and their act-outs.
     /// </summary>
     internal PickUps PickUps => _pickUps;
+
+    /// <summary>
+    /// The code mods' additions, for their item uses (null: no mods).
+    /// </summary>
+    public SimulationExtensions? Extensions
+    {
+        get => _itemUses.Extensions;
+        set => _itemUses.Extensions = value;
+    }
 
     /// <summary>
     /// The player's animals take a pick-up order on a loose item into their bags (<see cref="PickUps.AnimalsPickUp"/>).
@@ -252,7 +266,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 _held.Input(world, held);
                 break;
             case Items.QuickMoveItem quick:
-                _quickMoves.QuickMove(world, quick);
+                if (!_itemUses.Use(world, quick)) _quickMoves.QuickMove(world, quick);
                 break;
             case Items.RotateItem rotate:
                 RotateItem(world, rotate);

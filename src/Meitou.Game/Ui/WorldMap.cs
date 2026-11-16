@@ -712,7 +712,7 @@ sealed class WorldMap(PlayerInterface player)
         var item = grid.Items.FirstOrDefault(i => i.Index == int.Parse(index, CultureInfo.InvariantCulture));
         if (item is null) return false;
 
-        var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
+        var token = InventoryItemToken.Of(item);
 
         if (trade is not null && lead.IsPlayer && InventoryCommands.IsMovableSection(item.Section))
         {
@@ -830,7 +830,7 @@ sealed class WorldMap(PlayerInterface player)
         player.Say(new PutInMachine(lead.Id, Token(item), machine.Site, slot, -1, 0, count) { Tick = player.Session.World.Tick });
         return true;
 
-        static InventoryItemToken Token(InventoryItemView i) => new(i.Index, i.Record, i.Section, i.X, i.Y, i.Quantity, i.Quality);
+        static InventoryItemToken Token(InventoryItemView i) => InventoryItemToken.Of(i);
     }
 
     #endregion
