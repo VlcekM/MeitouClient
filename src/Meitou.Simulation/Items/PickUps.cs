@@ -253,7 +253,8 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     /// </summary>
     static bool Stow(World world, Items.Inventory inventory, Items.ItemInstance item, CharacterCold c, bool fetch)
     {
-        var bag = inventory.Backpack?.Contents;
+        // A container holding items never goes into the bag (InventoryCommands.FitsInBag).
+        var bag = Items.InventoryCommands.FitsInBag(item) ? inventory.Backpack?.Contents : null;
 
         // Food fetched to eat (259 Picking up food) goes in even with no bag: a bagless dog eats meat dropped beside it in the original.
         if (Items.InventoryCommands.MainClosed(c))
