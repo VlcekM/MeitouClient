@@ -174,7 +174,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
         _stats = [.. sections.SelectMany(s => s.Stats)];
         _built = DebugCharactersLayout.Build(roster, sections);
 
-        if (player.FaithfulScreens.IsRegistered(DebugCharactersLayout.Screen)) player.FaithfulScreens.Replace(DebugCharactersLayout.Screen, _built.Layout);
+        if (player.FaithfulScreens.IsRegistered(DebugCharactersLayout.Screen))
+            player.FaithfulScreens.Replace(DebugCharactersLayout.Screen, _built.Layout);
         else player.FaithfulScreens.Register(DebugCharactersLayout.Screen, _built.Layout, modal: true);
 
         if (!_characters.Contains(_character)) _character = CharacterId.None;
@@ -234,7 +235,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
             var id = _characters[row.Index];
             b.Text[row.Name] = names.GetValueOrDefault(id, "");
             Enable(b, row.Name);
-            if (id == _character) b.Properties[row.Name] = new Dictionary<string, string> { ["StateSelected"] = "true", ["Checked"] = "true" };
+            if (id == _character)
+                b.Properties[row.Name] = new Dictionary<string, string> { ["StateSelected"] = "true", ["Checked"] = "true" };
         }
 
         Stack(b, DebugCharactersLayout.CharacterView, built.Characters);
@@ -290,7 +292,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
         b.Text[DebugCharactersLayout.SectionSetLabelName + n] = "Set all values to";
 
         bool typing = player.FaithfulScreens.Focus is { } focus && focus.Screen == DebugCharactersLayout.Screen && focus.Widget == value;
-        if (!typing) player.FaithfulScreens.SetText(DebugCharactersLayout.Screen, value, _sectionValues.GetValueOrDefault(section, ""));
+        if (!typing)
+            player.FaithfulScreens.SetText(DebugCharactersLayout.Screen, value, _sectionValues.GetValueOrDefault(section, ""));
     }
 
     /// <summary>
@@ -425,7 +428,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
         foreach (var row in built.Characters.Where(r => !r.Heading))
         {
             if (!cells.TryGetValue(_characters[row.Index], out int cell)) continue;
-            if (controls.LastOrDefault(c => c.Name == row.Name) is not { } button || button.Bounds.Height <= 0) continue;
+            if (controls.LastOrDefault(c => c.Name == row.Name) is not { } button || button.Bounds.Height <= 0)
+                continue;
 
             float size = button.Bounds.Height - 6 * player.UiScale;
             var at = new UiRect(button.Bounds.X + 5 * player.UiScale, button.Bounds.Y + 3 * player.UiScale, size, size);
@@ -514,7 +518,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
     {
         string digits = new([.. text.Where(char.IsAsciiDigit)]);
         _sectionValues[section] = digits;
-        if (digits != text) player.FaithfulScreens.SetText(DebugCharactersLayout.Screen, DebugCharactersLayout.SectionSetValueName + section, digits);
+        if (digits != text)
+            player.FaithfulScreens.SetText(DebugCharactersLayout.Screen, DebugCharactersLayout.SectionSetValueName + section, digits);
     }
 
     /// <summary>
@@ -523,7 +528,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
     /// </summary>
     void SetSection(int section)
     {
-        if (_character.IsNone || section >= _sections.Count || !_sectionValues.TryGetValue(section, out var digits) || digits.Length == 0) return;
+        if (_character.IsNone || section >= _sections.Count || !_sectionValues.TryGetValue(section, out var digits) || digits.Length == 0)
+            return;
 
         var stats = _sections[section].Stats;
         int value = Math.Min(int.Parse(digits, CultureInfo.InvariantCulture), stats.Max(s => s.Max));
@@ -531,7 +537,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
         var game = stats.Where(s => s.ModSkill is null).Select(s => s.Stat).ToArray();
         var skills = stats.Where(s => s.ModSkill is not null).Select(s => s.ModSkill!).ToArray();
         if (game.Length > 0) world.Commands.Enqueue(new DebugSetStats([_character], game, value) { Tick = world.Tick });
-        if (skills.Length > 0) world.Commands.Enqueue(new DebugSetModSkills([_character], skills, value) { Tick = world.Tick });
+        if (skills.Length > 0)
+            world.Commands.Enqueue(new DebugSetModSkills([_character], skills, value) { Tick = world.Tick });
 
         _sliding.Clear();
         ApplyWhilePaused();
@@ -556,7 +563,8 @@ sealed class DebugCharactersWindow(PlayerInterface player)
     /// -1 for another widget.
     /// </summary>
     static int IndexOf(string name, string prefix) =>
-        name.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(name.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+        name.StartsWith(prefix, StringComparison.Ordinal)
+        && int.TryParse(name.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n)
             ? n
             : -1;
 

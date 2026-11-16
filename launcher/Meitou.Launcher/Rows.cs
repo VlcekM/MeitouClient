@@ -176,7 +176,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
             if (items is null || CoveredMods.UpdatedSince(Mod, items) is not { } updated) return null;
 
             string date = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            return Loc.Format(LauncherText.Translate("Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"), date);
+            string note = LauncherText.Translate("Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing");
+            return Loc.Format(note, date);
         }
     }
 

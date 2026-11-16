@@ -871,7 +871,8 @@ sealed class UserConfig
     static void MigrateShadowCascades(JsonObject json)
     {
         const string old = "Meitou: Shadow cascade 5 (Meitou)", count = "Shadow cascades (Meitou)";
-        if (json["graphics"] is not JsonObject graphics || graphics[old] is not JsonValue value || !value.TryGetValue(out double on)) return;
+        if (json["graphics"] is not JsonObject graphics || graphics[old] is not JsonValue value || !value.TryGetValue(out double on))
+            return;
 
         graphics.Remove(old);
         graphics[count] ??= on >= 0.5 ? 5 : 4;

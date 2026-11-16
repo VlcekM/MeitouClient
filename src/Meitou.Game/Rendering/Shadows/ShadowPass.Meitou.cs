@@ -11,10 +11,11 @@ namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The Meitou shadows (the <c>shadows</c> enhancement, docs/formats/shadows.md "Meitou shadows"): the same cascade array and caster draws as the
-/// game's CSM, but three to six cascades (<see cref="MeitouCascades"/>, five by default) fitted over the visible depths (<see cref="MeitouShadowFit"/>), drawn on a staggered
-/// schedule (<see cref="Cadence"/>: 1, 2, 4, 16, 32 frames with five cascades, each kept with the matrices it was drawn with), a soft receiver with
-/// cascade blending and a fade at the range's end, contact-hardening penumbrae from a half-resolution blocker map, and the terrain's own shadow over
-/// the whole world beyond the range (<see cref="TerrainShadowMap"/>), and the landmarks' beyond it however far they are (the landmark map).
+/// game's CSM, but three to six cascades (<see cref="MeitouCascades"/>, five by default) fitted over the visible depths
+/// (<see cref="MeitouShadowFit"/>), drawn on a staggered schedule (<see cref="Cadence"/>: 1, 2, 4, 16, 32 frames with five cascades, each kept with
+/// the matrices it was drawn with), a soft receiver with cascade blending and a fade at the range's end, contact-hardening penumbrae from a
+/// half-resolution blocker map, and the terrain's own shadow over the whole world beyond the range (<see cref="TerrainShadowMap"/>), and the
+/// landmarks' beyond it however far they are (the landmark map).
 /// </summary>
 public sealed unsafe partial class ShadowPass
 {

@@ -20,18 +20,17 @@ namespace Meitou.Game.DevTools;
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
 /// <see cref="DebugCommand"/>s. The menu opens on its categories (<see cref="DebugCategories"/>: Character, Squad / Faction, World / Spawn, Combat,
 /// Cheats, then Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a
-/// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
-/// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
-/// (the middle of the screen); heal and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
-/// gives them back. Edit characters closes the menu and opens a window of its own (<see cref="DebugCharactersWindow"/>), whose characters are
-/// picked in its list, not from the selection. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and
-/// keeps the squad's selection), else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the
-/// squad has room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move
-/// instantly, One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
+/// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how many in
+/// green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the
+/// middle of the screen); heal and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully gives them back. Edit
+/// characters closes the menu and opens a window of its own (<see cref="DebugCharactersWindow"/>), whose characters are picked in its list, not from
+/// the selection. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's selection),
+/// else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the squad has
+/// room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move instantly,
+/// One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
 /// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
-/// "Teleport on map" is a switch too:
-/// while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player
-/// character's), all or one faction's.
+/// "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected
+/// characters' (else every player character's), all or one faction's.
 /// </summary>
 sealed class DebugMenu(GameHost host)
 {

@@ -1201,7 +1201,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     async void SuggestionPage_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: ModRow { SuggestionPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
+        if (sender is Control { DataContext: ModRow { SuggestionPage: { } page } })
+            await this.Launcher.LaunchUriAsync(page);
     }
 
     /// <summary>
@@ -1209,7 +1210,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     async void RequestPage_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: ModRow { RequestPage: { } page } }) await this.Launcher.LaunchUriAsync(page);
+        if (sender is Control { DataContext: ModRow { RequestPage: { } page } })
+            await this.Launcher.LaunchUriAsync(page);
     }
 
     /// <summary>

@@ -53,10 +53,10 @@ sealed class FeedbackSettings
 
 /// <summary>
 /// Meitou's feedback button, always at the top right in both UI modes, and the form it opens: a title, the text, and ticks for a screenshot (taken
-/// when the button is pressed, without the menus), a save made when sending, log.txt and the action and dialogue logs. The player's Discord name
-/// goes along unless unticked; the ticks and the name are remembered (<see cref="FeedbackSettings"/>). The host (FeedbackCapture) takes the picture, makes the files and sends them
-/// to the reports service, which opens a GitHub issue (docs/feedback.md). The feedback button and form (docs/feedback.md): the
-/// button over the interface, the form's fields and ticks, and the screenshot taken without the menus.
+/// when the button is pressed, without the menus), a save made when sending, log.txt and the action and dialogue logs. The player's Discord name goes
+/// along unless unticked; the ticks and the name are remembered (<see cref="FeedbackSettings"/>). The host (FeedbackCapture) takes the picture, makes
+/// the files and sends them to the reports service, which opens a GitHub issue (docs/feedback.md). The feedback button and form (docs/feedback.md):
+/// the button over the interface, the form's fields and ticks, and the screenshot taken without the menus.
 /// </summary>
 sealed class FeedbackPanel(PlayerInterface player)
 {

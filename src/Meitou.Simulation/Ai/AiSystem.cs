@@ -1141,7 +1141,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         foreach (var id in squad.Members)
         {
-            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { Ai: { } mind } cold) continue;
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { Ai: { } mind } cold)
+                continue;
             var type = mind.Goal?.Task.Type;
 
             // An autonomous member on a player job holds no AI work slot (its job's machine counts it).
@@ -1208,7 +1209,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     internal static bool RealWork(World world, TownBuilding building)
     {
-        if (building.RuntimeKey is { } site && world.SystemOf<Production.ProductionSystem>()?.Powered(world, site) != true) return false;
+        if (building.RuntimeKey is { } site && world.SystemOf<Production.ProductionSystem>()?.Powered(world, site) != true)
+            return false;
 
         if (building.Function == MineFunction) return true;
         foreach (var m in world.Machines.All)
@@ -1804,7 +1806,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.WorkActive) mind.WorkEpoch++;
 
         mind.WorkActive = true;
-        if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.HomeTown, mind.WorkEpoch, type)) is not { } building) return;
+        if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.HomeTown, mind.WorkEpoch, type)) is not { } building)
+            return;
 
         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
         mind.WorkClip = _work.ClipOf(building);

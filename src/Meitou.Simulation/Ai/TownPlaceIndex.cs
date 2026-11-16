@@ -138,7 +138,8 @@ sealed class TownPlaceIndex(PopulationData data)
             foreach (var site in world.Buildings.All)
             {
                 if (!site.Complete || site.Destroyed || ai.FunctionOf(site.Record) is not (>= 0 and var fn)) continue;
-                if ((OutpostWorkFunctions >> fn & 1) == 0 || Construction.TownLookup.PlayerTownOf(world, site)?.Number != number) continue;
+                if ((OutpostWorkFunctions >> fn & 1) == 0 || Construction.TownLookup.PlayerTownOf(world, site)?.Number != number)
+                    continue;
 
                 all.Add(StandIn(site, fn));
                 seen.Add(site.Id);
