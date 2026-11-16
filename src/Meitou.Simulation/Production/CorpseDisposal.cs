@@ -16,9 +16,8 @@ namespace Meitou.Simulation.Production;
 public sealed record CorpseMachine(string Id, string RecordId, Vector3 Position, int Owner, string Building, bool Inside, int Site);
 
 /// <summary>
-/// The NPC side of corpse disposal (docs/game/ai-tasks.md "Perma-jobs", 137 / 138): the disposal finder <c>FUN_1408d0770</c>(1, 0xb), the corpse
-/// finder of 138 <c>FUN_1408cfb00</c>, and the feed of <c>Task_FeedCorpseIntoMachine</c> (136). The player's carrying job keeps its own finder
-/// (<see cref="ProductionSystem"/>).
+/// Corpse disposal (docs/game/ai-tasks.md "Perma-jobs", 137 / 138) for the NPCs' duty and the player's job alike: the disposal finder
+/// <c>FUN_1408d0770</c>(1, 0xb), the corpse finder of 138 <c>FUN_1408cfb00</c>, and the feed of <c>Task_FeedCorpseIntoMachine</c> (136).
 /// </summary>
 public static class CorpseDisposal
 {
@@ -36,9 +35,9 @@ public static class CorpseDisposal
 
     /// <summary>
     /// Every corpse disposal there is now: the complete player machines of function 11, and the placed buildings of function 11 and interior
-    /// disposals (<see cref="TownBuilding.Disposals"/>) of the registered towns' standing buildings.
+    /// disposals (<see cref="TownBuilding.Disposals"/>) of the registered towns' standing buildings (none without population data).
     /// </summary>
-    public static IEnumerable<CorpseMachine> Machines(World world, PopulationData data)
+    public static IEnumerable<CorpseMachine> Machines(World world, PopulationData? data)
     {
         foreach (var m in world.Machines.All)
         {
@@ -46,6 +45,8 @@ public static class CorpseDisposal
 
             yield return new CorpseMachine(site.Id, site.Record, site.Position, site.Owner, site.Parent ?? site.Id, site.Parent is not null, -1);
         }
+
+        if (data is null) yield break;
 
         foreach (var town in data.Sites)
         {
@@ -81,15 +82,16 @@ public static class CorpseDisposal
     /// (<see cref="FixtureRegistry.TownCandidates"/>: its town's within 1.1 x the radius, else its faction's nearest town's, plus its squad's home
     /// town's) that <paramref name="skip"/> leaves (claimed, path failed), those of its faction or that pass <c>canIUseThisBuilding</c>, the greatest
     /// weight: clamp(1 - d^2 / 4608^2, 1e-5, 1) of the 3D distance, x100 for its faction's, x100 in its squad's home, x1e-5 for a law enforcer when
-    /// the machine stands inside a building that is not public. The first listed wins a tie. Null for none.
+    /// the machine stands inside a building that is not public. The first listed wins a tie. Null for none. Without population data every machine
+    /// is in reach.
     /// </summary>
-    public static CorpseMachine? Find(World world, PopulationData data, IReadOnlyList<CorpseMachine> machines, int slot, Vector3 at,
+    public static CorpseMachine? Find(World world, PopulationData? data, IReadOnlyList<CorpseMachine> machines, int slot, Vector3 at,
         Func<CorpseMachine, bool> skip)
     {
         if (machines.Count == 0) return null;
 
         var carrier = world.Characters.Cold(slot)!;
-        var inReach = world.Fixtures.TownCandidates(world, data, carrier, at);
+        var inReach = data is null ? static _ => true : world.Fixtures.TownCandidates(world, data, carrier, at);
         var home = FixtureRegistry.HomeOf(world, carrier);
         bool? police = null;
         CorpseMachine? best = null;
@@ -215,4 +217,34 @@ public static class CorpseDisposal
     }
 
     #endregion
+}
+
+/// <summary>
+/// The corpse disposals (<see cref="CorpseDisposal.Machines"/>) gathered at most once per <paramref name="everyTicks"/> ticks: the finders ask for
+/// them on every look, and gathering walks every registered town's buildings. Derived state, not saved or hashed.
+/// </summary>
+public sealed class CorpseMachineCache(int everyTicks)
+{
+    /// <summary>
+    /// The disposals as of <see cref="_tick"/>.
+    /// </summary>
+    readonly List<CorpseMachine> _machines = [];
+
+    /// <summary>
+    /// The tick <see cref="_machines"/> was gathered (-1: never).
+    /// </summary>
+    long _tick = -1;
+
+    /// <summary>
+    /// The disposals there are, gathered again when <paramref name="everyTicks"/> ticks have passed.
+    /// </summary>
+    public IReadOnlyList<CorpseMachine> Get(World world, PopulationData? data)
+    {
+        if (_tick >= 0 && world.Tick - _tick < everyTicks && world.Tick >= _tick) return _machines;
+
+        _machines.Clear();
+        _machines.AddRange(CorpseDisposal.Machines(world, data));
+        _tick = world.Tick;
+        return _machines;
+    }
 }

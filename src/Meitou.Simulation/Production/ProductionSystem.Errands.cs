@@ -95,6 +95,10 @@ public sealed partial class ProductionSystem
         /// The corpse machine the carrier is taking the body to: claimed against its squad mates (the squad blackboard's goal list).
         /// </summary>
         public string? Site;
+        /// <summary>
+        /// That machine (<see cref="CorpseDisposal.Find"/>), found again on each step.
+        /// </summary>
+        public CorpseMachine? Machine;
     }
 
     /// <summary>
@@ -281,23 +285,22 @@ public sealed partial class ProductionSystem
         if (task != CharacterTask.GoTo) e.Walking = false;
         if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, cold, n, e);
         Vector2 goal = e.Goal;
-        BuildSite? site = null;
-        Machine? machine = null;
+        CorpseMachine? machine = null;
         if (e.Kind != ErrandKind.Corpse && !DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;
         if (e.Kind == ErrandKind.Corpse)
         {
             if (!DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;   // the carrier keeps the body, the errand waits
-            (site, machine) = NearestIncinerator(world, n.Position, id, cold.SquadId)!.Value;
-            e.Site = site.Id;
-            goal = GoalOf(world, site, machine);
+            machine = NearestIncinerator(world, n.Position, id, cold.SquadId)!;
+            (e.Site, e.Machine) = (machine.Id, machine);
+            goal = DisposalGoal(world, machine);
         }
 
-        bool arrived = site is not null
-            ? AtSite(world, n, site, machine!)
+        bool arrived = machine is not null
+            ? AtDisposal(world, n, machine)
             : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
         if (arrived)
         {
-            if (e.Kind == ErrandKind.Corpse) Incinerate(world, i, cold, site!, machine!);
+            if (machine is not null) Incinerate(world, i, machine);
             else Carry!.BeginPutDown(world, i, TaskSource.Job);
             _errands.Remove(id);
             return;
@@ -339,11 +342,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)
     {
-        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine
-            || AtSite(world, n, site, machine))
-            return;
+        if (e.Machine is not { } machine || AtDisposal(world, n, machine)) return;
 
-        cold.NoteUnreachable(siteId, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+        cold.NoteUnreachable(machine.Id, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
     }
 
     /// <summary>
@@ -357,142 +358,81 @@ public sealed partial class ProductionSystem
     #region Corpse disposal (137 / 138)
 
     /// <summary>
-    /// The weight factor of a building of the character's own faction (<c>DAT_141683250</c>, <b>Verified</b> 100).
+    /// The corpse disposals the finders choose among, gathered once per <see cref="ErrandEveryTicks"/>.
     /// </summary>
-    const float OwnFactionWeight = 100;
+    CorpseMachineCache? _disposals;
 
     /// <summary>
-    /// The squared distance within which a carrier outside every town still takes the nearest town (<c>DAT_14172dd88</c>, <b>Verified</b> 1.5625e7).
+    /// Feeds the carried body into the machine (<see cref="CorpseDisposal.Feed"/>, <c>Task_FeedCorpseIntoMachine</c> slot 3, <b>Verified</b>): it is
+    /// removed with its items, the sound plays and the machine's functionality <c>string</c> floats up. The original plays the lift clip back first;
+    /// Meitou removes it at once.
     /// </summary>
-    const float DisposalTownReach = 15625000f;
+    void Incinerate(World world, int i, CorpseMachine machine) =>
+        CorpseDisposal.Feed(world, Carry!, i, machine.Position, Data(machine.RecordId)?.Label ?? "");
 
     /// <summary>
-    /// Feeds the carried body into the machine (<c>Task_FeedCorpseIntoMachine</c> slot 3, <b>Verified</b> by decompile): the carrier lets go of
-    /// it and the character is removed from the world ("incinerated or cooked"), its items with it. The original plays the lift clip back first
-    /// and the sound <c>Character_Drop_Person</c>; Meitou removes it at once, with the sound (<see cref="SoundKind.FedToMachine"/>). The machine's
-    /// functionality <c>string</c> floats up from 5 units over it (<c>FUN_1403567a0</c>).
+    /// Where the carrier walks to: a player machine's operator goal (<see cref="GoalOf"/>), else the floor point at or next to the disposal.
     /// </summary>
-    void Incinerate(World world, int i, CharacterCold cold, BuildSite site, Machine machine)
+    Vector2 DisposalGoal(World world, CorpseMachine machine)
     {
-        var table = world.Characters;
-        var body = cold.Carrying;
-        if (!Carry!.LetGo(world, i) || !table.IsAlive(body)) return;
-        if (machine.Data.Label.Length > 0) world.Floaters?.Enqueue(Floater.Label(site.Position + new Vector3(0, 5, 0), machine.Data.Label));
-        if (table.TryResolveNext(body, out int b))
-            world.EmitSound(SoundKind.FedToMachine, b, table.Next[b].Position, armour: world.BodyArmourMaterial(b));
-        world.Uniques.Left(body);
-        table.Remove(body);
+        if (world.Machines.Find(machine.Id) is { } m && Site(world, machine.Id) is { } site) return GoalOf(world, site, m);
+
+        var to = machine.Position;
+        var at = world.Walkability.FloorNear(to.X, to.Z, to.Y, MovementSystem.FloorSlack) ?? to;
+        return new Vector2(at.X, at.Z);
     }
 
     /// <summary>
-    /// The finder of job 138 (<c>FUN_1408cfb00</c>, <b>Verified</b> by decompile): a dead, non-robot body in a cage of the character's town first
-    /// (<c>FUN_1408cbea0</c> with the cage mask), else the nearest dead body in sight that nobody carries (<c>FUN_1408ce170</c>). Meitou's cages are
-    /// the player's own, the town is the haul range, and sight is <see cref="ErrandSight"/> (engine stand-ins). The goal is the machine (found again
-    /// on each step).
+    /// Whether the carrier is at the disposal: a player machine's <see cref="AtSite"/>, else within the BUILDING's use range
+    /// (<c>UseableStuff::getReachRange</c>, doubled once stopped, <see cref="SiteReach.Within"/>) on its storey.
+    /// </summary>
+    bool AtDisposal(World world, in CharacterHot n, CorpseMachine machine)
+    {
+        if (world.Machines.Find(machine.Id) is { } m && Site(world, machine.Id) is { } site) return AtSite(world, n, site, m);
+
+        float range = Data(machine.RecordId)?.UseRange ?? 20;
+        return SiteReach.Within(n, Gap(n.Position, machine.Position), range)
+            && MathF.Abs(n.Position.Y - machine.Position.Y) < SiteReach.HeightLimit(door: false, machine.Inside);
+    }
+
+    /// <summary>
+    /// The finder of job 138 (<see cref="CorpseDisposal.FindCorpse"/>, <b>Verified</b>): a dead, non-robot body in a cage of the carrier's faction
+    /// among its town candidates (<see cref="Locks.FixtureRegistry.TownCandidates"/>; every cage without population data), else the nearest dead body
+    /// within <see cref="ErrandSight"/> (the sensed list's stand-in) that nobody has. The goal is the machine (found again on each step).
     /// </summary>
     (CharacterId Id, Vector2 Goal)? FindCorpse(World world, int slot, CharacterCold cold, LiftedBodies lifted)
     {
-        var table = world.Characters;
-        var at = table.Next[slot].Position;
-        CharacterId? best = null;
-        float bestD = float.MaxValue;
-        foreach (var f in world.Fixtures.All)
-        {
-            if (f.Kind != FixtureKind.Cage || f.Owner != world.Player.Faction || f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s))
-                continue;
-
-            if (!Liftable(world, table, s, f.Occupant, lifted, cageStage: true)) continue;
-            float d = Gap(at, f.Position);
-            if (d <= Settings.HaulRange && d < bestD) (best, bestD) = (f.Occupant, d);
-        }
-
-        if (best is null)
-        {
-            for (int s = 0; s < table.HighWater; s++)
-            {
-                if (s == slot || !table.Next[s].Alive) continue;
-                var id = table.IdOf(s);
-                if (!Liftable(world, table, s, id, lifted, cageStage: false)) continue;
-                float d = Gap(at, table.Next[s].Position);
-                if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
-            }
-        }
-
-        return best is { } body ? (body, Vector2.Zero) : null;
+        var at = world.Characters.Next[slot].Position;
+        var inReach = _towns is { } data ? world.Fixtures.TownCandidates(world, data, cold, at) : static _ => true;
+        var body = CorpseDisposal.FindCorpse(world, slot, f => inReach(f.Position), ErrandSight, lifted.Contains);
+        return body.IsNone ? null : (body, Vector2.Zero);
     }
 
     /// <summary>
-    /// A dead body that can be lifted, and that nobody has. Robots are skipped only in the cage stage (<b>Verified</b>: <c>FUN_1408cfb00</c> tests
-    /// the race's robot byte on the cage's occupant, the nearest-body finder <c>FUN_1408ce170</c> tests it only for an animal finder), so a human
-    /// carrier lifts a dead robot lying outside.
+    /// The corpse machine a body is taken to (<see cref="CorpseDisposal.Find"/>, the NPCs' finder): the player's machines and the towns' disposals
+    /// alike, leaving out one a squad mate has claimed, one whose operator places are taken and one whose path failed.
     /// </summary>
-    bool Liftable(World world, CharacterTable table, int s, CharacterId id, LiftedBodies lifted, bool cageStage) =>
-        table.Cold(s) is { Medical.Dead: true } body && (!cageStage || body.Race is { IsRobot: false }) && !lifted.Contains(id)
-        && CarrySystem.CanBeLifted(world, body);
-
-    /// <summary>
-    /// The weight of a distance in the disposal finder: clamp(1 - d^2 / 4608^2, 1e-5, 1) (<c>FUN_1409b2380</c> with <c>DAT_14172e248</c> =
-    /// 2.1233664e7, <b>Verified</b>).
-    /// </summary>
-    static float DisposalWeight(float distanceSquared) => Math.Clamp(1 - distanceSquared / 21233664f, 1e-5f, 1f);
-
-    /// <summary>
-    /// The corpse machine a body is taken to (<c>FUN_1408d0770</c> for function 11, <b>Verified</b> by decompile): among the complete corpse-disposal
-    /// buildings of the player and of allied factions ((<see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.Fixture?)"/>)) with
-    /// an operator place free that lie within 1.1 x the radius of the carrier's town (<c>FUN_1408cbea0</c> / <c>FUN_140a00690</c>), the one of the
-    /// greatest <see cref="DisposalWeight"/> of the 3D distance to the carrier (x100 for the player's own); the first listed wins a tie (the weights
-    /// of everything beyond 4608 are equal). The town is the one the carrier stands in, else the nearest within 1.5625e7 squared
-    /// (<c>DAT_14172dd88</c>); with none, every town is searched. Stand-ins: the town is a player's town, and the squad's home town (the Ownerships'
-    /// +0x38, <b>Unknown</b> for the player) and the home-building x100 are not read.
-    /// </summary>
-    (BuildSite Site, Machine Machine)? NearestIncinerator(World world, Vector3 from, CharacterId self, int squad)
+    CorpseMachine? NearestIncinerator(World world, Vector3 from, CharacterId self, int squad)
     {
+        if (!world.Characters.TryResolveNext(self, out int me)) return null;
+
         var goals = SquadGoals.Of(world);
-        if (!world.Characters.TryResolveNext(self, out int me) || world.Characters.Cold(me) is not { } carrier) return null;
-        var town = PlayerTownAt(world, from) ?? NearestPlayerTown(world, from, DisposalTownReach);
-        BuildSite? bestSite = null;
-        Machine? best = null;
-        float bestWeight = -1;
-        foreach (var m in world.Machines.All)
-        {
-            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site
-                || !world.Fixtures.CanUse(world, carrier, site.Owner, (Locks.FixtureRegistry.UsedBuilding?)null))
-                continue;
-
-            if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
-            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || MachineClaimed(goals, self, squad, site.Id)
-                || PathImpossible(world, self, site.Id))
-                continue;
-
-            float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
-            if (weight <= bestWeight) continue;
-            (bestSite, best, bestWeight) = (site, m, weight);
-        }
-
-        return best is null ? null : (bestSite!, best);
+        var machines = (_disposals ??= new CorpseMachineCache(ErrandEveryTicks)).Get(world, _towns);
+        return CorpseDisposal.Find(world, _towns, machines, me, from, m => Unavailable(world, goals, self, squad, m));
     }
+
+    /// <summary>
+    /// Whether the machine is out for the carrier: claimed by a squad mate, every operator place taken, or its path failed.
+    /// </summary>
+    bool Unavailable(World world, SquadGoals goals, CharacterId self, int squad, CorpseMachine m) =>
+        MachineClaimed(goals, self, squad, m.Id) || OperatorsOf(world, m.Id) >= (Data(m.RecordId)?.MaxOperators ?? 1)
+            || PathImpossible(world, self, m.Id);
 
     /// <summary>
     /// Whether another member of the squad is already taking a body to the machine at <paramref name="site"/> (<c>FUN_1402690e0</c> on the squad's
     /// goal list, <b>Verified</b>): not offered, even before it operates it.
     /// </summary>
     static bool MachineClaimed(SquadGoals goals, CharacterId self, int squad, string site) => goals.Working(squad, self, GoalTarget.At(site)) > 0;
-
-    /// <summary>
-    /// The player's town nearest to a point by centre, if its squared distance is within <paramref name="reachSquared"/>.
-    /// </summary>
-    static PlayerTown? NearestPlayerTown(World world, Vector3 at, float reachSquared)
-    {
-        PlayerTown? best = null;
-        float bestD = reachSquared;
-        foreach (var town in world.Buildings.Towns)
-        {
-            float d = Vector3.DistanceSquared(town.Position, at);
-            if (town.Owner == world.Player.Faction && d <= bestD) (best, bestD) = (town, d);
-        }
-
-        return best;
-    }
 
     #endregion
 

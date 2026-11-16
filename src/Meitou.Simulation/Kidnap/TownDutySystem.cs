@@ -1835,14 +1835,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     #region Corpse disposal
 
     /// <summary>
-    /// The disposals as of <see cref="_disposalsTick"/> (<see cref="CorpseDisposal.Machines"/>); derived, rebuilt once per look period.
+    /// The disposals the finder offers, gathered once per look period.
     /// </summary>
-    readonly List<CorpseMachine> _disposals = [];
-
-    /// <summary>
-    /// The tick <see cref="_disposals"/> was gathered (-1: never).
-    /// </summary>
-    long _disposalsTick = -1;
+    CorpseMachineCache? _disposals;
 
     /// <summary>
     /// The desire of 137 Corpse disposal (AI slot 43 <c>FUN_1406415a0</c>: 1.0, <c>DAT_14167c308</c>) times its finder's (<c>FUN_1408d1090</c>: 1.0
@@ -1890,17 +1885,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The disposals there are, gathered again when a look period has passed.
+    /// The disposals there are (<see cref="CorpseMachineCache"/>).
     /// </summary>
-    IReadOnlyList<CorpseMachine> Disposals(World world)
-    {
-        if (_disposalsTick >= 0 && world.Tick - _disposalsTick < Settings.LookEveryTicks) return _disposals;
-
-        _disposals.Clear();
-        _disposals.AddRange(CorpseDisposal.Machines(world, data));
-        _disposalsTick = world.Tick;
-        return _disposals;
-    }
+    IReadOnlyList<CorpseMachine> Disposals(World world) => (_disposals ??= new CorpseMachineCache(Settings.LookEveryTicks)).Get(world, data);
 
     /// <summary>
     /// The errands other than <paramref name="self"/> taking a body to the disposal.
