@@ -717,7 +717,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
   house it stands in and Condition, without the lock and Empty rows; a training dummy adds `Training:`. In a town, furniture and level buildings of
   the original's UseableStuff, StorageBuilding and LightBuilding add section 6 as above (`UseableLines`): Workers, Efficiency / Max efficiency or a
-  dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw. Inputs without a machine of the player's: condition 1 (0 destroyed, as the
+  dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw. So a town safe (`General storage`, function 13, BUILDING `max operators` −1,
+  functionality 5) reads `Workers:` 0/5 and `Efficiency:` 0% (**Verified** decompile: the UseableStuff constructor `FUN_1402a0900` sets +0x3ac
+  through `FUN_14029e460`, the BUILDING's value or else the functionality's, and `FUN_140304e90` has no storage exception). Inputs without a machine of the player's: condition 1 (0 destroyed, as the
   Condition row), yield 1, `output rate`, a light's slot 164 (interior furniture of a house, else not daytime), and for a level building that
   draws power its town frame's grant (`ProductionSystem.LevelPowerOf`: the level generators' output shared out over the town's draws and the
   player's machines of that frame, ascending). Which class a BUILDING gets (**Verified**,
