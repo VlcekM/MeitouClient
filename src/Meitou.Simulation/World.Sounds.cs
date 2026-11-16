@@ -92,7 +92,7 @@ public enum SoundKind : byte
     ReleasedFromPrison,
     /// <summary>
     /// A carried body was fed into a machine (<c>Task_FeedCorpseIntoMachine</c>, <c>FUN_1403567a0</c>; the subject is the body, gone from the world
-    /// by the time it is played): <c>Character_Drop_Person</c> on the body with its <c>Armor_Worn</c>.
+    /// by the time it is played): <c>Character_Drop_Person</c> on the body with its <c>Armor_Worn</c>, <see cref="SoundEvent.Armour"/>.
     /// </summary>
     FedToMachine,
 }
@@ -110,14 +110,22 @@ public enum SoundKind : byte
 /// <param name="Armoured">A bolt: some armour covers the part it hit.</param>
 /// <param name="Fatal">A <see cref="SoundKind.Down"/> that is a death, not a knock-out.</param>
 /// <param name="Item">An item's record id (<see cref="SoundKind.ShacklesOn"/>: the shackles).</param>
+/// <param name="Armour">The subject's body armour <c>material type</c> (0 cloth .. 3 plate) when it happened
+/// (<see cref="SoundKind.FedToMachine"/>).</param>
 public readonly record struct SoundEvent(SoundKind Kind, CharacterId Subject, CharacterId Other, Vector3 Position,
-    bool Heavy = false, bool AttackerUnarmed = false, bool AttackerRobot = false, bool Armoured = false, bool Fatal = false, string? Item = null);
+    bool Heavy = false, bool AttackerUnarmed = false, bool AttackerRobot = false, bool Armoured = false, bool Fatal = false, string? Item = null,
+    int Armour = 0);
 
 /// <summary>
 /// The world's sound events for the host.
 /// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// ARMOUR <c>slot</c> of body armour (ATTACH_BODY), the slot <c>FUN_1405d28b0</c> reads.
+    /// </summary>
+    const int BodyArmourSlot = 5;
+
     /// <summary>
     /// The sound events' queue (see <see cref="Sounds"/>).
     /// </summary>
@@ -139,9 +147,27 @@ public sealed partial class World
     /// Queues a sound-worthy happening for the host (nothing while <see cref="Sounds"/> is null); <paramref name="slot"/> is the character it happens
     /// to (-1 none). Display only.
     /// </summary>
-    public void EmitSound(SoundKind kind, int slot, Vector3 at, string? item = null)
+    public void EmitSound(SoundKind kind, int slot, Vector3 at, string? item = null, int armour = 0)
     {
-        if (_sounds is { } queue)
-            queue.Enqueue(new SoundEvent(kind, slot >= 0 ? Characters.IdOf(slot) : CharacterId.None, CharacterId.None, at, Item: item));
+        if (_sounds is not { } queue) return;
+
+        var subject = slot >= 0 ? Characters.IdOf(slot) : CharacterId.None;
+        queue.Enqueue(new SoundEvent(kind, subject, CharacterId.None, at, Item: item, Armour: armour));
+    }
+
+    /// <summary>
+    /// The <c>material type</c> of the heaviest worn body armour (ARMOUR <c>slot</c> 5) of the character in <paramref name="slot"/>, 0 (cloth) with
+    /// none: the <c>Armor_Worn</c> value the exe keeps on the character (<c>+0x68c</c>, refreshed by <c>FUN_1405d28b0</c> whenever an item is put
+    /// on or taken off, Character slots 51 and 52). Display only.
+    /// </summary>
+    public int BodyArmourMaterial(int slot)
+    {
+        if (Characters.Cold(slot)?.Fighter is not { } fighter) return 0;
+
+        int material = 0;
+        foreach (var piece in fighter.Armour)
+            if (piece.Data.Slot == BodyArmourSlot) material = Math.Max(material, (int)piece.Data.Material);
+
+        return material;
     }
 }

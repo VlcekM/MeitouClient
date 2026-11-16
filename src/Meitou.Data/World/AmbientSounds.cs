@@ -100,7 +100,7 @@ public static class BuildingEmitters
     /// <summary>
     /// A number in [0, 1) that depends only on the placement id (FNV-1a).
     /// </summary>
-    static float Roll(string id)
+    internal static float Roll(string id)
     {
         uint h = 2166136261;
         foreach (char c in id) h = (h ^ c) * 16777619;

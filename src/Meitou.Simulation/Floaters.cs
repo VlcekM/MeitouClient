@@ -44,6 +44,11 @@ public enum FloaterKind : byte
     /// A lock pick roll's "Pick failed" (<see cref="Floater.Part"/>) over the picker, in the stealth miss's red-grey (<c>FUN_140359160</c>).
     /// </summary>
     PickFailed,
+    /// <summary>
+    /// What a shopper paid for a unit (<see cref="Floater.Part"/>, the price in the invariant culture) over the shopper, pale yellow in the large
+    /// floater font (<c>FUN_1409a14b0</c>).
+    /// </summary>
+    Price,
 }
 
 /// <summary>
@@ -96,6 +101,12 @@ public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vect
     public static Floater BuildingHit(Vector3 position, int amount) =>
         new(FloaterKind.Building, CharacterId.None, position, false, false, amount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 default, default);
+
+    /// <summary>
+    /// A shopper's price over the shopper (<see cref="FloaterKind.Price"/>).
+    /// </summary>
+    public static Floater Price(CharacterId shopper, Vector3 position, long price) =>
+        new(FloaterKind.Price, shopper, position, false, false, price.ToString(System.Globalization.CultureInfo.InvariantCulture), default, default);
 
     /// <summary>
     /// A machine's label at a point (<see cref="FloaterKind.Label"/>).
