@@ -470,7 +470,8 @@ public sealed partial class MyGuiScreenHost
 
             if (pr.ContainsKey("BarKey") && pr.ContainsKey("BarMax"))
             {
-                if (Num(c, "BarMax") > 0)
+                // A bar with a WheelPage of 0 leaves the wheel to the view under it (the Edit characters window's sliders).
+                if (Num(c, "BarMax") > 0 && Num(c, "BarWheel", 1) != 0)
                 {
                     StepBar(id, c, sign * Num(c, "BarWheel", 1));
                     return;

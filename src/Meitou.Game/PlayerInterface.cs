@@ -187,6 +187,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal PickInspector Inspector => field ??= new(this);
     /// <summary>
+    /// The debug menu's Edit characters window (docs/game/ui-input.md "Edit characters window", Meitou only).
+    /// </summary>
+    internal DebugCharactersWindow CharactersWindow => field ??= new(this);
+    /// <summary>
     /// Meitou's feedback button, always at the top right in both UI modes, and the form it opens.
     /// </summary>
     internal FeedbackPanel FeedbackPanel => field ??= new(this);
@@ -1069,6 +1073,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             InventoryWindows.InventoryPointerUp(p);
             OrdersPanel.JobDragEnd(p);
             SquadWindows.SquadPointerUp(p, shift);
+            CharactersWindow.PointerUp();
             FaithfulScreens.PointerUp();
             WorldMap.MapDrag = null;
         }

@@ -120,14 +120,15 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>
-    /// The characters whose portraits the host draws, each into the atlas cell of its index: the squad bar's first, then, while the squads screen is
-    /// open, the other squads' members in order. As many as there are cells before the conversation's (30, CONSTANTS <c>max faction size</c>); a
+    /// The characters whose portraits the host draws, each into the atlas cell of its index: the squad bar's first, then, while the squads screen or
+    /// the debug menu's Edit characters window is open, the other squads' members in order. As many as there are cells before the conversation's (30, CONSTANTS <c>max faction size</c>); a
     /// modded faction past that shows nameless cells.
     /// </summary>
     public IReadOnlyList<CharacterSnapshot> PortraitMembers()
     {
         var bar = SquadBarMembers();
-        if (!player.SquadWindows.SquadsShown) return bar;   // the others are drawn (and posed out of range) only while the squads screen shows them
+        // the others are drawn (and posed out of range) only while the squads screen or the Edit characters window shows them
+        if (!player.SquadWindows.SquadsShown && !player.CharactersWindow.Shown) return bar;
 
         var byId = player.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
         var shown = bar.Select(c => c.Id).ToHashSet();

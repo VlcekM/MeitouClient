@@ -166,7 +166,8 @@ public sealed partial class MyGuiScreenHost
 
     /// <summary>
     /// Enter in the focused box (MyGUI): a multi-line box takes a line break (Ctrl+Enter accepts), any other accepts, which here is the default
-    /// action; a read-only box does nothing. True when the box took it.
+    /// action; a read-only box does nothing. A box whose layout names a <c>SubmitAction</c> raises that action with its text and lets go of the keys
+    /// instead (the Edit characters window's values). True when the box took it.
     /// </summary>
     public bool EditEnter(bool ctrl)
     {
@@ -176,6 +177,13 @@ public sealed partial class MyGuiScreenHost
         {
             _edit.Insert("\n");
             PublishEdit();
+            return true;
+        }
+
+        if (_focus is { } f && Find(f.Screen, f.Widget)?.Properties.GetValueOrDefault("SubmitAction") is { Length: > 0 } submit)
+        {
+            Activated?.Invoke(new(f.Screen, f.Widget, submit, _edit.Text));
+            Blur();
             return true;
         }
 

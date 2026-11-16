@@ -491,6 +491,7 @@ sealed partial class PlayerInterface
         DialogueWindow.SyncDialogueScreen();
         TradeWindows.SyncCharacterTradeScreen();
         InventoryWindows.ValidateInventoryDrag();
+        CharactersWindow.Sync();
         FaithfulScreens.FocusRing = UiMode == UiMode.Meitou;
     }
 
@@ -625,7 +626,7 @@ sealed partial class PlayerInterface
     /// The base shows something that moves on real time or with the camera: it is arranged every frame.
     /// </summary>
     bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
-        || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
+        || CharactersWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
 
     #endregion
 

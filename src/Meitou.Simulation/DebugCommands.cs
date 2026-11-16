@@ -57,9 +57,22 @@ public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : Deb
 public sealed record DebugAnimalAge(IReadOnlyList<CharacterId> Characters, float? Age = null) : DebugCommand;
 
 /// <summary>
-/// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit character sub-view).
+/// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit characters window).
 /// </summary>
 public sealed record DebugSetStats(IReadOnlyList<CharacterId> Characters, IReadOnlyList<StatsEnumerated> Stats, float Value) : DebugCommand;
+
+/// <summary>
+/// Sets the levels of the code mods' skills with the given ids (<see cref="ModSkill.Id"/>; an unknown id is skipped) of the characters to
+/// <see cref="Value"/> (the debug menu's Edit characters window).
+/// </summary>
+public sealed record DebugSetModSkills(IReadOnlyList<CharacterId> Characters, IReadOnlyList<string> Skills, float Value) : DebugCommand;
+
+/// <summary>
+/// Sets each of the given stats of the characters to its own value, and each code mod's skill with the given ids (an unknown id is skipped) to its
+/// own (the Edit characters window's Paste values).
+/// </summary>
+public sealed record DebugSetStatValues(IReadOnlyList<CharacterId> Characters, IReadOnlyDictionary<StatsEnumerated, float> Stats,
+    IReadOnlyDictionary<string, float> ModSkills) : DebugCommand;
 
 /// <summary>
 /// Recruits the character into the player's faction and active squad (the debug menu's Recruit row): refused when it has no dialogue line that makes
@@ -718,6 +731,12 @@ static class DebugCheats
             case DebugSetStats set:
                 SetStats(world, set);
                 break;
+            case DebugSetModSkills modSkills:
+                SetModSkills(world, modSkills);
+                break;
+            case DebugSetStatValues values:
+                SetStatValues(world, values);
+                break;
             case DebugRecruit recruit when data is not null:
                 Recruit(world, data, recruit);
                 break;
@@ -917,6 +936,39 @@ static class DebugCheats
         {
             if (table.TryResolveNext(id, out int slot) && table.Cold(slot)?.Stats is { } stats)
                 foreach (var stat in set.Stats) stats[stat] = set.Value;
+        }
+    }
+
+    /// <summary>
+    /// Sets the given code mods' skills of the characters to the value.
+    /// </summary>
+    static void SetModSkills(World world, DebugSetModSkills set)
+    {
+        var skills = ModSkills.All.Where(s => set.Skills.Contains(s.Id)).ToArray();
+        if (skills.Length == 0) return;
+
+        var table = world.Characters;
+        foreach (var id in set.Characters)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot)?.Stats is not { } stats) continue;
+
+            foreach (var skill in skills) skill.Set(stats, set.Value);
+        }
+    }
+
+    /// <summary>
+    /// Sets each of the given stats and code mods' skills of the characters to its own value.
+    /// </summary>
+    static void SetStatValues(World world, DebugSetStatValues set)
+    {
+        var skills = ModSkills.All.Where(s => set.ModSkills.ContainsKey(s.Id)).ToArray();
+        var table = world.Characters;
+        foreach (var id in set.Characters)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot)?.Stats is not { } stats) continue;
+
+            foreach (var (stat, value) in set.Stats) stats[stat] = value;
+            foreach (var skill in skills) skill.Set(stats, set.ModSkills[skill.Id]);
         }
     }
 

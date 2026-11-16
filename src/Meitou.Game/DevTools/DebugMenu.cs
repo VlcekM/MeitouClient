@@ -22,9 +22,10 @@ namespace Meitou.Game.DevTools;
 /// Cheats, then Mods for code mods' rows ([modding](docs/modding.md)), Tools and Overlays, <see cref="DebugTools"/>); Enter or Right opens one as a
 /// sub-view, whose rows are walked by Up and Down, typed into, applied by Enter, and left by Esc. A category whose switches are on shows how
 /// many in green ("Cheats   1 active"). Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target
-/// (the middle of the screen); heal, edit character and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
-/// gives them back. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and keeps the squad's
-/// selection), else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the
+/// (the middle of the screen); heal and damage the selected characters, else the inspected one. Heal keeps lost limbs; Heal fully
+/// gives them back. Edit characters closes the menu and opens a window of its own (<see cref="DebugCharactersWindow"/>), whose characters are
+/// picked in its list, not from the selection. Recruit takes the inspected character (a click on another faction's character shows it in the HUD and
+/// keeps the squad's selection), else the first selected: it adds it to the player's faction and active squad when it has a dialogue line that makes it join and the
 /// squad has room, then opens the character editor on it. The Cheats category holds the five debug switches (Set stats to 1000, Auto heal, Move
 /// instantly, One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
 /// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
@@ -70,9 +71,9 @@ sealed class DebugMenu(GameHost host)
         HealFully,
 
         /// <summary>
-        /// Opens the Edit character sub-view: quick actions, Appearance and every stat by category.
+        /// Closes the menu and opens the Edit characters window.
         /// </summary>
-        EditCharacter,
+        EditCharacters,
 
         /// <summary>
         /// Cuts the targets for the typed damage, on the picked part or at random.
@@ -166,7 +167,7 @@ sealed class DebugMenu(GameHost host)
     internal static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
-        "Edit character", "Damage (cut)",
+        "Edit characters", "Damage (cut)",
         "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Gigachad Mode (set stats to 1000)", "Auto heal",
             "Move instantly", "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target",
             "Explode on click", "Drop item", "Recruit", "Faction relations",
@@ -201,7 +202,7 @@ sealed class DebugMenu(GameHost host)
 
         var categories = new List<DebugCategory>
         {
-            new("Character", [(int)DebugRow.EditCharacter, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
+            new("Character", [(int)DebugRow.EditCharacters, (int)DebugRow.Heal, (int)DebugRow.HealFully, (int)DebugRow.ClearBounties,
                 (int)DebugRow.GiveItem]),
             new("Squad / Faction", [(int)DebugRow.Recruit, (int)DebugRow.Money, (int)DebugRow.FactionRelations,
                 (int)DebugRow.UnlockResearch]),
@@ -247,10 +248,6 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     readonly DebugItemPicker _itemPicker = new(host);
 
-    /// <summary>
-    /// The Edit character row's sub-view: quick actions, Appearance and every stat by category.
-    /// </summary>
-    readonly DebugCharacterEditor _characterEditor = new(host);
 
     /// <summary>
     /// The Faction relations row's sub-view: a faction, then its relation with every other one.
@@ -661,7 +658,7 @@ sealed class DebugMenu(GameHost host)
     /// Whether <paramref name="row"/> takes typed text: a mod row with a field, or a cheat row other than the switches and actions without one.
     /// </summary>
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacter or DebugRow.ForceHits
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.EditCharacters or DebugRow.ForceHits
             or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.StatsTo1000 or DebugRow.AutoHeal or DebugRow.InstantMove
             or DebugRow.OnePunch or DebugRow.NoStumble or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick
             or DebugRow.DropItem or DebugRow.Recruit or DebugRow.FactionRelations));
@@ -701,11 +698,6 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        if (_characterEditor.Open)
-        {
-            _characterEditor.Scroll(lines);
-            return;
-        }
 
         if (_relationsEditor.Open)
         {
@@ -731,15 +723,14 @@ sealed class DebugMenu(GameHost host)
 
     /// <summary>
     /// Whether the menu's selection takes typed text, so the menu must take every key: a row with a field (in a category or its part list), the item
-    /// picker (its search) or a character-editor category (its values). Otherwise it takes only <see cref="DebugMenuTakesKey"/> and the rest are the
-    /// game's.
+    /// picker (its search) or the faction relations' values. Otherwise it takes only <see cref="DebugMenuTakesKey"/> and the rest are the game's.
     /// </summary>
     internal bool DebugMenuTakesText
     {
         get
         {
             if (_itemPicker.Open) return true;
-            if (_characterEditor.Open) return _characterEditor.TakesText;
+
             if (_relationsEditor.Open) return _relationsEditor.TakesText;
             return !DebugAtCategories && DebugHasField(_debugRow);
         }
@@ -765,11 +756,6 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        if (_characterEditor.Open)
-        {
-            _characterEditor.Key(key);
-            return;
-        }
 
         if (_relationsEditor.Open)
         {
@@ -888,8 +874,8 @@ sealed class DebugMenu(GameHost host)
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.DropItem:
                 _itemPicker.Begin();
                 break;
-            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacter:
-                _characterEditor.Begin();
+            case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.EditCharacters:
+                OpenCharactersWindow();
                 break;
             case EngineKey.Enter or EngineKey.Right when !DebugIsTool(_debugRow) && _debugRow == (int)DebugRow.FactionRelations:
                 _debugStatus = _relationsEditor.Begin();
@@ -979,13 +965,13 @@ sealed class DebugMenu(GameHost host)
     {
         host.Modding.EnsureDebugFields();
         if (_itemPicker.Open) _itemPicker.Type(c);
-        else if (_characterEditor.Open) _characterEditor.Type(c);
+
         else if (_relationsEditor.Open) _relationsEditor.Type(c);
         else if (!DebugAtCategories && DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
     /// <summary>
-    /// Heal, edit character and damage: the selected characters, else the inspected one.
+    /// Heal and damage: the selected characters, else the inspected one.
     /// </summary>
     internal static CharacterId[] DebugTargets(GameHost host)
     {
@@ -1317,6 +1303,15 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
+    /// The Edit characters row: the menu closes and the window opens (it picks its own character; the game's selection is not used).
+    /// </summary>
+    void OpenCharactersWindow()
+    {
+        DebugMenuOpen = false;
+        host.Player.CharactersWindow.Open();
+    }
+
+    /// <summary>
     /// The console's gigachad mode, the menu's "Set stats to 1000" and "Auto heal" together: <paramref name="field"/> is on / off, or empty to toggle
     /// (on unless both are already on).
     /// </summary>
@@ -1342,7 +1337,7 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// Sets every stat of the targets to 100 (the console's <c>maxstats</c>, and the Edit character sub-view's Max out everything).
+    /// Sets every stat of the targets to 100 (the console's <c>maxstats</c>).
     /// </summary>
     internal string DebugMaxAll()
     {
@@ -1471,7 +1466,7 @@ sealed class DebugMenu(GameHost host)
     /// Draws the menu at <paramref name="top"/> (on the left, or at the right with <paramref name="atRight"/>): at the categories their titles with how
     /// many switches inside are on, in a category its rows (scrolled to the highlighted one) with a back button, the selection, camera target and money,
     /// the hint with <paramref name="close"/> and the status. <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display):
-    /// the text and every size in the menu grow with it. While the item picker or the Edit character sub-view is open it is drawn instead.
+    /// the text and every size in the menu grow with it. While the item picker or the faction relations sub-view is open it is drawn instead.
     /// </summary>
     internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false, float scale = 1,
         DebugOverlay.OverlayPass? pass = null)
@@ -1482,11 +1477,6 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        if (_characterEditor.Open)
-        {
-            _characterEditor.Draw(o, width, height, top, scale, close, atRight, pass);
-            return;
-        }
 
         if (_relationsEditor.Open)
         {
@@ -1567,7 +1557,7 @@ sealed class DebugMenu(GameHost host)
     internal bool DebugMenuContains(Vector2 at)
     {
         if (_itemPicker.Open) return _itemPicker.Contains(at);
-        if (_characterEditor.Open) return _characterEditor.Contains(at);
+
         if (_relationsEditor.Open) return _relationsEditor.Contains(at);
         return _panelRect is { } rect && Inside(rect, at);
     }
@@ -1586,11 +1576,6 @@ sealed class DebugMenu(GameHost host)
             return;
         }
 
-        if (_characterEditor.Open)
-        {
-            _characterEditor.Click(at);
-            return;
-        }
 
         if (_relationsEditor.Open)
         {
@@ -1776,8 +1761,8 @@ sealed class DebugMenu(GameHost host)
                 case DebugRow.DropItem:
                     value = "Enter: pick an item";
                     break;
-                case DebugRow.EditCharacter:
-                    value = "Enter: edit the character";
+                case DebugRow.EditCharacters:
+                    value = "Enter: open the window";
                     break;
                 case DebugRow.Recruit:
                     value = "Enter: recruit and edit";
