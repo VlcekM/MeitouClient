@@ -261,9 +261,7 @@ public sealed partial class DialogueSystem
             case 17: return Bool(dc,
                 mc.SquadId >= 0 && world.Squads.Find(mc.SquadId)?.HomeBuilding is { } home && Position(world, subjectId) is { } inside
                 && InBuilding(home, inside));
-            case 31: return Bool(dc,
-                Position(world, subjectId) is { } where && TownAt(where) is >= 0 and var town
-                && (town >= _data.SiteFactions.Count || _data.SiteFactions[town] != world.Player.Faction));
+            case 31: return Bool(dc, InNonPlayerTown(world, mc, subjectId));
             // TOWN_HAS_FORTIFICATIONS_WALLS: S's current town has a gate building (Town slot 97 FUN_140929910 finds one); S in no town reads false.
             case 49: return Bool(dc, Position(world, subjectId) is { } gated && HasGates(world, gated));
             // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open
@@ -376,6 +374,28 @@ public sealed partial class DialogueSystem
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// DC 31 IN_A_NON_PLAYER_TOWN (<c>FUN_140676950</c> case 0x1f): S's status town (<see cref="Ai.AiSystem.StatusTownAt"/>, kept out to 1.5 x
+    /// its radius once entered, as S's next status update would write it) is set and not of the player's faction, and is no nest or nest marker;
+    /// ruins count only when they are the speaker's squad's home town.
+    /// </summary>
+    bool InNonPlayerTown(World world, CharacterCold mc, CharacterId subject)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(subject, out int s) || table.Cold(s) is not { } sc) return false;
+
+        var town = Ai.AiSystem.StatusTownAt(_data, world, table.Next[s].Position, sc.StatusTown);
+        if (town.IsNone) return false;
+        if (town.Site < 0) return world.Buildings.FindTown(town.PlayerTown) is { } built && built.Owner != world.Player.Faction;
+
+        var type = _data.Sites[town.Site].Town.Type;
+        bool playerOwned = town.Site < _data.SiteFactions.Count && _data.SiteFactions[town.Site] == world.Player.Faction;
+        if (playerOwned || type is TownType.Nest or TownType.NestMarker) return false;
+        if (type != TownType.Ruins) return true;
+
+        return world.Squads.Find(mc.SquadId)?.Ai?.HomeTown == town;
     }
 
     /// <summary>
