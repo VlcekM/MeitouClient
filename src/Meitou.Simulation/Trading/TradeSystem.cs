@@ -257,8 +257,9 @@ public sealed class TradeSettings
 /// trader that does not buy illegal goods: "Attempted smuggling!" (<see cref="Smuggling"/>); the rest of the smuggling rules (the trader's answer for
 /// a smuggler, read by no caller seen) are not built.</item>
 /// </list>
-/// The shops' stock and restock times are in the state hash (through the squads). The open trade is not, but the buyback receipts it leaves on items
-/// are, and they are not saved: a save made mid-trade reloads with a different hash (docs/simulation.md, trading).
+/// A squad shop's stock and every shop's restock time are in the state hash (through the squads; a building shop's goods through its containers).
+/// The open trade is not, but the buyback receipts it leaves on items are, and they are not saved: a save made mid-trade reloads with a different
+/// hash (docs/simulation.md, trading).
 /// </summary>
 public sealed class TradeSystem : ITickSystem, ITradeSource
 {
@@ -854,9 +855,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (shop.Building is not null)
         {
-            // Not while an item lifted from the window is held: it goes back to the grid it came from.
-            if (home is null || BoxesOf(world, shop, out _).Count == 0 || shop.View.Live && world.Player.Held?.From.Holder == ItemHolder.Stock)
-                return;
+            // Not while an item lifted from the window is held (it goes back to the grid it came from), nor before a save's goods are handed over.
+            bool held = shop.View.Live && world.Player.Held?.From.Holder == ItemHolder.Stock;
+            if (home is null || BoxesOf(world, shop, out _).Count == 0 || held || shop.View.Pending) return;
 
             shop.Stock = FillGrid(shop);
         }
@@ -921,7 +922,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     void BuildView(World world)
     {
-        if (Resolve(world, out _, out _, out var shop) && shop!.Building is not null) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        if (!Resolve(world, out _, out _, out var shop) || shop!.Building is null) return;
+
+        SettleView(world, shop);
+        if (!shop.View.Pending) shop.View.Build(shop, BoxesOf(world, shop, out _));
     }
 
     /// <summary>
@@ -933,15 +937,15 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// A building shop's grid writes what changed into its containers once they are all registered, and empties when no trade window shows it
-    /// and no item lifted from a stock is held (the held item still goes back to it).
+    /// A building shop's grid writes what changed into its registered containers (an older save's goods once they all are), and empties when no
+    /// trade window shows it and no item lifted from a stock is held (the held item still goes back to it).
     /// </summary>
     internal void SettleView(World world, Shop shop)
     {
         if (!shop.View.Live) return;
 
         var boxes = BoxesOf(world, shop, out bool all);
-        if (!all) return;
+        if (!all && shop.View.Pending) return;
 
         shop.View.Write(shop, boxes);
         if (!Shows(world, shop) && world.Player.Held?.From.Holder != ItemHolder.Stock) shop.View.Drop(shop);
