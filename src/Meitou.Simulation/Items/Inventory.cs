@@ -161,6 +161,11 @@ public sealed class Inventory(int width, int height)
     public bool HasRoomFor(ItemInstance item) => Room(this, "main", item) || Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
     /// <summary>
+    /// Whether <paramref name="section"/> takes one unit of <paramref name="item"/> (a dry run): a stack of it with room left, or a free cell.
+    /// </summary>
+    public bool HasRoomIn(string section, ItemInstance item) => Room(this, section, item);
+
+    /// <summary>
     /// Whether <paramref name="inv"/>'s <paramref name="section"/> takes one unit of <paramref name="item"/>: a stack of it with room left, or a
     /// free cell.
     /// </summary>

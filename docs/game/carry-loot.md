@@ -112,7 +112,9 @@ drag-drop unpermitted down-character→Theft3, other source→Looting10. Ordinar
 Ground pickup can raise Theft inside another faction's building, and taking from another faction's container does (Theft by right-click, Looting by drag).
 
 **Observed** steal roll (`FUN_140794810`, chance `FUN_1407944d0`; virtual names KenshiLib 1ce4a16): both inventory transfers above and the give
-set their pending crime, then roll; caught refuses the move. Character owner (Loot, 26, on a sleeper in a bed, a playing-dead or a caged
+set their pending crime, then roll; caught refuses the move. **Verified** (`FUN_140713d20` decompile): the right click asks the taker's
+inventory for room (`Inventory` slot 4 `FUN_14074afa0`), else its backpack, after setting the crime and before the roll (`Character` slot 83);
+no room refuses the take with no roll and so no thievery XP. Character owner (Loot, 26, on a sleeper in a bed, a playing-dead or a caged
 character, never a ground sleeper: the menu tests special state `+0x2f8` != 0, `FUN_1407a6bc0`, **Observed**; [ui-input](ui-input.md#context-menu-verbs)): the owner watches, p = 1.1 x thievery/100, an equipped item (`Item::isEquipped` +0x129)
 x0.75, x0.75 again when it is armour (`isArmour`); the drag passes no item. Container: the container's parent building (`isFurnitureOf` -> its
 building) must have a resident squad (`Building::residentSquad` +0xD0, a CHARACTER or PLATOON hand), else no watcher; the watcher is the nearest

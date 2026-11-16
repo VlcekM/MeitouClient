@@ -1929,18 +1929,36 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var storage = ContainerAccess.GridOf(world, container, out var region);
         if (take.Index < 0 || take.Index >= storage.Items.Count || !region.Holds(storage.Items[take.Index])) return;
         var item = storage.Items[take.Index];
-        if (world.SystemOf<Crime.CrimeSystem>() is { } crimes && world.Characters.TryResolveNext(take.Character, out int thief)
-            && crimes.Steal(world, thief, container, Crime.CrimeCode.Theft)) return;
         var mark = item.Mark;
         if (container.Owner >= 0 && container.Owner != cold.Faction && Crime.CrimeSystem.IsStealing(world, container)
             && mark == StolenMark.None)
             item.Mark = Crime.CrimeSystem.OwnerMark(world, container.Building, container.Owner);
 
-        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
-            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, out bool worn, cold);
+        bool bagFirst = take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack;
+        if (Caught(world, container, take.Character, InventoryCommands.HasRoomFor(cold.Inventory!, item, bagFirst, cold)))
+        {
+            item.Mark = mark;
+            return;
+        }
+
+        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, bagFirst,
+            out bool worn, cold);
         if (storage.Items.Contains(item)) item.Mark = mark;   // what stayed keeps its mark
         if (worn) Assembly?.RefreshEquipment(cold);
         if (moved > 0) world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// The crime side of a take out of <paramref name="container"/>: the Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>), or the
+    /// Theft alone when the taker has no <paramref name="room"/> (<see cref="Crime.CrimeSystem.PendSteal"/>: no roll, no thievery XP, #796). True:
+    /// caught or no room, nothing moves.
+    /// </summary>
+    static bool Caught(World world, Locks.Fixture container, CharacterId taker, bool room)
+    {
+        if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !world.Characters.TryResolveNext(taker, out int thief)) return !room;
+
+        if (!room) crimes.PendSteal(world, thief, container, Crime.CrimeCode.Theft);
+        return !room || crimes.Steal(world, thief, container, Crime.CrimeCode.Theft);
     }
 
     /// <summary>

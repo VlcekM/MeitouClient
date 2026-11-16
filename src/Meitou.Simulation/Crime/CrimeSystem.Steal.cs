@@ -122,12 +122,30 @@ public sealed partial class CrimeSystem
     /// </summary>
     public bool Steal(World world, int thief, StealSource container, CrimeCode code)
     {
+        if (!PendSteal(world, thief, container, code)) return false;
+
+        float p = ContainerChance(world, thief, world.Characters.Cold(thief)!, container, out int w);
+        return Roll(world, thief, w, p, container.Owner, CharacterId.None, Rng.StableHash(container.Id));
+    }
+
+    /// <summary>
+    /// The pending crime of a take out of another faction's <paramref name="container"/> without the steal roll: the right click sets it before it
+    /// asks for room, so a thief without room gets it but no roll (<c>FUN_140713d20</c>, <b>Verified</b> decompile). False when the take is no
+    /// steal.
+    /// </summary>
+    public bool PendSteal(World world, int thief, Locks.Fixture container, CrimeCode code) =>
+        PendSteal(world, thief, StealSource.Of(container), code);
+
+    /// <summary>
+    /// <see cref="PendSteal(World, int, Locks.Fixture, CrimeCode)"/> out of any holder of another faction's goods.
+    /// </summary>
+    bool PendSteal(World world, int thief, StealSource container, CrimeCode code)
+    {
         if (world.Characters.Cold(thief) is not { } c || container.Owner < 0 || container.Owner == c.Faction || !IsStealing(world, container))
             return false;
 
         SetPending(world, thief, code, container.Owner, CharacterId.None, MinTimer);
-        float p = ContainerChance(world, thief, c, container, out int w);
-        return Roll(world, thief, w, p, container.Owner, CharacterId.None, Rng.StableHash(container.Id));
+        return true;
     }
 
     /// <summary>
@@ -232,13 +250,26 @@ public sealed partial class CrimeSystem
     /// </summary>
     public bool Pickpocket(World world, int thief, int owner, Items.ItemInstance? item, TakeKind kind)
     {
+        if (!PendPickpocket(world, thief, owner, kind)) return false;
+
+        var table = world.Characters;
+        var ownerId = table.IdOf(owner);
+        if (kind == TakeKind.Drag) item = null;
+        float? p = PickpocketChance(table.Cold(thief)!, table.Cold(owner)!, item);
+        return Roll(world, thief, p is null ? -1 : owner, p ?? 1, table.Cold(owner)!.Faction, ownerId, Rng.Key(ownerId));
+    }
+
+    /// <summary>
+    /// The pending crime of a take out of another faction's character (<see cref="TakeCode"/>) without the steal roll, as
+    /// <see cref="PendSteal(World, int, Locks.Fixture, CrimeCode)"/> for a thief without room. False when the take is no steal.
+    /// </summary>
+    public bool PendPickpocket(World world, int thief, int owner, TakeKind kind)
+    {
         var table = world.Characters;
         if (table.Cold(thief) is not { } c || table.Cold(owner) is not { } o || o.Faction == c.Faction || !IsStealing(world, o)) return false;
-        var ownerId = table.IdOf(owner);
-        if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, ownerId, MinTimer);
-        if (kind == TakeKind.Drag) item = null;
-        float? p = PickpocketChance(c, o, item);
-        return Roll(world, thief, p is null ? -1 : owner, p ?? 1, o.Faction, ownerId, Rng.Key(ownerId));
+
+        if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, table.IdOf(owner), MinTimer);
+        return true;
     }
 
     /// <summary>

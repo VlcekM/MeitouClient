@@ -176,31 +176,58 @@ public static class InventoryCommands
     /// </summary>
     static bool EquipUpright(Inventory root, ItemInstance item, CharacterCold? wearer)
     {
-        if (!WearableBy(item, wearer) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
+        if (item.Quantity != 1 || EquipCell(root, item, item.Width, item.Height, wearer) is not var (section, x, y)) return false;
+
+        item.Section = section;
+        item.X = x;
+        item.Y = y;
+        root.Items.Add(item);
+        return true;
+    }
+
+    /// <summary>
+    /// The equipment slot and cell <see cref="TryEquip"/> puts one unit of <paramref name="item"/> in, lying upright as
+    /// <paramref name="w"/> x <paramref name="h"/> (a dry run, nothing changes); null: none takes it.
+    /// </summary>
+    static (string Section, int X, int Y)? EquipCell(Inventory root, ItemInstance item, int w, int h, CharacterCold? wearer)
+    {
+        if (!WearableBy(item, wearer) || w <= 0 || h <= 0) return null;
+
         string[] sections = item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow ? ["back", "hip"]
             : item.Type is FcsRecordType.Armour or FcsRecordType.Item && IsEquipmentSection(item.EquipmentSection)
                     && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
         foreach (string section in sections)
         {
             if (SectionClosed(wearer, section)) continue;
-            int x = 0, y = 0;
-            if (section is "back" or "hip")
+            if (section is not ("back" or "hip"))
             {
-                var size = SectionSize(section);
-                var cell = Enumerable.Range(0, Math.Max(0, size.Height - item.Height + 1))
-                    .SelectMany(cy => Enumerable.Range(0, Math.Max(0, size.Width - item.Width + 1)).Select(cx => (X: cx, Y: cy)))
-                    .Cast<(int X, int Y)?>().FirstOrDefault(c => root.IsFree(section, c!.Value.X, c.Value.Y, item.Width, item.Height));
-                if (cell is not { } free) continue;
-                (x, y) = free;
+                if (root.Items.Any(i => i.Section == section)) continue;
+                return (section, 0, 0);
             }
-            else if (root.Items.Any(i => i.Section == section)) continue;
-            item.Section = section;
-            item.X = x;
-            item.Y = y;
-            root.Items.Add(item);
-            return true;
+
+            var size = SectionSize(section);
+            var cell = Enumerable.Range(0, Math.Max(0, size.Height - h + 1))
+                .SelectMany(cy => Enumerable.Range(0, Math.Max(0, size.Width - w + 1)).Select(cx => (X: cx, Y: cy)))
+                .Cast<(int X, int Y)?>()
+                .FirstOrDefault(c => root.IsFree(section, c!.Value.X, c.Value.Y, w, h));
+            if (cell is { } free) return (section, free.X, free.Y);
         }
-        return false;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <see cref="MoveInto"/> would place one unit of <paramref name="item"/> in <paramref name="into"/> (a dry run, nothing changes): the
+    /// worn bag first when <paramref name="bagFirst"/>, then a free equipment slot, then the main grid. The trade window's right click asks the
+    /// taker's inventory, else its backpack, before the steal roll and refuses the take without room (<c>FUN_140713d20</c>: <c>Inventory</c> slot 4
+    /// <c>FUN_14074afa0</c> before <c>Character</c> slot 83 <c>FUN_140794810</c>, <b>Verified</b> decompile), so a full thief gets no roll.
+    /// </summary>
+    public static bool HasRoomFor(Inventory into, ItemInstance item, bool bagFirst, CharacterCold? wearer = null)
+    {
+        int w = item.Rotated ? item.Height : item.Width;
+        int h = item.Rotated ? item.Width : item.Height;
+        return bagFirst && into.Backpack?.Contents is { } bag && bag.HasRoomIn("backpack_content", item)
+            || EquipCell(into, item, w, h, wearer) is not null
+            || !MainClosed(wearer) && into.HasRoomIn("main", item);
     }
 
     /// <summary>
