@@ -191,12 +191,20 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// A jobs row: the type's text and the building, training dummy or character it targets. The engineer works every site, not the one it was
-    /// ordered on, so its row is plain "Engineer" (<b>Observed</b> in the original by players, #348/#353).
+    /// The name a mod registered for its own job type (docs/modding.md "Mod jobs"); null for any other type.
+    /// </summary>
+    string? ModJobName(Data.Gameplay.Ai.TaskType type) => player.Session.World.Systems
+        .OfType<Simulation.Player.PlayerSystem>()
+        .FirstOrDefault()?.Extensions?.JobTypes.GetValueOrDefault(type);
+
+    /// <summary>
+    /// A jobs row: the type's text (a mod's job: the name it registered) and the building, training dummy or character it targets. The engineer
+    /// works every site, not the one it was ordered on, so its row is plain "Engineer" (<b>Observed</b> in the original by players, #348/#353).
     /// </summary>
     string JobRowText(Simulation.Production.PermaJob job)
     {
-        string text = Loc.Tr(Simulation.Production.PermaJobs.Text(job.Type) ?? job.Type.ToString());
+        string name = Simulation.Production.PermaJobs.Text(job.Type) ?? ModJobName(job.Type) ?? job.Type.ToString();
+        string text = Loc.Tr(name);
         if (job.Type == Data.Gameplay.Ai.TaskType.JobBuilder) return text;
 
         if (job.Site is { } id && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site)

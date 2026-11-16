@@ -281,6 +281,21 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A job type of the mod's own (docs/modding.md "Mod jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up, so
+    /// never a game task), which the mod puts in characters' job lists and runs itself. The jobs panel names it <paramref name="name"/>; a save keeps
+    /// it in its place in the list under Meitou keys (the original's list never holds it), and a load puts it back while the type is registered.
+    /// One mod per type.
+    /// </summary>
+    public void AddJobType(Data.Gameplay.Ai.TaskType type, string name)
+    {
+        CheckOpen();
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A job type needs a name.", nameof(name));
+
+        _registry.CheckJobTypeFree(type, Pending, Id);
+        Pending.JobTypes[type] = name;
+    }
+
+    /// <summary>
     /// The merged records of a type, in string id order.
     /// </summary>
     public IEnumerable<GameRecord> Records(int type) =>

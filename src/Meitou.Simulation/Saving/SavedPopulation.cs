@@ -558,7 +558,10 @@ internal static class SavedCharacters
             hot.Task = (byte)CharacterTask.Sleep;   // it lies there until an order (Locks.BedSystem)
 
         if (cold.IsPlayer && sc.Ai is { } ai)
-            PermaJobSave.Read(ai, sc.GameState, cold, world.Buildings, context.Handles, context.InstanceOf, context.InstanceIds);
+        {
+            PermaJobSave.Read(ai, sc.GameState, cold, world.Buildings, context.Handles, context.InstanceOf, context.InstanceIds,
+                world.SystemOf<Player.PlayerSystem>()?.Extensions?.JobTypes);
+        }
 
         if (cold.IsPlayer && sc.Ai is { } queueAi) OrderSave.Read(queueAi, cold, context.Handles, context.InstanceOf);
 

@@ -132,7 +132,7 @@ public delegate bool ItemUseHandler(ItemUse use);
 public sealed class SimulationExtensions
 {
     /// <summary>
-    /// The lowest dialogue condition, dialogue effect and record type number a mod may register; the vanilla numbers stay below it.
+    /// The lowest dialogue condition, dialogue effect, record type and job type number a mod may register; the vanilla numbers stay below it.
     /// </summary>
     public const int FirstModCode = 1000;
 
@@ -152,12 +152,16 @@ public sealed class SimulationExtensions
     /// The mods' item uses by item record string id.
     /// </summary>
     public Dictionary<string, ItemUseHandler> ItemUses { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The mods' own job types (no game job) and the jobs panel's name of each (docs/modding.md "Mod jobs").
+    /// </summary>
+    public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
 
     /// <summary>
     /// Whether the mods add nothing.
     /// </summary>
     public bool IsEmpty => Systems.Count == 0 && DialogueConditions.Count == 0 && DialogueEffects.Count == 0
-        && ItemUses.Count == 0;
+        && ItemUses.Count == 0 && JobTypes.Count == 0;
 
     /// <summary>
     /// Each extra system's factory, for log lines that name the mod and the system; weak, so a dropped world's systems go with it.
