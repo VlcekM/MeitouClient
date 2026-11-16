@@ -361,15 +361,21 @@ public sealed partial class ProductionSystem
     /// AI's plan for 189 (87's list B in order: <c>!63</c>, whose provider is 92; <c>!62</c>, whose provider is 93), a full output is emptied into
     /// the inventory (row 92), else an empty input is filled from what it carries (row 93, <see cref="FillInputs"/>), else the machine is operated
     /// (row 87, <see cref="TownOperate"/>). Fetching an input from another machine and putting output away are walks of the job
-    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only pretends.
+    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only pretends (<see cref="PretendXp"/>).
     /// </summary>
     void ObedientWorkers(World world, float dt)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Operates: true, Place: var place } } cold) continue;
+            if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Place: var place } work } cold) continue;
             if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(table.Next[i], place.Building, place.Range)) continue;
+
+            if (!work.Operates)
+            {
+                PretendXp(world, cold, place, dt);
+                continue;
+            }
 
             var m = world.Machines.Find(TownWorkId(place.Building)) ?? TownWork(world, place.Building, place.Owner);
             if (m is null || !Live(world, m)) continue;
@@ -378,6 +384,17 @@ public sealed partial class ProductionSystem
             else if (m.HasEmptyInputs) FillInputs(world, cold, m);
             else TownOperate(world, i, cold, m, dt);
         }
+    }
+
+    /// <summary>
+    /// An obedient player slave pretending at its workplace on goal 190: row 221 is <c>Task_OperateMachine</c> as 87 is, whose update
+    /// (<c>FUN_14035bc90</c>, <b>Verified</b>) trains the functionality's <c>stat used</c> every frame whatever the machine holds, BF_TRAINING
+    /// excepted (<see cref="OperatingXp"/>). No machine is made for it.
+    /// </summary>
+    void PretendXp(World world, CharacterCold cold, Ai.ObedientWorkplace place, float dt)
+    {
+        if (Data(place.Building.BuildingId) is not { Function: not MachineData.TrainingFunction } data) return;
+        OperatingXp(world, cold, data.Stat, dt);
     }
 
     /// <summary>
