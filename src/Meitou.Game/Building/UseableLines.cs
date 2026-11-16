@@ -9,7 +9,7 @@ namespace Meitou.Game.Building;
 /// <summary>
 /// The lines of the original's UseableStuff / StorageBuilding / LightBuilding panel (slot 40 <c>FUN_140304e90</c>, docs/game/ui-screens.md "Selected building") for a
 /// selected building with no machine of the player's (a town's furniture or level building): <c>Training:</c> among the state lines of a training
-/// dummy, and in a town Workers then Efficiency and Max efficiency, or a dummy's Max Skill Level.
+/// dummy, and Workers then Efficiency and Max efficiency, or a dummy's Max Skill Level.
 /// </summary>
 sealed class UseableLines(PlayerInterface player)
 {
@@ -71,13 +71,13 @@ sealed class UseableLines(PlayerInterface player)
     internal bool IsSkeletonBed(string? record) => DataOf(record) is { Function: SkeletonBedFunction };
 
     /// <summary>
-    /// Adds the section 6 lines of a UseableStuff, StorageBuilding or LightBuilding standing in a town: Workers (slot 155), then Max Skill Level for
-    /// a training dummy, else Efficiency and Max efficiency (slot 154), then a consumer's Power (slot 153). Left out: a bed's, and a consumer's that
-    /// stands inside a building, whose registration with the town's frame is Unknown.
+    /// Adds the section 6 lines of a UseableStuff, StorageBuilding or LightBuilding, in a town or not (the panel's town guard passes for any placed
+    /// building): Workers (slot 155), then Max Skill Level for a training dummy, else Efficiency and Max efficiency (slot 154), then a consumer's
+    /// Power (slot 153). Left out: a bed's, and a consumer's with no power view (one inside a building, or with no level town).
     /// </summary>
     internal void AddStatsLines(BuildingSelection.SelectedBuilding focus, List<PlayerInterface.HudLine> stats)
     {
-        if (focus.Town is not { Length: > 0 } || DataOf(focus.Record) is not { } data || !Useable(data)) return;
+        if (DataOf(focus.Record) is not { } data || !Useable(data)) return;
 
         var machine = MachineOf(focus);
         var power = player.Session.CurrentSnapshot.InspectedLevelPower is { } p && p.Instance == focus.Instance ? p : (LevelPowerView?)null;
