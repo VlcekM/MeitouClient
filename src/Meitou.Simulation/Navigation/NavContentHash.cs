@@ -93,7 +93,7 @@ internal sealed class NavContentHash
         {
             // Lower case: the set keeps whichever spelling came first, and record order is not fixed.
             Add(path.ToLowerInvariant());
-            if (CollisionPaths.Resolve(install, path) is not { } file)
+            if (CollisionPaths.ResolveCollision(install, path) is not { } file)
             {
                 Add("-");
                 continue;

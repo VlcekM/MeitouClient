@@ -82,7 +82,7 @@ internal sealed class CollisionCache(GameInstall install)
     /// </summary>
     PreparedCollision? Load(string recordPath)
     {
-        var path = CollisionPaths.Resolve(install, recordPath);
+        var path = CollisionPaths.ResolveCollision(install, recordPath);
         if (path is null)
         {
             Interlocked.Increment(ref _missing);
