@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
@@ -48,6 +49,12 @@ public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs
 /// Sets every stat of the characters to 100.
 /// </summary>
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
+
+/// <summary>
+/// Reports each animal's age, or sets it to the given fraction (0 to 1.5) through the growth path, refreshing its drawn size immediately.
+/// Non-animals are skipped with a message; null queries without changing anything.
+/// </summary>
+public sealed record DebugAnimalAge(IReadOnlyList<CharacterId> Characters, float? Age = null) : DebugCommand;
 
 /// <summary>
 /// Sets the given stats of the characters to <see cref="Value"/> (the debug menu's Edit character sub-view).
@@ -705,6 +712,9 @@ static class DebugCheats
             case DebugMaxSkills max:
                 MaxSkills(world, max);
                 break;
+            case DebugAnimalAge age:
+                AnimalAge(world, age);
+                break;
             case DebugSetStats set:
                 SetStats(world, set);
                 break;
@@ -857,6 +867,43 @@ static class DebugCheats
         {
             if (table.TryResolveNext(id, out int skilled) && table.Cold(skilled)?.Stats is { } stats)
                 for (var s = StatsEnumerated.None + 1; s < StatsEnumerated.End; s++) stats[s] = 100;
+        }
+    }
+
+    /// <summary>
+    /// Reads or edits animal ages and posts the trader-style age row for each target. A stale id never falls back to another character.
+    /// </summary>
+    static void AnimalAge(World world, DebugAnimalAge command)
+    {
+        if (command.Age is { } value && (!float.IsFinite(value) || value < 0 || value > 1.5f))
+        {
+            world.Post("animalage: age must be a fraction from 0 to 1.5 (adult = 1)");
+            return;
+        }
+
+        var table = world.Characters;
+        foreach (var id in command.Characters)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold)
+            {
+                world.Post($"animalage: no character c:{id.Slot}.{id.Generation}");
+                continue;
+            }
+            if (cold.Animal is null)
+            {
+                world.Post($"animalage: {cold.Name}: skipped (not an animal)");
+                continue;
+            }
+            if (cold.Stats is null || cold.Medical is null)
+            {
+                world.Post($"animalage: {cold.Name}: skipped (animal body unavailable)");
+                continue;
+            }
+
+            if (command.Age is { } age) BodySystem.SetAnimalAge(cold, age, refreshLook: true);
+            string word = Loc.Tr(AnimalData.AgeWord(cold.Age));
+            string number = ((int)(cold.Age * 100)).ToString(CultureInfo.InvariantCulture);
+            world.Post($"animalage: {cold.Name}: {word} ({number})");
         }
     }
 

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Game.DevTools.Agents;
 using Meitou.Game.Host;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
@@ -273,6 +274,7 @@ sealed class DevConsoleHost(GameHost host)
             c.SetComplete(name, (i, typed) => i == 0 ? Characters(typed) : []);
         c.SetComplete("select", (_, typed) => Characters(typed));
         c.SetComplete("version", (i, typed) => i == 0 ? Starting(["--say"], typed) : []);
+        c.SetComplete("animalage", (i, typed) => i == 0 ? Starting(["pup", "teen", "adult", "elder"], typed) : []);
         c.SetComplete("order", (i, typed) => i == 0 ? Starting(["move", "attack"],
             typed) : i == 1 && c.CompletionArgs is ["attack"] ? Characters(typed) : []);
         c.SetComplete("spawn-at", (i, typed) => i == 2 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
@@ -395,6 +397,10 @@ sealed class DevConsoleHost(GameHost host)
             + "game loads. Runs in the simulation, so not while the game is paused", ConsoleExplodeClick);
 
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", ConsoleMaxstats);
+        Add("animalage", "animalage [<age>|pup|teen|adult|elder] [--id <c:slot.gen>]",
+            "show or set animal age: a fraction from 0 to 1.5 (1 = adult; not 0-150); pup=0.2, teen=0.5, adult=1, elder=1.2. "
+            + "Targets --id, else the inspected creature, else the selected characters; skips non-animals. "
+            + "Sets age-scaled stats, body factors and visible size without healing; growth continues normally. Works while paused", ConsoleAnimalage);
 
         Add("give", "give \"<item record>\" [qty] [quality] [--equip]", "put items on the first selected character; quality 0-100 (armour, weapons, "
             + "crossbows, limbs); one unit is worn when its slot is free; --equip also wears it when the slot is taken (the worn item goes to the "
@@ -631,6 +637,85 @@ sealed class DevConsoleHost(GameHost host)
     {
         if (!Need(args, 0, 0, Self("maxstats"))) return;
         Report(con, host.DebugMenu.DebugMaxAll());
+    }
+
+    /// <summary>
+    /// The <c>animalage</c> command: targets the creature in the info panel before falling back to the selection, including wild animals.
+    /// </summary>
+    void ConsoleAnimalage(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!AnimalAgeArgs(args, con, out var byId, out float? age)) return;
+        var snap = host.Session.CurrentSnapshot;
+        CharacterId[] targets;
+        if (byId is { } id)
+        {
+            if (!snap.Characters.Any(c => c.Id == id))
+            {
+                con.Error($"animalage: no character c:{id.Slot}.{id.Generation}");
+                return;
+            }
+
+            targets = [id];
+        }
+        else targets = snap.Characters.FirstOrDefault(c => c.Inspected) is { } inspected
+            ? [inspected.Id] : [.. snap.Characters.Where(c => c.Selected).Select(c => c.Id)];
+        if (targets.Length == 0)
+        {
+            con.Error($"animalage: click a creature, select characters, or pass --id; usage: {Self("animalage").Usage}");
+            return;
+        }
+
+        Send(t => new DebugAnimalAge(targets, age) { Tick = t });
+        if (host.Session.ApplyPausedCommandsNow()) host.WorldNews();
+        else con.Print("animalage: queued for the next simulation tick");
+    }
+
+    /// <summary>
+    /// Parses one optional age fraction or word and one optional explicit character id, in either order.
+    /// </summary>
+    static bool AnimalAgeArgs(IReadOnlyList<string> args, DevConsole con, out CharacterId? byId, out float? age)
+    {
+        byId = null;
+        age = null;
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (args[i].Equals("--id", StringComparison.OrdinalIgnoreCase))
+            {
+                if (byId is not null || i + 1 >= args.Count || !AgentOrders.TryParseCharacter(args[++i], out var id))
+                {
+                    con.Error("animalage: --id needs one character id (c:<slot>.<gen>)");
+                    return false;
+                }
+
+                byId = id;
+                continue;
+            }
+            if (age is not null || !AnimalAgeValue(args[i], out float value))
+            {
+                con.Error("animalage: use one age fraction from 0 to 1.5 (adult = 1), or pup, teen, adult, elder");
+                return false;
+            }
+
+            age = value;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a dev age preset or invariant fraction, rejecting non-finite and out-of-range numbers.
+    /// </summary>
+    static bool AnimalAgeValue(string text, out float age)
+    {
+        age = text.ToLowerInvariant() switch
+        {
+            "pup" => 0.2f,
+            "teen" => 0.5f,
+            "adult" => 1,
+            "elder" => 1.2f,
+            _ => float.NaN,
+        };
+        if (float.IsNaN(age) && !float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out age)) return false;
+        return float.IsFinite(age) && age >= 0 && age <= 1.5f;
     }
 
     /// <summary>
