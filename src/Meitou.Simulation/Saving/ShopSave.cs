@@ -36,7 +36,8 @@ internal static class ShopSave
         if (shop is null) return;
         platoon.Floats[RefreshKey] = (float)(world.GameHours + (shop.NextRestockTick - world.Tick) * BodySystem.HoursPerTick);
         platoon.Ints[FillsKey] = shop.Fills;
-        platoon.Strings[StockKey] = shop.Building is null ? ContainerSave.Write(shop.Stock) ?? "[]" : "[]";
+        bool own = shop.Building is null || shop.View.Pending;   // a building shop's goods are its containers', unless not handed over yet
+        platoon.Strings[StockKey] = own ? ContainerSave.Write(shop.Stock) ?? "[]" : "[]";
     }
 
     /// <summary>

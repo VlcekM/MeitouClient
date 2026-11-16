@@ -44,8 +44,10 @@ public static partial class MyGuiTemplates
             if (originalName == "Caption") properties["CaptionOwner"] = source.Name;
             if (node.UserStrings.TryGetValue("Event", out string? eventName)) properties["TemplateEvent"] = eventName;
             // MyGUI turns a part's position_real into pixels once, at the template's own size; its align then keeps those margins
-            // (Kenshi_ListBoxEmpty's client sits 19 x 18 px in, whatever the list's size).
+            // (Kenshi_ListBoxEmpty's client sits 19 x 18 px in, whatever the list's size). The fractions stay as TemplateRealPosition: the arranger
+            // converts them again at the scaled template size, as the scaled game does.
             var position = node.RealPosition ? node.Position.RelativeTo(new(0, 0, referenceWidth, referenceHeight), true) : node.Position;
+            if (node.RealPosition) properties["TemplateRealPosition"] = Coordinates(node.Position);
             var nested = node.Children.Select(c => Clone(c, position.Width, position.Height)).ToList();
             // The layout's children go into the template's Client only for the widgets that take one as their client (MyGUI's setWidgetClient:
             // windows, views, edit boxes, lists); a plain Widget, TextBox, ImageBox or Button keeps them itself (the title's CreditsPanel, a
@@ -79,4 +81,9 @@ public static partial class MyGuiTemplates
         var resolvedProperties = new Dictionary<string, string>(expanded.Properties, StringComparer.Ordinal) { ["ResolvedTemplate"] = "true" };
         return expanded with { Properties = resolvedProperties };
     }
+
+    /// <summary>
+    /// A rectangle as the four numbers of a layout's <c>position</c> / <c>position_real</c> (round-trip, <see cref="UiRect.Parse"/> reads it).
+    /// </summary>
+    static string Coordinates(UiRect r) => FormattableString.Invariant($"{r.X:R} {r.Y:R} {r.Width:R} {r.Height:R}");
 }

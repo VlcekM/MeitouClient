@@ -24,6 +24,10 @@ sealed class ShopView
     /// Whether the grid holds copies the containers follow (built, or a save's goods not yet handed to the containers).
     /// </summary>
     public bool Live { get; private set; }
+    /// <summary>
+    /// Whether the grid holds an older save's goods that no container has yet (<see cref="Adopt"/>): they wait for all the containers.
+    /// </summary>
+    public bool Pending { get; private set; }
 
     /// <summary>
     /// Builds the trader window from what <paramref name="boxes"/> hold.
@@ -42,6 +46,7 @@ sealed class ShopView
         InventoryCommands.Arrange(shop.Stock);
         _mirrored = Frozen(Tally(shop.Stock.Items));
         Live = true;
+        Pending = false;
     }
 
     /// <summary>
@@ -51,6 +56,7 @@ sealed class ShopView
     {
         _mirrored = [];
         Live = true;
+        Pending = true;
     }
 
     /// <summary>
@@ -82,6 +88,7 @@ sealed class ShopView
         }
 
         if (changed) _mirrored = Frozen(now);
+        Pending = false;
     }
 
     /// <summary>
@@ -93,6 +100,7 @@ sealed class ShopView
         shop.Stock = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
         _mirrored = [];
         Live = false;
+        Pending = false;
     }
 
     /// <summary>

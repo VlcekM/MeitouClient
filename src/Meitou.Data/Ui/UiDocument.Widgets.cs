@@ -3,10 +3,36 @@ using System.Globalization;
 namespace Meitou.Data.Ui;
 
 /// <summary>
-/// A MultiListBox column (MyGUI <c>addColumn</c>): its caption and width in layout pixels; a Fill column takes the width the others leave (MyGUI's
-/// Fill resizing policy), the rest are Fixed.
+/// MyGUI's MultiListBox column resizing policies (<c>ResizingPolicy</c>, in its order; 3.2 has no other).
 /// </summary>
-public sealed record UiColumn(string Caption, float Width, bool Fill = false);
+public enum MyGuiResizingPolicy
+{
+    /// <summary>
+    /// As wide as its header caption: the header button's width less its text region's, plus the caption's text size.
+    /// </summary>
+    Auto,
+
+    /// <summary>
+    /// Its own width in pixels (0 when negative).
+    /// </summary>
+    Fixed,
+
+    /// <summary>
+    /// A share of the width the other columns leave.
+    /// </summary>
+    Fill,
+
+    /// <summary>
+    /// A name MyGUI does not know (its <c>MAX</c> value): no width.
+    /// </summary>
+    None,
+}
+
+/// <summary>
+/// A MultiListBox column the code adds (MyGUI <c>addColumn</c>, a Fixed column; <c>setColumnResizingPolicyAt</c> changes it): its caption, its
+/// width in pixels and its resizing policy.
+/// </summary>
+public sealed record UiColumn(string Caption, float Width, MyGuiResizingPolicy Policy = MyGuiResizingPolicy.Fixed);
 
 /// <summary>
 /// The bindings the run-time widgets read: list columns and sorting, scroll canvases and native scrolling, text measuring, the open combo box.
@@ -41,6 +67,14 @@ public sealed partial class UiBindings
     public Func<UiControl, float>? TextHeight { get; set; }
 
     /// <summary>
+    /// A control's text widths as MyGUI's TextBox gives them, for a MultiListBox's Auto columns: its text region's width (<c>getTextRegion</c>) and
+    /// its caption's text size (<c>getTextSize</c>: the widest line in whole pixels, plus 2 for an <c>EditText</c>'s cursor, else 1 for a shadow),
+    /// and whether the text part stretches horizontally with the control; the function gives null for a control whose skin has no text part, and
+    /// the bindings null when the host measures no text: either gives an Auto column no width.
+    /// </summary>
+    public Func<UiControl, (float Region, float Text, bool Stretched)?>? TextWidths { get; set; }
+
+    /// <summary>
     /// The ComboBoxes whose popup list shows (set by the host): the open one and any <c>SmoothShow</c> list still fading out, each with its alpha
     /// (1, or the fade's: MyGUI <c>ControllerFadeAlpha</c>) and whether it takes input (not while it fades out).
     /// </summary>
@@ -67,7 +101,7 @@ public static partial class MyGuiPresentation
     /// <summary>
     /// Arranges one widget under <paramref name="parent"/> (the visit of <see cref="Arrange"/>).
     /// </summary>
-    delegate void VisitWidget(MyGuiWidget widget, UiRect parent, UiRect clip, bool enabled, float alpha);
+    delegate void VisitWidget(MyGuiWidget widget, UiParent parent, UiRect clip, bool enabled, float alpha);
 
     /// <summary>
     /// A number as a marker property (round-trip).
@@ -92,12 +126,6 @@ public static partial class MyGuiPresentation
         b.Text.Count > 0 && props.TryGetValue("TemplateOwner", out var o) && props.TryGetValue("TemplatePart", out var part) && part.Length > 0
             ? b.Coded(o + "." + part)
             : null;
-
-    /// <summary>
-    /// Where the children of a ScrollView's client are placed: the scrolled canvas rather than the client.
-    /// </summary>
-    static UiRect ChildParent(IReadOnlyDictionary<string, string> props, UiRect bounds) =>
-        props.TryGetValue("CanvasOrigin", out var s) ? UiRect.Parse(s) : bounds;
 
     /// <summary>
     /// The part <paramref name="part"/> of the template expanded for <paramref name="owner"/>; null when it has none.
@@ -129,13 +157,15 @@ public static partial class MyGuiPresentation
         : column <= 0 ? item.Caption : "";
 
     /// <summary>
-    /// A list line's height from the skin's <c>HeightLine</c> at the template scale, else <see cref="DefaultLine"/>.
+    /// A list line's height from the skin's <c>HeightLine</c> at the template scale (Kenshi's <c>ScaleManager::applyH</c> in
+    /// <c>ListBox::initialiseOverride</c>: floored), else <see cref="DefaultLine"/>.
     /// </summary>
     static float HeightLine(MyGuiWidget w, UiBindings b)
     {
         if (!w.UserStrings.TryGetValue("HeightLine", out var heightLine)) return DefaultLine;
 
-        return float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1 ? height * b.TemplateScale : DefaultLine;
+        bool valid = float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1;
+        return valid ? MyGuiScale.Position(height, b.TemplateScale) : DefaultLine;
     }
 
     /// <summary>
@@ -200,7 +230,8 @@ public static partial class MyGuiPresentation
 
         if (w.Type == "EditBox") EditBoxScroll(result, b, w, props);
         if (w.Type == "ComboBox") Combo(result, b, w, props, bounds, enabled, viewport, visit, deferred);
-        else if (w.Type == "MultiListBox" && b.Columns.ContainsKey(w.Name)) MultiColumns(result, b, w, props, enabled, alpha, visit);
+        else if (w.Type == "MultiListBox" && ColumnsOf(b, w) is { Count: > 0 } columns)
+            MultiColumns(result, b, w, props, columns, enabled, alpha, visit);
         else if (props.TryGetValue("ListSource", out var source) && b.Lists.TryGetValue(source, out var sourceItems))
         {
             ListRows(result, b, w, props, bounds, clip, enabled, props["ListSel"], props["ListScroll"], sourceItems, ListOrder(b, source),
@@ -347,9 +378,11 @@ public static partial class MyGuiPresentation
             var pl = result[place].Bounds;
             float length = vertical ? pl.Height : pl.Width;
             float skin = track >= 0 ? vertical ? result[track].Bounds.Height : result[track].Bounds.Width : 0;
-            float minimum = (PartOf(bar, "Track") is { } trackWidget && trackWidget.UserStrings.TryGetValue("MinTrackSize", out _)
+            float minimumTrack = PartOf(bar, "Track") is { } trackWidget && trackWidget.UserStrings.TryGetValue("MinTrackSize", out _)
                 ? Num(trackWidget.UserStrings, "MinTrackSize")
-                : Num(bar.UserStrings, "MinTrackSize")) * b.TemplateScale;
+                : Num(bar.UserStrings, "MinTrackSize");
+            // Kenshi's MyGUI scales MinTrackSize as a position (ScaleManager::applyW: floored).
+            float minimum = MyGuiScale.Position(minimumTrack, b.TemplateScale);
             float thumb = Math.Max(fraction is { } f ? length * Math.Clamp(f, 0, 1) : skin, minimum);
             if (pos is null && track >= 0 && length - thumb > 0.5f && max > 0)
             {
@@ -480,7 +513,7 @@ public static partial class MyGuiPresentation
     /// with both bars shown), the range is canvas minus client, a smaller canvas sits by <c>CanvasAlign</c> (centred by default), the bar page is 16
     /// px, the wheel 50 px. MyGUI re-reads the sizes only once per update; Meitou iterates the rule to its fixed point.
     /// </summary>
-    static void VisitScrollView(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, UiRect bounds,
+    static void VisitScrollView(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, UiParent bounds,
         UiRect childClip, bool enabled, float alpha, VisitWidget visit)
     {
         int mark = result.Count;
@@ -592,7 +625,7 @@ public static partial class MyGuiPresentation
     /// <paramref name="origin"/>: the parts are positioned or hidden through the bindings for the visit, which are restored after it.
     /// </summary>
     static void Relayout(List<UiControl> result, UiBindings b, MyGuiWidget w, int mark, MyGuiWidget clientWidget, MyGuiWidget? vWidget,
-        MyGuiWidget? hWidget, (UiRect Client, UiRect V, UiRect H, bool VShown, bool HShown) fit, UiRect origin, UiRect bounds, UiRect childClip,
+        MyGuiWidget? hWidget, (UiRect Client, UiRect V, UiRect H, bool VShown, bool HShown) fit, UiRect origin, UiParent bounds, UiRect childClip,
         bool enabled, float alpha, VisitWidget visit)
     {
         result.RemoveRange(mark, result.Count - mark);
@@ -672,6 +705,7 @@ public static partial class MyGuiPresentation
         properties.Remove("Visible");
         properties.Remove("TemplateReferenceWidth");
         properties.Remove("TemplateReferenceHeight");
+        properties.Remove("TemplateRealPosition");
         var popup = list with { Position = new(bounds.X, y, bounds.Width, length), RealPosition = false, Properties = properties };
         deferred.Add(() => VisitPopup(result, popup, viewport, enabled && shown.Enabled, shown.Alpha, visit));
     }
@@ -690,16 +724,55 @@ public static partial class MyGuiPresentation
     }
 
     /// <summary>
-    /// A MultiListBox with bound columns (Verified against MyGUI 3.2.2 MultiListBox.cpp): per column a header button (<c>SkinButton</c>, in
+    /// A MultiListBox's columns: its layout's <c>MultiListItem</c> widgets (MyGUI's <c>_wrapItem</c> makes each an Auto column of width 0, which its
+    /// <c>Caption</c>, <c>ItemResizingPolicy</c> and <c>ItemWidth</c> properties then set), followed by the ones the code adds.
+    /// </summary>
+    static List<UiColumn> ColumnsOf(UiBindings b, MyGuiWidget w)
+    {
+        var columns = new List<UiColumn>();
+        foreach (var item in w.DescendantsAndSelf().Where(n => n.Type == "MultiListItem")) columns.Add(LayoutColumn(b, item));
+        if (b.Columns.TryGetValue(w.Name, out var bound)) columns.AddRange(bound);
+
+        return columns;
+    }
+
+    /// <summary>
+    /// A layout's <c>MultiListItem</c> as a column: its caption (the code's, else the layout's in the player's language), its <c>ItemWidth</c> (an int,
+    /// 0 when missing or unreadable) and its <c>ItemResizingPolicy</c> (Auto when missing; a name MyGUI does not know gives
+    /// <see cref="MyGuiResizingPolicy.None"/>).
+    /// </summary>
+    static UiColumn LayoutColumn(UiBindings b, MyGuiWidget item)
+    {
+        var props = new Dictionary<string, string>(item.Properties, StringComparer.Ordinal);
+        if (b.Properties.TryGetValue(item.Name, out var overrides)) foreach (var p in overrides) props[p.Key] = p.Value;
+
+        string caption = b.Coded(item.Name) ?? Loc.TrCaption(props.GetValueOrDefault("Caption") ?? "");
+        int width = int.TryParse(props.GetValueOrDefault("ItemWidth"), NumberStyles.Integer, Inv, out int itemWidth) ? itemWidth : 0;
+        var policy = props.TryGetValue("ItemResizingPolicy", out var name) ? ResizingPolicy(name) : MyGuiResizingPolicy.Auto;
+        return new(caption, width, policy);
+    }
+
+    /// <summary>
+    /// MyGUI's <c>ResizingPolicy::parse</c>: the policy of that exact name, else <see cref="MyGuiResizingPolicy.None"/>.
+    /// </summary>
+    static MyGuiResizingPolicy ResizingPolicy(string name) => name switch
+    {
+        "Auto" => MyGuiResizingPolicy.Auto,
+        "Fixed" => MyGuiResizingPolicy.Fixed,
+        "Fill" => MyGuiResizingPolicy.Fill,
+        _ => MyGuiResizingPolicy.None,
+    };
+
+    /// <summary>
+    /// A MultiListBox's columns (Verified against MyGUI 3.2.2 MultiListBox.cpp): per column a header button (<c>SkinButton</c>, in
     /// <c>HeaderPlace</c>, caption, sort arrow image Up / Down / None) and a sub-list (<c>SkinList</c>, in <c>Client</c>), at the widths of
     /// <see cref="ColumnWidths"/>, a <c>SkinSeparator</c> widget in the <c>WidthSeparator</c> gap after each column but the last; the sub-lists share
     /// one selection and scroll position, and only the last shows its bar. The widths follow the client's on every arrangement (MyGUI
     /// <c>updateColumns</c> on a resize when a column is Fill or the header has its <c>Empty</c> part); MyGUI has no user column resizing.
     /// </summary>
-    static void MultiColumns(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, bool enabled, float alpha,
-        VisitWidget visit)
+    static void MultiColumns(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, List<UiColumn> columns,
+        bool enabled, float alpha, VisitWidget visit)
     {
-        var columns = b.Columns[w.Name];
         int hi = IndexOfPart(result, w, "HeaderPlace"), ci = IndexOfPart(result, w, "Client");
         var buttonPrototype = ColumnPrototype(w, "button");
         var listPrototype = ColumnPrototype(w, "list");
@@ -710,8 +783,9 @@ public static partial class MyGuiPresentation
         var client = result[ci];
         var headerClip = header.Bounds.Intersect(header.Clip ?? header.Bounds);
         var clientClip = client.Bounds.Intersect(client.Clip ?? client.Bounds);
-        int gap = SeparatorWidth(w, b.TemplateScale);
-        int[] widths = ColumnWidths(columns, b.TemplateScale, (int)MathF.Floor(client.Bounds.Width), gap);
+        int gap = SeparatorWidth(w);
+        int clientWidth = (int)client.Bounds.Width;
+        int[] widths = ColumnWidths(columns, clientWidth, gap, c => AutoWidth(b, buttonPrototype, c.Caption, clientWidth, header.Bounds.Height));
         var (sortColumn, ascending) = b.Sorts.TryGetValue(w.Name, out var sort) ? sort : (-1, true);
         float x = 0;
         for (int i = 0; i < columns.Count; i++)
@@ -759,31 +833,61 @@ public static partial class MyGuiPresentation
         w.Children.FirstOrDefault(c => c.Properties.GetValueOrDefault("ColumnPrototype") == kind);
 
     /// <summary>
-    /// A MultiListBox's <c>WidthSeparator</c> user string (0 when missing; MyGUI reads an int) in pixels at the template scale.
+    /// A MultiListBox's <c>WidthSeparator</c> user string in pixels (0 when missing; MyGUI reads an int, and Kenshi's build does not scale it).
     /// </summary>
-    static int SeparatorWidth(MyGuiWidget w, float scale) =>
-        int.TryParse(w.UserStrings.GetValueOrDefault("WidthSeparator"), NumberStyles.Integer, Inv, out int gap) ? (int)MathF.Floor(gap * scale) : 0;
+    static int SeparatorWidth(MyGuiWidget w) =>
+        int.TryParse(w.UserStrings.GetValueOrDefault("WidthSeparator"), NumberStyles.Integer, Inv, out int gap) ? gap : 0;
 
     /// <summary>
-    /// The column widths of MyGUI 3.2.2 <c>MultiListBox::updateColumns</c>, in integer pixels: a Fixed column its width (at the template scale,
-    /// below 0 taken as 0); the free space (client width less the gaps between columns and the Fixed widths) shared by the Fill columns, each the
-    /// free space divided by their count when it is above 0 (else 0), the last of them the remainder too, so it can be negative.
+    /// The column widths of MyGUI's <c>MultiListBox::updateColumns</c>, in integer pixels, none scaled (Kenshi's build scales no column): a Fixed
+    /// column its width (below 0 taken as 0), an Auto one <paramref name="auto"/>'s, one of no known policy none; the free space (client width less
+    /// the gaps between columns and those widths) shared by the Fill columns, each the free space divided by their count when it is above 0 (else
+    /// 0), the last of them the remainder too, so it can be negative.
     /// </summary>
-    static int[] ColumnWidths(IReadOnlyList<UiColumn> columns, float scale, int clientWidth, int gap)
+    static int[] ColumnWidths(IReadOnlyList<UiColumn> columns, int clientWidth, int gap, Func<UiColumn, int> auto)
     {
-        int[] widths = [.. columns.Select(c => c.Fill ? 0 : Math.Max(0, (int)MathF.Floor(c.Width * scale)))];
-        int fills = columns.Count(c => c.Fill);
+        int[] widths = [.. columns.Select(c => OwnWidth(c, auto))];
+        int fills = columns.Count(c => c.Policy == MyGuiResizingPolicy.Fill);
         int free = clientWidth - (columns.Count == 0 ? 0 : (columns.Count - 1) * gap) - widths.Sum();
         int star = fills != 0 && free > 0 ? free / fills : 0;
         int lastFill = -1;
-        for (int i = 0; i < columns.Count; i++) if (columns[i].Fill) lastFill = i;
+        for (int i = 0; i < columns.Count; i++) if (columns[i].Policy == MyGuiResizingPolicy.Fill) lastFill = i;
 
         for (int i = 0; i < columns.Count; i++)
         {
-            if (columns[i].Fill) widths[i] = i == lastFill ? star + free - star * fills : star;
+            if (columns[i].Policy == MyGuiResizingPolicy.Fill) widths[i] = i == lastFill ? star + free - star * fills : star;
         }
 
         return widths;
+    }
+
+    /// <summary>
+    /// A column's width before the Fill columns share the rest (MyGUI's <c>updateWidthColumns</c>): Fixed its own (0 when negative), Auto
+    /// <paramref name="auto"/>'s, Fill and an unknown policy none.
+    /// </summary>
+    static int OwnWidth(UiColumn column, Func<UiColumn, int> auto) => column.Policy switch
+    {
+        MyGuiResizingPolicy.Fixed => Math.Max(0, (int)column.Width),
+        MyGuiResizingPolicy.Auto => auto(column),
+        _ => 0,
+    };
+
+    /// <summary>
+    /// An Auto column's width (MyGUI's <c>updateWidthColumns</c>): the header button's width less its text region's, plus the caption's text size,
+    /// measured on <paramref name="button"/> <paramref name="width"/> wide. MyGUI reads the button's last width, which cancels out when the skin's
+    /// text part stretches with the button (the installed <c>Kenshi_Button1Skin</c>'s does); a button skin without a text part gives 0 (the button
+    /// is made 0 wide and stays so).
+    /// </summary>
+    static int AutoWidth(UiBindings b, MyGuiWidget button, string caption, float width, float height)
+    {
+        var control = new UiControl(button.Name, button.Type, new(0, 0, width, height), caption, "", button.Skin, true, button.Properties, default);
+        if (b.TextWidths?.Invoke(control) is not { } measured) return 0;
+
+        // A text part that keeps its width makes MyGUI's result grow by the text size less the region on every updateColumns, so it depends on
+        // how often that ran: not reproduced, no width.
+        if (!measured.Stretched) return 0;
+
+        return (int)(width - measured.Region + measured.Text);
     }
 
     /// <summary>

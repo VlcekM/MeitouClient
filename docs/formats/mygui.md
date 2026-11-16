@@ -229,6 +229,11 @@ rectangles are converted before issuing Vulkan scissors. **Verified** by
 Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **Verified** below means read against the MyGUI **3.2.2** tag's source (`ScrollBar.cpp`,
 `ListBox.cpp`, `ScrollView.cpp`, `ScrollViewBase.cpp`, `ComboBox.cpp`, `MultiListBox.cpp`, `Window.cpp`, `ControllerRepeatClick.cpp`, `ResizingPolicy.h`). No test covers it; the behaviour is by reading, not yet seen in the running game.
 
+The install's `MyGUIEngine_x64.dll` is a Kenshi build of MyGUI **3.2.3** (`MyGUI.log`; upstream's version number from November 2015 to the 3.4.0 rename), made before upstream's March 2017
+change that gave every Widget a `Client` (its `Widget::initialiseOverride` is empty). **Verified** by disassembling the DLL (its exports name the functions): `Widget::_setAlign`,
+`ResourceLayout::createWidget`, `Widget::setRealCoord`, `MultiListBox::updateWidthColumns`, `getColumnWidth` and `updateColumns` do what the 3.2.2 source does. The DLL adds a
+`ScaleManager` (not in upstream) that scales resource pixels at load ("Align and pixel rounding" below).
+
 - **ScrollBar** (Verified, `ScrollBar.cpp`): parts `Start`, `End`, `TrackPlace`, `Track`, `FirstPart`, `SecondPart`; positions run `0 .. Range-1`. The thumb sits at
   `(line - thumb) * pos / (Range - 1)`, `line` the TrackPlace length; it is hidden when `Range < 2` or `line <= thumb`, FirstPart / SecondPart then take half the line each.
   Thumb size: set by the owner (`line * view / content`), else the skin's Track; at least `MinTrackSize` (the Track's user string, else the bar's; Kenshi: 10). Start / End step by `Page`,
@@ -239,7 +244,7 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
   `BehaviorSlider`, `Range` 3, stays in the middle) unless `RangePosition` or a binding says. `VerticalAlignment` defaults true.
 - **Kenshi templates** (Observed, `kenshi_templates.xml`): `Kenshi_ScrollBarV/H/VBig/HBig`, `Kenshi_SliderVBig/HBig` and `Kenshi_ScrollBar` all carry the parts above (the Big / Slider ones with `LE_TargetWidgetType`
   ScrollBar); a bar is recognised by type `ScrollBar` or that user string. `Kenshi_BehaviorSlider` is the only bar the installed layouts use directly (`Kenshi_MainPanel`, `Range` 3).
-- **ListBox** (Verified, `ListBox.cpp`): lines are `HeightLine` tall (user string of the list skin: `Kenshi_ListBox` and `Kenshi_ListBoxEmpty` 18, `Kenshi_MultiSubListBox` 21; times the template scale;
+- **ListBox** (Verified, `ListBox.cpp`): lines are `HeightLine` tall (user string of the list skin: `Kenshi_ListBox` and `Kenshi_ListBoxEmpty` 18, `Kenshi_MultiSubListBox` 21; times the template scale, floored;
   an ItemBox has none and keeps Meitou's 22), scrolled in pixels. VScroll shows when `lines * HeightLine - client height >= 1`, else it is hidden and the client takes its width. Its Page and ViewPage are
   one line, the thumb `line * visible / content`; the wheel moves exactly one line per event. Keyboard (host `ListKey`): Up / Down one row (from no selection both pick the first), Home / End,
   PageUp / PageDown a client's worth, a row not fully visible is scrolled to the top (clamped), Return accepts (`accept`). Selecting raises `select` (`Text`: item id, `Value`: row). The key routing
@@ -278,22 +283,41 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
 - **MultiListBox** (Verified, `MultiListBox.cpp`): per column a header button (`SkinButton`, in `HeaderPlace`, its `Image` child shows `Up` / `Down` on the sorted column, `None` on the others; the arrows are in `Kenshi_MiscImages`
   group `Arrows`) and a sub-list (`SkinList`, in `Client`); Fixed columns keep their width, Fill columns share the rest (last one the remainder; `ResizingPolicy` is `Auto, Fixed, Fill`); one selection and one scroll
   position for all; only the last sub-list shows its bar. A header click sorts ascending by that column, again reverses; MyGUI's default comparator is a plain string `<` of the cells (Meitou: ordinal). The image is "Up"
-  when `mSortUp`. Binding: `UiBindings.Columns[name]` (captions, widths, Fill), `Lists[name]` items with `UiListItem.Cells`, `Sorts[name]` the start sort; the host keeps the
-  clicked sort. Header and sub-list skins are expanded once at load as hidden prototype children of the MultiListBox and cloned per column. Widths (`updateColumns`, integer pixels):
-  free = client width - (columns - 1) x `WidthSeparator` - the Fixed widths; each Fill column free / Fill count when free > 0 (else 0), the last Fill column also the remainder
-  (negative when free is). A `SkinSeparator` widget fills the gap after each column but the last; `Kenshi_MultiListBox` sets neither user string. The widths are recomputed
-  when the box is resized; MyGUI has no user column resizing (no separator or header drag). Auto width (header caption width) is not done: only `_addItem` (columns
-  given as `MultiListItem` children) sets it, which no installed layout has.
+  when `mSortUp`. Columns: `addColumn` makes a Fixed one; a layout's `MultiListItem` child makes an Auto one of width 0 (`_wrapItem`), which its `Caption`, `ItemResizingPolicy`
+  (`ResizingPolicy::parse`: exactly `Auto`, `Fixed` or `Fill`, any other name gives the `MAX` value, which has no width) and `ItemWidth` (an int; used by Fixed only) properties
+  then set; no installed layout has one. Widths (`updateColumns`, integer pixels): a Fixed column its width (0 when negative), an Auto one the header button's width less its text
+  region's (`getTextRegion`) plus the caption's text size (`getTextSize`: `TextView`'s widest line, each line's glyph advances (the FreeType advance) summed and rounded up, plus 2
+  for an `EditText`'s cursor, else 1 for a shadow; Verified against the source's `TextView.cpp`, `EditText.cpp`, `ResourceTrueTypeFont.cpp`); free = client width - (columns - 1) x `WidthSeparator` - those widths; each Fill column free / Fill count when free > 0 (else 0), the last Fill
+  column also the remainder (negative when free is). Auto reads the button's last width, which cancels out when the skin's text part stretches with the button (with one
+  that keeps its width, each `updateColumns` adds the text size less the region): `Kenshi_MultiListButton`'s
+  skin `Kenshi_Button1Skin` (118 x 45) has a `SimpleText` at `3 3 112 39`, Stretch. Kenshi's build scales no column width nor `WidthSeparator` (no `ScaleManager` call in
+  `MultiListBox`). A `SkinSeparator` widget fills the gap after each column but the last; `Kenshi_MultiListBox` sets neither user string. The widths are recomputed
+  when the box is resized; MyGUI has no user column resizing (no separator or header drag). Binding: `UiBindings.Columns[name]` (captions, widths, `MyGuiResizingPolicy`) after the
+  layout's `MultiListItem`s, `Lists[name]` items with `UiListItem.Cells`, `Sorts[name]` the start sort; the host keeps the clicked sort; `UiBindings.TextWidths` measures an Auto
+  header (`UiPainter.TextWidths`, the faithful screens). Header and sub-list skins are expanded once at load as hidden prototype children of the MultiListBox and cloned per column.
 - **Game's save list** (Observed, decompile of `FUN_140480100`, the load / save window): two columns, `addColumn(<text>, 170)` and `addColumn(<text>, 180)`, `sortByColumn(1, true)` (`mSortUp` starts true, so reversed:
-  newest first, arrow "Down"), column 0 Fill, column 1 Fixed; rows are the save names with `{1,datetime}` of the modified time in column 1. The two captions are localised strings (the pot has "Name" and "Date" from
+  newest first, arrow "Down"), column 0 Fill, column 1 Fixed (the 170 and 180 are literals, unscaled at any resolution); rows are the save names with `{1,datetime}` of the modified time in column 1. The two captions are localised strings (the pot has "Name" and "Date" from
   `savemanager.cpp`). Meitou's `GamesList` (load and save) uses these columns, the name cell with the save's origin appended; `Kenshi_ImportGamePanel` is not registered.
 - **Align and pixel rounding** (Verified, `Widget.cpp`, `SubSkin.cpp`, `TileRect.cpp`, `EditText.cpp`, `MainSkin.cpp`, `Align.h`, `CoordConverter.h`, `ResourceLayout.cpp`,
   `ResourceSkin.cpp`; a `MainSkin` piece always covers its whole widget): `align` words are ORed (`Align::parse`; no
   attribute: `Default`, Left Top). An axis with both words stretches by the parent's growth, Right / Bottom move by it, Left / Top stay, and an axis with neither is centred
   at (parent - size) / 2 (integer division), whatever its position was, so "Right" alone also centres vertically. Every `setSize` / `setCoord` of a parent re-aligns its children
-  and skin pieces this way, also at an unchanged size; a template's parts are made at its `Root` size, then the widget takes its own size. `position_real` becomes
-  `int(fraction x parent client size)` once, when the widget is made. Meitou: `UiRect.AlignTo` (template parts, skin pieces, text areas) and `UiRect.RelativeTo`, also at the
-  template scale, where the inputs are not whole pixels.
+  and skin pieces this way, also at an unchanged size (in the DLL only `setSize` and `setCoord` call `_setAlign`); `setPosition` re-aligns nothing, and a child that `_setAlign` only moves (Right, Bottom, centred) gets `setPosition`, so
+  its own children stay, while a stretched one gets `setSize` / `setCoord`. All coordinates are ints. `position_real` becomes `int(float(size) x fraction)` (single precision,
+  truncated) once, when the widget is made, against the parent's client size then (the view size for a root or popup; `setRealCoord` against the parent's size now); later
+  sizes of the parent only align it. A widget made with a template skin is first sized to the skin's size, then to the template's `Root` size, its parts are made in that, then
+  it takes its own size (aligning the parts); the layout's children are made after that, in its client's size then.
+- **Kenshi's resource scale** (Verified, the DLL's `ScaleManager` and its callers, disassembled; `FUN_1406e3c30` in the game's decompile): the game sets one scale for both
+  axes, the smaller of a size global over the `Kenshi_UI.png` size (`DAT_141f1fb40` / 1920, `DAT_141f1fb44` / 1080). The DLL applies it when it reads resources, in single
+  precision: a position or offset `floorf(v x scale)`, a size `ceilf(v x scale)`. Scaled: a `ResourceLayout` resource's pixel `position` (its `Root` too; `parseWidget` is told so
+  when the resource's `type` is `ResourceLayout`, so a `.layout` file's widgets are not scaled), a `ResourceSkin`'s size (ceil) and every piece's offset (x, y floor; width,
+  height ceil), a TileRect state's `TileSize` property (ceil), a ListBox's `HeightLine` (floor), a ScrollBar's or its Track's `MinTrackSize` (floor), and values of the
+  TrueType font and pointer resources. No `position_real` fraction is scaled. `ScrollView`, `ComboBox` and `MultiListBox` call no `ScaleManager` method.
+  Meitou: `MyGuiPresentation.Place` keeps each widget's made rectangle and its parent's made size (`UiParent`), aligning a child only once its parent was sized
+  (`UiRect.AlignTo`, centring then). A position the code binds is where the widget was made (its children are made in it), unless `UiBindings.MadeSizes` gives the size
+  it was made at: then its children align from that, as a window resized by its grips (`MyGuiScreenHost.PlaceRoots`) does.
+  Template parts and skin pieces use `MyGuiScale` at the template scale (`UiBindings.TemplateScale`; the painter's UI scale), the parts' fractions converted at the scaled
+  template size (`TemplateRealPosition`).
 - **Window** (Verified, `Window.cpp`; layouts): `Snap` (set by every Kenshi window template) snaps an edge to the viewport's within 10 px (`|left| <= 10`, `|right - width| < 10`, likewise top / bottom) while dragging,
   without clamping; Meitou lets a dragged window leave the screen but keeps its top edge and 48 px of it in view (`KeepVisible`), and places others fully on screen. `Movable` false (`Kenshi_MessageBox`, `Kenshi_AdvancedOptionsWindow`) stops the drag; `MinSize` / `MaxSize` (`Kenshi_OpenSaveFileDialog` 200 200) bound the
   size a resize gives. **Observed**: no Kenshi window template has a child with the user strings `Action` or `Scale` (MyGUI's resize / move markers), so the original has no user resizing; the generic grips (`Scale`

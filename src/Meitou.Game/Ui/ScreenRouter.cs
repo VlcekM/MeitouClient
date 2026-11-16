@@ -73,7 +73,11 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     internal UiBindings BindFaithfulScreen(string id)
     {
-        var b = new UiBindings { TextHeight = c => player.UiPainter?.TextHeight(c, player.Height, player.StandardPixels) ?? 0 };
+        var b = new UiBindings
+        {
+            TextHeight = c => player.UiPainter?.TextHeight(c, player.Height, player.StandardPixels) ?? 0,
+            TextWidths = c => player.UiPainter?.TextWidths(c, player.Height, player.StandardPixels),
+        };
         var layout = player.FaithfulScreens.Layout(id);
         string screen = id;
         bool pinned = InventoryWindows.IsPinnedInventory(id) || InventoryWindows.IsPinnedBag(id);

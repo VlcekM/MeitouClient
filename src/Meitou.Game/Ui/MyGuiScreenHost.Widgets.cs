@@ -703,21 +703,17 @@ public sealed partial class MyGuiScreenHost
             var initial = b.Positions.GetValueOrDefault(root.Name, root.Position.RelativeTo(new(0, 0, width, height), root.RealPosition));
             float w = initial.Width * (bound ? 1 : WindowScale), h = initial.Height * (bound ? 1 : WindowScale);
 
-            if (!bound && s.Size is { } size) (w, h) = (size.X, size.Y);
-            else if (!bound && !root.RealPosition)
+            if (!bound && !root.RealPosition)
             {
                 if (root.Align.Contains("Stretch") && !root.Align.Contains("VStretch")) w += width - s.FirstViewport.X;
                 if (root.Align.Contains("Stretch") && !root.Align.Contains("HStretch")) h += height - s.FirstViewport.Y;
             }
 
-            var (min, max) = SizeLimits(root);
-            w = Math.Max(min.X, Math.Min(w, max.X));
-            h = Math.Max(min.Y, Math.Min(h, max.Y));
-            if (b.FitWindowToViewport)
-            {
-                w = Math.Clamp(w, 0, Math.Max(0, width - 24));
-                h = Math.Clamp(h, 0, Math.Max(0, height - 24));
-            }
+            var made = WindowLimits(root, b, new(w, h), width, height);
+            var sized = !bound && s.Size is { } size ? WindowLimits(root, b, size, width, height) : made;
+            (w, h) = (sized.X, sized.Y);
+            // A resize grip sizes the window after it was made (MyGUI's setCoord): its children align from the size it was made at.
+            if (sized != made) b.MadeSizes[root.Name] = (made.X, made.Y);
             var position = (b.WindowPosition ?? new Vector2((width - w) / 2, (height - h) / 2)) + s.Offset;
             var (x, y) = b.FitWindowToViewport || s.Dragged
                 ? OnScreen(s, viewport, new(w, h), position.X, position.Y)
@@ -734,6 +730,19 @@ public sealed partial class MyGuiScreenHost
         }
 
         s.Viewport = viewport;
+    }
+
+    /// <summary>
+    /// A window size within the root's <c>MinSize</c> / <c>MaxSize</c> and, when the bindings fit windows to the viewport, within the viewport less
+    /// 24 pixels.
+    /// </summary>
+    static Vector2 WindowLimits(MyGuiWidget root, UiBindings b, Vector2 size, int width, int height)
+    {
+        var (min, max) = SizeLimits(root);
+        float w = Math.Max(min.X, Math.Min(size.X, max.X)), h = Math.Max(min.Y, Math.Min(size.Y, max.Y));
+        if (!b.FitWindowToViewport) return new(w, h);
+
+        return new(Math.Clamp(w, 0, Math.Max(0, width - 24)), Math.Clamp(h, 0, Math.Max(0, height - 24)));
     }
 
     /// <summary>
