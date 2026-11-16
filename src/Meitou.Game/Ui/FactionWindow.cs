@@ -7,6 +7,14 @@ using Meitou.Simulation.Player;
 namespace Meitou.Game.Ui;
 
 /// <summary>
+/// A row of the faction tab's relations list (<see cref="FactionWindow"/>; mods arrange them with <c>ModContext.ArrangeFactionList</c>).
+/// </summary>
+/// <param name="Faction">The faction (a position in the relation table); -1: a heading, its name alone with no number or bar.</param>
+/// <param name="Name">The text shown (translated when the catalog has it).</param>
+/// <param name="Relation">The player's relation towards the faction, -100 to 100 (the bars stop at 100).</param>
+public readonly record struct FactionListRow(int Faction, string Name, float Relation);
+
+/// <summary>
 /// The Overview's faction tab (<c>FactionsScreen</c>, docs/game/ui-screens.md "Faction tab"): the player faction's name, a
 /// <c>Kenshi_FactionRelationsLine</c> per faction with the relation's number and its bar, and the information panel's two headings.
 /// </summary>
@@ -55,7 +63,12 @@ sealed class FactionWindow(PlayerInterface player)
     /// <summary>
     /// The factions the faction tab lists with the player's relation towards each (-100..100); null before a world with game data. The host sets it.
     /// </summary>
-    public Func<IReadOnlyList<(string Name, float Relation)>>? FactionRelations { get; set; }
+    public Func<IReadOnlyList<FactionListRow>>? FactionRelations { get; set; }
+
+    /// <summary>
+    /// The mods' arrangement of the list sorted by name: the rows to show, in order (null: as sorted). The host sets it.
+    /// </summary>
+    public Func<IReadOnlyList<FactionListRow>, IReadOnlyList<FactionListRow>>? ArrangeList { get; set; }
 
     /// <summary>
     /// The info panel's contract and Upcoming Events rows (docs/game/ui-screens.md "Faction tab").
@@ -108,11 +121,12 @@ sealed class FactionWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// The relations list: a line per faction, by name, on the scroll view's client.
+    /// The relations list: a line per faction, by name (or as the mods arrange it), on the scroll view's client.
     /// </summary>
     void AddRelationsLines(List<UiControl> controls, UiControl panel, MyGuiLayout layout, float scale)
     {
-        var factions = (FactionRelations?.Invoke() ?? []).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        IReadOnlyList<FactionListRow> sorted = [.. (FactionRelations?.Invoke() ?? []).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)];
+        var factions = ArrangeList?.Invoke(sorted) ?? sorted;
         // The lines go on the scroll view's client (Kenshi_ScrollView: 10 px inside the frame at the template's scale), not on its frame.
         var client = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == panel.Name
             && c.Properties.GetValueOrDefault("TemplatePart") == "Client");
@@ -125,19 +139,12 @@ sealed class FactionWindow(PlayerInterface player)
         _relationsScroll = Math.Clamp(_relationsScroll, 0, Math.Max(0, factions.Count * step - area.Height));
         for (int i = 0; i < factions.Count; i++)
         {
-            var (name, relation) = factions[i];
             var line = new UiRect(area.X, area.Y + i * step - _relationsScroll, lineWidth, lineHeight);
             if (line.Intersect(clip).Height <= 0) continue;
 
             var b = new UiBindings { TemplateScale = scale };
             if (root is not null) b.Positions[root.Name] = new(0, 0, lineWidth, lineHeight);
-            b.Text["FactionName"] = name;
-            b.Text["FactionValue"] = ((int)relation).ToString(CultureInfo.InvariantCulture);
-            string valueColour = relation < -30 ? PlayerInterface.BadBrightColour
-                : relation > 60 ? PlayerInterface.GoodColour
-                : PlayerInterface.MainColour;
-            b.Properties["FactionValue"] = new Dictionary<string, string> { ["TextColour"] = valueColour };
-            SetBarPositions(b, layout, relation, lineWidth, lineHeight);
+            BindRow(b, layout, factions[i], lineWidth, lineHeight);
             int shownWidth = (int)MathF.Round(lineWidth);
             int shownHeight = (int)MathF.Round(lineHeight);
             foreach (var c in MyGuiPresentation.Arrange(layout, shownWidth, shownHeight, b, player.UiResources.Layers))
@@ -152,6 +159,24 @@ sealed class FactionWindow(PlayerInterface player)
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// A line's name, number and bars; a heading (<see cref="FactionListRow.Faction"/> -1) has its name alone, and a relation that is not a number
+    /// shows as 0.
+    /// </summary>
+    static void BindRow(UiBindings b, MyGuiLayout layout, FactionListRow row, float lineWidth, float lineHeight)
+    {
+        bool heading = row.Faction < 0;
+        float relation = heading || !float.IsFinite(row.Relation) ? 0 : row.Relation;
+        string valueColour = relation < -30 ? PlayerInterface.BadBrightColour
+            : relation > 60 ? PlayerInterface.GoodColour
+            : PlayerInterface.MainColour;
+
+        b.Text["FactionName"] = row.Name ?? "";
+        b.Text["FactionValue"] = heading ? "" : ((int)relation).ToString(CultureInfo.InvariantCulture);
+        b.Properties["FactionValue"] = new Dictionary<string, string> { ["TextColour"] = valueColour };
+        SetBarPositions(b, layout, relation, lineWidth, lineHeight);
     }
 
     /// <summary>
