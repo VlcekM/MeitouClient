@@ -176,10 +176,6 @@ public sealed class StandardSystemOptions
     /// </summary>
     public Crime.ArrestSettings? Arrest { get; init; }
     /// <summary>
-    /// Meitou (on; Faithful off): doors walkers opened close behind them (<see cref="Meitou.Simulation.Locks.LockSystem.DoorsCloseBehind"/>).
-    /// </summary>
-    public bool DoorsCloseBehind { get; init; } = true;
-    /// <summary>
     /// The player's animals pick up loose items into their bags (<see cref="PlayerSystem.AnimalsPickUp"/>; off by default).
     /// </summary>
     public bool AnimalsPickUp { get; init; }
@@ -756,7 +752,6 @@ public static class StandardSystems
                     _locks = new Locks.LockSystem(_data.Bodies.Constants, _data.BodyOptions)
                     {
                         Crimes = _crime,
-                        DoorsCloseBehind = _o.DoorsCloseBehind,
                         Assembly = new CharacterAssembly(_data),
                         Combat = _combat,
                         CombatConstants = _data.Combat.Constants

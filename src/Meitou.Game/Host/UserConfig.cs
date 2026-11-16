@@ -387,11 +387,6 @@ sealed class UserConfig
     /// </summary>
     public bool UnloadedProduction { get; set; } = true;
     /// <summary>
-    /// Doors a walker opened close behind it after 5 s (Advanced settings; Faithful off: they stay open, as in the game; docs/simulation.md "Cages,
-    /// beds and locks").
-    /// </summary>
-    public bool DoorsCloseBehind { get; set; } = true;
-    /// <summary>
     /// A blow that destroys the head cuts it off, under the limbs' rule (Advanced settings; Faithful off: the game never does;
     /// docs/game/character-stats.md "Decapitation").
     /// </summary>

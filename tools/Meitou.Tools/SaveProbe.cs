@@ -214,7 +214,7 @@ static class SaveProbe
             .Where(q => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key == door.Building)
             .Select(q => $"{q.Id}:'{q.Name}' goal={LeaderGoal(probe, q.Leader.Slot)}");
         return $"{door.Id} {door.HostRecordId} at=<{door.Position.X:F0}, {door.Position.Z:F0}> gate={door.IsGate} owner={probe.Faction(door.Owner)} {door.Motion} open={door.OpenAmount:F2} "
-            + $"locked={door.Lock?.Locked} wants={door.WantsLock} broken={door.DoorBroken} restored={door.Restored} auto={door.AutoOpened}/{door.LastPass} "
+            + $"locked={door.Lock?.Locked} wants={door.WantsLock} broken={door.DoorBroken} restored={door.Restored} "
             + $"level={LevelDoor(world, door)} homes=[{string.Join(", ", squads)}]";
     }
 

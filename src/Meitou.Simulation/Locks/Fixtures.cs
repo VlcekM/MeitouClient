@@ -406,17 +406,6 @@ public sealed class Fixture
     public bool Restored { get; set; }
 
     /// <summary>
-    /// Doors: a walker opened it (Meitou: it closes again once nobody has gone through it for a while,
-    /// <see cref="LockSystem.DoorsCloseBehind"/>), and the tick a character last went through or stood in it. Engine state, not saved; hashed only
-    /// while set.
-    /// </summary>
-    public bool AutoOpened { get; set; }
-    /// <summary>
-    /// Doors: the tick a character last went through or stood in it (see <see cref="AutoOpened"/>).
-    /// </summary>
-    public long LastPass { get; set; }
-
-    /// <summary>
     /// Adds the fixture's state to the world's state hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
@@ -432,7 +421,6 @@ public sealed class Fixture
             h.Add(OpenAmount);
             h.Add(DoorBroken);
             h.Add(WantsLock);
-            if (AutoOpened) h.Add(LastPass);
             if (DoorProgress != 1) h.Add(DoorProgress);
         }
 

@@ -28,7 +28,6 @@
   "keepWild": true,
   "residentSchedule": true,
   "unloadedProduction": true,
-  "doorsCloseBehind": true,
   "fixDoorBreak": true,
   "fixAmbienceSuffix": true,
   "fixWindStop": true,

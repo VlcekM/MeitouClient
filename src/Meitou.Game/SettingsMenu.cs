@@ -449,11 +449,6 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action? ResetTutorials { get; init; }
 
     /// <summary>
-    /// The door auto-close switch changed (<see cref="UserConfig.DoorsCloseBehind"/>).
-    /// </summary>
-    public Action<bool>? DoorsCloseChanged { get; init; }
-
-    /// <summary>
     /// The animals' pick-up switch changed (<see cref="UserConfig.AnimalsPickUp"/>).
     /// </summary>
     public Action<bool>? AnimalsPickUpChanged { get; init; }
@@ -1503,10 +1498,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         LateDefencesChanged?.Invoke(false);
         Config.KeepRoamers = Config.OffscreenFights = Config.OffscreenHealing = Config.CampaignAncestorsOnce = Config.KeepWild
             = Config.ResidentSchedule = Config.UnloadedProduction = true;
-        Config.DoorsCloseBehind = true;
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
-        DoorsCloseChanged?.Invoke(true);
         Config.PauseOnLoad = true;
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
         Config.AnimalsPickUp = false;

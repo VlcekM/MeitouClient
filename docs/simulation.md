@@ -938,11 +938,8 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   leaf's foot (`DoorSpot.Foot`, the box's bottom; within 40): measured from its centre, tall gates (Stack's leaf centre is 45 up) were never opened and walked through shut.
   Engine stand-in for the original's door faces, closed until `doa` 0.6 ([locks](game/locks.md#doors) "Navigation"): every tick a door less than 0.6 open is solid
   (`HoldAtLeaves`), so a character that moved into or through its leaf from one side within its width is put back at its footprint radius and waits while the leaf opens
-  (**Observed**, real-data probe 2026-10-21: a walker at a Stack gate waits about 3 s and passes at 0.62). **Meitou difference**
-  (the original closes no door behind a walker, [locks](game/locks.md#doors)): with `DoorsCloseBehind` (Advanced setting "Doors close behind",
-  on; off = Faithful) a door a walker opened closes 5 game seconds after the last character crossed it or stood in its leaf box (depth 12);
-  a door that `wants lock` (gates) is left open, since closing would lock it and a locked gate shuts its building for every path.
-  `AutoOpened`/`LastPass` are engine state, not saved (a loaded open door stays open), hashed only while set.
+  (**Observed**, real-data probe 2026-10-21: a walker at a Stack gate waits about 3 s and passes at 0.62). A door a walker opened stays open, as the
+  original closes no door behind a walker ([locks](game/locks.md#doors)).
   The player's finished buildings register their doors (`RegisterPlayerBuilding`, site -1, unregistered when no longer finished;
   keys written by `BuildingSave`), and a cage or `has lock` building its own lock ([player-built locks](game/locks.md#lock-object)); the site menu has Open/Close Doors (`ToggleDoorsOrder`) and Lock/Unlock Doors
   (`ToggleDoorLocksOrder`), the door panel's buttons for all doors at once. Any door: `DoorOrder` (a quick right click,

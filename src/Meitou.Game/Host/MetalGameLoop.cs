@@ -1242,10 +1242,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on;
             },
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
-            DoorsCloseChanged = on =>
-            {
-                foreach (var locks in host.Session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on;
-            },
             AnimalsPickUpChanged = on =>
             {
                 foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on;

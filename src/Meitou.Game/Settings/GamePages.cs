@@ -658,14 +658,10 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The world and play rows: doors, decapitation, ragdolls, XP, the speeds, pausing, animals, cage guards, outlines, selection and ground items.
+    /// The world and play rows: decapitation, ragdolls, XP, the speeds, pausing, animals, cage guards, outlines, selection and ground items.
     /// </summary>
     void AddWorldRows(List<SettingsMenu.Entry> result)
     {
-        result.Add(new("Doors close behind",
-            "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open.",
-            Toggle: new("Doors close behind", () => menu.Config.DoorsCloseBehind,
-                v => { menu.Config.DoorsCloseBehind = v; menu.DoorsCloseChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Decapitation",
             "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. "
             + "In the game a destroyed head only kills.",

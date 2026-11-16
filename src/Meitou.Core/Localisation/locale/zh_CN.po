@@ -1223,12 +1223,6 @@ msgstr "城镇保持作息"
 msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
 msgstr "一小时后或更久才回来的城镇居民，会按作息出现在该在的位置：夜里在床上，在柜台后，在岗位和座位上。在游戏里他们还站在你离开时的位置。"
 
-msgid "Doors close behind"
-msgstr "门会随手关上"
-
-msgid "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open."
-msgstr "有人走过而打开的门，在最后一个人通过几秒后会重新关上。在游戏里门会一直开着。"
-
 msgid "Hover outline"
 msgstr "悬停描边"
 

@@ -51,7 +51,7 @@ public class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_door_that_wants_its_lock_locks_when_closed_and_a_walker_opened_door_closes_after_5_s()
+    public void A_door_that_wants_its_lock_locks_when_closed()
     {
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
@@ -71,23 +71,6 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(DoorMotion.Closed, door.Motion);
         Assert.Equal(0, door.OpenAmount);
         Assert.True(door.Lock!.Locked);
-
-        // Meitou: a walker opened it and nobody goes through, so it closes once 5 s have passed since the last pass (and not before).
-        door.WantsLock = false;
-        door.Lock.Locked = false;
-        door.Motion = DoorMotion.Open;
-        door.OpenAmount = 1;
-        door.AutoOpened = true;
-        door.LastPass = world.Tick;
-        int five = (int)MathF.Ceiling(LockSystem.AutoCloseSeconds / world.TickSeconds);
-        world.RunTicks(five - 10);
-
-        Assert.Equal(DoorMotion.Open, door.Motion);
-
-        world.RunTicks(10 + LockSystem.WalkerEveryTicks);
-
-        Assert.Equal(DoorMotion.Closing, door.Motion);
-        Assert.False(door.Lock!.Locked);
     }
 
     [Fact]

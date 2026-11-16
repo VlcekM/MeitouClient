@@ -1218,12 +1218,6 @@ msgstr "Habitantes mantêm sua rotina"
 msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
 msgstr "Os habitantes que você reencontra após uma hora ou mais estarão onde sua rotina diária os levaria: na cama à noite, no balcão, em seus postos ou assentos. No jogo original, eles permanecem onde estavam quando você saiu."
 
-msgid "Doors close behind"
-msgstr "Portas fecham após a passagem"
-
-msgid "A door someone opened by walking through it closes again a few seconds after the last person went through. In the game doors stay open."
-msgstr "Uma porta aberta pela passagem de alguém fecha novamente alguns segundos após a última pessoa atravessá-la. No jogo original, as portas permanecem abertas."
-
 msgid "Hover outline"
 msgstr "Contorno ao passar o cursor"
 
