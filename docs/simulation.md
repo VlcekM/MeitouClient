@@ -779,9 +779,10 @@ any two factions, weighted by the victim's `faction importance` and the town it 
 bleed-out has no killer); first-aid gratitude on every bandaging update. The attack order and looting change no relation. A
 witness that regards the culprit as friendly takes 20 off on every sweep (`CrimeSystem.BetrayalDelta`). Wars:
 `PlayerRelations.DeclareWar` / `EndWar` (one direction, the speaker's table; the war flag is not saved). Campaigns and diplomats in the aggro
-(`AggroSystem.Regards`, `FinderDrops`; [ai-tasks](game/ai-tasks.md#combat-goals)): an enemy Diplomat is tagged NEUTRAL by a player-side looker, and by others
-inside its faction's `biomes`; 16 skips members of a campaign in phase 0, 21 (and 144 with no home) leave alone a non-hostile Diplomat or phase-0 member
-its squad holds no TEMP_ENEMY on. Original threshold/sense/retreat facts:
+(`AggroSystem.Regards`, `FinderDrops`, `LeaveAlone`; [ai-tasks](game/ai-tasks.md#combat-goals)): an enemy Diplomat is tagged NEUTRAL by a player-side looker, and by
+others inside its faction's `biomes`; 16 skips members of a campaign in phase 0 and of a unique platoon; every scored target choice (the fight's, the finders', the
+assault's) leaves alone, for an NPC chooser, a non-hostile Diplomat or phase-0 member its squad holds no TEMP_ENEMY on, and for a player-faction chooser an unaware,
+conscious one of another faction not after one of its friends; a turret scores a Diplomat that intends no aggression 0. Original threshold/sense/retreat facts:
 [perception.md](game/perception.md), [AI](game/ai.md), [factions](game/factions-squads-towns.md).
 
 ## Carrying, rescue and looting
@@ -885,7 +886,7 @@ Every witness that sees the culprit reacts, not only the first after the booking
 stop there, a police 1480 off in sight range booked a slave hunter's assault at Sho-Battai's gate and the gate guards 40 away never reacted
 (**Observed**, headless, a player quicksave).
 The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same.
-An Assault on a Diplomat standing in its faction's `biomes` is set as code 9, Terrorism ([economy 11.6](game/economy.md#116-booking-factions-and-police-hits-observed), `CrimeSystem.DiplomatVictim`). A police-like witness not fighting re-fires the witness event (41 for an Assault, 42 for a Looting) at it every
+An Assault on a Diplomat standing in its faction's `biomes` is set as code 9, Terrorism ([economy 11.6](game/economy.md#116-booking-factions-and-police-hits-observed), `CrimeSystem.DiplomatVictim`). A police-like witness not fighting re-fires the witness event (41 for an Assault or code 9, 42 for a Looting) at it every
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running; not a Trespassing
 (an NPC gets one from a DA 33 in a private home), whose event-17 line only restarts a chase forever (#519). So a town's
 guards turn on hungry bandits (Starving Bandits, -10 to all: not hostile, so no aggro target) attacking someone there.
@@ -1050,8 +1051,10 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   arrest's guard walking to such a cage has them opened at once. Rounds and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
   walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (refused while
-  locked; any other than a kidnap victim books a pending Escaping Prison (refused for a lawless owner) whatever the sentence, and sets `Escaped` unless the cage owner is not real).
-  `Imprison` clears `Escaped`; being outside every town does (`ArrestSystem.DropTownStatusOutsideTowns`, as for `Freed`); `Release` does too, unless the cage owner is not real or the releaser is an NPC of a faction that books no bounties.
+  locked; any other than a kidnap victim whose sentence is not served, or whose cage owner is not real or a bandit faction, books a pending Escaping Prison (refused for a
+  lawless owner) and sets `Escaped` unless the cage owner is not real; [locks](game/locks.md#cages-and-beds)).
+  `Imprison` clears `Escaped`; being outside every town does (`ArrestSystem.DropTownStatusOutsideTowns`, as for `Freed`); an engine release (trade, recruit,
+  liberators) does too, unless the cage owner is not real; a jailer's release (`Task_ReleasePrisoner`) leaves it.
 - **HUD**: `CharacterSnapshot.Prison`; the State line shows the status panel's prison text.
 - **Bail** (DA 43, [economy 11.5](game/economy.md#115-bail-and-sentence); only the Shek bounty desk and the Inquisitor offer it): the conversation
   closes and the window reopens as the bail list (engine stand-in for the trading window): "Pay Bounty", one choice "Name (c.N)" per prisoner of
@@ -1120,8 +1123,8 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   buyer's money is the slaver's squad purse (`Squad.Money`, a trader's shop money); the confirm re-checks the window's gate (a row ticked, total within the buyer's money) and
   does nothing otherwise; a slave bought free out of a squad of others leads a new "Wandering Squad" (`SquadManagement.DismissTemplate`, as a dismissed character) of its faction, or a new player squad for
   one of the player's; event 51 fires after it is out of its cage; the window closes when the slaver or the customer is no longer awake. It is neither saved nor hashed.
-- Not built: task 133 as such (Meitou walks a bought caged
-  slave out of its open cage to within 15 units of the buyer); DA 48 (animals). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
+- A bought slave stands at its cage's exit spot, its order queue cleared (the task 133 the original gives finds the hold already cleared:
+  [locks](game/locks.md#cages-and-beds)). Not built: DA 48 (animals). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
 **Verified** by decompile) puts the ARMOUR `SHACKLES` (boots) on one wearing no locked shackles, `SHACKLES-BODY` when its boots section is disabled (Meitou: the race's `no shoes`),
 what it wore there going into its inventory (engine choice; `DialogueSystem.Chain`). Its other callers (a dialogue action, `FUN_1405dbd80`, `FUN_1405dc310`, `FUN_140583a10`) are not traced.
 
@@ -1146,7 +1149,10 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 - **Marching home**: a campaign carrier cages in the first own town on the way with a free cage and drops the victim only in its campaign's home town without one (`Abduction.HomeSite`; engine reading of the original's cage finder, which weighs the home x100 but does not require it, [ai-tasks](game/ai-tasks.md)); a member of an AI squad that lists a cannibal retreat package (signals 1, 25) lifts
   without a cage in range and cages the same way, its home its squad's home town, which the retreat package walks the squad to (130 TRAVEL_TO_TARGET_TOWN_FAST as going home at a run, [Captives](#captives)).
 - What happens to the captive next: [Captives](#captives).
-- **Not built**: kidnapping as a crime for witnesses, a carrier's platoon unloading with an NPC victim (the carry is dropped when the platoon is stored). The victim's own platoon splits it off into a squad of its own when it unloads ([split at unload](game/factions-squads-towns.md)), so a bounty carried away from its town stays on the carrier's shoulder. A split-off member made from a save's platoon leaves that record (`SavedMember.Gone`) and is saved with its new platoon, where it is (#622: kept in the old record it loaded only with its home squad).
+- An NPC kidnapping is no crime for witnesses, as in the original (its lift is 68, not `Task_Kidnapping`; [carry-loot](game/carry-loot.md#the-kidnap-victim-flag)),
+  but for a sleeper taken from a bed, which the engine lifts through the kidnap roll.
+  A carrier whose squad leaves the world lets its victim go where it stands and keeps the link, taking it up again when both are back ([Carrying](#carrying-rescue-and-looting)
+  and the save's `carrying` link, `CarrySystem.DropForUnload`). The victim's own platoon splits it off into a squad of its own when it unloads ([split at unload](game/factions-squads-towns.md)), so a bounty carried away from its town stays on the carrier's shoulder. A split-off member made from a save's platoon leaves that record (`SavedMember.Gone`) and is saved with its new platoon, where it is (#622: kept in the old record it loaded only with its home squad).
 - Activation of a player-owned empty platoon (**Verified**, `FUN_1404ffad0`: members are made from the template only when the owner has no player flag): it is removed, not filled (`PopulationRoaming.Activate`).
 - Activation repair (**Verified**): a platoon's squad made in a player town's open ground by a faction that is not the player's has the members that came up inside walls moved to its place, with a red message "Character <name> of <squad> tried to spawn inside walls!" (**Verified**, `FUN_1404ffad0`: the place's gate code 0, a member alive, up, not in a bed or cage and with its own code above 0, once at the build; Meitou `PopulationRoaming.MoveOutOfPlayerWalls`, for every platoon load: roaming, town-pool and never-made town squads (a saved squad's characters keep their saved places), plain colour, nothing where the codes are unknown).
   The original's unload test (`ActivePlatoon::unloadCheck` `FUN_1404febd0`, **Verified** by decompile) holds a platoon loaded while a member carries (Character `+0x348`) a player-faction

@@ -453,7 +453,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   cage is unlocked and status `+0xea = 1`; then, if the releaser's faction has `+0x40`, the prisoner's entries for the releaser's booking faction and for the
   jail's booking faction are **erased** (`FUN_1408539f0`), the releaser says `EV_PRISONER_FREE_TO_GO`; if the releaser is a player
   (non-`+0x40` player faction), the prisoner says `EV_UNLOCK_MY_CAGE_OR_SHACKLES`. In those two cases the prisoner gets 133
-  `GET_OUT_OF_CAGE_LEGIT`. Meitou `LockSystem.FreeBy` does the mark and both events for the Set Free walk and the goal-211 rounds alike (the mark is set for every prisoner, a kidnapped one included, **Verified** `FUN_1403570a0`: byte `+0xea` set with no test; the status update clears it outside towns). Always: the restraint is freed; "{1} has been released from prison." for a player-faction prisoner of status type 0 (not a slave, `FUN_1405c8aa0`; **Verified**). Only this task posts it: bail, trade, recruiting and liberators do not (Meitou `FixtureRegistry.Release` with `jailer`).
+  `GET_OUT_OF_CAGE_LEGIT` (queue cleared), which finds the hold cleared by the release that follows and does nothing ([locks](locks.md#cages-and-beds); so the release writes
+  no escaped flag, **Verified**). Meitou `LockSystem.FreeBy` does the mark and both events for the Set Free walk and the goal-211 rounds alike (the mark is set for every prisoner, a kidnapped one included, **Verified** `FUN_1403570a0`: byte `+0xea` set with no test; the status update clears it outside towns). Always: the restraint is freed; "{1} has been released from prison." for a player-faction prisoner of status type 0 (not a slave, `FUN_1405c8aa0`; **Verified**). Only this task posts it: bail, trade, recruiting and liberators do not (Meitou `FixtureRegistry.Release` with `jailer`).
 - **Bail** (dialogue action 43 `CHOOSE_PRISONER_BAIL` opens `CharacterTrading_PrisonerBailout` `FUN_1406ab890`, "Pay Bounty", **Observed**): the list
   is the living occupants of `BF_CAGE` furniture in the speaker's home town's buildings that are player-faction, or not hostile to
   the speaker under further tests (`FUN_1405995d0`, `FUN_140599590`, `FUN_14059a920 < 36`). Price `2 * bounty` with a zero faction,
@@ -461,7 +462,9 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   Paying (`FUN_1406ae170`) unlocks the cage, erases the jail's entry (`FUN_1408539f0(ledger, 0)`), sets `+0xea = 1` (freed: [perception](perception.md#sense-tags-who-is-an-enemy), Meitou `Freed`), the prisoner says
   `EV_BOUGHT_ME_FROM_SLAVERY` (event 51, `FUN_140684990` with the payer, the conversation's player character, as target; **Verified**) and gets 133 `GET_OUT_OF_CAGE_LEGIT` (**Verified**, `FUN_1405d20d0(prisoner, 0, 0x85, 0)` unconditionally; one whose event call returned 0, who could not speak, first gets 128 `RETREAT_HOMETOWN`);
   its squad's memory also takes the payer as FREED_ME (long tag 3, `FUN_140673930`; **Verified**), for every freed prisoner whose character resolved. Meitou: `ArrestSystem.Bail`
-  writes both, and `SendOut` walks a prisoner that spoke out of the cage to its payer (133, the walk of a bought slave) and one that did not to its squad's home (128 standing for the pair). Only two base dialogues carry DA 43 (**Verified** by probe, 2026-10-21): "Shek law
+  writes both. Both gives clear the order queue first (**Verified** by disassembly: `FUN_1405d20d0` with its clear argument 1), so 133 replaces 128; the bail only unlocks
+  the cage, and 133's leave takes the prisoner out at its exit spot, an escape only for a `not real` or bandit cage owner ([locks](locks.md#cages-and-beds)). Meitou
+  `ArrestSystem.SendOut` (`FixtureRegistry.GetOutLegit`), before event 51 (Meitou's events need a free speaker). Only two base dialogues carry DA 43 (**Verified** by probe, 2026-10-21): "Shek law
   bounty" (shek bounty desk, the reply "I'm here to bail out a friend.") and "Inquisitor heretic bounty" (Holy Nation Inquisitor); no United Cities law
   dialogue offers bail.
 - **Escape**: leaving by 207/256 gives a pending Escaping Prison (0xc) and the escaped flag; being lifted out gives the flag only (the crime call is refused while still held, [locks](locks.md#cages-and-beds)) ([locks](locks.md#cages-and-beds));
@@ -487,7 +490,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   (kinds 5, 3 and 4) and an Assault pending from the attack order. Code 4 only names a ledger bit (**Observed**).
 - **Assault to code 9** (**Verified**, `FUN_140852c80` and the disassembly of `FUN_140796240`): the setter turns a code 5 into 9 (the second Terrorism, 5000) when its victim
   resolves to a character with diplomatic status in its own biomes (`isDiplomaticStatus(victim, 1)`: NPC class 5 Diplomat standing in a BIOME_GROUP of its faction's `biomes`,
-  [perception](perception.md#sense-tags-who-is-an-enemy)); the code 9 is set even over another pending crime, which holds off a plain Assault. Meitou `CrimeSystem.SetPending` (`DiplomatVictim`).
+  [perception](perception.md#sense-tags-who-is-an-enemy)); the code 9 is set even over another pending crime, which holds off a plain Assault. Meitou `CrimeSystem.SetPending` (`DiplomatVictim`). Its witnesses say event 41,
+  the generic assault line, with no tests of their own ([dialogue](dialogue.md#firing-an-event), **Verified** by the witness switch's jump table).
 - **Witness timing** (`FUN_1408580d0`, the perception's per-seen-character update, **Observed**): the witness function `FUN_140854d10` runs for a
   seen character when the update says it is newly seen (either of two flag arguments), or while it has a pending crime whose timer
   (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh. The witness function returns at once when the seen character or the witness is imprisoned (`+0x2f8 == 2`, **Verified**, decompile), so a caged culprit's timer runs out and its status line gives way to the bounty. A witness
@@ -611,7 +615,8 @@ holding the slaver, the customer, the character list and val0.
   (the set is per owner object, **Inferred**). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
   values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned; split from a squad of more than one into a new squad of
   its own faction (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
-  restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT; relations toward the
+  restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT (queue cleared; the
+  hold is already cleared, so it does nothing: [locks](locks.md#cages-and-beds)); relations toward the
   player's faction: the slaver's +1, its own +4. Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
   nothing is paid to the slaver.
 - The window's gate (`FUN_1407281c0`) makes such a shortfall unreachable: confirm is enabled only with a row ticked and the total within the buyer's money (the slaver's when

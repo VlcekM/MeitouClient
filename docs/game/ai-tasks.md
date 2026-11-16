@@ -951,7 +951,10 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   of the looker's faction (`FUN_14032e2a0`: chain flag `+0x320`, owner faction the looker's) by its slave state (`FUN_1405c8aa0`): skipped while 1, a target once 2 (escaped); also needed: global `DAT_142133f54` set or the
   target's campaign (`FUN_1409c4b90`, **Verified** by disassembly: its faction's war manager forces record for its platoon, none without a platoon) null or in a phase other than 0 (`+0xc0`): a campaign
   still marching to its target is not attacked on sight. `DAT_142133f54` (initial 0) has this one reader and no writer in the decompile (**Observed**). Meitou `AggroSystem.FinderDrops`,
-  `CharacterFacts.MarchingToCampaign`. Also needed: the platoon-side object's vfunc `0xb0` null (not modelled). Factor 1 with a target, else 0. This is the attack on sight.
+  `CharacterFacts.MarchingToCampaign`. Also needed (first of all): the target's platoon (`FUN_140791b10`: Character `+0x658`, else its faction's default platoon `FUN_1406b9c60`; `+0x78`) is no
+  `UniquePlatoon`: `Platoon` vfunc `0xb0` is `FUN_1407f22f0` (0) and only `UniquePlatoon`'s `FUN_1409b0680` returns the platoon (**Verified**, vtables); a `UniquePlatoon` is made from an
+  UNIQUE_SQUAD_TEMPLATE or a saved PLATOON with `special` (`FUN_14057c6f0`), and no base record names either UNIQUE_SQUAD_TEMPLATE (**Verified**, probe), so only mods reach it
+  (Meitou `CharacterFacts.UniquePlatoon`; a character with no squad counts as in none). The pick goes through the target score, so the [leave-alone test](combat.md#attack-slots-and-circling) applies too. Factor 1 with a target, else 0. This is the attack on sight.
 - 144 TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME ("Home territory aggression", finder `FUN_14059fd70`, **Verified** stub): SENSE_ENEMY
   entries (mask 4, 0x208) within 1.3 x the home town's radius (`FUN_140926d50`, factor `DAT_14169bb40` = 1.3, read-only; ground-plane squared distance, strict; a
   NEST_MARKER home contains nobody), or outside it in the looker's own building (**Observed**: the enemy's and the looker's building hands match, the looker's not null; the
@@ -960,8 +963,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (`FUN_14059f720`) takes mask 6 (neutral or enemy, 0x308) and drops a faction the looker's coexists with (one way, neutrals too); `FUN_1408569a0`
   (leave alone, also in `FUN_14059fa70`) then drops, for a looker whose faction has no player flag (`+0x250`), whose squad holds no TEMP_ENEMY on the target
   (`FUN_140678960` tag 4) and whose faction is not hostile to the target's (relation above -30, `FUN_1406b25d0`), a target with diplomatic status (`FUN_140796240` flag 0: NPC class 5,
-  biome not factored in) or whose campaign is in phase 0 (`FUN_1409c4b90`); **Verified** by decompile and disassembly. Meitou `AggroSystem.FinderDrops` (21, and 144 with no home circle;
-  the player-faction branch is not modelled).
+  biome not factored in) or whose campaign is in phase 0 (`FUN_1409c4b90`); **Verified** by decompile and disassembly. The same test gates the target score `FUN_14059e300`,
+  which every finder here picks by (16, 21, 144 with or without its circle, 34, 41, 101), with its player-faction branch ([target score](combat.md#attack-slots-and-circling)).
+  Meitou `LeaveAlone.Spares`, in the score (`AggroSystem.Score`, `AiSystem.AssaultTargetFor`, `CombatSystem.Consider`).
 - 143 PROTECT_OWN_SQUAD ("Protect close allies"): effect `!isAggressionTowards` (state 16, evaluator `FUN_14059de10`: the target
   resolves to a character whose AI-side object is set and byte +0x2b0 is set). Finder `FUN_14099d510` scores
   each squad mate (the platoon's active members, the looker included) that passes `FUN_140855960(sense, mate, 1)` (**Verified**: the looker itself; else a mate in its own sensed map that is seen or
@@ -1026,7 +1030,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   or a goal not aimed at it, gives 0. Known = an entry of the looker's senses (`CharacterFacts.Knows`) or the mission target itself. The plan is the goal
   alone (engine choice: the walk and the weapon are the combat system's); the serial step sends a non-defensive `AttackOrder` to the picked member, the character alone
   (as dialogue's attack effects: its mates join through their own stance), and when the fight ends the next think picks the next standing member. Not modelled: the
-  `+0x280` branch, the leave-alone cases, entry age. 248 "Attacking Squad" has the same row shape and the same finder (`FUN_140793eb0`; its commitment is 0.3 + r x 2 h and it has no desire override): Meitou maps it to the assault behaviour of 101. No AI_TASK record of the merged base data has enum 248 (goal lists name AI_TASK records), so only a mod reaches it.
+  `+0x280` branch, entry age. 248 "Attacking Squad" has the same row shape and the same finder (`FUN_140793eb0`; its commitment is 0.3 + r x 2 h and it has no desire override): Meitou maps it to the assault behaviour of 101. No AI_TASK record of the merged base data has enum 248 (goal lists name AI_TASK records), so only a mod reaches it.
 - 32 SELF_PRESERVATION and 35 RUN_AWAY (**Verified** unless marked: `FUN_140319a60` registrations, stub bytes read from the exe, `Character::setupAI` `FUN_140621b70`). `setupAI` gives **every**
   character goal 14 (weight 0.1) and goal 32 (weight 1, target itself, tier 3); the race `AI Goals` (30 races list 32) may add it again. Row 32: flags 0x65, list A `!159`, no B, effect `!39`;
   desire AI slot 17 (`FUN_140599d20`, [combat](combat.md#fight-lifecycle-and-orders): 1 with a threat within 40, 0.7 with an attacking threat within 181.7, else 0); its finder stub jumps to `FUN_1405985e0`,
@@ -1459,7 +1463,8 @@ feed, eject on; heal, help off (on in 4), rescue, stay, shootfirst off. Readers 
   floats +0x4bc ≤ 0, +0x4b8 < 2.25) a character takes food from the backpack of a squad member within 200 units (squared 40000).
 - **Shoot first** (+0x11a): turret target choice `FUN_1404374d0`: enemies (sensed 4, 0x210) weigh `FUN_140435d70`(…, 1), unseen × 0.1, the current
   target × 1.5; with none, a player gunner with the option takes sensed (2, 0x210) characters whose faction's type (+0x34) is 0 or 8 or whose
-  faction default (+0x60) is below -30; each is scored by `FUN_140435d70` with range factor k 0.6 (`DAT_141696c8c`), unseen x 0.1, current x 1.5, **Verified**, no extra weight.
+  faction default (+0x60) is below -30; each is scored by `FUN_140435d70` with range factor k 0.6 (`DAT_141696c8c`), unseen x 0.1, current x 1.5, **Verified**, no extra weight. The
+  score's own diplomat test: [combat](combat.md#turrets).
 
 ## Unknowns
 

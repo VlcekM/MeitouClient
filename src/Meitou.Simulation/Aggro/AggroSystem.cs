@@ -1703,16 +1703,24 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// never when the master squad holds TEMP_ENEMY on the character, always with TEMP_ALLY or a love tag, else the master's faction is allied to the
     /// character's (the same faction is <see cref="MasterSpares"/>'s first test).
     /// </summary>
-    static bool MasterRegardsFriendly(ref Scan s, Squad master, int slot, CharacterCold c)
+    static bool MasterRegardsFriendly(ref Scan s, Squad master, int slot, CharacterCold c) =>
+        MasterRegardsFriendly(s.World, s.Relations, s.Memory, master, new CharacterId(slot, s.Table.Previous[slot].Generation), c);
+
+    /// <summary>
+    /// Slot 126 of the master squad on <paramref name="who"/> (<paramref name="c"/>): see <see cref="MasterRegardsFriendly(ref Scan, Squad, int,
+    /// CharacterCold)"/>; also read by the leave-alone test's slave part (<see cref="LeaveAlone"/>).
+    /// </summary>
+    internal static bool MasterRegardsFriendly(
+        World world, FactionRelations relations, Dialogue.SquadMemory? memory, Squad master, CharacterId who, CharacterCold c)
     {
-        if (s.Memory is { } memory)
+        if (memory is not null)
         {
-            var (tags, entry) = memory.Read(s.World, master.Id, new CharacterId(slot, s.Table.Previous[slot].Generation));
+            var (tags, entry) = memory.Read(world, master.Id, who);
             if ((tags >> Dialogue.MemoryTag.TempEnemy & 1) != 0) return false;
             if ((tags >> Dialogue.MemoryTag.TempAlly & 1) != 0 || (entry?.Long & Dialogue.MemoryTag.LoveMask) is > 0) return true;
         }
 
-        return s.Relations.Contains(master.Faction) && s.Relations.Contains(c.Faction) && s.Relations.IsAlly(master.Faction, c.Faction);
+        return relations.Contains(master.Faction) && relations.Contains(c.Faction) && relations.IsAlly(master.Faction, c.Faction);
     }
 
     /// <summary>
@@ -2168,7 +2176,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// Whether the finder takes the candidate for an enemy: tagged ENEMY (for 21 also NEUTRAL) by the relations (a disguise, the freed rule), a
     /// campaign assault's target, the squads' temporary tags and a contract's employer, an enemy with diplomatic status tagged NEUTRAL; then the
-    /// finders' own campaign and leave-alone gates (<see cref="FinderDrops"/>).
+    /// finders' own campaign and unique-platoon gates (<see cref="FinderDrops"/>).
     /// </summary>
     static bool TakenAsEnemy(ref Scan s, int slot, CharacterCold c)
     {
@@ -2212,27 +2220,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         // An enemy with diplomatic status is sensed NEUTRAL (Regards): only 21, which takes neutrals too, still finds it.
         bool diplomat = enemy && CharacterFacts.DiplomaticStatus(c, other.Position, s.Towns, !PlayerSide(s.World, s.Cold));
         bool taken = neutrals ? enemy || IsNeutral(s.Relations, s.Faction, seenAs) : enemy && !diplomat;
-        return taken && !FinderDrops(ref s, c, tempEnemy);
+        return taken && !FinderDrops(ref s, c);
     }
 
     /// <summary>
     /// The finders' gates after the sense tags (<b>Verified</b> by decompile and disassembly). 16 (<c>FUN_14059f3a0</c>) skips a member of a campaign
-    /// still marching (<see cref="CharacterFacts.MarchingToCampaign"/>; its global override <c>DAT_142133f54</c> has no writer, <b>Observed</b>).
-    /// 21 (<c>FUN_14059f720</c>) and 144 without a home circle (<c>FUN_14059fa70</c>) leave alone (<c>FUN_1408569a0</c>), for a looker not of
-    /// the player's faction, a target its squad holds no TEMP_ENEMY on and whose faction its own is not hostile to (relation above -30) when the
-    /// target has diplomatic status (biome not factored in) or marches in a campaign. The player-faction branch of the leave-alone test is not
-    /// modelled.
+    /// still marching (<see cref="CharacterFacts.MarchingToCampaign"/>; its global override <c>DAT_142133f54</c> has no writer, <b>Observed</b>) and
+    /// a member of a unique platoon (<see cref="CharacterFacts.UniquePlatoon"/>). The leave-alone test that 21 (<c>FUN_14059f720</c>) and the
+    /// sensed-enemy finder (<c>FUN_14059fa70</c>) call is also the target score's, so every finder gets it there (<see cref="Score"/>).
     /// </summary>
-    static bool FinderDrops(ref Scan s, CharacterCold c, bool tempEnemy)
-    {
-        if (s.Finder == FoeFinder.Enemies) return CharacterFacts.MarchingToCampaign(s.World, c);
-
-        bool leavesAlone = s.Finder == FoeFinder.EnemiesAndNeutrals || s.Finder == FoeFinder.Territory && s.Home.R2 == 0;
-        if (!leavesAlone || s.World.Player.Faction == s.Faction || tempEnemy) return false;
-        if (s.Relations.Contains(c.Faction) && s.Relations.IsHostile(s.Faction, c.Faction)) return false;
-
-        return CharacterFacts.DiplomaticStatus(c, default, null, false) || CharacterFacts.MarchingToCampaign(s.World, c);
-    }
+    static bool FinderDrops(ref Scan s, CharacterCold c) =>
+        s.Finder == FoeFinder.Enemies && (CharacterFacts.MarchingToCampaign(s.World, c) || CharacterFacts.UniquePlatoon(s.World, s.Towns?.Db, c));
 
     /// <summary>
     /// The area test of the attack-on-sight finders (<c>FUN_140599f30</c>, <b>Verified</b>): a target in the looker's own building passes; else the
@@ -2263,6 +2261,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         ref readonly var other = ref s.Table.Previous[slot];
         var fight = s.Combat?.StateOf(new CharacterId(slot, other.Generation)) ?? CombatSlot.Fresh(other.Generation);
         if (s.Cold is { } chooser && TargetScore.SparesSlave(chooser, c)) return null;
+
+        // The leave-alone test gates the whole score (FUN_14059e300 -> FUN_1408569a0, Verified).
+        var kit = new LeaveAlone.Kit(s.Relations, s.Memory, s.Combat);
+        if (s.Cold is { } looker && LeaveAlone.Spares(s.World, kit, s.Self, looker, slot, c)) return null;
 
         if (s.HoldPost && !Orders.HoldPost(s.Eye, s.HoldPoint, other.Position, other.Velocity, other.Yaw, c.Medical!.Crawling
             || fight.AttackTech >= 0, c.InCombat))

@@ -776,6 +776,18 @@ public sealed class CharacterCold
     public CharacterId CarriedBy { get; set; } = CharacterId.None;
 
     /// <summary>
+    /// The partner of a carry this character was in when its squad left the world (null: none): the original writes the link into the unloading
+    /// platoon's record before its members are destroyed, and the destroy lets the partner go (docs/formats/save.md "Carry links"). Linked again once
+    /// both are in the world (<see cref="Carrying.CarrySystem"/>); saved as the <c>carrying</c> link. Runtime only otherwise; not hashed.
+    /// </summary>
+    public CharacterCold? CarryRelink { get; set; }
+
+    /// <summary>
+    /// Whether this character was the carrier of <see cref="CarryRelink"/> (else the carried one).
+    /// </summary>
+    public bool CarryRelinkIsCarrier { get; set; }
+
+    /// <summary>
     /// While carried: lifted awake by a friendly carrier (the player's Pick Up on a standing squad mate), so it stays on the shoulder until put down
     /// rather than being set down as one that came round.
     /// </summary>
