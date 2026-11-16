@@ -570,7 +570,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// An upgrade's materials from the building's own inventory (<b>Verified</b>, Building slot 75: for each material, int(required - delivered)
     /// times, an item of it is taken from the building's inventory and destroyed and one unit delivered, stopping when none is left). Meitou's
-    /// inventory of a building is its machine's storage, then its input and output stock.
+    /// inventory of a building is its machine's storage, then its input and output stock. Observers hear each unit (no user).
     /// </summary>
     static void PullOwn(World world, BuildSite site)
     {
@@ -586,6 +586,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 else break;
                 slot.Delivered++;
                 took = true;
+                ItemUseObservers.Report(world, ItemUseKind.BuildingMaterial, slot.Item, CharacterId.None, site.Id, 1, true);
             }
         }
 
@@ -1882,6 +1883,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             found.Owner.RemoveOne(found.Item);
             m.Delivered += 1;
             given++;
+            ItemUseObservers.Report(world, ItemUseKind.BuildingMaterial, m.Item, table.IdOf(slot), site.Id, 1, true);
         }
 
         if (given > 0) world.Buildings.Touch();

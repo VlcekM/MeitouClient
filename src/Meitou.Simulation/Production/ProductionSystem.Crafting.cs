@@ -185,7 +185,7 @@ public sealed partial class ProductionSystem
         {
             if (input.Rate <= 0) continue;
             float need = input.Rate * amount;
-            while (input.Level < need && input.Count > 0) { input.Count--; input.Level += 1; }
+            while (input.Level < need && input.Count > 0) TakeInput(world, m, input);
             input.Level = MathF.Max(0, input.Level - need);
         }
 

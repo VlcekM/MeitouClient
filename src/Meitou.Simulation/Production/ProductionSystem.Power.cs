@@ -204,7 +204,7 @@ public sealed partial class ProductionSystem
             if (m.Data.IsGenerator)
             {
                 m.Status = (byte)(m.Demand > 0 ? 2 : 0);
-                if (m.Inputs.Length > 0 && m.PowerOn && Live(world, m)) BurnFuel(m, dt);
+                if (m.Inputs.Length > 0 && m.PowerOn && Live(world, m)) BurnFuel(world, m, dt);
             }
         }
 
@@ -798,7 +798,7 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// A generator burns fuel as a producer draws inputs (<c>vfunc_183</c>): <c>rate x dt x P x option</c>, times its load.
     /// </summary>
-    void BurnFuel(Machine m, float dt)
+    void BurnFuel(World world, Machine m, float dt)
     {
         float amount = m.Data.Rate * dt * _constants.ProductionSpeed * Settings.ProductionOption * m.Usage;
         if (amount <= 0) return;
@@ -806,7 +806,7 @@ public sealed partial class ProductionSystem
         {
             float need = input.Rate * amount;
             if (need <= 0) continue;
-            while (input.Level < need && input.Count > 0) { input.Count--; input.Level += 1; }
+            while (input.Level < need && input.Count > 0) TakeInput(world, m, input);
             input.Level = MathF.Max(0, input.Level - need);
         }
     }

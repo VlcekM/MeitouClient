@@ -631,14 +631,16 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Shots and reloads
 
     /// <summary>
-    /// A finished reload: one bolt is taken from the shooter's inventory.
+    /// A finished reload: one bolt is taken from the shooter's inventory; observers hear it (<see cref="Items.ItemUseKind.Ammunition"/>).
     /// </summary>
     void ApplyReload(World world, in Effect e)
     {
         var cold = world.Characters.Cold(e.Source);
         if (cold?.Fighter?.Crossbow is not { } x) return;
+        if (!Ammunition.UseOne(cold.Inventory, x.Data.AmmoId, out bool unitGone)) return;
 
-        Ammunition.UseOne(cold.Inventory, x.Data.AmmoId);
+        var shooter = world.Characters.IdOf(e.Source);
+        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Ammunition, x.Data.AmmoId, shooter, null, 1, unitGone);
     }
 
     /// <summary>

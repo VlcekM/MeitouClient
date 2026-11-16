@@ -585,7 +585,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
 
         // once per part bandaged; only the player's medics use up kits here (FUN_140649a00: faction +0x250)
-        if (medicCold.IsPlayer) Drain(kit, skill, dt, robot, touched);
+        if (medicCold.IsPlayer) Drain(world, m, kit, skill, dt, robot, touched);
         medicCold.UseSkill(StatOf(robot), world.Tick);
         _xp.Medic(stats, race, medicRace, dt, StatOf(robot));
 
@@ -621,7 +621,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
         float woundSkill = SkillOf(stats, m == p, race.IsRobot && !kitless);
         body.CloseWound(dt, woundSkill, woundKit is { } wk ? Items.Info(wk.Item.Record)?.Quality ?? 0 : KitlessQuality, Constants);
-        if (woundKit is { } used) Drain(used, woundSkill, dt, race.IsRobot, 1);
+        if (woundKit is { } used) Drain(world, m, used, woundSkill, dt, race.IsRobot, 1);
         medicCold.UseSkill(StatOf(race.IsRobot && !kitless), world.Tick);
         _xp.Medic(stats, race, medicRace, dt, StatOf(race.IsRobot && !kitless));
     }
@@ -676,7 +676,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             return;
         }
 
-        Drain(kit, skill, dt, false, 1);
+        Drain(world, m, kit, skill, dt, false, 1);
         medicCold.UseSkill(StatsEnumerated.Medic, world.Tick);
         _xp.Medic(stats, race, medicRace, dt, StatsEnumerated.Medic);
     }
@@ -686,12 +686,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     #region Kits
 
     /// <summary>
-    /// Uses <paramref name="times"/> drains of a kit (<see cref="MedicalState.KitDrain"/>); a used-up kit is gone.
+    /// Uses <paramref name="times"/> drains of a kit (<see cref="MedicalState.KitDrain"/>) by medic <paramref name="m"/>; a used-up kit is gone.
+    /// Observers hear the charges it had that the drain spent (<see cref="ItemUseKind.FirstAid"/>).
     /// </summary>
-    void Drain((ItemInstance Item, Inventory Owner) kit, float skill, float dt, bool robotKit, int times)
+    void Drain(World world, int m, (ItemInstance Item, Inventory Owner) kit, float skill, float dt, bool robotKit, int times)
     {
-        kit.Item.Charges -= MedicalState.KitDrain(Constants, skill, dt, robotKit) * times;
-        if (kit.Item.Charges <= 0) kit.Owner.RemoveOne(kit.Item);
+        float amount = MedicalState.KitDrain(Constants, skill, dt, robotKit) * times;
+        float spent = MathF.Min(amount, MathF.Max(kit.Item.Charges, 0));
+        kit.Item.Charges -= amount;
+        bool finished = kit.Item.Charges <= 0;
+        if (finished) kit.Owner.RemoveOne(kit.Item);
+
+        ItemUseObservers.Report(world, ItemUseKind.FirstAid, kit.Item.Record, world.Characters.IdOf(m), null, spent, finished);
     }
 
     /// <summary>

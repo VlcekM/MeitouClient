@@ -357,7 +357,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// <summary>
     /// One bite (<c>FUN_1405d0780</c>): min(charges, 300 - hunger, 50) comes off the item (a limb, <c>item function</c> 17, is eaten whole for 30),
     /// which goes when nothing is left; the stomach gets a hundredth of it. With more than one unit in the stack the next unit starts full (engine
-    /// choice: food does not stack in the data).
+    /// choice: food does not stack in the data). Observers hear the bite (<see cref="ItemUseKind.Eaten"/>).
     /// </summary>
     static void Eat(World world, int slot, MedicalState med, Inventory? from, ItemInstance item)
     {
@@ -365,15 +365,18 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         float amount = limb ? 30 : item.Charges;
         amount = MathF.Min(MathF.Min(amount, 300 - med.Hunger), BiteSize);
         item.Charges -= amount;
-        if (item.Charges <= 0 || limb)
+        bool finished = item.Charges <= 0 || limb;
+        if (finished)
         {
             bool more = item.Quantity > 1;
             from?.RemoveOne(item);
             if (more) item.Charges = item.MaxCharges;
         }
+
         med.Fed = amount * 0.01f;
         var at = world.Characters.Next[slot].Position;
         world.Floaters?.Enqueue(Floater.Text(world.Characters.IdOf(slot), at, Loc.Tr("Ate {1}", item.Name)));
         world.EmitSound(SoundKind.Eat, slot, at);
+        ItemUseObservers.Report(world, ItemUseKind.Eaten, item.Record, world.Characters.IdOf(slot), null, amount, finished);
     }
 }

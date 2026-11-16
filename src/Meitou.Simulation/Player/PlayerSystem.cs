@@ -440,6 +440,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         }
         foreach (int site in sites) world.Player.Know(site, TownKnowledge.Discovered | TownKnowledge.Recent);
         inventory.RemoveOne(item);
+        ItemUseObservers.Report(world, ItemUseKind.Map, item.Record, table.IdOf(owner), null, 1, true);
         world.Post($"{sites.Count} location(s) added to the map.");
     }
 

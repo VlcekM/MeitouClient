@@ -1214,7 +1214,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         foreach (var input in m.Inputs)
         {
             float need = input.Rate * amount;
-            while (input.Level < need && input.Count > 0) { input.Count--; input.Level += 1; }
+            while (input.Level < need && input.Count > 0) TakeInput(world, m, input);
             input.Level = MathF.Max(0, input.Level - need);
         }
 
@@ -1316,6 +1316,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             float need = w * rate * input.Rate - input.Level;
             input.Level = 0;
             if (need <= 0) continue;
+            int before = input.Count;
             if (input.Count <= need) input.Count = 0;
             else
             {
@@ -1323,6 +1324,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 input.Count -= (int)whole;
                 input.Level = 1 - (need - whole);
             }
+
+            if (before > input.Count)
+                ItemUseObservers.Report(world, ItemUseKind.MachineInput, input.Item, CharacterId.None, m.Site, before - input.Count, true);
         }
     }
 
@@ -1365,7 +1369,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// The water draw (<b>Observed</b>, <c>FUN_1400df4c0</c>): each input needs <c>amount</c>; one below it takes an item from its section, or the
     /// draw fails (its level 0).
     /// </summary>
-    static bool DrawWater(Machine m, float amount)
+    static bool DrawWater(World world, Machine m, float amount)
     {
         foreach (var input in m.Inputs)
         {
@@ -1378,11 +1382,22 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         foreach (var input in m.Inputs)
         {
-            if (input.Level < amount && input.Count > 0) { input.Count--; input.Level += 1; }
+            if (input.Level < amount && input.Count > 0) TakeInput(world, m, input);
             input.Level -= amount;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// One unit of a machine's input stock goes into its level (production, crafting, fuel and water draw it this way); observers hear it
+    /// (<see cref="ItemUseKind.MachineInput"/>: the machine's site, no user).
+    /// </summary>
+    static void TakeInput(World world, Machine m, InputSlot input)
+    {
+        input.Count--;
+        input.Level += 1;
+        ItemUseObservers.Report(world, ItemUseKind.MachineInput, input.Item, CharacterId.None, m.Site, 1, true);
     }
 
     /// <summary>
@@ -1398,7 +1413,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Inputs.Length > 0 && !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
             m.Inputs[0].Level = MathF.Min(1, m.Inputs[0].Level + rain.Wetness * m.WaterRate * m.Inputs[0].Rate * dt * RainWaterFactor);
 
-        bool watered = m.Inputs.Length == 0 || DrawWater(m, dt * m.WaterRate);
+        bool watered = m.Inputs.Length == 0 || DrawWater(world, m, dt * m.WaterRate);
         float inc = h * m.Yield / fd.GrowthTime;
         if (Rated(world, m) != 0) inc *= m.Health * m.Power;   // slot 109 only for a farm that uses power (FUN_1402976a0)
         if (!watered) inc *= fd.DroughtMultiplier;
@@ -1706,16 +1721,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     Meitou.Data.World.ZoneCoordinate? FocusZone() => _focus is { } f ? Meitou.Data.World.WorldLayout.ZoneOf(f.X, f.Z) : null;
 
     /// <summary>
-    /// The items of the player's research benches where costs are counted and paid (<b>Verified</b>, <c>FUN_14082e750</c>, <c>FUN_14082e810</c>,
+    /// The player's research benches whose items count toward and pay costs (<b>Verified</b>, <c>FUN_14082e750</c>, <c>FUN_14082e810</c>,
     /// <c>FUN_14082e900</c>, <c>FUN_1409fc450</c>): only the benches (function 3, the player's) in the 3 x 3 zones round the camera focus; without a
     /// focus (headless runs) every bench.
     /// </summary>
-    IEnumerable<Inventory> Benches(World world)
+    IEnumerable<Machine> Benches(World world)
     {
         var near = FocusZone();
         foreach (var m in world.Machines.All)
         {
-            if (!m.Data.IsResearch || m.Storage is not { } s || Site(world, m.Site) is not { Complete: true } site
+            if (!m.Data.IsResearch || m.Storage is null || Site(world, m.Site) is not { Complete: true } site
                 || site.Owner != world.Player.Faction)
                 continue;
 
@@ -1723,7 +1738,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 && (Math.Abs(at.X - z.X) > 1 || Math.Abs(at.Y - z.Y) > 1))
                 continue;
 
-            yield return s;
+            yield return m;
         }
     }
 
@@ -1733,9 +1748,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     int CountInBenches(World world, string item)
     {
         int n = 0;
-        foreach (var s in Benches(world))
+        foreach (var m in Benches(world))
         {
-            foreach (var i in s.Items)
+            foreach (var i in m.Storage!.Items)
                 if (i.Record == item) n += i.Quantity;
         }
 
@@ -1777,16 +1792,20 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             foreach (var (item, count) in r.CostAt(world.Research.Times(id)))
             {
                 int left = count;
-                foreach (var s in Benches(world))
+                foreach (var m in Benches(world))
                 {
+                    var s = m.Storage!;
                     foreach (var i in s.Items.Where(i => i.Record == item).ToList())
                     {
+                        if (left == 0) break;
                         int take = Math.Min(left, i.Quantity);
                         i.Quantity -= take;
                         if (i.Quantity == 0) s.Items.Remove(i);
                         left -= take;
-                        if (left == 0) break;
+                        if (take > 0) ItemUseObservers.Report(world, ItemUseKind.Research, item, CharacterId.None, m.Site, take, true);
                     }
+
+                    if (left == 0) break;
                 }
             }
         }

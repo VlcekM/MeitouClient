@@ -49,7 +49,10 @@ sealed class QuickMoves(PopulationData? data)
         if (item.Type == FcsRecordType.Blueprint && cold.Faction == world.Player.Faction)
         {
             // One read whatever Shift says: a second unit would only say "Research already known".
-            if (world.SystemOf<Production.ProductionSystem>()?.Learn(world, item) == true) root.RemoveOne(item);
+            if (world.SystemOf<Production.ProductionSystem>()?.Learn(world, item) != true) return;
+
+            root.RemoveOne(item);
+            ItemUseObservers.Report(world, ItemUseKind.Blueprint, item.Record, table.IdOf(s), null, 1, true);
             return;
         }
 

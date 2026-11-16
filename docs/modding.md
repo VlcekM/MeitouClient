@@ -126,6 +126,19 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Items used up:** a registered system implementing `IItemUseObserver` receives `ItemUsedUp(World, in ItemUsed)` inside the step that
+  used an item, once the item has changed: the tick, the `ItemUseKind`, the item record's string id, the user (none for a machine, a
+  research order or an upgrade pulling from the building's own stock), the building it went into or came from (a construction, machine or
+  research bench site, a cut fixture; else null), the amount (charges for `Eaten`, `FirstAid` and `Ammunition`, where one bolt shot is one
+  charge; else units) and whether a whole unit left the inventory or storage. The kinds: food bites (each bite, the eater's own, its
+  backpack's or a squad mate's backpack's food; a limb counts as the bite it gave), first-aid, robot and splint kit charges spent, crossbow
+  shots, building materials delivered or pulled from the building itself (a later dismantle's refund is not reported), tools broken
+  cutting locks or shackles, maps read, blueprints learned, machine inputs (production, crafting, generator fuel, farm water, furnace
+  smelting), research costs, and the units of the clicked stack a mod's item use took out of the user's inventory, whatever the handler
+  did with them (charges or other items it spends are not seen). Every use runs in a serial step; callbacks run in system order, may read
+  the world and change their own hashed state, and must not change items, characters or other world state, since the step may still be
+  walking them: gameplay changes go through commands. Without an observer no payload is made. A throwing callback is logged and disabled
+  for that world; faulted registrations enter the state hash.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
