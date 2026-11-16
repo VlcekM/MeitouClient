@@ -89,7 +89,7 @@ sealed class ModReport(List<ModRow> rows, List<string> otherIssues, int enabled,
         var rows = new List<ModRow>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var path = ModList.ModsCfgPath(install);
-        foreach (var line in File.Exists(path) ? File.ReadAllLines(path) : [])
+        foreach (var line in File.Exists(path) ? ModList.ReadLines(path) : [])
         {
             if (ModList.ParseModsCfg([line]).FirstOrDefault() is not { } name || !seen.Add(name)) continue;
 
