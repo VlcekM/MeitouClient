@@ -51,6 +51,12 @@ internal static class GateDoorMarkers
     }
 
     /// <summary>
+    /// The door's outer marker (<c>+0x3bc</c>), where its building reads its own gate code (<c>FUN_140555fd0</c>).
+    /// </summary>
+    public static Vector3 Outer(GameRecord door, DoorFrame frame, Matrix4x4 node, GroundRay floor0, GroundRay ground) =>
+        Markers(door, frame, node, floor0, ground).Outer;
+
+    /// <summary>
     /// The door's inner (<c>+0x3c8</c>) and outer (<c>+0x3bc</c>) markers, <c>FUN_14029cc90</c>.
     /// </summary>
     static (Vector3 Inner, Vector3 Outer) Markers(GameRecord door, DoorFrame frame, Matrix4x4 node, GroundRay floor0, GroundRay ground)

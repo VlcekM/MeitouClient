@@ -96,7 +96,7 @@ internal sealed partial class ZoneGeometryGatherer
             bool open = kind != InteriorKind.Real;
             bool upper = kind == InteriorKind.Blank && !record.GetBool("is wall gate") && !record.GetBool("links together");
             AddBuilding(g, record, b.Key, position, b.Rotation, destroyed, open: open, upper: upper);
-            if (!destroyed && InZone(g, b.Position)) QueueGateDoor(g, record, b.Key, position, b.Rotation);
+            if (InZone(g, b.Position)) QueueDoor(g, record, kind, b.Key, position, b.Rotation, destroyed);
             foreach (var (item, at, rotation) in LayoutObjects(b, record, position, destroyed))
                 AddBuilding(g, item.Building, $"{b.Key}/{item.InstanceId}", at, rotation, destroyed: false, floor: item.Floor, open: open,
                         upper: upper);
@@ -111,22 +111,39 @@ internal sealed partial class ZoneGeometryGatherer
     static bool InZone(ZoneGeometry g, Vector3 at) => at.X >= g.ZoneMin.X && at.X < g.ZoneMax.X && at.Z >= g.ZoneMin.Y && at.Z < g.ZoneMax.Y;
 
     /// <summary>
-    /// Queues a gate's first door for <see cref="ZoneGeometry.GateSides"/>: a GatewayBuilding (the factory makes one for <c>is wall gate</c>,
-    /// <c>FUN_14057cc70</c>) that is not destroyed (a destroyed building has no doors) and has a door 0 with a collision box.
+    /// Queues a building's first door: a gate's for <see cref="ZoneGeometry.GateSides"/> (a GatewayBuilding, made for <c>is wall gate</c>,
+    /// <c>FUN_14057cc70</c>), another building with a real interior's for <see cref="ZoneGeometry.CodePoints"/>. A destroyed building has no doors;
+    /// an interior building without a door reads its code at its position (<c>FUN_140555fd0</c>).
     /// </summary>
-    void QueueGateDoor(ZoneGeometry g, GameRecord building, string key, Vector3 position, Quaternion rotation)
+    void QueueDoor(ZoneGeometry g, GameRecord building, InteriorKind kind, string key, Vector3 position, Quaternion rotation, bool destroyed)
     {
-        if (!building.GetBool("is wall gate")) return;
+        bool gate = building.GetBool("is wall gate");
+        if (!gate && kind != InteriorKind.Real) return;
 
+        if (!destroyed && FirstDoor(building, key, position, rotation) is var (door, frame, node))
+        {
+            (gate ? g.GateDoors : g.CodeDoors).Add((key, door, frame, node));
+            return;
+        }
+
+        if (!gate) g.CodePoints.Add(new BuildingCodePoint(key, position));
+    }
+
+    /// <summary>
+    /// The building's door 0 with a collision box (its record, box and the building's node), null when it has none.
+    /// </summary>
+    (GameRecord Door, DoorFrame Frame, Matrix4x4 Node)? FirstDoor(GameRecord building, string key, Vector3 position, Quaternion rotation)
+    {
         var node = NodeMatrix(building, position, rotation);
         foreach (var mesh in WorldObjectLayout.Building(_db, building, key, position, rotation, new BuildingState(false)))
         {
             if (mesh.DoorIndex != 0 || mesh.CollisionPath(false) is not { Length: > 0 } path || _collision.Get(path) is not { } prepared) continue;
             if (prepared.Door.HalfExtents == Vector3.Zero) continue;
 
-            g.GateDoors.Add((key, mesh.Owner, prepared.Door, node));
-            return;
+            return (mesh.Owner, prepared.Door, node);
         }
+
+        return null;
     }
 
     /// <summary>

@@ -246,6 +246,18 @@ internal sealed class ZoneGeometry
     public List<GateSide> GateSides { get; } = [];
 
     /// <summary>
+    /// The first doors of the zone's other buildings with an interior (placement key, door record, door frame, node), until every surface is
+    /// gathered (then their outer markers become <see cref="CodePoints"/>).
+    /// </summary>
+    public List<(string Building, Meitou.Data.GameRecord Door, Meitou.Data.World.DoorFrame Frame, Matrix4x4 Node)> CodeDoors { get; } = [];
+
+    /// <summary>
+    /// Where the zone's buildings with an interior read their own gate code (<see cref="BuildingCodePoint"/>): the outer markers of
+    /// <see cref="CodeDoors"/>, and the positions of those without a door.
+    /// </summary>
+    public List<BuildingCodePoint> CodePoints { get; } = [];
+
+    /// <summary>
     /// Seed points: regions of the mesh near one stay, the rest is pruned (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
     /// </summary>
     public List<Vector3> Seeds { get; } = [];

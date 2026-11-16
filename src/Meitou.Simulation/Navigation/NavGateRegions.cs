@@ -24,7 +24,7 @@ public sealed class NavGateRegions : IGateRegions
     /// </summary>
     readonly Dictionary<long, int> _codes;
     /// <summary>
-    /// The unlabelled interior polygons' codes, their buildings' (<see cref="GateInteriorCodes"/>).
+    /// The interior polygons' codes, their buildings' (<see cref="GateInteriorCodes"/>).
     /// </summary>
     readonly Dictionary<long, int> _inside;
 

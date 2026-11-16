@@ -997,16 +997,21 @@ ground within a few units either way); the connection test is `NavQuery`'s A* (1
 closed, and the flood crosses only portals that pass the same clearance rule (`NavQuery.Fits`); the flood applies the 100 000-step cap but not
 the byte caps; an unjoined border edge is open only toward a zone with no mesh loaded (Meitou's stitching leaves short gaps across loaded borders: Stack's
 yard on the 19.29 / 20.29 border); gates are listed by zone (X, then Z), then as gathered. `IGateRegions.CodeAt` reads an object's code at a
-position: `getGateCode`, except that an unlabelled interior polygon takes its building's code, the highest code of the exterior ground its
-connected interior's joins reach, across zone borders and through runs of exterior door polygons (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; `LockSystem` applies the result
+position: `getGateCode`, except that every interior polygon takes its building's own code, as a character inside a building does (**Verified**,
+Character slot 35 `FUN_140792200`: the location building's slot 0x118, a gateway's by the side; else the position's code). A building's own code
+is `getGateCode` at its first door's outer marker, or at its position when it has no door, e.g. a ruin (**Verified**, `FUN_140555fd0`; a building
+with a parent takes the parent's). Each interior polygon carries its building's placement key (`ZoneNavMesh.BuildingIds` / `BuildingOf`) and
+each zone the point its buildings read their code at (`ZoneNavMesh.CodePoints`: the outer marker by `GateDoorMarkers.Outer`, else the
+placement), so an interior split by a zone border takes one code (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; `LockSystem` applies the result
 (`GateRegionsCommand`, not hashed or saved): door 0's `Fixture.GateCode` takes the first code, the building the second, and Town slot 96 reads both
 from the last labelling that listed the gate. Before the first labelling a
 building's code is -1 (the lock system knows no navmesh face). **Observed** (`NavGateRegions.Label` over Meitou's meshes, 3 x 3 zones around each
 town, 5 to 45 ms): Stack, Squin, Heng, Admag, Bad Teeth and Mongrel each have one walled region (code 1) and every gate [1, 0], the first side
 inside; Shark's Makeshift Gate has both sides connected, so [0, 0]; the Hub has no gate with a door. No flood failed there. Mongrel's two sides
 connect without the footprint, kilometres around through the terrain past passages narrower than 8; with it they don't. Positions on the
-surface reading -1 are exterior door polygons (as the original's unlabelled door faces) and interior islands no door joins on Meitou's mesh
-(buildings over a zone border such as Stack's Stationhouse, Storm Houses and Y-House: Stack 218 polygons, Mongrel 163, Heng 84). **Observed**
+surface reading -1 are exterior door polygons (as the original's unlabelled door faces) and the interiors of buildings whose code point reads
+-1: the Hub's ruins (no doors, their origin on the ruin floor, an unlabelled interior face; 309 polygons). Interiors over a zone border (Stack's
+Stationhouse, Storm Houses and Y-House) take their building's code. **Observed**
 (saved `gatecode0` in the original's saves, written after a pass): the gates of Stack, Squin, Heng, Admag, Bad Teeth and Mongrel hold 1 to 3,
 Shark's Makeshift Gate 0, every other door -1, so the first side is the inside.
 

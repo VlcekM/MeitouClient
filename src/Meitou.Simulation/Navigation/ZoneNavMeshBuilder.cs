@@ -184,6 +184,7 @@ internal static class ZoneNavMeshBuilder
         NavPolygonHeights.AddDetail(mesh, meshes, details, g.Ground);
         NavDoorAssignment.Assign(mesh, g, s);
         if (g.GateSides.Count > 0) mesh.GateSides = [.. g.GateSides];
+        if (g.CodePoints.Count > 0) mesh.CodePoints = [.. g.CodePoints];
         times.Stitch = watch.Elapsed.TotalMilliseconds;
 
         watch.Restart();

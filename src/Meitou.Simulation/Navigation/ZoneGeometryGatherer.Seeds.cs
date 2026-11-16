@@ -94,6 +94,9 @@ internal sealed partial class ZoneGeometryGatherer
             var (first, second) = GateDoorMarkers.Sides(door, frame, node, Floor0, Ground);
             g.GateSides.Add(new GateSide(building, first, second));
         }
+
+        foreach (var (building, door, frame, node) in g.CodeDoors)
+            g.CodePoints.Add(new BuildingCodePoint(building, GateDoorMarkers.Outer(door, frame, node, Floor0, Ground)));
     }
 
     /// <summary>

@@ -15,12 +15,12 @@ public sealed class NavMeshCache
     /// <summary>
     /// Bump when the builder's output changes for the same input (a new rule in the gatherer or the pruner).
     /// </summary>
-    public const int BuilderVersion = 60;
+    public const int BuilderVersion = 61;
 
     /// <summary>
     /// The layout version of the cache file; a file with another is not read.
     /// </summary>
-    const int FormatVersion = 7;
+    const int FormatVersion = 8;
     /// <summary>
     /// The first four bytes of a cache file.
     /// </summary>
@@ -106,8 +106,13 @@ public sealed class NavMeshCache
         for (int i = 0; i < doorIds.Length; i++)
             doorIds[i] = r.ReadString();
 
+        var buildingIds = new string[r.ReadInt32()];
+        for (int i = 0; i < buildingIds.Length; i++)
+            buildingIds[i] = r.ReadString();
+
         int count = r.ReadInt32();
         var doorOf = doorIds.Length > 0 ? new int[count] : null;
+        var buildingOf = buildingIds.Length > 0 ? new int[count] : null;
         var polygons = new int[count][];
         var neighbours = new int[count][];
         var areas = new byte[count];
@@ -135,6 +140,7 @@ public sealed class NavMeshCache
             }
 
             if (doorOf is not null) doorOf[p] = r.ReadInt16();
+            if (buildingOf is not null) buildingOf[p] = r.ReadInt16();
         }
 
         var corners = new Vector3[r.ReadInt32() * 3];
@@ -143,6 +149,7 @@ public sealed class NavMeshCache
 
         var heights = ReadHeights(r, count);
         var gateSides = ReadGateSides(r);
+        var codePoints = ReadCodePoints(r);
         if (r.ReadInt32() != count)
             return null; // trailer: truncated writes fail here
 
@@ -161,6 +168,9 @@ public sealed class NavMeshCache
             DoorIds = doorIds.Length > 0 ? doorIds : null,
             DoorOf = doorOf,
             GateSides = gateSides,
+            BuildingIds = buildingIds.Length > 0 ? buildingIds : null,
+            BuildingOf = buildingOf,
+            CodePoints = codePoints,
             Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null,
             Heights = heights,
             InteriorStart = interiorStart,
@@ -207,6 +217,18 @@ public sealed class NavMeshCache
     }
 
     /// <summary>
+    /// Where the zone's interior buildings read their own code (null when the zone has none).
+    /// </summary>
+    static BuildingCodePoint[]? ReadCodePoints(BinaryReader r)
+    {
+        var points = new BuildingCodePoint[r.ReadInt32()];
+        for (int i = 0; i < points.Length; i++)
+            points[i] = new BuildingCodePoint(r.ReadString(), ReadVector(r));
+
+        return points.Length > 0 ? points : null;
+    }
+
+    /// <summary>
     /// Reads three floats.
     /// </summary>
     static Vector3 ReadVector(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
@@ -245,9 +267,14 @@ public sealed class NavMeshCache
             foreach (var id in ids)
                 w.Write(id);
 
+            var buildings = m.BuildingIds ?? [];
+            w.Write(buildings.Length);
+            foreach (var id in buildings)
+                w.Write(id);
+
             w.Write(m.PolygonCount);
             for (int p = 0; p < m.PolygonCount; p++)
-                WritePolygon(w, m, p, ids.Length > 0);
+                WritePolygon(w, m, p, ids.Length > 0, buildings.Length > 0);
 
             var corners = m.Surfaces?.Corners ?? [];
             w.Write(corners.Length / 3);
@@ -260,6 +287,7 @@ public sealed class NavMeshCache
 
             WriteHeights(w, m.Heights);
             WriteGateSides(w, m.GateSides);
+            WriteCodePoints(w, m.CodePoints);
             w.Write(m.PolygonCount);
         }
 
@@ -267,9 +295,9 @@ public sealed class NavMeshCache
     }
 
     /// <summary>
-    /// Writes one polygon: its corners, neighbours, links, area, kept flag and (with doors) its door.
+    /// Writes one polygon: its corners, neighbours, links, area, kept flag, (with doors) its door and (with interiors) its building.
     /// </summary>
-    static void WritePolygon(BinaryWriter w, ZoneNavMesh m, int p, bool withDoors)
+    static void WritePolygon(BinaryWriter w, ZoneNavMesh m, int p, bool withDoors, bool withBuildings)
     {
         w.Write((byte)m.Polygons[p].Length);
         w.Write(m.Areas[p]);
@@ -286,6 +314,7 @@ public sealed class NavMeshCache
             w.Write(i);
 
         if (withDoors) w.Write((short)(m.DoorOf?[p] ?? -1));
+        if (withBuildings) w.Write((short)(m.BuildingOf?[p] ?? -1));
     }
 
     /// <summary>
@@ -299,6 +328,19 @@ public sealed class NavMeshCache
             w.Write(side.Building);
             WriteVector(w, side.First);
             WriteVector(w, side.Second);
+        }
+    }
+
+    /// <summary>
+    /// Writes the interior buildings' code points (a count first).
+    /// </summary>
+    static void WriteCodePoints(BinaryWriter w, BuildingCodePoint[]? points)
+    {
+        w.Write(points?.Length ?? 0);
+        foreach (var point in points ?? [])
+        {
+            w.Write(point.Building);
+            WriteVector(w, point.At);
         }
     }
 

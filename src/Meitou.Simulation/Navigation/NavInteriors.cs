@@ -52,14 +52,18 @@ internal static class NavInteriors
 
         var doorIds = new List<string>(exterior.DoorIds ?? []);
         var doorOf = new List<int>(exterior.DoorOf ?? Enumerable.Repeat(-1, exterior.PolygonCount));
+        var buildingIds = new List<string>();
+        var buildingOf = new List<int>(Enumerable.Repeat(-1, exterior.PolygonCount));
 
         // The zone keeps its own bounds: cross-zone linking finds the borders by them (an interior's padded box may reach past them).
         var lo = exterior.BoundsMin;
         var hi = exterior.BoundsMax;
         var offsets = new List<int>();
 
-        foreach (var m in interiors.Select(i => i.Mesh))
+        foreach (var interior in interiors)
         {
+            var m = interior.Mesh;
+            int building = BuildingIndex(buildingIds, interior.Key);
             int vo = vertices.Count;
             int po = polygons.Count;
             offsets.Add(po);
@@ -73,6 +77,7 @@ internal static class NavInteriors
                 kept.Add(m.Kept[p]);
                 links.Add(ShiftedLinks(m.LinksOf(p), po));
                 doorOf.Add(m.DoorOf is { } d && d[p] >= 0 ? remap[d[p]] : -1);
+                buildingOf.Add(building);
             }
         }
 
@@ -107,11 +112,29 @@ internal static class NavInteriors
             DoorIds = doorIds.Count > 0 ? [.. doorIds] : null,
             DoorOf = doorIds.Count > 0 ? [.. doorOf] : null,
             GateSides = exterior.GateSides,
+            BuildingIds = buildingIds.Count > 0 ? [.. buildingIds] : null,
+            BuildingOf = buildingIds.Count > 0 ? [.. buildingOf] : null,
+            CodePoints = exterior.CodePoints,
             Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(i => i.Mesh.Surfaces?.Corners ?? []))]),
             Terrain = exterior.Terrain,
             Heights = ZoneNavMesh.HeightsOf(heights),
             InteriorStart = exteriorCount,
         };
+    }
+
+    /// <summary>
+    /// The index of building <paramref name="key"/> in <paramref name="buildingIds"/>, added at the end when it is new; −1 for an interior without a
+    /// building key.
+    /// </summary>
+    static int BuildingIndex(List<string> buildingIds, string? key)
+    {
+        if (key is null) return -1;
+
+        int i = buildingIds.IndexOf(key);
+        if (i >= 0) return i;
+
+        buildingIds.Add(key);
+        return buildingIds.Count - 1;
     }
 
     /// <summary>
