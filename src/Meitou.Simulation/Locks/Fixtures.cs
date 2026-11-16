@@ -370,6 +370,11 @@ public sealed class Fixture
     /// </summary>
     public float UseRange { get; init; }
     /// <summary>
+    /// Its BUILDING_FUNCTIONALITY <c>function</c> (BuildingFunction; -1 without one): a container of 9 BF_SHOP asks for Alt before it is stolen
+    /// from (<see cref="Items.ContainerAccess"/>). Derived from the data, not hashed or saved.
+    /// </summary>
+    public int Function { get; init; } = -1;
+    /// <summary>
     /// Cages and beds: who is in it (none: free).
     /// </summary>
     public CharacterId Occupant { get; set; } = CharacterId.None;

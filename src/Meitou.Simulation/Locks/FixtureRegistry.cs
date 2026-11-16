@@ -1036,6 +1036,7 @@ public sealed partial class FixtureRegistry
             Restrains = functionality?.GetBool("restrains movement") ?? false,
             OccupantSelection = kind == FixtureKind.Cage && (functionality?.GetBool("occupant selection") ?? false),
             UseRange = functionality is null ? 25 : FloatOf(functionality, "use range", 25),
+            Function = functionality?.GetInt("function") ?? -1,
             Contents = kind == FixtureKind.Container && storageWidth > 0 && storageHeight > 0
                     ? new Items.Inventory(storageWidth, storageHeight) { StackBonusMult = record.GetFloat("stackable bonus mult", 1) } : null,
             Lock = !locked ? null
