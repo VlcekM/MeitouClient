@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Meitou.Localisation;
 using Meitou.Simulation;
 
 namespace Meitou.Game.Effects;
@@ -40,7 +41,8 @@ static class FloaterText
     /// </summary>
     public static string? Format(in Floater f, FloaterMode mode)
     {
-        // The eating text, machine labels, knock-out and pick results, door damage: the text as it is.
+        // A shopper's price in the game's money format; the eating text, machine labels, knock-out and pick results, door damage: the text as it is.
+        if (f.Kind == FloaterKind.Price) return Loc.Tr("c.{1,num}", long.Parse(f.Part, CultureInfo.InvariantCulture));
         if (f.Kind is not FloaterKind.Damage) return f.Part.Length > 0 ? f.Part : null;
         if (mode == FloaterMode.Off) return null;
         var d = f.Damage;
@@ -73,6 +75,7 @@ static class FloaterText
         FloaterKind.Label or FloaterKind.Building => LabelGrey,
         FloaterKind.StealthHit or FloaterKind.PickSuccess => StealthHit,
         FloaterKind.StealthMiss or FloaterKind.PickFailed => StealthMiss,
+        FloaterKind.Price => PriceYellow,
         _ => HitColour(f),
     };
 
@@ -97,6 +100,11 @@ static class FloaterText
     /// A machine label's colour: grey 0.7 at 0.8 alpha (<c>FUN_1403567a0</c>).
     /// </summary>
     public static readonly Vector4 LabelGrey = new(0.7f, 0.7f, 0.7f, 0.8f);
+
+    /// <summary>
+    /// A shopper's price: (1, 1, 0.6) at 0.9 alpha (<c>FUN_1409a14b0</c>, <b>Verified</b>: the literals its call reads).
+    /// </summary>
+    public static readonly Vector4 PriceYellow = new(1, 1, 0.6f, 0.9f);
 
     /// <summary>
     /// The value cut to a whole number, in the invariant culture.

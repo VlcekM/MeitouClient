@@ -139,7 +139,8 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   the player's faction **and** `rand()/32768 > 0.2` (`DAT_1416885d8`), the add-to-buyer call is skipped: the unit is paid for and gone, the buyer gets nothing (80 %). Otherwise `Character` slot 45 `FUN_1405cb400`
   puts it into the buyer's inventory; it is never equipped or used here; without room: "No room for that item.", the unit goes back to the stock and nothing is paid.
 - After a unit is bought for more than 0 (kept or not), with the GUI global `DAT_142133ae0` set, the price floats over the shopper and `Sell_Item` posts on it (**Verified**, `FUN_1409a14b0`; the sound in Meitou:
-  [audio](../audio.md#characters-footsteps-combat-voices)). Not modelled: the speech text on failure (slot 56 `FUN_1405c9950`) and that floater. Engine choices: unique items are never sold; a house's
+  [audio](../audio.md#characters-footsteps-combat-voices); the floater's look: [ui-screens](ui-screens.md#8-damage-floaters)); the flag is the one the hide-interface action flips, so
+  neither happens with the interface hidden. Meitou: `Floater.Price` and `SoundKind.NpcBought`. Not modelled: the speech text on failure (slot 56 `FUN_1405c9950`). Engine choices: unique items are never sold; a house's
   goods (`FillHome`) are sellers too.
 
 ### Building shops (**Observed**, decompile)

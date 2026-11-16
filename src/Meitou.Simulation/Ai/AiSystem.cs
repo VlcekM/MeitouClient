@@ -1205,23 +1205,38 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Staying home at a workstation of the home (the pretend operating of 221, <see cref="PretendOperate"/>).
+    /// At a piece it pretend-operates (221, <see cref="PretendOperate"/>): staying home at a workstation or training dummy of the home, or sitting
+    /// around at a training dummy (275 leads to 221 too).
     /// </summary>
-    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type) =>
-        behaviour == AiBehaviour.Sit && type == TaskType.StayInHome && board.SeatClaims.TryGetValue(slot, out var claim)
-            && claim.Kind == HomeSpotKind.Workstation;
+    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type)
+    {
+        if (behaviour != AiBehaviour.Sit) return false;
+        if (type == TaskType.StayInHome) return board.SeatClaims.TryGetValue(slot, out var claim) && Pretended(claim.Kind);
+
+        return type == TaskType.SitAround && board.SitClaims.TryGetValue(slot, out var sitting) && sitting.Spot.Kind == HomeSpotKind.Training;
+    }
 
     /// <summary>
-    /// At a workstation, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221): the machine's work clip and hunger rate, as the real
-    /// operating.
+    /// A piece operated in pretence (<c>Task_OperateMachine</c>, 221): a workstation or a training dummy.
+    /// </summary>
+    static bool Pretended(HomeSpotKind kind) => kind is HomeSpotKind.Workstation or HomeSpotKind.Training;
+
+    /// <summary>
+    /// At a workstation or training dummy, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221; <c>Task_OperateMachine</c>
+    /// <c>FUN_14035bc90</c> treats a dummy as any machine): the piece's work clip and hunger rate, as the real operating, with its functionality's
+    /// <c>animation events</c> on the clip (docs/audio.md "Machine work").
     /// </summary>
     void PretendOperate(World world, int slot, AiMind mind, HomeSpot piece)
     {
         var clip = _work.PieceClipOf(piece);
         mind.WorkActive = true;
         mind.WorkClip = clip;
+        mind.WorkFunctionality = _work.PieceFunctionalityOf(piece);
         mind.WorkHungerRate = piece.HungerRate;
-        if (world.Characters.Cold(slot) is { } worker) worker.ActionClip = clip;
+        if (world.Characters.Cold(slot) is not { } worker) return;
+
+        worker.ActionClip = clip;
+        worker.ActionWork = StandingWork(mind.WorkFunctionality, clip);
     }
 
     #endregion
@@ -1844,7 +1859,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
         else if (claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation) n.Yaw = claimed.Yaw;
 
-        if (claimed.Kind == HomeSpotKind.Workstation) PretendOperate(world, slot, mind, claimed);
+        if (Pretended(claimed.Kind)) PretendOperate(world, slot, mind, claimed);
         Become(world, slot, claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
     }
 

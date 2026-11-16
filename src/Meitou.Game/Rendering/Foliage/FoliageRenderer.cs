@@ -244,6 +244,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     volatile PlayerFoliageTowns _playerTowns = PlayerFoliageTowns.None;
 
     /// <summary>
+    /// The player's towns the layouts are placed with now (<see cref="SetPlayerTowns"/>).
+    /// </summary>
+    public PlayerFoliageTowns PlayerTowns => _playerTowns;
+
+    /// <summary>
     /// The player's towns now, which keep <c>avoid towns</c> foliage away like the level's (the same list the navmesh's foliage uses,
     /// docs/formats/foliage.md "Towns"): the laid-out zones a founded, moved or gone town reaches are dropped and laid out again. A zone whose layout
     /// is running keeps what it was started with and is checked again when the job ends (<see cref="AcceptLayouts"/>).

@@ -51,6 +51,11 @@ public sealed class FoliageZone
     /// False when only the far layers were placed (<see cref="FoliageLayout.Place"/> with <c>farOnly</c>): no grass, no MEDIUM or CLOSE meshes.
     /// </summary>
     public bool Complete { get; set; } = true;
+    /// <summary>
+    /// The sound emitters of the placed meshes, in placement order, at most <see cref="FoliageLayout.MaxEmitters"/> (docs/audio.md "Point
+    /// emitters", foliage); filled only by a complete placement, and not kept by the layout cache.
+    /// </summary>
+    public List<PlacedEmitter> Emitters { get; } = [];
 }
 
 /// <summary>
@@ -101,6 +106,12 @@ public static class FoliageLayout
     /// The game's TreeLoader3D scale range (the bounds of its 8-bit scale).
     /// </summary>
     public const float MinScale = 0.01f, MaxScale = 10f;
+
+    /// <summary>
+    /// The emitters a zone's foliage may hold: an instance placed while its zone's foliage object holds 100 or more gets none
+    /// (<c>FUN_1406d2410</c>, <b>Verified</b> by disassembly).
+    /// </summary>
+    public const int MaxEmitters = 100;
 
     /// <summary>
     /// The game's TreeLoader3D page size for the mesh layers: half a zone (the zone's width × 0.5 at the PagedGeometry made for them,
@@ -278,6 +289,7 @@ public static class FoliageLayout
             var position = new Vector3(LoaderSnap(p.X, c.X0), y, LoaderSnap(p.Y, c.Z0));
             c.Zone.Instances.Add(new FoliageInstance(mesh, c.Layer, position, qScale, qYaw, Orientation(mesh, input.Ground, position, qYaw)));
             if (mesh.BuildingType is not null) c.Zone.Resources++;
+            if (mesh.Sound is { } sound) AddEmitter(c.Zone, mesh, sound, new Vector3(p.X, y, p.Y));
         }
         foreach (var child in mesh.Children)
         {
@@ -292,6 +304,24 @@ public static class FoliageLayout
         }
         if (!rejected && mesh.GrassSpot > 0) GrassSpot(input.Overlay, p, mesh.GrassSpot * scale);
         return true;
+    }
+
+    /// <summary>
+    /// The emitter of an instance just placed, before its children (<c>FUN_1406d2410</c>, <b>Verified</b> by disassembly): only while the zone holds
+    /// fewer than <see cref="MaxEmitters"/>, rolled by the sound's <c>chance</c>, at the instance's unsnapped point + the entry's values (no turn, no
+    /// scale). It has no game object of a building, so <c>needs power</c> and <c>efficiency multiplier</c> are forced to 0 (<c>FUN_140259a80</c>).
+    /// The roll is a stable hash of the zone and the instance's index (the exe calls <c>rand()</c>, which the placement's own generator never
+    /// reads). Only a complete placement makes emitters, since the cap counts every layer's.
+    /// </summary>
+    static void AddEmitter(FoliageZone zone, FoliageMesh mesh, (AmbientSound Sound, Vector3 Offset) entry, Vector3 at)
+    {
+        if (!zone.Complete || zone.Emitters.Count >= MaxEmitters) return;
+
+        string key = $"foliage {zone.Zone.X},{zone.Zone.Y} #{zone.Instances.Count - 1}";
+        if (entry.Sound.Chance <= BuildingEmitters.Roll(key)) return;
+
+        var own = entry.Sound with { NeedsPower = false, EfficiencyMultiplier = 0 };
+        zone.Emitters.Add(new PlacedEmitter(key, own, at + entry.Offset, mesh.StringId, at));
     }
 
     /// <summary>

@@ -723,20 +723,6 @@ public sealed class CharacterSounds
         Jobs++;
     }
 
-    /// <summary>
-    /// A body fed into a machine (<c>FUN_1403567a0</c>): <c>Character_Drop_Person</c> with the body's <c>Armor_Worn</c>, 1000 units. The exe posts
-    /// it on the body's object as it destroys the body; the body is gone from the snapshot by now, so a pooled object at its last place
-    /// (<paramref name="at"/>) takes it (<b>engine choice</b>).
-    /// </summary>
-    public void FedToMachine(Vector3 at, int armourMaterial)
-    {
-        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
-        _player.SetPosition(id, at);
-        _player.SetSwitch("Armor_Worn", ArmourName(armourMaterial), id);
-        _player.Post("Character_Drop_Person", id);
-        Jobs++;
-    }
 
     #endregion
 

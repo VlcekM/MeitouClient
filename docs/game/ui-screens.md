@@ -1531,9 +1531,12 @@ Full info "separate numbers for each damage type". Built at the end of `MedicalS
   top left goes to the screen point of the anchor. The anchor rises in world space at the speed table's entry by the 5th argument (0, 4, 8 units/s;
   a hit passes 1: 4/s); past 8 units of rise the alpha is 1 - (rise - 8) x 0.25, and at 12 the label goes: 3 s in all. The rise adds the game's frame time (`DAT_142133798`, the frame time x the world's speed `+0x700`, `FUN_140788a00`), so a label stands still while the game is paused and goes faster at the fast speeds; Meitou the same. No healing floater exists
   among the callers of `FUN_14073faf0` (**Observed**). The stealth KO's "*Thunk*" / "Failed!" is another caller ([combat](combat.md#stealth-knock-out)).
+  A shopper's purchase is another (**Verified**, `FUN_1409a14b0`, the call's arguments read by disassembly): `c.{1,num}` with the unit's price over the shopper, 15 units
+  up, colour (1, 1, 0.6) at alpha 0.9, font 2 (`Kenshi_FloaterFont_Large`), speed 1 (4/s), only while the GUI's shown flag is set ([economy](economy.md)).
 
 Meitou (`PlayerInterface.AddFloaters`): text, font, motion and fade as above; colour: red when a player's character is hit, green when one lands the
-blow, else grey. No healing floater, as in the original.
+blow, else grey. No healing floater, as in the original. The shopper's price is `FloaterKind.Price` (`NpcTrade.Buy`). Floaters are drawn with the interface,
+so one queued while it is hidden shows when it is shown again.
 
 **Layer** (**Verified**, the install's `core_layer.xml`): floaters and speech bubbles are on `Dialog`, above `Wallpaper`, `Back` (name tags, task bars) and
 `Overlapped` but below `Middle` (the HUD, `Kenshi_MainPanel`) and every later layer, so under the HUD and all windows, the map included. The option `floaters` gates

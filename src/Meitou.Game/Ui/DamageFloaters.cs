@@ -34,6 +34,10 @@ sealed class DamageFloaters(PlayerInterface player)
     internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, FloaterMode Mode, float Height = FloaterHeight)
     {
         /// <summary>
+        /// The large floater font (a shopper's price passes font 2, <c>Kenshi_FloaterFont_Large</c>), whatever <see cref="Mode"/> says.
+        /// </summary>
+        public bool Large { get; init; }
+        /// <summary>
         /// The anchor's last position (the character's as drawn).
         /// </summary>
         public Vector3 Last { get; set; }
@@ -74,7 +78,7 @@ sealed class DamageFloaters(PlayerInterface player)
 
             // A machine label starts at its own point.
             float height = f.Kind == FloaterKind.Label ? 0 : FloaterHeight;
-            var live = new Live(f.Target, text, FloaterText.Colour(f), FontMode(f.Kind), height);
+            var live = new Live(f.Target, text, FloaterText.Colour(f), FontMode(f.Kind), height) { Large = f.Kind == FloaterKind.Price };
             live.Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position;
             Floaters.Add(live);
         }
@@ -97,6 +101,15 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     FloaterMode FontMode(FloaterKind kind) =>
         kind is FloaterKind.Label or FloaterKind.PickSuccess or FloaterKind.PickFailed ? FloaterMode.Full : player.Floaters;
+
+    /// <summary>
+    /// The floater's MyGUI font: the large one for a price, else the small one for Full info (and the fixed small-font floaters), the medium one
+    /// otherwise.
+    /// </summary>
+    static string FontName(Live l) =>
+        l.Large ? "Kenshi_FloaterFont_Large"
+        : l.Mode == FloaterMode.Full ? "Kenshi_FloaterFont_Small"
+        : "Kenshi_FloaterFont_Medium";
 
     /// <summary>
     /// A building's damage number starts at the point hit moved a little at random in x, y and z (<c>FUN_14029d2b0</c>; the original's amounts are
@@ -127,7 +140,7 @@ sealed class DamageFloaters(PlayerInterface player)
             float alpha = rise > FloaterFadeFrom ? 1 - (rise - FloaterFadeFrom) * 0.25f : 1;
             var properties = new Dictionary<string, string>
             {
-                ["FontName"] = l.Mode == FloaterMode.Full ? "Kenshi_FloaterFont_Small" : "Kenshi_FloaterFont_Medium",
+                ["FontName"] = FontName(l),
                 ["TextAlign"] = "Left Top",
             };
             controls.Add(new($"floater-{n++}", "TextBox", new(at.X, at.Y, 600 * scale, 40 * scale), l.Text, "", "", true, properties,

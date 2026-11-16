@@ -37,6 +37,11 @@ sealed class WorldAudio(GameHost host)
     DoorSounds? _doorSounds;
 
     /// <summary>
+    /// The foliage's emitters, added to <see cref="Emitters"/> as their zones are placed.
+    /// </summary>
+    readonly FoliageEmitters _foliageEmitters = new(host);
+
+    /// <summary>
     /// The world the door sounds follow.
     /// </summary>
     object? _doorSoundsFor;
@@ -70,6 +75,7 @@ sealed class WorldAudio(GameHost host)
 
         UpdateEmitters();
         UpdateEffectEmitters(Emitters!);
+        _foliageEmitters.Update(Emitters!, eye);
         host.CorpseFlies.UpdateCorpseFlyEmitters(Emitters!);
         Emitters!.Update(eye);
         _doorSounds!.FixBreak = host.Config.FixDoorBreak;
@@ -83,6 +89,7 @@ sealed class WorldAudio(GameHost host)
     {
         _interiorSounds?.Silence();
         Emitters?.Clear();
+        _foliageEmitters.Forget();
         _doorSounds?.Clear();
         _doorSoundsFor = null;
         ForgetEmitters();

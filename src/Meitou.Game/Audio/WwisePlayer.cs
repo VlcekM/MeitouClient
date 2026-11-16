@@ -75,9 +75,21 @@ public sealed partial class WwisePlayer : IDisposable
 
     /// <summary>
     /// Reads a bank and converts its WEMs on a worker thread, then hands the objects and clips to the audio thread. Loading a bank that is
-    /// loaded or loading returns the same task.
+    /// loaded or loading returns the same task; one whose load failed is read again, as the game's <c>LoadBank</c> call is made again on its next
+    /// request (docs/audio.md "Music").
     /// </summary>
-    public Task LoadBank(string name) => _loading.GetOrAdd(Normalize(name), n => Task.Run(() =>
+    public Task LoadBank(string name)
+    {
+        var n = Normalize(name);
+        if (_loading.TryGetValue(n, out var asked) && (asked.IsFaulted || asked.IsCanceled)) _loading.TryRemove(new(n, asked));
+
+        return _loading.GetOrAdd(n, ReadBank);
+    }
+
+    /// <summary>
+    /// The worker task of <see cref="LoadBank"/>: reads the bank <paramref name="n"/>, converts its WEMs and queues the hand-over.
+    /// </summary>
+    Task ReadBank(string n) => Task.Run(() =>
     {
         var bank = WwiseBank.ReadFile(Path.Combine(_bankDirectory, n + ".bnk"));
         var clips = new ConcurrentBag<MediaClip>();
@@ -94,7 +106,7 @@ public sealed partial class WwisePlayer : IDisposable
             _loadedBanks[n] = true;
             RetryPending();
         });
-    }));
+    });
 
     /// <summary>
     /// Unloads a loaded bank (nothing for one that is not loaded or still loading): what is playing from it is cut, its recordings are

@@ -1233,7 +1233,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     applied as written, with the town the member stands in (radius test) and the building's owner = its property owner, else the level state's `owner faction ID`, else the town's faction;
     the player-side branch is coded but unused (an AI-run squad is never the player's). Pieces: a free chair, throne or (not for the player's side) training dummy in any building of that
     town (`TownBuilding.SeatAt`: the layout's chairs, then `Furniture`: layout thrones and dummies, and free-standing chairs, thrones and dummies), the nearest to the member (engine choice:
-    the original takes the first of an arbitrary order). A dummy is stood at, facing its way. Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner
+    the original takes the first of an arbitrary order). A dummy is stood at, facing its way, and pretend-operated like a home workstation (221 `Task_OperateMachine`: the functionality's
+    clip, hunger rate and `animation events`; `AiSystem.PretendOperate`). Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner
     (the building's is used).
 - Chairs (**Verified**, BUILDING_FUNCTIONALITY records of gamedata.base / rebirth.mod / the install's mods, dumped): BuildingFunction 17 BF_CHAIR
   `chair`, `chair-fixed`, `chair-fixed 180` (animation "sitting chair"; Stool, Old Stool, Bench, Sitting Box) and `sit on floor (no chair)`
