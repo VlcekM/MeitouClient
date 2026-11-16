@@ -73,7 +73,7 @@ sealed class UseableLines(PlayerInterface player)
     /// <summary>
     /// Adds the section 6 lines of a UseableStuff, StorageBuilding or LightBuilding, in a town or not (the panel's town guard passes for any placed
     /// building): Workers (slot 155), then Max Skill Level for a training dummy, else Efficiency and Max efficiency (slot 154), then a consumer's
-    /// Power (slot 153). Left out: a bed's, and a consumer's with no power view (one inside a building, or with no level town).
+    /// Power (slot 153). Left out: a bed's, and a consumer's with no power view (a seat or dummy spot of a house, or one with no level town).
     /// </summary>
     internal void AddStatsLines(BuildingSelection.SelectedBuilding focus, List<PlayerInterface.HudLine> stats)
     {

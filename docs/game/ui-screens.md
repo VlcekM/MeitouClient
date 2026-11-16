@@ -722,7 +722,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   house it stands in and Condition, without the lock rows, `[EMPTY]` only when Meitou holds the container's inventory (a machine); a training dummy adds `Training:`. In a town
   or not (the town guard above), furniture and level buildings of
   the original's UseableStuff, StorageBuilding and LightBuilding add section 6 as above (`UseableLines`): Workers, Efficiency / Max efficiency or a
-  dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw. So a town safe (`General storage`, function 13, BUILDING `max operators` −1,
+  dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw (a layout object's on its house's town frame). So a town safe (`General storage`, function 13, BUILDING `max operators` −1,
   functionality 5) reads `Workers:` 0/5 and `Efficiency:` 0% (**Verified** decompile: the UseableStuff constructor `FUN_1402a0900` sets +0x3ac
   through `FUN_14029e460`, the BUILDING's value or else the functionality's, and `FUN_140304e90` has no storage exception; **Observed** in the original 1.0.65 through the Kenshi harness: a Machinists' Safe in Stoat
   reads `Workers:` 0/5 and `Efficiency:` 0% in Bad, `Max efficiency:` 100%). Inputs without a machine of the player's: condition 1 (0 destroyed, as the

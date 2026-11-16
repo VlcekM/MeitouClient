@@ -262,6 +262,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public IReadOnlyList<TownPiece> Pieces { get; init; } = [];
     /// <summary>
+    /// Every object its interior and exterior layouts place, picked or not: each is a building of its own that completes with it and joins the power
+    /// frame of the town it stands in (docs/game/buildings-production.md "Power"). None for a ruin's interior.
+    /// </summary>
+    public IReadOnlyList<TownLayoutBuilding> LayoutBuildings { get; init; } = [];
+    /// <summary>
     /// Its own record's BUILDING_FUNCTIONALITY <c>function</c> (-1: none); a placed table is an outdoor table to sit at.
     /// </summary>
     public int Function { get; init; } = -1;
@@ -331,6 +336,13 @@ public sealed record TownItemSlot(string Id, string GroupId, Vector3 Position, Q
 /// while the building shows its outside (<see cref="LayoutItem.Outside"/>).
 /// </summary>
 public sealed record TownPiece(string Id, string RecordId, Vector3 Position, Quaternion Rotation, int Floor, bool Outside);
+
+/// <summary>
+/// An object a building's interior or exterior layout places (<see cref="TownBuilding.LayoutBuildings"/>): an interior's <paramref name="Id"/> is a
+/// <see cref="TownPiece"/>'s, an exterior's the parent's <see cref="BuildingKey"/>, "/exterior/" and its index; <paramref name="Outdoors"/> for an
+/// exterior's.
+/// </summary>
+public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoors);
 
 /// <summary>
 /// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the
@@ -440,6 +452,7 @@ public static class TownBuildings
             ItemSlots = c.ItemSlots,
             Tables = c.Tables,
             Pieces = c.Pieces,
+            LayoutBuildings = c.LayoutBuildings,
             Furniture = c.Furniture,
             Furnished = c.Furnished,
             InteriorLayout = interior,

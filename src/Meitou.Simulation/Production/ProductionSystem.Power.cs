@@ -240,7 +240,9 @@ public sealed partial class ProductionSystem
     /// The draws of the machine-class buildings placed in the level-data town of <paramref name="index"/> (<b>Observed</b>, <c>FUN_1402a1750</c>
     /// registers a level building with its power town as a consumer by the sign of its <c>power output</c>): every standing building with a
     /// functionality whose output is negative (turrets, searchlights, wells, mines, refineries); a light only outside daytime (LightBuilding slot
-    /// 164). Houses and stalls have no functionality and are left out. Each is one consumer of the frame at its level-data draw.
+    /// 164). Houses and stalls have no functionality and are left out. Each is one consumer of the frame at its level-data draw, and so is each
+    /// such object of a standing building's layouts (ceiling fans, lamps, stoves, benches; <see cref="TownBuilding.LayoutBuildings"/>), which
+    /// joins its house's town (<c>FUN_140296940</c> climbs to the root object); an interior's light draws all day.
     /// </summary>
     List<float> NpcDraws(World world, int index)
     {
@@ -249,12 +251,25 @@ public sealed partial class ProductionSystem
 
         foreach (var b in site.Buildings)
         {
-            if (b.Destroyed || Data(b.BuildingId) is not { IsConsumer: true, Function: >= 0 } data || data.IsLight && world.Daytime) continue;
+            if (b.Destroyed) continue;
 
-            draws.Add(MathF.Abs(data.PowerOutput));
+            if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(draw);
+            foreach (var item in b.LayoutBuildings)
+                if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(drawn);
         }
 
         return draws;
+    }
+
+    /// <summary>
+    /// The draw of a level building or layout object of BUILDING <paramref name="record"/> on its frame: its <c>power output</c>'s size when it
+    /// has a functionality and draws, 0 for a light by day when <paramref name="outdoors"/> (LightBuilding slot 164); null when it draws nothing.
+    /// </summary>
+    float? Draw(World world, string record, bool outdoors)
+    {
+        if (Data(record) is not { IsConsumer: true, Function: >= 0 } data) return null;
+
+        return data.IsLight && outdoors && world.Daytime ? 0 : MathF.Abs(data.PowerOutput);
     }
 
     /// <summary>
@@ -264,17 +279,30 @@ public sealed partial class ProductionSystem
     /// </summary>
     public LevelPowerView? LevelPowerOf(World world, string? key)
     {
-        if (key is null || LevelBuilding(world, key) is not { } found) return null;
+        if (key is null || LevelObject(world, key) is not { } found) return null;
 
-        var (index, b) = found;
-        if (b.Destroyed || Data(b.BuildingId) is not { IsConsumer: true, Function: >= 0 } data) return null;
-
-        float demand = data.IsLight && world.Daytime ? 0 : MathF.Abs(data.PowerOutput);
+        var (index, record, outdoors) = found;
+        if (Draw(world, record, outdoors) is not { } demand) return null;
         if (demand <= 0) return new LevelPowerView(key, 0, 0);
 
         var machines = _grids.GetValueOrDefault(-index - 1)?.Where(m => m.Data.IsConsumer).Select(m => m.Demand) ?? [];
         float granted = GrantOf(demand, NpcOutput(world, index), NpcDraws(world, index), [.. machines]);
         return new LevelPowerView(key, demand, granted);
+    }
+
+    /// <summary>
+    /// The standing level building or layout object of <paramref name="key"/> (a layout object's key is its house's, "/" and more,
+    /// <see cref="TownLayoutBuilding.Id"/>) with its town's index, its record and whether it stands outdoors; null for any other.
+    /// </summary>
+    (int Town, string Record, bool Outdoors)? LevelObject(World world, string key)
+    {
+        if (LevelBuilding(world, key) is { } found)
+            return found.Building.Destroyed ? null : (found.Town, found.Building.BuildingId, true);
+
+        if (key.IndexOf('/') is not (> 0 and var end) || LevelBuilding(world, key[..end]) is not { Building.Destroyed: false } house) return null;
+
+        var item = house.Building.LayoutBuildings.FirstOrDefault(i => i.Id == key);
+        return item is null ? null : (house.Town, item.RecordId, item.Outdoors);
     }
 
     /// <summary>

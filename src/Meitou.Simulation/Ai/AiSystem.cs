@@ -1817,7 +1817,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         Crimes is { Alarms.Count: > 0 } crimes && world.Characters.Cold(slot) is { } cold
             ? crimes.AlarmFor(board.Town, world.Characters.Previous[slot].Position,
                 type == TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1,
-                Crime.CrimeSystem.FloorOf(world, slot, world.Characters.Previous[slot].Position), world.Sight.PlaceOf(slot), world)
+                Crime.CrimeSystem.FloorOf(world, slot, world.Characters.Previous[slot].Position), world.Sight.LocationOf(slot), world)
             : null;
 
     /// <summary>
