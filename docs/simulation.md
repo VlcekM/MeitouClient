@@ -1828,6 +1828,10 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   interface, and a click on one inspects it as another faction's (the snapshot's `IndependentSquads`); it has no squad tab, is not on the
   squads screen or Tab, the squad commands (move, rename, reorder, remove) refuse it, and it does not count against `max squads`
   (`SquadManagement.LedSquads`). Saved as `meitou independent`.
+- **Owner** (`SetSquadAutonomy(..., Owner:)`, `Squad.AutonomyOwner`, saved as `meitou autonomy owner`): the manifest id of the last code mod that
+  switched it on naming itself (a command naming none keeps it). After a load, before the first tick, a squad whose owner is not running (not
+  installed, refused or failed to start) is switched off and loses its home, with a notice (`SquadAutonomy.DropUnowned`, from
+  `GameMods.DropUnownedAutonomy`); one with no owner stays as saved.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
 - **Not built**: a player outpost is no `Blackboard.Town`, so its turrets, machines and nodes are not goal targets (the player's jobs run them);

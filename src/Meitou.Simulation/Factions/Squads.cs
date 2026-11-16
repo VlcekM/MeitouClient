@@ -171,6 +171,11 @@ public sealed class Squad
     /// </summary>
     public bool Independent { get; set; }
     /// <summary>
+    /// The code mod that made the squad autonomous (its manifest id, <see cref="Ai.SetSquadAutonomy"/>); null: none named, or not autonomous. A load
+    /// without that mod running gives the squad back to the player (<see cref="Ai.SquadAutonomy.DropUnowned"/>). Saved, hashed while set.
+    /// </summary>
+    public string? AutonomyOwner { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -349,6 +354,11 @@ public sealed class SquadRegistry
             if (s.Autonomous) hasher.Add(0x4175746F);
             if (s.Independent) hasher.Add(0x496E6470);
             if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
+            if (s.AutonomyOwner is { } owner)
+            {
+                hasher.Add(0x4F776E72);
+                hasher.Add(Rng.StableHash(owner));
+            }
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

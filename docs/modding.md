@@ -283,7 +283,10 @@ holds refuses the second mod.
   (`BuildSite.Id`); null clears it. The player's orders and jobs come first. `SetSquadAutonomy(squadId, true, Independent: true)` makes it a squad
   the player does not lead: not selectable, no squad tab, no squad commands, not counted against `max squads` (for staff, caravans or companions
   with a will of their own; orders that name its characters still apply; refused for the last squad the player leads; `SetSquadAutonomy(squadId,
-  true)` leads it again). The switch, package and home are saved with the squad. Off drops the
+  true)` leads it again). Pass your mod's id as `Owner` (`SetSquadAutonomy(squadId, true, Owner: context.Id)`): a load without your mod running
+  (not installed, refused or failed to start) gives the squad back to the player (autonomy, independence and home cleared, with a notice), so
+  removing the mod never strands it; a squad switched on with no owner, as in a save from before `Owner`, stays as saved until a command names
+  one (send `Independent: true` again with it to keep the squad independent). The switch, package, home and owner are saved with the squad. Off drops the
   package, the members' minds and the independence. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.

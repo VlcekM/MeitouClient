@@ -173,6 +173,23 @@ sealed class GameMods(GameHost host)
     internal void RestoreModData(World world, Data.Save.SaveGame save) => Mods?.RestoreSaveData(world, save.ModData);
 
     /// <summary>
+    /// The squads of the world just loaded that a code mod made autonomous, when that mod is not running now (not installed, refused or failed to
+    /// start), go back to the player (<see cref="Simulation.Ai.SquadAutonomy.DropUnowned"/>), with a notice; between ticks, before the first.
+    /// </summary>
+    internal void DropUnownedAutonomy(World world)
+    {
+        var running = (Mods?.Mods ?? [])
+            .Select(m => m.Manifest.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        int dropped = Simulation.Ai.SquadAutonomy.DropUnowned(world, running.Contains);
+        if (dropped == 0) return;
+
+        string line = $"{dropped} squad(s) run by a mod that is not loaded are yours again.";
+        Console.WriteLine($"mods      {line}");
+        host.Player.Notice(line, true);
+    }
+
+    /// <summary>
     /// The debug menu rows the mods registered, after the game's own.
     /// </summary>
     internal IReadOnlyList<ModDebugCommand> ModDebugRows => Mods?.DebugCommands ?? [];
