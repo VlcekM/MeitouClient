@@ -62,6 +62,10 @@ public sealed class MusicDirector
     /// </summary>
     string? _pendingBank;
     /// <summary>
+    /// The load of <see cref="_pendingBank"/>; a failed one ends the wait with nothing remembered.
+    /// </summary>
+    Task? _pendingLoad;
+    /// <summary>
     /// Whether no biome step has run yet (the first drops the main theme's bank).
     /// </summary>
     bool _firstChange = true;
@@ -204,6 +208,7 @@ public sealed class MusicDirector
             Biome = null;
             _remembered = null;
             _pendingBank = null;
+            _pendingLoad = null;
             return;
         }
         string bank = BankOf(Names[next]);
@@ -215,18 +220,30 @@ public sealed class MusicDirector
             Biome = null;
             _remembered = null;
             _pendingBank = bank;
-            _player.LoadBank(bank);
+            _pendingLoad = _player.LoadBank(bank);
         }
     }
 
     /// <summary>
-    /// Remembers the current biome's music once its pending bank has loaded, and clears the pending bank.
+    /// Remembers the current biome's music once its pending bank has loaded, and clears the pending bank. A load that failed clears it too, with
+    /// nothing remembered and no switch set (the exe's bank pass <c>FUN_140259130</c> clears the pending bit whatever <c>LoadBank</c> returned); the
+    /// bank is asked for again at the next change into that biome.
     /// </summary>
     void CompleteLoad()
     {
-        if (_pendingBank is null || !_player.IsBankLoaded(_pendingBank)) return;
+        if (_pendingBank is null) return;
+
+        if (_pendingLoad is { IsFaulted: true } or { IsCanceled: true })
+        {
+            _pendingBank = null;
+            _pendingLoad = null;
+            return;
+        }
+
+        if (!_player.IsBankLoaded(_pendingBank)) return;
         if (_index is >= 0 and <= 3 && BankOf(Names[_index]) == _pendingBank) Remember(Names[_index]);
         _pendingBank = null;
+        _pendingLoad = null;
     }
 
     /// <summary>

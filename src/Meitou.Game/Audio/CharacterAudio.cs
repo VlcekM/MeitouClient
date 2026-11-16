@@ -35,6 +35,11 @@ sealed class CharacterAudio(GameHost host)
     internal CharacterSounds? Sounds;
 
     /// <summary>
+    /// The bodies fed into machines, each sounding on an object of its own until the exe's deletion would end it; made with <see cref="Sounds"/>.
+    /// </summary>
+    FedBodySounds? _fedBodies;
+
+    /// <summary>
     /// The ground types of the terrain under the characters' feet.
     /// </summary>
     GroundSurfaces? _groundSurfaces;
@@ -183,7 +188,8 @@ sealed class CharacterAudio(GameHost host)
         UpdateCharacters(sounds, db, world);
         sounds.EndFrame();
         ForgetStaleMemos();
-        while (_soundQueue.TryDequeue(out var happened)) PlayCombatSound(sounds, happened);
+        _fedBodies!.Update(host.Session.Simulation.Speed);
+        while (_soundQueue.TryDequeue(out var happened)) PlayCombatSound(sounds, happened, eye);
     }
 
     /// <summary>
@@ -192,6 +198,7 @@ sealed class CharacterAudio(GameHost host)
     internal void Reset()
     {
         Sounds?.Clear();
+        _fedBodies?.Clear();
         _soundQueue.Clear();
         if (_soundsFor is { } world) world.Sounds = null;
         _soundsFor = null;
@@ -227,6 +234,7 @@ sealed class CharacterAudio(GameHost host)
         _definitionLoops = [.. library.Definitions.Select(d => d.Loop)];
         _workEvents.Clear();
         Sounds = new CharacterSounds(sound.Player, _groundSurfaces) { Floor = FloorSurface, Puddle = host.InPuddle };
+        _fedBodies = new FedBodySounds(sound.Player);
     }
 
     /// <summary>
@@ -235,6 +243,7 @@ sealed class CharacterAudio(GameHost host)
     void FollowWorld(CharacterSounds sounds, World world)
     {
         sounds.Clear();
+        _fedBodies?.Clear();
         _workLayers.Clear();
         _soundQueue.Clear();
         world.Sounds = _soundQueue;
@@ -477,7 +486,7 @@ sealed class CharacterAudio(GameHost host)
     /// <summary>
     /// Plays one of the combat's happenings: on the characters' objects, or as an interface sound.
     /// </summary>
-    void PlayCombatSound(CharacterSounds sounds, in SoundEvent e)
+    void PlayCombatSound(CharacterSounds sounds, in SoundEvent e, Vector3 eye)
     {
         ulong subject = SoundKey(e.Subject), other = e.Other.IsNone ? 0 : SoundKey(e.Other);
         switch (e.Kind)
@@ -533,27 +542,19 @@ sealed class CharacterAudio(GameHost host)
             case SoundKind.Inspected:
                 sounds.Job(subject, "Character_Inspect");
                 break;
+            // Posted, with the price floater, only while the interface is shown (FUN_1409a14b0 tests the GUI's shown flag first).
             case SoundKind.NpcBought:
-                sounds.Job(subject, "Sell_Item", CharacterSounds.FootstepLimit);
+                if (host.Player.UiVisible) sounds.Job(subject, "Sell_Item", CharacterSounds.FootstepLimit);
                 break;
             case SoundKind.ReleasedFromPrison:
                 host.Sound.Ui.Sounds?.Play(new UiSoundEvent("Create_Character"));
                 break;
             case SoundKind.FedToMachine:
-                sounds.FedToMachine(e.Position, ArmourOf(e.Subject));
+                _fedBodies!.Post(e.Position, e.Armour, eye);
                 break;
         }
     }
 
-    /// <summary>
-    /// The <c>material type</c> of a character's body armour (<see cref="CharacterSoundProfile.ArmourMaterial"/>) from the previous snapshot, for one
-    /// already gone from the current one; 0 (Cloth) when it is in neither.
-    /// </summary>
-    int ArmourOf(CharacterId id)
-    {
-        if (!host.PreviousById.TryGetValue(id, out var c) || c.Appearance is not { } look) return 0;
-        return _soundProfiles.TryGetValue(look, out var profile) ? profile.ArmourMaterial : 0;
-    }
 
     #endregion
 }

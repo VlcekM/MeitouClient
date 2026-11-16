@@ -92,12 +92,23 @@ public static class NpcTrade
             else if (purse is not null) purse.Money -= price;
             if (owner is not null) owner.Money += price;
 
-            // FUN_1409a14b0: a sale worth more than nothing floats the price over the shopper and posts Sell_Item on it.
-            if (price > 0) world.EmitSound(SoundKind.NpcBought, buyer, table.Next[buyer].Position);
+            // FUN_1409a14b0: a sale worth more than nothing floats the price over the shopper and posts Sell_Item on it (both only while the interface
+            // is shown, which the host decides).
+            if (price > 0) Announce(world, buyer, price);
             return NpcSale.Sold;
         }
 
         return NpcSale.NoItem;
+    }
+
+    /// <summary>
+    /// The price floater over the shopper and its <c>Sell_Item</c> (<see cref="SoundKind.NpcBought"/>). Display only.
+    /// </summary>
+    static void Announce(World world, int buyer, long price)
+    {
+        var at = world.Characters.Next[buyer].Position;
+        world.Floaters?.Enqueue(Floater.Price(world.Characters.IdOf(buyer), at, price));
+        world.EmitSound(SoundKind.NpcBought, buyer, at);
     }
 
     /// <summary>

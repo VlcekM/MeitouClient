@@ -378,7 +378,8 @@ public sealed partial class ProductionSystem
         var body = cold.Carrying;
         if (!Carry!.LetGo(world, i) || !table.IsAlive(body)) return;
         if (machine.Data.Label.Length > 0) world.Floaters?.Enqueue(Floater.Label(site.Position + new Vector3(0, 5, 0), machine.Data.Label));
-        if (table.TryResolveNext(body, out int b)) world.EmitSound(SoundKind.FedToMachine, b, table.Next[b].Position);
+        if (table.TryResolveNext(body, out int b))
+            world.EmitSound(SoundKind.FedToMachine, b, table.Next[b].Position, armour: world.BodyArmourMaterial(b));
         world.Uniques.Left(body);
         table.Remove(body);
     }

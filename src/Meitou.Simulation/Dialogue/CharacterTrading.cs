@@ -65,10 +65,6 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// </summary>
     const float SlaveSaleRange = 300;
     /// <summary>
-    /// How far from the buyer a bought slave walks out of its cage to (engine choice).
-    /// </summary>
-    const float GetOutReach = 15;
-    /// <summary>
     /// DA 48's reach (<c>FUN_140680560</c>, <b>Observed</b>): the seller's faction's animals within 3000 units of it, and its own squad's within
     /// 2304.
     /// </summary>
@@ -371,24 +367,23 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// the player); its cage unlocked and left; slave state 0; its AI reset; its worn shackles unlocked (still worn); event 51 at it with the player
     /// character as the target; relations toward the player's faction: the slaver's +1, its own +4. Engine choices: the new squad of a non-player
     /// faction is of the "Wandering Squad" template (the original's is <b>Unknown</b>); event 51 fires after it is out of its cage (the original
-    /// fires it first; Meitou's events need a free speaker); the original's task 133 (GET_OUT_OF_CAGE_LEGIT) is a walk from the open cage to within a
-    /// few units of the buyer (where the original's task takes it is <b>Unknown</b>).
+    /// fires it first; Meitou's events need a free speaker). The task 133 the confirm gives (queue cleared) finds the hold already cleared and does
+    /// nothing (<see cref="Locks.FixtureRegistry.GetOutLegit"/>), so the bought one stands at the cage's exit spot and its own AI goes on.
     /// </summary>
     void BuyFree(World world, int slot, CharacterCold c, CharacterCold slaver, CharacterId player)
     {
         var table = world.Characters;
         var id = table.IdOf(slot);
         if (world.Squads.Find(c.SquadId) is { Members.Count: > 1 }) SplitOff(world, slot, c);
-        bool caged = c.IsImprisoned;
-        if (caged) world.Fixtures.Release(world, id);
+        if (c.IsImprisoned) world.Fixtures.Release(world, id);
         Locks.FixtureRegistry.ClearSlave(world, c);
         c.Freed = true;   // status +0xea = 1 (FUN_1406add20, Verified)
         c.Ai = null;
         c.Engaged = false;
         c.Fleeing = false;
         c.Pending = null;
+        c.OrderQueue.Clear();
         TaskStart.Stand(table, slot);
-        if (caged && table.TryResolveNext(player, out int buyer)) WalkOutOfCage(world, slot, buyer);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;
 
         // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
@@ -396,22 +391,6 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         system.FireEvent(world, id, player, DialogueSystem.BoughtMeFromSlavery);
         ChangeTowardPlayer(world, slaver.Faction, 1);
         ChangeTowardPlayer(world, c.Faction, 4);
-    }
-
-    /// <summary>
-    /// The walk of a prisoner freed from its cage (Task_GetOutOfCage with the legit flag, row 133, <c>FUN_1406add20</c> and <c>FUN_1406ae170</c> give
-    /// it): out through the open cage door to within a few units of <paramref name="nearSlot"/>, on the prisoner's side of it (where the original's
-    /// task takes it is <b>Unknown</b>; the path finds the door).
-    /// </summary>
-    internal static void WalkOutOfCage(World world, int slot, int nearSlot)
-    {
-        var table = world.Characters;
-        var from = table.Next[slot].Position;
-        var to = table.Next[nearSlot].Position;
-        var away = new Vector2(from.X - to.X, from.Z - to.Z);
-        float gap = away.Length();
-        var target = new Vector2(to.X, to.Z) + (gap > 1e-3f ? away / gap * Math.Min(GetOutReach, gap) : Vector2.Zero);
-        TaskStart.Walk(world, slot, target, SpeedMode.Walk, Data.Gameplay.Ai.TaskType.MoveOnFreeWill, TaskSource.Npc);
     }
 
     /// <summary>

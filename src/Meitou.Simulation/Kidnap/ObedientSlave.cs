@@ -122,6 +122,16 @@ public static class ObedientSlave
     }
 
     /// <summary>
+    /// The job in the list of a slave with no master squad whose owner is still only its saved handle (a load), else -1: the owner the original
+    /// reads through the owner handle (<c>+0x328</c>), which the job's target copies (<c>FUN_14032e0d0</c>).
+    /// </summary>
+    internal static int PendingOwnerJob(CharacterCold cold)
+    {
+        if (cold.SlaveState != 1 || cold.SlaveMaster >= 0) return -1;
+        return cold.Jobs.FindIndex(j => j.Type == TaskType.SlaveObedience && j.Character.IsNone && !j.Saved.IsNull);
+    }
+
+    /// <summary>
     /// The owner character of job <paramref name="k"/>: its character, found again from the saved handle after a load (as <c>ProductionSystem</c>'s
     /// follow jobs); alive and not the slave itself.
     /// </summary>
@@ -181,6 +191,35 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         /// The walks to it that ended short (<see cref="MaxFails"/> give it up).
         /// </summary>
         public int Fails;
+        /// <summary>
+        /// The walk 189's plan makes away from the workplace now (<see cref="ErrandFor"/>), null while the work is at the workplace.
+        /// </summary>
+        public Errand? Away;
+    }
+
+    /// <summary>
+    /// A walk of 189's plan away from the workplace: to the machine row 94 found, whose output row 92 takes there (<paramref name="Source"/>), or to
+    /// the storage row 93 fills there (<paramref name="Store"/>); <paramref name="Goal"/> is where it walks.
+    /// </summary>
+    sealed record Errand(Vector3 Goal, TownBuilding? Source, string? Store);
+
+    /// <summary>
+    /// What 189's plan does at a workplace (<see cref="ErrandFor"/>).
+    /// </summary>
+    enum Plan
+    {
+        /// <summary>
+        /// The work is at the workplace (rows 92, 93 or 87 there).
+        /// </summary>
+        Here,
+        /// <summary>
+        /// A walk away comes first (<see cref="WorkSpot.Away"/>).
+        /// </summary>
+        Away,
+        /// <summary>
+        /// 189 has no plan at this workplace.
+        /// </summary>
+        None,
     }
 
     /// <summary>
@@ -285,7 +324,7 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
             if (goal.Task.Priority is < TaskPriority.Fluff or > TaskPriority.Urgent || !goal.InWindow(hour) || !TaskStart.Eligible(world, cold, type))
                 continue;
 
-            float score = Desire(world, slot, cold, k, type) * goal.Weight;
+            float score = Desire(world, slot, cold, k, type) * goal.Weight * Crowding(world, slot, cold, goal);
             if (Runs(cold, k, type)) score *= Continuity;
             if (!(score > 0)) continue;
 
@@ -294,6 +333,23 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// The scorer's crowd factor (<c>FUN_14050df10</c>, <b>Verified</b>): the row's TaskData <c>+0x34</c> (<see cref="TaskProfile.Crowd"/>) to
+    /// the power of the entries of the slave's own squad's blackboard on the same goal (<c>FUN_140268f30</c>, <see cref="Blackboard.CrowdOf"/>).
+    /// Every goal the Slave lists hold keeps the default 1, so it changes no score; a squad without a board has no entries.
+    /// </summary>
+    static float Crowding(World world, int slot, CharacterCold cold, AiGoal goal)
+    {
+        var type = goal.Task.Type;
+        float crowd = TaskProfiles.Of(type).Crowd;
+        if (crowd == 1 || world.Squads.Find(cold.SquadId) is not { Ai: { } board } squad) return 1;
+
+        var id = world.Characters.IdOf(slot);
+        bool needsTarget = TaskDataTable.Of(type)?.Is(TaskDataFlags.NeedsTarget) ?? false;
+        int n = board.CrowdOf(type, needsTarget, AiSystem.CrowdTarget(goal.Task.Target, squad, board, id), id);
+        return MathF.Pow(crowd, n);
     }
 
     /// <summary>
@@ -323,8 +379,7 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         return type switch
         {
             TaskType.FollowSlavemaster => FollowTarget(world, slot, cold, k) is null ? 0 : 1,
-            TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend =>
-                ai is not null && ai.HasWorkplaces(world, world.Characters.IdOf(slot), TownPoint(world, slot, cold), type) ? 1 : 0,
+            TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend => ai is not null && WorkPlans(world, slot, cold, type, ai) ? 1 : 0,
             // Its effect 79 (imprisoned) holding, the goal is done: the finder wants the slave held in nothing.
             TaskType.SlaveGetInMyMastersCage => captives.OwnCage(world, slot, cold) is null ? 0 : 1,
             TaskType.AttackEnemiesOfMySlavemaster or TaskType.ProtectOwnSquad => FightScore(world, slot, cold, k, type, ai),
@@ -332,6 +387,22 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
             TaskType.Idle => 1,
             _ => 0,
         };
+    }
+
+    /// <summary>
+    /// Whether a worker goal finds a workplace and plans there: the finder needs one (<see cref="AiSystem.HasWorkplaces"/>); for 189 the workplace it
+    /// holds must have a plan (<see cref="ErrandFor"/>), else the next pick, which its next start makes, must (a goal whose plan fails is not run, and
+    /// the next goal of the list is tried).
+    /// </summary>
+    bool WorkPlans(World world, int slot, CharacterCold cold, TaskType type, AiSystem ai)
+    {
+        var id = world.Characters.IdOf(slot);
+        var town = TownPoint(world, slot, cold);
+        if (!ai.HasWorkplaces(world, id, town, type)) return false;
+        if (type != TaskType.AutoLabouringMines || !_works.TryGetValue(id, out var spot)) return true;
+        if (ErrandFor(world, slot, cold, spot.Place).Plan != Plan.None) return true;
+
+        return ai.WorkAt(world, id, town, spot.Epoch + 1, type) is { } next && ErrandFor(world, slot, cold, next).Plan != Plan.None;
     }
 
     /// <summary>
@@ -406,9 +477,15 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
     {
         if (!_works.TryGetValue(world.Characters.IdOf(slot), out var spot) || !cold.Running!.Runs(task)) return false;
 
+        ref var n = ref world.Characters.Next[slot];
+        if (spot.Away is { } away) return task == CharacterTask.GoTo && !AiSystem.AtWork(in n, away.Goal, AiSystem.WorkReach);
+
         var place = spot.Place;
-        return task == CharacterTask.GoTo ? !AiSystem.AtWork(in world.Characters.Next[slot], place.Building.Position, place.Range)
-            : cold.ActionClip == place.Clip;
+        if (task == CharacterTask.GoTo) return !AiSystem.AtWork(in n, place.Building.Position, place.Range);
+
+        // Standing at it: 189's plan may now walk away first (an input to fetch, output to put away).
+        bool real = cold.Running.Row == TaskType.AutoLabouringMines;
+        return cold.ActionClip == place.Clip && (!real || ErrandFor(world, slot, cold, place).Plan == Plan.Here);
     }
 
     /// <summary>
@@ -421,6 +498,13 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         if (world.SystemOf<AiSystem>() is not { } ai) return;
 
         bool again = _works.TryGetValue(id, out var spot) && Runs(cold, k, type);
+        if (again && type == TaskType.AutoLabouringMines)
+        {
+            var plan = RunErrand(world, slot, cold, k, spot!);
+            if (plan == Plan.Away) return;
+            if (plan == Plan.None) again = false;
+        }
+
         if (again && AiSystem.AtWork(in table.Next[slot], spot!.Place.Building.Position, spot.Place.Range))
         {
             Work(world, slot, k, type);
@@ -438,10 +522,146 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         int epoch = spot is null ? 0 : spot.Epoch + 1;
         if (ai.WorkAt(world, id, TownPoint(world, slot, cold), epoch, type) is not { } found) return;
 
-        _works[id] = new WorkSpot { Place = found, Epoch = epoch };
+        var picked = _works[id] = new WorkSpot { Place = found, Epoch = epoch };
+        if (type == TaskType.AutoLabouringMines && RunErrand(world, slot, cold, k, picked) != Plan.Here) return;
+
         if (AiSystem.AtWork(in table.Next[slot], found.Building.Position, found.Range)) Work(world, slot, k, type);
         else Walk(world, slot, k, type, found);
     }
+
+    #endregion
+
+    #region 189's plan
+
+    /// <summary>
+    /// 189's walks away from its workplace: at the walk's end it acts (row 92 at the source, row 93 at the storage) and the plan is asked again;
+    /// a walk that keeps ending short gives the workplace up (<see cref="MaxFails"/>). <see cref="Plan.Away"/> while a walk runs,
+    /// <see cref="Plan.None"/> when 189 has no plan at the workplace (the next start makes a new pick: engine choice, the original's finder rolls a
+    /// fresh target each think).
+    /// </summary>
+    Plan RunErrand(World world, int slot, CharacterCold cold, int k, WorkSpot spot)
+    {
+        ref var n = ref world.Characters.Next[slot];
+        if (spot.Away is { } away)
+        {
+            if (!AiSystem.AtWork(in n, away.Goal, AiSystem.WorkReach))
+            {
+                if (n.Task == (byte)CharacterTask.GoTo) return Plan.Away;
+                if (++spot.Fails >= MaxFails) return Plan.None;
+
+                GoTo(world, slot, k, away.Goal);
+                return Plan.Away;
+            }
+
+            Act(world, slot, cold, spot.Place, away);
+            spot.Away = null;
+            spot.Fails = 0;
+        }
+
+        var (plan, errand) = ErrandFor(world, slot, cold, spot.Place);
+        if (plan != Plan.Away) return plan;
+
+        spot.Away = errand;
+        GoTo(world, slot, k, errand!.Goal);
+        return Plan.Away;
+    }
+
+    /// <summary>
+    /// At the walk's end: row 92 empties the source's output into the inventory, row 93 puts the carried items into the storage.
+    /// </summary>
+    static void Act(World world, int slot, CharacterCold cold, ObedientWorkplace place, Errand away)
+    {
+        var at = world.Characters.Next[slot].Position;
+        if (away.Source is { } source) world.SystemOf<ProductionSystem>()?.TakeTownOutput(world, cold, source, place.Owner);
+        else if (away.Store is { } store) world.SystemOf<TownDutySystem>()?.PutAway(world, cold, store, at);
+    }
+
+    /// <summary>
+    /// The plan of 189 at its workplace, as the planner makes it from 87's list B in order (docs/game/buildings-production.md "NPC town machines"):
+    /// with the output full (<c>!63</c>) and no room for its item (92's <c>82</c>), the ditch first (114, then 93 at the storage); with an empty
+    /// input (<c>!62</c>) and none of its items carried (93's <c>67</c>), the machine row 94 finds (its effect <c>66</c>: 92 there; no room for that
+    /// machine's item: the ditch first); with the machine's output carried and a storage taking it (<c>!89</c>, evaluator <c>FUN_1405a2c90</c>,
+    /// <b>Observed</b>), putting it away (113, then 93 at that storage). With no source, or no storage to make room in, 189 has no plan there.
+    /// </summary>
+    static (Plan Plan, Errand? Errand) ErrandFor(World world, int slot, CharacterCold cold, ObedientWorkplace place)
+    {
+        if (world.SystemOf<ProductionSystem>() is not { } production || ProductionSystem.TownWorkOf(world, place.Building) is not { } m)
+            return (Plan.Here, null);
+
+        var at = world.Characters.Next[slot].Position;
+        if (m.OutputBlocked) return production.RoomForOutput(cold, m) ? (Plan.Here, null) : Ditch(world, cold, at);
+        if (m.HasEmptyInputs) return ProductionSystem.CarriesInputOf(cold, m) ? (Plan.Here, null) : Fetch(world, cold, m, at, production);
+        if (!ProductionSystem.CarriesOutputOf(cold, m) || Store(world, cold, at, OutputCarried(cold, m)) is not var (id, spot))
+            return (Plan.Here, null);
+
+        return (Plan.Away, new Errand(new Vector3(spot.X, 0, spot.Y), null, id));
+    }
+
+    /// <summary>
+    /// Row 94's walk: the town machine whose output holds an item the empty input takes (<see cref="ProductionSystem.InputSource"/>), the ditch first
+    /// when there is no room for that item; no plan without one.
+    /// </summary>
+    static (Plan, Errand?) Fetch(World world, CharacterCold cold, Machine m, Vector3 at, ProductionSystem production)
+    {
+        if (world.SystemOf<AiSystem>() is not { } ai || ProductionSystem.InputSource(world, m, ai.TownWorkplaces(at), at) is not { } source
+            || ProductionSystem.TownWorkOf(world, source) is not { } from)
+        {
+            return (Plan.None, null);
+        }
+
+        if (!production.RoomForOutput(cold, from)) return Ditch(world, cold, at);
+        return (Plan.Away, new Errand(source.Position with { Y = 0 }, source, null));
+    }
+
+    /// <summary>
+    /// Row 114's walk: the nearest storage taking a carried item (<see cref="TownDutySystem.DitchStore"/>); no plan without one.
+    /// </summary>
+    static (Plan, Errand?) Ditch(World world, CharacterCold cold, Vector3 at)
+    {
+        if (world.SystemOf<TownDutySystem>() is not { } duties || world.Squads.Find(cold.SquadId) is not { } squad
+            || duties.DitchStore(world, squad, cold, at, register: false) is not var (id, spot))
+        {
+            return (Plan.None, null);
+        }
+
+        return (Plan.Away, new Errand(new Vector3(spot.X, 0, spot.Y), null, id));
+    }
+
+    /// <summary>
+    /// The storage the ditch finder finds for <paramref name="items"/> (<see cref="TownDutySystem.StoreTaking"/>), null for none.
+    /// </summary>
+    static (string Id, Vector2 Spot)? Store(World world, CharacterCold cold, Vector3 at, IEnumerable<Items.ItemInstance> items) =>
+        world.SystemOf<TownDutySystem>() is { } duties && world.Squads.Find(cold.SquadId) is { } squad
+            ? duties.StoreTaking(world, squad, cold, at, items) : null;
+
+    /// <summary>
+    /// The carried units of the machine's output item (inventory and worn backpack).
+    /// </summary>
+    static IEnumerable<Items.ItemInstance> OutputCarried(CharacterCold cold, Machine m)
+    {
+        if (m.Output is not { } output || cold.Inventory is not { } inv) return [];
+
+        var carried = inv.All().Concat(inv.Backpack?.Contents?.All() ?? []);
+        return carried.Where(i => i.Record == output.Recipe.Item);
+    }
+
+    /// <summary>
+    /// Starts a walk of 189 to <paramref name="goal"/> (arriving within <see cref="AiSystem.WorkReach"/>, <see cref="ITaskHandler.Start"/>).
+    /// </summary>
+    static void GoTo(World world, int slot, int k, Vector3 goal)
+    {
+        var request = new TaskRequest(CharacterTask.GoTo, TaskType.AutoLabouringMines, TaskSource.Job)
+        {
+            Job = k,
+            Goal = new Vector2(goal.X, goal.Z),
+            Mode = SpeedMode.Walk,
+        };
+        TaskStart.Start(world, slot, request);
+    }
+
+    #endregion
+
+    #region Acting out the rest
 
     /// <summary>
     /// Starts the walk to the workplace.
@@ -545,7 +765,7 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         if (request.Task == CharacterTask.GoTo)
         {
             MovementSystem.GoTo(table, slot, request.Goal!.Value, request.Mode ?? cold.RunSpeed);
-            cold.ArriveWithin = known ? spot!.Place.Range : AiSystem.WorkReach;
+            cold.ArriveWithin = known && spot!.Away is null ? spot.Place.Range : AiSystem.WorkReach;
             return;
         }
 

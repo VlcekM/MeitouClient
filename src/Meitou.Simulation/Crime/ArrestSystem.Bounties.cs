@@ -247,7 +247,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the prisoner freed (no escape).
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through task 133
+    /// (<see cref="SendOut"/>).
     /// </summary>
     void Bail(World world, int p, CharacterCold pc, Fixture cage, int price, int payer)
     {
@@ -260,7 +261,7 @@ public sealed partial class ArrestSystem : IOrderOwner
             if (ledger.Count == 0) pc.Bounties = null;
         }
         world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
-        world.Fixtures.Release(world, prisoner);
+        world.Fixtures.SetLocked(cage, false);
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
@@ -268,24 +269,26 @@ public sealed partial class ArrestSystem : IOrderOwner
         // event 0x33; Verified).
         var payerId = table.IdOf(payer);
         Talk?.Memory.Remember(world, pc.SquadId, payerId, Dialogue.MemoryTag.FreedMe);
-        bool spoke = Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery) == true;
-        SendOut(world, p, pc, payer, spoke);
+        SendOut(world, prisoner);
+        Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery);
         Note(world, ArrestEventKind.Bailed, table.IdOf(payer), prisoner, cage.Owner, price);
     }
 
     /// <summary>
-    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given
-    /// 128 Retreat to hometown, then every one 133 Get out of cage (legit). Whether the later give replaces the earlier or
-    /// queues behind it is <b>Unknown</b> (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its
-    /// payer (<see cref="Dialogue.CharacterTrading.WalkOutOfCage"/>,
-    /// 133) and one that did not to its squad's home (128 standing for the pair).
+    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c> (<b>Verified</b> by disassembly): one that could not speak (event 51 returned
+    /// 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c>
+    /// with its clear argument 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its
+    /// unlocked cage (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. Engine order: out before event 51, since Meitou's
+    /// events need a free speaker.
     /// </summary>
-    void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
+    void SendOut(World world, CharacterId prisoner)
     {
-        if (!spoke && world.Squads.Find(pc.SquadId) is { } squad)
-            TaskStart.Walk(world, p, squad.HomeCentre, SpeedMode.Walk, TaskType.RetreatHometown, TaskSource.Npc);
-        else
-            Dialogue.CharacterTrading.WalkOutOfCage(world, p, payer);
+        var table = world.Characters;
+        if (!table.TryResolveNext(prisoner, out int p)) return;
+
+        table.Cold(p)!.OrderQueue.Clear();
+        world.Fixtures.GetOutLegit(world, prisoner, Crimes);
+        TaskStart.Stand(table, p);
     }
 
     #endregion

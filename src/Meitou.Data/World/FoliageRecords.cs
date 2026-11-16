@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.Fcs;
 
 namespace Meitou.Data.World;
@@ -197,6 +198,11 @@ public sealed class FoliageMesh
     /// </summary>
     public GameRecord? BuildingType { get; init; }
     /// <summary>
+    /// The first entry of <c>sounds</c>: its AMBIENT_SOUND and the entry's three values, the emitter's offset from a placed copy (docs/audio.md
+    /// "Point emitters"); null when the list is empty or its record is missing or not an AMBIENT_SOUND.
+    /// </summary>
+    public (AmbientSound Sound, Vector3 Offset)? Sound { get; init; }
+    /// <summary>
     /// Child meshes (<c>meshes</c>) placed around every placed copy of this one.
     /// </summary>
     public List<FoliageMesh> Children { get; } = [];
@@ -214,6 +220,18 @@ public sealed class FoliageMesh
     /// A mesh's material looks: FOLIAGE clips on the normal map's alpha and is double-sided (runtime-materials.md).
     /// </summary>
     public bool IsFoliageMaterial => MaterialType == 4;
+
+    /// <summary>
+    /// The first <c>sounds</c> entry of <paramref name="r"/> (<see cref="Sound"/>): the exe looks only at that one, and makes no emitter when its
+    /// record is missing (<c>FUN_1406d2410</c>).
+    /// </summary>
+    static (AmbientSound, Vector3)? SoundOf(GameRecord r, GameDatabase db)
+    {
+        if (r.GetReferences("sounds") is not [var first, ..] || db.Find(first.TargetStringId) is not { } record) return null;
+        if (AmbientSound.From(record) is not { } sound) return null;
+
+        return (sound, new Vector3(first.Values.Value0, first.Values.Value1, first.Values.Value2));
+    }
 
     /// <summary>
     /// The mesh of FOLIAGE_MESH <paramref name="r"/> with its children, each record read once through <paramref name="cache"/>.
@@ -262,6 +280,7 @@ public sealed class FoliageMesh
             GrassSpot = r.GetFloat("grass spot"),
             WindFactor = r.GetFloat("wind factor", 1),
             BuildingType = r.GetReferences("building type").Select(x => db.Find(x.TargetStringId)).FirstOrDefault(b => b is not null),
+            Sound = SoundOf(r, db),
         };
         cache[r.StringId] = m;
         foreach (var c in r.GetReferences("meshes"))

@@ -511,8 +511,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// slave (state 1) while the status object's current town (<c>+0x88</c>) is null and its squared distance to the owner is above
     /// <see cref="EscapeDistanceSquared"/> (<b>Verified</b>; the town is <see cref="CharacterCold.StatusTown"/>). The owner is the master squad's
     /// leader (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle). With no owner handle the slave escapes in town
-    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner still waiting to load is kept, and so is a slave held in
-    /// an owned cage (<see cref="CagedByOwner"/>).
+    /// too (<c>FUN_1404fe6e0</c> rejects a null handle); a master squad or saved owner (the save's <c>slaver</c> handle, or the Obedient Slave job's,
+    /// <see cref="Kidnap.ObedientSlave.PendingOwnerJob"/>) still waiting to load is kept, and so is a slave held in an owned cage
+    /// (<see cref="CagedByOwner"/>).
     /// </summary>
     void EscapeFarFromOwner(World world)
     {
@@ -523,7 +524,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c) continue;
             if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner)
             {
-                if (c.SlaveMaster < 0 && c.Save is not { Slaver.IsNull: false } && !CagedByOwner(world, c)) FixtureRegistry.TagEscaped(world, c);
+                bool pending = c.Save is { Slaver.IsNull: false } || Kidnap.ObedientSlave.PendingOwnerJob(c) >= 0;
+                if (c.SlaveMaster < 0 && !pending && !CagedByOwner(world, c)) FixtureRegistry.TagEscaped(world, c);
 
                 continue;
             }

@@ -88,6 +88,7 @@ public sealed partial class AiSystem
                 continue;
 
             if (PursuitSystem.PathImpossible(me, m, world.Tick) || TargetScore.SparesSlave(me, c)) continue;
+            if (LeaveAlone.Spares(world, new LeaveAlone.Kit(Relations, Memory, _combat), slot, me, m.Slot, c)) continue;
 
             var candidate = new TargetCandidate
             {

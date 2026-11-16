@@ -299,13 +299,13 @@ public sealed partial class CombatSystem
         int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration
             ? t.Target : -1;
 
-        int kept = KeptTurretOrder(world, g, gc);
+        int kept = KeptTurretOrder(world, Towns, g, gc);
         if (kept >= 0) return kept;
 
         var found = TurretCandidates(world, at, range);
         var facing = new Vector3(MathF.Sin(t.Yaw), 0, MathF.Cos(t.Yaw));
         int generation = prev[g].Generation;
-        var choice = new TurretChoice(world, _read, t, g, gc, at, range, facing, generation, found);
+        var choice = new TurretChoice(world, Towns, _read, t, g, gc, at, range, facing, generation, found);
 
         // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the
         // gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still
@@ -337,14 +337,14 @@ public sealed partial class CombatSystem
     /// regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a
     /// crawler; out of range or blocked, the turret waits). Returns the ordered target kept, else -1.
     /// </summary>
-    static int KeptTurretOrder(World world, int g, CharacterCold gc)
+    static int KeptTurretOrder(World world, PopulationData? towns, int g, CharacterCold gc)
     {
         if (gc.TurretTarget.IsNone) return -1;
 
         var table = world.Characters;
         var prev = table.Previous;
         var talk = world.SystemOf<Dialogue.DialogueSystem>();
-        if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered))
+        if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, towns, gc, ordered)
             && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
             return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
 
@@ -369,10 +369,11 @@ public sealed partial class CombatSystem
     /// <summary>
     /// One turret's choice among its <paramref name="found"/> candidates (<see cref="ChooseTurretTarget"/>): gunner <paramref name="g"/>
     /// (<paramref name="gc"/>, of <paramref name="generation"/>) at <paramref name="at"/>, the turret <paramref name="t"/> facing
-    /// <paramref name="facing"/> with the gun's <paramref name="range"/>, and <paramref name="read"/> the last tick's combat slots.
+    /// <paramref name="facing"/> with the gun's <paramref name="range"/>, <paramref name="read"/> the last tick's combat slots and
+    /// <paramref name="towns"/> the population data (the diplomats' biomes).
     /// </summary>
-    readonly struct TurretChoice(World world, CombatSlot[] read, TurretState t, int g, CharacterCold gc, Vector3 at, float range, Vector3 facing,
-        int generation, List<int> found)
+    readonly struct TurretChoice(World world, PopulationData? towns, CombatSlot[] read, TurretState t, int g, CharacterCold gc, Vector3 at,
+        float range, Vector3 facing, int generation, List<int> found)
     {
         /// <summary>
         /// The score of candidate <paramref name="o"/> (<c>FUN_140435d70</c>) at <paramref name="rangeFactor"/> x the range, + 0.1 when it is the
@@ -382,7 +383,7 @@ public sealed partial class CombatSystem
         {
             var table = world.Characters;
             var oc = table.Cold(o);
-            if (ScoresZero(world, gc, oc)) return 0;
+            if (ScoresZero(world, towns, gc, o)) return 0;
 
             var med = oc!.Medical!;
             var there = table.Previous[o].Position;
@@ -528,12 +529,32 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// A target every turret scores 0 (<c>FUN_140435d70</c>, <b>Verified</b>): down for every gunner (out, dead, playing dead, carried), in a bed or
-    /// cage, and for a gunner not of the player's faction one that is not upright. An ordered target that scores 0 is dropped (<c>FUN_140437f40</c>).
+    /// cage, for a gunner not of the player's faction one that is not upright, and a diplomat that intends no aggression
+    /// (<see cref="SparedDiplomat"/>). An ordered target that scores 0 is dropped (<c>FUN_140437f40</c>).
     /// </summary>
-    static bool ScoresZero(World world, CharacterCold gunner, CharacterCold? target) =>
-        target?.Medical is not { } med || med.Incapacitated || med.PlayingDead || !target.CarriedBy.IsNone
-        || target.InSomething != global::Meitou.Simulation.Locks.HeldState.None
-        || !(gunner.IsPlayer || world.Player.Faction >= 0 && gunner.Faction == world.Player.Faction) && med.Prone;
+    static bool ScoresZero(World world, PopulationData? towns, CharacterCold gunner, int target)
+    {
+        var tc = world.Characters.Cold(target);
+        if (tc?.Medical is not { } med || med.Incapacitated || med.PlayingDead || !tc.CarriedBy.IsNone) return true;
+        if (tc.InSomething != global::Meitou.Simulation.Locks.HeldState.None) return true;
+        if (!(gunner.IsPlayer || world.Player.Faction >= 0 && gunner.Faction == world.Player.Faction) && med.Prone) return true;
+
+        return SparedDiplomat(world, towns, gunner, target, tc);
+    }
+
+    /// <summary>
+    /// The turret score's own diplomat test (<c>FUN_140435d70</c>, <b>Verified</b> by decompile): a target with diplomatic status
+    /// (<c>FUN_140796240</c>, the biome factored in for a gunner not with the player, <c>FUN_140856bc0</c>;
+    /// <see cref="CharacterFacts.DiplomaticStatus"/>) scores 0 unless its intended aggression (vfunc <c>0x1e8</c>, its current goal's,
+    /// <see cref="Ai.TaskAggression.OfGoal"/>) is above 0.
+    /// </summary>
+    static bool SparedDiplomat(World world, PopulationData? towns, CharacterCold gunner, int target, CharacterCold tc)
+    {
+        var at = world.Characters.Previous[target].Position;
+        bool withPlayer = Aggro.AggroSystem.PlayerSide(world, gunner);
+
+        return CharacterFacts.DiplomaticStatus(tc, at, towns, !withPlayer) && Ai.TaskAggression.OfGoal(tc) <= 0;
+    }
 
     #endregion
 }

@@ -296,6 +296,15 @@ public static partial class SaveCapture
         /// </summary>
         public readonly List<(FcsRecord State, CharacterId Partner)> Carries = [];
         /// <summary>
+        /// The handle each character written got, by its cold state (a stored member has no id).
+        /// </summary>
+        public readonly Dictionary<CharacterCold, Hand> ColdHandles = new(ReferenceEqualityComparer.Instance);
+        /// <summary>
+        /// The kept carry links of characters whose squad left the world carrying (<see cref="CharacterCold.CarryRelink"/>): a state record and the
+        /// partner's cold state.
+        /// </summary>
+        public readonly List<(FcsRecord State, CharacterCold Partner)> KeptCarries = [];
+        /// <summary>
         /// The orders whose target character's handle is written once every character has one: the AI record, the key prefix and the target.
         /// </summary>
         public readonly List<(FcsRecord Record, string Prefix, CharacterId Target)> OrderTargets = [];
@@ -341,6 +350,8 @@ public static partial class SaveCapture
         // The carry links (FUN_1406280a0 writes the partner's handle under `carrying`, the null one when it is not saved).
         foreach (var (state, partner) in pass.Carries)
             (pass.Handles.TryGetValue(partner, out var hand) ? hand : Hand.Null).Write(state, "carrying");
+        foreach (var (state, partner) in pass.KeptCarries)
+            (pass.ColdHandles.TryGetValue(partner, out var kept) ? kept : Hand.Null).Write(state, "carrying");
 
         // The queued orders name their target character the same way (`tjobT<i>`); one not saved leaves the null handle.
         foreach (var (record, prefix, who) in pass.OrderTargets)
@@ -796,6 +807,7 @@ public static partial class SaveCapture
         // What it carries and wears, as it is now; items read from a save keep their records' other keys.
         if (cold.Inventory is { } inventory) builder.SetInventory(platoon, sc, SavedKit.FromInventory(inventory));
         if (!id.IsNone) s_memoryPass?.Handles[id] = sc.Handle;
+        s_memoryPass?.ColdHandles[cold] = sc.Handle;
         return sc;
     }
 
@@ -833,11 +845,14 @@ public static partial class SaveCapture
         // A new record has no held keys of the save to leave as read: a captive of a save's platoon split into one of its own (#677).
         HeldSave.Write(g, cold, isNew ? null : link, world.Fixtures, buildings);
 
-        // Carrying or carried: the bool says which, the partner's handle is written once every character has one.
-        g.Bools["carrying"] = !cold.Carrying.IsNone;
+        // Carrying or carried: the bool says which, the partner's handle is written once every character has one. A squad that left the world in a
+        // carry keeps its link (FUN_1404ff410 wrote the record before the destroy unlinked it).
         var partner = cold.Carrying.IsNone ? cold.CarriedBy : cold.Carrying;
-        if (partner.IsNone) Hand.Null.Write(g, "carrying");
-        else s_memoryPass?.Carries.Add((g, partner));
+        bool keptCarrier = partner.IsNone && cold.CarryRelink is not null && cold.CarryRelinkIsCarrier;
+        g.Bools["carrying"] = !cold.Carrying.IsNone || keptCarrier;
+        if (!partner.IsNone) s_memoryPass?.Carries.Add((g, partner));
+        else if (cold.CarryRelink is { } kept && s_memoryPass is { } keptPass) keptPass.KeptCarries.Add((g, kept));
+        else Hand.Null.Write(g, "carrying");
 
         // A world without ragdolls (headless) keeps what was read; a stale pose is not used where the character no longer lies.
         if (id.IsNone) RagdollSave.Write(g, null);
@@ -845,8 +860,9 @@ public static partial class SaveCapture
 
         if (cold.PortraitSerial is { } portraitSerial) g.Ints["portrait_serial"] = (int)portraitSerial;
 
-        // Its floor (getFloor), which the original reads back on load (FUN_140626f50) and writes for every character, 0 to 3 in vanilla saves.
+        // Its floor (getFloor) and the building it is in, on top of it too (isIndoors), which the original reads back on load (FUN_140626f50).
         g.Ints["floor"] = SavedFloor(world, id);
+        SavedBuilding(world, id, buildings).Write(g, "isindoors");
 
         // The character's slot 0x398 (FUN_1406280a0): an animal's age, 1 for people (docs/game/animals.md "Ageing"; Verified in vanilla saves).
         if ((cold.Stats ?? link?.Stats) is { } aged) g.Floats["age"] = aged.Scale;
@@ -857,6 +873,17 @@ public static partial class SaveCapture
     /// </summary>
     static int SavedFloor(World world, CharacterId id) =>
         world.Characters.TryResolveNext(id, out int slot) ? world.Sight.FloorOf(slot, world.Characters.Previous[slot].Position) : 0;
+
+    /// <summary>
+    /// The handle of the building the character is in or on top of (<see cref="Perception.SightMap.LocationOf"/>); the null handle outdoors, out of
+    /// the world, or for a building the save has no complete handle of.
+    /// </summary>
+    static Hand SavedBuilding(World world, CharacterId id, IReadOnlyDictionary<string, FcsRecord> buildings)
+    {
+        if (!world.Characters.TryResolveNext(id, out int slot) || world.Sight.LocationOf(slot) is not (>= 0 and var place)) return Hand.Null;
+
+        return buildings.TryGetValue(world.Sight.PlaceKey(place), out var b) && Hand.IsComplete(b, "handle") ? Hand.Read(b, "handle") : Hand.Null;
+    }
 
     /// <summary>
     /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>); the handle of its contract's mission target is written

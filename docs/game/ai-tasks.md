@@ -665,12 +665,14 @@ Meitou: [simulation, captives](../simulation.md#captives).
     running there that has its inputs. An NPC town's machine counts only once it holds its inputs: the pick does not ask whether 94 / 93 could fill it (engine choice for the plan's fill-or-fail).
     190 (pretend, no 62 in 221's B list) still picks any workplace. A member on 189 or 190 holds an operator slot (`AiMind.WorkPost`,
     `AiSystem.ClaimWork`, serial on the package cadence, the kept slots reserved first): up to the functionality's `max operators` per
-    workplace, no limit for a building without a functionality record.
+    workplace, no limit for a building without a functionality record. `Task_OperateMachine` (87 and 221) adds the worker to the building's
+    operators at its start (`FUN_14035b430` -> `tryOperate` `FUN_1400f8030`, which refuses a new operator once the operators reach `max operators`, and the task
+    then ends) and removes it at its end (`FUN_140347350`, **Verified**), so a pretending worker takes a slot too.
 - **Obedient Slave** (187, flags 0x75, TaskData kind +4 = 1 and +8 = 0 like a plain job, no lists, no desire or finder of its own, task class `Task_Blank`). Meitou:
   [simulation, captives](../simulation.md#captives). A **perma-job** (it sits in the character's job list, `+0x88`), not a goal, whoever the character is.
   - **Added and removed** (**Verified**, `FUN_1405a4940` slave state setter -> `FUN_14032e0d0`): when the slave state *changes* (the setter does nothing for the same state), a change **to 1**
     destroys the one-shot orders and the perma-jobs (`FUN_140507530`, `FUN_140507280`) and adds job 187 toward the character's owner handle (character `+0x328`, `FUN_1405086d0` with the
-    permanent flag, which turns the jobs switch on); a change **to 0 or 2** removes the first job of type 187 and stops, or, when the list holds none, destroys the orders and perma-jobs.
+    permanent flag, which turns the jobs switch on); a change **to any other state** (0, 2 or 3: the setter passes "new state is 1") removes the first job of type 187 and stops, or, when the list holds none, destroys the orders and perma-jobs.
     So freeing, an escape (state 2) or bail ends the obedience at once. `Character::setChainedMode` (`FUN_14032e590`, which sets state 1 first, writes the owner handle from its target and the owner's
     faction, resets the orders object, adds the job and then puts the shackles on, **Verified**) and processing (182, `FUN_14035aa20`) do the same reset themselves, whatever the old state. The job is
     saved with the list (`pjob<i>` 187, `pjobT<i>` the owner handle).
@@ -689,21 +691,40 @@ Meitou: [simulation, captives](../simulation.md#captives).
     ([pathfinding](pathfinding.md#following)); it copies the leader's sneaking every update, so **a slave following a master who is not sneaking cannot sneak**, and escapes by sneaking only while it stands or works.
     189 / 190 are the worker rows ([above](#slave-work-shout-and-capture)): the finder asks the **blackboard's current town** (`+0x88`) of the slave's own platoon, which the AI's rule writes from the
     platoon's leader (`FUN_1402688d0`, [AI](ai.md#package-classes)); a character whose side differs from the town's works only in slave state 1. 172 is the slave's own walk into a free cage of its
-    owner's faction (finder `FUN_1408caaf0`).
-  - **Other readers of "has job 187"** (`FUN_140597380`): 15 Protect allies' desire `FUN_140599b90` is **0** for a slave in state 1 holding it (**Verified**, sneaking or not); `chooseBestAttackTarget` (`FUN_14059e300`) never scores a candidate in state 1, chained with the chooser's faction its owner (`FUN_14032e2a0`), that holds it (**Verified**, [target score](combat.md#attack-slots-and-circling)); `FUN_1408569a0` spares its owner's friends ([sense tags](perception.md#sense-tags-who-is-an-enemy)); `FUN_140852700`, read by the escaped-slave spotting `FUN_140855a80`, is not modelled.
+    owner's faction (finder `FUN_1408caaf0`). The crowd factor of the scorer (TaskData `+0x34`) is the default 1 for every goal the Slave lists hold (**Verified**: no registration in
+    `FUN_140319a60` writes it for 14, 35, 41, 143, 171, 172, 189 or 190, and AI_TASK records carry no such field), so the master squad's mates on the same goal change no score.
+  - **Leaving the night cage** (**Verified**, `FUN_14026b790`, `FUN_14032ebd0`, `FUN_14050f800`, `FUN_14050fe10`, `TaskRepertoire` slot 1 `FUN_14032dbf0`): there is no own release. Getting in
+    (107 `Task_UseCage`, start `FUN_140358040` -> `FUN_140330600`) locks the cage and sets the imprisoned repertoire (4; 0x10 in a cage that restrains movement). The Slave list is loaded through the
+    Tasker factory with the slave's repertoire, which makes nothing for a row the repertoire lacks, and the planner looks the root row up in the same repertoire, so a row it lacks plans nothing
+    (an empty result, value 0); a list loaded before the caging is kept but its 171 / 189 / 190 then plan nothing. Of the Slave goals only 172 (flags 0x55) and 14 (0x75) carry the bit; 171 (0x61),
+    189 and 190 (0x1) do not, and no Slave goal needs `!79`, whose providers 133 / 207 / 256 (0x74) would in any case need the cage unlocked (`!54`). `Task_UseCage`'s end (`FUN_140348330`) only
+    resets the animation. So in the morning a caged slave stands (14 in its hours) until another lets it out: its master's gatherers (173, 217, 245, [Prisoner fate](#prisoner-fate-and-slave-rows)), a
+    release, the player, or the other callers that clear the hold (`FUN_140330600` with 0: a lift `FUN_1405cff90`, being bought free `FUN_1406add20`, the Building virtuals at slots 73 and 81
+    `FUN_1402a2860` / `FUN_1407ad6c0`); `Task_FirstAid`'s update (`FUN_1403563a0`) also takes a caged patient out when the medic's faction is not the player's and the medic regards it as friendly.
+  - **Other readers of "has job 187"** (`FUN_140597380`): 15 Protect allies' desire `FUN_140599b90` is **0** for a slave in state 1 holding it (**Verified**, sneaking or not); `chooseBestAttackTarget` (`FUN_14059e300`) never scores a candidate in state 1, chained with the chooser's faction its owner (`FUN_14032e2a0`), that holds it (**Verified**, [target score](combat.md#attack-slots-and-circling)); `FUN_1408569a0` spares its owner's friends ([sense tags](perception.md#sense-tags-who-is-an-enemy)).
+    `FUN_140852700` (**Verified**, disassembly) holds when the target has no order queued (its order list empty, or one entry of type 65 or 52) and the AI it is called on holds job 187. Its only callers,
+    the escaped-slave test `FUN_140855a80` and its helper `FUN_140852750`, are reached from the sight pass `FUN_140859680` through `FUN_140856b50` with the **looker's** AI, and that pass has
+    already returned for a looker in any slave state but 0. A character in state 0 holds no job 187 (only a change to 1, chaining or processing adds it, after clearing the list; every
+    change away from 1 removes it), so the test is false there and changes no spotting; Meitou has nothing to model.
   - The status tooltip tells the player: "Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master."
   - **Meitou**: the AI's slaves (a slave member of its owner's squad in the Slave role; one in another squad takes the Slave list of the squad it obeys, `CharacterCold.SlaveMaster`: the owner squad of
     the squad factory's slaves, the slaver who bought or processed it, the arresting guard's squad, the receiver of a delivery) run it through the AI ([ai](ai.md#goal-loading)). A **player character** gets the job in
-    its list (`ObedientSlave`, step 3 of the decision step): the gate as above; the best goal of the master squad's Slave list in its hour by desire x finder x weight (x1.25 the one running, a tie
-    to the later-listed; no crowding factor) among **171** (the owner, else the master squad's leader); **189 / 190** (the AI's finder, `AiSystem.WorkAt`: a random workplace of the town the
-    slave's squad leader stands in with a free operator slot, 189 only one it can run; walked to and stood at at its work clip; the slave holds no operator slot itself, engine choice), at
-    which both take the functionality's `hunger rate` and 189 works the town building's machine as the AI's plan does (a full output emptied into the inventory, row 92, else row 87 operates
-    a machine with its inputs; `ProductionSystem.ObedientWorkers`); **172** (the finder above, `CaptiveSystem.OwnCage`; walked to and got into, `FixtureRegistry.Imprison`, as the AI slave's
-    own walk; done once it is held); **41** and **143** (the AI's desires and finders, `AiSystem.ObedientFight`, 143's mates being the slave's own squad; the fight a job fight, 41's as a goal's
+    its list (`ObedientSlave`, step 3 of the decision step): the gate as above; the best goal of the master squad's Slave list in its hour, eligible in its repertoire (`TaskStart.Eligible`: caged,
+    only 172 and 14), by desire x finder x weight x crowd (the row's `TaskProfile.Crowd` to the power of its own squad board's entries on the goal; x1.25 the one running, a tie
+    to the later-listed) among **171** (the owner, else the master squad's leader); **189 / 190** (the AI's finder, `AiSystem.WorkAt`: a random workplace of the town the
+    slave's squad leader stands in with a free operator slot, its own counting as free, 189 only one it can run; walked to and stood at at its work clip; standing there it holds an operator
+    slot as `Task_OperateMachine` does, counted with the members' kept slots, `AiSystem.ReserveObedientWork`), at which both take the functionality's `hunger rate`. 189 works the town building's
+    machine as the AI's plan does (87's list B in order, `ObedientJobs.ErrandFor`): at the building a full output is emptied into the inventory (92), else an empty input filled from what it
+    carries (93), else the machine operated (87; `ProductionSystem.ObedientWorkers`); it first walks away for a full output with no room (the ditch, 114 then 93, `TownDutySystem.DitchStore`), an
+    empty input with none of its items carried (row 94's source, `ProductionSystem.InputSource`, emptied there by 92, the ditch first without room for its item) and carried output of the machine a
+    storage takes (state 89, 113 then 93, `TownDutySystem.StoreTaking` / `PutAway`); with no source or no storage to make room in, the next start picks another workplace (engine choice: the
+    original's finder rolls a fresh target each think). **172** (the finder above, `CaptiveSystem.OwnCage`; walked to and got into, `FixtureRegistry.Imprison`, as the AI slave's
+    own walk; done once it is held; it stays until let out, as above); **41** and **143** (the AI's desires and finders, `AiSystem.ObedientFight`, 143's mates being the slave's own squad; the fight a job fight, 41's as a goal's
     attack with its alert voice, 143's as a defence); **35** (done while its list A holds, no immediate threat and no enemy sensed; else row 35's desire with the player-faction vetoes,
     `AiSystem.ObedientRunDesire`, [combat](combat.md#fight-lifecycle-and-orders) "Self-defence"; acted out as `Task_Runaway`'s run from the sensed enemies, `FleeSystem.EnemyRunPoint`, again when a run ends) and
     **14**. A faction owner with no squad has no master: the job is held but nothing runs. The job names the master squad's leader (the original's handle names a character or a squad). `SlaveMaster` is
-    runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else the owner is found again from the job's saved handle when it names a character.
+    runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else of the one the job's saved handle names
+    (`CaptiveSystem.RestoreSlavers`, both once that character is loaded; the escape far from the owner waits for either), so 41's finder and the senses read it as the original's owner handle.
 - **States 140 and 16** (**Verified**): 140 `target swimming` = `FUN_140598ec0(ai, target hand)`: the hand resolves to an object (else false) and `FUN_1405c7fd0(object)` is 3, i.e. the target's water state is deep water (the HUD's Swimming). 16 `isAggressionTowards` = `FUN_14059de10(ai, target hand)`: only for a character hand (type 1), true when that character's byte `+0x2b0` is set ([combat](combat.md): the immediate-melee flag), so it means "the target is being meleed right now", not an aggression relation. Rows with `!140`: 25 First aid, 249 Splinting, 60 Repairing, 4 Attacking, 64 (which also has `!16`). Meitou's planner target is a position, not a character, so 140 and 16 are not wired; those rows are run by the first aid, repair and combat systems, which do not read them.
 - **Nests and the town list** (`FUN_14092d850`, [factions](factions-squads-towns.md)): one town and one nest get the full step per frame (cursors `DAT_142135440` / `DAT_142135438`), so a loaded nest makes at most one squad every N frames, N the nests in the list. Meitou's nests top up on their own look (engine choice: the throttle is the look cadence, not a cursor over the list).
 - **`BuildingFinder_SlavesToProcess` accept** (**Verified**, slot 0 `FUN_1408db680` -> `FUN_1408db510`): a building with vfunc `0x300` non-null whose owner faction (vfunc `0x58`) has no player flag (`+0x250`), then a cage (function 8, vfunc `0x2f0`) of the finder's town context within a relation limit (rating <= `0x100`), `Ownerships::canIUseThisBuilding(worker, cage)` true (`FUN_140621230`: [locks](locks.md#beds)), the owner not on the character's excluded list (`FUN_1405b0290`) and occupancy (vfunc `0x4f0`) equal to the wanted flag. No taken or reserved test and no "another job works this occupant" test: Meitou's `Taken` / `Busy` claims in `CaptiveSystem.ProcessTarget` are an engine guard against two processors. Meitou uses `FixtureRegistry.CanUse`.
@@ -952,7 +973,10 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   of the looker's faction (`FUN_14032e2a0`: chain flag `+0x320`, owner faction the looker's) by its slave state (`FUN_1405c8aa0`): skipped while 1, a target once 2 (escaped); also needed: global `DAT_142133f54` set or the
   target's campaign (`FUN_1409c4b90`, **Verified** by disassembly: its faction's war manager forces record for its platoon, none without a platoon) null or in a phase other than 0 (`+0xc0`): a campaign
   still marching to its target is not attacked on sight. `DAT_142133f54` (initial 0) has this one reader and no writer in the decompile (**Observed**). Meitou `AggroSystem.FinderDrops`,
-  `CharacterFacts.MarchingToCampaign`. Also needed: the platoon-side object's vfunc `0xb0` null (not modelled). Factor 1 with a target, else 0. This is the attack on sight.
+  `CharacterFacts.MarchingToCampaign`. Also needed (first of all): the target's platoon (`FUN_140791b10`: Character `+0x658`, else its faction's default platoon `FUN_1406b9c60`; `+0x78`) is no
+  `UniquePlatoon`: `Platoon` vfunc `0xb0` is `FUN_1407f22f0` (0) and only `UniquePlatoon`'s `FUN_1409b0680` returns the platoon (**Verified**, vtables); a `UniquePlatoon` is made from an
+  UNIQUE_SQUAD_TEMPLATE or a saved PLATOON with `special` (`FUN_14057c6f0`), and no base record names either UNIQUE_SQUAD_TEMPLATE (**Verified**, probe), so only mods reach it
+  (Meitou `CharacterFacts.UniquePlatoon`; a character with no squad counts as in none). The pick goes through the target score, so the [leave-alone test](combat.md#attack-slots-and-circling) applies too. Factor 1 with a target, else 0. This is the attack on sight.
 - 144 TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME ("Home territory aggression", finder `FUN_14059fd70`, **Verified** stub): SENSE_ENEMY
   entries (mask 4, 0x208) within 1.3 x the home town's radius (`FUN_140926d50`, factor `DAT_14169bb40` = 1.3, read-only; ground-plane squared distance, strict; a
   NEST_MARKER home contains nobody), or outside it in the looker's own building (**Observed**: the enemy's and the looker's building hands match, the looker's not null; the
@@ -961,8 +985,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (`FUN_14059f720`) takes mask 6 (neutral or enemy, 0x308) and drops a faction the looker's coexists with (one way, neutrals too); `FUN_1408569a0`
   (leave alone, also in `FUN_14059fa70`) then drops, for a looker whose faction has no player flag (`+0x250`), whose squad holds no TEMP_ENEMY on the target
   (`FUN_140678960` tag 4) and whose faction is not hostile to the target's (relation above -30, `FUN_1406b25d0`), a target with diplomatic status (`FUN_140796240` flag 0: NPC class 5,
-  biome not factored in) or whose campaign is in phase 0 (`FUN_1409c4b90`); **Verified** by decompile and disassembly. Meitou `AggroSystem.FinderDrops` (21, and 144 with no home circle;
-  the player-faction branch is not modelled).
+  biome not factored in) or whose campaign is in phase 0 (`FUN_1409c4b90`); **Verified** by decompile and disassembly. The same test gates the target score `FUN_14059e300`,
+  which every finder here picks by (16, 21, 144 with or without its circle, 34, 41, 101), with its player-faction branch ([target score](combat.md#attack-slots-and-circling)).
+  Meitou `LeaveAlone.Spares`, in the score (`AggroSystem.Score`, `AiSystem.AssaultTargetFor`, `CombatSystem.Consider`).
 - 143 PROTECT_OWN_SQUAD ("Protect close allies"): effect `!isAggressionTowards` (state 16, evaluator `FUN_14059de10`: the target
   resolves to a character whose AI-side object is set and byte +0x2b0 is set). Finder `FUN_14099d510` scores
   each squad mate (the platoon's active members, the looker included) that passes `FUN_140855960(sense, mate, 1)` (**Verified**: the looker itself; else a mate in its own sensed map that is seen or
@@ -1027,7 +1052,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   or a goal not aimed at it, gives 0. Known = an entry of the looker's senses (`CharacterFacts.Knows`) or the mission target itself. The plan is the goal
   alone (engine choice: the walk and the weapon are the combat system's); the serial step sends a non-defensive `AttackOrder` to the picked member, the character alone
   (as dialogue's attack effects: its mates join through their own stance), and when the fight ends the next think picks the next standing member. Not modelled: the
-  `+0x280` branch, the leave-alone cases, entry age. 248 "Attacking Squad" has the same row shape and the same finder (`FUN_140793eb0`; its commitment is 0.3 + r x 2 h and it has no desire override): Meitou maps it to the assault behaviour of 101. No AI_TASK record of the merged base data has enum 248 (goal lists name AI_TASK records), so only a mod reaches it.
+  `+0x280` branch, entry age. 248 "Attacking Squad" has the same row shape and the same finder (`FUN_140793eb0`; its commitment is 0.3 + r x 2 h and it has no desire override): Meitou maps it to the assault behaviour of 101. No AI_TASK record of the merged base data has enum 248 (goal lists name AI_TASK records), so only a mod reaches it.
 - 32 SELF_PRESERVATION and 35 RUN_AWAY (**Verified** unless marked: `FUN_140319a60` registrations, stub bytes read from the exe, `Character::setupAI` `FUN_140621b70`). `setupAI` gives **every**
   character goal 14 (weight 0.1) and goal 32 (weight 1, target itself, tier 3); the race `AI Goals` (30 races list 32) may add it again. Row 32: flags 0x65, list A `!159`, no B, effect `!39`;
   desire AI slot 17 (`FUN_140599d20`, [combat](combat.md#fight-lifecycle-and-orders): 1 with a threat within 40, 0.7 with an attacking threat within 181.7, else 0); its finder stub jumps to `FUN_1405985e0`,
@@ -1235,7 +1260,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     applied as written, with the town the member stands in (radius test) and the building's owner = its property owner, else the level state's `owner faction ID`, else the town's faction;
     the player-side branch is coded but unused (an AI-run squad is never the player's). Pieces: a free chair, throne or (not for the player's side) training dummy in any building of that
     town (`TownBuilding.SeatAt`: the layout's chairs, then `Furniture`: layout thrones and dummies, and free-standing chairs, thrones and dummies), the nearest to the member (engine choice:
-    the original takes the first of an arbitrary order). A dummy is stood at, facing its way. Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner
+    the original takes the first of an arbitrary order). A dummy is stood at, facing its way, and pretend-operated like a home workstation (221 `Task_OperateMachine`: the functionality's
+    clip, hunger rate and `animation events`; `AiSystem.PretendOperate`). Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner
     (the building's is used).
 - Chairs (**Verified**, BUILDING_FUNCTIONALITY records of gamedata.base / rebirth.mod / the install's mods, dumped): BuildingFunction 17 BF_CHAIR
   `chair`, `chair-fixed`, `chair-fixed 180` (animation "sitting chair"; Stool, Old Stool, Bench, Sitting Box) and `sit on floor (no chair)`
@@ -1459,7 +1485,8 @@ feed, eject on; heal, help off (on in 4), rescue, stay, shootfirst off. Readers 
   floats +0x4bc ≤ 0, +0x4b8 < 2.25) a character takes food from the backpack of a squad member within 200 units (squared 40000).
 - **Shoot first** (+0x11a): turret target choice `FUN_1404374d0`: enemies (sensed 4, 0x210) weigh `FUN_140435d70`(…, 1), unseen × 0.1, the current
   target × 1.5; with none, a player gunner with the option takes sensed (2, 0x210) characters whose faction's type (+0x34) is 0 or 8 or whose
-  faction default (+0x60) is below -30; each is scored by `FUN_140435d70` with range factor k 0.6 (`DAT_141696c8c`), unseen x 0.1, current x 1.5, **Verified**, no extra weight.
+  faction default (+0x60) is below -30; each is scored by `FUN_140435d70` with range factor k 0.6 (`DAT_141696c8c`), unseen x 0.1, current x 1.5, **Verified**, no extra weight. The
+  score's own diplomat test: [combat](combat.md#turrets).
 
 ## Unknowns
 

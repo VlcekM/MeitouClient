@@ -841,9 +841,21 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// The carries a save held (<see cref="Saving.SavedCharacterLink.CarryPartner"/>; docs/formats/save.md "Carry links"): a carrier whose partner is
     /// now in the world takes it up again at once, without the lift (the link needs a carrier that is not carried and carries nothing, and a body not
     /// carried; a body in a bed or cage is let go of). One waits while its partner is not loaded (the original's deferred link,
-    /// <c>FUN_140797ec0</c>); either one dead or gone drops the link.
+    /// <c>FUN_140797ec0</c>); either one dead or gone drops the link. Then the links of squads that left the world in a carry
+    /// (<see cref="DropForUnload"/>).
     /// </summary>
     void RestoreLinks(World world)
+    {
+        RestoreSavedLinks(world);
+        RestoreUnloadLinks(world);
+    }
+
+    /// <summary>
+    /// The carries a save held (see <see cref="RestoreLinks"/>), linked from either side with the roles the side's <c>carrying</c> bool names (the
+    /// reader <c>FUN_140627b30</c>, <b>Verified</b>): a body whose carrier's record no longer holds the link (its squad was destroyed or unloaded
+    /// first) is taken up again by it.
+    /// </summary>
+    void RestoreSavedLinks(World world)
     {
         var table = world.Characters;
         var next = table.Next;
@@ -851,12 +863,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { Save: { CarryPartner.IsNull: false } link } cold) continue;
-            // the carrier's side links it
-            if (!link.CarryIsCarrier)
+
+            // A body already carried again (its carrier's side linked it) is done.
+            if (!link.CarryIsCarrier && !cold.CarriedBy.IsNone)
             {
-                if (!cold.CarriedBy.IsNone) link.CarryPartner = Meitou.Data.Save.Hand.Null;
+                link.CarryPartner = Meitou.Data.Save.Hand.Null;
                 continue;
             }
+
             if (bySave is null)
             {
                 bySave = [];
@@ -866,15 +880,77 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             var hand = link.CarryPartner;
             if (!bySave.TryGetValue((hand.C, hand.I), out int b) || b == i) continue;
             link.CarryPartner = Meitou.Data.Save.Hand.Null;
-            var body = table.Cold(b)!;
-            body.Save?.CarryPartner = Meitou.Data.Save.Hand.Null;
+            table.Cold(b)!.Save?.CarryPartner = Meitou.Data.Save.Hand.Null;
+            if (link.CarryIsCarrier) Relink(world, i, b);
+            else Relink(world, b, i);
+        }
+    }
 
-            // FUN_1405cff90 / FUN_1405ced90 (Verified): the carrier is not itself carried, carries nothing and the body is not carried; no medical
-            // test; a held body is let go.
-            if (!cold.Carrying.IsNone || !cold.CarriedBy.IsNone || !body.CarriedBy.IsNone) continue;
-            world.Fixtures.ReleaseHeld(world, table.IdOf(b));
-            if (body.Medical is { Incapacitated: false } && Friendly(cold, body)) body.CarriedAwake = true;
-            Link(table, i, b);
+    /// <summary>
+    /// The links a squad kept when it left the world carrying or carried (<see cref="CharacterCold.CarryRelink"/>): once the partner is in the
+    /// world again the carrier takes it up, from either side (the reader <c>FUN_140627b30</c> links with the roles its <c>carrying</c> bool names,
+    /// <b>Verified</b>); a partner not in the world is waited for (<c>FUN_140797ec0</c> has no give-up).
+    /// </summary>
+    void RestoreUnloadLinks(World world)
+    {
+        var table = world.Characters;
+        var next = table.Next;
+        Dictionary<CharacterCold, int>? byCold = null;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!next[i].Alive || table.Cold(i) is not { CarryRelink: { } partner } cold) continue;
+
+            if (byCold is null)
+            {
+                byCold = new(ReferenceEqualityComparer.Instance);
+                for (int s = 0; s < table.HighWater; s++)
+                    if (next[s].Alive && table.Cold(s) is { } other) byCold[other] = s;
+            }
+
+            if (!byCold.TryGetValue(partner, out int p) || p == i) continue;
+
+            cold.CarryRelink = null;
+            if (ReferenceEquals(partner.CarryRelink, cold)) partner.CarryRelink = null;
+            if (cold.CarryRelinkIsCarrier) Relink(world, i, p);
+            else Relink(world, p, i);
+        }
+    }
+
+    /// <summary>
+    /// A kept link made again (<c>FUN_1405cff90</c> / <c>FUN_1405ced90</c>, <b>Verified</b>): only for a carrier that is not itself carried and
+    /// carries nothing, and a body not carried; no medical test; a held body is let go.
+    /// </summary>
+    void Relink(World world, int carrier, int body)
+    {
+        var table = world.Characters;
+        var cold = table.Cold(carrier)!;
+        var bc = table.Cold(body)!;
+        if (!cold.Carrying.IsNone || !cold.CarriedBy.IsNone || !bc.CarriedBy.IsNone) return;
+
+        world.Fixtures.ReleaseHeld(world, table.IdOf(body));
+        if (bc.Medical is { Incapacitated: false } && Friendly(cold, bc)) bc.CarriedAwake = true;
+        Link(table, carrier, body);
+    }
+
+    /// <summary>
+    /// A member of a squad that leaves the world lets its carry go (<c>FUN_1404feed0</c> destroys every member of the unloading platoon, and the
+    /// destroy <c>FUN_140799af0</c> runs the put-down unlink <c>FUN_1405ce1e0</c> on it, <b>Verified</b>): the partner is dropped where it is, a
+    /// kidnap victim's carrier taken for its kidnapper as a put-down does (<see cref="LetKidnapVictimGo"/>). The platoon's record, written just
+    /// before, keeps the link (<c>FUN_1404ff410</c>), so it is noted on the leaving one (<see cref="CharacterCold.CarryRelink"/>). Serial phase.
+    /// </summary>
+    internal void DropForUnload(World world, int slot)
+    {
+        var table = world.Characters;
+        var cold = table.Cold(slot)!;
+        if (table.TryResolveNext(cold.Carrying, out int body))
+        {
+            (cold.CarryRelink, cold.CarryRelinkIsCarrier) = (table.Cold(body), true);
+            Unlink(world, slot, body, drop: true);
+        }
+        else if (table.TryResolveNext(cold.CarriedBy, out int carrier))
+        {
+            (cold.CarryRelink, cold.CarryRelinkIsCarrier) = (table.Cold(carrier), false);
+            Unlink(world, carrier, slot, drop: true);
         }
     }
 

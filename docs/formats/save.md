@@ -562,7 +562,13 @@ a squad handle is not mapped. The read keys are written back unchanged until the
 
 Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` reads): the character state record has a bool `carrying` (true on the carrier) and a handle `carrying`
 (the partner, null when none), both always written. The reader links them when the partner resolves, else keeps the handle and links it later from the per-frame `FUN_140797ec0`
-(deferred until the partner is loaded). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys; the link is made without a lift, checked every 20 ticks; it skips a carrier that is carried or carries and a carried body, tests no incapacitation (the carry step drops an incapacitated carrier's body afterwards, **Verified** `FUN_1405cff90`), and lets the body go from a bed or cage.
+(deferred until the partner is loaded, with no give-up). The reader links from either side, the roles by the side's bool (**Verified** `FUN_140627b30`). An unloading
+platoon's record is written before its members are destroyed (`FUN_1407ef4b0`: `FUN_1404ff410`, then `FUN_1404feed0`), and each destroy (`FUN_140799af0`) runs the
+put-down unlink `FUN_1405ce1e0`, so the partner is let go where it is while the record keeps the link; when the platoon loads again the carry is made again if the
+partner is free (**Verified**). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys; the link is made without a lift, from either side, checked every 20
+ticks; it skips a carrier that is carried or carries and a carried body, tests no incapacitation (the carry step drops an incapacitated carrier's body afterwards,
+**Verified** `FUN_1405cff90`), and lets the body go from a bed or cage. A squad stored as it leaves the world lets its carries go and keeps the links
+(`CarrySystem.DropForUnload`, `CharacterCold.CarryRelink`), written as these keys and made again once both are in the world.
 
 Meitou (`Saving/HeldSave`): reads building keys from the zones' GAMESTATE_BUILDING records when the town registers and writes them back into
 them (the visited zones' files, [Zone files](#zone-files)); the save ids of generated interiors are not mapped, so interior cages and
@@ -603,6 +609,8 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
 Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`), each written only while set and removed otherwise:
 - GAMESTATE_CHARACTER int `floor`: the character's `getFloor` (0 to 3), read back on load (`FUN_140626f50`) and set again by its next movement
   step; **Verified** in vanilla saves (every character has it). Meitou writes `SightMap.FloorOf`, on top of a building too.
+- GAMESTATE_CHARACTER handle `isindoors`: the building the character is in, on top of it too (`isIndoors`), null outdoors; read back with
+  `floor` (`FUN_140626f50`). Meitou writes the building's save handle for `SightMap.LocationOf`, null when the save holds none.
 - GAMESTATE_CHARACTER float `age`: the character's age (1 for people, an animal's growth, [animals](../game/animals.md#ageing)); **Verified** in vanilla saves.
 - GAMESTATE_CHARACTER `meitou kidnapped` (bool, held by a kidnapper: no sentence, no bail; not the original's `kidn`), `meitou recognition` (float 0..1, bounty recognition meter). The escaped and [kidnap victim](../game/carry-loot.md#the-kidnap-victim-flag) flags are the original's `escap` and `kidn` (above; `CrimeSave` writes them always). Older Meitou saves wrote `meitou escaped` and the recently-wanted seconds as `meitou recently wanted`; each is read when the original's key (`escap`, `disguiseblown`) is missing and dropped on save.
 - GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since).
