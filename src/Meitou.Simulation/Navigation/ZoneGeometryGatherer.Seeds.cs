@@ -214,9 +214,9 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// Linked wall sections (BUILDING with <c>link length</c> above 0): three seeds on top of a WALKABLE wall where the ray down hits it, and for
-    /// walls that leave the zone three ground seeds clamped into the zone box. The three positions along the wall are our choice (0.15, 0.5 and 0.85
-    /// of its length, the length taken from the collision footprint); the original's are Unknown.
+    /// Linked wall sections (BUILDING with <c>link length</c> above 0): three seeds on top of a WALKABLE wall the player owns where the ray down hits
+    /// it (a town's walls get none, so their tops are no island of their own), and for walls that leave the zone three ground seeds clamped into the
+    /// zone box. The three positions along the wall are our choice (0.15, 0.5 and 0.85 of its length, the length taken from the collision footprint).
     /// </summary>
     void AddLinkedWallSeeds(ZoneGeometry g, BuildingRay hits)
     {
@@ -235,7 +235,7 @@ internal sealed partial class ZoneGeometryGatherer
             // The two farthest footprint points are the wall's ends.
             var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
             var (a, c) = FarthestPair(hull);
-            bool walkable = (PathMode)record.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Walkable;
+            bool walkable = b.PlayerOwned && (PathMode)record.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Walkable;
             bool leaves = !(InsideBox(g, a) && InsideBox(g, c));
             foreach (float t in new[] { 0.15f, 0.5f, 0.85f })
                 AddWallSeedsAt(g, Vector2.Lerp(a, c, t), walkable, leaves, hits, water);

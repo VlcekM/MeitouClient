@@ -265,13 +265,22 @@ sealed class BuildingSync(GameHost host)
     /// <summary>
     /// The render and navigation overlay type of a site (<c>StateId</c> null, <c>WorldY</c> the absolute height, the zone of its position). Its key
     /// is its own id: a player building's id is unique in the world (the simulation's registry reserves every saved id), and the overlays remove it
-    /// by that id.
+    /// by that id. <c>PlayerOwned</c>: the site's owner is the player's faction (a nest's pieces are their camp's).
     /// </summary>
-    static BuildingPlacement Placement(BuildingSnapshot site) =>
-        site.LevelPlacement is { } level
-            ? level with { Key = site.Id, WorldY = site.Position.Y, DestroyedOverride = site.Destroyed }
-            : new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null,
-                site.Position.Y) { Key = site.Id, Contained = site.Parent is not null, ContainerId = site.Parent };
+    BuildingPlacement Placement(BuildingSnapshot site)
+    {
+        bool mine = site.Owner == host.Session.World.Player.Faction;
+        if (site.LevelPlacement is { } level)
+            return level with { Key = site.Id, WorldY = site.Position.Y, DestroyedOverride = site.Destroyed, PlayerOwned = mine };
+
+        return new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y)
+        {
+            Key = site.Id,
+            Contained = site.Parent is not null,
+            ContainerId = site.Parent,
+            PlayerOwned = mine,
+        };
+    }
 
     /// <summary>
     /// Navmesh membership (engine reading of the Observed rebuild on placing): <c>path mode</c> not 0 and the building complete or without a <c>build

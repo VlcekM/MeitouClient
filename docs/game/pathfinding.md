@@ -786,8 +786,12 @@ lose the collision too once a destroyed one was made; Meitou clears it per place
       329 enclosed regions (25 of their 28 million sq units) hold one). Then the midpoints of the
       open border edges of each already built neighbour zone (FUN_1403c9820, the four neighbours) so regions connect
       across zone borders; points of a global list (DAT_14212f470, not identified) inside the box; and linked wall
-      sections (class 9 WALL with `link length` > 0): three seeds on top of WALKABLE walls (ray hits) and, for walls that
-      leave the zone, three ground seeds clamped into the zone box.
+      sections (class 9 WALL with `link length` > 0): three seeds on top of WALKABLE walls the player owns (ray hits) and, for walls that
+      leave the zone, three ground seeds clamped into the zone box. **Verified** (FUN_1403cbfa0's wall loop): the top seeds need
+      FUN_140546dd0 (the owner faction, slot 0x58, has the player field +0x250) as well as `path mode` 3, so a town's walls get none;
+      **Observed** (`meitou-tools navmesh --town Admag --probe`, #798): the original's 12.35 tile has no polygon on Admag's WALKABLE
+      `Defensive Wall IV` tops, where seeding them kept a 200-polygon island with no way down that patrols walked onto and stood on. Meitou:
+      `BuildingPlacement.PlayerOwned` (the host's sites whose owner is the player's faction).
     - job type 1: two ground seeds on each edge of the job's box (corner table DAT_1416ccd30).
     - ground seeds (FUN_1403d8ac0): terrain height at (x, z), raised to the water level, then a ray down against
       groups 2, 6, 9, 14, 19 (mask 0x84244); the seed is added only when the ray finds nothing (or a hit of one
