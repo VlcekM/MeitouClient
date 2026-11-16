@@ -402,6 +402,23 @@ sealed class UserConfig
     /// </summary>
     public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>
+    /// What the XP gains of the player's characters and faction are multiplied by (Advanced settings "Squad XP"; 1, as in the game;
+    /// docs/game/character-stats.md "Levelling (XP)").
+    /// </summary>
+    public float SquadXp { get; set; } = 1;
+    /// <summary>
+    /// What every other character's XP gains are multiplied by (Advanced settings "Others' XP"; 1, as in the game).
+    /// </summary>
+    public float OthersXp { get; set; } = 1;
+    /// <summary>
+    /// The XP sliders' range (<see cref="SquadXp"/>, <see cref="OthersXp"/>): none to a thousand times the game's, as the XP mods allow.
+    /// </summary>
+    public const float MinXpRate = 0, MaxXpRate = 1000;
+    /// <summary>
+    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>).
+    /// </summary>
+    public List<string> AdoptedMods { get; set; } = [];
+    /// <summary>
     /// A loaded or imported save starts paused (Advanced settings, a Faithful / Meitou switch; on by default, Meitou: in the game it runs at once).
     /// <c>--load</c> is not paused.
     /// </summary>
@@ -934,6 +951,9 @@ sealed class UserConfig
         if (MetalUpscaler is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) MetalRenderScale = Math.Clamp(MetalRenderScale, 0.4f, 1f);
         MetalRenderDivisor = Math.Clamp(MetalRenderDivisor, 1, MetalRenderDivisorMax);
         ModSettings ??= [];
+        AdoptedMods ??= [];
+        SquadXp = float.IsFinite(SquadXp) ? Math.Clamp(SquadXp, MinXpRate, MaxXpRate) : 1;
+        OthersXp = float.IsFinite(OthersXp) ? Math.Clamp(OthersXp, MinXpRate, MaxXpRate) : 1;
         foreach (var (mod, saved) in ModSettings.ToList())
             if (saved is null) ModSettings.Remove(mod);
     }

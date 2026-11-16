@@ -72,14 +72,15 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
 
     /// <summary>
     /// Trains the skill by <paramref name="amount"/> on the game's curve (<see cref="CharacterStats.CoreGain"/>: full rate at 1, slower towards 101);
-    /// returns the new level. A NaN level stays NaN, as a vanilla stat's does.
+    /// returns the new level. A NaN level stays NaN, as a vanilla stat's does. The character's XP rate applies as to a vanilla stat
+    /// (<see cref="CharacterStats.XpRate"/>).
     /// </summary>
     public float Gain(CharacterStats stats, float amount)
     {
         float level = Level(stats);
         if (float.IsNaN(level)) return level;
 
-        float next = CharacterStats.CoreGain(level, amount);
+        float next = CharacterStats.CoreGain(level, stats.Rated(level, amount, CharacterStats.XpCap));
         Set(stats, next);
         return next;
     }

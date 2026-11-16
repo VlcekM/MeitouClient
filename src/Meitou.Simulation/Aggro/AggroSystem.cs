@@ -329,7 +329,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// Of the player's side (the original's <c>isWithThePlayer</c> <c>FUN_140856bc0</c>): the player's faction. Engine: its owner path (a slave's or
     /// pet's) is not modelled.
     /// </summary>
-    static bool PlayerSide(World world, CharacterCold? c) =>
+    internal static bool PlayerSide(World world, CharacterCold? c) =>
         c is not null && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction);
 
     /// <summary>
