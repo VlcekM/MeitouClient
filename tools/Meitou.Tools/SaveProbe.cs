@@ -108,6 +108,7 @@ static class SaveProbe
             case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
             case ("containers", >= 1): Containers(probe, float.Parse(a[0])); return true;
+            case ("shopgrid", >= 1): ShopGrid(probe, a[0]); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
             case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
@@ -1161,6 +1162,68 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The trader window of the building shop of the squad named <paramref name="squad"/> (a part of its name) as a trade opening builds it: its
+    /// size, each item with its cell, footprint and quantity, and the grid as text (a letter per item, '.' a free cell).
+    /// </summary>
+    static void ShopGrid(ProbeWorld probe, string squad)
+    {
+        var world = probe.World;
+        var q = world.Squads.All.FirstOrDefault(s => s.Shop?.Building is not null && s.Name.Contains(squad, StringComparison.OrdinalIgnoreCase));
+        if (q?.Shop is not { } shop)
+        {
+            Console.WriteLine($"no building shop squad named '{squad}'");
+            return;
+        }
+
+        var boxes = shop.Containers
+            .Select(id => world.Fixtures.Find(id))
+            .Where(f => f?.Contents is not null)
+            .Select(f => new Meitou.Simulation.Trading.StockBox(f!, null))
+            .ToList();
+        shop.View.Build(shop, boxes);
+
+        var grid = shop.Stock;
+        Console.WriteLine($"squad {q.Id} '{q.Name}' window starts {shop.ViewSize.Columns}x{shop.ViewSize.Rows}, built {grid.Width}x{grid.Height}, "
+            + $"{grid.Items.Count} items from {boxes.Count} containers");
+        for (int k = 0; k < grid.Items.Count; k++)
+        {
+            var it = grid.Items[k];
+            Console.WriteLine($"  {Letter(k)} {it.Name} record={it.Record} type={it.Type} at {it.X},{it.Y} size {it.Width}x{it.Height} "
+                + $"quantity={it.Quantity} limit={grid.LimitOf(it)}");
+        }
+
+        PrintGrid(grid);
+        shop.View.Drop(shop);
+    }
+
+    /// <summary>
+    /// The grid's main section as text, a row per line: each item's cells its letter (<see cref="Letter"/>), a free cell '.'.
+    /// </summary>
+    static void PrintGrid(Meitou.Simulation.Items.Inventory grid)
+    {
+        var rows = new char[grid.Height][];
+        for (int y = 0; y < grid.Height; y++) rows[y] = new string('.', grid.Width).ToCharArray();
+
+        for (int k = 0; k < grid.Items.Count; k++)
+        {
+            var it = grid.Items[k];
+            for (int y = it.Y; y < Math.Min(grid.Height, it.Y + it.Height); y++)
+                for (int x = it.X; x < Math.Min(grid.Width, it.X + it.Width); x++) rows[y][x] = Letter(k);
+        }
+
+        int last = Array.FindLastIndex(rows, r => r.Any(c => c != '.'));
+        for (int y = 0; y <= Math.Min(grid.Height - 1, last + 2); y++) Console.WriteLine($"  {y,3} {new string(rows[y])}");
+    }
+
+    /// <summary>
+    /// The letter an item's cells show in <see cref="PrintGrid"/>.
+    /// </summary>
+    static char Letter(int k) =>
+        k < 26 ? (char)('a' + k)
+        : k < 52 ? (char)('A' + k - 26)
+        : '#';
+
+    /// <summary>
     /// The player's buildings within <paramref name="radius"/> of the leader: id, record, position, floor, the building they stand in and whether
     /// they are complete.
     /// </summary>
@@ -1533,6 +1596,7 @@ static class SaveProbe
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
               containers <radius>      containers near the leader: their items, building shop stock in each, homes with vendor lists and trader window
+              shopgrid <squad>         a building shop's trader window as a trade builds it: items, cells, the grid as text
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
               research                 the research state and each bench's rate factors
