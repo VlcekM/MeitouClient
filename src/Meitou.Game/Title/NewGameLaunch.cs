@@ -134,8 +134,8 @@ sealed class NewGameLaunch(GameHost host)
                 host.SettleNewWorld();
                 host.Player.Notice(Loc.Tr("Started {1}", chosen.Name));
                 ShowStartHints();
-                // The start's characters are made in the editor first (docs/characters.md "Character editor").
-                host.CharacterEditor.PendingCreation = [.. spawned.Members];
+                // The start's characters, of every start squad, are made in the editor first (docs/characters.md "Character editor").
+                host.CharacterEditor.PendingCreation = [.. SquadManagement.PlayerSquads(host.Session.World).SelectMany(s => s.Members)];
                 return null;
             }));
         host.SkyArrival?.ClimbAtOnce();
