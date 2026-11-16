@@ -49,9 +49,13 @@ to `FUN_140884850`: s = clamp(stored x 0.75 if carrying (Character +0x348) x 2 w
 (CharStats +0x3c) x the fitted limbs' factor `FUN_140644b90(16)` x 0.01, 0, 1); the getter returns s x 100 and
 the sneak speed `FUN_140884920` reads s. Body term (`FUN_140644da0`): clamp(lowest health fraction over TORSO and
 LEG parts, 1 with none, + toughness x scale x 0.01, 0, 1). Its only caller is the sense update `FUN_1408586d0`,
-past an early return on a Character +0xd4 byte, so otherwise it keeps its last value (1 at start; **Observed**,
-fits #46's torso at 0.5 leaving stealth at 1). The table's stealth case (A; 0.9, 0.9, 0.8) exists, but no caller
-found reaches it. Meitou: `Orders.Stealth` (its x2 reads `MedicalState.Prone`, both crawls).
+past an early return on a Character +0xd4 byte (stealth on), so otherwise it keeps its last value (1 at start; **Observed**,
+fits #46's torso at 0.5 leaving stealth at 1). That update is skipped while the character is down (`FUN_1405cf130`, vfunc 0x30
+`FUN_1405c9e10`: unconscious, dead, carried, ragdolled or posture >= 3), not for the posture-2 crippled crawl, so a crippled sneaker's
+term follows its downed leg: crawling does not cancel the injury (**Verified**, decompile; #785). The Stealth tooltip (`FUN_14088f9a0`)
+ends its rows at "Crawling: +100%" and skips the Encumbrance, Injuries, gear and Robotics rows, but its Total is the full getter.
+The table's stealth case (A; 0.9, 0.9, 0.8) exists, but no caller found reaches it. Meitou: `Orders.Stealth` (its x2 reads
+`MedicalState.Prone`, both crawls).
 
 ### Gear factors
 
