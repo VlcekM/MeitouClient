@@ -356,10 +356,10 @@ public sealed record TownDisposal(string Id, string RecordId, Vector3 Position);
 public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoors);
 
 /// <summary>
-/// A level building no town takes that draws power (<see cref="TownBuildings.Townless"/>): its <see cref="BuildingPlacement.Key"/>, BUILDING, position
-/// and whether the level data has it destroyed.
+/// A level building no town takes that draws power (<see cref="TownBuildings.Townless"/>): its <see cref="BuildingPlacement.Key"/>, BUILDING, position,
+/// whether the level data has it destroyed, its zone and its level-data state (null: none).
 /// </summary>
-public sealed record TownlessBuilding(string Key, string RecordId, Vector3 Position, bool Destroyed);
+public sealed record TownlessBuilding(string Key, string RecordId, Vector3 Position, bool Destroyed, ZoneCoordinate Zone, GameRecord? LevelState);
 
 /// <summary>
 /// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the

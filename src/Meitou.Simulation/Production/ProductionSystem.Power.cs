@@ -37,9 +37,19 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<int, float> _npcSupply = [];
     /// <summary>
-    /// The draws of the machine-class buildings of each such town (<see cref="NpcDraws"/>): pseudo consumers of its frame. A scratch map.
+    /// The pseudo consumers of each grid that holds a player machine this tick: an NPC town's level buildings and layout objects
+    /// (<see cref="NpcDraws"/>), the town-less buildings nearest to it (<see cref="TownlessDraws"/>). A scratch map.
     /// </summary>
-    readonly Dictionary<int, List<float>> _npcDraws = [];
+    readonly Dictionary<int, List<PseudoDraw>> _npcDraws = [];
+    /// <summary>
+    /// What each pseudo consumer of the last tick's grids was granted, by its key, with its grid and draw (<see cref="Share"/>). A scratch map.
+    /// </summary>
+    readonly Dictionary<string, (int Grid, float Demand, float Granted)> _pseudoGrants = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The last grant of a pseudo consumer of each grid and draw this tick: a house's bed or seat spot, which has no key of its own among the
+    /// layout objects, reads the share of a layout object of its draw on its frame. A scratch map.
+    /// </summary>
+    readonly Dictionary<(int Grid, float Demand), float> _pseudoByDemand = [];
     /// <summary>
     /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
     /// </summary>
@@ -229,6 +239,8 @@ public sealed partial class ProductionSystem
     {
         _npcSupply.Clear();
         _npcDraws.Clear();
+        _pseudoGrants.Clear();
+        _pseudoByDemand.Clear();
         foreach (var town in _grids.Where(g => g.Value.Count > 0).Select(g => g.Key))
         {
             if (town > 0)
@@ -245,14 +257,14 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The draws of the town-less level buildings whose nearest town is grid <paramref name="grid"/> (<see cref="TownlessGrid"/>).
     /// </summary>
-    List<float> TownlessDraws(World world, int grid)
+    List<PseudoDraw> TownlessDraws(World world, int grid)
     {
-        var draws = new List<float>();
+        var draws = new List<PseudoDraw>();
         foreach (var b in world.SystemOf<PopulationSystem>()?.Data.Townless ?? [])
         {
             if (b.Destroyed || TownlessGrid(world, b) != grid) continue;
 
-            if (Draw(world, b.RecordId, outdoors: true) is { } draw) draws.Add(draw);
+            if (Draw(world, b.RecordId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, TownlessGetsBattery(world, b)));
         }
 
         return draws;
@@ -280,22 +292,48 @@ public sealed partial class ProductionSystem
     /// such object of a standing building's layouts (ceiling fans, lamps, stoves, benches; <see cref="TownBuilding.LayoutBuildings"/>), which
     /// joins its house's town (<c>FUN_140296940</c> climbs to the root object); an interior's light draws all day.
     /// </summary>
-    List<float> NpcDraws(World world, int index)
+    List<PseudoDraw> NpcDraws(World world, int index)
     {
-        var draws = new List<float>();
+        var draws = new List<PseudoDraw>();
         if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return draws;
 
         foreach (var b in site.Buildings)
         {
             if (b.Destroyed) continue;
 
-            if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(draw);
+            if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, LevelGetsBattery(world, site, b)));
             foreach (var item in b.LayoutBuildings)
-                if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(drawn);
+                if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(new PseudoDraw(item.Id, drawn, GetsBattery: true));
         }
 
         draws.AddRange(TownlessDraws(world, -(index + 1)));
         return draws;
+    }
+
+    /// <summary>
+    /// A level building's <c>gets battery</c> (+0x3b4): the UseableStuff constructor (<c>FUN_1402a0900</c>) sets it, and only a building of a saved
+    /// zone or of the player's loads it from its state, where a missing key is false (<c>FUN_1402a1750</c>, the guard of "NPC generator state").
+    /// A layout object keeps the constructor's (Meitou does not map the save's ids of generated interiors).
+    /// </summary>
+    static bool LevelGetsBattery(World world, TownSite site, TownBuilding b)
+    {
+        var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        if (!world.SavedZones.Contains(b.Zone) && !PlayerGeneratorOwner(world, site, b, saved)) return true;
+
+        return saved is not null ? saved.Bools.GetValueOrDefault("gets battery") : b.LevelState?.GetBool("gets battery") ?? true;
+    }
+
+    /// <summary>
+    /// A town-less building's <c>gets battery</c>, as <see cref="LevelGetsBattery"/> reads it; with no town, the owner is its saved owner alone.
+    /// </summary>
+    static bool TownlessGetsBattery(World world, TownlessBuilding b)
+    {
+        var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
+        bool player = saved?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } id
+            && world.SystemOf<PopulationSystem>()?.Data.FactionIndex(id) is >= 0 and var faction && faction == world.Player.Faction;
+        if (!world.SavedZones.Contains(b.Zone) && !player) return true;
+
+        return saved is not null ? saved.Bools.GetValueOrDefault("gets battery") : b.LevelState?.GetBool("gets battery") ?? true;
     }
 
     /// <summary>
@@ -329,13 +367,26 @@ public sealed partial class ProductionSystem
         if (demand <= 0) return new LevelPowerView(key, 0, 0);
         if (grid == NoPowerTown) return new LevelPowerView(key, demand, 0);
 
-        var machines = _grids.GetValueOrDefault(grid) ?? [];
-        var consumers = machines.Where(m => m.Data.IsConsumer).Select(m => m.Demand).ToList();
-        float granted = grid < 0
-            ? GrantOf(demand, NpcOutput(world, -grid - 1), NpcDraws(world, -grid - 1), consumers)
-            : GrantOf(demand, machines.Where(m => m.Data.IsGenerator).Sum(m => m.Demand), TownlessDraws(world, grid), consumers);
-        return new LevelPowerView(key, demand, granted);
+        return new LevelPowerView(key, demand, Recorded(key, grid, demand) ?? UnsharedGrant(world, grid, demand));
     }
+
+    /// <summary>
+    /// What the last tick's frame of <paramref name="grid"/> granted the pseudo consumer <paramref name="key"/>, batteries included (<see cref="Share"/>),
+    /// else one of its draw on that frame; null when the grid holds no player machine (no frame ran).
+    /// </summary>
+    float? Recorded(string key, int grid, float demand)
+    {
+        if (_pseudoGrants.TryGetValue(key, out var own) && own.Grid == grid) return own.Granted;
+
+        return _pseudoByDemand.TryGetValue((grid, demand), out float alike) ? alike : null;
+    }
+
+    /// <summary>
+    /// The grant of a draw of <paramref name="demand"/> on a frame no player machine is on: an NPC town's generators over its town draws
+    /// (<see cref="GrantOf"/>; it has no batteries, which only the player builds); 0 on a player town's, which then has no generator either.
+    /// </summary>
+    float UnsharedGrant(World world, int grid, float demand) =>
+        grid < 0 ? GrantOf(demand, NpcOutput(world, -grid - 1), [.. NpcDraws(world, -grid - 1).Select(d => d.Demand)], []) : 0;
 
     /// <summary>
     /// The standing level object of <paramref name="key"/> with its grid (a level town's <c>-(index + 1)</c>, a town-less building's
@@ -615,21 +666,14 @@ public sealed partial class ProductionSystem
         supply += _npcSupply.GetValueOrDefault(town);
         float generated = supply;
         _townSupply[town] = (generated > 0, batteries > 0);
-        consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));
-        int @short = ShareOut(consumers, _npcDraws.GetValueOrDefault(town), ref supply);
-        demandTotal += _npcDraws.TryGetValue(town, out var npc) ? npc.Sum() : 0;
+        var npc = _npcDraws.GetValueOrDefault(town) ?? [];
+        var order = ConsumerOrder(consumers, npc);
+        int @short = ShareOut(order, ref supply);
+        demandTotal += npc.Sum(d => d.Demand);
 
         float batteryLeft = batteries;
-        if (mode && @short > 0)
-        {
-            foreach (var c in consumers)
-            {
-                if (!c.GetsBattery || c.Granted >= c.Demand) continue;
-                float give = MathF.Min(c.Demand - c.Granted, batteryLeft / Math.Max(1, @short--));
-                batteryLeft -= give;
-                c.Granted += give;
-            }
-        }
+        if (mode && @short > 0) TopUpFromBatteries(order, ref batteryLeft, @short);
+        RecordPseudoGrants(town, npc);
 
         float charged = 0, drained = 0;
         if (supply <= 0)
@@ -660,30 +704,69 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The water-filling of <paramref name="supply"/> over the machines (sorted by demand) and the NPC town's pseudo consumers (<paramref name="npc"/>,
-    /// null: none): in ascending demand each takes at most an equal share of what is left; a machine of equal demand to a pseudo consumer comes
-    /// after it. Returns how many battery-taking machines were left short.
+    /// The frame's consumers in the order the original sorts them (<c>FUN_140927350</c>): ascending demand, a pseudo consumer before a machine of
+    /// equal demand, machines of equal demand by site.
     /// </summary>
-    static int ShareOut(List<Machine> consumers, List<float>? npc, ref float supply)
+    static List<IPowerDraw> ConsumerOrder(List<Machine> consumers, List<PseudoDraw> npc)
     {
-        var draws = npc is null ? new Queue<float>() : new Queue<float>(npc.Order());
-        int left = consumers.Count + draws.Count, @short = 0;
+        consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));
+        var order = new List<IPowerDraw>(consumers.Count + npc.Count);
+        var draws = new Queue<PseudoDraw>(npc.OrderBy(d => d.Demand));
         foreach (var c in consumers)
         {
-            while (draws.Count > 0 && draws.Peek() <= c.Demand)
-            {
-                float draw = draws.Dequeue();
-                supply -= MathF.Min(supply / Math.Max(1, left--), draw);
-            }
+            while (draws.Count > 0 && draws.Peek().Demand <= c.Demand) order.Add(draws.Dequeue());
 
+            order.Add(c);
+        }
+
+        order.AddRange(draws);
+        return order;
+    }
+
+    /// <summary>
+    /// The water-filling of <paramref name="supply"/> over the frame's consumers in <see cref="ConsumerOrder"/>, machines and pseudo consumers
+    /// alike: each takes at most an equal share of what is left. Returns how many that get battery power were left short.
+    /// </summary>
+    static int ShareOut(List<IPowerDraw> order, ref float supply)
+    {
+        int left = order.Count, @short = 0;
+        foreach (var c in order)
+        {
             float give = MathF.Min(supply / Math.Max(1, left--), c.Demand);
             supply -= give;
             c.Granted = give;
             if (give < c.Demand && c.GetsBattery) @short++;
         }
 
-        while (draws.Count > 0) supply -= MathF.Min(supply / Math.Max(1, left--), draws.Dequeue());
         return @short;
+    }
+
+    /// <summary>
+    /// In battery mode the consumers left short that get battery power (<c>gets battery</c>, a pseudo consumer's too) share the batteries' output
+    /// in the same order, each at most what it still lacks.
+    /// </summary>
+    static void TopUpFromBatteries(List<IPowerDraw> order, ref float batteryLeft, int @short)
+    {
+        foreach (var c in order)
+        {
+            if (!c.GetsBattery || c.Granted >= c.Demand) continue;
+
+            float give = MathF.Min(c.Demand - c.Granted, batteryLeft / Math.Max(1, @short--));
+            batteryLeft -= give;
+            c.Granted += give;
+        }
+    }
+
+    /// <summary>
+    /// Keeps what the frame of <paramref name="grid"/> granted each of its pseudo consumers this tick, for their panels (<see cref="Recorded"/>).
+    /// </summary>
+    void RecordPseudoGrants(int grid, List<PseudoDraw> npc)
+    {
+        foreach (var d in npc)
+        {
+            _pseudoGrants[d.Key] = (grid, d.Demand, d.Granted);
+            _pseudoByDemand[(grid, d.Demand)] = d.Granted;
+        }
     }
 
     /// <summary>

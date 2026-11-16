@@ -1,3 +1,4 @@
+using Meitou.Content;
 using Meitou.Data.Fcs;
 
 namespace Meitou.Data;
@@ -71,6 +72,11 @@ public sealed class GameDatabase
     #region Loading
 
     /// <summary>
+    /// What the game loader keeps from one file to the next (its value buffer), for the files of this database's load.
+    /// </summary>
+    readonly FcsLoaderSession _loader = new();
+
+    /// <summary>
     /// Reads and applies every file of <paramref name="loadOrder"/>: the core files, the language's core translation, the mods, then the translation
     /// of the first mod that has one (docs/formats/localisation.md, "Data translation").
     /// </summary>
@@ -97,21 +103,16 @@ public sealed class GameDatabase
     }
 
     /// <summary>
-    /// Reads and applies one data file of the load order as the game does (docs/formats/fcs-mod.md, "Files that fail to load"): one that does not
-    /// open or has an unknown file type is left out (<see cref="NotLoaded"/>), one damaged further on is applied with the records read before the
-    /// damage.
+    /// Reads and applies one data file of the load order as the game does (docs/formats/fcs-mod.md, "Game loader", "Files that fail to load"): one
+    /// that does not open or has a file type outside 8..17 is left out (<see cref="NotLoaded"/>); one that ends early is applied as far as the
+    /// loader gets.
     /// </summary>
     void LoadDataFile(LoadOrderEntry entry)
     {
-        FcsFile file;
+        FcsGameLoader loader;
         try
         {
-            file = FcsReader.ReadFile(entry.Path);
-        }
-        catch (FcsFormatException e) when (e.Partial is { } partial)
-        {
-            Issues.Add(new GameDataIssue(GameDataIssueKind.DataFileDamaged, entry.Name, null, e.Message));
-            file = partial;
+            loader = OpenLoader(entry.Path, LoaderName(entry));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FcsFormatException)
         {
@@ -120,46 +121,96 @@ public sealed class GameDatabase
             return;
         }
 
-        Apply(file, entry.Name);
+        Version++;
+        Files.Add(entry.Name);
+        Headers[entry.Name] = HeaderOf(entry.Path);
+        while (loader.Next() is { } record)
+            Apply(record, entry.Name);
+        ReportLoad(loader, entry.Name, entry.Path);
     }
 
     /// <summary>
     /// Applies a <c>.translation</c> file like any data file (the game loads it with the same loader, <b>Verified</b> <c>Fcs_LoadTranslationFile</c>
-    /// → <c>GameDataContainer_Load</c>): its records change the names and text fields of records already loaded. A file that cannot be read is
-    /// reported as an issue and skipped, as the game logs an error and goes on.
+    /// → <c>GameDataContainer_Load</c>, with no entry name): its records change the names and text fields of records already loaded. A file that
+    /// cannot be opened or has a bad file type is reported as an issue and skipped, as the game logs an error and goes on.
     /// </summary>
     public void LoadTranslation(string? path)
     {
         if (path is null) return;
-        FcsFile file;
+
+        string fileName = Path.GetFileName(path);
+        FcsGameLoader loader;
         try
         {
-            file = FcsReader.ReadFile(path);
+            loader = OpenLoader(path, "");
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FcsFormatException)
         {
-            Issues.Add(new GameDataIssue(GameDataIssueKind.TranslationNotLoaded, Path.GetFileName(path), null, e.Message));
+            Issues.Add(new GameDataIssue(GameDataIssueKind.TranslationNotLoaded, fileName, null, e.Message));
             return;
         }
-        ApplyTranslation(file, Path.GetFileName(path));
+
+        Version++;
+        Translations.Add(fileName);
+        while (loader.Next() is { } source)
+            ApplyTranslated(source, fileName);
+        ReportLoad(loader, fileName, path);
     }
 
     /// <summary>
-    /// <see cref="Apply(FcsFile, string)"/> for a translation file. A rename keeps the English name in <see cref="GameRecord.BaseName"/>; the
-    /// <c>_original_*</c> strings (the English text the translator saw) are not kept, nothing reads them.
+    /// <see cref="Apply(FcsRecord, string, bool)"/> for a record of a translation file. A rename keeps the English name in
+    /// <see cref="GameRecord.BaseName"/>; the <c>_original_*</c> strings (the English text the translator saw) are not kept, nothing reads them.
     /// </summary>
-    public void ApplyTranslation(FcsFile file, string fileName)
+    void ApplyTranslated(FcsRecord source, string fileName)
     {
-        Version++;
-        Translations.Add(fileName);
-        foreach (var source in file.Records)
-        {
-            foreach (var key in source.Strings.Keys.Where(k => k.StartsWith("_original_", StringComparison.Ordinal)).ToList())
-                source.Strings.Remove(key);
-            bool known = _records.ContainsKey(source.StringId);
-            Apply(source, fileName, translation: true);
-            if (!known && _records.ContainsKey(source.StringId)) _translationOnly.Add(source.StringId);
-        }
+        foreach (var key in source.Strings.Keys.Where(k => k.StartsWith("_original_", StringComparison.Ordinal)).ToList())
+            source.Strings.Remove(key);
+        bool known = _records.ContainsKey(source.StringId);
+        Apply(source, fileName, translation: true);
+        if (!known && _records.ContainsKey(source.StringId)) _translationOnly.Add(source.StringId);
+    }
+
+    /// <summary>
+    /// Starts the game loader on the file at <paramref name="path"/>; <paramref name="entryName"/> and the path go in as the game has them, bytes in
+    /// the code page names are kept in (<see cref="GameNameEncoding"/>).
+    /// </summary>
+    FcsGameLoader OpenLoader(string path, string entryName) =>
+        new(File.ReadAllBytes(path), AsGameBytes(path), AsGameBytes(entryName), _loader, _records.ContainsKey);
+
+    /// <summary>
+    /// The load entry's name the game loads a file under: <c>base</c> for <c>gamedata.base</c>, a mod's name (its file without <c>.mod</c>).
+    /// </summary>
+    static string LoaderName(LoadOrderEntry entry) => entry.Name == "gamedata.base" ? "base" : Path.GetFileNameWithoutExtension(entry.Name);
+
+    /// <summary>
+    /// <paramref name="text"/> as the game's bytes in the code page names are kept in, as an FCS string holds bytes (<see cref="LosslessUtf8"/>).
+    /// </summary>
+    static string AsGameBytes(string text) => LosslessUtf8.GetString(GameNameEncoding.Encoding.GetBytes(text));
+
+    /// <summary>
+    /// The header fields of the file at <paramref name="path"/>, which the loader skips, for Meitou's mod report; defaults when unreadable.
+    /// </summary>
+    static FileHeader HeaderOf(string path)
+    {
+        var header = FcsReader.TryReadHeader(path) ?? new FcsFile();
+        return new(header.Version, header.Author, header.Description);
+    }
+
+    /// <summary>
+    /// Reports what the loader met in a file: an early end (<see cref="GameDataIssueKind.DataFileDamaged"/>) and out-of-date GLOBAL_CONSTANTS
+    /// changes (<see cref="GameDataIssueKind.OutdatedConstants"/>, the game's "Mod Warning" box naming <paramref name="path"/>).
+    /// </summary>
+    void ReportLoad(FcsGameLoader loader, string fileName, string path)
+    {
+        foreach (var stringId in loader.OutdatedConstants)
+            Issue(GameDataIssueKind.OutdatedConstants, fileName, stringId, path);
+
+        if (!loader.Damaged) return;
+
+        string stop = loader.StoppedAt is { } at
+            ? $"; reading stopped at byte {at}, where the game goes on with values the file does not decide"
+            : "; read to the end with the values last read";
+        Issues.Add(new GameDataIssue(GameDataIssueKind.DataFileDamaged, fileName, null, "the file ends early" + stop));
     }
 
     /// <summary>
@@ -301,7 +352,7 @@ public sealed class GameDatabase
 
         if (!source.IsModified)
             Issue(GameDataIssueKind.RecordAlreadyDefined, fileName, source.StringId,
-                $"defines record '{source.Name}' again (first defined by {record.DefinedBy}); fields merged");
+                $"defines record '{record.Name}' again (first defined by {record.DefinedBy}); fields merged");
         if (source.RecordType != record.Type)
             Issue(GameDataIssueKind.ChangedRecordType, fileName, source.StringId,
                 $"type {source.RecordType} differs from {record.Type}; kept {record.Type}");
@@ -414,9 +465,14 @@ public enum GameDataIssueKind
     /// </summary>
     DataFileNotLoaded,
     /// <summary>
-    /// A data file is damaged past its file type; the records read before the damage are applied and the file counts as loaded.
+    /// A data file ends before its declared content; what the game loader reads of it is applied and the file counts as loaded.
     /// </summary>
     DataFileDamaged,
+    /// <summary>
+    /// A type 11 or 13 file changes GLOBAL_CONSTANTS with tags: the game shows its "Mod Warning" box (the message is the file's path) and keeps the
+    /// change untagged.
+    /// </summary>
+    OutdatedConstants,
 }
 
 /// <summary>

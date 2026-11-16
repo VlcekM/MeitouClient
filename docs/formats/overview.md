@@ -45,11 +45,27 @@ local; `CollisionPaths.Resolve`), used for collision, interiors, body files, att
 
 **Verified** launcher (`FUN_140125df0`, save `FUN_140120bd0`): active entries first in cfg order,
 remaining mods dependency-sorted; unknown dependency names dropped, cycles omitted (saving
-therefore drops them). Only type-17 headers are read for display (`FUN_1406be050`); missing
-references/dependencies warn without blocking. `data/__mods.list` remembers names without
+therefore drops them). Headers of a type above 15 are read for display (`FUN_1406be050`: four strings cut at 2048 bytes and a
+NUL; dependencies and references split at `,`, empty parts dropped, untrimmed, each cut before its last dot unless that is the first
+character, `gamedata.base` skipped); missing references/dependencies warn without blocking. `data/__mods.list` remembers names without
 extensions; newly found names start enabled. Rewritten with visible names; without Steam old
 missing names remain. **Observed:** beyond 1000 entries it restarts. Save writes enabled
 `<name>.mod` in displayed order.
+
+### Name encoding
+
+**Verified** (kenshi_x64's boost::filesystem `windows_file_codecvt`: `MultiByteToWideChar` / `WideCharToMultiByte` with the ANSI code page,
+the OEM one if file APIs are set to OEM, no best fit, default character `?`; narrow `std::ifstream` + `getline` for `mods.cfg` and
+`__mods.list` (`FUN_14013d680`); discovery `FUN_14086f7a0` lists folders and files wide (`FUN_1409b8070`, `FUN_1409b7c50`), converts the
+names to narrow and builds a Workshop mod's path from its narrow file name; the loader converts its path to
+wide): file and mod names are bytes in the system's ANSI code page. A name with a character the code page lacks gets `?` there and then names
+no file: a local mod folder is not found, a Workshop mod is listed under the `?` name and fails to load. `mods.cfg` and `__mods.list` lines
+are taken as bytes (a byte-order mark stays part of the first line) and written in that code page. Header dependency strings are compared
+byte for byte with those names, so an FCS-written (UTF-8) dependency on a mod whose name is not ASCII only matches under a UTF-8 code page.
+
+Meitou (`GameNameEncoding`, `ModList`, `ModHeader`, `GameDatabase`): on Windows the code page of `GetACP` for the name lists, header
+dependencies and references, and the names the loader uses; a references string over 2048 bytes keeps 2048 (the launcher leaves its last
+byte unset there and reads on past the buffer). Elsewhere UTF-8 (Meitou choice: no such code page exists there).
 
 FCS differs: `InheritFiles` fixes gamedata.base, Newwworld.mod, Dialogue.mod, coltontown.mod,
 Nizu.mod, Mohamad.mod, rebirth.mod and also searches cfg entries under `data/`.

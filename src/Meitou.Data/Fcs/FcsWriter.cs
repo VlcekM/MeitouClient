@@ -24,8 +24,11 @@ public static class FcsWriter
     /// Write each record's <see cref="FcsRecord.ByteSize"/> as stored instead of its real size. World-state files
     /// (<c>.zone</c>, <c>.level</c>) contain sizes that don't match their records; this keeps them byte-exact.
     /// </param>
+    /// <remarks>A file of a type below V15 is written as the editor saves it (<see cref="AsEditorSaves"/>).</remarks>
     public static void Write(FcsFile file, Stream stream, bool keepByteSizes = false)
     {
+        if (file.FileType < FcsFileType.V15) file = AsEditorSaves(file);
+
         using var w = new BinaryWriter(stream, FcsReader.Encoding, leaveOpen: true);
         w.Write((int)file.FileType);
 
@@ -47,6 +50,29 @@ public static class FcsWriter
 
         foreach (var record in file.Records)
             WriteRecord(w, record, keepByteSizes);
+    }
+
+    /// <summary>
+    /// <paramref name="file"/> as the editor saves a file of an old type (docs/formats/fcs-mod.md, "Game loader"): type V17 with its header fields and
+    /// the bookkeeping of a fresh header (save counter 1, nothing merged, no delete requests) unless it has its own; the records as they are.
+    /// </summary>
+    static FcsFile AsEditorSaves(FcsFile file)
+    {
+        var saved = new FcsFile
+        {
+            FileType = FcsFileType.V17,
+            Version = file.Version,
+            Author = file.Author,
+            Description = file.Description,
+            Merge = file.Merge ?? new FcsMergeInfo(1, 0, []),
+            DeleteRequests = file.DeleteRequests ?? [],
+            HeaderTail = file.HeaderTail,
+            NextId = file.NextId,
+        };
+        saved.Dependencies.AddRange(file.Dependencies);
+        saved.References.AddRange(file.References);
+        saved.Records.AddRange(file.Records);
+        return saved;
     }
 
     /// <summary>
