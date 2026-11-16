@@ -50,7 +50,7 @@ taskbar entry, the launcher dialog included) and muted; a hidden game still rend
 `--stall=<seconds>` (any command): how long the game may render no frame before the command fails (default 30).
 
 `state --json` units: `hours` is the game clock (day = hours / 24, as the GUI shows it), positions are world units,
-`hunger` is the GUI's figure / 100 (the text shows the GUI's), `parts` are `[health, stun damage, full health]`, `stats`
+`floor` is the object's `getFloor` (also on each `containers` line), `onRoof` (text: `on-roof`) its `_isOnARoof`, `hunger` is the GUI's figure / 100 (the text shows the GUI's), `parts` are `[health, stun damage, full health]`, `stats`
 are the raw skill levels.
 
 ### Playing
