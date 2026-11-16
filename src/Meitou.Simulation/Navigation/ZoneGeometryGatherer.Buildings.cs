@@ -60,6 +60,7 @@ internal sealed partial class ZoneGeometryGatherer
             if (StateOf(b) is { } state)
                 hash = Combine(hash, (uint)Stable(b.LayoutName(state, exterior: true) + "|" + b.LayoutName(state, exterior: false)));
             if (b.WithoutInterior) hash = Combine(hash, 0x1e7e1u);   // only then, so the other zones' keys stay as they were
+            if (b.PlayerOwned) hash = Combine(hash, 0x9a7e2u);   // its wall top is seeded (AddLinkedWallSeeds)
         }
         return IncludeFoliage ? CombineTowns(hash, zone) : hash;
     }
