@@ -159,21 +159,35 @@ public sealed partial class FixtureRegistry
     /// fixture, or null for a standalone building that is no fixture (a player's machine, with no town of its own), whose owner faction is
     /// <paramref name="owner"/>.
     /// </summary>
-    public bool CanUse(World world, CharacterCold carrier, int owner, Fixture? f)
+    public bool CanUse(World world, CharacterCold carrier, int owner, Fixture? f) =>
+        f is null
+            ? CanUse(world, carrier, owner, (UsedBuilding?)null)
+            : CanUse(world, carrier, owner, new UsedBuilding(TownOfFixture(world, f), f.Site, f.Building, IsInside(f), f.Contents is not null));
+
+    /// <summary>
+    /// A building <see cref="CanUse(World, CharacterCold, int, UsedBuilding?)"/> tests: its town, its site (-1: none), the building it stands in or
+    /// is, whether it stands inside another, and whether it holds an inventory.
+    /// </summary>
+    public readonly record struct UsedBuilding(CampaignTown Town, int Site, string Building, bool Inside, bool HasInventory);
+
+    /// <summary>
+    /// <c>canIUseThisBuilding</c> (<c>FUN_140621230</c>) of <paramref name="building"/> owned by <paramref name="owner"/>: a fixture's, or a town
+    /// building that is no fixture (a corpse disposal); null for a standalone building with no town of its own.
+    /// </summary>
+    public bool CanUse(World world, CharacterCold carrier, int owner, UsedBuilding? building)
     {
         var squad = world.Squads.Find(carrier.SquadId);
         int faction = squad?.Faction ?? carrier.Faction;
         if (faction < 0 || owner == faction) return true;
         if (_usableData is not { } data) return false;
-        if (f is not null && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board
-                && TownOfFixture(world, f) == board.Destination)
+        if (building is { } b && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && b.Town == board.Destination)
             return true;
 
         var relations = data.Relations;
         bool known = owner >= 0 && relations.Contains(owner) && relations.Contains(faction);
-        if (known && relations.IsHostile(owner, faction) || f?.Contents is not null) return false;
-        if (f is not null && !IsInside(f) && squad is { Town: >= 0 } && f.Site == squad.Town) return true;
-        if (f is not null && IsInside(f) && IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal
+        if (known && relations.IsHostile(owner, faction) || building?.HasInventory == true) return false;
+        if (building is { Inside: false } own && squad is { Town: >= 0 } && own.Site == squad.Town) return true;
+        if (building is { Inside: true } nested && IsPublic(nested.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal
                 && owner != world.Player.Faction)
             return true;
 

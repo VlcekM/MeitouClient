@@ -257,6 +257,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public IReadOnlyList<Vector3> Tables { get; init; } = [];
     /// <summary>
+    /// Its interior layout's corpse disposals (function 11: a cannibal lab's cooking pits, a lab's skeleton shredders), in layout order: the machines
+    /// of goal 137's finder (docs/game/ai-tasks.md "Perma-jobs").
+    /// </summary>
+    public IReadOnlyList<TownDisposal> Disposals { get; init; } = [];
+    /// <summary>
     /// Its interior layout's other furniture, in layout order: what no bed, seat, cage or container pick takes, nodes left out. A left click selects
     /// each by its own collision (docs/game/ui-screens.md "Selected building").
     /// </summary>
@@ -336,6 +341,12 @@ public sealed record TownItemSlot(string Id, string GroupId, Vector3 Position, Q
 /// while the building shows its outside (<see cref="LayoutItem.Outside"/>).
 /// </summary>
 public sealed record TownPiece(string Id, string RecordId, Vector3 Position, Quaternion Rotation, int Floor, bool Outside);
+
+/// <summary>
+/// A corpse disposal of a building's interior layout (<see cref="TownBuilding.Disposals"/>): <paramref name="Id"/> is the parent's
+/// <see cref="BuildingKey"/>, "/" and the item's index in the layout (as a <see cref="TownPiece"/>'s), <paramref name="RecordId"/> its BUILDING.
+/// </summary>
+public sealed record TownDisposal(string Id, string RecordId, Vector3 Position);
 
 /// <summary>
 /// An object a building's interior or exterior layout places (<see cref="TownBuilding.LayoutBuildings"/>): an interior's <paramref name="Id"/> is a
@@ -451,6 +462,7 @@ public static class TownBuildings
             Fixtures = c.Fixtures,
             ItemSlots = c.ItemSlots,
             Tables = c.Tables,
+            Disposals = c.Disposals,
             Pieces = c.Pieces,
             LayoutBuildings = c.LayoutBuildings,
             Furniture = c.Furniture,

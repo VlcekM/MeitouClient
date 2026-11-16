@@ -156,6 +156,7 @@ public sealed class TownBuildingBuilder
                 : -1,
             HandleSerial = state?.GetInt("handleS") ?? 0,
             Tables = c.Tables,
+            Disposals = c.Disposals,
             Pieces = c.Pieces,
             LayoutBuildings = c.LayoutBuildings,
             Furniture = c.Furniture,

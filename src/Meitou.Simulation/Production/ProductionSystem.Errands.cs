@@ -455,7 +455,7 @@ public sealed partial class ProductionSystem
         foreach (var m in world.Machines.All)
         {
             if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site
-                || !world.Fixtures.CanUse(world, carrier, site.Owner, null))
+                || !world.Fixtures.CanUse(world, carrier, site.Owner, (Locks.FixtureRegistry.UsedBuilding?)null))
                 continue;
 
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;

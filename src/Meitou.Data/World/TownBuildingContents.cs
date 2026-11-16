@@ -30,6 +30,10 @@ sealed class TownBuildingContents
     /// </summary>
     public List<Vector3> Tables = [];
     /// <summary>
+    /// The corpse disposals (BUILDING_FUNCTIONALITY <c>function</c> 11) of its interior layout (<see cref="TownBuilding.Disposals"/>).
+    /// </summary>
+    public List<TownDisposal> Disposals = [];
+    /// <summary>
     /// The thrones, dummies and workstations of its interior layout, and the building itself when it stands alone as one.
     /// </summary>
     public List<HomeSpot> Furniture = [];
@@ -132,7 +136,10 @@ sealed class TownBuildingContents
 
             string id = $"{b.Key}/{index}";
             LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false));
-            if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) Tables.Add(at);
+            int kind = function?.GetInt("function") ?? -1;
+            if (kind == CorpseDisposalFunction) Disposals.Add(new TownDisposal(id, item.Building.StringId, at));
+
+            if (kind is TableFunction or CorpseDisposalFunction or RefineryFunction) Tables.Add(at);
             else picked |= AddFixture(db, functions, item, id, at, rotation);
 
             if (!picked) Pieces.Add(new TownPiece(id, item.Building.StringId, at, rotation, item.Floor, item.Outside));
