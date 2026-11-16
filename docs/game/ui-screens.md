@@ -702,8 +702,11 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   (1.0 here, 0.3 for the public toggle, 0.4 for For sale) is the button's share of the row, at its right; at 1.0 the key is not shown
   (**Observed**: the owner's screenshots of a Defensive Gate III and a bought town house, `HudLine.ButtonWidth` in Meitou). Meitou engine choices: a moving door reads by where
   it heads (opening: open, closing: closed), and an open door that wants its lock reads `Locked` with "The door will lock when it closes.".
-- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`): 3 `Town:`, then with an inventory (+0x430) holding no items (its count +0x18 is 0,
-  `FUN_14004a0cf`) `[EMPTY]` in Title `#492620` (the uppercased translation of "Empty" in brackets, empty value; **Observed** decompile), `Training:` (function 7, any `stat used`: the
+- **Beds, cages, containers, lamps** (Useable / Storage / Light slot 40 `FUN_140304e90`). Every section sits under a town guard, `FUN_1400f6c20`
+  (**Verified**, its disassembly): it climbs to the root object (+0x238's +0x90, a building's slot 0x3d0 parent) and returns the town its handle
+  +0x1d0 resolves to (type 0xd TOWN or 0x55), else the nearest non-nest town to +0x48 with no distance cap (`FUN_1409f9100`); null only for a root at
+  the origin or a world with no town, so a placed building always passes, a NO_TOWN one too. 3 `Town:` (not for NO_TOWN), then with an
+  inventory (+0x430) holding no items (its count +0x18 is 0, `FUN_14004a0cf`) `[EMPTY]` in Title `#492620` (the uppercased translation of "Empty" in brackets, empty value; **Observed** decompile), `Training:` (function 7, any `stat used`: the
   label `Training:` with the editor stat name `FUN_140888440` of +0x3f8 appended, no separator, as the label of an empty-valued line; **Verified**
   decompile; Meitou puts a space between), `Cost to use:`
   `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
@@ -759,7 +762,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     is set, else only while it is not daytime (`FUN_14066cb20`, sunrise < hour < sunset): a lamp outdoors shows Efficiency 0% by day (and draws no power, slot
     163 `FUN_140299630` asking slot 164 first). The Damage and Power rows read their own values, not slot 109.
   - Who shows it (**Verified**, each class's slot 40): ProductionBuilding's `FUN_1402ffeb0` (also Generator, WindGenerator, RainCollector, Torture), Research
-    `FUN_140309680` and Crafting `FUN_1402ff070` in section 6 as 155, 154, 153; Useable / Storage / Light `FUN_140304e90` (only with a town, `FUN_1400f6c20`) in
+    `FUN_140309680` and Crafting `FUN_1402ff070` in section 6 as 155, 154, 153; Useable / Storage / Light `FUN_140304e90` (behind the town guard of [Beds, cages, containers, lamps](#selected-building)) in
     section 6 as 155, 154, 153 (power), except for function 6 (BF_BED; slot 94 `FUN_1400f6b30` is the function +0x158, 27 for a mine whose `FUN_1405946f0` fails)
     `Healing bonus:` `x{1,num}` of the float +0x1a4 instead of all three, and for function 7 (BF_TRAINING, +0x158) `Max Skill Level:` int(+0x1a4) − 1 with the
     tooltip "This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time." instead of 154; BF_SKELETON_BED
