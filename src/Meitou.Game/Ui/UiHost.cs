@@ -13,6 +13,50 @@ public sealed record UiDiagnostic(string Extension, string Operation, Exception 
 public sealed record UiActionContext(UiFrameContext Frame, string Argument);
 
 /// <summary>
+/// What an extension's right-click menu rows get (<see cref="UiRegistration.AddCharacterMenuVerbs"/>): the character the menu is for, the selected
+/// characters and the cursor when the menu was built; Shift (it turns the game's own orders into jobs) and the tick read when asked, so a row's
+/// action sees them as the player chooses it; and the command queue.
+/// </summary>
+public sealed class UiMenuContext(Simulation.CharacterSnapshot target, IReadOnlyList<Simulation.CharacterId> selected,
+    System.Numerics.Vector2 cursor, Func<bool> shift, Func<long> tick, Action<Simulation.SimCommand> enqueue)
+{
+    /// <summary>
+    /// The character the menu is for.
+    /// </summary>
+    public Simulation.CharacterSnapshot Target { get; } = target;
+
+    /// <summary>
+    /// The selected characters when the menu was built.
+    /// </summary>
+    public IReadOnlyList<Simulation.CharacterId> Selected { get; } = selected;
+
+    /// <summary>
+    /// The cursor (screen pixels) when the menu was built.
+    /// </summary>
+    public System.Numerics.Vector2 Cursor { get; } = cursor;
+
+    /// <summary>
+    /// Whether Shift is held now.
+    /// </summary>
+    public bool Shift => shift();
+
+    /// <summary>
+    /// The world's tick now, for a command's <see cref="Simulation.SimCommand.Tick"/>.
+    /// </summary>
+    public long Tick => tick();
+
+    /// <summary>
+    /// Queues a command for the world.
+    /// </summary>
+    public void Enqueue(Simulation.SimCommand command) => enqueue(command);
+}
+
+/// <summary>
+/// A row an extension adds to a character's right-click menu: its caption and what choosing it does (on the host's thread).
+/// </summary>
+public sealed record UiMenuVerb(string Caption, Action Choose);
+
+/// <summary>
 /// Read-only presentation data. UI extensions cannot mutate UiBindings or receive the simulation world.
 /// </summary>
 public sealed class UiFrameContext
@@ -118,6 +162,11 @@ public sealed class UiHost
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
 
     /// <summary>
+    /// The right-click menu row sources, with their owners, in registration order.
+    /// </summary>
+    readonly List<(string Owner, Func<UiMenuContext, IEnumerable<UiMenuVerb>> Verbs)> _menuVerbs = [];
+
+    /// <summary>
     /// The registered extensions' ids.
     /// </summary>
     readonly HashSet<string> _extensions = new(StringComparer.Ordinal);
@@ -128,7 +177,7 @@ public sealed class UiHost
     UiFrameContext? _frame;
 
     /// <summary>
-    /// An extension failed (a contribution's build or an action).
+    /// An extension failed (a contribution's build, an action, a right-click menu row source or a row's action).
     /// </summary>
     public event Action<UiDiagnostic>? Diagnostic;
 
@@ -220,6 +269,11 @@ public sealed class UiHost
         _contributions.Add((owner, slot, mode, order, factory));
 
     /// <summary>
+    /// Adds a right-click menu row source for <paramref name="owner"/>.
+    /// </summary>
+    internal void AddMenuVerbs(string owner, Func<UiMenuContext, IEnumerable<UiMenuVerb>> verbs) => _menuVerbs.Add((owner, verbs));
+
+    /// <summary>
     /// Removes everything <paramref name="owner"/> registered.
     /// </summary>
     internal void Remove(string owner)
@@ -230,12 +284,59 @@ public sealed class UiHost
         _overrides.RemoveAll(o => o.Owner == owner);
         _controlOverrides.RemoveAll(o => o.Owner == owner);
         _contributions.RemoveAll(c => c.Owner == owner);
+        _menuVerbs.RemoveAll(v => v.Owner == owner);
         _extensions.Remove(owner);
     }
 
     #endregion
 
     #region Lookup
+
+    /// <summary>
+    /// Whether any extension adds rows to the right-click menu (<see cref="CharacterMenuVerbs"/>).
+    /// </summary>
+    public bool HasMenuVerbs => _menuVerbs.Count > 0;
+
+    /// <summary>
+    /// The rows the extensions add to a character's right-click menu, in registration order; a source that throws, or names a row without a caption
+    /// or action, is reported as a <see cref="Diagnostic"/> and adds nothing to this menu. A row's action that throws is reported the same way.
+    /// </summary>
+    public IReadOnlyList<UiMenuVerb> CharacterMenuVerbs(UiMenuContext context)
+    {
+        var rows = new List<UiMenuVerb>();
+        foreach (var (owner, verbs) in _menuVerbs)
+        {
+            try
+            {
+                var added = verbs(context).ToList();
+                if (added.Any(v => string.IsNullOrWhiteSpace(v.Caption) || v.Choose is null))
+                    throw new InvalidOperationException("A menu row needs a caption and an action.");
+
+                rows.AddRange(added.Select(v => v with { Choose = Guarded(owner, v) }));
+            }
+            catch (Exception e)
+            {
+                Diagnostic?.Invoke(new UiDiagnostic(owner, "menu verbs", e));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input.
+    /// </summary>
+    Action Guarded(string owner, UiMenuVerb row) => () =>
+    {
+        try
+        {
+            row.Choose();
+        }
+        catch (Exception e)
+        {
+            Diagnostic?.Invoke(new UiDiagnostic(owner, $"menu row {row.Caption}", e));
+        }
+    };
 
     /// <summary>
     /// Style <paramref name="id"/>, the last override's if any; the default for an empty id.
@@ -504,6 +605,19 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(factory);
         _host.Contribute(Id, slot, mode, order, factory);
+    }
+
+    /// <summary>
+    /// Adds rows to a character's right-click menu, after the game's own (docs/modding.md "Registration surface"): <paramref name="verbs"/> runs
+    /// on the host's thread whenever the game asks for the menu, which includes every frame a character is under the cursor, so it must be cheap,
+    /// and while a tick may be in flight, so it must not touch the world; it reads the context and a chosen row queues commands
+    /// (<see cref="UiMenuContext.Enqueue"/>). Shift is the row's own to read: the game's order-to-job switch does not apply.
+    /// </summary>
+    public void AddCharacterMenuVerbs(Func<UiMenuContext, IEnumerable<UiMenuVerb>> verbs)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(verbs);
+        _host.AddMenuVerbs(Id, verbs);
     }
 
     /// <summary>
