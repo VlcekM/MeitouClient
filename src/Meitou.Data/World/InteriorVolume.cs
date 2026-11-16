@@ -699,7 +699,7 @@ public sealed class InteriorCollisions(GameInstall install)
     /// </summary>
     CollisionMesh? Load(string recordPath)
     {
-        if (CollisionPaths.Resolve(install, recordPath) is not { } path) return null;
+        if (CollisionPaths.ResolveCollision(install, recordPath) is not { } path) return null;
         CollisionFile file;
         try { file = CollisionFile.ReadFile(path); }
         catch (Exception e) when (e is InvalidDataException or IOException or System.Xml.XmlException or FormatException) { return null; }

@@ -54,7 +54,7 @@ sealed class DoorPoses(WorldObjectRenderer owner)
     /// </summary>
     DoorFrame FrameOf(string recordPath)
     {
-        if (string.IsNullOrWhiteSpace(recordPath) || owner.FindRecordFile(recordPath) is not { } path) return DoorFrame.Default;
+        if (string.IsNullOrWhiteSpace(recordPath) || owner.FindCollisionFile(recordPath) is not { } path) return DoorFrame.Default;
 
         try
         {

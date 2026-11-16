@@ -1,4 +1,5 @@
 using Meitou.Content;
+using Meitou.Data.Ogre;
 
 namespace Meitou.Data.Physics;
 
@@ -7,6 +8,11 @@ namespace Meitou.Data.Physics;
 /// </summary>
 public static class CollisionPaths
 {
+    /// <summary>
+    /// Ogre's default resource group, which the game's collision opener searches first before the others.
+    /// </summary>
+    const string DefaultGroup = "General";
+
     /// <summary>
     /// The mods found per install root, with the newer write time of its <c>mods</c> and Workshop folders when they were scanned.
     /// </summary>
@@ -44,7 +50,8 @@ public static class CollisionPaths
 
     /// <summary>
     /// The file a record's path field names (<c>.\data\buildings\x.xml</c>, backslashes, optionally without the leading <c>.\</c>) under the install,
-    /// or null when the field is empty or the file is not there.
+    /// else the file of that bare name in the game's resource folders (an enabled mod's own folders included), or null when the field is empty or
+    /// no such file exists.
     /// </summary>
     public static string? Resolve(GameInstall install, string recordPath)
     {
@@ -62,6 +69,46 @@ public static class CollisionPaths
         }
         // Records may name the file relative to data/.
         full = GameFiles.Resolve(Path.Combine(install.DataDirectory, rel.StartsWith("data/", StringComparison.OrdinalIgnoreCase) ? rel[5..] : rel));
-        return File.Exists(full) ? full : null;
+        if (File.Exists(full)) return full;
+
+        // Many mods name their file as if it were the base game's (.\data\buildings\...) but ship it elsewhere in their own folder; the game asks
+        // Ogre for the bare name (docs/formats/overview.md "Resource lookup"), which finds it there.
+        return Index(install)?.Find(Path.GetFileName(rel), DefaultGroup) is { } byName && File.Exists(byName) ? byName : null;
+    }
+
+    /// <summary>
+    /// The install's resource index (<see cref="GameResources"/>), or null for an install without <c>resources.cfg</c> (a test install).
+    /// </summary>
+    static OgreScriptResources? Index(GameInstall install) =>
+        File.Exists(Path.Combine(install.Root, "resources.cfg")) ? GameResources.For(install) : null;
+
+    /// <summary>
+    /// The collision file a record's path names, as docs/formats/collision.md "File lookup" describes the game opening a building part's
+    /// (<c>xml collision</c>, <c>destroyed collision</c>): by its bare name, the XML beside a cooked <c>.bin</c> of that name first, else the XML of
+    /// that name (the last enabled mod holding it wins); a file outside the resource folders by <see cref="Resolve"/>. Every file the collision
+    /// cache reads goes this way. Null when none is found.
+    /// </summary>
+    public static string? ResolveCollision(GameInstall install, string recordPath)
+    {
+        if (string.IsNullOrWhiteSpace(recordPath)) return null;
+        if (Index(install) is not { } resources) return Resolve(install, recordPath);
+
+        string name = Path.GetFileName(recordPath.Replace('\\', '/'));
+        if (CookedSource(resources, name) is { } cooked) return cooked;
+        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return byName;
+
+        return Resolve(install, recordPath);
+    }
+
+    /// <summary>
+    /// The XML that the cooked file the game prefers for <paramref name="name"/> (its stem + <c>.bin</c>, found by bare name) was made from: the
+    /// file of that name beside it; null when there is no cooked file or no XML beside it. Meitou reads the XML, not the cooked file.
+    /// </summary>
+    static string? CookedSource(OgreScriptResources resources, string name)
+    {
+        if (resources.Find(Path.ChangeExtension(name, ".bin"), DefaultGroup) is not { } bin) return null;
+
+        var beside = GameFiles.Resolve(Path.Combine(Path.GetDirectoryName(bin)!, name));
+        return File.Exists(beside) ? beside : null;
     }
 }

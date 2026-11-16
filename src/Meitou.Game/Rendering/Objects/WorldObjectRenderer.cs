@@ -1322,6 +1322,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         Data.Physics.CollisionPaths.Resolve(_objects.Install, recordPath) ?? _assets.Find(Path.GetFileName(recordPath.Replace('\\', '/')));
 
     /// <summary>
+    /// Finds a collision file a record names the way the walking map does (<see cref="Data.Physics.CollisionPaths.ResolveCollision"/>), or null.
+    /// </summary>
+    internal string? FindCollisionFile(string recordPath) => Data.Physics.CollisionPaths.ResolveCollision(_objects.Install, recordPath);
+
+    /// <summary>
     /// What cuts a ray-traced part as the draws cut it, for the traced sun: its map's bindless index (0: none or not resident) and threshold.
     /// </summary>
     internal (uint Map, float Threshold) RayCut(ObjectMaterialSet materials, int part)
