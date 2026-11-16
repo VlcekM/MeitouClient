@@ -37,6 +37,10 @@ sealed class TownBuildingContents
     /// Its interior layout's other furniture (<see cref="TownBuilding.Pieces"/>).
     /// </summary>
     public List<TownPiece> Pieces = [];
+    /// <summary>
+    /// Every object its interior and exterior layouts place (<see cref="TownBuilding.LayoutBuildings"/>).
+    /// </summary>
+    public List<TownLayoutBuilding> LayoutBuildings = [];
 
     /// <summary>
     /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the
@@ -54,6 +58,7 @@ sealed class TownBuildingContents
         {
             c.Shop = exterior.GetInt("is shop") != 0;
             c.Bar = exterior.GetInt("is bar") != 0;
+            c.AddExteriorBuildings(layouts, b, exterior);
         }
 
         if (resolved.Destroyed || layouts.Find(record, b.LayoutName(state, exterior: false), exterior: false) is not { } interior) return c;
@@ -72,6 +77,20 @@ sealed class TownBuildingContents
             c.LayInterior(db, layouts, resolved, interior, new(), new());
 
         return c.Spots;
+    }
+
+    /// <summary>
+    /// Adds each object of the exterior layout <paramref name="layout"/> to <see cref="LayoutBuildings"/>, outdoors, as
+    /// <c>&lt;key&gt;/exterior/&lt;index&gt;</c>.
+    /// </summary>
+    void AddExteriorBuildings(BuildingLayouts layouts, BuildingPlacement b, GameRecord layout)
+    {
+        int index = 0;
+        foreach (var item in layouts.Items(layout, b))
+        {
+            LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true));
+            index++;
+        }
     }
 
     /// <summary>
@@ -112,6 +131,7 @@ sealed class TownBuildingContents
             bool picked = LaySpot(db, item, at, rotation, beds, function, ref seats);
 
             string id = $"{b.Key}/{index}";
+            LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false));
             if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) Tables.Add(at);
             else picked |= AddFixture(db, functions, item, id, at, rotation);
 
