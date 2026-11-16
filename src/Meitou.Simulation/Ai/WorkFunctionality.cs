@@ -30,6 +30,11 @@ sealed class WorkFunctionality(PopulationData data)
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _maxOperators = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The BuildingFunction of each building record, by its string id (<see cref="FunctionOf"/>).
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _functions = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// How near a worker must come to its building's position: the functionality's <c>use range</c> (the original's <c>UseableStuff</c> reach,
     /// <c>maxUseRange</c>, docs/game/buildings-production.md "Work distance"), <see cref="AiSystem.WorkReach"/> for a building without one.
     /// </summary>
@@ -88,4 +93,12 @@ sealed class WorkFunctionality(PopulationData data)
     public int MaxOperatorsOf(TownBuilding building) => _maxOperators.GetOrAdd(building.BuildingId, id =>
         data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
             ? function.GetInt("max operators", 1) : int.MaxValue);
+
+    /// <summary>
+    /// The BuildingFunction of building record <paramref name="record"/>: its functionality's <c>function</c>, as a level building's
+    /// (<see cref="TownBuilding.Function"/>); -1 without one.
+    /// </summary>
+    public int FunctionOf(string record) => _functions.GetOrAdd(record, id =>
+        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
+            ? function.GetInt("function", -1) : -1);
 }

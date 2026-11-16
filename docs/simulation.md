@@ -1823,10 +1823,23 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the
   complete beds the player placed in it (`BuildSite.Parent`, one per member, `SquadAutonomy.HomeBed`), else the player bed search. A player-built
   home has no indoor volume: "inside" is within the home radius.
+- **Outpost as town**: a complete player-built home in an outpost the squad's faction owns makes that outpost its town (`Blackboard.Outpost`, the
+  player town's number, beside `Town` = -1; `Blackboard.HomeTown` is either kind; derived from the home on each settle, not hashed or saved).
+  Patrols start and ring it, "at home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its
+  centre. **Engine choice**: a patrol route's town radius is a third of the outpost's radius, so the route stays within it (a site's is its size
+  radius times its town radius mult).
+- **Outpost work**: the outpost's complete, standing mines and refineries are its workplaces for goals 189 / 190, stand-ins known by their
+  site id (`TownPlaceIndex.OutpostWorkplaces`); the player-flag gate lets the faction's members work there (`WorkAllowed`). **Engine choices**:
+  research and crafting benches are left out (a town worker only pretends at one, and would hold the player's researcher's slot), and 189 takes
+  and operates only a powered machine, as the player's operator does. A worker runs the player's own machine (`ProductionSystem.TownWorkOf` gives
+  it for a stand-in; no `townwork:` machine is made) and empties and stores its output as a town worker does ([NPC town
+  machines](game/buildings-production.md#npc-town-machines)). Operator
+  slots are shared: the player's job operators fill the AI's (`ReserveWork`), the AI's holders count against the jobs' (`OperatorsOf`), and a
+  member on a player job holds no AI slot.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
-- **Not built**: a player outpost is no `Blackboard.Town`, so its turrets, machines and nodes are not goal targets (the player's jobs run them);
-  a work building; the contract's mission target over a save (as NPC platoons).
+- **Not built**: the outpost's gates and turrets are not yet goal targets of its residents; a work building; the contract's mission target over a
+  save (as NPC platoons).
 
 ### Planner
 

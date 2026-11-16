@@ -34,6 +34,12 @@ sealed class TownPlaceIndex(PopulationData data)
     internal const int WorkFunctions = 0x41a;
 
     /// <summary>
+    /// The functions of an outpost's workplaces (<b>engine choice</b>): mines and refineries, the producers a worker runs. A research or crafting
+    /// bench is pretence for a town worker, and at an outpost it would take the operator slot of the player's own researcher or crafter.
+    /// </summary>
+    internal const int OutpostWorkFunctions = 1 << TownBuildings.MineFunction | 1 << TownBuildings.RefineryFunction;
+
+    /// <summary>
     /// The places of each town looked at, by site: rebuilt in the serial step, read by the think on every worker (derived, not hashed).
     /// </summary>
     readonly Dictionary<int, TownPlaces> _places = [];
@@ -42,6 +48,18 @@ sealed class TownPlaceIndex(PopulationData data)
     /// The workplaces of each town 189 can really work at (<see cref="AiSystem.RealWork"/>), by site: rebuilt with the places (derived, not hashed).
     /// </summary>
     readonly Dictionary<int, IReadOnlyList<TownBuilding>> _realWork = [];
+
+    /// <summary>
+    /// The workplaces of each outpost a squad has as its town (<see cref="Blackboard.Outpost"/>), by the player town's number, and those 189 can
+    /// really work at: rebuilt with the places (derived, not hashed).
+    /// </summary>
+    readonly Dictionary<int, (IReadOnlyList<TownBuilding> All, IReadOnlyList<TownBuilding> Real)> _outposts = [];
+
+    /// <summary>
+    /// The stand-in of each player-built workplace, by site id: kept across refreshes, as a worker holds its workplace by reference
+    /// (<see cref="AiMind.WorkPost"/>); a site whose record changed gets a new one (derived, not hashed).
+    /// </summary>
+    readonly Dictionary<string, TownBuilding> _standIns = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The places of town <paramref name="site"/> (<see cref="None"/> when it was not looked at).
@@ -57,6 +75,25 @@ sealed class TownPlaceIndex(PopulationData data)
     /// The workplaces of <paramref name="town"/> 189 can really work at (none for a town not looked at).
     /// </summary>
     public IReadOnlyList<TownBuilding> RealWorkOf(int town) => town >= 0 && _realWork.TryGetValue(town, out var real) ? real : [];
+
+    /// <summary>
+    /// The workplaces of outpost <paramref name="number"/> (a player town's number): its complete, standing buildings with a function in
+    /// <see cref="OutpostWorkFunctions"/>, each a stand-in known by its site id (<see cref="TownBuilding.RuntimeKey"/>, the id of its machine); 189
+    /// takes only those it can really work at (<paramref name="real"/>, <see cref="AiSystem.RealWork"/>). None for an outpost not looked at.
+    /// </summary>
+    public IReadOnlyList<TownBuilding> OutpostWorkplaces(int number, bool real)
+    {
+        if (!_outposts.TryGetValue(number, out var work)) return [];
+
+        return real ? work.Real : work.All;
+    }
+
+    /// <summary>
+    /// The outposts' workplaces as the last refresh found them, by outpost number in order.
+    /// </summary>
+    public IEnumerable<TownBuilding> OutpostStandIns() => _outposts
+        .OrderBy(o => o.Key)
+        .SelectMany(o => o.Value.All);
 
     /// <summary>
     /// The buildings wandering in <paramref name="site"/> can go to from <paramref name="at"/>: its public ones with a general node in the zone of
@@ -79,10 +116,54 @@ sealed class TownPlaceIndex(PopulationData data)
     {
         _places.Clear();
         _realWork.Clear();
+        _outposts.Clear();
         var refresh = new Refresher(this, world, ai, data);
 
         refresh.NoteHomes();
         refresh.AddTowns();
+        AddOutposts(world, ai);
+    }
+
+    /// <summary>
+    /// The workplaces of each outpost a squad has as its town (<see cref="OutpostWorkplaces"/>).
+    /// </summary>
+    void AddOutposts(World world, AiSystem ai)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Ai is not { Outpost: > 0 and var number } || _outposts.ContainsKey(number)) continue;
+
+            var all = new List<TownBuilding>();
+            foreach (var site in world.Buildings.All)
+            {
+                if (!site.Complete || site.Destroyed || ai.FunctionOf(site.Record) is not (>= 0 and var fn)) continue;
+                if ((OutpostWorkFunctions >> fn & 1) == 0 || Construction.TownLookup.PlayerTownOf(world, site)?.Number != number) continue;
+
+                all.Add(StandIn(site, fn));
+                seen.Add(site.Id);
+            }
+
+            _outposts[number] = (all, [.. all.Where(b => AiSystem.RealWork(world, b))]);
+        }
+
+        foreach (string gone in _standIns.Keys.Where(id => !seen.Contains(id)).ToList()) _standIns.Remove(gone);
+    }
+
+    /// <summary>
+    /// The stand-in of a player-built workplace (<see cref="_standIns"/>): its place, facing and function, known by its site id.
+    /// </summary>
+    TownBuilding StandIn(Construction.BuildSite site, int function)
+    {
+        if (_standIns.TryGetValue(site.Id, out var known) && known.BuildingId == site.Record) return known;
+
+        return _standIns[site.Id] = new TownBuilding(site.Id, site.Record, site.Name, site.Position, TownBuildings.YawOf(site.Rotation), false,
+            false, [])
+        {
+            RuntimeKey = site.Id,
+            Zone = site.Zone,
+            Function = function,
+        };
     }
 
     /// <summary>
