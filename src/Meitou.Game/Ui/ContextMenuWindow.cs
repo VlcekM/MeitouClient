@@ -191,7 +191,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// <summary>
     /// The verbs the selection has for a character (<c>FUN_1407a6bc0</c>, docs/game/ui-input.md "Context menu verbs"), in the original's labels.
     /// Prisoners, carried bodies, the player's own, hostile and other characters each get their branch's verbs; then the medic verbs and the shackle
-    /// verbs.
+    /// verbs; then the rows the mods' interface extensions add (<see cref="PlayerInterface.ModMenuVerbs"/>, which read Shift themselves).
     /// </summary>
     internal List<(string Caption, Action Give)> Verbs(CharacterSnapshot target)
     {
@@ -265,7 +265,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
         }
 
         // Shift turns an order into a job (SquadPanel).
-        return [.. verbs.Select(v => (v.Item1, player.SquadWindows.JobOrOrder(v.Item1, id, v.Item2)))];
+        List<(string, Action)> rows = [.. verbs.Select(v => (v.Item1, player.SquadWindows.JobOrOrder(v.Item1, id, v.Item2)))];
+        rows.AddRange(player.ModMenuVerbs(target));
+        return rows;
     }
 
     /// <summary>

@@ -242,6 +242,18 @@ sealed partial class PlayerInterface
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
 
     /// <summary>
+    /// The rows the interface extensions add to <paramref name="target"/>'s right-click menu (<see cref="UiHost.CharacterMenuVerbs"/>); none
+    /// without such an extension.
+    /// </summary>
+    internal IEnumerable<(string Caption, Action Give)> ModMenuVerbs(CharacterSnapshot target)
+    {
+        if (!_uiHost.HasMenuVerbs) return [];
+
+        var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
+        return _uiHost.CharacterMenuVerbs(context).Select(v => (v.Caption, v.Choose));
+    }
+
+    /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.
     /// </summary>
     public void SetUiMode(UiMode mode)
