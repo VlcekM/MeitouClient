@@ -29,7 +29,7 @@ public sealed partial class DialogueSystem
         {
             return true;
         }
-        if (PlayerHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
+        if (SquadManagement.FactionHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
         {
             world.Post("It looks like your squad is a little full.");
             c.Ended = true;
@@ -42,18 +42,6 @@ public sealed partial class DialogueSystem
             _request = new DialogueRequest(++_requestId, DialogueRequestKind.RecruitEditor, me, me);
         }
         return true;
-    }
-
-    /// <summary>
-    /// The living player characters that have not died (the faction size cap counts them).
-    /// </summary>
-    internal static int PlayerHeads(World world)
-    {
-        var table = world.Characters;
-        int heads = 0;
-        for (int i = 0; i < table.Next.Length; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true, DiedTick: < 0 }) heads++;
-        return heads;
     }
 
     /// <summary>
@@ -79,7 +67,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     static void ExtraSquadAtTheCap(World world, PopulationData data, Squad active, GameConstants limits)
     {
-        if (PlayerHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
+        if (SquadManagement.FactionHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
             || SquadManagement.LedSquads(world).Count < limits.MaxSquads)
         {
             return;
@@ -196,7 +184,7 @@ public sealed partial class DialogueSystem
             if (slave.IsImprisoned) world.Fixtures.Release(world, id);
             if (tc.IsPlayer || tc.Faction == world.Player.Faction)
             {
-                if (PlayerHeads(world) >= _data.Bodies.Constants.MaxFactionSize || !JoinPlayer(world, s, tc)) break;
+                if (SquadManagement.FactionHeads(world) >= _data.Bodies.Constants.MaxFactionSize || !JoinPlayer(world, s, tc)) break;
             }
             else if (world.Squads.Find(tc.SquadId) is { } theirs)
             {

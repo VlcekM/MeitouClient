@@ -319,9 +319,9 @@ sealed class SquadPanel(PlayerInterface player)
     static string SquadScrollKey(string squadId) => SquadScrollPrefix + squadId;
 
     /// <summary>
-    /// The player's characters alive (what the faction's count and the dismiss rule count, <see cref="SquadManagement.FactionHeads"/>).
+    /// The player's characters alive, as the simulation counts them for the faction size cap (<see cref="WorldSnapshot.FactionHeads"/>).
     /// </summary>
-    int LivingPlayerCharacters() => player.Session.CurrentSnapshot.Characters.Count(c => c.IsPlayer && c.Body is not { Dead: true });
+    int LivingPlayerCharacters() => player.Session.CurrentSnapshot.FactionHeads;
 
     /// <summary>
     /// The name edit box of squad <paramref name="squad"/>.

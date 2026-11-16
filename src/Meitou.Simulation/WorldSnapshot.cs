@@ -967,6 +967,11 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public IReadOnlyList<SquadView> IndependentSquads { get; init; } = [];
     /// <summary>
+    /// The player's characters alive, as the faction size cap counts them (<see cref="SquadManagement.FactionHeads"/>): the squads screen's
+    /// count and its dismiss rule read it.
+    /// </summary>
+    public int FactionHeads { get; init; }
+    /// <summary>
     /// The active squad's id (<see cref="PlayerState.Squad"/>; -1 none): the squad bar shows it.
     /// </summary>
     public int ActiveSquad { get; init; } = -1;
