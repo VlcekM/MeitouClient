@@ -15,10 +15,15 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// Whether the town at <paramref name="at"/> has a workplace goal <paramref name="type"/> may work at for the character (the finders of 189 / 190
-    /// return 0 without one: <see cref="PickWork"/>'s list, the player-flag gate and a free operator slot).
+    /// return 0 without one: <see cref="PickWork"/>'s list, the player-flag gate and a free operator slot, the one it operates counting as free).
     /// </summary>
-    internal bool HasWorkplaces(World world, CharacterId self, Vector3 at, TaskType type) =>
-        TownAt(at) is >= 0 and var site && WorkAllowed(world, self.Slot, site) && WorkplacesFor(site, type).Any(HasFreeSlot);
+    internal bool HasWorkplaces(World world, CharacterId self, Vector3 at, TaskType type)
+    {
+        if (TownAt(at) is not (>= 0 and var site) || !WorkAllowed(world, self.Slot, site)) return false;
+
+        var held = HeldWork(world, self);
+        return WorkplacesFor(site, type).Any(b => HasFreeSlot(b, held));
+    }
 
     /// <summary>
     /// The building a worker on goal <paramref name="type"/> works at in the town at <paramref name="at"/> (<see cref="PickWork"/>: a random
@@ -27,10 +32,37 @@ public sealed partial class AiSystem
     /// </summary>
     internal ObedientWorkplace? WorkAt(World world, CharacterId self, Vector3 at, int epoch, TaskType type)
     {
-        if (TownAt(at) is not (>= 0 and var site) || PickWork(world, self, site, epoch, type) is not { } building) return null;
+        if (TownAt(at) is not (>= 0 and var site) || PickWork(world, self, site, epoch, type, HeldWork(world, self)) is not { } building)
+            return null;
 
         return new ObedientWorkplace(building, _work.ClipOf(building), _work.FunctionalityOf(building), _work.HungerRateOf(building),
             WorkRangeOf(building), WorkOwnerOf(site));
+    }
+
+    /// <summary>
+    /// The workplaces of the town at <paramref name="at"/> (none outside a town): row 94's candidates
+    /// (<see cref="Production.ProductionSystem.InputSource"/>).
+    /// </summary>
+    internal IReadOnlyList<TownBuilding> TownWorkplaces(Vector3 at) => TownAt(at) is >= 0 and var site ? Places(site).Workplaces : [];
+
+    /// <summary>
+    /// The workplace an obedient player slave operates now (<see cref="CharacterCold.SlaveWork"/>), null for none.
+    /// </summary>
+    static TownBuilding? HeldWork(World world, CharacterId self) => world.Characters.Cold(self.Slot)?.SlaveWork?.Place.Building;
+
+    /// <summary>
+    /// The operator slots obedient player slaves hold: one standing at its workplace runs Task_OperateMachine (87 for 189, 221 for 190), whose
+    /// start adds it to the building's operators and whose end removes it (<c>FUN_14035b430</c>, <c>FUN_140347350</c>, <b>Verified</b>), so it
+    /// takes a slot of the functionality's <c>max operators</c> as an NPC worker does. Counted on the cadence pass with the members' kept slots.
+    /// </summary>
+    void ReserveObedientWork(World world)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Next[s].Alive && table.Cold(s) is { Ai: null, SlaveWork.Place.Building: var b })
+                _workTaken[b] = _workTaken.GetValueOrDefault(b) + 1;
+        }
     }
 
     #endregion

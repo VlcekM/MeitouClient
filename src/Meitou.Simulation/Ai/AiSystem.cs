@@ -1096,18 +1096,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in
     /// <see cref="TownPlaceIndex.WorkFunctions"/>, slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its
     /// <paramref name="epoch"/> of picks (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189
-    /// (<paramref name="type"/>, real work) takes only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
+    /// (<paramref name="type"/>, real work) takes only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any. The workplace whose
+    /// operator slot the character itself holds (<paramref name="held"/>) counts as free for it (<c>couldIOperate</c> passes for a current operator).
     /// </summary>
-    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend)
+    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend,
+        TownBuilding? held = null)
     {
         if (!WorkAllowed(world, self.Slot, town)) return null;
         var list = WorkplacesFor(town, type);
         int free = 0;
-        foreach (var b in list) if (HasFreeSlot(b)) free++;
+        foreach (var b in list) if (HasFreeSlot(b, held)) free++;
         if (free == 0) return null;
         int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), free);
         foreach (var b in list)
-            if (HasFreeSlot(b) && pick-- == 0) return b;
+            if (HasFreeSlot(b, held) && pick-- == 0) return b;
         return null;
     }
 
@@ -1120,7 +1122,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's
     /// <c>couldIOperate</c>, docs/game/ai-tasks.md "Worker"): fewer holders than its functionality's <c>max operators</c>.
     /// </summary>
-    bool HasFreeSlot(TownBuilding building) => _workTaken.GetValueOrDefault(building) < _work.MaxOperatorsOf(building);
+    bool HasFreeSlot(TownBuilding building, TownBuilding? held = null) =>
+        _workTaken.GetValueOrDefault(building) - (ReferenceEquals(building, held) ? 1 : 0) < _work.MaxOperatorsOf(building);
 
     /// <summary>
     /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that
@@ -1142,7 +1145,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The workplaces the members hold, reserved for every squad before any claims (as the seats, <see cref="TownPlaceClaims.Reserve"/>).
+    /// The workplaces the members hold, reserved for every squad before any claims (as the seats, <see cref="TownPlaceClaims.Reserve"/>), and those
+    /// obedient player slaves operate (<see cref="ReserveObedientWork"/>).
     /// </summary>
     void ReserveWork(World world)
     {
@@ -1154,6 +1158,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
             }
         }
+
+        ReserveObedientWork(world);
     }
 
     /// <summary>

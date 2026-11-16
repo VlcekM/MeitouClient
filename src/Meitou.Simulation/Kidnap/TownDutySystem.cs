@@ -1621,7 +1621,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
         {
             TaskStart.Stand(table, g);
-            StashHere(world, d, gc, inv, machine, box, store, gn.Position);
+            StashHere(world, d.Kind == TownDutyKind.Ditch, gc, inv, machine, box, store, gn.Position);
             return End(world, d);
         }
 
@@ -1641,16 +1641,38 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The errand's member at its store puts the items in, whole stacks while there is room. A building shop's stock container is lent its
-    /// rectangle of the stock for it (<see cref="Trading.TradeSystem.Lend"/>), so what goes in joins the shop's stock: the original's stock is what
-    /// the home's containers hold (docs/game/economy.md "Building shops"), and the ditch finder takes a shop's storages as any other.
+    /// Row 93 at a storage for an obedient player slave's errand (<see cref="StashHere"/>, the ditch's collection): the carried items the storage
+    /// <paramref name="storeId"/> takes go in. Serial phases only.
     /// </summary>
-    void StashHere(World world, TownDuty d, CharacterCold gc, Inventory inv, Production.Machine? machine, Fixture? box, Inventory store, Vector3 at)
+    internal void PutAway(World world, CharacterCold cold, string storeId, Vector3 at)
+    {
+        var machine = world.Machines.Find(storeId);
+        var box = machine is null ? world.Fixtures.Find(storeId) : null;
+        if ((machine?.Storage ?? box?.Contents) is { } store && cold.Inventory is { } inv) StashHere(world, true, cold, inv, machine, box, store, at);
+    }
+
+    /// <summary>
+    /// The storage the ditch finder (<see cref="DitchStore"/>'s search, <see cref="StoreFor"/>) finds for <paramref name="items"/> in the town at
+    /// <paramref name="at"/>: the nearest that takes one of them; null outside a town or with none. A read-only look.
+    /// </summary>
+    internal (string Id, Vector2 Spot)? StoreTaking(World world, Squad squad, CharacterCold cold, Vector3 at, IEnumerable<ItemInstance> items)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        return town.IsNone ? null : StoreFor(world, squad, cold, at, town, [.. items], register: false);
+    }
+
+    /// <summary>
+    /// The errand's member at its store puts the items in, whole stacks while there is room: for a ditch (<paramref name="ditch"/>) what the
+    /// ditch's collection lists, else its loot. A building shop's stock container is lent its rectangle of the stock for it
+    /// (<see cref="Trading.TradeSystem.Lend"/>), so what goes in joins the shop's stock: the original's stock is what the home's containers hold
+    /// (docs/game/economy.md "Building shops"), and the ditch finder takes a shop's storages as any other.
+    /// </summary>
+    void StashHere(World world, bool ditch, CharacterCold gc, Inventory inv, Production.Machine? machine, Fixture? box, Inventory store, Vector3 at)
     {
         var shop = box is not null ? ContainerAccess.ShopOf(world, box) : null;
         if (shop is not null) Trading.TradeSystem.Lend(world, shop, box!.Id);
 
-        var carried = d.Kind == TownDutyKind.Ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc);
+        var carried = ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc);
         foreach (var item in carried.Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : GridTakes(box!, i)).ToList())
         {
             inv.Remove(item);
