@@ -5,22 +5,17 @@ using Meitou.Game.Host;
 namespace Meitou.Modding;
 
 /// <summary>
-/// Mods whose feature Meitou has built in (docs/formats/rekenshi.md). When one is enabled, Meitou takes its settings into its own once
-/// (<see cref="UserConfig.AdoptedMods"/>) and says so; a code mod among them is not run, so the feature never applies twice, and a save made while it
-/// ran does not report it gone.
+/// Mods whose feature Meitou has built in (<see cref="CoveredMods.BuiltIn"/>, docs/formats/rekenshi.md). When one is enabled, Meitou takes its
+/// settings into its own once (<see cref="UserConfig.AdoptedMods"/>) and says so; a code mod among them is not run, so the feature never applies
+/// twice, and a save made while it ran does not report it gone.
 /// </summary>
 static class BuiltInMods
 {
     /// <summary>
-    /// A mod Meitou covers: its <c>.mod</c> name or its code mod's id, what the notice says became of its settings, and how they are taken in (from
-    /// the mod and the mods on disk by name).
+    /// A mod Meitou covers (its entry in <see cref="CoveredMods.BuiltIn"/>), what the notice says became of its settings, and how they are taken in
+    /// (from the mod and the mods on disk by name).
     /// </summary>
-    sealed record Covered(string? ModName, string? CodeId, string Taken, Action<UserConfig, ModInfo, IReadOnlyDictionary<string, ModInfo>> Adopt);
-
-    /// <summary>
-    /// The <c>.mod</c> name of xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (Workshop 3679678086).
-    /// </summary>
-    const string RekenshiXpMod = "Player XP Only x10 RE";
+    sealed record Covered(BuiltInMod Mod, string Taken, Action<UserConfig, ModInfo, IReadOnlyDictionary<string, ModInfo>> Adopt);
 
     /// <summary>
     /// The XP multiplier both XP mods start at.
@@ -37,10 +32,9 @@ static class BuiltInMods
     /// </summary>
     static readonly Covered[] All =
     [
-        new(RekenshiXpMod, null, XpTaken, (config, mod, _) => config.SquadXp = Clamped(RekenshiXp(mod.Folder) ?? DefaultXpMod)),
-        // Its code mod port "[MeitouClient] Player-Only XP x10" (Workshop 3838916871), which uses the plugin's file over its own saved setting when the
-        // plugin is installed.
-        new(null, "player-only-xp", XpTaken, (config, _, onDisk) => config.SquadXp = Clamped(PortXp(config, onDisk))),
+        new(CoveredMods.RekenshiXp, XpTaken, (config, mod, _) => config.SquadXp = Clamped(RekenshiXp(mod.Folder) ?? DefaultXpMod)),
+        // The port uses the plugin's file over its own saved setting when the plugin is installed.
+        new(CoveredMods.XpPort, XpTaken, (config, _, onDisk) => config.SquadXp = Clamped(PortXp(config, onDisk))),
     ];
 
     /// <summary>
@@ -72,7 +66,7 @@ static class BuiltInMods
     /// </summary>
     public static void SkipCovered(List<ModInfo> enabled, List<ModInfo> disabled)
     {
-        foreach (var mod in enabled.Where(m => CoveredOf(m) is { CodeId: not null }).ToList())
+        foreach (var mod in enabled.Where(m => CoveredOf(m) is { Mod.CodeId: not null }).ToList())
         {
             Console.WriteLine($"mods      {mod.Name} not run: built into Meitou");
             enabled.Remove(mod);
@@ -84,7 +78,7 @@ static class BuiltInMods
     /// <paramref name="saved"/> without the covered code mods, so a save made while one ran does not report it gone.
     /// </summary>
     public static CodeModEnvironment WithoutCovered(CodeModEnvironment saved) =>
-        saved with { Mods = [.. saved.Mods.Where(m => !All.Any(c => c.CodeId == m.Id))] };
+        saved with { Mods = [.. saved.Mods.Where(m => !All.Any(c => c.Mod.CodeId == m.Id))] };
 
     /// <summary>
     /// The mods on disk by name; none when the folders cannot be read.
@@ -103,13 +97,9 @@ static class BuiltInMods
     }
 
     /// <summary>
-    /// The entry covering <paramref name="mod"/>, by its <c>.mod</c> name or its code mod's id; null when Meitou does not cover it.
+    /// The entry covering <paramref name="mod"/> (<see cref="CoveredMods.BuiltInOf"/>); null when Meitou does not cover it.
     /// </summary>
-    static Covered? CoveredOf(ModInfo mod)
-    {
-        string? id = mod.HasCode ? CodeModManifest.TryReadId(mod.CodeManifestPath) : null;
-        return All.FirstOrDefault(c => c.ModName == mod.Name || id is not null && c.CodeId == id);
-    }
+    static Covered? CoveredOf(ModInfo mod) => CoveredMods.BuiltInOf(mod) is { } built ? All.FirstOrDefault(c => c.Mod == built) : null;
 
     /// <summary>
     /// The plugin's <c>xp_multiplier</c> in <c>plugin/player_xp_boost.ini</c> of <paramref name="folder"/> (a trailing <c>;</c> or <c>#</c> comment
@@ -151,7 +141,8 @@ static class BuiltInMods
     /// </summary>
     static float PortXp(UserConfig config, IReadOnlyDictionary<string, ModInfo> onDisk)
     {
-        if (onDisk.GetValueOrDefault(RekenshiXpMod) is { } plugin && RekenshiXp(plugin.Folder) is { } shared) return shared;
+        if (onDisk.GetValueOrDefault(CoveredMods.RekenshiXp.ModName!) is { } plugin && RekenshiXp(plugin.Folder) is { } shared)
+            return shared;
 
         string? saved = config.ModSettings.GetValueOrDefault("player-only-xp")?.GetValueOrDefault("Multiplier");
         return float.TryParse(saved, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : DefaultXpMod;

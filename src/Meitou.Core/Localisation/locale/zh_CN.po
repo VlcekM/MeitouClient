@@ -200,6 +200,48 @@ msgstr "本地模组"
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"
 
+msgid "Built into Meitou: {1}"
+msgstr "已内置于 Meitou：{1}"
+
+msgid "Built into Meitou: {1}; this mod is not run"
+msgstr "已内置于 Meitou：{1}；此模组不会运行"
+
+msgid "Squad XP in the Advanced settings"
+msgstr "高级设置中的 Squad XP"
+
+msgid "One Meitou mod that does the same: {1}"
+msgstr "一个功能相同的 Meitou 模组：{1}"
+
+msgid "One Meitou mod that does the same: {1} (installed)"
+msgstr "一个功能相同的 Meitou 模组：{1}（已安装）"
+
+msgid "View {1}"
+msgstr "查看 {1}"
+
+msgid "Open the Steam workshop page of a Meitou mod that does the same; subscribing is up to you"
+msgstr "打开一个功能相同的 Meitou 模组的 Steam 创意工坊页面；是否订阅由你决定"
+
+msgid "Meitou mods you might like"
+msgstr "你可能喜欢的 Meitou 模组"
+
+msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
+msgstr "这些 RE_Kenshi 模组的插件无法在 Meitou 中运行。"
+
+msgid "One Meitou mod on the Steam workshop that does the same (others may too):"
+msgstr "Steam 创意工坊上有一个功能相同的 Meitou 模组（可能还有其他的）："
+
+msgid "Want to look at them on Steam?"
+msgstr "要在 Steam 上看看它们吗？"
+
+msgid "Open its page"
+msgstr "打开页面"
+
+msgid "Open {1} pages"
+msgstr "打开 {1} 个页面"
+
+msgid "No thanks"
+msgstr "不用了"
+
 msgid "nightly"
 msgstr "每日构建"
 
