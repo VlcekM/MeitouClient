@@ -490,6 +490,18 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     static float Factor(byte area, NavAgent agent) => NavArea.WetState(area) is var state and > 0 ? agent.Water[state] : 1;
 
     /// <summary>
+    /// Whether an agent of <paramref name="radius"/> passes from <paramref name="from"/> through its edge <paramref name="edge"/> into
+    /// <paramref name="to"/>: the search's clearance rule (a portal end on a wall takes the radius off it).
+    /// </summary>
+    internal bool Fits(NavRef from, int edge, NavRef to, float radius)
+    {
+        if (!Portal(from, edge, to, out var left, out var right, out bool leftWall, out bool rightWall)) return false;
+
+        float width = Vector2.Distance(new(left.X, left.Z), new(right.X, right.Z));
+        return width >= ((leftWall ? 1 : 0) + (rightWall ? 1 : 0)) * radius;
+    }
+
+    /// <summary>
     /// The shared segment between a polygon's edge and the polygon behind it: the overlap of the two collinear edges. Left and right are as seen when
     /// walking from <paramref name="from"/> into <paramref name="to"/> (polygons are counter-clockwise on the X/Z plane, so the edge's end is on the
     /// left).

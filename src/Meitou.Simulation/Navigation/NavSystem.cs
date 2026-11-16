@@ -1,5 +1,6 @@
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Characters;
 using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
@@ -249,6 +250,13 @@ public sealed class NavSystem : IDisposable
     readonly object _labelGate = new();
 
     /// <summary>
+    /// The footprint radius the gate-code pass's connection tests keep clear: RACE <c>17-gamedata.quack</c>'s (Greenlander, the default race)
+    /// <c>pathfind footprint radius</c>, as <c>FUN_1402ef4a0</c> reads it.
+    /// </summary>
+    float GateFootprint => _db.Find(CharacterGenerator.DefaultRaceId)?.GetFloat("pathfind footprint radius", GateCodeFlood.DefaultFootprint)
+        ?? GateCodeFlood.DefaultFootprint;
+
+    /// <summary>
     /// The gate codes of the meshes loaded now (<see cref="NavGateRegions"/>: the gate-code pass over the gates their zones hold). Slow (floods over
     /// the loaded navmesh): call it off the simulation thread. One labelling at a time.
     /// </summary>
@@ -256,7 +264,7 @@ public sealed class NavSystem : IDisposable
     {
         lock (_labelGate)
         {
-            return NavGateRegions.Label(Walkability.World);
+            return NavGateRegions.Label(Walkability.World, GateFootprint);
         }
     }
 

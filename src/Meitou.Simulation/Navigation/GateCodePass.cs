@@ -23,12 +23,12 @@ internal sealed class GateCodePass
     readonly List<int> _failed = [];
 
     /// <summary>
-    /// A pass over <paramref name="world"/> for <paramref name="gates"/>.
+    /// A pass over <paramref name="world"/> for <paramref name="gates"/>; its connection tests keep <paramref name="footprint"/> clear.
     /// </summary>
-    public GateCodePass(NavWorld world, List<GateSide> gates)
+    public GateCodePass(NavWorld world, List<GateSide> gates, float footprint)
     {
         _gates = gates;
-        _flood = new GateCodeFlood(world);
+        _flood = new GateCodeFlood(world, footprint);
         First = new int[gates.Count];
         Second = new int[gates.Count];
     }

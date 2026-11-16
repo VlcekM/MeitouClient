@@ -954,11 +954,14 @@ The original labels the walkable ground by the gates (**Verified** structure, de
   (`InteriorFilter`); face data -1 or an unlabelled face reads 0 in the exterior, an unlabelled door face (data 4 or 5) -1; in a section whose
   +0x1a0 is 0x10000 or more an unlabelled face reads -1. Under the `GateFilter` (`FUN_1402f4730`) a search never enters a face whose data is 4 or 5:
   every unlabelled door face.
-- **Connection** (**Verified**, `FUN_1402ec580`): a Havok path search between two points under the gate filter; false when either point has no
-  face (`FUN_1402ea530`) or the search fails.
+- **Connection** (**Verified**, `FUN_1402ec580`, its input set up in `FUN_1402ef4a0`): a Havok path search between two points under the gate
+  filter; false when either point has no face (`FUN_1402ea530`) or the search fails. The search input (`FUN_140ce5230`) allows 100 000 iterations
+  and carries an agent diameter of RACE `17-gamedata.quack`'s (Greenlander) `pathfind footprint radius` x 0.2 Havok units (4 → 0.8, a width of 8),
+  read once and kept at pass +0x90, so a passage narrower than the footprint does not connect.
 - **Flood** (**Verified**, `FUN_1402ed460`, `FUN_140ce5e60`): per code, ascending, from the side point of the last gate holding it (first codes 0xffff
   are left out; codes 0 and below are not flooded). A start point without a face logs "Floodfill has no starting polygon"; a start face that has a
-  code already is skipped. The flood runs under the gate filter, crosses only edges whose nearest point lies within 900 Havok units (9000) of the
+  code already is skipped. The flood runs under the gate filter with the connection search's agent diameter (its input +0x2c; `FUN_140ce5e60`
+  takes half of it as the radius), crosses only edges whose nearest point lies within 900 Havok units (9000) of the
   start seen from above, and stops after 100 000 iterations or when its open set or search state (0x20000 / 0x90200 bytes) is full. Its callback
   (`GateFillCallback`, `FUN_1402ea7a0`) refuses an exterior face whose streaming edge leads to an unloaded section or, with no streaming edges, that
   has a boundary edge of 2 Havok units (20) or more along its section's border; a refused face aborts the flood. A stopped or aborted flood logs
@@ -990,20 +993,22 @@ Meitou (engine reading; `NavGateRegions`, `GateCodePass`, `GateCodeFlood`, `Gate
 the rules above from the door's first collision box (`ZoneGeometryGatherer.AddGateSides`, `GateDoorMarkers`; rays against the gathered group-9
 triangles and the terrain) and the zone mesh keeps them (`ZoneNavMesh.GateSides`, cached). Faces are kept polygons, door faces `NavArea.Door`
 polygons, interior sections the interior polygons. Differences: the face at a point is the lowest polygon above it, which meets a polygon up to 5 under the point (Meitou's surfaces follow the
-ground within a few units either way); the connection test is connected parts (no iteration cap); the flood applies the 100 000-step cap but not the
-byte caps; an unjoined border edge is open only toward a zone with no mesh loaded (Meitou's stitching leaves short gaps across loaded borders: Stack's
+ground within a few units either way); the connection test is `NavQuery`'s A* (100 000 iterations) for a `NavAgent` of the footprint radius with door polygons
+closed, and the flood crosses only portals that pass the same clearance rule (`NavQuery.Fits`); the flood applies the 100 000-step cap but not
+the byte caps; an unjoined border edge is open only toward a zone with no mesh loaded (Meitou's stitching leaves short gaps across loaded borders: Stack's
 yard on the 19.29 / 20.29 border); gates are listed by zone (X, then Z), then as gathered. `IGateRegions.CodeAt` reads an object's code at a
 position: `getGateCode`, except that an unlabelled interior polygon takes its building's code, the highest code of the exterior ground its
 connected interior's joins reach, across zone borders and through runs of exterior door polygons (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; `LockSystem` applies the result
 (`GateRegionsCommand`, not hashed or saved): door 0's `Fixture.GateCode` takes the first code, the building the second, and Town slot 96 reads both
 from the last labelling that listed the gate. Before the first labelling a
 building's code is -1 (the lock system knows no navmesh face). **Observed** (`NavGateRegions.Label` over Meitou's meshes, 3 x 3 zones around each
-town, 5 to 45 ms): Stack, Squin, Heng, Admag and Bad Teeth each have one walled region (code 1) and every gate [1, 0], the first side inside; Mongrel's
-two gates and Shark's Makeshift Gate have both sides connected, so [0, 0] (the routes run kilometres around through the terrain, not through the
-gates: Mongrel's wall line is open on Meitou's mesh); the Hub has no gate with a door. No flood failed there. Positions reading -1 are exterior door polygons, a few exterior polygons the face lookup misses at their centre, and
-interiors with no walkable join (Stack 218 interior polygons, the most). **Observed**
-(saved `gatecode0` in the original's saves, written after a pass): the gates of Stack, Squin, Heng, Admag, Bad Teeth and Mongrel hold 1 to 3, every
-other door -1, so the first side is the inside and Mongrel is walled in the original (Meitou's mesh joins its two sides).
+town, 5 to 45 ms): Stack, Squin, Heng, Admag, Bad Teeth and Mongrel each have one walled region (code 1) and every gate [1, 0], the first side
+inside; Shark's Makeshift Gate has both sides connected, so [0, 0]; the Hub has no gate with a door. No flood failed there. Mongrel's two sides
+connect without the footprint, kilometres around through the terrain past passages narrower than 8; with it they don't. Positions on the
+surface reading -1 are exterior door polygons (as the original's unlabelled door faces) and interior islands no door joins on Meitou's mesh
+(buildings over a zone border such as Stack's Stationhouse, Storm Houses and Y-House: Stack 218 polygons, Mongrel 163, Heng 84). **Observed**
+(saved `gatecode0` in the original's saves, written after a pass): the gates of Stack, Squin, Heng, Admag, Bad Teeth and Mongrel hold 1 to 3,
+Shark's Makeshift Gate 0, every other door -1, so the first side is the inside.
 
 ## Unknowns
 

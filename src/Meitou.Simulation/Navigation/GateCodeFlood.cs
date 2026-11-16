@@ -12,9 +12,9 @@ internal sealed class GateCodeFlood
     #region Connection
 
     /// <summary>
-    /// Each kept polygon's connected part under the gate filter, by zone slot (-1 for door and pruned polygons).
+    /// The footprint radius the connection search keeps clear when no race says otherwise (Greenlander's <c>pathfind footprint radius</c>).
     /// </summary>
-    readonly int[][] _part;
+    public const float DefaultFootprint = 4;
 
     /// <summary>
     /// The navmesh walked.
@@ -22,87 +22,41 @@ internal sealed class GateCodeFlood
     readonly NavWorld _world;
 
     /// <summary>
-    /// Splits <paramref name="world"/> into the parts the gate filter leaves connected.
+    /// The path search the connection test asks.
     /// </summary>
-    public GateCodeFlood(NavWorld world)
+    readonly NavQuery _query;
+
+    /// <summary>
+    /// Who the connection search is for: the footprint radius, every door face blocked (the gate filter).
+    /// </summary>
+    readonly NavAgent _agent;
+
+    /// <summary>
+    /// The walks over <paramref name="world"/>; the connection search keeps <paramref name="footprint"/> clear.
+    /// </summary>
+    public GateCodeFlood(NavWorld world, float footprint)
     {
         _world = world;
-        _part = new int[world.ZoneCount][];
-        for (int s = 0; s < world.ZoneCount; s++)
-        {
-            _part[s] = new int[world.Mesh(s).PolygonCount];
-            Array.Fill(_part[s], -1);
-        }
-
-        MarkParts();
+        _query = new NavQuery(world);
+        _agent = new NavAgent { Radius = footprint, DoorsClosed = true };
     }
 
     /// <summary>
-    /// <c>FUN_1402ec580</c>: whether a path under the gate filter joins the faces at <paramref name="a"/> and <paramref name="b"/>; false when either
-    /// point finds no face (<c>FUN_1402ea530</c>). The original asks Havok's search (100 000 iterations); the parts answer the same.
+    /// <c>FUN_1402ec580</c>: whether a path search under the gate filter, for the footprint, joins the faces at <paramref name="a"/> and
+    /// <paramref name="b"/> within the search's iterations; false when either point finds no face (<c>FUN_1402ea530</c>).
     /// </summary>
     public bool Connected(Vector3 a, Vector3 b)
     {
         if (!GateFaces.TryFaceAbove(_world, a, out var from) || !GateFaces.TryFaceAbove(_world, b, out var to)) return false;
         if (from == to) return true;
 
-        // A path may leave a door face but never enters one.
-        if (PartOf(to) < 0) return false;
-        if (PartOf(from) >= 0) return PartOf(from) == PartOf(to);
-
-        foreach (var (n, _, _) in Around(from))
-            if (PartOf(n) == PartOf(to)) return true;
-
-        return false;
+        return _query.FindCorridor(from, a, to, b, _agent) is not null;
     }
 
     /// <summary>
     /// <c>NavMesh::getGateCode</c> at <paramref name="at"/> over <paramref name="codes"/>.
     /// </summary>
     public int CodeAt(Vector3 at, Dictionary<long, int> codes) => GateFaces.CodeAt(_world, codes, at);
-
-    /// <summary>
-    /// The part of a polygon (-1 for a door's).
-    /// </summary>
-    int PartOf(NavRef r) => _part[r.Zone][r.Polygon];
-
-    /// <summary>
-    /// Numbers the connected parts of the kept, non-door polygons.
-    /// </summary>
-    void MarkParts()
-    {
-        int next = 0;
-        var queue = new Queue<NavRef>();
-        for (int s = 0; s < _world.ZoneCount; s++)
-        {
-            var m = _world.Mesh(s);
-            for (int p = 0; p < m.PolygonCount; p++)
-            {
-                if (!Passable(new NavRef(s, p)) || _part[s][p] >= 0) continue;
-
-                _part[s][p] = next;
-                queue.Enqueue(new NavRef(s, p));
-                Spread(queue, next++);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Gives every passable polygon reached from <paramref name="queue"/> the part <paramref name="part"/>.
-    /// </summary>
-    void Spread(Queue<NavRef> queue, int part)
-    {
-        while (queue.TryDequeue(out var r))
-        {
-            foreach (var (n, _, _) in Around(r))
-            {
-                if (!Passable(n) || _part[n.Zone][n.Polygon] >= 0) continue;
-
-                _part[n.Zone][n.Polygon] = part;
-                queue.Enqueue(n);
-            }
-        }
-    }
 
     #endregion
 
@@ -165,7 +119,8 @@ internal sealed class GateCodeFlood
     }
 
     /// <summary>
-    /// The faces a flood from <paramref name="start"/> reaches, null when one of them is at the open edge (the fill callback refuses it and the
+    /// The faces a flood from <paramref name="start"/> reaches through portals wide enough for the footprint (<c>FUN_140ce5e60</c> takes half the
+    /// agent's diameter as its radius), null when one of them is at the open edge (the fill callback refuses it and the
     /// search stops) or it takes more than <see cref="FloodIterations"/> steps.
     /// </summary>
     List<NavRef>? Reach(NavRef start, Vector2 seed)
@@ -181,9 +136,12 @@ internal sealed class GateCodeFlood
         {
             if (++steps > FloodIterations) return null;
 
-            foreach (var (n, a, b) in Around(r))
+            foreach (var (n, edge, a, b) in Around(r))
             {
-                if (!Passable(n) || DistanceToEdge(seed, a, b) > FloodRadius || !seen.Add(n.Key)) continue;
+                if (!Passable(n) || DistanceToEdge(seed, a, b) > FloodRadius || seen.Contains(n.Key)) continue;
+                if (!_query.Fits(r, edge, n, _agent.Radius)) continue;
+
+                seen.Add(n.Key);
                 if (AtOpenEdge(n)) return null;
 
                 reached.Add(n);
@@ -265,24 +223,25 @@ internal sealed class GateCodeFlood
     }
 
     /// <summary>
-    /// The polygons next to <paramref name="r"/> with the edge between: behind its edges, across its own links and across the zone borders.
+    /// The polygons next to <paramref name="r"/> with the edge between (its index in <paramref name="r"/> and its ends): behind its edges, across its
+    /// own links and across the zone borders.
     /// </summary>
-    IEnumerable<(NavRef To, Vector3 A, Vector3 B)> Around(NavRef r)
+    IEnumerable<(NavRef To, int Edge, Vector3 A, Vector3 B)> Around(NavRef r)
     {
         var m = _world.Mesh(r.Zone);
         var poly = m.Polygons[r.Polygon];
         for (int k = 0; k < poly.Length; k++)
         {
             int q = m.Neighbours[r.Polygon][k];
-            if (q >= 0) yield return (new NavRef(r.Zone, q), m.Vertices[poly[k]], m.Vertices[poly[(k + 1) % poly.Length]]);
+            if (q >= 0) yield return (new NavRef(r.Zone, q), k, m.Vertices[poly[k]], m.Vertices[poly[(k + 1) % poly.Length]]);
         }
 
         var own = m.LinksOf(r.Polygon).ToArray();
         for (int i = 0; i + 1 < own.Length; i += 2)
-            yield return (new NavRef(r.Zone, own[i + 1]), m.Vertices[poly[own[i]]], m.Vertices[poly[(own[i] + 1) % poly.Length]]);
+            yield return (new NavRef(r.Zone, own[i + 1]), own[i], m.Vertices[poly[own[i]]], m.Vertices[poly[(own[i] + 1) % poly.Length]]);
 
         foreach (var link in _world.LinksOf(r).ToArray())
-            yield return (link.To, m.Vertices[poly[link.Edge]], m.Vertices[poly[(link.Edge + 1) % poly.Length]]);
+            yield return (link.To, link.Edge, m.Vertices[poly[link.Edge]], m.Vertices[poly[(link.Edge + 1) % poly.Length]]);
     }
 
     #endregion

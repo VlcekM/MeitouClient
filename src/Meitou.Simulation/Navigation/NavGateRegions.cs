@@ -50,11 +50,6 @@ public sealed class NavGateRegions : IGateRegions
     public IReadOnlyList<string> Log { get; }
 
     /// <summary>
-    /// The number of codes written into faces.
-    /// </summary>
-    public int RegionCount => _codes.Values.Distinct().Count();
-
-    /// <summary>
     /// The code of an object at <paramref name="at"/>: <c>NavMesh::getGateCode</c> there, except that in an interior it is its building's
     /// (<see cref="GateInteriorCodes"/>; the original keeps each object's code on the object, and what is inside a building takes the building's).
     /// </summary>
@@ -67,19 +62,15 @@ public sealed class NavGateRegions : IGateRegions
 
     /// <summary>
     /// Runs the gate-code pass over <paramref name="world"/>: the gates are the side points its zone meshes hold
-    /// (<see cref="ZoneNavMesh.GateSides"/>), by zone (X, then Z) and then as gathered, each building once.
+    /// (<see cref="ZoneNavMesh.GateSides"/>), by zone (X, then Z) and then as gathered, each building once. The connection tests keep
+    /// <paramref name="footprint"/> clear: the default race's <c>pathfind footprint radius</c> (<c>FUN_1402ef4a0</c>).
     /// </summary>
-    public static NavGateRegions Label(NavWorld world) => Label(world, _ => true);
-
-    /// <summary>
-    /// As <see cref="Label(NavWorld)"/> over the gates whose placement key <paramref name="include"/> accepts.
-    /// </summary>
-    public static NavGateRegions Label(NavWorld world, Func<string, bool> include)
+    public static NavGateRegions Label(NavWorld world, float footprint = GateCodeFlood.DefaultFootprint)
     {
-        var gates = GatesOf(world).Where(g => include(g.Building)).ToList();
+        var gates = GatesOf(world);
         if (gates.Count == 0) return new NavGateRegions(world, [], GateInteriorCodes.Of(world, []), [], []);
 
-        var pass = new GateCodePass(world, gates);
+        var pass = new GateCodePass(world, gates, footprint);
         pass.Run();
         var links = gates.Select((g, i) => new GateLink(g.Building, [pass.First[i], pass.Second[i]])).ToList();
         return new NavGateRegions(world, pass.Codes, GateInteriorCodes.Of(world, pass.Codes), links, pass.Log);
