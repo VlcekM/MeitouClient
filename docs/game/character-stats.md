@@ -52,7 +52,7 @@ LEG parts, 1 with none, + toughness x scale x 0.01, 0, 1). Its only caller is th
 past an early return on a Character +0xd4 byte (stealth on), so otherwise it keeps its last value (1 at start; **Observed**,
 fits #46's torso at 0.5 leaving stealth at 1). That update is skipped while the character is down (`FUN_1405cf130`, vfunc 0x30
 `FUN_1405c9e10`: unconscious, dead, carried, ragdolled or posture >= 3), not for the posture-2 crippled crawl, so a crippled sneaker's
-term follows its downed leg: crawling does not cancel the injury (**Verified**, decompile; #785). The Stealth tooltip (`FUN_14088f9a0`)
+term follows its downed leg: crawling does not cancel the injury (**Verified**, decompile, and in the original via kh: right leg -81/145, toughness 49, stealth 59 crawls at "0 (-59)", Total 0; #785). The Stealth tooltip (`FUN_14088f9a0`)
 ends its rows at "Crawling: +100%" and skips the Encumbrance, Injuries, gear and Robotics rows, but its Total is the full getter.
 The table's stealth case (A; 0.9, 0.9, 0.8) exists, but no caller found reaches it. Meitou: `Orders.Stealth` (its x2 reads
 `MedicalState.Prone`, both crawls).
