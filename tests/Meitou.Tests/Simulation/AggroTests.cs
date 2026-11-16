@@ -238,7 +238,7 @@ public class AggroTests
         Assert.Empty(a.World.TakeMessages());
 
         // The townsfolk declare war on the player: -35, hostile, and the game's messages.
-        PlayerRelations.DeclareWar(a.World, a.Relations, Townsfolk, Player);
+        PlayerRelations.DeclareWar(a.World, a.Relations, Townsfolk, Player, CharacterId.None);
 
         Assert.Equal(-35, a.Relations.Get(Townsfolk, Player));
         Assert.Equal(["War breaks out between townsfolk and Nameless", "townsfolk are now hostile towards you"], a.World.TakeMessages());

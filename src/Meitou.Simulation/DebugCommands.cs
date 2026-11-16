@@ -1042,8 +1042,8 @@ static class DebugCheats
         for (int b = 0; b < relations.Count; b++)
         {
             if (b == set.A || (set.B is { } only && b != only)) continue;
-            PlayerRelations.Add(world, relations, set.A, b, value - relations.Get(set.A, b));
-            PlayerRelations.Add(world, relations, b, set.A, value - relations.Get(b, set.A));
+            PlayerRelations.Add(world, relations, set.A, b, value - relations.Get(set.A, b), new(RelationCauseType.Debug));
+            PlayerRelations.Add(world, relations, b, set.A, value - relations.Get(b, set.A), new(RelationCauseType.Debug));
         }
     }
 

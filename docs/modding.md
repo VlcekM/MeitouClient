@@ -126,6 +126,16 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Relation changes:** a registered system implementing `IRelationChangeObserver` receives `RelationChanged(World, in RelationChange)`
+  once per change of a faction relation, after the change and its threshold message: the two factions (the player's row comes as the other
+  faction's view of the player), the value before and after, and a `RelationCause`: its type (a deed, a witnessed crime, a captive sold or a
+  slave bought free, dialogue, war declared or ended, a debug command), the deed's kind, the acting character (none for a debug command) and
+  the deed's victim. One killing blow reports each of its events (killed, hit, knockout, killing blow); first aid reports each update. An
+  ended war counts when its flag clears even if the value does not. Loads, a new game's start values, global trust, rank and direct
+  `FactionRelations` writes are not reported. Callbacks run serially in system order inside the serial step that made the change; they may
+  read the world, change their own hashed state and change relations (a change made through `PlayerRelations` during a callback is not
+  reported again), and must not change characters or other world state. A throwing callback is logged and disabled for that world, as for
+  combat; faulted registrations enter the state hash.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs

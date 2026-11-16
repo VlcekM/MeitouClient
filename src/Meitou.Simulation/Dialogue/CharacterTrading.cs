@@ -389,8 +389,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
         system.Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);
         system.FireEvent(world, id, player, DialogueSystem.BoughtMeFromSlavery);
-        ChangeTowardPlayer(world, slaver.Faction, 1);
-        ChangeTowardPlayer(world, c.Faction, 4);
+        ChangeTowardPlayer(world, slaver.Faction, 1, player);
+        ChangeTowardPlayer(world, c.Faction, 4, player);
     }
 
     /// <summary>
@@ -453,8 +453,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         Locks.FixtureRegistry.Enslave(world, c, slaver.Faction, slaver.SquadId);
         Chain(c);
         system.Memory.Remember(world, c.SquadId, customer, MemoryTag.Captor);
-        ChangeTowardPlayer(world, slaver.Faction, 4);
-        ChangeTowardPlayer(world, c.Faction, -4);
+        ChangeTowardPlayer(world, slaver.Faction, 4, customer);
+        ChangeTowardPlayer(world, c.Faction, -4, customer);
     }
 
     /// <summary>
@@ -463,12 +463,13 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     void Chain(CharacterCold c) => (_chainAssembly ??= new CharacterAssembly(data)).Chain(c);
 
     /// <summary>
-    /// Changes <paramref name="faction"/>'s relation toward the player's faction by the amount (not for the player's own faction or an unknown one).
+    /// Changes <paramref name="faction"/>'s relation toward the player's faction by the amount (not for the player's own faction or an unknown one);
+    /// <paramref name="actor"/> is the player's character who traded.
     /// </summary>
-    void ChangeTowardPlayer(World world, int faction, int amount)
+    void ChangeTowardPlayer(World world, int faction, int amount, CharacterId actor)
     {
         if (world.Player.Faction < 0 || faction == world.Player.Faction || !data.Relations.Contains(faction)) return;
-        system.ChangeRelation(world, faction, world.Player.Faction, amount);
+        system.ChangeRelation(world, faction, world.Player.Faction, amount, new(RelationCauseType.Trade, actor));
     }
 
     /// <summary>

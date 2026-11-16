@@ -18,49 +18,60 @@ public static class PlayerRelations
     {
         int player = relations.PlayerFaction;
         if (player < 0 || faction == player || !relations.Contains(faction)) return;
-        Event(world, relations, faction, player, kind, x);
+        Event(world, relations, faction, player, kind, x, CharacterId.None, CharacterId.None);
     }
 
     /// <summary>
     /// Slot 5 of <paramref name="a"/>'s table about <paramref name="b"/> (<see cref="FactionRelations.Event"/>); when <paramref name="b"/> is the
     /// player's faction the threshold message of the change is posted, as the game's slot does (<c>FUN_1406b2d20</c> tests the other faction's player
-    /// flag).
+    /// flag). <paramref name="doer"/> and <paramref name="victim"/> are passed on to the observers.
     /// </summary>
-    public static void Event(World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x)
+    public static void Event(
+        World world, FactionRelations relations, int a, int b, RelationEventKind kind, float x, CharacterId doer, CharacterId victim)
     {
         var (before, after) = relations.Event(a, b, kind, x);
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+
+        Posted(world, relations, a, b, before, after);
+        Observed(world, relations, a, b, before, after, new(RelationCauseType.Deed, kind, doer, victim));
     }
 
     /// <summary>
-    /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side.
+    /// Slot 4 (<see cref="FactionRelations.Add"/>) with the threshold message when the player's faction is one side; the observers get
+    /// <paramref name="cause"/>.
     /// </summary>
-    public static void Add(World world, FactionRelations relations, int a, int b, float delta)
+    public static void Add(World world, FactionRelations relations, int a, int b, float delta, RelationCause cause)
     {
         var (before, after) = relations.Add(a, b, delta);
-        if (before != after) Posted(world, relations, a, b, before, after);
+        if (before == after) return;
+
+        Posted(world, relations, a, b, before, after);
+        Observed(world, relations, a, b, before, after, cause);
     }
 
     /// <summary>
     /// Faction <paramref name="a"/> declares war on <paramref name="b"/> (<see cref="FactionRelations.DeclareWar"/>, the dialogue's DECLARE_WAR):
     /// "War breaks out between {1} and {2}" when the war flag was clear, and the threshold message when <paramref name="b"/> is the player's faction.
-    /// Nothing when <paramref name="a"/> is already hostile.
+    /// Nothing when <paramref name="a"/> is already hostile. The observers see a change of the relation or of the war flag.
     /// </summary>
-    public static void DeclareWar(World world, FactionRelations relations, int a, int b)
+    public static void DeclareWar(World world, FactionRelations relations, int a, int b, CharacterId speaker)
     {
         var (before, after, started) = relations.DeclareWar(a, b);
         if (started) world.Post(Loc.Tr("War breaks out between {1} and {2}", relations.Factions[a].Name, relations.Factions[b].Name));
         if (before != after) Posted(world, relations, a, b, before, after);
+        if (started || before != after) Observed(world, relations, a, b, before, after, new(RelationCauseType.WarDeclared, speaker));
     }
 
     /// <summary>
     /// Faction <paramref name="a"/> ends its war with <paramref name="b"/> (<see cref="FactionRelations.EndWar"/>, the dialogue's END_WAR), with the
-    /// threshold message as above.
+    /// threshold message as above. The observers see a change of the relation or of the war flag.
     /// </summary>
-    public static void EndWar(World world, FactionRelations relations, int a, int b)
+    public static void EndWar(World world, FactionRelations relations, int a, int b, CharacterId speaker)
     {
+        bool atWar = relations.AtWar(a, b);
         var (before, after) = relations.EndWar(a, b);
         if (before != after) Posted(world, relations, a, b, before, after);
+        if (atWar || before != after) Observed(world, relations, a, b, before, after, new(RelationCauseType.WarEnded, speaker));
     }
 
     /// <summary>
@@ -71,6 +82,15 @@ public static class PlayerRelations
         // The player's row is kept in the other faction's table: either way round the other faction names the message.
         int other = a == relations.PlayerFaction ? b : b == relations.PlayerFaction ? a : -1;
         if (other >= 0 && Notice(relations.Factions[other].Name, before, after) is { } text) world.Post(text);
+    }
+
+    /// <summary>
+    /// Passes a change to the world's observers (<see cref="IRelationChangeObserver"/>), the player's row as the other faction's view of the player.
+    /// </summary>
+    static void Observed(World world, FactionRelations relations, int a, int b, float before, float after, RelationCause cause)
+    {
+        if (a == relations.PlayerFaction && a >= 0) (a, b) = (b, a);
+        world.RelationObservers.Observe(world, new RelationChange(world.Tick, a, b, before, after, cause));
     }
 
     /// <summary>
@@ -135,7 +155,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     {
         var table = world.Characters;
         if (table.Cold(doer) is not { } d || table.Cold(victim) is not { } v || d.Faction == v.Faction || x == 0) return;
-        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x);
+        PlayerRelations.Event(world, Relations, v.Faction, d.Faction, kind, x, table.IdOf(doer), table.IdOf(victim));
     }
 
     /// <summary>

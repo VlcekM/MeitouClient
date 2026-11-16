@@ -39,7 +39,7 @@ public sealed partial class DialogueSystem
         var mc = Cold(world, me);
         if (mc is not null) RunLocks(c, line, mc);
         if (line.Interrupt is { } interrupt) _interrupts[me] = interrupt;
-        RunRelationChanges(world, line);
+        RunRelationChanges(world, line, me);
         CrowdTrigger(world, c, line, me);
         var target = c.Player;
         var tc = Cold(world, target);
@@ -61,15 +61,16 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The line's <c>change relations</c>: each listed faction's relation with the player's faction changed by the amount, and the change posted.
+    /// The line's <c>change relations</c>: each listed faction's relation with the player's faction changed by the amount, and the change posted;
+    /// <paramref name="speaker"/> is the line's NPC-side speaker.
     /// </summary>
-    void RunRelationChanges(World world, DialogueNode line)
+    void RunRelationChanges(World world, DialogueNode line, CharacterId speaker)
     {
         foreach (var (factionId, amount) in line.ChangeRelations)
         {
             int f = _data.Relations.IndexOf(factionId);
             if (f < 0 || amount == 0 || world.Player.Faction < 0) continue;
-            ChangeRelation(world, f, world.Player.Faction, amount);
+            ChangeRelation(world, f, world.Player.Faction, amount, new(RelationCauseType.Dialogue, speaker));
             world.Post(amount > 0
                 ? Loc.Tr("Relations with {1} improved by {2}", _data.Factions[f].Name, amount)
                 : Loc.Tr("Relations with {1} decreased by {2}", _data.Factions[f].Name, -amount));
@@ -200,7 +201,7 @@ public sealed partial class DialogueSystem
         switch (effect.Action)
         {
             case DialogueActions.AffectRelations when mc is not null && tc is not null:
-                ChangeRelation(world, mc.Faction, tc.Faction, effect.Value);
+                ChangeRelation(world, mc.Faction, tc.Faction, effect.Value, new(RelationCauseType.Dialogue, me));
                 break;
             case DialogueActions.AffectReputation when mc is not null:
                 _data.Relations.AddGlobalTrust(mc.Faction, effect.Value);   // the speaker's faction's global trust (slot 9), whoever the target is
@@ -213,11 +214,11 @@ public sealed partial class DialogueSystem
                 break;
             case DialogueActions.DeclareWar when mc is not null && tc is not null && _data.Relations.Contains(mc.Faction)
                 && _data.Relations.Contains(tc.Faction):
-                PlayerRelations.DeclareWar(world, _data.Relations, mc.Faction, tc.Faction);
+                PlayerRelations.DeclareWar(world, _data.Relations, mc.Faction, tc.Faction, me);
                 break;
             case DialogueActions.EndWar when mc is not null && tc is not null && _data.Relations.Contains(mc.Faction)
                 && _data.Relations.Contains(tc.Faction):
-                PlayerRelations.EndWar(world, _data.Relations, mc.Faction, tc.Faction);
+                PlayerRelations.EndWar(world, _data.Relations, mc.Faction, tc.Faction, me);
                 break;
         }
     }
@@ -475,15 +476,11 @@ public sealed partial class DialogueSystem
     static void Lock(CharacterCold cold, string dialogue, bool locked) => (cold.DialogueLocks ??= new(StringComparer.Ordinal))[dialogue] = locked;
 
     /// <summary>
-    /// Changes the relation of factions <paramref name="a"/> and <paramref name="b"/> by the amount, posting the notice when one is the player's.
+    /// Changes the relation of factions <paramref name="a"/> and <paramref name="b"/> by the amount, posting the notice when one is the player's
+    /// (<see cref="PlayerRelations.Add"/>).
     /// </summary>
-    internal void ChangeRelation(World world, int a, int b, int amount)
-    {
-        var (before, after) = _data.Relations.Add(a, b, amount);
-        int other = a == world.Player.Faction ? b : a;
-        if (b == world.Player.Faction || a == world.Player.Faction)
-            if (PlayerRelations.Notice(_data.Factions[other].Name, before, after) is { } text) world.Post(text);
-    }
+    internal void ChangeRelation(World world, int a, int b, int amount, RelationCause cause) =>
+        PlayerRelations.Add(world, _data.Relations, a, b, amount, cause);
 
     /// <summary>
     /// Money to (or from, when negative) the character's faction: the player's purse, else its squad's.
