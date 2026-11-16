@@ -365,7 +365,7 @@ character that changed squads is written anew in its new platoon and leaves the 
 A squad's member order is its platoon file's INSTANCE_COLLECTION order: Meitou reads the members in that order (the first leads) and, when saving,
 rewrites the collection in the squad's current order, slots and handles unchanged, so a reorder on the squads screen survives a reload.
 Meitou-only, for an [autonomous squad](../simulation.md#autonomous-player-squads) (`Saving/AutonomySave`): `meitou autonomous` (bool), its packages in the
-NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou home` (string: a town building key or a player building id) while a home is
+NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou independent` (bool) for one the player does not lead; `meitou home` (string: a town building key or a player building id) while a home is
 assigned. Other player platoons' AI keys stay as read.
 
 ### Missing character records

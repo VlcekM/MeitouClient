@@ -5,15 +5,16 @@ namespace Meitou.Simulation.Saving;
 
 /// <summary>
 /// An autonomous player squad on its PLATOON record (docs/formats/save.md "Player platoons"; Meitou only): <c>meitou autonomous</c> (bool), its
-/// packages in the NPC platoons' keys (<see cref="AiSave"/>) and <c>meitou home</c> (string: <see cref="Squad.AssignedHome"/>). A squad that is
-/// not autonomous has none of them, and its record's AI keys are left as the save had them.
+/// packages in the NPC platoons' keys (<see cref="AiSave"/>), <c>meitou independent</c> (bool: <see cref="Squad.Independent"/>) and
+/// <c>meitou home</c> (string: <see cref="Squad.AssignedHome"/>). A squad that is not autonomous has none of them but the home, and its record's AI
+/// keys are left as the save had them.
 /// </summary>
 public static class AutonomySave
 {
     /// <summary>
-    /// The PLATOON keys: the switch and the assigned home.
+    /// The PLATOON keys: the switch, the independence and the assigned home.
     /// </summary>
-    public const string AutonomousKey = "meitou autonomous", HomeKey = "meitou home";
+    public const string AutonomousKey = "meitou autonomous", IndependentKey = "meitou independent", HomeKey = "meitou home";
 
     /// <summary>
     /// Writes the squad's autonomy over the platoon's; a squad no longer autonomous loses the keys, and the AI keys they came with are cleared.
@@ -22,6 +23,9 @@ public static class AutonomySave
     {
         if (squad.AssignedHome is { } home) platoon.Strings[HomeKey] = home;
         else platoon.Strings.Remove(HomeKey);
+
+        if (squad.Independent) platoon.Bools[IndependentKey] = true;
+        else platoon.Bools.Remove(IndependentKey);
 
         if (squad.Autonomous)
         {
@@ -42,6 +46,7 @@ public static class AutonomySave
     {
         squad.AssignedHome = platoon.Strings.GetValueOrDefault(HomeKey) is { Length: > 0 } home ? home : null;
         squad.Autonomous = platoon.Bools.GetValueOrDefault(AutonomousKey);
+        squad.Independent = squad.Autonomous && platoon.Bools.GetValueOrDefault(IndependentKey);
         if (squad.Autonomous) squad.SavedAi = AiSave.Read(platoon);
     }
 }

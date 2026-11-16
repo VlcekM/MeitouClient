@@ -936,9 +936,15 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public SquadAi SquadAi { get; init; } = SquadAi.Defaults;
     /// <summary>
-    /// The player's squads in order (<see cref="SquadManagement.PlayerSquads"/>), each with its members in squad order (the first leads).
+    /// The player's squads the player leads, in order (<see cref="SquadManagement.LedSquads"/>), each with its members in squad order (the first
+    /// leads).
     /// </summary>
     public IReadOnlyList<SquadView> PlayerSquads { get; init; } = [];
+    /// <summary>
+    /// The player's squads the player does not lead (<see cref="Squad.Independent"/>), with their members: clicking one inspects it as another
+    /// faction's character is.
+    /// </summary>
+    public IReadOnlyList<SquadView> IndependentSquads { get; init; } = [];
     /// <summary>
     /// The active squad's id (<see cref="PlayerState.Squad"/>; -1 none): the squad bar shows it.
     /// </summary>
