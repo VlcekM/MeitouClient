@@ -178,7 +178,7 @@ public sealed partial class CombatSystem
         bool loaded = TurretReload(t, cold, dt);
 
         var (muzzle, _) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
-        if (loaded && target >= 0) t.Aim = AimPoint(muzzle, prev[target], gun.ShotSpeed);
+        if (loaded && target >= 0) t.Aim = AimPoint(muzzle, prev[target], world.Characters.Cold(target), gun.ShotSpeed);
 
         float rate = TurretFormulas.TurnRate(t.Efficiency, gun.AimSpeed, t.Gun.Damage * t.DamageMult);
         t.Worst = rate > 0 && t.Aim is { } aim && t.Gun.Parts.Count > 0

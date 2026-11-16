@@ -938,7 +938,7 @@ below is what the engine uses.
 ### Bolt visuals
 
 **Observed** (decompile; `Harpoon` +0x70 state 0 recycle, 1 flying, 2 hit a character, 3 landed): each bolt is one hardware-instanced entity of the
-CROSSBOW `live ammo` mesh (one `HarpoonManager_<mesh>` per mesh) with the gun's material, its local +z along the flight (`setDirection(dir, TS_WORLD,
+CROSSBOW `live ammo` mesh (one `HarpoonManager_<mesh>` per mesh) with the gun's material (Meitou: the debris renderer's material resolver; the flat sandbox, with no object renderer, makes its own, else every bolt drew untextured), its local +z along the flight (`setDirection(dir, TS_WORLD,
 UNIT_Z)`), scaled (1, 1, max(1, speed x 0.005)) in flight as a fake motion blur and 1 once it hits; no trail. A bolt past its range pitches down 8°
 a second about world x and is recycled at range -5000. Landed (`FUN_14043acf0`): exactly at the hit point, flight orientation kept, a world node;
 terrain hits under |dot(normal, dir)| 0.1 vanish; objects and buildings land with the "Stone" impact switch; above `harpoonLimit` (setting, default 60; **Verified**, `FUN_14043acf0`: the list is per bolt mesh, the test is count > limit, the new bolt included)
@@ -958,7 +958,7 @@ flies on into the stop point within 0.15 s. Needs the particle renderer: nothing
 node in the shooter's `hands` (`Bip01 Prop2` with the attach offset; without built meshes the character's position + (0, 10, 0)); the muzzle (slot 9
 `FUN_140434fc0`) is that node's world position + its orientation x (`barrel pos Y`, `barrel pos Z`, 0), the place of loaded bolt 0 (base game: (-1, 5.9, 0),
 Spring Bat (-1, 1.75, 0)). The direction is normalise(aim point - muzzle) (slot 12), the aim point the target's `Bip01 Spine2` (`Spine1` for some targets)
-plus a lead of target velocity x distance / `shot speed` (first order, **Verified**), tilted by `randomDeviant(random x deviation)`. Flight: each frame a ray from the bolt along its z on the physics
+plus a lead of target velocity x distance / `shot speed` (first order, **Verified**; Meitou: `RangedTuning.AimHeight` 13 above the feet, a lying target's lying-hull middle), tilted by `randomDeviant(random x deviation)`. Flight: each frame a ray from the bolt along its z on the physics
 thread (raycastClosestShape, group mask `0x087fde47`, read one frame late); a hit counts within 2 x the step. Groups tested: 0 and 1 (0: the characters' click hulls, below),
 2 terrain, 6 and 14 foliage, 9-12 building floors, 15-18 stairs, 19-22 furniture, 27 unwalkable roofs; not ragdolls, items, doors, interior hulls or
 passable parts. The shooter is skipped (`FUN_1400cd0b0`). The flight tests only what the physics scene holds: `FUN_1404380e0` has no case for
@@ -986,7 +986,7 @@ fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no use
 **Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up) (read through the decompiler's garbled Ogre operators: the feet-to-feet
 line), mask `0x87f9e04` (no characters); it passes when it meets something
 farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.
-Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character has no hull (every Meitou knock-out is ragdolled), nor a carried one, awake too (every pick-up requests CARRY_MODE, [ragdolls](ragdolls.md)).
+Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a down character (knocked out or dead) keeps a lying hull, height max(X, Z) as the prone rule, standing in for the ragdoll bodies the original's bolts would strike (how they do is **Unknown**); a carried one has none, awake too (every pick-up requests CARRY_MODE, [ragdolls](ragdolls.md)).
 
 ### Arms
 
