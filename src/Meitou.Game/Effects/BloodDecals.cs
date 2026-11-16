@@ -90,8 +90,10 @@ sealed partial class BloodDecals(GameHost host)
     /// </summary>
     internal void SetUpBlood(IGpuContext context)
     {
-        // Made now: its shaders compile here, not at the first burst.
-        host.Gpu.Debris ??= new DebrisRenderer(context, host.Gpu.Objects?.Resolver, host.Assets.Find)
+        // Made now: its shaders compile here, not at the first burst. A world with no object renderer (the flat sandbox) still textures its debris:
+        // without a resolver every bolt and piece would be drawn in the untextured colour.
+        var resolver = host.Gpu.Objects?.Resolver ?? new MaterialResolver(host.Scene.Database, host.Assets.Materials, host.Assets);
+        host.Gpu.Debris ??= new DebrisRenderer(context, resolver, host.Assets.Find)
         {
             SharedTextures = () => host.Gpu.Characters?.Textures,
         };

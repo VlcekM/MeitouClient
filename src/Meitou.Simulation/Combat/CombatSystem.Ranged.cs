@@ -174,25 +174,32 @@ public sealed partial class CombatSystem : IProjectileSource
     /// The aim point (<c>FUN_140436d10</c>): the target's spine (here <see cref="RangedTuning.AimHeight"/> above its feet) plus its velocity times
     /// the bolt's flight time over the distance from the barrel (the lead, <b>Verified</b> in the disassembly).
     /// </summary>
-    static Vector3 AimPoint(Vector3 barrel, in CharacterHot target, float shotSpeed)
+    static Vector3 AimPoint(Vector3 barrel, in CharacterHot target, CharacterCold? cold, float shotSpeed)
     {
-        var spine = target.Position + new Vector3(0, RangedTuning.AimHeight, 0);
+        // A lying body's spine is near the ground: the middle of its lying hull (Meitou; the original reads the posed Bip01 Spine2).
+        float height = cold is { Race: not null } && Lying(cold) ? HullHalf(cold).Y : RangedTuning.AimHeight;
+        var spine = target.Position + new Vector3(0, height, 0);
         float flight = Vector3.Distance(barrel, spine) / MathF.Max(shotSpeed, 1);
 
         return spine + target.Velocity * flight;
     }
 
     /// <summary>
+    /// Whether a character lies on the ground: prone (crawling, staying low) or down (knocked out or dead).
+    /// </summary>
+    static bool Lying(CharacterCold c) => c.Medical is { Prone: true } or { Incapacitated: true };
+
+    /// <summary>
     /// Half the size of a character's click hull (<c>CharMovement +0x3b0</c>, a kinematic PhysX box in collision group 0 that the rays of bolts and
     /// of the line of fire hit; built by <c>FUN_140661a70</c>, docs/game/combat.md "Line of fire and the hit shape"): the race's <c>hull size X, Y,
-    /// Z</c>, Y = max(X, Z) while it is not upright (prone state not 0), all times half the size factor (slot 0x390), Y also times the look's height
-    /// (the appearance's <c>characterHeight</c>). The box is not turned with the character.
+    /// Z</c>, Y = max(X, Z) while it is not upright (prone state not 0; Meitou: also while it is down, <see cref="Shootable"/>), all times half the
+    /// size factor (slot 0x390), Y also times the look's height (the appearance's <c>characterHeight</c>). The box is not turned with the character.
     /// </summary>
     internal static Vector3 HullHalf(CharacterCold c)
     {
         var race = c.Race!;
         float x = race.HullX, y = race.HullY, z = race.HullZ;
-        if (c.Medical is { Prone: true }) y = MathF.Max(x, z);
+        if (Lying(c)) y = MathF.Max(x, z);
 
         float k = 0.5f * (c.Medical?.ScaleK ?? 1);
         float height = c.Appearance is { } look ? CharacterShape.MovementScaleOf(look) : 1;
@@ -252,11 +259,12 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Has a click hull for bolts and the line of fire: alive, with a body, not down or carried (the original takes the hull away while a whole-body
-    /// or carry ragdoll runs, <c>FUN_1405d0db0</c> → <c>FUN_14065fe40</c>, <b>Observed</b>; Meitou treats every down or carried body as ragdolled).
+    /// Has a click hull for bolts and the line of fire: alive, with a body, not carried (the original takes the hull away while a whole-body or carry
+    /// ragdoll runs, <c>FUN_1405d0db0</c> → <c>FUN_14065fe40</c>, <b>Observed</b>, and a down body is struck through its ragdoll's own bodies;
+    /// Meitou has no ragdoll bodies for bolts, so a down body keeps a lying hull, <see cref="HullHalf"/>).
     /// </summary>
     internal static bool Shootable(ReadOnlySpan<CharacterHot> state, CharacterTable table, int slot) =>
-        state[slot].Alive && table.Cold(slot) is { Medical.Incapacitated: false, CarriedBy.IsNone: true, Race: not null };
+        state[slot].Alive && table.Cold(slot) is { CarriedBy.IsNone: true, Race: not null, Medical: not null };
 
     /// <summary>
     /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from
@@ -608,7 +616,7 @@ public sealed partial class CombatSystem : IProjectileSource
             if (s.Steady > 0) return;
         }
 
-        var aim = AimPoint(barrel, world.Characters.Previous[t], x.Stats.ShotSpeed);
+        var aim = AimPoint(barrel, world.Characters.Previous[t], world.Characters.Cold(t), x.Stats.ShotSpeed);
         switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, x.Stats.Range))
         {
             case 0:
@@ -655,7 +663,7 @@ public sealed partial class CombatSystem : IProjectileSource
         if (ac?.Fighter?.Crossbow is not { } x || ac.Stats is null || ac.Medical is null || !prev[t].Alive) return;
 
         var barrel = Barrel(prev[a]);
-        var aim = AimPoint(barrel, prev[t], x.Stats.ShotSpeed);
+        var aim = AimPoint(barrel, prev[t], table.Cold(t), x.Stats.ShotSpeed);
         var to = aim - barrel;
         if (to.LengthSquared() < 1e-6f) return;
 
