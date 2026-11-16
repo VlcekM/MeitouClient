@@ -242,6 +242,17 @@ sealed partial class PlayerInterface
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
 
     /// <summary>
+    /// Whether any UI extension adds markers to the world map.
+    /// </summary>
+    internal bool HasModMapMarkers => _uiHost.HasMapMarkers;
+
+    /// <summary>
+    /// The markers the UI extensions add to the world map (<see cref="UiHost.MapMarkers"/>), each group checked by <paramref name="knownGroup"/>.
+    /// </summary>
+    internal IReadOnlyList<(string Owner, UiMapMarker Marker)> ModMapMarkers(UiMapContext context, Func<string, bool> knownGroup) =>
+        _uiHost.MapMarkers(context, knownGroup);
+
+    /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.
     /// </summary>
     public void SetUiMode(UiMode mode)

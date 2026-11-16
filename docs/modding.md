@@ -214,6 +214,15 @@ holds refuses the second mod.
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
   `new UiNode(id, UiNodeKind.Image) { Image = Path.Combine(context.Folder, "face.png") }`; a CHARACTER record's portrait is
   `{ Portrait = "<string id>" }` on the same kind of node ([native UI](native-ui.md#layout-input-and-lifetime)).
+- **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
+  (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
+  must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
+  (`Kenshi_MapMarkers`: Town, Village, Outpost, Ruin, Camp, Nest, Workcamp, SmallPlace, Character, Movement, NewDiscovered; names are
+  exact), a tint, an optional label (shown from zoom level 1) and tooltip (rows split by new lines, a tab between a row's label and value,
+  as a place's), the least zoom level it shows at and a size against the group's image. They are drawn after the towns, camps and outposts
+  and before the tracked squads and the player's characters, centred on their point and sized as a place's are. A mod keeps its markers
+  itself (in its `IModSaveData` to keep them across a load). A source that throws or gives a marker with a group the marker set lacks, a
+  point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2 is logged once and dropped.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
