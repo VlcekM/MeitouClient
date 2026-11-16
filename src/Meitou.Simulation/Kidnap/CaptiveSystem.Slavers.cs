@@ -1,3 +1,7 @@
+using System.Numerics;
+using Meitou.Data.Gameplay;
+using Meitou.Simulation.Factions;
+
 namespace Meitou.Simulation.Kidnap;
 
 /// <summary>
@@ -14,6 +18,10 @@ public sealed partial class CaptiveSystem
     /// The table's spawn count at the last pass: an owner not in the world can only appear through a spawn, so the pass waits for one.
     /// </summary>
     long _slaversSeenSpawns = -1;
+    /// <summary>
+    /// The <c>slaves</c> list of each squad template looked at for a lost owner, by its string id.
+    /// </summary>
+    readonly Dictionary<string, IReadOnlyList<RecordLink>> _slavesOf = [];
 
     /// <summary>
     /// A loaded slave whose save names its owner character (<see cref="Saving.SavedCharacterLink.Slaver"/>) takes it once that character is in the
@@ -35,6 +43,7 @@ public sealed partial class CaptiveSystem
 
             if (cold.Save is { Slaver.IsNull: false } link) RestoreSlaver(table, i, cold, link, ref bySave);
             if (ObedientSlave.PendingOwnerJob(cold) is >= 0 and var k) RestoreJobOwner(table, i, cold, k, ref bySave);
+            if (cold.Save is { SlaverLost: true } lost) RestoreLostSlaver(world, i, cold, lost);
         }
     }
 
@@ -68,6 +77,61 @@ public sealed partial class CaptiveSystem
 
         cold.Jobs[k] = job with { Character = table.IdOf(owner) };
         Adopt(cold, table.Cold(owner)!);
+    }
+
+    /// <summary>
+    /// A slave whose Meitou save lost its owner (<see cref="Saving.SavedCharacterLink.SlaverLost"/>) takes as its master the nearest squad in the
+    /// world of its owner faction whose template lists the slave's squad template under <c>slaves</c>: the squad the factory made it for
+    /// (<see cref="Population.PopulationSystem"/>'s slaves). Engine choice, for saves written before the owner was; one no longer a slave stops looking.
+    /// </summary>
+    void RestoreLostSlaver(World world, int i, CharacterCold cold, Saving.SavedCharacterLink link)
+    {
+        if (cold.SlaveState != 1 || cold.SlaveMaster >= 0)
+        {
+            link.SlaverLost = false;
+            return;
+        }
+
+        if (world.Squads.Find(cold.SquadId) is not { } own || MasterFor(world, i, cold.SlaveOwner, own.TemplateId) is not { } master) return;
+
+        cold.SlaveMaster = master.Id;
+        link.SlaverLost = false;
+    }
+
+    /// <summary>
+    /// The squad of <paramref name="faction"/> with a living leader nearest to slot <paramref name="i"/> whose template's <c>slaves</c> name
+    /// <paramref name="slaveTemplate"/>; null when there is none.
+    /// </summary>
+    Squad? MasterFor(World world, int i, int faction, string slaveTemplate)
+    {
+        var table = world.Characters;
+        var at = table.Next[i].Position;
+        Squad? best = null;
+        float bestDistance = float.MaxValue;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Faction != faction || !table.TryResolveNext(squad.Leader, out int leader)) continue;
+            if (!SlavesOf(squad.TemplateId).Any(l => l.Id == slaveTemplate)) continue;
+
+            float distance = Vector3.DistanceSquared(at, table.Next[leader].Position);
+            if (distance >= bestDistance) continue;
+            best = squad;
+            bestDistance = distance;
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// A squad template's <c>slaves</c> list (empty for a record that is not a squad template).
+    /// </summary>
+    IReadOnlyList<RecordLink> SlavesOf(string templateId)
+    {
+        if (_slavesOf.TryGetValue(templateId, out var known)) return known;
+
+        var slaves = data.Db.Find(templateId) is { } r && SquadFactory.IsTemplate(r) ? SquadTemplate.From(r).Slaves : [];
+        _slavesOf[templateId] = slaves;
+        return slaves;
     }
 
     /// <summary>

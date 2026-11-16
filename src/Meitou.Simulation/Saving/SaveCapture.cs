@@ -296,6 +296,10 @@ public static partial class SaveCapture
         /// </summary>
         public readonly List<(FcsRecord State, CharacterId Partner)> Carries = [];
         /// <summary>
+        /// The slaves' owner handles to write once every character has a handle: a state record and the owner character.
+        /// </summary>
+        public readonly List<(FcsRecord State, CharacterId Owner)> Slavers = [];
+        /// <summary>
         /// The handle each character written got, by its cold state (a stored member has no id).
         /// </summary>
         public readonly Dictionary<CharacterCold, Hand> ColdHandles = new(ReferenceEqualityComparer.Instance);
@@ -336,8 +340,8 @@ public static partial class SaveCapture
     static void NoteMemory(FcsRecord record, SquadMemoryData? data) => s_memoryPass?.Targets.Add((record, data));
 
     /// <summary>
-    /// Writes what the capture held back once every character has a handle: the squads' memories, the carry links, the orders' targets and the
-    /// items' owners.
+    /// Writes what the capture held back once every character has a handle: the squads' memories, the carry links, the slaves' owners, the orders'
+    /// targets and the items' owners.
     /// </summary>
     static void WriteMemories()
     {
@@ -352,6 +356,12 @@ public static partial class SaveCapture
             (pass.Handles.TryGetValue(partner, out var hand) ? hand : Hand.Null).Write(state, "carrying");
         foreach (var (state, partner) in pass.KeptCarries)
             (pass.ColdHandles.TryGetValue(partner, out var kept) ? kept : Hand.Null).Write(state, "carrying");
+
+        // The slaves' owners (FUN_1406280a0 writes the owner handle, character +0x328, under `slaver`); one not saved leaves the keys as written.
+        foreach (var (state, owner) in pass.Slavers)
+        {
+            if (pass.Handles.TryGetValue(owner, out var slaver)) slaver.Write(state, SlaveSave.SlaverKey);
+        }
 
         // The queued orders name their target character the same way (`tjobT<i>`); one not saved leaves the null handle.
         foreach (var (record, prefix, who) in pass.OrderTargets)
@@ -824,6 +834,7 @@ public static partial class SaveCapture
         BountySave.Write(g, cold.Bounties, data.Relations, clock, world.Tick, world.TickSeconds);
         CrimeSave.Write(g, cold);
         SlaveSave.Write(g, cold, data);
+        if (cold.SlaveState != 0 && Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner) s_memoryPass?.Slavers.Add((g, owner));
         DialogueSave.Write(g, cold);
         if (orders) Orders.Write(g, cold);
         if (orders && sc.Ai is { } ai)

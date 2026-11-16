@@ -9,8 +9,9 @@ namespace Meitou.Simulation.Saving;
 /// (0 free, 1 slave, 2 escaped, 3 ex-slave; <c>FUN_140626580</c> writes it with <c>personality</c>, docs/formats/save.md),
 /// the original's <c>ssct</c> float (<see cref="CharacterCold.SlaveSince"/>, written always), the original's <c>slaver</c> handle
 /// (the owner character) and Meitou's <c>meitou slave owner</c> (the owner FACTION's string id), and the original's <c>shaved</c> bool
-/// (<see cref="CharacterCold.Shaved"/>, written always). The owner key is written only while set and removed otherwise;
-/// the <c>slaver</c> keys are left as they were read until the slave is freed or handed to another master,
+/// (<see cref="CharacterCold.Shaved"/>, written always). The owner key is written only while set and removed otherwise.
+/// The <c>slaver</c> keys name the leader of the squad the slave obeys once the capture has given every character a handle
+/// (<c>SaveCapture</c>); without a known master they are left as they were read until the slave is freed or handed to another master,
 /// then written as the null handle.
 /// </summary>
 public static class SlaveSave
@@ -39,6 +40,10 @@ public static class SlaveSave
         // The owner character, found once it is in the world; a handle of another class (a squad) is not mapped.
         if (cold.SlaveState == 0 || cold.Save is not { } link) return;
         if (Hand.Read(state, SlaverKey) is { RecordType: FcsRecordType.Character } slaver) link.Slaver = slaver;
+
+        // Only Meitou writes the owner key, and the original never keeps a slave with a null owner (it escapes at its next update): such a slave is
+        // one whose owner the save lost.
+        else if (cold.SlaveState == 1 && cold.SlaveOwner >= 0) link.SlaverLost = true;
     }
 
     /// <summary>

@@ -117,6 +117,11 @@ public sealed class SavedCharacterLink
     /// The save's <c>slaver</c> handle no longer names the owner (the slave was freed or handed to another master): it is written as null.
     /// </summary>
     public bool SlaverStale { get; set; }
+    /// <summary>
+    /// A slave in a Meitou save that wrote no owner for it (one before the owner handle was written, <see cref="SlaveSave"/>): its master is looked
+    /// for among the squads in the world (<see cref="Kidnap.CaptiveSystem"/>), and it does not escape for want of an owner meanwhile.
+    /// </summary>
+    public bool SlaverLost { get; set; }
 
     /// <summary>
     /// Forgets the save's owner character: the slave was freed or handed on.

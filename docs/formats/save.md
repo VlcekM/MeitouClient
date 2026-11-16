@@ -563,7 +563,10 @@ Rebirth save, read with a scratch FCS reader: all 32 state-1 slaves name a saved
 Meitou (`Saving/SlaveSave`) reads and writes `slavestate`, `ssct` and the `shaved` bool (`CharacterCold.Shaved`, the shaven head of
 [processing](../game/ai-tasks.md#slave-work-shout-and-capture); all 32 NPC slaves of the Rebirth save have it set), and the owner as `meitou slave owner` (FACTION string id). It reads a CHARACTER `slaver` handle: once that character is
 in the world, its faction is the owner when the save has no owner key, and its squad is the master (`CharacterCold.SlaveMaster`, `CaptiveSystem.RestoreSlavers`, every 20 ticks);
-a squad handle is not mapped. The read keys are written back unchanged until the slave is freed or handed to another master, then as the null handle. `CrimeSave` reads and writes `tn` (`CharacterCold.Freed`, written always).
+a squad handle is not mapped. The original writes the owner handle (character `+0x328`) under `slaver` for every character (**Verified**, `FUN_1406280a0`). Meitou writes the
+leader of the squad the slave obeys there (`SaveCapture`); a slave with no known master keeps the read keys until it is freed or handed to another master, then the null handle.
+A state-1 slave with Meitou's owner key and a null `slaver` (a Meitou save that wrote no owner) takes as its master the nearest squad of its owner faction whose
+template lists the slave's squad template under `slaves` (engine choice, `CaptiveSystem.RestoreLostSlaver`), and is not made escaped for want of an owner meanwhile. `CrimeSave` reads and writes `tn` (`CharacterCold.Freed`, written always).
 
 Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` reads): the character state record has a bool `carrying` (true on the carrier) and a handle `carrying`
 (the partner, null when none), both always written. The reader links them when the partner resolves, else keeps the handle and links it later from the per-frame `FUN_140797ec0`
