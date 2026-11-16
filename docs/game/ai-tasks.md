@@ -839,8 +839,8 @@ the plan is `93 Filling machine -> 114` (93 is the only row listing `!62` in lis
   crates, `Storage: Ore`; **Verified**, base data: only the three Shop Counters are 9), so when a shop's container is such a candidate, a worker's ditched output joins that shop's stock.
 Meitou: `PlanContext.Find` gives rows 113 / 114 / 242 a `Targets.Store` target (`TownDutySystem.DitchStore`: the nearest container fixture or player storage of its faction or the town's, in its town, that takes an item
 of `ProductionSystem.Ditchable`), state 67 is true for it while the character carries such an item, and a plan whose first step is 93 or the walk to a
-Store target sets `AiMind.DitchRequest`; `TownDutySystem` runs a `Ditch` errand (walk, put in, `Replan`). A building shop's stock container is tested and filled through its rectangle of the
-shop's stock (`Shop.RegionTakes`, `TradeSystem.Lend` / `TakeBack`), so the put-in items are for sale until the next restock clears them. So a worker of goal 189 whose inventory is full ditches before it empties the machine (92's B 82), and a
+Store target sets `AiMind.DitchRequest`; `TownDutySystem` runs a `Ditch` errand (walk, put in, `Replan`). A building shop's stock container is tested and filled as any
+other; it holds the shop's goods, so the put-in items are for sale until the next restock clears them. So a worker of goal 189 whose inventory is full ditches before it empties the machine (92's B 82), and a
 town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (the nearest machine whose output holds an item the target machine's inputs take, scored by `FUN_14059d000`) is modelled for machines (`ProductionSystem.InputSource`), see [NPC town machines](buildings-production.md#npc-town-machines).
 
 ## Animals in beds

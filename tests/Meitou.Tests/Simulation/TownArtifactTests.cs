@@ -144,28 +144,28 @@ public class TownArtifactTests
     }
 
     [Fact]
-    public void A_building_shop_takes_the_artifacts_of_its_chests_into_its_stock_and_keeps_them_out_of_its_purse_when_it_restocks()
+    public void A_building_shop_keeps_the_artifacts_in_its_chests_and_out_of_its_purse_when_it_restocks()
     {
         var data = Data();
         using var world = World(data, StandardParts.Trade);
         Visit(world, 30);
         var squad = world.Squads.All.Single(s => s.TemplateId == "vault-t");
         var shop = squad.Shop!;
+        var items = Chests(world).SelectMany(c => c.Contents!.Items).ToList();
         Assert.Equal(VaultKey, shop.Building);
-        Assert.All(Chests(world), c => Assert.Empty(c.Contents!.Items));
-        Assert.Equal(3, shop.Stock.Items.Where(i => i.Unique).Sum(i => i.Quantity));
-        Assert.Contains(shop.Stock.Items, i => i.Record == "junk-t");
+        Assert.Equal(3, items.Where(i => i.Unique).Sum(i => i.Quantity));
+        Assert.Contains(items, i => i.Record == "junk-t");
 
         // An idol (100000), unique as an artifact is, would raise the purse to 25000 if a fill counted it.
         var idol = data.Items.Create("idol-t")!;
         idol.Unique = true;
-        Assert.True(shop.Stock.Add(idol));
-        var artifacts = shop.Stock.Items.Where(i => i.Unique).ToList();
+        Assert.True(Chests(world)[0].Contents!.Add(idol));
+        var artifacts = Chests(world).SelectMany(c => c.Contents!.Items).Where(i => i.Unique).ToList();
         int fills = shop.Fills;
         shop.NextRestockTick = world.Tick;
         world.RunTicks(30);
         Assert.True(shop.Fills > fills);
-        Assert.Equal(artifacts, shop.Stock.Items.Where(i => i.Unique));
+        Assert.Equal(artifacts, Chests(world).SelectMany(c => c.Contents!.Items).Where(i => i.Unique));
         Assert.Equal(3000, squad.Money);   // 0.25 x two junk units, at least 3000
     }
 
@@ -208,13 +208,13 @@ public class TownArtifactTests
     }
 
     [Fact]
-    public void A_shop_squad_made_afresh_takes_the_artifacts_its_old_one_held()
+    public void A_shop_squad_made_afresh_finds_the_artifacts_its_old_one_left_in_the_chests()
     {
         var data = Data();
         using var world = World(data, StandardParts.Trade);
         Visit(world, 30);
         var old = world.Squads.All.Single(s => s.TemplateId == "vault-t");
-        Assert.Equal(3, old.Shop!.Stock.Items.Where(i => i.Unique).Sum(i => i.Quantity));
+        Assert.NotNull(old.Shop);
         // Two of its three die (at least 60 %), the leader keeps the shop open; the town unloads with the shop stored and is made afresh at the next
         // visit.
         foreach (var m in old.Members.Where(m => m != old.Leader)) world.Characters.Cold(m.Slot)!.DiedTick = world.Tick;
@@ -224,8 +224,8 @@ public class TownArtifactTests
 
         var fresh = world.Squads.All.Single(s => s.TemplateId == "vault-t");
         Assert.NotEqual(old.Id, fresh.Id);
-        Assert.Equal(3, fresh.Shop!.Stock.Items.Where(i => i.Unique && i.Record == "book-t").Sum(i => i.Quantity));
-        Assert.All(Chests(world), c => Assert.Empty(c.Contents!.Items));
+        Assert.NotNull(fresh.Shop);
+        Assert.Equal(3, Chests(world).SelectMany(c => c.Contents!.Items).Where(i => i.Unique && i.Record == "book-t").Sum(i => i.Quantity));
     }
 
     [Fact]

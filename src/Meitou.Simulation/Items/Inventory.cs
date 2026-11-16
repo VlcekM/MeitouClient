@@ -81,23 +81,10 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// The rectangles the grid is split into (a building shop's stock, one per stock container, <see cref="Trading.Shop.ForBuilding"/>): an item lies
-    /// wholly inside one, the cells outside them hold nothing. Null: the whole grid is one.
-    /// </summary>
-    public IReadOnlyList<GridRegion>? Regions { get; init; }
-
-    /// <summary>
-    /// Whether a w x h footprint at (x, y) lies inside one of the <see cref="Regions"/> (always without them).
-    /// </summary>
-    public bool InRegion(int x, int y, int w, int h) => Regions is not { } regions || regions.Any(r => r.Contains(x, y, w, h));
-
-    /// <summary>
-    /// Whether a w x h footprint at (x, y) of <paramref name="section"/> overlaps no item and lies inside one of the <see cref="Regions"/> (other
-    /// bounds are the caller's to check).
+    /// Whether a w x h footprint at (x, y) of <paramref name="section"/> overlaps no item (the bounds are the caller's to check).
     /// </summary>
     public bool IsFree(string section, int x, int y, int w, int h)
     {
-        if (!InRegion(x, y, w, h)) return false;
         foreach (var i in Items)
         {
             if (i.Section != section) continue;
@@ -133,6 +120,16 @@ public sealed class Inventory(int width, int height)
         int start = Limited ? 1 : item.StackLimit;
         if (StackBonusMinimum == 1 && StackBonusMult == 1) return Math.Max(start, 1);
         return ItemInfo.StackLimitIn(start, StackBonusMinimum, StackBonusMult);
+    }
+
+    /// <summary>
+    /// A copy of this inventory and of every item in it (<see cref="ItemInstance.Copy"/>).
+    /// </summary>
+    public Inventory Copy()
+    {
+        var copy = new Inventory(Width, Height) { StackBonusMinimum = StackBonusMinimum, StackBonusMult = StackBonusMult, Limited = Limited };
+        copy.Items.AddRange(Items.Select(i => i.Copy()));
+        return copy;
     }
 
     /// <summary>
@@ -184,7 +181,7 @@ public sealed class Inventory(int width, int height)
     /// stolen mark, death and unique flags, mod tag. The material keeps blueprints of different researches apart: they share their look record
     /// (#354).
     /// </summary>
-    static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality
+    internal static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality
             && a.ModTag == b.ModTag && a.Mark == b.Mark
         && a.Death == b.Death && a.Unique == b.Unique;
 
@@ -359,20 +356,4 @@ public sealed class Inventory(int width, int height)
         h.Add(Rng.StableHash("ModTag"));
         h.Add(Rng.StableHash(tag));
     }
-}
-
-/// <summary>
-/// A rectangle of an inventory's cells (<see cref="Inventory.Regions"/>).
-/// </summary>
-public readonly record struct GridRegion(int X, int Y, int Width, int Height)
-{
-    /// <summary>
-    /// Whether the <paramref name="w"/> x <paramref name="h"/> cells at (<paramref name="x"/>, <paramref name="y"/>) lie inside the region.
-    /// </summary>
-    public bool Contains(int x, int y, int w, int h) => x >= X && y >= Y && x + w <= X + Width && y + h <= Y + Height;
-
-    /// <summary>
-    /// Whether <paramref name="item"/>'s top-left cell lies inside.
-    /// </summary>
-    public bool Holds(ItemInstance item) => item.X >= X && item.X < X + Width && item.Y >= Y && item.Y < Y + Height;
 }

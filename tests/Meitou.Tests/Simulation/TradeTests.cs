@@ -93,7 +93,7 @@ public class TradeTests
     [Fact]
     public void A_housed_trader_sells_from_its_homes_merged_stock_containers_with_its_vendor_money_purse()
     {
-        using var b = new Bazaar();
+        using var b = new Bazaar(Rec("box", FcsRecordType.Building, r => r.Name = "Box"));
         var shopkeeper = b.Spawn("shopkeeper", new Vector2(10, 0), b.Data.FactionIndex("f-t"), false, "bshop-t");
         TownFixture Box(string id, int function, int w, int h) => new(id, "box", false, Vector3.Zero, 0) { Function = function, StorageWidth = w,
                 StorageHeight = h };
@@ -104,12 +104,15 @@ public class TradeTests
                     Box("c", TownBuildings.CageFunction, 0, 0), Box("d", TownBuildings.RefineryFunction, 30, 30)],
         };
         b.SquadOf(shopkeeper).HomeBuilding = home;
+        b.World.Fixtures.RegisterSite(b.World, b.Data, 0);
+        b.World.Fixtures.RegisterAdded(b.World, b.Data, 0, home);
         b.World.RunTicks(1);
         var shop = b.SquadOf(shopkeeper).Shop!;
         Assert.Equal(home.Key, shop.Building);
-        Assert.Equal((20, 20), (shop.Stock.Width, shop.Stock.Height));   // the widest, the two side by side would not fit: a shelf each
+        Assert.Equal((20, 15), (shop.Stock.Width, shop.Stock.Height));   // the widest container's columns, ceil(300 cells / 20) rows
         Assert.InRange(b.SquadOf(shopkeeper).Money, 5000 - 2000 + 500, 5000 + 2000 + 500);   // vendor money +/- 0.4 x it, plus the money roll
-        Assert.InRange(shop.Stock.All().Sum(i => i.Quantity), 8, 12);
+        Assert.Empty(shop.Stock.Items);   // the goods lie in the containers
+        Assert.InRange(shop.Containers.Sum(id => b.World.Fixtures.Find(id)!.Contents!.All().Sum(i => i.Quantity)), 8, 12);
 
         // No stock container: a squad shop of 18 x 18.
         var bare = new TownBuilding("bare", "bare", "Bare", Vector3.Zero, 0, false, false,

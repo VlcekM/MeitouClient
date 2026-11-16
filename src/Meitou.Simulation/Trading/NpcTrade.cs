@@ -28,8 +28,8 @@ public enum NpcSale : byte
 /// <c>FUN_14074a630</c> that <c>FUN_1409a14b0</c> makes for <c>Task_Shopping</c>. Changes shared state, so it runs in a serial step only.
 /// <list type="bullet">
 /// <item><b>Sellers</b>: the containers of the building (<b>Observed</b>, <c>FUN_14054add0</c> / <c>FUN_1409a14b0</c> list only container objects,
-/// never a trader's carried stock): a building shop's stock rectangle per container, and the contents of a house's stock containers. The first with
-/// an item of the function sells a random one of them. Engine choice: a unique item (an artifact) is never sold.</item>
+/// never a trader's carried stock): the building's stock containers, a shop's or a house's. The first with an item of the function sells a random
+/// one of them. Engine choice: a unique item (an artifact) is never sold.</item>
 /// <item><b>Price</b> (<b>Verified</b>): the item's stack price (slot 82) of one unit, with the sell flag set only for a buyer of the player's
 /// faction. With no trade window open the trader factor is 1 and no town's market factor applies (<b>Observed</b>), so it is
 /// <see cref="Market.StackPrice"/> with <see cref="Trader.None"/>.</item>
@@ -56,11 +56,11 @@ public static class NpcTrade
         var table = world.Characters;
         if (table.Cold(buyer) is not { } cold) return NpcSale.NoItem;
 
-        foreach (var (stock, region, owner) in Sellers(world, building))
+        foreach (var (stock, owner) in Sellers(world, building))
         {
             int count = 0;
             foreach (var item in stock.Items)
-                if (Offered(market, item, region, function)) count++;
+                if (Offered(market, item, function)) count++;
             if (count == 0) continue;
 
             int pick = Rng.Int(roll, count);
@@ -68,7 +68,7 @@ public static class NpcTrade
 
             foreach (var item in stock.Items)
             {
-                if (Offered(market, item, region, function) && pick-- == 0)
+                if (Offered(market, item, function) && pick-- == 0)
                 {
                     chosen = item;
                     break;
@@ -101,38 +101,30 @@ public static class NpcTrade
     }
 
     /// <summary>
-    /// Whether the item is offered in an NPC trade: not unique, no full bag, inside <paramref name="region"/> when one is given, and of item
-    /// function <paramref name="function"/>.
+    /// Whether the item is offered in an NPC trade: not unique, no full bag, and of item function <paramref name="function"/>.
     /// </summary>
-    static bool Offered(Market market, ItemInstance item, GridRegion? region, int function) =>
-        !item.Unique && item.Contents is not { Items.Count: > 0 } && (region is not { } r || r.Holds(item))
-        && market.Items.Info(item.Record)?.Function == function;
+    static bool Offered(Market market, ItemInstance item, int function) =>
+        !item.Unique && item.Contents is not { Items.Count: > 0 } && market.Items.Info(item.Record)?.Function == function;
 
     /// <summary>
-    /// The building's stock containers in a fixed order: the squads that live in it with a building shop (one rectangle of the shop's stock per
-    /// container), then the contents of its stock containers (a house's goods), which belong to the first squad living in it (none: the money goes
-    /// nowhere; the original pays the owner faction).
+    /// The building's stock containers in its order, each with the squad that owns what it holds: the squad with a building shop living in it, else
+    /// the first squad living in it (none: the money goes nowhere; the original pays the owner faction).
     /// </summary>
-    static IEnumerable<(Inventory Stock, GridRegion? Region, Squad? Owner)> Sellers(World world, TownBuilding building)
+    static IEnumerable<(Inventory Stock, Squad? Owner)> Sellers(World world, TownBuilding building)
     {
-        Squad? resident = null;
+        Squad? resident = null, shop = null;
 
         foreach (var squad in world.Squads.All)
         {
             if (!ReferenceEquals(squad.Ai?.OwnHome ?? squad.HomeBuilding, building)) continue;
 
             resident ??= squad;
-
-            if (squad.Shop is { Building: not null } shop)
-            {
-                for (int k = 0; k < shop.Containers.Count; k++)
-                    yield return (shop.Stock, shop.Stock.Regions![k], squad);
-            }
+            if (squad.Shop is { Building: not null }) shop ??= squad;
         }
 
         foreach (var f in building.Fixtures)
         {
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Contents is { } box) yield return (box, null, resident);
+            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Contents is { } box) yield return (box, shop ?? resident);
         }
     }
 }

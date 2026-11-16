@@ -1883,7 +1883,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         // engine choice: a shop's stock is not a place to leave things
         if (ContainerAccess.ShopOf(world, container) is not null) { world.Post("That stock is the shop's."); return; }
         var root = cold.Inventory!;
-        var storage = ContainerAccess.GridOf(world, container);
+        var storage = container.Contents!;
         var item = root.All().ElementAtOrDefault(put.Item.Index);
         var token = put.Item;
         if (item is null || item.Record != token.Record || item.Section != token.Section || item.X != token.X || item.Y != token.Y
@@ -1926,8 +1926,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     void TakeFromContainer(World world, Locks.Fixture container, CharacterCold cold, TakeFromMachine take)
     {
-        var storage = ContainerAccess.GridOf(world, container, out var region);
-        if (take.Index < 0 || take.Index >= storage.Items.Count || !region.Holds(storage.Items[take.Index])) return;
+        var storage = container.Contents!;
+        if (take.Index < 0 || take.Index >= storage.Items.Count) return;
         var item = storage.Items[take.Index];
         var mark = item.Mark;
         if (container.Owner >= 0 && container.Owner != cold.Faction && Crime.CrimeSystem.IsStealing(world, container)

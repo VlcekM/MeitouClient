@@ -316,27 +316,25 @@ public sealed partial class World
     {
         if (Player.OpenContainer is not { } id || Fixtures.Find(id) is not { Contents: not null } f) return null;
 
-        var grid = Items.ContainerAccess.GridOf(this, f, out var region);
+        var grid = f.Contents;
         float? steal = Characters.TryResolveNext(Player.ContainerOpener, out int thief)
             ? Crime.CrimeSystem.StealChanceOf(this, thief, Crime.StealSource.Of(f))
             : null;
-        var storage = new InventoryView(region.Width, region.Height, 0, 0,
+        var storage = new InventoryView(grid.Width, grid.Height, 0, 0,
             Array.AsReadOnly(grid.Items
-                .Select((item, index) => (item, index))
-                .Where(e => region.Holds(e.item))
-                .Select(e => new InventoryItemView(e.index, e.item.Record, e.item.Name, "main", e.item.X - region.X, e.item.Y - region.Y,
-                    e.item.Width, e.item.Height, e.item.Quantity, e.item.Weight, e.item.Quality)
+                .Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "main", item.X, item.Y, item.Width, item.Height,
+                    item.Quantity, item.Weight, item.Quality)
                 {
-                    Material = e.item.MaterialId,
-                    Rotated = e.item.Rotated,
-                    Colour = e.item.ColourId,
-                    Charge = e.item.ChargeFraction,
-                    Company = e.item.CompanyId,
-                    Level = e.item.Level,
-                    Charges = e.item.Charges,
-                    MaxCharges = e.item.MaxCharges,
-                    Unique = e.item.Unique,
-                    ModTag = e.item.ModTag,
+                    Material = item.MaterialId,
+                    Rotated = item.Rotated,
+                    Colour = item.ColourId,
+                    Charge = item.ChargeFraction,
+                    Company = item.CompanyId,
+                    Level = item.Level,
+                    Charges = item.Charges,
+                    MaxCharges = item.MaxCharges,
+                    Unique = item.Unique,
+                    ModTag = item.ModTag,
                     StealChance = steal
                 })
                 .ToArray()));

@@ -11,11 +11,10 @@ namespace Meitou.Simulation.Trading;
 
 /// <summary>
 /// A trader squad's shop: the stock it sells, its trade terms and when it restocks (docs/game/economy.md section 9). The purse is the squad's
-/// <see cref="Squad.Money"/>, the game's <c>Platoon+0x88</c>. <b>Engine choice</b>: the stock is one inventory of <see cref="Width"/> x
-/// <see cref="Height"/> cells held by the squad, the size of the building shops' storage (<c>storage size</c> 18 x 18 in <c>gamedata.base</c>, the
-/// width of the vanilla trader window): the trader window shows its trader's <c>backpack_content</c> section (<c>FUN_140150570</c>,
-/// docs/game/ui-screens.md section 6). In the original a squad shop's stock is offered to "the inventory sections" (not decoded) and a building
-/// shop's lies in the shop building's containers (here a rectangle of the stock per container, <see cref="ForBuilding"/>).
+/// <see cref="Squad.Money"/>, the game's <c>Platoon+0x88</c>. A squad shop's stock is one inventory of <see cref="Width"/> x <see cref="Height"/>
+/// cells held by the squad (<b>Engine choice</b>: in the original it is offered to "the inventory sections", not decoded). A building shop's goods
+/// lie in the shop building's stock containers (<see cref="Containers"/>), as in the original; its <see cref="Stock"/> is only the trader window's
+/// copy of them (<see cref="ForBuilding"/>, <see cref="ShopView"/>).
 /// </summary>
 public sealed class Shop
 {
@@ -30,16 +29,16 @@ public sealed class Shop
     public const float StockStackMult = 50;
 
     /// <summary>
-    /// The stock: an 18 x 18 grid whose cells hold <see cref="StockStackMult"/> x each item's <c>stackable</c>.
+    /// The stock: a squad shop's own goods, a building shop's trader window (<see cref="ShopView"/>); cells hold <see cref="StockStackMult"/> x each
+    /// item's <c>stackable</c>. A building shop's grows while its view is built and is replaced by a fill's scratch grid while the fill runs.
     /// </summary>
-    public Inventory Stock { get; init; } = new(Width, Height) { StackBonusMult = StockStackMult };
+    public Inventory Stock { get; internal set; } = new(Width, Height) { StackBonusMult = StockStackMult };
     /// <summary>
     /// The trader's terms the prices read.
     /// </summary>
     public required Trader Terms { get; init; }
     /// <summary>
-    /// A building shop's building (<see cref="Meitou.Data.World.TownBuilding.Key"/>): its stock is the merged storage of the building's containers;
-    /// null for a squad shop.
+    /// A building shop's building (<see cref="Meitou.Data.World.TownBuilding.Key"/>), whose stock containers hold its goods; null for a squad shop.
     /// </summary>
     public string? Building { get; init; }
     /// <summary>
@@ -50,202 +49,57 @@ public sealed class Shop
     /// How many times the stock was filled: the key of the next fill's rolls.
     /// </summary>
     public int Fills { get; set; }
-
     /// <summary>
-    /// The cells outside every container (<see cref="UnusedCells"/>), made on first read.
-    /// </summary>
-    List<GridRegion>? _unused;
-
-    /// <summary>
-    /// The cells of <see cref="Stock"/> outside every container (<see cref="Unused"/>, made once: the layout never changes).
-    /// </summary>
-    public IReadOnlyList<GridRegion> UnusedCells => _unused ??= Unused(Stock);
-
-    /// <summary>
-    /// The stock containers of a building shop (fixture ids), in the order of <see cref="Inventory.Regions"/> of <see cref="Stock"/>; empty for a
-    /// squad shop.
+    /// The stock containers of a building shop (fixture ids), in the building's order; empty for a squad shop.
     /// </summary>
     public IReadOnlyList<string> Containers { get; init; } = [];
+    /// <summary>
+    /// A building shop's trader window: its columns and the rows it starts with.
+    /// </summary>
+    public (int Columns, int Rows) ViewSize { get; init; } = (Width, Height);
+    /// <summary>
+    /// A building shop's trader window state (<see cref="ShopView"/>).
+    /// </summary>
+    internal ShopView View { get; } = new();
 
     /// <summary>
-    /// A building shop of <paramref name="building"/> (the shop wrapper <c>FUN_140953850</c>, <b>Observed</b>, merges its stock containers into one
-    /// section): null when the building has no stock container. <b>Engine choice</b>: the stock is one inventory as wide as the widest container (at
-    /// least 18) in which each container's grid is a rectangle of its own (<see cref="Inventory.Regions"/>), so each container holds its own items
-    /// and the trade window shows them all (the cells outside every container greyed, <see cref="Unused"/>). The rectangles are packed
-    /// (<see cref="Pack"/>) in a few orders (by height, area, width, longer side, largest first; ties in the building's order) and the lowest packing
-    /// is kept. The original's merged section is ceil(cells / width) high; this is more when the containers do not tile, and never less than the
-    /// stacked heights of the containers wider than half the stock, which share no row (the L-House bar's four 10 x 10 barrels: 58 rows for 43).
+    /// A building shop of <paramref name="building"/> (the shop wrapper <c>FUN_140953850</c>, <b>Observed</b>): null when the building has no stock
+    /// container. Its trader window is one grid as wide as the widest container (at least 18) and ceil(cells / width) high for the containers' cells
+    /// together (18 x 18 without cells); <see cref="ShopView"/> fills it with copies of what they hold.
     /// </summary>
     public static Shop? ForBuilding(Meitou.Data.World.TownBuilding building, Trader terms)
     {
         var boxes = building.Fixtures.Where(f => f.HoldsShopStock).ToList();
         if (boxes.Count == 0) return null;
 
-        int width = Math.Max(Width, boxes.Max(f => f.StorageWidth));
-        Func<Meitou.Data.World.TownFixture, int>[] orders =
-            [f => f.StorageHeight, f => f.StorageWidth * f.StorageHeight, f => f.StorageWidth, f => Math.Max(f.StorageWidth, f.StorageHeight)];
-        (List<Meitou.Data.World.TownFixture> Boxes, List<GridRegion> Regions, int Height)? best = null;
+        int columns = Math.Max(Width, boxes.Max(f => f.StorageWidth));
+        int cells = boxes.Sum(f => f.StorageWidth * f.StorageHeight);
+        int rows = cells > 0 ? (cells + columns - 1) / columns : columns;
 
-        foreach (var order in orders)
-        {
-            var sorted = boxes.OrderByDescending(order).ToList();
-            var (regions, height) = Pack(sorted, width);
-            if (best is null || height < best.Value.Height) best = (sorted, regions, height);
-        }
-
-        var (placed, layout, rows) = best!.Value;
         return new Shop
         {
             Terms = terms,
             Building = building.Key,
-            Containers = [.. placed.Select(f => f.Id)],
-            Stock = new Inventory(width, rows) { StackBonusMult = StockStackMult, Regions = layout },
+            Containers = [.. boxes.Select(f => f.Id)],
+            ViewSize = (columns, rows),
+            Stock = new Inventory(columns, rows) { StackBonusMult = StockStackMult },
         };
     }
 
     /// <summary>
-    /// Bottom-left maximal-rectangles packing: the free space is kept as every largest free rectangle (overlapping), each box goes where its bottom
-    /// is highest up (lowest y + height), then leftmost, so it also fills holes left beside and under taller boxes.
+    /// Whether <paramref name="fixture"/> is one of this building shop's stock containers.
     /// </summary>
-    static (List<GridRegion> Regions, int Height) Pack(List<Meitou.Data.World.TownFixture> boxes, int width)
-    {
-        var free = new List<GridRegion> { new(0, 0, width, boxes.Sum(f => f.StorageHeight)) };
-        var regions = new List<GridRegion>(boxes.Count);
-        int height = 0;
-
-        foreach (var f in boxes)
-        {
-            GridRegion? at = null;
-
-            foreach (var r in free)
-            {
-                if (f.StorageWidth <= r.Width && f.StorageHeight <= r.Height
-                    && (at is not { } a || r.Y + f.StorageHeight < a.Y + a.Height || r.Y + f.StorageHeight == a.Y + a.Height && r.X < a.X))
-                {
-                    at = new GridRegion(r.X, r.Y, f.StorageWidth, f.StorageHeight);
-                }
-            }
-
-            var p = at!.Value;   // the free space is as tall as all the boxes stacked, so every box fits
-            regions.Add(p);
-            height = Math.Max(height, p.Y + p.Height);
-            var split = new List<GridRegion>();
-
-            foreach (var r in free)
-            {
-                if (p.X >= r.X + r.Width || p.X + p.Width <= r.X || p.Y >= r.Y + r.Height || p.Y + p.Height <= r.Y)
-                {
-                    split.Add(r);
-                    continue;
-                }
-
-                if (p.X > r.X) split.Add(r with { Width = p.X - r.X });
-                if (p.X + p.Width < r.X + r.Width)
-                    split.Add(r with { X = p.X + p.Width, Width = r.X + r.Width - p.X - p.Width });
-                if (p.Y > r.Y) split.Add(r with { Height = p.Y - r.Y });
-                if (p.Y + p.Height < r.Y + r.Height)
-                    split.Add(r with { Y = p.Y + p.Height, Height = r.Y + r.Height - p.Y - p.Height });
-            }
-
-            free = [.. split.Where((r, i) => !split.Where((o, j) => j != i && o.Contains(r.X, r.Y, r.Width, r.Height) && (o != r || j < i)).Any())];
-        }
-
-        return (regions, height);
-    }
+    public bool Holds(string fixture) => Containers.Contains(fixture);
 
     /// <summary>
-    /// The cells of <paramref name="grid"/> outside its <see cref="Inventory.Regions"/> (none without them), as rectangles: runs of a row, joined
-    /// down while they repeat.
-    /// </summary>
-    public static List<GridRegion> Unused(Inventory grid)
-    {
-        var result = new List<GridRegion>();
-        if (grid.Regions is null) return result;
-
-        var open = new Dictionary<(int X, int Width), int>();   // a run of the previous row -> the index of its rectangle
-
-        for (int y = 0; y < grid.Height; y++)
-        {
-            var next = new Dictionary<(int X, int Width), int>();
-
-            for (int x = 0; x < grid.Width;)
-            {
-                if (grid.InRegion(x, y, 1, 1))
-                {
-                    x++;
-                    continue;
-                }
-
-                int start = x;
-                while (x < grid.Width && !grid.InRegion(x, y, 1, 1)) x++;
-
-                var run = (start, x - start);
-
-                if (open.TryGetValue(run, out int k)) result[k] = result[k] with { Height = result[k].Height + 1 };
-                else
-                {
-                    k = result.Count;
-                    result.Add(new GridRegion(start, y, x - start, 1));
-                }
-
-                next[run] = k;
-            }
-
-            open = next;
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// The rectangle of <see cref="Stock"/> that is container <paramref name="fixture"/>'s grid; false when it is not one of this shop's stock
-    /// containers.
-    /// </summary>
-    public bool RegionOf(string fixture, out GridRegion region)
-    {
-        for (int k = 0; k < Containers.Count; k++)
-        {
-            if (Containers[k] == fixture)
-            {
-                region = Stock.Regions![k];
-                return true;
-            }
-        }
-
-        region = default;
-        return false;
-    }
-
-    /// <summary>
-    /// Whether container <paramref name="fixture"/>'s rectangle of <see cref="Stock"/> takes one unit of <paramref name="item"/> (a pure read, as
-    /// the container's own grid would): a stack of it there with room left under <paramref name="stackLimit"/>, or a free cell.
-    /// </summary>
-    public bool RegionTakes(string fixture, ItemInstance item, int stackLimit)
-    {
-        if (!RegionOf(fixture, out var r)) return false;
-
-        foreach (var other in Stock.Items)
-        {
-            if (r.Holds(other) && other.Record == item.Record && other.Quality == item.Quality && other.Mark == item.Mark
-                    && other.Section == "main" && other.Quantity < stackLimit)
-                return true;
-        }
-
-        for (int y = r.Y; y + item.Height <= r.Y + r.Height; y++)
-            for (int x = r.X; x + item.Width <= r.X + r.Width; x++)
-                if (Stock.IsFree("main", x, y, item.Width, item.Height)) return true;
-
-        return false;
-    }
-
-    /// <summary>
-    /// Adds the next restock tick, the fill count and the stock to the world hash.
+    /// Adds the next restock tick, the fill count and a squad shop's stock to the world hash (a building shop's goods are hashed with its
+    /// containers; its trader window is not state).
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(NextRestockTick);
         h.Add(Fills);
-        Stock.Hash(ref h);
+        if (Building is null) Stock.Hash(ref h);
     }
 }
 

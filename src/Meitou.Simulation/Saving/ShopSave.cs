@@ -2,6 +2,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Trading;
@@ -10,10 +11,11 @@ namespace Meitou.Simulation.Saving;
 
 /// <summary>
 /// A trader squad's shop on its PLATOON (docs/game/economy.md "Shops and transactions"): the original's <c>inventory refresh time</c>
-/// (absolute game hours of the next restock) and Meitou's own <c>meitou shop</c> (the stock, as <see cref="ContainerSave"/>'s JSON;
-/// <c>[]</c> when sold out) and <c>meitou shop fills</c> (<see cref="Shop.Fills"/>, the next fill's roll key). The purse is the platoon's
-/// <c>money</c>. The original keeps a building shop's stock in the home's containers and saves those with the zone, whose interior ids
-/// Meitou does not map; a save without <c>meitou shop</c> gets a fresh fill, as before.
+/// (absolute game hours of the next restock) and Meitou's own <c>meitou shop</c> (a squad shop's stock, as <see cref="ContainerSave"/>'s JSON;
+/// <c>[]</c> when sold out, and always for a building shop, whose goods are saved with its containers) and <c>meitou shop fills</c>
+/// (<see cref="Shop.Fills"/>, the next fill's roll key). The purse is the platoon's <c>money</c>. A save without <c>meitou shop</c> gets a fresh
+/// fill. An older Meitou save kept a building shop's stock under the key with its containers empty: read, it goes to the containers
+/// (<see cref="ShopView.Adopt"/>).
 /// </summary>
 internal static class ShopSave
 {
@@ -21,6 +23,10 @@ internal static class ShopSave
     /// The PLATOON keys: the original's restock time, and Meitou's stock and fill key.
     /// </summary>
     public const string RefreshKey = "inventory refresh time", StockKey = "meitou shop", FillsKey = "meitou shop fills";
+    /// <summary>
+    /// The rows of the grid an older save's building shop stock is read into (its packed stock was at most a few hundred rows high).
+    /// </summary>
+    const int OldStockRows = 4096;
 
     /// <summary>
     /// Writes the shop over the platoon's keys; a squad with no shop keeps what was read.
@@ -30,7 +36,7 @@ internal static class ShopSave
         if (shop is null) return;
         platoon.Floats[RefreshKey] = (float)(world.GameHours + (shop.NextRestockTick - world.Tick) * BodySystem.HoursPerTick);
         platoon.Ints[FillsKey] = shop.Fills;
-        platoon.Strings[StockKey] = ContainerSave.Write(shop.Stock) ?? "[]";
+        platoon.Strings[StockKey] = shop.Building is null ? ContainerSave.Write(shop.Stock) ?? "[]" : "[]";
     }
 
     /// <summary>
@@ -50,7 +56,7 @@ internal static class ShopSave
             ? Shop.ForBuilding(home, terms)
             : null;
         var shop = homeShop ?? new Shop { Terms = terms };
-        ContainerSave.Read(text, shop.Stock, data.Items);
+        ReadStock(text, shop, data);
         shop.Fills = platoon.Ints.GetValueOrDefault(FillsKey);
 
         // At most one refresh away (engine choice): older Meitou saves pushed it out by the save's clock at each load.
@@ -65,7 +71,26 @@ internal static class ShopSave
     static Shop? Unfilled(string text, Squad squad, PopulationData data)
     {
         var shop = TradeSystem.UnfilledShop(squad, TradeSystem.TemplateRecord(data, squad.TemplateId));
-        if (shop is not null) ContainerSave.Read(text, shop.Stock, data.Items);
+        if (shop is not null) ReadStock(text, shop, data);
         return shop;
+    }
+
+    /// <summary>
+    /// Reads the saved stock <paramref name="text"/>: a squad shop's into its stock; a building shop's (an older save's) into a grid tall enough
+    /// for it, which the trade system hands to the containers once they are registered.
+    /// </summary>
+    static void ReadStock(string text, Shop shop, PopulationData data)
+    {
+        if (shop.Building is null)
+        {
+            ContainerSave.Read(text, shop.Stock, data.Items);
+            return;
+        }
+
+        if (text == "[]") return;
+
+        shop.Stock = new Inventory(shop.ViewSize.Columns, OldStockRows) { StackBonusMult = Shop.StockStackMult };
+        ContainerSave.Read(text, shop.Stock, data.Items);
+        shop.View.Adopt();
     }
 }

@@ -855,7 +855,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             bool refresh = stored.Members.Count == 0 && Regenerates(squad.TemplateId, site);
             if (stored.Members.Count == 0 && !refresh)
             {
-                if (squad.Shop is { } shop) Trading.TradeSystem.GiveBack(world, shop);
+                if (squad.Shop is { } shop) Trading.TradeSystem.Settle(world, shop);
                 continue;
             }
 

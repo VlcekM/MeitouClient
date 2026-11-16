@@ -1028,7 +1028,7 @@ static class SaveProbe
 
     /// <summary>
     /// The containers within <paramref name="radius"/> of the leader: building, record, lock, own items, and the building shop whose stock
-    /// container each is, with its rectangle and the stock items in it (what its window shows).
+    /// container each is, with the size its trader window starts at.
     /// </summary>
     static void Containers(ProbeWorld probe, float radius)
     {
@@ -1041,11 +1041,10 @@ static class SaveProbe
 
             foreach (var q in world.Squads.All)
             {
-                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.RegionOf(f.Id, out var region)) continue;
+                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.Holds(f.Id)) continue;
 
-                int held = shop.Stock.Items.Count(region.Holds);
-                Console.WriteLine($"  shop of squad {q.Id} '{q.Name}' template={q.TemplateId} region={region} stock={shop.Stock.Items.Count} "
-                    + $"here={held}");
+                var (columns, rows) = shop.ViewSize;
+                Console.WriteLine($"  stock container of squad {q.Id} '{q.Name}' template={q.TemplateId} window={columns}x{rows}");
             }
         }
 

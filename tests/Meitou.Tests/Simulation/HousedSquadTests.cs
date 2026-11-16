@@ -1,8 +1,13 @@
+using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
+using Meitou.Simulation.Trading;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
@@ -76,6 +81,52 @@ public class HousedSquadTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_building_shops_trade_window_shows_its_containers_goods_in_one_grid_and_a_purchase_leaves_its_container()
+    {
+        var data = Load();
+        var squin = data.Sites.First(s => s.Town.Name == "Squin");
+        using var world = Town(data, squin, StandardParts.Trade);
+        world.RunTicks(3);
+        var squad = world.Squads.All.First(s => s.Shop?.Building is not null);
+        var shop = squad.Shop!;
+        var grids = shop.Containers.Select(id => world.Fixtures.Find(id)!.Contents!).ToList();
+        int Units() => grids.Sum(g => g.Items.Where(i => i.ItemFunction != PlayerSystem.MoneyFunction).Sum(i => i.Quantity));
+        int units = Units();
+
+        var hero = PlayerNextTo(world, data, world.Characters.Next[squad.Leader.Slot].Position);
+        world.Commands.Enqueue(new OpenTrade(hero, squad.Leader) { Tick = world.Tick });
+        world.RunTicks(5);
+        var trade = world.Systems.OfType<TradeSystem>().Single();
+        var view = trade.PublishTrade()!;
+
+        // The original's merged section: the widest container's columns, ceil(cells / columns) rows (more only when the copies do not fit).
+        var (columns, rows) = shop.ViewSize;
+        Assert.Equal(columns, view.StockWidth);
+        Assert.InRange(view.StockHeight, rows, rows * 2);
+        Assert.Equal(units, view.Stock.Sum(i => i.Quantity));
+
+        var bought = view.Stock.OrderBy(i => i.Width * i.Height).First();
+        world.Commands.Enqueue(new BuyItem(bought.Token, 1) { Tick = world.Tick });
+        world.RunTicks(1);
+        Assert.Equal(units - 1, Units());
+        Assert.Equal(bought.Record, Assert.Single(world.Characters.Cold(hero.Slot)!.Inventory!.Items).Record);
+    }
+
+    /// <summary>
+    /// A rich player character standing at <paramref name="at"/>.
+    /// </summary>
+    static CharacterId PlayerNextTo(SimWorld world, PopulationData data, Vector3 at)
+    {
+        var cold = new Combat.Combatant { Name = "hero" }.MakeCold();
+        cold.Faction = data.PlayerFaction;
+        cold.IsPlayer = true;
+        cold.Inventory = new Inventory();
+        world.Player.Money = 1_000_000;
+        return world.Characters.Spawn(new CharacterHot { Position = at + new Vector3(10, 0, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                Task = (byte)CharacterTask.Idle }, cold, 0);
+    }
+
+    [Fact]
     public void Squins_housed_traders_sell_from_their_homes_stock_containers_with_their_vendor_money()
     {
         var data = Load();
@@ -85,8 +136,7 @@ public class HousedSquadTests(ITestOutputHelper output)
         var shops = world.Squads.All.Where(s => s.Shop?.Building is not null).ToList();
         foreach (var s in shops)
         {
-            output.WriteLine($"{s.Name} in {s.HomeBuilding!.Name}: {s.Shop!.Stock.Width} x {s.Shop.Stock.Height}, "
-                + $"{s.Shop.Stock.All().Sum(i => i.Quantity)} units, {s.Money} cats");
+            output.WriteLine($"{s.Name} in {s.HomeBuilding!.Name}: {s.Shop!.Stock.Width} x {s.Shop.Stock.Height}, {s.Money} cats");
         }
 
         Assert.NotEmpty(shops);
@@ -103,14 +153,8 @@ public class HousedSquadTests(ITestOutputHelper output)
             int width = s.Shop.Stock.Width;
 
             Assert.Equal(Math.Max(18, boxes.Max(f => f.StorageWidth)), width);
-
-            // the original's merged section; each container's own rectangle takes a few rows more. Containers wider than half the stock never
-            // share a row, so they stack (L-House's four 10 x 10 barrels in an 18-wide stock).
-            int wideRows = boxes.Where(f => f.StorageWidth * 2 > width).Sum(f => f.StorageHeight);
-            int packed = Math.Max((cells + width - 1) / width, wideRows);
-
-            Assert.InRange(s.Shop.Stock.Height, packed, packed * 11 / 10 + 3);
-            Assert.NotEmpty(s.Shop.Stock.Items);
+            Assert.Equal((cells + width - 1) / width, s.Shop.Stock.Height);   // the original's merged section
+            Assert.Contains(boxes, f => world.Fixtures.Find(f.Id)?.Contents is { Items.Count: > 0 });
 
             if (template.VendorMoney > 0)
 

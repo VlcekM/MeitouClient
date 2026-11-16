@@ -256,15 +256,6 @@ sealed class TradeWindows(PlayerInterface player)
         int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
         var area = slot.Bounds;
 
-        // A building shop's cells outside every container hold nothing: greyed over the grid's tiles.
-        foreach (var (r, k) in trade.Unused.Select((r, k) => (r, k)))
-        {
-            controls.Add(new($"trade-unused-{k}", "Widget",
-                new(area.X + r.X * area.Width / columns, area.Y + r.Y * area.Height / rows,
-                    r.Width * area.Width / columns, r.Height * area.Height / rows),
-                "", "", "", true, new Dictionary<string, string>(), new Vector4(0, 0, 0, 0.65f), Pickable: false, Clip: slot.Clip));
-        }
-
         foreach (var item in trade.Stock)
         {
             if (player.InventoryWindows.Lifted(ItemOwner.Stock, item.Index)) continue;

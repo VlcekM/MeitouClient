@@ -202,10 +202,6 @@ public sealed record TradeView(CharacterId Customer, CharacterId Trader, string 
     /// </summary>
     public IReadOnlyDictionary<CharacterId, IReadOnlyList<TradeItemView>> GoodsOf { get; init; } =
         new Dictionary<CharacterId, IReadOnlyList<TradeItemView>>();
-    /// <summary>
-    /// The stock cells outside every container of a building shop (<see cref="Shop.Unused"/>), which hold nothing; empty for a squad shop.
-    /// </summary>
-    public IReadOnlyList<GridRegion> Unused { get; init; } = [];
 }
 
 /// <summary>
@@ -376,6 +372,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     break;
             }
         }
+
+        WriteOpenView(world);
     }
 
     /// <summary>
@@ -401,7 +399,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             else if (_open ? InReach(world, c, t, Settings.PassRange) : InReach(world, c, t))
             {
                 if (!_open)
+                {
                     TaskStart.Stand(world.Characters, c);   // the customer stops where it stands, not at the trader's spot behind a counter
+                    BuildView(world);
+                }
 
                 _open = true;
                 Hold(world, t);
@@ -411,6 +412,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             else Hold(world, t);
         }
 
+        WriteOpenView(world);
         RefreshView(world);
     }
 
@@ -557,21 +559,18 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             if (PlayersSquad(world, squad)) continue;
 
             bool living = Living(world, squad);
+            if (squad.Shop is { Building: not null } building) SettleView(world, building);
 
-            if (squad.Shop is { Building: not null } closing && !living)
+            if (squad.Shop is { Building: not null } && !living)
             {
-                // Nobody of the squad is left alive: its stock goes back into its containers, which keep it, as the original's containers hold the
-                // stock (artifacts included).
-                GiveBack(world, closing, all: true);
+                // Nobody of the squad is left alive: its containers keep the goods, as the original's do (artifacts included).
                 squad.Shop = null;
                 continue;
             }
 
-            if (squad.Shop is { Building: not null } lent && TemplateOf(squad.TemplateId) is null && !TradesWith(world, squad))
+            if (squad.Shop is { Building: not null } && TemplateOf(squad.TemplateId) is null && !TradesWith(world, squad))
             {
-                // Containers lent to a trade by a housed squad that keeps no shop (StockFor) get their goods back once it ends; the house filling
-                // goes on.
-                GiveBack(world, lent, all: true);
+                // A housed squad that keeps no shop traded from its home's containers (StockFor) only for that trade; the house filling goes on.
                 squad.Shop = null;
                 continue;
             }
@@ -609,7 +608,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         squad.Shop = squad.HomeBuilding is { } home ? Shop.ForBuilding(home, terms) : new Shop { Terms = terms };
         if (squad.Shop is null) return;
 
-        TakeContents(world, squad.Shop);
         Refill(world, squad, squad.Shop, template);
     }
 
@@ -623,8 +621,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// A trade opened with a member of a squad that has no shop yet: a trader squad gets its shop now; any other trades from what the original's
     /// window shows (docs/game/economy.md "Who trades"): a squad with no home building (the Traders Guild's <c>Caravan</c>: <c>vendors</c> but no
     /// <c>is trader</c>) from a stock that is never filled and takes what its members' worn bags hold (<see cref="TakeBags"/>: the pack animals'
-    /// loads, <see cref="Items.PackLoad"/>); a housed one from its home's stock containers, lent for the trade (<see cref="Stock"/> hands them
-    /// back), none without.
+    /// loads, <see cref="Items.PackLoad"/>); a housed one from its home's stock containers for that trade (<see cref="Stock"/> drops the shop after
+    /// it), none without.
     /// </summary>
     void StockFor(World world, int t)
     {
@@ -638,8 +636,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         squad.Shop = UnfilledShop(squad, TemplateRecord(_data, squad.TemplateId));
-        if (squad.Shop is { Building: not null } lent) TakeContents(world, lent);
-        else if (squad.Shop is { } carried) TakeBags(world, squad, carried);
+        if (squad.Shop is { Building: null } carried) TakeBags(world, squad, carried);
     }
 
     /// <summary>
@@ -678,67 +675,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) ? SquadTemplate.From(r) : null;
 
     /// <summary>
-    /// A new building shop's stock containers hand what they hold (a town's artifacts) to the stock, each into its own rectangle (in the original the
-    /// stock is what they hold, docs/game/economy.md "Artifacts").
-    /// </summary>
-    static void TakeContents(World world, Shop shop)
-    {
-        for (int k = 0; k < shop.Containers.Count; k++) TakeContents(world, shop, k);
-    }
-
-    /// <summary>
-    /// Stock container <paramref name="k"/> of a building shop hands what it holds to its rectangle of the stock.
-    /// </summary>
-    static void TakeContents(World world, Shop shop, int k)
-    {
-        if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid } || grid.Items.Count == 0) return;
-
-        var region = shop.Stock.Regions![k];
-
-        foreach (var item in grid.Items)
-        {
-            item.X += region.X;
-            item.Y += region.Y;
-            shop.Stock.Items.Add(item);
-        }
-
-        grid.Items.Clear();
-    }
-
-    /// <summary>
-    /// A building shop's stock container <paramref name="fixture"/> gets its rectangle of the stock back into its own grid while something is put
-    /// into it (a ditch, docs/game/ai-tasks.md "Ditching": the original's stock is what the home's containers hold, so what goes into one is for
-    /// sale); <see cref="TakeBack"/> returns it to the stock afterwards.
-    /// </summary>
-    internal static void Lend(World world, Shop shop, string fixture)
-    {
-        if (shop.Stock.Regions is null || IndexOf(shop, fixture) is not (>= 0 and var k)) return;
-
-        GiveBack(world, shop, k, all: true);
-    }
-
-    /// <summary>
-    /// The stock container <paramref name="fixture"/> lent by <see cref="Lend"/> hands its grid back to its rectangle of the shop's stock.
-    /// </summary>
-    internal static void TakeBack(World world, Shop shop, string fixture)
-    {
-        if (shop.Stock.Regions is null || IndexOf(shop, fixture) is not (>= 0 and var k)) return;
-
-        TakeContents(world, shop, k);
-    }
-
-    /// <summary>
-    /// The index of a stock container among a building shop's (<see cref="Shop.Containers"/>), -1 for none.
-    /// </summary>
-    static int IndexOf(Shop shop, string fixture)
-    {
-        for (int k = 0; k < shop.Containers.Count; k++)
-            if (shop.Containers[k] == fixture) return k;
-
-        return -1;
-    }
-
-    /// <summary>
     /// Whether someone of the squad is alive.
     /// </summary>
     static bool Living(World world, Squad squad)
@@ -751,35 +687,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// A building shop whose squad is dropped, made afresh or all dead hands its unique items (artifacts; with <paramref name="all"/>, its whole
-    /// stock) back to their containers, which keep them for the next shop, as the original's containers keep them until taken (docs/game/economy.md
-    /// "Artifacts").
+    /// A building shop whose squad is dropped, made afresh or all dead writes what its trader window changed into its containers
+    /// (<see cref="SettleView"/>), which keep the goods for the next shop, as the original's containers keep them.
     /// </summary>
-    internal static void GiveBack(World world, Shop shop, bool all = false)
-    {
-        if (shop.Stock.Regions is null) return;
-
-        for (int k = 0; k < shop.Containers.Count; k++) GiveBack(world, shop, k, all);
-    }
-
-    /// <summary>
-    /// Stock container <paramref name="k"/> of a building shop takes its unique items (with <paramref name="all"/>, everything) of its rectangle of
-    /// the stock back into its own grid, at the same cells.
-    /// </summary>
-    static void GiveBack(World world, Shop shop, int k, bool all)
-    {
-        if (world.Fixtures.Find(shop.Containers[k]) is not { Contents: { } grid }) return;
-
-        var region = shop.Stock.Regions![k];
-
-        foreach (var item in shop.Stock.Items.Where(i => (all || i.Unique) && region.Holds(i)).ToList())
-        {
-            shop.Stock.Items.Remove(item);
-            (item.X, item.Y) = (item.X - region.X, item.Y - region.Y);
-            if (grid.IsFree("main", item.X, item.Y, item.Width, item.Height)) grid.Items.Add(item);
-            else grid.AddTo("main", item);
-        }
-    }
+    internal static void Settle(World world, Shop shop) => world.SystemOf<TradeSystem>()?.SettleView(world, shop);
 
     /// <summary>
     /// The FACTION record of faction <paramref name="faction"/>; null for none.
@@ -864,6 +775,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (usable.Count == 0) return;
 
         merged.Fills = (int)world.Tick;
+        merged.Stock = FillGrid(merged);
         ShopFiller.Fill(merged, template, Market(world), _data, world.Seed, key, specials: first);
 
         // Engine: the special items are spread with the vendor items (the original gives each to a container of a shuffle of its own first).
@@ -882,14 +794,32 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var boxes = new List<StockBox>();
 
         foreach (var f in home.Fixtures)
-        {
-            if (!f.HoldsShopStock || world.Fixtures.Find(f.Id) is not { Contents: not null } box) continue;
-
-            var record = _data.Db.Find(box.RecordId);
-            boxes.Add(new StockBox(box, record is null ? null : Data.Gameplay.Construction.MachineData.From(_data.Db, record)));
-        }
+            if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Contents: not null } box) boxes.Add(BoxOf(box));
 
         return boxes;
+    }
+
+    /// <summary>
+    /// A building shop's stock containers that are registered, in its order; <paramref name="all"/> false when some are not (their zone not loaded).
+    /// </summary>
+    List<StockBox> BoxesOf(World world, Shop shop, out bool all)
+    {
+        var boxes = new List<StockBox>(shop.Containers.Count);
+
+        foreach (var id in shop.Containers)
+            if (world.Fixtures.Find(id) is { Contents: not null } box) boxes.Add(BoxOf(box));
+
+        all = boxes.Count == shop.Containers.Count;
+        return boxes;
+    }
+
+    /// <summary>
+    /// A stock container with its record's storage rules.
+    /// </summary>
+    StockBox BoxOf(Locks.Fixture box)
+    {
+        var record = _data.Db.Find(box.RecordId);
+        return new StockBox(box, record is null ? null : Data.Gameplay.Construction.MachineData.From(_data.Db, record));
     }
 
     /// <summary>
@@ -909,80 +839,71 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
+    /// The rows of the scratch grid a building shop's fill is made in before it is spread over the containers: room for any fill.
+    /// </summary>
+    const int FillRows = 1024;
+
+    /// <summary>
     /// Fills the shop again (the specials on its first fill), sets the squad's purse, spreads a building shop's new stock over its containers and
-    /// relocks those that hold some, and sets the next restock tick.
+    /// relocks those that hold some, and sets the next restock tick. A building shop none of whose containers is registered waits: the original's
+    /// filler returns while the building or its interior is missing and is called again (docs/game/economy.md "Building shops").
     /// </summary>
     void Refill(World world, Squad squad, Shop shop, SquadTemplate template)
     {
+        var home = squad.HomeBuilding;
+
+        if (shop.Building is not null)
+        {
+            // Not while an item lifted from the window is held: it goes back to the grid it came from.
+            if (home is null || BoxesOf(world, shop, out _).Count == 0 || shop.View.Live && world.Player.Held?.From.Holder == ItemHolder.Stock)
+                return;
+
+            shop.Stock = FillGrid(shop);
+        }
+
         squad.Money = ShopFiller.Fill(shop, template, Market(world), _data, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
 
-        if (shop.Building is not null && squad.HomeBuilding is { } home)
+        if (shop.Building is not null)
         {
-            SpreadStock(world, shop, home, template, (ulong)squad.Id);
-            Relock(world, shop, home);
+            SpreadStock(world, shop, home!, template, (ulong)squad.Id);
+            Relock(world, home!);
+            ReopenView(world, shop);
         }
 
         shop.NextRestockTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);
     }
 
     /// <summary>
-    /// A building shop's new stock is spread over its containers as a stocked home's (<see cref="HomeStock"/>): the original's building filler
-    /// (<c>FUN_14095b210</c>) fills a trader's home the same way, so its barrels and cabinets hold goods, not only the first container (#768). The
-    /// unique items kept from before stay where they lie, their cells taken by copies while the spread runs; what no usable container takes is
-    /// lost. A shop none of whose containers is registered keeps the fill as it was put.
+    /// The scratch grid a building shop's fill is made in (<see cref="FillRows"/> rows of its trader window's columns).
+    /// </summary>
+    static Inventory FillGrid(Shop shop) => new(shop.ViewSize.Columns, FillRows) { StackBonusMult = Shop.StockStackMult };
+
+    /// <summary>
+    /// A building shop's new stock (its fill's scratch grid) is spread over its containers as a stocked home's (<see cref="HomeStock"/>): the
+    /// original's building filler (<c>FUN_14095b210</c>) fills a trader's home the same way, after clearing the containers but their unique items
+    /// (<c>FUN_14074a5b0</c>). What no usable container takes is lost.
     /// </summary>
     void SpreadStock(World world, Shop shop, Meitou.Data.World.TownBuilding home, SquadTemplate template, ulong key)
     {
-        var boxes = StockBoxes(world, home).Where(b => shop.RegionOf(b.Fixture.Id, out _)).ToList();
-        if (boxes.Count == 0) return;
+        var boxes = StockBoxes(world, home).Where(b => shop.Holds(b.Fixture.Id)).ToList();
 
-        var made = shop.Stock.Items.Where(i => !i.Unique).ToList();
-        shop.Stock.Items.RemoveAll(i => !i.Unique);
-        var kept = BlockKept(shop, boxes);
+        foreach (var box in boxes) box.Grid.Items.RemoveAll(i => !i.Unique);
 
         var usable = HomeStock.Usable(boxes, VendorEntries(template, FactionRecord(shop.Terms.Faction)));
         var rng = new RandomStream(world.Seed, Rng.Mix(key ^ SpreadSalt ^ ((ulong)shop.Fills << 40)), RngPurpose.Trade);
-        HomeStock.Spread(usable, made, Market(world).BaseValue, ref rng);
-
-        foreach (var box in boxes) box.Grid.Items.RemoveAll(kept.Contains);
-        TakeContents(world, shop);
-    }
-
-    /// <summary>
-    /// Puts a copy of each unique item of the stock into the container whose rectangle holds it, at its cell there, so the spread leaves those cells
-    /// free; returns the copies.
-    /// </summary>
-    static HashSet<ItemInstance> BlockKept(Shop shop, List<StockBox> boxes)
-    {
-        var kept = new HashSet<ItemInstance>(ReferenceEqualityComparer.Instance);
-
-        foreach (var box in boxes)
-        {
-            shop.RegionOf(box.Fixture.Id, out var region);
-
-            foreach (var item in shop.Stock.Items.Where(region.Holds))
-            {
-                var copy = item.WithQuantity(item.Quantity);
-                copy.Unique = true;
-                (copy.X, copy.Y) = (item.X - region.X, item.Y - region.Y);
-                box.Grid.Items.Add(copy);
-                kept.Add(copy);
-            }
-        }
-
-        return kept;
+        HomeStock.Spread(usable, shop.Stock.Items, Market(world).BaseValue, ref rng);
     }
 
     /// <summary>
     /// The building filler unlocks the stock containers it fills (<c>FUN_14095b210</c>), then locks each that holds something (<c>FUN_1409565e0</c>,
     /// #328).
     /// </summary>
-    static void Relock(World world, Shop shop, Meitou.Data.World.TownBuilding home)
+    static void Relock(World world, Meitou.Data.World.TownBuilding home)
     {
         foreach (var f in home.Fixtures)
         {
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Lock is { } l)
-                l.Locked = shop.RegionOf(f.Id, out var region) && shop.Stock.Items.Any(region.Holds);
+            if (f.HoldsShopStock && world.Fixtures.Find(f.Id) is { Lock: { } l } box)
+                l.Locked = box.Contents is { Items.Count: > 0 };
         }
     }
 
@@ -990,6 +911,55 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// The shop a character trades for: its squad's (null: not a trader).
     /// </summary>
     public static Shop? ShopOf(World world, CharacterCold cold) => cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId)?.Shop : null;
+
+    #endregion
+
+    #region A building shop's trader window (ShopView)
+
+    /// <summary>
+    /// The trade window opens: a building shop's grid is built from its containers.
+    /// </summary>
+    void BuildView(World world)
+    {
+        if (Resolve(world, out _, out _, out var shop) && shop!.Building is not null) shop.View.Build(shop, BoxesOf(world, shop, out _));
+    }
+
+    /// <summary>
+    /// What the open trade changed in a building shop's grid goes to its containers.
+    /// </summary>
+    void WriteOpenView(World world)
+    {
+        if (_open && Resolve(world, out _, out _, out var shop) && shop!.Building is not null) SettleView(world, shop);
+    }
+
+    /// <summary>
+    /// A building shop's grid writes what changed into its containers once they are all registered, and empties when no trade window shows it
+    /// and no item lifted from a stock is held (the held item still goes back to it).
+    /// </summary>
+    internal void SettleView(World world, Shop shop)
+    {
+        if (!shop.View.Live) return;
+
+        var boxes = BoxesOf(world, shop, out bool all);
+        if (!all) return;
+
+        shop.View.Write(shop, boxes);
+        if (!Shows(world, shop) && world.Player.Held?.From.Holder != ItemHolder.Stock) shop.View.Drop(shop);
+    }
+
+    /// <summary>
+    /// A building shop's restock: a trader window that shows it is built again, else the fill's scratch grid goes.
+    /// </summary>
+    void ReopenView(World world, Shop shop)
+    {
+        if (Shows(world, shop)) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        else shop.View.Drop(shop);
+    }
+
+    /// <summary>
+    /// Whether the open trade window shows <paramref name="shop"/>.
+    /// </summary>
+    bool Shows(World world, Shop shop) => _open && Resolve(world, out _, out _, out var open) && ReferenceEquals(open, shop);
 
     #endregion
 
@@ -1603,7 +1573,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         {
             Held = held,
             GoodsOf = goodsOf,
-            Unused = shop.UnusedCells,
         };
     }
 

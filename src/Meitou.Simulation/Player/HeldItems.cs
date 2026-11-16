@@ -223,10 +223,9 @@ sealed class HeldItems(PopulationData? data)
         if (ContainerAccess.ContainerFor(world, site, lift.Actor, out var opener) is { } container)
         {
             if (opener is null || world.Player.OpenContainer != site) return;
-            var grid = ContainerAccess.GridOf(world, container, out var region);
+            var grid = container.Contents!;
             var item = grid.Items.ElementAtOrDefault(t.Index);
-            if (!Matches(item, t with { X = t.X + region.X, Y = t.Y + region.Y }, section: false)
-                    || !region.Holds(item!)) return;   // the window shows cells from the container's corner
+            if (!Matches(item, t, section: false)) return;
             Hold(world, lift, Split(grid, item!, lift.Whole), grid, "main", item!.X, item.Y);
             world.Machines.Touch();
             return;
@@ -339,7 +338,7 @@ sealed class HeldItems(PopulationData? data)
             return;
         }
 
-        if (Under(world, target, item, place, out int x, out int y) is not { Count: < 2 } under)
+        if (Under(target, item, place, out int x, out int y) is not { Count: < 2 } under)
         {
             ReturnHeldItem(world);
             return;
@@ -416,10 +415,12 @@ sealed class HeldItems(PopulationData? data)
             default:
                 if (place.Section != "main") return null;
                 if (ContainerAccess.ContainerFor(world, into.Site, held.Actor, out var opener) is { } container)
-                    return opener is not null && world.Player.OpenContainer == into.Site && ContainerAccess.ShopOf(world,
-                            container) is null ? new(ContainerAccess.GridOf(world, container), ContainerAccess.GridOf(world, container), "main",
-                                    ContainerAccess.GridOf(world, container).Width, ContainerAccess.GridOf(world, container).Height, null, container,
-                                    null) : null;
+                {
+                    var grid = container.Contents!;
+                    bool open = opener is not null && world.Player.OpenContainer == into.Site && ContainerAccess.ShopOf(world, container) is null;
+                    return open ? new(grid, grid, "main", grid.Width, grid.Height, null, container, null) : null;
+                }
+
                 return world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, into.Site, out _) is { Storage: { } storage,
                         Closed: false } m
                     ? new(storage, storage, "main", storage.Width, storage.Height, null, null, m) : null;
@@ -462,9 +463,9 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// The items under the held item in the target's section (a slot: whatever is in it) at the cell it lands at; null (the item goes back) when
-    /// its footprint is larger than the section or no shop container has room ("No room for that item.").
+    /// its footprint is larger than the section.
     /// </summary>
-    static List<ItemInstance>? Under(World world, Target target, ItemInstance item, PlaceHeld place, out int x, out int y)
+    static List<ItemInstance>? Under(Target target, ItemInstance item, PlaceHeld place, out int x, out int y)
     {
         x = 0;
         y = 0;
@@ -472,44 +473,9 @@ sealed class HeldItems(PopulationData? data)
         if (item.Width > target.Columns || item.Height > target.Rows) return null;
         x = Math.Clamp(place.X, 0, target.Columns - item.Width);
         y = Math.Clamp(place.Y, 0, target.Rows - item.Height);
-        // On a shop's greyed cells, or across two of its containers: the nearest free cell of a container instead (engine choice, #349).
-        if (!target.Grid.InRegion(x, y, item.Width, item.Height))
-        {
-            if (NearestFreeInRegion(target, item, x, y) is not var (fx, fy))
-            {
-                world.Post("No room for that item.");
-                return null;
-            }
-            (x, y) = (fx, fy);
-        }
         int cx = x, cy = y;
         return target.Grid.Items.Where(i => i.Section == target.Section && cx < i.X + i.Width && i.X < cx + item.Width && cy < i.Y + i.Height
                 && i.Y < cy + item.Height).ToList();
-    }
-
-    /// <summary>
-    /// The free cell nearest (<paramref name="x"/>, <paramref name="y"/>) where <paramref name="item"/> lies inside one of the grid's regions; null
-    /// when none has room.
-    /// </summary>
-    static (int X, int Y)? NearestFreeInRegion(Target target, ItemInstance item, int x, int y)
-    {
-        (int X, int Y)? best = null;
-        int bestDistance = int.MaxValue;
-        for (int cy = 0; cy + item.Height <= target.Rows; cy++)
-        {
-            for (int cx = 0; cx + item.Width <= target.Columns; cx++)
-            {
-                int distance = (cx - x) * (cx - x) + (cy - y) * (cy - y);
-                if (distance >= bestDistance || !target.Grid.InRegion(cx, cy, item.Width, item.Height)) continue;
-
-                bool taken = target.Grid.Items.Any(i => i.Section == target.Section && cx < i.X + i.Width && i.X < cx + item.Width
-                        && cy < i.Y + i.Height && i.Y < cy + item.Height);
-                if (taken) continue;
-
-                (best, bestDistance) = ((cx, cy), distance);
-            }
-        }
-        return best;
     }
 
     /// <summary>

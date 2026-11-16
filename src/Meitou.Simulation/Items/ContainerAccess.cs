@@ -20,8 +20,8 @@ public sealed record CloseContainer : SimCommand;
 /// <summary>
 /// Opening a container of a building's interior (docs/game/locks.md "Containers"): a character walks up to it, its inventory shows in a window
 /// beside the character's, and items are moved with <see cref="Production.PutInMachine"/> / <see cref="Production.TakeFromMachine"/> addressed by
-/// the fixture id. <b>Engine choices</b>: the reach, a locked one refusing, a shop's containers staying the shop's (each its own rectangle of the
-/// shop's stock, <see cref="Trading.Shop.ForBuilding"/>). Taking from another faction's is stealing (<see cref="Crime.CrimeSystem.Steal"/>).
+/// the fixture id. <b>Engine choices</b>: the reach, a locked one refusing, a shop's stock containers taking nothing put in
+/// (<see cref="ShopOf"/>). Taking from another faction's is stealing (<see cref="Crime.CrimeSystem.Steal"/>).
 /// </summary>
 public static class ContainerAccess
 {
@@ -170,24 +170,7 @@ public static class ContainerAccess
     /// The building shop <paramref name="container"/> is a stock container of, if any.
     /// </summary>
     internal static Trading.Shop? ShopOf(World world, Locks.Fixture container) =>
-        world.Squads.All.Select(s => s.Shop).FirstOrDefault(s => s?.Building == container.Building && s.RegionOf(container.Id, out _));
-
-    /// <summary>
-    /// The grid a container window works on: the container's own, but for a building shop's stock container the shop's stock
-    /// (<see cref="Trading.Shop.ForBuilding"/>), of which the container's grid is <paramref name="region"/>: the window shows and takes only the
-    /// items there (at cells relative to its corner), taking them is theft.
-    /// </summary>
-    internal static Items.Inventory GridOf(World world, Locks.Fixture container, out Items.GridRegion region)
-    {
-        if (ShopOf(world, container) is { } shop && shop.RegionOf(container.Id, out region)) return shop.Stock;
-        region = new(0, 0, container.Contents!.Width, container.Contents.Height);
-        return container.Contents;
-    }
-
-    /// <summary>
-    /// The grid a container window works on (<see cref="GridOf(World, Locks.Fixture, out Items.GridRegion)"/>), without its region.
-    /// </summary>
-    internal static Items.Inventory GridOf(World world, Locks.Fixture container) => GridOf(world, container, out _);
+        world.Squads.All.Select(s => s.Shop).FirstOrDefault(s => s?.Building == container.Building && s.Holds(container.Id));
 
     /// <summary>
     /// Whether two points are within <see cref="ContainerFloorSlack"/> of each other in height.
