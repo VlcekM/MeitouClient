@@ -156,9 +156,11 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
   game start town list.", then, as an empty list does, a draw among the TOWN and VILLAGE placements whose faction is real, not BANDIT and not hostile
   to the player (-30 or below); with none, (-43500, -6625). Meitou stands the squad on a walkable spot near that place.
 - **Discovered**: every town of type TOWN in the biome group of the start place.
-- **Squad**: a SQUAD_TEMPLATE entry makes a squad of its own; a CHARACTER entry makes v0 characters (0 counts as 1), each at the place plus up to 50
-  on x and z, joining the player's current squad. Nobody made: the Wanderer squad `45550-gamedata.base`. Meitou makes one squad of them all, each
-  template keeping its own layout.
+- **Squad**: a SQUAD_TEMPLATE entry makes a squad; a CHARACTER entry makes v0 characters (0 counts as 1), each at the place plus up to 50 on x
+  and z, joining the player's current squad. Nobody made: the Wanderer squad `45550-gamedata.base`. **Observed** (1.0.68, data-only starts): the
+  first template's squad is Nameless_0 and every CHARACTER entry's characters join it after the template's members, whatever the list order; each
+  further template is a squad of its own, Nameless_1 and on (templates of 3 and 5 then a CHARACTER of 2 gave 3 + 2 and 5; a CHARACTER of 2
+  then a template of 3 gave one squad of 3 + 2; templates of 5 and 25 gave 5 and 25). The character editor lists every start character.
 - **Research**: the start's `research`, or `5359-gamedata.base` when it lists none.
 - **Clock**: day 1 (set by the reset), 10:00.
 - **The Slaves**: **Observed** (1.0.68 factory/status decompilation): its template's `malnourished` flag gives
@@ -1142,7 +1144,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   as `squad index`), each the list's width less a scroll bar (`Kenshi_ScrollBarV` width, else 17 × UI scale) and 0.28 of its height. Box parts:
   `SquadNameText` (editable, at most 32 characters; the text goes into the platoon's record name), `SquadSizeText` "{1,num}/{2,num}" against
   `max squad size` (Meitou: Bad), `SquadRemoveButton`, `PortraitsPanel` with a
-  `Kenshi_SquadsPanel_PortraitCharacter` cell per member (Meitou shrinks cells to fit one row). `FactionSizeText`: Meitou shows the faction's count
+  `Kenshi_SquadsPanel_PortraitCharacter` cell per member: cells keep their size, as many to a row as fit, filled in rows, and a box whose rows
+  do not fit gets a scroll bar inside it (**Observed**, 1.0.68 at 1680 x 1050: a squad of 25 showed rows of 9, 9 and 7 with the box's scroll
+  bar; Meitou scrolls a row a wheel step). `FactionSizeText`: Meitou shows the faction's count
   against `max faction size`.
 - The constructors pass the translated captions through a locale transform taken to be upper-casing (the box's "Delete" matches its layout's "DELETE"; not seen in a run): `NewSquadButton` "ADD SQUAD", `lbSquadsDismiss` "DISMISS" (the layout's
   "NEW SQUAD" / "DRAG HERE TO DISMISS" are replaced).
@@ -1381,7 +1385,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   (`FUN_1405f5d10`) for each human of its list when not in mode 1 (the window's byte `+0x1c0` is mode == 1, set in `FUN_1405f4dd0`), right after `starting health`, so a race
   switched at a new game loses what it wore in the sections it closes. The other `InventorySection::setEnabled` callers are the furnace, crafting benches and animals. Meitou:
   `InventoryCommands.SectionClosed`, `CharacterSnapshot.ClosedSlots`, drawn disabled and refusing drops and every automatic equip (`TryEquip`, `Transfer`, `MoveInto`: trade, pick-up, loot, scavenge, storage, slave clothing);
-  `InventoryCommands.ValidateSections` runs when a leg is severed (the limb queue of `PopulationSystem`) and for the start's squad when the creation ends (`CharacterEditing.EndCreation`):
+  `InventoryCommands.ValidateSections` runs when a leg is severed (the limb queue of `PopulationSystem`) and for the start's squads when the creation ends (`CharacterEditing.EndCreation`):
   boots dropped 3 ahead of the character (as a dropped held item, engine offset), the rest destroyed.
 - **Unknown**: the trader window's panel lines beyond Money.
 - Item placement failure messages (FUN_14070f7e0; the checks behind them are in [economy.md](economy.md#shops-and-transactions)): Out of trading range; No room for that item; You can't

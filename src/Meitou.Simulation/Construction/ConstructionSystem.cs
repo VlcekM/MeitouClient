@@ -51,7 +51,8 @@ public sealed class ConstructionSettings
 /// <c>Schedule</c> walks the character to the site (the
 /// first-aid pattern), <c>SlowWorld</c> works it, all serial. At the site the builder pushes build work each tick until the site stalls
 /// (<c>sum(min(delivered, required)) &lt;= progress</c>); then, if it carries a missing material, it fills the 5 s delivery bar
-/// (<see cref="CharacterTask.DeliverMaterials"/>), hands over one unit per missing type and goes on building; empty-handed it fetches a missing
+/// (<see cref="CharacterTask.DeliverMaterials"/>), hands over one unit per missing type, fills it again while it still carries a missing one,
+/// then goes on building; empty-handed it fetches a missing
 /// material (<see cref="CharacterTask.FetchMaterials"/>, task 247: <see cref="Source"/>) and comes back, or stops when there is none.</item>
 /// <item><b>Work</b> per tick (<b>Verified</b>): <c>lerp(0.3, 2, engineering/100) x dt x Building speed x CONSTANTS build speed x 0.75^k</c>, k the
 /// builders that have worked the site this tick
@@ -1866,7 +1867,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// One deliverer's step: the delivery bar fills, and when full one of each owed material carried goes into the site; then back to building.
+    /// One deliverer's step: the delivery bar fills, and when full one of each owed material carried goes into the site; the bar fills again while
+    /// an owed material is still carried, then back to building (docs/game/buildings-production.md "Material delivery").
     /// </summary>
     void DeliverStep(World world, int slot, CharacterCold cold, BuildSite site, float dt)
     {
@@ -1885,6 +1887,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         }
 
         if (given > 0) world.Buildings.Touch();
+
+        // The task goes on while something owed is carried (Task_AddMaterialsToBuilding), so a builder hands over all it brought before building.
+        if (given > 0 && Carries(cold, site)) return;
 
         // On with building; with nothing handed over the planner's next step is the building task's own (fetch or end when stalled).
         TaskStart.Step(table, slot, CharacterTask.Build);

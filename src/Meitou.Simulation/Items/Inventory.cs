@@ -139,11 +139,12 @@ public sealed class Inventory(int width, int height)
     /// fit stays in <paramref name="item"/>'s <see cref="ItemInstance.Quantity"/> (the caller keeps or drops it) and the units placed stay placed.
     /// Units with a buyback receipt top up only stacks of the same trade and direction; with no free cell left they join plain stacks too and lose
     /// the receipt (docs/simulation.md, trading). <paramref name="mainShut"/>: the main grid takes nothing, only the backpack does (a live animal's,
-    /// <see cref="InventoryCommands.MainClosed"/>).
+    /// <see cref="InventoryCommands.MainClosed"/>). A container holding items never goes into the backpack (<see
+    /// cref="InventoryCommands.FitsInBag"/>).
     /// </summary>
     public bool Add(ItemInstance item, bool mainShut = false)
     {
-        var bag = Backpack?.Contents;
+        var bag = InventoryCommands.FitsInBag(item) ? Backpack?.Contents : null;
         if ((!mainShut && TopUp(this, item, false)) || (bag is not null && TopUp(bag, item, false))) return true;
         if (!mainShut && Place(this, "main", item)) return true;
         if (bag is not null && Place(bag, "backpack_content", item)) return true;
@@ -153,9 +154,10 @@ public sealed class Inventory(int width, int height)
     /// <summary>
     /// Whether one unit of <paramref name="item"/> would find a place in <see cref="Add"/> (a dry run, nothing changes): a stack of it in the main
     /// grid or the backpack with room left, or a free cell in either. The state <c>gotInventoryRoomForResources</c> (82, <c>FUN_14059bd80</c>: the
-    /// inventory, else the worn backpack's).
+    /// inventory, else the worn backpack's; never the backpack for a container holding items).
     /// </summary>
-    public bool HasRoomFor(ItemInstance item) => Room(this, "main", item) || Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
+    public bool HasRoomFor(ItemInstance item) =>
+        Room(this, "main", item) || InventoryCommands.FitsInBag(item) && Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
     /// <summary>
     /// Whether <paramref name="section"/> takes one unit of <paramref name="item"/> (a dry run): a stack of it with room left, or a free cell.
@@ -271,8 +273,8 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// The items the windows list, each with its index in <see cref="All"/> (the number the drag tokens carry): this inventory's own and the worn
-    /// backpack's contents. The contents of a container carried in the grid are not listed (their cells would draw over the worn bag's in its window;
-    /// the original opens only the worn backpack's grid).
+    /// backpack's own items. The contents of a container carried in the grid or in the worn bag are not listed (their cells would draw over the bag's
+    /// in its window; the original opens only the worn backpack's grid).
     /// </summary>
     public IEnumerable<(int Index, ItemInstance Item)> Shown()
     {
@@ -282,9 +284,11 @@ public sealed class Inventory(int width, int height)
         {
             yield return (index++, i);
             if (i.Contents is not { } bag) continue;
+
+            bool open = ReferenceEquals(i, worn);
             foreach (var inner in bag.All())
             {
-                if (ReferenceEquals(i, worn)) yield return (index, inner);
+                if (open && bag.Items.Contains(inner)) yield return (index, inner);
                 index++;
             }
         }

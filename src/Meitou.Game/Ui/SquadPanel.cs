@@ -37,6 +37,11 @@ sealed class SquadPanel(PlayerInterface player)
     const float SquadCellWidth = 0.0416667f, SquadCellHeight = 0.0740741f;
 
     /// <summary>
+    /// The prefix of a squad box's scroll id (<see cref="SquadScrollKey"/>), which names its scroll bar's parts too.
+    /// </summary>
+    const string SquadScrollPrefix = "squads-rows-";
+
+    /// <summary>
     /// The squad box layout; null before the UI is read.
     /// </summary>
     internal MyGuiLayout? SquadBoxLayout;
@@ -45,6 +50,11 @@ sealed class SquadPanel(PlayerInterface player)
     /// How far the squads list is scrolled, pixels (clamped when it is laid out).
     /// </summary>
     float _squadsScroll;
+
+    /// <summary>
+    /// The portrait cell's size the squad boxes were last laid out with: a wheel step over a box's portraits.
+    /// </summary>
+    float _squadCell;
 
     /// <summary>
     /// A portrait pressed on the squads screen (dragged once the pointer moves): the character and where the press was.
@@ -241,26 +251,72 @@ sealed class SquadPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The squad's present members' portraits in a row of its portraits panel, shrunk to fit; the one being dragged follows the pointer instead.
+    /// The squad's present members' portraits in rows of its portraits panel (<see cref="LayOutSquadRows"/>); the one being dragged follows the
+    /// pointer instead.
     /// </summary>
     void AddSquadMembers(List<UiControl> controls, SquadView squad, UiRect cellsArea, UiRect clip, string squadId,
         Dictionary<CharacterId, CharacterSnapshot> byId, Dictionary<CharacterId, int> cells, bool dragging)
     {
         var members = squad.Members.Where(byId.ContainsKey).ToList();
-        float size = Math.Min(Math.Min(player.Width * SquadCellWidth, player.Height * SquadCellHeight), cellsArea.Height - 4);
-        if (members.Count * size > cellsArea.Width) size = cellsArea.Width / members.Count;
-
-        var cellClip = cellsArea.Intersect(clip);
+        float size = _squadCell = Math.Min(player.Width * SquadCellWidth, player.Height * SquadCellHeight);
+        var (page, columns, scroll) = LayOutSquadRows(controls, cellsArea, clip, squadId, members.Count, size);
+        var cellClip = page.Intersect(clip);
 
         for (int k = 0; k < members.Count; k++)
         {
             if (dragging && _portraitDrag!.Value.Character == members[k]) continue;   // it follows the pointer
 
-            var cell = new UiRect(cellsArea.X + 2 + k * size, cellsArea.Y + (cellsArea.Height - size) / 2, size, size);
+            var cell = new UiRect(page.X + 2 + k % columns * size, page.Y + 2 + k / columns * size - scroll, size, size);
             AddSquadPortrait(controls, $"squad-{squadId}-cell-{k}", cell, byId[members[k]], cells.GetValueOrDefault(members[k], -1), cellClip,
                 new Dictionary<string, string> { ["SquadOf"] = squadId, ["SquadPortrait"] = $"{squadId}:{k}" });
         }
     }
+
+    /// <summary>
+    /// A squad box's portrait rows (docs/game/ui-screens.md "Squads tab"): full-size cells, as many to a row as fit, in rows; when the rows do not
+    /// fit the box, a scroll bar inside it (<see cref="ScrollBars.AddScrollBar"/>, its offset kept by squad). Returns the cells' page, the columns
+    /// and the offset.
+    /// </summary>
+    (UiRect Page, int Columns, float Scroll) LayOutSquadRows(List<UiControl> controls, UiRect cellsArea, UiRect clip, string squadId, int count,
+        float size)
+    {
+        string key = SquadScrollKey(squadId);
+        var bars = player.ScrollBars;
+        int columns = Columns(cellsArea.Width, size);
+        float maximum = Math.Max(0, Rows(count, columns) * size + 4 - cellsArea.Height);
+        if (maximum <= 0)
+        {
+            bars.InventoryScroll.Remove(key);
+            bars.InventoryViews.Remove(key);
+            bars.InventoryTracks.Remove(key);
+            return (cellsArea, columns, 0);
+        }
+
+        float barWidth = SquadScrollBar * player.UiScale;
+        var page = cellsArea with { Width = Math.Max(0, cellsArea.Width - barWidth) };
+        columns = Columns(page.Width, size);
+        maximum = Math.Max(0, Rows(count, columns) * size + 4 - page.Height);
+        float scroll = bars.InventoryScroll[key] = Math.Clamp(bars.InventoryScroll.GetValueOrDefault(key), 0, maximum);
+        bars.InventoryViews[key] = (page, maximum);
+        var track = new UiRect(page.X + page.Width, page.Y, barWidth, page.Height);
+        bars.AddScrollBar(key, controls, track, page.Height, page.Height + maximum, scroll, maximum, cellsArea.Intersect(clip), key);
+        return (page, columns, scroll);
+    }
+
+    /// <summary>
+    /// How many cells of <paramref name="size"/> a row of <paramref name="width"/> holds (at least one).
+    /// </summary>
+    static int Columns(float width, float size) => Math.Max(1, (int)((width - 4) / size));
+
+    /// <summary>
+    /// The rows <paramref name="count"/> cells take at <paramref name="columns"/> to a row.
+    /// </summary>
+    static int Rows(int count, int columns) => (count + columns - 1) / columns;
+
+    /// <summary>
+    /// The scroll id of squad <paramref name="squadId"/>'s portrait rows, and its scroll bar's part names.
+    /// </summary>
+    static string SquadScrollKey(string squadId) => SquadScrollPrefix + squadId;
 
     /// <summary>
     /// The player's characters alive (what the faction's count and the dismiss rule count, <see cref="SquadManagement.FactionHeads"/>).
@@ -319,6 +375,13 @@ sealed class SquadPanel(PlayerInterface player)
 
         var c = hit.Control;
 
+        if (SquadScrollPart(c.Name) is { } key)
+        {
+            if (c.Name.EndsWith("-thumb", StringComparison.Ordinal)) player.ScrollBars.ScrollThumbDown(key, c, p);
+            else player.ScrollBars.HudScrollAction(key, c.Action);
+            return true;
+        }
+
         if (c.Properties.TryGetValue("SquadPortrait", out var at) && PortraitAt(at) is { } member)
         {
             player.FaithfulScreens.Blur();
@@ -334,6 +397,18 @@ sealed class SquadPanel(PlayerInterface player)
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The scroll id a squad box's scroll bar part scrolls, by the part's name; null for any other control.
+    /// </summary>
+    static string? SquadScrollPart(string name)
+    {
+        if (!name.StartsWith(SquadScrollPrefix, StringComparison.Ordinal)) return null;
+
+        int end = SquadScrollPrefix.Length;
+        while (end < name.Length && char.IsAsciiDigit(name[end])) end++;
+        return name[..end];
     }
 
     /// <summary>
@@ -440,18 +515,40 @@ sealed class SquadPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The wheel over the squads list scrolls it; false elsewhere or when the tab is not shown.
+    /// The wheel over a squad box's portraits scrolls its rows a row a step when they do not fit, elsewhere over the squads list the list; false
+    /// elsewhere or when the tab is not shown.
     /// </summary>
     internal bool SquadsWheel(Vector2 p, float steps)
     {
         if (!SquadsShown || player.FaithfulScreens.HitTest(p) is not { Screen: "overview" } hit
-            || !(hit.Control.Name == "SquadsPanel" || hit.Control.Properties.ContainsKey("SquadOf")))
+            || !(hit.Control.Name == "SquadsPanel" || hit.Control.Properties.ContainsKey("SquadOf")
+                || SquadScrollPart(hit.Control.Name) is not null))
         {
             return false;
         }
 
+        if (SquadRowsUnder(hit.Control, p) is { } key)
+        {
+            var bars = player.ScrollBars;
+            float maximum = bars.InventoryViews[key].Maximum;
+            bars.InventoryScroll[key] = Math.Clamp(bars.InventoryScroll.GetValueOrDefault(key) - MathF.Sign(steps) * _squadCell, 0, maximum);
+            return true;
+        }
+
         _squadsScroll -= steps * 44 * player.UiScale;   // clamped when the list is laid out
         return true;
+    }
+
+    /// <summary>
+    /// The scroll id of the squad box whose scrolled portrait rows are under <paramref name="p"/>; null when there are none.
+    /// </summary>
+    string? SquadRowsUnder(UiControl control, Vector2 p)
+    {
+        string? key = SquadScrollPart(control.Name)
+            ?? (control.Properties.TryGetValue("SquadOf", out var squad) ? SquadScrollKey(squad) : null);
+        if (key is null || !player.ScrollBars.InventoryViews.TryGetValue(key, out var view)) return null;
+
+        return view.View.Contains(p.X, p.Y) || SquadScrollPart(control.Name) is not null ? key : null;
     }
 
     /// <summary>

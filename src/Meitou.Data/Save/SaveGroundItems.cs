@@ -6,8 +6,8 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item (docs/formats/save.md
-/// "Zone files").
+/// A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item, a container with its
+/// contents (docs/formats/save.md "Zone files").
 /// </summary>
 public sealed record SaveGroundItem(FcsInstance Instance, FcsRecord Record, SaveItem Item);
 
@@ -22,7 +22,8 @@ public static partial class SaveGroundItems
     public const string ListId = "1-itemlist";
 
     /// <summary>
-    /// The zone's loose items in list order; entries whose target is missing or no ITEM are skipped.
+    /// The zone's loose items in list order, a container's contents read through the INVENTORY_STATE its ITEM's one instance names (as a carried
+    /// container's are); entries whose target is missing or no ITEM are skipped.
     /// </summary>
     public static List<SaveGroundItem> Read(SaveZone zone)
     {
@@ -32,27 +33,29 @@ public static partial class SaveGroundItems
         foreach (var r in zone.File.Records) byId.TryAdd(r.StringId, r);
         foreach (var i in list.Instances)
         {
-            if (byId.TryGetValue(i.Target, out var r) && r.RecordType == FcsRecordType.Item)
-                found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r)));
+            if (!byId.TryGetValue(i.Target, out var r) || r.RecordType != FcsRecordType.Item) continue;
+
+            List<SaveItem>? contents = null;
+            if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.InventoryState)
+                contents = SaveInventory.Read(zone.File, inner);
+            found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r, contents)));
         }
         return found;
     }
 
     /// <summary>
-    /// Replaces the zone's list and the ITEM records it named with <paramref name="items"/> (each a position, a rotation and the item; one with a
-    /// <see cref="SaveItem.Source"/> keeps its record id and its unmodelled keys) and <paramref name="kept"/> (entries written back as read). A new
-    /// item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c> above every such id of the file and of the read items, and
-    /// the list's entries are numbered from 1. An empty list is not written (the original deletes it).
+    /// Replaces the zone's list and the ITEM records it named (with the records of their contents) with <paramref name="items"/> (each a position, a
+    /// rotation and the item; one with a <see cref="SaveItem.Source"/> keeps its record id and its unmodelled keys) and <paramref name="kept"/>
+    /// (entries written back as read, contents and all). A new item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c>
+    /// above every such id of the file and of the read items, and the list's entries are numbered from 1. A container's contents get an
+    /// INVENTORY_STATE named by the item's one instance and an INVENTORY_ITEM_STATE per item, with ids of the same form (<b>Observed</b>, a backpack
+    /// the original saved on the ground); an empty container gets none. An empty list is not written (the original deletes it).
     /// </summary>
     public static void Write(SaveZone zone, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items,
         IReadOnlyList<SaveGroundItem> kept)
     {
         var file = zone.File;
-        if (zone.ItemList is { } old)
-        {
-            var targets = old.Instances.Select(i => i.Target).ToHashSet(StringComparer.Ordinal);
-            file.Records.RemoveAll(r => ReferenceEquals(r, old) || (r.RecordType == FcsRecordType.Item && targets.Contains(r.StringId)));
-        }
+        if (zone.ItemList is { } old) RemoveOld(file, old, kept);
         if (items.Count + kept.Count == 0) return;
         var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0", StringId = ListId };
         string suffix = string.Create(CultureInfo.InvariantCulture, $"-zone{zone.Coordinate.X}.{zone.Coordinate.Y}-INGAME");
@@ -80,10 +83,43 @@ public static partial class SaveGroundItems
             }
             record.StringId = id;
             file.Records.Add(record);
+            if (item.Contents is { Count: > 0 } contents)
+                AddContents(file, record, contents, () => (++n).ToString(CultureInfo.InvariantCulture) + suffix);
             list.Instances.Add(new FcsInstance { Id = Entry(++entry), Target = id, Position = position, Rotation = rotation });
         }
         file.Records.Add(list);
         file.Data.NextId = Math.Max(file.Data.NextId, file.Records.Max(r => r.Id));
+    }
+
+    /// <summary>
+    /// Takes the old list out of <paramref name="file"/> with the ITEM records it named and the records their contents reach, but for the
+    /// <paramref name="kept"/> entries' contents (written back as read).
+    /// </summary>
+    static void RemoveOld(SaveFile file, FcsRecord old, IReadOnlyList<SaveGroundItem> kept)
+    {
+        var targets = old.Instances.Select(i => i.Target).ToHashSet(StringComparer.Ordinal);
+        var keptIds = kept.Select(k => k.Record.StringId).ToHashSet(StringComparer.Ordinal);
+        var keep = kept.SelectMany(k => SaveInventory.Reachable(file, k.Record)).ToHashSet(StringComparer.Ordinal);
+        var contents = file.Records
+            .Where(r => r.RecordType == FcsRecordType.Item && targets.Contains(r.StringId) && !keptIds.Contains(r.StringId))
+            .SelectMany(r => SaveInventory.Reachable(file, r))
+            .Where(id => !keep.Contains(id))
+            .ToHashSet(StringComparer.Ordinal);
+        file.Records.RemoveAll(r => ReferenceEquals(r, old) || (r.RecordType == FcsRecordType.Item && targets.Contains(r.StringId))
+            || contents.Contains(r.StringId));
+    }
+
+    /// <summary>
+    /// Writes a loose container's <paramref name="contents"/>: an INVENTORY_STATE named by the item's one instance, filled as a carried container's
+    /// (<see cref="SaveInventory.Replace"/>), its records named by <paramref name="nextId"/>.
+    /// </summary>
+    static void AddContents(SaveFile file, FcsRecord item, IReadOnlyList<SaveItem> contents, Func<string> nextId)
+    {
+        var state = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Name = "0", Id = NextNumber(file), StringId = nextId() };
+        file.Records.Add(state);
+        file.Data.NextId = Math.Max(file.Data.NextId, state.Id);
+        item.Instances.Add(SaveInventory.Link(1, state.StringId));
+        SaveInventory.Replace(file, state, contents, _ => nextId());
     }
 
     /// <summary>

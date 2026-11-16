@@ -135,6 +135,18 @@ public static class SavedKit
     }
 
     /// <summary>
+    /// A saved item as an instance with a container's saved contents in its bag (a loose item's); null when the game data lacks its record.
+    /// </summary>
+    internal static ItemInstance? WithContents(SaveItem s, ItemFactory factory)
+    {
+        if (ItemOf(s, factory) is not { } item) return null;
+
+        if (s.Contents is { } contents && item.Contents is { } bag)
+            Fill(bag, contents, factory, null, "backpack_content", null);
+        return item;
+    }
+
+    /// <summary>
     /// A saved item as an instance (without a container's contents); null when the game data lacks its record.
     /// </summary>
     internal static ItemInstance? ItemOf(SaveItem s, ItemFactory factory)
