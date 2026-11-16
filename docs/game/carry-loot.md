@@ -300,6 +300,11 @@ Status `+0xe9`, saved as `kidn` ([save](../formats/save.md)). **Verified** by de
 - **Set** only by `Task_Kidnapping` vfunc 2 (`FUN_1403552d0`), on the victim, when the roll was not failed (task `+0x80` clear, set by the failed
   branch of vfunc 1) and the target resolves and is not the kidnapper: the kidnapper gets the pending Kidnapping (code 15) against the victim's
   faction, the victim the flag, then the lift (`Task_LiftSomething` vfunc 2). So every 246 lift flags its victim, whoever the kidnapper is, before any cage.
+- **An NPC kidnapping is no crime** (**Verified**): goal 254's step 132 needs state 48 carrying, whose only provider is 68 Lifting (`Task_LiftSomething`): 246 is
+  registered not-a-provider (TaskData `+0x40` = 1, `FUN_140319a60`), and only the task factory `FUN_14032ebd0` builds `Task_Kidnapping` (`FUN_140334d70`). The code-15
+  setters are `Task_Kidnapping`'s two slots, the witness function below and the put-down, the last two only for a load with the flag; so an NPC kidnapper's victim is
+  never flagged and its carrier is booked for nothing, by the lift or by those who see it carry the victim off. Meitou: `KidnapSystem` books nothing for a downed
+  victim; a sleeper it takes from a bed it lifts through the kidnap roll (`CarrySystem.BeginPickUp` with `kidnap`, engine choice), which books the Kidnapping.
 - **Cleared** by the per-update `FUN_140852a30`: not carried (`+0x3d4` clear) and in a bed (`+0x2f8` = 1) while its status town (`+0x88`) is its
   home town (`FUN_1407956a0` `+0x30`); or carried by someone it regards as friendly (vfunc `0x3f0`) or loves (`FUN_140599590`), else it tags its
   carrier TEMP ENEMY (4) each update. Also by the separated-squad merge ([locks](locks.md#cages-and-beds)). Caging, release and escape do not touch it.

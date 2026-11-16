@@ -335,8 +335,8 @@ path-facing branches set the heading at once (before, `Turn` at 4π rad/s, which
   heard now (entry +0x38 / +0x39), not left alone (`FUN_1408569a0`), passing the Hold post test `FUN_140598630` and the area test `FUN_140599f30`
   ([perception](perception.md)) and not friendly (character vfunc 0x3f0), and returns the best by `FUN_14059e300`. So the current target is kept only as a list
   member (an attacker, a threat) or, through the finder, while it is seen or heard and tagged an enemy: one that runs out of sight on open ground is lost at the next pick (a path
-  chase does not pick, below). Meitou (`CombatSystem.ChooseTarget` over `CharacterFacts.Senses`, [perception](perception.md#senses)): the lists and the finder as above (the leave-alone and
-  area tests left out), the aggro mode taken as 0; a pick after the timer runs out is made while the fighter runs on a path too (engine choice).
+  chase does not pick, below). Meitou (`CombatSystem.ChooseTarget` over `CharacterFacts.Senses`, [perception](perception.md#senses)): the lists and the finder as above (the area test left
+  out; the leave-alone test is the target score's, below), the aggro mode taken as 0; a pick after the timer runs out is made while the fighter runs on a path too (engine choice).
 - **Target score** (`AI::chooseBestAttackTarget` `FUN_14059e300`). Skips ragdolls (`Character::isRagdoll`), candidates the leave-alone test
   `FUN_1408569a0` passes, allies by faction (`FUN_1406b2630`, unless the candidate is a slave), impossible-path candidates and an obedient slave of the
   chooser's faction (slave state 1, chained with that faction its owner, `FUN_14032e2a0`, and holding job 187; **Verified**, the test gates the
@@ -344,7 +344,11 @@ path-facing branches set the heading at once (before, `Turn` at 4π rad/s, which
   an NPC chooser, a candidate it does not remember as an attacker and whose faction is not an enemy, when the candidate has diplomatic status
   (`Character::isDiplomaticStatus`: NPC class Diplomat, [ui-screens](ui-screens.md#4-hud-mainbargui)) or is in a war campaign whose +0xc0 is 0; for a player chooser, a candidate not aware of it, conscious,
   of another faction, while the chooser mans no turret, whose intended target is nobody, or who has no aggression towards it, or whose target
-  is not the chooser's ally (and an obedient slave leaves alone its master's allies). So player characters never pick an unaware bystander. Weights are CharStats fields that `CharStats::init` sets
+  is not the chooser's ally (and an obedient slave leaves alone its master's allies). So player characters never pick an unaware bystander. **Verified** (decompile of
+  `FUN_1408569a0`): "conscious" is not down (vfunc 0x30), "not aware" is the candidate's senses lacking the chooser (`FUN_140855960` flag 0), "mans no turret" is the
+  chooser's turret handle `+0x260` being null (type 0xb), the candidate's target is its AI's target hand (`FUN_1404357a0`) and its aggression the running task's (status
+  `+0xa0`, above 0 `DAT_141681b38`). Meitou `LeaveAlone.Spares`, in every chooser that scores (the fight's own choice, the attack-on-sight look and its finders, the
+  assault finder); the AI's target is the candidate's fight target, else its running task's target. Weights are CharStats fields that `CharStats::init` sets
   to the same constants for every character (**Verified** literals; not saved, no other writer found; names KenshiLib 1ce4a16): `STUBBOURNESS`
   +0x154 = 5, `PROFESSIONALNESS` +0x158 = 1, `HOLDING_POSITION` +0x15c = 2, `IMMEDIACY` +0x160 = 2, `IMMEDIACY_MAX_RANGE` +0x164 = 200,
   `MANLINESS` +0x168 = 1, `MURDEROUS` +0x16c = −2. Terms, in order:
@@ -794,7 +798,9 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 - **Target choice** (`FUN_140437f40`, `FUN_1404374d0`, score `FUN_140435d70`): the preferred/current target is kept if it still scores and equals the order's; else every
   sensed character (list category 4, mask 0x210) scores s = (f·g)² with g = 1 − d/(k × range) (k 1), f 1 (0.1 for slot 0x360, ×0.1 for slot 0x368; slot 0x368 > 0 is 0 for a gunner not of
   the player's faction); down for any gunner (slot 0x30: out, dead, ragdolled, carried, posture ≥ 3), `+0x2f8` ≠ 0 or `+0x3d4` (carried) → 0, and an ordered target that scores 0 is dropped (**Verified**; Meitou `CombatSystem.ScoresZero`); out of range → 0.001; then × weight (slot 6), × 1.5 when `FUN_1405ca6f0`, + 0.1 when it is the
-  current target; × 0.1 when its sense entry is not seen, × 1.5 for the current; best above 1e-6. None: with the player's **Shoot first** option (`DAT_142134690 +0x11a`) a player gunner takes
+  current target; × 0.1 when its sense entry is not seen, × 1.5 for the current; best above 1e-6. A candidate with diplomatic status (`FUN_140796240`, the biome factored in
+  for a gunner not with the player, `FUN_140856bc0`) scores 0 unless its intended aggression (vfunc 0x1e8, the current goal's) is above 0 (**Verified**, decompile of
+  `FUN_140435d70`; Meitou `CombatSystem.SparedDiplomat`). None: with the player's **Shoot first** option (`DAT_142134690 +0x11a`) a player gunner takes
   sensed characters of fundamental type 0 or 8 or a default-hostile faction (k 0.6); an NPC gunner takes default-hostile ones it is aware of (`FUN_14099b820`) and those fighting a member
   of its own group. An unseen chosen target is looked at (slot 0x3b0).
 - **NPC turret goals** 149/222/234 have list A `isNoEnemiesInVicinity` (with the `*` flag): done, so not chosen, while the gunner senses no enemy (state 6 is AI `+0xbc`

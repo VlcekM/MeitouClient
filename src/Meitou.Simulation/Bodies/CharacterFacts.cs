@@ -65,6 +65,20 @@ public static class CharacterFacts
         && world.Platoons.Find(squad.PlatoonId)?.Campaign is { Phase: 0 };
 
     /// <summary>
+    /// The character's platoon is a <c>UniquePlatoon</c> (<c>Platoon</c> vfunc <c>0xb0</c> returns the platoon itself only for that class,
+    /// <c>FUN_1409b0680</c>, the base <c>FUN_1407f22f0</c> 0; <b>Verified</b>): one made from an UNIQUE_SQUAD_TEMPLATE, or a saved PLATOON with
+    /// <c>special</c> (<c>FUN_14057c6f0</c>). Engine reading: a character with no squad is in no such platoon (the original asks its faction's
+    /// default platoon, <c>FUN_1406b9c60</c>).
+    /// </summary>
+    public static bool UniquePlatoon(World world, Meitou.Data.GameDatabase? db, CharacterCold cold)
+    {
+        if (cold.SquadId < 0 || world.Squads.Find(cold.SquadId) is not { } squad) return false;
+        if (db?.Find(squad.TemplateId) is { Type: Meitou.Data.Fcs.FcsRecordType.UniqueSquadTemplate }) return true;
+
+        return world.Platoons.Find(squad.PlatoonId)?.Saved?.Source.Record.Bools.GetValueOrDefault("special") == true;
+    }
+
+    /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is
     /// unconscious to everyone), ragdolled or carried. A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so
     /// <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.

@@ -20,8 +20,8 @@ public sealed record PickLockOrder(IReadOnlyList<CharacterId> Characters, Charac
 }
 
 /// <summary>
-/// The characters (the selection when empty) leave their cage (Task_GetOutOfCage): refused while it is locked; an escape unless it is a kidnap
-/// victim.
+/// The characters (the selection when empty) leave their cage (Task_GetOutOfCage 207): refused while it is locked; whether it is an escape is the
+/// task's flag (<see cref="Locks.FixtureRegistry.GetOut"/>).
 /// </summary>
 public sealed record GetOutOrder(IReadOnlyList<CharacterId> Characters) : OrderCommand;
 
