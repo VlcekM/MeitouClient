@@ -604,10 +604,10 @@ sealed class ContextMenuWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// A container (the original's building branch for a storage with an inventory): unlocked, Inventory (the player's) or Loot (26); another
-    /// faction's locked one, Pick Lock (76). The menu's orders skip the quick click's Alt test (<c>FUN_1407fa650</c>), so Loot on another faction's
-    /// container takes from it at once (a shop container's stock is stolen from); a locked one also has Use Tools and Use Strength (285, 286). Not
-    /// built: Auto-Haul (124) on an interior container.
+    /// A container (the original's building branch for a storage with an inventory): unlocked, Inventory (the player's) or Loot (26); one not the
+    /// player's (an unowned one too) locked, Pick Lock (76). The menu's orders skip the quick click's Alt test (<c>FUN_1407fa650</c>), so Loot on
+    /// another faction's container takes from it at once (a shop container's stock is stolen from); a locked one also has Use Tools and Use
+    /// Strength (285, 286). Not built: Auto-Haul (124) on an interior container.
     /// </summary>
     internal List<(string Caption, Action Give)> ContainerVerbs(ContainerSpot container)
     {
@@ -619,8 +619,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         if (!container.Locked) verbs.Add((own ? "Inventory" : "Loot", () => OpenContainer(container.Id, true)));
         else
         {
-            if (!own && container.Owner >= 0)
-                verbs.Add((PickLockCaption(container.Position, container.Level, true), () => OpenContainer(container.Id, true)));
+            if (!own) verbs.Add((PickLockCaption(container.Position, container.Level, true), () => OpenContainer(container.Id, true)));
 
             verbs.Add(("Use Tools",
                 () => player.Say(new ForceLockOrder([], container.Id, LockForce.Tools) { Tick = player.Session.World.Tick })));

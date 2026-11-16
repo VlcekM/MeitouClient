@@ -7,7 +7,7 @@ namespace Meitou.Simulation.Items;
 
 /// <summary>
 /// Open a container (<see cref="Locks.Fixture.Id"/>): the nearest of the characters (the selection when empty) who may walks to it and its window
-/// opens. Another faction's locked one: with <paramref name="Alt"/> its lock is picked (76 PICK_LOCK), else the hint and a walk to it; another
+/// opens. A locked one not the player's: with <paramref name="Alt"/> its lock is picked (76 PICK_LOCK), else the hint and a walk to it; another
 /// faction's BF_SHOP one without Alt: the steal hint and a walk.
 /// </summary>
 public sealed record OpenContainerOrder(IReadOnlyList<CharacterId> Characters, string Fixture, bool Alt = false) : OrderCommand;
@@ -55,11 +55,13 @@ public static class ContainerAccess
         var table = world.Characters;
         int best = -1;
         float bestDistance = float.MaxValue;
-        bool theirs = fixture.Owner >= 0 && fixture.Owner != world.Player.Faction;
+        bool own = fixture.Owner == world.Player.Faction;
+        bool theirs = fixture.Owner >= 0 && !own;
         bool locked = fixture.Lock is { EffectivelyLocked: true };
 
-        // Another faction's locked container is picked (76) with Alt (the original's FUN_1407fc6e0); the rest is row 3, a walk to it.
-        var row = locked && theirs && order.Alt ? Meitou.Data.Gameplay.Ai.TaskType.PickLock : Meitou.Data.Gameplay.Ai.TaskType.Pickup;
+        // A locked container not the player's, an unowned one too, is picked (76) with Alt (the original's FUN_1407fc6e0 tests only the player's
+        // ownership, FUN_140546dd0); the rest is row 3, a walk to it.
+        var row = locked && !own && order.Alt ? Meitou.Data.Gameplay.Ai.TaskType.PickLock : Meitou.Data.Gameplay.Ai.TaskType.Pickup;
         foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
         {
             if (!table.TryResolveNext(id, out int s)
@@ -73,7 +75,7 @@ public static class ContainerAccess
         var walker = table.Cold(best)!;
         if (locked)
         {
-            if (!theirs)
+            if (own)
             {
                 world.Post($"{walker.Name}: It's locked.");
                 return;
