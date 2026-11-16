@@ -27,7 +27,7 @@ public static class GroundItemSave
         {
             foreach (var g in SaveGroundItems.Read(zone))
             {
-                if (SavedKit.ItemOf(g.Item, factory) is { } item)
+                if (SavedKit.WithContents(g.Item, factory) is { } item)
                 {
                     int owner = handles is null || g.Item.Source is not { } r ? -1 : OwnerOf(r, handles, factionOf!);
                     int stolen = MarkStolen(item, g.Item, factionOf);
@@ -90,7 +90,8 @@ public static class GroundItemSave
             var old = zone is null ? [] : SaveGroundItems.Read(zone);
             var kept = old.Where(o => factory.Create(o.Item.BaseId) is null).ToList();
             var named = old.Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
-            bool unchanged = zone is not null && items.All(i => AsSaved(i, named)) && items.Count + kept.Count == old.Count;
+            var held = old.Where(o => o.Item.Contents is { Count: > 0 }).Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
+            bool unchanged = zone is not null && items.All(i => AsSaved(i, named, held)) && items.Count + kept.Count == old.Count;
             if (unchanged) continue;
 
             if (zone is null) game.Zones[z] = zone = new SaveZone(z, new SaveFile());
@@ -107,11 +108,13 @@ public static class GroundItemSave
 
     /// <summary>
     /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="named"/>) and with that record's
-    /// mod tag, so a code mod's retag in place rewrites the zone.
+    /// mod tag, so a code mod's retag in place rewrites the zone; a container that holds items, or was read holding some (<paramref name="held"/>),
+    /// always counts as changed.
     /// </summary>
-    static bool AsSaved(GroundItem item, HashSet<string> named)
+    static bool AsSaved(GroundItem item, HashSet<string> named, HashSet<string> held)
     {
         if (item.Item.Saved is not { } saved || !named.Contains(saved.StringId)) return false;
+        if (item.Item.Contents is { Items.Count: > 0 } || held.Contains(saved.StringId)) return false;
 
         return saved.Strings.GetValueOrDefault(SaveItem.ModTagKey, "") == item.Item.ModTag;
     }
