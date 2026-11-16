@@ -385,12 +385,26 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             var controls = MyGuiPresentation.Arrange(s.Layout, width, height, b, resources.Layers).ToList();
             PinChecked(s, controls);
             decorate?.Invoke(id, controls);
+            BringPopupsForward(controls);
             ArrangeKeyboard(id, controls);
             result.Add(new(id, controls));
         }
 
         _frame = result;
         return _frame;
+    }
+
+    /// <summary>
+    /// Moves an open combo box's popup list over the controls the screen added after arranging (the Items window's item cells), so the list is drawn
+    /// and picked above them.
+    /// </summary>
+    static void BringPopupsForward(List<UiControl> controls)
+    {
+        if (!controls.Any(c => c.Properties.ContainsKey(MyGuiPresentation.PopupProperty))) return;
+
+        var popups = controls.Where(c => c.Properties.ContainsKey(MyGuiPresentation.PopupProperty)).ToList();
+        controls.RemoveAll(c => c.Properties.ContainsKey(MyGuiPresentation.PopupProperty));
+        controls.AddRange(popups);
     }
 
     /// <summary>

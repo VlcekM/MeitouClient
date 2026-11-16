@@ -263,7 +263,7 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 
 ## Item categories
 
-What tells item records apart, for lists of every item (the debug menu's Drop item picker, `DebugItemCatalog`). The record type is the first level;
+What tells item records apart, for lists of every item (the debug menu's Items window, `DebugItemCatalog`). The record type is the first level;
 the second is one int field per type (names from the editor's built-in enums, **Verified** by decompiling `forgotten construction set.exe`: they are not in
 `fcs_enums.def`; the item counts are **Observed** on the vanilla install, 568 named item records):
 

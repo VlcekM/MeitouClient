@@ -338,6 +338,27 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// (<see cref="Crime.CrimeSystem.StealChanceOf(World, int, int, Items.ItemInstance)"/>): the tooltip's stealing chance. Null otherwise.
     /// </summary>
     public float? StealChance { get; init; }
+
+    /// <summary>
+    /// The view of <paramref name="item"/> as item <paramref name="index"/> of a window: everything the item itself says, none of what depends on
+    /// its holder (stolen marks, stealing chance).
+    /// </summary>
+    public static InventoryItemView Of(int index, Items.ItemInstance item) =>
+        new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight, item.Quality)
+        {
+            Material = item.MaterialId,
+            Rotated = item.Rotated,
+            Colour = item.ColourId,
+            Charge = item.ChargeFraction,
+            Company = item.CompanyId,
+            Crafter = item.Crafter,
+            ModTag = item.ModTag,
+            Level = item.Level,
+            Charges = item.Charges,
+            MaxCharges = item.MaxCharges,
+            Unique = item.Unique,
+            BagItems = item.Contents?.Items.Count ?? -1,
+        };
 }
 
 /// <summary>

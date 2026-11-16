@@ -47,6 +47,12 @@ sealed class TooltipRuntime(PlayerInterface player)
     internal const string ItemTipKey = "tooltip_item";
 
     /// <summary>
+    /// The control property that puts an item cell's tooltip at the pointer instead of beside the window holding the cell (a window too wide for the
+    /// tooltip to fit beside it, as the Items window is).
+    /// </summary>
+    internal const string PointerAnchor = "tooltip_at_pointer";
+
+    /// <summary>
     /// The control the pointer is over; null for none.
     /// </summary>
     string? _tipTarget;
@@ -144,6 +150,8 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     static UiRect? ItemWindow(IReadOnlyList<UiControl> controls, UiControl cell)
     {
+        if (cell.Properties.ContainsKey(PointerAnchor)) return null;
+
         float x = cell.Bounds.X + cell.Bounds.Width / 2, y = cell.Bounds.Y + cell.Bounds.Height / 2;
         for (int i = controls.Count - 1; i >= 0; i--)
             if (controls[i].Type == "Window" && controls[i].Bounds.Contains(x, y)) return controls[i].Bounds;

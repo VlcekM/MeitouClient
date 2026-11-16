@@ -191,6 +191,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal DebugCharactersWindow CharactersWindow => field ??= new(this);
     /// <summary>
+    /// The debug menu's Items window (docs/game/ui-input.md "Items window", Meitou only).
+    /// </summary>
+    internal DebugItemsWindow ItemsWindow => field ??= new(this);
+    /// <summary>
     /// Meitou's feedback button, always at the top right in both UI modes, and the form it opens.
     /// </summary>
     internal FeedbackPanel FeedbackPanel => field ??= new(this);
@@ -817,6 +821,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (CharacterEditor.EditorPointerDown(button, p)) return true;
         if (Session.Bindings.Get(InputAction.RotateItem).Contains(Binding.Of(button)) && InventoryWindows.RotateAt(p)) return true;
         if (button == MouseButton.Right && InventoryWindows.CancelInventoryDrag()) return true;
+        if (button == MouseButton.Right && ItemsWindow.CancelDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.WallCancel()) return true;
         if (button == MouseButton.Right && !OverHud(p) && LevelEditorPanel.LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.BuildDiscard()) return true;
@@ -1070,6 +1075,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (button == MouseButton.Left)
         {
             WorldMap.MapPickUp(p);
+            ItemsWindow.PointerUp(p, shift);
             InventoryWindows.InventoryPointerUp(p);
             OrdersPanel.JobDragEnd(p);
             SquadWindows.SquadPointerUp(p, shift);
@@ -1363,6 +1369,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The name of a record by string id (a body part of an armour's coverage); the host sets it.
     /// </summary>
     public Func<string, string?>? RecordName { get; set; }
+    /// <summary>
+    /// The game data's population: the records and the item factory (the Items window makes its stock from them); the host sets it. Null before a
+    /// world is loaded.
+    /// </summary>
+    internal Func<Simulation.Population.PopulationData?>? PopulationOf { get; set; }
 
 
     #endregion

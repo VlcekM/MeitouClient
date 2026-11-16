@@ -1225,6 +1225,7 @@ sealed partial class GameHost(
     {
         ui.ArmourOf = record => PopData?.Combat.Armour(record);
         ui.RecordName = id => PopData?.Db.Find(id)?.Name;
+        ui.PopulationOf = () => PopData;
         ui.PricesOf = PriceLookup();
         ui.GroundItemPicks.ArtifactOf = id => PopData?.Db.Find(id)?.GetBool("artifact") == true;
 

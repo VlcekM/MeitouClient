@@ -835,23 +835,10 @@ public sealed partial class World
     {
         bool stolen = item.IsStolenFor(faction, population);
 
-        return new InventoryItemView(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight,
-            item.Quality)
+        return InventoryItemView.Of(index, item) with
         {
-            Material = item.MaterialId,
-            Rotated = item.Rotated,
-            Colour = item.ColourId,
-            Charge = item.ChargeFraction,
-            Company = item.CompanyId,
-            Crafter = item.Crafter,
-            ModTag = item.ModTag,
-            Level = item.Level,
-            Charges = item.Charges,
-            MaxCharges = item.MaxCharges,
             StolenFrom = stolen ? item.StolenFrom : -1,
             StolenOwner = stolen ? Characters.OwnerNameOf(item.Owner) : null,
-            Unique = item.Unique,
-            BagItems = item.Contents?.Items.Count ?? -1,
             StealChance = steal?.Invoke(item)
         };
     }

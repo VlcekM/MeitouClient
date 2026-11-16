@@ -241,7 +241,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// <summary>
     /// The Client part of a scroll view's template (the area its canvas shows).
     /// </summary>
-    static bool IsTemplateClient(UiControl c, string owner) =>
+    internal static bool IsTemplateClient(UiControl c, string owner) =>
         c.Properties.GetValueOrDefault("TemplateOwner") == owner && c.Properties.GetValueOrDefault("TemplatePart") == "Client";
 
     /// <summary>
