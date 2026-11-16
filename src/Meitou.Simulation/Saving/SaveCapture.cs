@@ -845,9 +845,18 @@ public static partial class SaveCapture
 
         if (cold.PortraitSerial is { } portraitSerial) g.Ints["portrait_serial"] = (int)portraitSerial;
 
+        // Its floor (getFloor), which the original reads back on load (FUN_140626f50) and writes for every character, 0 to 3 in vanilla saves.
+        g.Ints["floor"] = SavedFloor(world, id);
+
         // The character's slot 0x398 (FUN_1406280a0): an animal's age, 1 for people (docs/game/animals.md "Ageing"; Verified in vanilla saves).
         if ((cold.Stats ?? link?.Stats) is { } aged) g.Floats["age"] = aged.Scale;
     }
+
+    /// <summary>
+    /// The floor the character stands on (<see cref="Perception.SightMap.FloorOf"/> at its last-tick position); 0 for one not in the world.
+    /// </summary>
+    static int SavedFloor(World world, CharacterId id) =>
+        world.Characters.TryResolveNext(id, out int slot) ? world.Sight.FloorOf(slot, world.Characters.Previous[slot].Position) : 0;
 
     /// <summary>
     /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>); the handle of its contract's mission target is written

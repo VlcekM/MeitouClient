@@ -385,6 +385,7 @@ public sealed class SaveBuilder
         g.Floats["age"] = age;
         g.Floats["decay"] = 0;
         g.Ints["TI day"] = 0;
+        g.Ints["floor"] = 0;
         g.Ints["slavestate"] = 0;
         g.Ints["in something"] = 0;
         g.Ints["portrait_serial"] = Serial();

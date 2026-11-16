@@ -301,8 +301,8 @@ public sealed class TownAlarm
     /// </summary>
     public System.Numerics.Vector3 Position { get; set; }
     /// <summary>
-    /// The indoor volume the culprit was in when the alarm was raised (<see cref="SightMap.PlaceOf"/>; the original's location handle <c>+0x40</c>,
-    /// type 0xb = none), -1 outdoors. Overwritten by a repeated raise.
+    /// The building the culprit was in, or on top of, when the alarm was raised (<see cref="SightMap.LocationOf"/>; the original's location handle
+    /// <c>+0x40</c>, the culprit's <c>isIndoors</c>, which standing on a roof keeps; type 0xb = none), -1 outdoors. Overwritten by a repeated raise.
     /// </summary>
     public int Place { get; set; } = -1;
     /// <summary>

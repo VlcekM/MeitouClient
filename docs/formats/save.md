@@ -601,6 +601,8 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   pick-ups (a runtime item id) and the Medic / Rescue buttons' looks are not saved.
 
 Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`), each written only while set and removed otherwise:
+- GAMESTATE_CHARACTER int `floor`: the character's `getFloor` (0 to 3), read back on load (`FUN_140626f50`) and set again by its next movement
+  step; **Verified** in vanilla saves (every character has it). Meitou writes `SightMap.FloorOf`, on top of a building too.
 - GAMESTATE_CHARACTER float `age`: the character's age (1 for people, an animal's growth, [animals](../game/animals.md#ageing)); **Verified** in vanilla saves.
 - GAMESTATE_CHARACTER `meitou kidnapped` (bool, held by a kidnapper: no sentence, no bail; not the original's `kidn`), `meitou recognition` (float 0..1, bounty recognition meter). The escaped and [kidnap victim](../game/carry-loot.md#the-kidnap-victim-flag) flags are the original's `escap` and `kidn` (above; `CrimeSave` writes them always). Older Meitou saves wrote `meitou escaped` and the recently-wanted seconds as `meitou recently wanted`; each is read when the original's key (`escap`, `disguiseblown`) is missing and dropped on save.
 - GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since).
