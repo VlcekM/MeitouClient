@@ -16,7 +16,8 @@ public sealed record SetSquadAutonomy(int SquadId, bool On) : SimCommand;
 
 /// <summary>
 /// Gives a player's squad its home (<see cref="Squad.AssignedHome"/>): a town building's <see cref="TownBuilding.Key"/> or a player-built
-/// building's id (<see cref="BuildSite.Id"/>); null: none. A town building also makes its town the squad's (<see cref="Blackboard.Town"/>).
+/// building's id (<see cref="BuildSite.Id"/>); null: none. A town building also makes its town the squad's (<see cref="Blackboard.Town"/>), a
+/// player-built one in an outpost of the squad's faction that outpost (<see cref="Blackboard.Outpost"/>).
 /// </summary>
 public sealed record SetSquadHome(int SquadId, string? Building) : SimCommand;
 
@@ -176,19 +177,21 @@ public sealed class SquadAutonomy(PopulationData data)
     readonly Dictionary<string, TownBuilding> _built = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Puts the squad's assigned home on its board: its own home, the home in use unless a package moved that, and its town; the members think
-    /// again. A home that no longer exists is forgotten; a player-built one not complete counts as none until it is. Nothing when unchanged.
+    /// Puts the squad's assigned home on its board: its own home, the home in use unless a package moved that, and its town (a town building's
+    /// site, or the squad's own outpost a player-built home stands in); the members think again. A home that no longer exists is forgotten; a
+    /// player-built one not complete counts as none until it is. Nothing when unchanged.
     /// </summary>
     public void Settle(World world, Squad squad, Blackboard board)
     {
-        var (home, town) = Resolve(world, squad);
-        if (ReferenceEquals(board.OwnHome, home) && board.Town == town) return;
+        var (home, town, outpost) = Resolve(world, squad);
+        if (ReferenceEquals(board.OwnHome, home) && board.Town == town && board.Outpost == outpost) return;
 
         var old = board.OwnHome;
         board.OwnHome = home;
         if (ReferenceEquals(board.Home, old)) board.Home = home;
 
         board.Town = town;
+        board.Outpost = outpost;
         board.GateHome = null;
         board.Touch();
         Rethink(world, squad);
@@ -218,27 +221,35 @@ public sealed class SquadAutonomy(PopulationData data)
     }
 
     /// <summary>
-    /// The building and town (a site index; -1: none) of the squad's assigned home: a key with a zone is a town building's, any other a
-    /// player-built building's id. An id or key nothing answers to is forgotten.
+    /// The building and town (a site index; -1: none) of the squad's assigned home, and the outpost (a player town's number; 0: none) a
+    /// player-built home stands in (<see cref="OutpostOf"/>): a key with a zone is a town building's, any other a player-built building's id. An id
+    /// or key nothing answers to is forgotten.
     /// </summary>
-    (TownBuilding? Home, int Town) Resolve(World world, Squad squad)
+    (TownBuilding? Home, int Town, int Outpost) Resolve(World world, Squad squad)
     {
-        if (squad.AssignedHome is not { } key) return (null, -1);
+        if (squad.AssignedHome is not { } key) return (null, -1, 0);
 
         int colon = key.IndexOf(':');
         if (colon >= 0)
         {
-            var placed = TownBuildingOf(key, colon);
-            if (placed.Home is null) squad.AssignedHome = null;
+            var (placed, town) = TownBuildingOf(key, colon);
+            if (placed is null) squad.AssignedHome = null;
 
-            return placed;
+            return (placed, town, 0);
         }
 
         if (world.Buildings.Find(key) is not { } site) squad.AssignedHome = null;
-        else if (site.Complete) return (Built(site), -1);
+        else if (site.Complete) return (Built(site), -1, OutpostOf(world, squad, site));
 
-        return (null, -1);
+        return (null, -1, 0);
     }
+
+    /// <summary>
+    /// The number of the outpost <paramref name="site"/> belongs to (<see cref="Construction.TownLookup.PlayerTownOf"/>, as the outpost's radius
+    /// refit counts it) when the squad's faction owns it: the squad's town; 0 for a building outside any outpost or in another faction's.
+    /// </summary>
+    static int OutpostOf(World world, Squad squad, BuildSite site) =>
+        Construction.TownLookup.PlayerTownOf(world, site) is { } town && town.Owner == squad.Faction ? town.Number : 0;
 
     /// <summary>
     /// The town building with run-time name <paramref name="key"/> (its instance id starts after <paramref name="colon"/>) and its town's site.

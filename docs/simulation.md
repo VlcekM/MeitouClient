@@ -1821,10 +1821,15 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the
   complete beds the player placed in it (`BuildSite.Parent`, one per member, `SquadAutonomy.HomeBed`), else the player bed search. A player-built
   home has no indoor volume: "inside" is within the home radius.
+- **Outpost as town**: a complete player-built home in an outpost the squad's faction owns makes that outpost its town (`Blackboard.Outpost`, the
+  player town's number, beside `Town` = -1; `Blackboard.HomeTown` is either kind; derived from the home on each settle, not hashed or saved).
+  Patrols start and ring it, "at home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its
+  centre. **Engine choice**: a patrol route's town radius is a third of the outpost's radius, so the route stays within it (a site's is its size
+  radius times its town radius mult).
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
-- **Not built**: a player outpost is no `Blackboard.Town`, so its turrets, machines and nodes are not goal targets (the player's jobs run them);
-  a work building; the contract's mission target over a save (as NPC platoons).
+- **Not built**: the outpost's places, gates, turrets and machines are not yet goal targets of its residents (the player's jobs run them); a
+  work building; the contract's mission target over a save (as NPC platoons).
 
 ### Planner
 

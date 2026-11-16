@@ -269,6 +269,22 @@ public sealed class Blackboard
     public int Town { get; set; } = -1;
 
     /// <summary>
+    /// The player town (<see cref="Construction.PlayerTown.Number"/>; 0: none) an autonomous squad's player-built home stands in, the squad's town in
+    /// place of a site (<see cref="Town"/> is then -1; <see cref="SquadAutonomy"/>, docs/simulation.md "Autonomous player squads"). Derived from the
+    /// home, not hashed or saved.
+    /// </summary>
+    public int Outpost { get; set; }
+
+    /// <summary>
+    /// The squad's home town as either kind: <see cref="Town"/>'s site, else <see cref="Outpost"/>; none without either.
+    /// </summary>
+    public CampaignTown HomeTown => Town >= 0
+        ? CampaignTown.OfSite(Town)
+        : Outpost > 0
+            ? CampaignTown.OfPlayer(Outpost)
+            : CampaignTown.None;
+
+    /// <summary>
     /// The town's turrets (<see cref="PopulationData.Turrets"/>) and the turret index each member's slot claimed to man, as the last serial step
     /// found them (derived, not hashed).
     /// </summary>

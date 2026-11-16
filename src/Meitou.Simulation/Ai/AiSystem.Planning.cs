@@ -320,12 +320,12 @@ public sealed partial class AiSystem
             StateType.IsAtHome => _board.Home is not { } home || _mind.HomeUnreachable
                 || Vector2.DistanceSquared(Flat(Me.Position), Flat(home.Position)) <= HomeRadius * HomeRadius,
             // Without a town it is never at its home town; its destination town (patrolling in town) is wherever it is.
-            StateType.IsAtHomeTown => _board.Town >= 0 && _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot)),
+            StateType.IsAtHomeTown => !_board.HomeTown.IsNone && _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot)),
             // The running package's mission town when it has one (the trader's next town), else the home town.
             StateType.AtDestinationTown or StateType.AtDestinationTown94 => _board.Destination.IsNone
                 ? _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot))
                 : _system.CurrentTown(_world, Me.Position) == _board.Destination,
-            StateType.HasDestinationTown => _board.Town >= 0 || !_board.Destination.IsNone,
+            StateType.HasDestinationTown => !_board.HomeTown.IsNone || !_board.Destination.IsNone,
             StateType.AtATown => _system.TownAt(Me.Position) >= 0,
             // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
             StateType.AlarmsInTheVicinity => _system.AlarmOf(_world, _slot, TaskType.InvestigateAlarms, _board) is not null,
@@ -395,7 +395,7 @@ public sealed partial class AiSystem
                         return new PlanTarget(Targets.Seat, chair.Position);
 
                     if (_system.NodeGoalFindsNothing(_mind, _board, type)) return default;
-                    return Spot(Targets.Spot, _system.SpotFor(_mind, _board, AiBehaviour.Post, type));
+                    return Spot(Targets.Spot, _system.SpotFor(_world, _mind, _board, AiBehaviour.Post, type));
                 case TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
                     if (_world.Characters.Cold(_slot) is { InSomething: Locks.HeldState.Bed })
@@ -405,9 +405,9 @@ public sealed partial class AiSystem
                         return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null));
 
                     if (!_system.HasBed(_world, _board, _mind, _slot)) return default;
-                    return Spot(Targets.Bed, _system.SpotFor(_mind, _board, AiBehaviour.Sleep, type));
+                    return Spot(Targets.Bed, _system.SpotFor(_world, _mind, _board, AiBehaviour.Sleep, type));
                 case TaskType.GoHomebuilding:
-                    return Spot(Targets.Spot, _system.SpotFor(_mind, _board, AiBehaviour.GoHome, type));
+                    return Spot(Targets.Spot, _system.SpotFor(_world, _mind, _board, AiBehaviour.GoHome, type));
                 case TaskType.WanderTown or TaskType.Shopping or TaskType.Wanderer:
                     {
                         var behaviour = TaskBehaviours.Of(type);

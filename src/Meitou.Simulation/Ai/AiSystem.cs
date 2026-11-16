@@ -759,16 +759,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Whether a character is within its squad's home town's radius; true when the squad has no town or the character is not alive.
+    /// Whether a character is within its squad's home town's radius (a site's or an outpost's, <see cref="HomePlace"/>); true when the squad has no
+    /// town or the character is not alive.
     /// </summary>
     bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
     {
-        if (board.Town < 0 || !world.Characters.IsAlive(self)) return true;
-        var site = data.Sites[board.Town];
-        var p = world.Characters.Previous[self.Slot].Position;
-        float r = site.Town.Radius;
-        return Vector2.DistanceSquared(new Vector2(p.X, p.Z), new Vector2(site.Position.X, site.Position.Z)) <= r * r;
+        if (HomePlace(world, board) is not { } town || !world.Characters.IsAlive(self)) return true;
+
+        var p = Flat(world.Characters.Previous[self.Slot].Position);
+        return Vector2.DistanceSquared(p, town.Centre) <= town.Radius * town.Radius;
     }
+
+    /// <summary>
+    /// Where the squad's home town (<see cref="Blackboard.HomeTown"/>: its site, or the outpost an autonomous squad's player-built home stands in)
+    /// stands; null without one.
+    /// </summary>
+    PlacedTown? HomePlace(World world, Blackboard board) => TownPlace(data, world, board.HomeTown);
 
     #endregion
 
@@ -1005,7 +1011,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     (Vector2 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
-        var town = board.Destination.IsNone && board.Town >= 0 ? CampaignTown.OfSite(board.Town) : board.Destination;
+        var town = board.Destination.IsNone ? board.HomeTown : board.Destination;
         if (town.Site >= 0)
         {
             var site = data.Sites[town.Site];
@@ -1664,7 +1670,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ? SpareBed(world, board, mind, slot) : null;
         var (target, home, floor, facing) = spare is not null
             ? (Flat(spare.Position), true, spare.Position.Y, (float?)null)
-            : SpotFor(mind, board, behaviour, type);
+            : SpotFor(world, mind, board, behaviour, type);
         var speed = type is TaskType.RunAwayHometown or TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
         if (!GoToSpot(world, slot, mind, target, home ? GiveUp.Home : GiveUp.Post, speed, height: floor)) return;
 
@@ -1897,7 +1903,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// the character's post. True in <c>Home</c> when the spot is the home's; <c>Floor</c> is the height of a node or bed (so the walk ends on the
     /// floor it is on, not on the ground below); <c>Yaw</c> the way a node faces, which the character turns to on arriving.
     /// </summary>
-    (Vector2 Target, bool Home, float? Floor, float? Yaw) SpotFor(AiMind mind, Blackboard board, AiBehaviour behaviour, TaskType type)
+    (Vector2 Target, bool Home, float? Floor, float? Yaw) SpotFor(World world, AiMind mind, Blackboard board, AiBehaviour behaviour, TaskType type)
     {
         if (behaviour == AiBehaviour.GoHome)
         {
@@ -1907,7 +1913,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 return (waypoint, true, null, null);
 
             if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null);
-            if (board.Town >= 0) return (Flat(data.Sites[board.Town].Position), true, null, null);
+            if (HomePlace(world, board) is { } town) return (town.Centre, true, null, null);
             return (mind.Squad.HomeCentre, true, null, null);
         }
 
@@ -3150,7 +3156,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             PackageClass.Retreat => !board.Intact,
             PackageClass.Patrol or PackageClass.PatrolRunning =>
-                board.Town >= 0 && _world.GameHours >= board.NextPatrol && _world.Characters.IsAlive(_squad.Leader)
+                !board.HomeTown.IsNone && _world.GameHours >= board.NextPatrol && _world.Characters.IsAlive(_squad.Leader)
                 && !_system.CannibalPatrolHeld(_world, _squad, board, package),
             PackageClass.Bar => BarHere(board),
             PackageClass.BarOutdoors => true,
@@ -3334,20 +3340,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A patrol's route (<b>engine choice</b>: the original's <c>GoOutOnPatrol</c> is not decoded): <see cref="AiSettings.PatrolPoints"/> points
-    /// round the home town at seeded angles and distances of 1.5 to 3 town radii, each pulled in towards the town until walkable (dropped when none
-    /// is), then home. The next patrol may start 6 to 12 game hours after this one started; this one gives up after 6.
+    /// round the home town at seeded angles and distances of 1.5 to 3 town radii (<see cref="PatrolRadius"/>), each pulled in towards the town until
+    /// walkable (dropped when none is), then home. The next patrol may start 6 to 12 game hours after this one started; this one gives up after 6.
     /// </summary>
     void LayRoute(World world, Squad squad, Blackboard board)
     {
-        if (board.Town < 0)
+        if (HomePlace(world, board) is not { } town)
         {
             board.Route = [];
             return;
         }
 
-        var site = data.Sites[board.Town];
-        var centre = Flat(site.Position);
-        float r = MathF.Max(site.Town.SizeRadius * site.Town.TownRadiusMult, 100);
+        var centre = town.Centre;
+        float r = PatrolRadius(world, board);
         ulong key = Rng.Mix((ulong)squad.Id << 20 ^ (ulong)board.Version);
         float start = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, SeedSalts.AiPatrol)) * MathF.Tau;
         var route = new List<Vector2>();
@@ -3372,6 +3377,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             + Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, 0x50)) * (Settings.PatrolEveryHoursMax - Settings.PatrolEveryHoursMin);
         board.NextPatrol = world.GameHours + every;
         board.PatrolGiveUp = world.GameHours + Settings.PatrolGiveUpHours;
+    }
+
+    /// <summary>
+    /// The town radius a patrol route is laid by (<b>engine choice</b>): a site's size radius times its town radius mult, at least 100; an
+    /// outpost's a third of its radius (an outpost record has no size radius of its own), so the route's 1.5 to 3 radii stay within the outpost.
+    /// </summary>
+    float PatrolRadius(World world, Blackboard board)
+    {
+        if (board.Town >= 0)
+        {
+            var site = data.Sites[board.Town];
+            return MathF.Max(site.Town.SizeRadius * site.Town.TownRadiusMult, 100);
+        }
+
+        return world.Buildings.FindTown(board.Outpost) is { } outpost ? outpost.Radius / 3 : 100;
     }
 
     #endregion
