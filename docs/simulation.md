@@ -1106,12 +1106,16 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   enemies (engine: Heng's Outlaw slaves, uncaged without building data, drew its Samurai into fights). **Observed** (real-data
   probe 2026-10-21): Rebirth's 10 Rebirth Cage Guards squads make 34 caged Rebirth Slaves.
 - **Slave catching** (`ArrestSystem.CatchSlave`, the spotting sweep; the packages' Capture Slaves, 167, in `addon- slave catching`, which Rebirth's gate guards and garrison inherit): an awake NPC of the owner faction in its own town that sees a player slave (daylight sight, full range; a sneaking one, like a sneaking escaped prisoner or bounty in the spotting sweep, only once that NPC's spot meter on it is full, `ArrestSystem.SeesSuspect`)
-  tags it escaping (2) when it wears no locked shackles or stands outside the town; the nearest police-like or slaver one then captures an escaping slave as an arrest with
-  `Enslave` (fight down, lift, cage; event 36 ESCAPING_SLAVE_SPOTTED as a bubble), and the caging makes it a slave (1) again and chains it
+  with a view factor above 0.05 tags it escaping (2) by the original's test (`EscapingSlave`, [escaping slave spotted](game/ai-tasks.md#slave-work-shout-and-capture)): sneaking, no
+  shackles worn, walking a move order away from its master (its point farther than 250 from the owner and than the slave, not heading at it, and outdoors, past 433 or not
+  looking like a slave), or fighting the looker's ally; the looker's own-town gate is the engine's, and so is tagging a slave whose master Meitou does not know when it
+  stands outside that town. The nearest police-like or slaver one then captures an escaping slave as an arrest with
+  `Enslave` (fight down, lift, cage; event 36 ESCAPING_SLAVE_SPOTTED as a bubble; engine for the line's DA 6 attack), and the caging makes it a slave (1) again and chains it
   (`CharacterAssembly.Chain`; the original cuffs before the carry; unchained, it never looks like a slave and is processed forever, #508). A town here is `InOwnTown`'s extent, else no farther
   from its centre than its gate nearest the point plus 100 (Rebirth's gates stand about 1500 out, its radius is 184); without gates, the extent only. A caged slave's master is
-  the resident squad of its cage's building when loaded (engine stand-in for `FUN_140330600` assigning the cage's owner handle). **Observed** (probe): a start
-  slave walking out of Rebirth is tagged just past the south gate, and once down is carried back and caged as a slave.
+  the resident squad of its cage's building when loaded (engine stand-in for `FUN_140330600` assigning the cage's owner handle). **Observed** (probe `obey`, #813 save, Rebirth):
+  an obedient slave standing, working or ordered toward its master stays a slave; ordered to a point 330 off, away from its master (2200 off), it is tagged outdoors within 20
+  ticks, and the Holy Sentinel beside it beats it down and cages it, a slave again 23 s later; sneaking, it is tagged once the Sentinel's spot meter fills (about 80 ticks).
 - **Escape far from the owner** (`ArrestSystem.EscapeFarFromOwner`, on the spotting cadence; facts: [carry-loot](game/carry-loot.md#a-slave-far-from-its-owner-escapes)): any
   slave (state 1), player or NPC, outside every town (its status town, `CharacterCold.StatusTown`, [rule](game/carry-loot.md#the-status-town), as for `Freed`) and farther than about 3 536 from its owner becomes an escaped slave. The owner is the
   master squad's leader (`ObedientSlave.OwnerOf`); without a master squad or pending saved owner handle, a slave becomes escaped even inside town. Not one held in a cage that has an owner (`ArrestSystem.CagedByOwner`): the original's cage entry gives it the cage's owner handle (`FUN_140330600`), and Meitou's stand-in, the resident squad, is missing for a cage with none (Rebirth's Prisoner Poles; **Observed**, #647 save: the start prisoner turned escaped slave in its cage within 30 ticks).

@@ -1311,7 +1311,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// in a weapon section fails it; the armour and legs sections must each hold nothing, a slave garment (<c>stigma</c> 6) or one of the faction's
     /// <c>slave clothing</c>; then the boots section passes with a locked piece, and empty only with a locked armour piece on a shaven head.
     /// </summary>
-    bool LooksLikeASlave(CharacterCold watcher, CharacterCold c)
+    internal bool LooksLikeASlave(CharacterCold watcher, CharacterCold c)
     {
         if (c.Fighter is { IsAnimal: true }) return true;
         if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Diplomat) return false;

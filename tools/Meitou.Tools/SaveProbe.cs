@@ -82,6 +82,10 @@ static class SaveProbe
             case ("premises", _): Premises(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
             case ("captors", _): Captors(probe, a.Count > 0 ? int.Parse(a[0]) : 15, a.Count > 1 && a[1] == "walk"); return true;
+            case ("obey", >= 2):
+                Vector2? point = a.Count > 4 ? new(float.Parse(a[3]), float.Parse(a[4])) : null;
+                ObeyProbe.Run(probe, a[0], a[1], point, a.Count > 2 ? int.Parse(a[2]) : 15);
+                return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0]); return true;
             case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
@@ -1413,6 +1417,7 @@ static class SaveProbe
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               captors [rounds] [walk]  captive jobs on the leader: worker, phase, gap, its senses of the leader; walk clears sneak (#759)
+              obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
               cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it

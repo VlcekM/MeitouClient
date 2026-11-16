@@ -123,12 +123,14 @@ public static class ObedientSlave
 
     /// <summary>
     /// The job in the list of a slave with no master squad whose owner is still only its saved handle (a load), else -1: the owner the original
-    /// reads through the owner handle (<c>+0x328</c>), which the job's target copies (<c>FUN_14032e0d0</c>).
+    /// reads through the owner handle (<c>+0x328</c>), which the job's target copies (<c>FUN_14032e0d0</c>). A job whose owner <see cref="Owner"/>
+    /// found already stays pending until the master is adopted from it: the decision step can find it between the owner's spawn and the restore
+    /// pass, and the far-escape rule then took the slave for one without an owner (#813's save: an escaped slave 150 ticks after the load).
     /// </summary>
     internal static int PendingOwnerJob(CharacterCold cold)
     {
         if (cold.SlaveState != 1 || cold.SlaveMaster >= 0) return -1;
-        return cold.Jobs.FindIndex(j => j.Type == TaskType.SlaveObedience && j.Character.IsNone && !j.Saved.IsNull);
+        return cold.Jobs.FindIndex(j => j.Type == TaskType.SlaveObedience && !j.Saved.IsNull);
     }
 
     /// <summary>
