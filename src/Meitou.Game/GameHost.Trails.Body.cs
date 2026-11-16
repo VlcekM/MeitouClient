@@ -202,8 +202,8 @@ sealed partial class GameHost
     /// foot or paw plants and never plough.
     /// </summary>
     bool BodyContact(
-        TerrainTrailRenderer? trails, GroundSurfaces ground, long key, ref Walker w, Vector3 root, Vector2 heading, bool animal, bool upright, float speed,
-        bool continues)
+        TerrainTrailRenderer? trails, GroundSurfaces ground, long key, ref Walker w, Vector3 root, Vector2 heading, bool animal, bool upright,
+        float speed, bool continues)
     {
         _contactBodies.Clear();
         Gpu.Characters?.ContactCapsules(key, _contactBodies);

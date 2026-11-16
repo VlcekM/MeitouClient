@@ -615,9 +615,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
 
     /// <summary>
     /// The rent paid by the character in <paramref name="slot"/> (the original's <c>FUN_1403576c0</c>, <b>Observed</b>); only the player's characters
-    /// pay. An NPC is only checked here (<see cref="MayRentAsNpc"/>) and pays once it lies in the bed (<see cref="SettleNpcRent"/>). -1: "This isn't mine", refused. Above 0: free when the player's faction paid for this bed less than <see cref="BedSettings.RentHours"/>
-    /// ago; else "Can't afford c.{1} for bed rental." and refused, or the money is paid with "Paid c.{1} for bed rental.". True when the bed may be
-    /// used.
+    /// pay. An NPC is only checked here (<see cref="MayRentAsNpc"/>) and pays once it lies in the bed (<see cref="SettleNpcRent"/>). -1: "This
+    /// isn't mine", refused. Above 0: free when the player's faction paid for this bed less than <see cref="BedSettings.RentHours"/> ago; else
+    /// "Can't afford c.{1} for bed rental." and refused, or the money is paid with "Paid c.{1} for bed rental.". True when the bed may be used.
     /// </summary>
     public bool Pay(World world, int slot, Fixture bed, int cost)
     {

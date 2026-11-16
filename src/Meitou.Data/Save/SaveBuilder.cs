@@ -463,6 +463,7 @@ public sealed class SaveBuilder
         var order = first.Where(platoon.Characters.Contains).Concat(rest).ToList();
         platoon.Characters.Clear();
         platoon.Characters.AddRange(order);
+
         if (platoon.Collection is not { } collection) return;
 
         var instances = new HashSet<FcsInstance>(order.Select(c => c.Instance));

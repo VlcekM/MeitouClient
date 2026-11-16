@@ -60,7 +60,9 @@ static class BuiltInMods
             Console.WriteLine($"mods      {mod.Name} is built into Meitou: Squad XP {config.SquadXp}");
             notices.Add($"{mod.Name} is built into Meitou now: {covered.Taken}.");
         }
+
         if (notices.Count > 0) config.Save();
+
         return notices;
     }
 

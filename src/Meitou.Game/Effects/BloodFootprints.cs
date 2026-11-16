@@ -222,7 +222,8 @@ sealed class BloodFootprints(GameHost host)
     /// <summary>
     /// Wets the contacting foot inside the source or leaves a smaller deposit on dry ground.
     /// </summary>
-    void Deposit(TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
+    void Deposit(
+        TerrainDecalStore store, Trail trail, bool right, Vector3 at, Vector2 across, CharacterPart? boot, CharacterAppearance look, double now)
     {
         ref Sole sole = ref (right ? ref trail.RightSole : ref trail.Left);
         var point = Xz(at);

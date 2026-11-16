@@ -49,8 +49,8 @@ public class ModHookTests
 
     /// <summary>
     /// <c>SpawnPlatoon</c> adds an unloaded platoon of the template inside the ring with its purse and size, the same spot for the same seed; an
-    /// unknown template, a radius that is not finite or a template that plans no one adds nothing and takes no platoon id. Catches a spawn outside the ring, a lost purse, or a
-    /// refusal that still adds or shifts later spawns' ids.
+    /// unknown template, a radius that is not finite or a template that plans no one adds nothing and takes no platoon id. Catches a spawn
+    /// outside the ring, a lost purse, or a refusal that still adds or shifts later spawns' ids.
     /// </summary>
     [Fact]
     public void A_spawned_platoon_lies_in_its_ring_unloaded_with_its_purse_and_bad_input_adds_nothing()
@@ -191,7 +191,8 @@ public class ModHookTests
         SaveLoader.Load(w2, game, population2.Data, new SaveLoadOptions { ApplyRelations = false });
         var again = Assert.Single(w2.Platoons.All, x => x.ModTag == "crew|7");
 
-        Assert.Equal((true, "10-t", faction, p.Size, 750L, false), (again.ModSpawned, again.TemplateId, again.Faction, again.Size, again.Money, again.Pinned));
+        var reloaded = (again.ModSpawned, again.TemplateId, again.Faction, again.Size, again.Money, again.Pinned);
+        Assert.Equal((true, "10-t", faction, p.Size, 750L, false), reloaded);
         Assert.Equal(p.Key, again.Key);   // planned again as the same squad
         Assert.InRange(Vector2.Distance(p.Position, again.Position), 0, 1);
     }
@@ -554,8 +555,8 @@ public class ModHookTests
     }
 
     /// <summary>
-    /// A saved ground item retagged in place is saved and reloaded with its new tag, while an untouched zone is left byte for byte. Catches the zone-save shortcut
-    /// keeping the old tag (review P2, the path #653 touched).
+    /// A saved ground item retagged in place is saved and reloaded with its new tag, while an untouched zone is left byte for byte. Catches the
+    /// zone-save shortcut keeping the old tag (review P2, the path #653 touched).
     /// </summary>
     [Fact]
     public void A_retagged_ground_item_reloads_with_its_new_tag_and_an_untouched_zone_stays_byte_identical()

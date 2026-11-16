@@ -1237,7 +1237,8 @@ public static partial class SaveCapture
         }
 
         /// <summary>
-        /// Writes the squads in the world, the stored ones and the campaign's and code mods' stand-ins; returns the platoons written by world platoon id.
+        /// Writes the squads in the world, the stored ones and the campaign's and code mods' stand-ins; returns the platoons written by world
+        /// platoon id.
         /// </summary>
         public Dictionary<int, SavePlatoon> Write(LoadedSave? loaded)
         {
