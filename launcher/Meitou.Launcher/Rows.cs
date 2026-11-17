@@ -93,6 +93,11 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public SuggestedMod? Suggestion => CoveredMods.SuggestionOf(Mod);
 
     /// <summary>
+    /// The entry of the official port the game runs in place of this RE_Kenshi mod's plugin (<see cref="CoveredMods.PortOf"/>); null when none.
+    /// </summary>
+    public PortedMod? Port => CoveredMods.PortOf(Mod);
+
+    /// <summary>
     /// Whether the mod list holds <see cref="Suggestion"/>'s code mod (set with the list), so the row offers no link to it.
     /// </summary>
     public bool SuggestionInstalled
@@ -129,14 +134,14 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin, its file rebinds and sound banks and a suggested code mod, an
-    /// update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
+    /// The row's notes: built into Meitou, a code mod, an ignored or ported RE_Kenshi plugin, its file rebinds and sound banks and a suggested code
+    /// mod, an update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
     {
         CoveredNote,
         Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
-        Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
+        PluginNote,
         Mod.ReKenshi is { FileRebinds.Count: > 0 } ? LauncherText.Translate("RE_Kenshi file rebinds: applied to the map files") : null,
         Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: loaded before the game's") : null,
         SuggestionNote,
@@ -151,6 +156,14 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         .Concat(DependencyProblems.Select(p => Loc.Format(LauncherText.Translate("Will not load: {1}"), p)))
         .Append(BlankingNote)
         .OfType<string>());
+
+    /// <summary>
+    /// The note for an RE_Kenshi plugin without code of its own that Meitou has not built in: Meitou runs its port (<see cref="Port"/>), or its DLLs
+    /// are ignored; null otherwise.
+    /// </summary>
+    string? PluginNote => !Mod.HasNativePlugin || Mod.HasCode || BuiltIn is not null ? null
+        : Port is not null ? LauncherText.Translate("RE_Kenshi plugin: Meitou runs its own port of it in its place")
+        : LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou");
 
     /// <summary>
     /// The note for <see cref="BuiltIn"/>: the Meitou setting the feature became, and for a code mod that it is not run; null when not built in.
@@ -174,7 +187,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     {
         get
         {
-            var items = BuiltIn?.Items ?? Suggestion?.Items;
+            var items = BuiltIn?.Items ?? Port?.Items ?? Suggestion?.Items;
             if (items is null || CoveredMods.UpdatedSince(Mod, items) is not { } updated) return null;
 
             string date = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -184,10 +197,10 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     }
 
     /// <summary>
-    /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in nor has a suggestion for, so the
-    /// player can ask for it; null otherwise, and the row shows no Request button.
+    /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in, ports nor has a suggestion for, so
+    /// the player can ask for it; null otherwise, and the row shows no Request button.
     /// </summary>
-    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Suggestion is null ? CoveredMods.Wishlist : null;
+    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Port is null && Suggestion is null ? CoveredMods.Wishlist : null;
 
     /// <summary>
     /// The text of the button that opens <see cref="RequestPage"/>.

@@ -19,11 +19,23 @@ public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting,
 public sealed record SuggestedMod(string ModName, MatchedItem[] Items, string By, string ByModName, ulong ByWorkshopId);
 
 /// <summary>
-/// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod) and the launcher
-/// (which notes both kinds on the Mods page and suggests a code mod for an RE_Kenshi one).
+/// An RE_Kenshi mod whose plugin Meitou runs an official port of in its place (docs/formats/rekenshi.md "Ports"): the mod's <c>.mod</c> name, the
+/// workshop items that carry it, and the port's code mod id, which names its folder under <see cref="CoveredMods.PortsFolder"/>.
+/// </summary>
+public sealed record PortedMod(string ModName, MatchedItem[] Items, string PortId);
+
+/// <summary>
+/// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod, and runs a ported
+/// plugin's port) and the launcher (which notes every kind on the Mods page and suggests a code mod for an RE_Kenshi one). A mod matches one
+/// kind, first found of built in, ported, suggested.
 /// </summary>
 public static class CoveredMods
 {
+    /// <summary>
+    /// The folder beside the game's executable that holds the official ports, one folder per port id with its <c>meitou.json</c> and assemblies.
+    /// </summary>
+    public const string PortsFolder = "ports";
+
     /// <summary>
     /// xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (workshop 3679678086, matched against its 2026-11-07 update).
     /// </summary>
@@ -50,6 +62,11 @@ public static class CoveredMods
     ];
 
     /// <summary>
+    /// The RE_Kenshi mods whose plugin has an official port (source in the repo's <c>ports</c> folder, shipped with the game).
+    /// </summary>
+    public static IReadOnlyList<PortedMod> Ported { get; } = [];
+
+    /// <summary>
     /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
     /// </summary>
     public static Uri Wishlist { get; } = new("https://docs.google.com/spreadsheets/d/1h6HXRgT1MbioPtgj3enuXIdevj2JWaRU8qSz-99Haoo/edit?gid=0#gid=0");
@@ -72,11 +89,28 @@ public static class CoveredMods
     /// </summary>
     public static SuggestedMod? SuggestionOf(ModInfo mod)
     {
-        if (!mod.HasNativePlugin || mod.HasCode) return null;
+        if (!mod.HasNativePlugin || mod.HasCode || PortOf(mod) is not null) return null;
 
         ulong? item = WorkshopId(mod);
         return Suggested.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.Items.Any(i => i.Id == id)));
     }
+
+    /// <summary>
+    /// The entry porting the plugin of <paramref name="mod"/>, an RE_Kenshi plugin without code of its own that Meitou has not built in, by its
+    /// <c>.mod</c> name or its workshop item; null when none does.
+    /// </summary>
+    public static PortedMod? PortOf(ModInfo mod)
+    {
+        if (!mod.HasNativePlugin || mod.HasCode || BuiltInOf(mod) is not null) return null;
+
+        ulong? item = WorkshopId(mod);
+        return Ported.FirstOrDefault(p => p.ModName == mod.Name || (item is { } id && p.Items.Any(i => i.Id == id)));
+    }
+
+    /// <summary>
+    /// The folder of the port <paramref name="ported"/> names, under <see cref="PortsFolder"/> of the game in <paramref name="gameFolder"/>.
+    /// </summary>
+    public static string PortFolder(string gameFolder, PortedMod ported) => Path.Combine(gameFolder, PortsFolder, ported.PortId);
 
     /// <summary>
     /// When the workshop copy of <paramref name="mod"/> was updated, if after the version <paramref name="items"/> was matched against

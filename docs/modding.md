@@ -3,7 +3,7 @@
 **Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
-RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in or ported to this API ([rekenshi](formats/rekenshi.md)). Code:
+RE_Kenshi plugin DLLs are never loaded: wishlist plugins are superseded, built in or ported to this API ([rekenshi](formats/rekenshi.md)). Code:
 `src/Meitou.Game/Mods` (contract and loader), `GameMods` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
@@ -53,6 +53,8 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
+- An enabled RE_Kenshi mod with an official port runs the port in its place ([ports](formats/rekenshi.md#ports)); another code mod with the
+  port's id is left out and counted as disabled.
 - A code mod whose feature Meitou has built in (`BuiltInMods`, [rekenshi](formats/rekenshi.md): the `player-only-xp` port) is left out
   of the load set and counted as disabled.
 
@@ -90,7 +92,8 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   the first world's systems, in `mods.cfg` order. Registering is only allowed inside it. A throw drops the mod's registrations and
   removes its Harmony patches (`UnpatchAll` of its id).
 - Worlds are built again for every new game and load, so systems are registered as factories and made per world.
-- `ModContext`: `Id`, `Name`, `Folder`, `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
+- `ModContext`: `Id`, `Name`, `Folder` (the `.mod` file's), `CodeFolder` (the manifest's: `Folder`, or a port's folder beside the game),
+  `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
   `RngPurpose`, `Harmony`, `Tick` and `Enqueue(SimCommand)` for the running world (dropped and logged before the first world),
   `Dependency<T>(id)` and `HasDependency(id)` for declared dependencies ([dependencies](modding-dependencies.md#using-a-dependency)).
 - `RngPurpose` is `StableHash(id) | 0x80000000` cast to `RngPurpose`, so it never equals a vanilla purpose.

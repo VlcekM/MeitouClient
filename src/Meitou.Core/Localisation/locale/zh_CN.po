@@ -197,6 +197,9 @@ msgstr "Steam 创意工坊"
 msgid "Local mod"
 msgstr "本地模组"
 
+msgid "RE_Kenshi plugin: Meitou runs its own port of it in its place"
+msgstr "RE_Kenshi 插件：Meitou 以自己的移植版代替它运行"
+
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"
 
