@@ -470,6 +470,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBenchFacing { get; set; } = true;
     /// <summary>
+    /// A prisoner in a cage or on a pole plays only the fixture's pose (Fixes settings; off: it holds its wounds there, as the game does;
+    /// docs/animation.md "Injury holds").
+    /// </summary>
+    public bool FixPrisonPose { get; set; } = true;
+    /// <summary>
     /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings; off: only the grid
     /// and the worn backpack, as the game does; docs/game/dialogue.md "Conditions").
     /// </summary>

@@ -552,6 +552,7 @@ public sealed class AnimationSystem(
         var next = table.Next;
         var wantedLower = s_lowerScratch ??= [];
         var wantedUpper = s_upperScratch ??= [];
+        _prisonPoseFix = world.PrisonPoseFix;   // every partition writes the same value
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
@@ -1061,7 +1062,7 @@ public sealed class AnimationSystem(
             wanted.Add((technique, 1));
         }
 
-        if (!down && !carried) AddArmOverlay(a, cold, stance, crawling, speed, wanted);
+        if (!down && !carried) AddArmOverlay(a, cold, stance, crawling, inCage, speed, wanted);
 
         var (lift, liftTime) = PickLift(a, cold, task, down, carried, wanted, ref legs);
 
@@ -1298,18 +1299,19 @@ public sealed class AnimationSystem(
     /// <summary>
     /// A carrier (FUN_140520000, the arm overlay update every frame): the carrying arm's overlay clip whatever else plays, a technique included
     /// (docs/animation.md "A carrier"). A character that carries nothing and stands holds its hurt parts (FUN_140520000 -> FUN_14051fe60,
-    /// docs/animation.md "Injury holds").
+    /// docs/animation.md "Injury holds"); a prisoner does too, unless <see cref="World.PrisonPoseFix"/>.
     /// </summary>
-    void AddArmOverlay(CharacterAnimation a, CharacterCold cold, in AnimationStance stance, bool crawling, float speed,
+    void AddArmOverlay(CharacterAnimation a, CharacterCold cold, in AnimationStance stance, bool crawling, bool inCage, float speed,
         List<(int Index, float Weight)> wanted)
     {
         bool swims = cold is { WaterState: 3, Race.Swims: true };
         bool armsFree = !stance.CarryingLeft && !stance.CarryingRight;
+        bool holds = armsFree && !crawling && speed <= PainHoldMaxSpeed && !swims && !(inCage && _prisonPoseFix);
         if (stance.CarryingLeft && CarryArmClip >= 0)
         {
             wanted.Add((CarryArmClip, 1));
         }
-        else if (armsFree && !crawling && speed <= PainHoldMaxSpeed && !swims && PainHold(a, cold, stance, wanted) is >= 0 and var hold)
+        else if (holds && PainHold(a, cold, stance, wanted) is >= 0 and var hold)
         {
             wanted.Add((hold, 1));
         }
@@ -1823,6 +1825,11 @@ public sealed class AnimationSystem(
     /// The forward speed over which the injury hold is not played (<c>FUN_140520000</c>: the constant at <c>141683170</c>).
     /// </summary>
     const float PainHoldMaxSpeed = 50;
+
+    /// <summary>
+    /// The world's <see cref="World.PrisonPoseFix"/>, read each tick (true for an <see cref="Update"/> outside a world: tests, the title battle).
+    /// </summary>
+    bool _prisonPoseFix = true;
 
     /// <summary>
     /// The breathing overlay every standing human plays (<c>breathing noarms</c>: spine, neck and head only; <b>Verified</b>,

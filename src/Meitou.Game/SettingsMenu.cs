@@ -430,6 +430,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? BenchFacingChanged { get; init; }
 
     /// <summary>
+    /// Applies the prisoner pose fix (<see cref="UserConfig.FixPrisonPose"/>).
+    /// </summary>
+    public Action<bool>? PrisonPoseChanged { get; init; }
+
+    /// <summary>
     /// Applies the bag search fix (<see cref="UserConfig.FixBagSearch"/>).
     /// </summary>
     public Action<bool>? BagSearchChanged { get; init; }
@@ -1518,6 +1523,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         PunchReachChanged?.Invoke(true);
         Config.FixBenchFacing = true;
         BenchFacingChanged?.Invoke(true);
+        Config.FixPrisonPose = true;
+        PrisonPoseChanged?.Invoke(true);
         Config.FixBagSearch = true;
         BagSearchChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;

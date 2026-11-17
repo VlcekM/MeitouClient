@@ -96,7 +96,8 @@ threshold in per cent (60; stomach 65). Each medical tick every part with the re
 by fraction ascending, one entry per distinct fraction. `FUN_140520000`, for a character that carries nothing, in the normal animation category (no crawl, no swimming) and moves at 50 or less (constant `141683170`), walks that set
 in order and plays the first record `FUN_14051fe60` accepts: a record that uses the right arm needs it free and working; a record that uses the left plays as is when the left arm is free and working, else as its **`-R` mirror**
 (record name + `-R`, e.g. `hand2head-R`) when the right is. An arm is busy while its hand holds a weapon (`+0x18d` / `+0x18e`) or an active upper-manager layer uses it (`FUN_1405b2e10` / `FUN_1405b2db0`). No test of combat
-or technique. Animals have no pain animations (`FUN_140646bb0` returns none when the slot `0x248` is set; the hit stores the part's name at character `+0x288`).
+or technique, and none of imprisonment: the prison pick (`FUN_140520500`) leaves the category at 0 and `stand pole` (layer `all`) uses neither arm, so a hurt prisoner holds its wounds over
+the cage or pole pose (**Observed**, decompile; #917 shows it in Meitou). Fixes option **Prisoners hold still** (`World.PrisonPoseFix`, on by default) skips the hold while imprisoned. Animals have no pain animations (`FUN_140646bb0` returns none when the slot `0x248` is set; the hit stores the part's name at character `+0x288`).
 Meitou: `AnimationSystem.PainHold`, `BodyPartTemplate.PainAnim/PainThreshold`, `AnimationDefinition.UsesLeftArm/UsesRightArm`.
 
 ### Head turning
