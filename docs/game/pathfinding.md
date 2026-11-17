@@ -131,9 +131,10 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
   overlapping characters apart, which `MovementSystem` separation does.
 - Meitou fight footwork (`MovementSystem.SlideStep`): a steering fighter's step (with the separation push, else alone) whose end cannot be stood on is
-  turned 30° and then 60° either way, shortened by the turn's cosine, and the first that can be stood on is made (engine choice: off the mesh, on bare
-  terrain too steep for it, there are no wall edges to slide along). Before, such a fighter stood still, every tick: in #923's save (a Reaver on a
-  cliff face off the mesh, `--nav`) the circling guards backed off into the rise and stayed piled up under 1 unit apart, so none had the
+  turned 30° and then 60° either way, shortened by the turn's cosine, and the first that can be stood on is made; on the mesh and in its
+  `EdgeTolerance` band alike (engine choice: the footwork step is not swept against the mesh's edges). Before, such a fighter stood still, every tick:
+  in #923's save (a Reaver 5.5 above the terrain off the mesh, nothing under it, `--nav`) the circling guards stood in the edge band nearest it,
+  backed off into the rise beyond and stayed piled up under 1 unit apart, so none had the
   room to ask for a swing (`CombatSystem.BodyRoom`) and the Reaver took no hit in 1,000 ticks; with the turn none stood for the whole run and it was
   knocked out at tick ~1,260 (**Observed**).
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead

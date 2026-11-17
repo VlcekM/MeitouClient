@@ -146,6 +146,23 @@ public class MovementTests
         Assert.True(w2.Characters.IsAlive(id));
     }
 
+    /// <summary>
+    /// A fighter's footwork step into ground it cannot stand on is turned along the edge rather than dropped (#923: guards backing off into a cliff
+    /// stood piled up for good); one straight into a dead end gets no turn either.
+    /// </summary>
+    [Fact]
+    public void A_refused_footwork_step_is_turned_along_the_edge()
+    {
+        var walk = new OpenGroundWalkability((x, _) => x < 0 ? -1000 : 300);
+        var from = new Vector3(0.2f, 300, 0);
+        var slid = MovementSystem.SlideStep(walk, from, new Vector2(-1, 0.6f));
+
+        Assert.NotNull(slid);
+        Assert.True(walk.IsWalkable(from.X + slid.Value.X, from.Z + slid.Value.Y), "it ends on ground it can stand on");
+        Assert.True(slid.Value.Y > 0, "it keeps the step's way along the edge");
+        Assert.Null(MovementSystem.SlideStep(walk, from, new Vector2(-1, 0)));
+    }
+
     sealed class Misbehaving : ITickSystem
     {
         public void Think(SimWorld world, Partition partition) =>

@@ -2072,7 +2072,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// shortened by the turn's cosine, the first whose end point can be stood on; null when none can. Off the mesh (bare terrain too steep for it)
     /// there are no wall edges to slide along, only end points that cannot be stood on, so the turns stand in for the wall's direction (engine choice).
     /// </summary>
-    static Vector2? SlideStep(IWalkability walk, Vector3 from, Vector2 step)
+    internal static Vector2? SlideStep(IWalkability walk, Vector3 from, Vector2 step)
     {
         if (step == Vector2.Zero) return null;
 
