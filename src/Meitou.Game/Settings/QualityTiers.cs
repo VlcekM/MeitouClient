@@ -96,10 +96,11 @@ sealed class QualityTiers(SettingsMenu menu)
 
     /// <summary>
     /// The quality switches the presets set: the relief's (docs/render-terrain.md "Ground relief", RTX 4090: refinement +0.38 ms; parallax and
-    /// displacement are effects, not tiers), then Meitou's effects by what they cost (measured on an RTX 4090 at 1440p native, GPU time: the
-    /// materials, trails, foam and far grass under 0.1 ms; reflections +0.13, GTAO +0.11 and +0.54 at its high quality; the radiance cache +0.17,
-    /// the traced sun +1.3, with its far cascades; its grass shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are
-    /// the switches their choices stand for (<see cref="WorldFrame.ChoiceDrivenSwitches"/>).
+    /// displacement are effects, not tiers), then Meitou's effects by what they cost (RTX 4090 at 1440p native, GPU time, the settings matrix of
+    /// <see cref="LookPresets.ImpactOf"/>: the materials, trails, foam and far grass up to 0.35 ms; reflections 0.65 to 1.4, GTAO 0.7 to 0.8 and
+    /// 0.47 more at its high quality; the hybrid GI up to 1.3; lamp shadows 1.1 to 4.6; the GI traced on characters 2.7 to 3.6; the traced grass
+    /// shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are the switches their choices stand for (<see
+    /// cref="WorldFrame.ChoiceDrivenSwitches"/>).
     /// </summary>
     internal static readonly PresetToggle[] PresetToggles =
     [
@@ -113,14 +114,21 @@ sealed class QualityTiers(SettingsMenu menu)
         new("Ground-truth occlusion", false, false, true, High: true),
         new("Hybrid GI", false, false, true, High: false),
         new("Traced sun shadows", false, false, true, High: false),
-        new(WorldFrame.TracedFarCascadesSwitch, false, false, true, High: false),
+        // Traced lamp shadows: 0.9 to 6.3 ms on an RTX 4090 at 1440p (a lit hall at night the most), so only from the classes that trace the sun.
+        new("Lamp shadows", false, false, true, High: false),
+        // The characters' traced indirect light: 2.7 ms on a close-up, 3.6 in a hall full of characters; High keeps GTAO without it.
+        new(WorldFrame.GiCharactersSwitch, false, false, true, High: false),
+        // Off in every tier: with the rays on, they take the sun at every distance. With the cascades past 2000 the shadows of trees changed
+        // (sharp to soft) as the camera moved the band over them.
+        new(WorldFrame.TracedFarCascadesSwitch, false, false, false, High: false),
         new(WorldFrame.TracedGrassSwitch, false, false, false, High: false, Extreme: true),
     ];
 
     /// <summary>
     /// The tier switches that need the indirect light's traced scene: off, whatever the tier, while it is off (no ray tracing on the device).
     /// </summary>
-    static readonly string[] TracedSwitches = ["Hybrid GI", "Traced sun shadows", WorldFrame.TracedFarCascadesSwitch];
+    static readonly string[] TracedSwitches =
+        ["Hybrid GI", "Traced sun shadows", WorldFrame.TracedFarCascadesSwitch, "Lamp shadows", WorldFrame.GiCharactersSwitch];
 
     /// <summary>
     /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing

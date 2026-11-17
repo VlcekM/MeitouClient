@@ -23,7 +23,7 @@ static class SettingHints
         "Full screen" => "Fill the monitor with a borderless game window.",
         "Grading" => "Apply the scene's colour and contrast adjustments.",
         "Texture quality" => "Texture resolution; terrain changes need a restart.",
-        "Blood decals drawn" => "The most blood marks on walls and objects and bloody footprints drawn in a frame, the nearest first.",
+        "Blood decals drawn" => "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first.",
         "Anisotropic filtering" => "Keep textures sharp when viewed at an angle.",
         "Use Metal upscaling" => "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. "
             + "Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose.",
@@ -122,6 +122,7 @@ static class SettingHints
         WorldFrame.GiRelocateSwitch => "Move the light probes out of walls.",
         WorldFrame.GiCloudShadowsSwitch => "Clouds shade the bounced light and the light shafts.",
         WorldFrame.GiCacheSwitch => "A traced cache adds fine indirect light near the camera.",
+        WorldFrame.GiCharactersSwitch => "Rays gather the bounced light on each character instead of the probes'. Needs GTAO.",
         WorldFrame.GiRaysSwitch => "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost.",
         "Tone map and grade" => "Use hybrid tone mapping and scene colour grading.",
         "Light shafts" => "Let shadows shape the light scattered through haze.",

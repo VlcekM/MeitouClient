@@ -675,6 +675,42 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly HashSet<ZoneCoordinate> _candidates = [];
 
     /// <summary>
+    /// When and from where the zones were last ranked (<see cref="RankDue"/>): <see cref="Stopwatch.GetTimestamp"/>, the eye, the arrival.
+    /// </summary>
+    long _rankedAt;
+
+    /// <summary>
+    /// See <see cref="_rankedAt"/>.
+    /// </summary>
+    Vector3 _rankedEye;
+
+    /// <summary>
+    /// See <see cref="_rankedAt"/>.
+    /// </summary>
+    Vector3? _rankedArrival;
+
+    /// <summary>
+    /// At rest the zones are ranked this often (seconds), not every frame (<see cref="RankDue"/>).
+    /// </summary>
+    const double RankRest = 1.0 / 30;
+
+    /// <summary>
+    /// Whether this update ranks the zones (<see cref="GatherCandidates"/>, <see cref="RankWanted"/>: every zone within the far reach and round
+    /// each kept point, 0.47 ms a frame at a town with eight kept points). Every update while a layout is wanted or running, while settling, when
+    /// the arrival changes or the eye has moved 64 units since the last ranking; otherwise once in <see cref="RankRest"/>: nothing is wanted
+    /// then, so the ranking can only find that the eye's or a kept point's slow drift has brought a zone within a reach, which the prefetch
+    /// margin (half a zone) allows for many times over.
+    /// </summary>
+    bool RankDue(Vector3 eye, Vector3? arrival, bool settling)
+    {
+        long now = Stopwatch.GetTimestamp();
+        bool due = settling || _wanted.Count > 0 || _runningWhole + _runningFar > 0 || arrival != _rankedArrival
+            || Vector3.DistanceSquared(eye, _rankedEye) > 64 * 64 || Stopwatch.GetElapsedTime(_rankedAt, now).TotalSeconds >= RankRest;
+        if (due) (_rankedAt, _rankedEye, _rankedArrival) = (now, eye, arrival);
+        return due;
+    }
+
+    /// <summary>
     /// The field behind <see cref="Areas"/>.
     /// </summary>
     int _areas = 1;
@@ -739,6 +775,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// One update: takes the finished layouts, drops the far zones, starts the wanted layouts, then the grass pages, meshes, levels, textures,
     /// uploads (within <paramref name="settling"/>'s or the frame's budget) and atlases.
     /// </summary>
+
     void Update(Vector3 eye, bool settling)
     {
         _updates++;
@@ -761,8 +798,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var arrival = settling ? null : Ahead;
         float arrivalReach = nearReach + PrefetchMargin;
         var keptPoints = settling ? [] : Kept;
-        GatherCandidates(eye, farReach + ahead.Length(), arrival, arrivalReach, keptPoints);
-        RankWanted(eye, predicted, arrival, arrivalReach, keptPoints, (nearReach, farReach, wholeReach));
+        if (RankDue(eye, arrival, settling))
+        {
+            GatherCandidates(eye, farReach + ahead.Length(), arrival, arrivalReach, keptPoints);
+            RankWanted(eye, predicted, arrival, arrivalReach, keptPoints, (nearReach, farReach, wholeReach));
+        }
         StartLayouts(layouts);
         NearestMissingMesh = float.PositiveInfinity;
 
@@ -1263,9 +1303,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     const int MaxGrassJobs = 12;
     /// <summary>
-    /// Grass pages generating at once under the loading screen: at least four per streaming thread.
+    /// Grass pages generating at once under the loading screen: sixteen per streaming thread. The covered frames run at some 35 a second, so this
+    /// bounds the pages a second; at four per thread a save's 11 000 near pages took 6.5 s, the threads two thirds idle.
     /// </summary>
-    static readonly int CoveredGrassJobs = Math.Max(MaxGrassJobs, 4 * BackgroundWork.Threads);
+    static readonly int CoveredGrassJobs = Math.Max(MaxGrassJobs, 16 * BackgroundWork.Threads);
     /// <summary>
     /// The page walk's wanted pages: distance (the eye's, else past all of the eye's for a kept point's), zone and page key.
     /// </summary>
@@ -1613,7 +1654,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         for (int i = 0; i < picked; i++)
         {
-            var (_, state, key) = _grassPicks[i];
+            var (pickedAt, state, key) = _grassPicks[i];
             _grassPicks[i] = default;
             StartGrassPage(state, key);
         }

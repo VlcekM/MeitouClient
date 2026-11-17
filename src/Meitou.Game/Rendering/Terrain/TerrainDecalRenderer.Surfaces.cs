@@ -44,10 +44,10 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// <summary>
     /// The range and default of <see cref="SurfaceDraws"/>.
     /// </summary>
-    public const int MinSurfaceDraws = 64, MaxSurfaceDraws = 2048, DefaultSurfaceDraws = 512;
+    public const int MinSurfaceDraws = 64, MaxSurfaceDraws = 2048, DefaultSurfaceDraws = 2048;
 
     /// <summary>
-    /// The most surface decals and footprints drawn in a frame, the nearest (the Tab panel's <c>Blood decals drawn</c> slider).
+    /// The most surface decals and footprints drawn in a frame, the ones that look largest (the Tab panel's <c>Blood decals drawn</c> slider).
     /// </summary>
     public static int SurfaceDraws { get; set; } = DefaultSurfaceDraws;
 
@@ -161,6 +161,15 @@ public sealed unsafe partial class TerrainDecalRenderer
             return mix(0.14, 1.0, smoothstep(0.16 + (1.0 - wet) * 0.39, 0.63, ink));
         }
 
+        // The mark's texture coordinates of a place on its plane (relative to its centre), and whether they are off its square.
+        vec2 uvOf(vec2 plane)
+        {
+            float s = sin(vShape.z), c = cos(vShape.z);
+            return vec2(dot(plane, vec2(s, c)) / vShape.x, dot(plane, vec2(c, -s)) / vShape.y) * 0.5 + 0.5;
+        }
+
+        bool offSquare(vec2 uv) { return any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))); }
+
         void main()
         {
             vec2 size = vec2(textureSize(textures2D[pc.depth], 0));
@@ -173,10 +182,15 @@ public sealed unsafe partial class TerrainDecalRenderer
             float dist = length(rel);
             float radius = vCentre.w;
             if (dist > radius) discard;
-            float terrainDepth = texelFetch(textures2D[pc.terrainDepth], t, 0).r;
             bool footprint = vShape.w > 1.5;
+            bool laid = vShape.w < 0.5;   // a pool, drip or smear: on a floor at the mark's height
             vec2 plane = rel.xz;
             float fade = 1.0;
+            float height = abs(rel.y);
+            // What is laid from above ends here for most of its sphere's pixels, before any other texel is read: off its height, or off its square.
+            if (laid && height > 0.4) discard;
+            if ((laid || footprint) && offSquare(uvOf(plane))) discard;
+            float terrainDepth = texelFetch(textures2D[pc.terrainDepth], t, 0).r;
             if (footprint)
             {
                 // Exactly the terrain's pixel. Floors, rocks, foliage and debris cannot take a ground print.
@@ -199,18 +213,18 @@ public sealed unsafe partial class TerrainDecalRenderer
                 vec3 n = normalize(cross(dx, dy));
                 if (dot(n, p) > 0.0) n = -n;   // towards the eye
 
-                if (vShape.w < 0.5)
+                if (laid)
                 {
-                    // A pool, drip or smear: only on a floor at the mark's height.
-                    float height = abs(rel.y);
-                    if (n.y < 0.8 || height > 0.4) discard;
+                    // A pool, drip or smear: only on a floor (at the mark's height, above).
+                    if (n.y < 0.8) discard;
                     fade = 1.0 - smoothstep(0.2, 0.4, height);
                 }
                 else
                 {
-                    // A splash: any surface that faces the mark, fainter towards the edge of its reach.
+                    // A splash: any surface that faces the mark, within the mark's half size of it along the surface's normal.
                     if (dot(n, -rel) < 0.05 * dist) discard;
-                    fade = 1.0 - smoothstep(0.55 * radius, radius, dist);
+                    float reach = max(vShape.x, vShape.y);
+                    fade = 1.0 - smoothstep(0.5 * reach, reach, abs(dot(rel, n)));
                 }
                 if (abs(n.y) <= 0.8)
                 {
@@ -218,13 +232,24 @@ public sealed unsafe partial class TerrainDecalRenderer
                     plane = vec2(dot(rel, tx), dot(rel, cross(n, tx)));
                 }
             }
-            float s = sin(vShape.z), c = cos(vShape.z);
-            vec2 uv = vec2(dot(plane, vec2(s, c)) / vShape.x, dot(plane, vec2(c, -s)) / vShape.y) * 0.5 + 0.5;
-            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) discard;
+            vec2 uv = uvOf(plane);
+            if (offSquare(uv)) discard;
             float pixel = z0 * 2.0 * pc.tanY / size.y;
             float lod = max(log2(max(pixel * float(textureSize(textures2D[nonuniformEXT(vSprite)], 0).x) / (2.0 * vShape.x), 1e-4)), 0.0);
             vec4 texel = textureLod(textures2D[nonuniformEXT(vSprite)], uv, lod);
             float a = clamp(texel.a * vColour.a * fade, 0.0, 1.0);
+            if (!laid && !footprint)
+            {
+                // A splash's drops grow fewer from its middle out, to nothing at a reach that differs round the mark (0.55 to 1 of its half
+                // size, by a noise of the direction, the mark's angle its seed). Which drops go is a noise a few drops across with a finer one:
+                // whole drops, in patches. Its texture is an even field of drops to the square's sides: cut by a fade of the radius, however
+                // uneven the rim, it read as a disc, and the gaps between neighbours as shapes with arcs for sides.
+                vec2 c = uv * 2.0 - 1.0, seed = vec2(vShape.z * 17.0, vShape.z * 29.0);
+                float r = length(c), reach = 0.55 + 0.45 * inkNoise(c / max(r, 1e-4) * 1.6 + seed);
+                float thin = smoothstep(0.15, 1.0, r / reach) * 1.16 - 0.08;
+                float kept = clamp((0.5 * inkNoise(uv * 14.0 + seed) + 0.5 * inkNoise(uv * 37.0 - seed) - 0.5) * 2.2 + 0.5, 0.0, 1.0);
+                a *= smoothstep(thin - 0.07, thin + 0.07, kept);
+            }
             // Multiplied into the lit surface: the blood's colour against a mid-grey albedo.
             vec3 ink = texel.rgb * vColour.rgb * 1.6 + 0.03;
             if (footprint)
@@ -381,6 +406,11 @@ public sealed unsafe partial class TerrainDecalRenderer
         public Vector2 At;
 
         /// <summary>
+        /// What it adds to each cell of the cover grid under it, and the radius it was added over (<see cref="Count"/>); 0 while it is not counted.
+        /// </summary>
+        public float Cover, Reach;
+
+        /// <summary>
         /// The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null, and the surface clock it last bled into it at.
         /// </summary>
         public long? Who;
@@ -437,7 +467,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     float _fullOfBleeding = -1;
 
     /// <summary>
-    /// This frame's near decals with their squared distance to the eye, nearest first (at most <see cref="SurfaceDraws"/>).
+    /// This frame's near decals, each with the square of its distance to the eye over its radius (the smaller, the larger it looks).
     /// </summary>
     readonly List<(float Distance, SurfaceDecal Decal)> _surfaceNear = [];
 
@@ -625,6 +655,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     public void ClearSurfaces()
     {
         _surfaces.Clear();
+        _cover.Clear();
         _surfacePools.Clear();
         _surfaceEyeKnown = false;
     }
@@ -681,13 +712,23 @@ public sealed unsafe partial class TerrainDecalRenderer
 
         _surfaceClock += dt;
         _footprints.RemoveAll(d => d.Expires <= _surfaceClock);
-        if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock && !InRange(d)) == 0) return;
+        if (_surfaces.RemoveAll(Gone) == 0) return;
 
         var gone = _surfacePools
             .Where(p => p.Value.Expires <= _surfaceClock && !InRange(p.Value))
             .Select(p => p.Key)
             .ToList();
         foreach (var key in gone) _surfacePools.Remove(key);
+    }
+
+    /// <summary>
+    /// A decal whose life ran out away from the camera: no longer counted in the cover, and to be removed.
+    /// </summary>
+    bool Gone(SurfaceDecal d)
+    {
+        if (d.Expires > _surfaceClock || InRange(d)) return false;
+        Uncount(d);
+        return true;
     }
 
     /// <summary>
@@ -718,6 +759,11 @@ public sealed unsafe partial class TerrainDecalRenderer
         {
             pool.Size = MathF.Min(pool.Size + grow / MathF.Max(1, pool.Size * 10), TerrainDecalStore.PoolMax);
             pool.Bled = _surfaceClock;
+            if (MathF.Abs(ReachOf(pool) - pool.Reach) >= CoverCell * 0.5f)
+            {
+                Uncount(pool);
+                Count(pool);
+            }
             return;
         }
         // At the cap with every decal a pool still bleeding (more bleeders than decals): this one bleeds on the terrain only, rather than each new
@@ -725,7 +771,7 @@ public sealed unsafe partial class TerrainDecalRenderer
         if (_surfaces.Count >= MaxSurfaces && !MakeRoom()) return;
         pool = Make(TerrainDecalType.Pool, at, random.Next(variants), random.NextSingle() * MathF.Tau, grow, abgr);
         (pool.Who, pool.Bled) = (who, _surfaceClock);
-        Keep(pool);
+        Keep(pool, always: true);
         _surfacePools[who] = pool;
     }
 
@@ -747,6 +793,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             if (Bleeding(d)) continue;
             if (d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d)
                 _surfacePools.Remove(who);
+            Uncount(d);
             _surfaces.RemoveAt(i);
             return true;
         }
@@ -780,19 +827,128 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
-    /// Adds a decal, making room at the cap: the oldest that is not a pool still bleeding, else the oldest.
+    /// Adds a decal, making room at the cap: the oldest that is not a pool still bleeding, else the oldest. Not where the surface is soaked
+    /// already (<see cref="Soaked"/>) unless <paramref name="always"/> (a bleeder's pool, which grows past what is there).
     /// </summary>
-    void Keep(SurfaceDecal decal)
+    void Keep(SurfaceDecal decal, bool always = false)
     {
+        if (!always && Soaked(decal)) return;
         if (_surfaces.Count >= MaxSurfaces && !MakeRoom())
         {
             var oldest = _surfaces[0];
             // Its bleeder's pool by the key it keeps: a scan of the pools per new decal took most of a frame with thousands bleeding at the cap.
             if (oldest.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == oldest)
                 _surfacePools.Remove(who);
+            Uncount(oldest);
             _surfaces.RemoveAt(0);
         }
         _surfaces.Add(decal);
+        Count(decal);
+    }
+
+    /// <summary>
+    /// The side of a cell of the cover grid (X, Z) and the height of one of its bands, in world units.
+    /// </summary>
+    const float CoverCell = 4, CoverBand = 8;
+
+    /// <summary>
+    /// The cover at which a place takes no new mark: the sum of the inked shares of the marks lying over it (<see cref="Inked"/>). Marks falling
+    /// at random leave about 80 % of the surface inked by then (1 less e to the power of minus 1.6), and each one more is a whole square drawn
+    /// for little new blood: a long fight in one room stacked hundreds of them on every pixel (docs/game/blood-decals.md "Blood on surfaces").
+    /// </summary>
+    const float CoverFull = 1.6f;
+
+    /// <summary>
+    /// The cover (<see cref="CoverFull"/>) the kept marks give each cell of <see cref="CoverCell"/> under them, by band of height.
+    /// </summary>
+    readonly Dictionary<(int X, int Z, int Band), float> _cover = [];
+
+    /// <summary>
+    /// The share of its square a mark of this type inks: the mean alpha of the type's textures (docs/game/blood-decals.md "Blood on surfaces").
+    /// </summary>
+    static float Inked(TerrainDecalType type) => type switch
+    {
+        TerrainDecalType.Pool => 0.35f,
+        TerrainDecalType.Smear => 0.25f,
+        _ => 0.1f,
+    };
+
+    /// <summary>
+    /// The radius a mark is counted over: of a circle of four fifths of its square's area.
+    /// </summary>
+    float ReachOf(SurfaceDecal d)
+    {
+        var (hw, hh) = Half(d);
+        return MathF.Sqrt(hw * hh);
+    }
+
+    /// <summary>
+    /// The cover grid's cell along an axis.
+    /// </summary>
+    static int CoverIndex(float along) => (int)MathF.Floor(along / CoverCell);
+
+    /// <summary>
+    /// Counts a kept mark in the cover of the cells under it: its inked share times its alpha, less for one smaller than a cell.
+    /// </summary>
+    void Count(SurfaceDecal d)
+    {
+        float reach = ReachOf(d);
+        float share = MathF.Min(1, MathF.PI * reach * reach / (CoverCell * CoverCell));
+        (d.Cover, d.Reach) = (Inked(d.Type) * ((d.Colour >> 24) / 255f) * share, reach);
+        AddCover(d, d.Cover);
+    }
+
+    /// <summary>
+    /// Takes a mark out of the cover (it is removed, or counted again at a new size).
+    /// </summary>
+    void Uncount(SurfaceDecal d)
+    {
+        if (d.Cover <= 0) return;
+        AddCover(d, -d.Cover);
+        d.Cover = 0;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="amount"/> to the cells whose middle is within the mark's <see cref="SurfaceDecal.Reach"/>, and to the one it is in.
+    /// </summary>
+    void AddCover(SurfaceDecal d, float amount)
+    {
+        int band = (int)MathF.Floor(d.Centre.Y / CoverBand);
+        int ownX = CoverIndex(d.Centre.X), ownZ = CoverIndex(d.Centre.Z);
+        for (int z = CoverIndex(d.Centre.Z - d.Reach); z <= CoverIndex(d.Centre.Z + d.Reach); z++)
+        {
+            for (int x = CoverIndex(d.Centre.X - d.Reach); x <= CoverIndex(d.Centre.X + d.Reach); x++)
+            {
+                var middle = new Vector2((x + 0.5f) * CoverCell, (z + 0.5f) * CoverCell);
+                bool under = Vector2.DistanceSquared(middle, new Vector2(d.Centre.X, d.Centre.Z)) <= d.Reach * d.Reach;
+                if (!under && (x != ownX || z != ownZ)) continue;
+                float cover = _cover.GetValueOrDefault((x, z, band)) + amount;
+                if (cover > 1e-4f) _cover[(x, z, band)] = cover;
+                else _cover.Remove((x, z, band));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cover at a place: of the marks within half a band above and below it.
+    /// </summary>
+    float CoverAt(float x, float y, float z)
+    {
+        int low = (int)MathF.Floor((y - CoverBand * 0.5f) / CoverBand), high = (int)MathF.Floor((y + CoverBand * 0.5f) / CoverBand);
+        float cover = _cover.GetValueOrDefault((CoverIndex(x), CoverIndex(z), low));
+        return high == low ? cover : cover + _cover.GetValueOrDefault((CoverIndex(x), CoverIndex(z), high));
+    }
+
+    /// <summary>
+    /// The surface under a new mark is soaked: at its centre and half-way to its edge on four sides the cover is <see cref="CoverFull"/>. A mark
+    /// reaching past the soaked place is kept.
+    /// </summary>
+    bool Soaked(SurfaceDecal d)
+    {
+        float half = ReachOf(d) * 0.5f;
+        var c = d.Centre;
+        return CoverAt(c.X, c.Y, c.Z) >= CoverFull && CoverAt(c.X - half, c.Y, c.Z) >= CoverFull && CoverAt(c.X + half, c.Y, c.Z) >= CoverFull
+            && CoverAt(c.X, c.Y, c.Z - half) >= CoverFull && CoverAt(c.X, c.Y, c.Z + half) >= CoverFull;
     }
 
     /// <summary>
@@ -878,7 +1034,7 @@ public sealed unsafe partial class TerrainDecalRenderer
 
     /// <summary>
     /// The decals within the range of the eye and in front of it (<paramref name="back"/> is the view's back), at most
-    /// <see cref="SurfaceDraws"/> of them, the nearest, into <see cref="_surfaceNear"/>.
+    /// <see cref="SurfaceDraws"/> of them, the ones that look largest, into <see cref="_surfaceNear"/>.
     /// </summary>
     void CollectSurfaceNear(Vector3 eye, Vector3 back, Vector4[] frustum, bool drawObjects)
     {
@@ -889,12 +1045,12 @@ public sealed unsafe partial class TerrainDecalRenderer
             foreach (var d in _surfaces)
             {
                 var (hw, hh) = Half(d);
-                float radius = MathF.Sqrt(hw * hw + hh * hh);
+                float radius = SphereOf(d, hw, hh);
                 var rel = d.Centre - eye;
                 // Past the range, or behind the eye.
                 if (radius <= 0 || rel.Length() - radius > range || Vector3.Dot(rel, back) > radius) continue;
                 if (!FrustumTests.SphereVisible(frustum, d.Centre, radius * 1.01f + 0.5f)) continue;
-                _surfaceNear.Add((rel.LengthSquared(), d));
+                _surfaceNear.Add((rel.LengthSquared() / (radius * radius), d));
             }
         }
 
@@ -904,15 +1060,24 @@ public sealed unsafe partial class TerrainDecalRenderer
             float reach = range + radius;
             float distance = Vector3.DistanceSquared(d.Centre, eye);
             if (distance > reach * reach || !FrustumTests.SphereVisible(frustum, d.Centre, radius)) continue;
-            _surfaceNear.Add((distance, d));
+            _surfaceNear.Add((distance / (radius * radius), d));
         }
 
-        if (_surfaceNear.Count > SurfaceDraws)
+        int draws = SurfaceDraws;
+        if (_surfaceNear.Count > draws)
         {
+            // More in view than the slider lets through: the ones that look smallest go (the square of distance over radius), wherever they are.
+            // The nearest to the eye were kept before, the marks lying on the terrain among them, which this pass never draws: a room's blood went
+            // and came back as the camera turned or zoomed, once a fight outside had left more than the cap in view.
             _surfaceNear.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            _surfaceNear.RemoveRange(SurfaceDraws, _surfaceNear.Count - SurfaceDraws);
+            _surfaceNear.RemoveRange(draws, _surfaceNear.Count - draws);
         }
     }
+
+    /// <summary>
+    /// The radius of the sphere a mark is drawn in: round its square; a splash's also holds the surfaces up to its half size off its plane.
+    /// </summary>
+    static float SphereOf(SurfaceDecal d, float hw, float hh) => d.Floor ? MathF.Sqrt(hw * hw + hh * hh) : 1.55f * MathF.Max(hw, hh);
 
     /// <summary>
     /// A sole's bounding sphere includes room for the terrain's slope.
@@ -941,7 +1106,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             if (footprint) alpha = MathF.Min(alpha, d.Expires - _surfaceClock);
             _surfaceInstances[n++] = new SurfaceInstance
             {
-                Centre = new Vector4(d.Centre - eye, footprint ? SoleRadius(d) : MathF.Sqrt(hw * hw + hh * hh)),   // the sphere round the decal's square
+                Centre = new Vector4(d.Centre - eye, footprint ? SoleRadius(d) : SphereOf(d, hw, hh)),
                 Shape = new Vector4(hw, hh, d.Angle, footprint ? 2 + d.Transfer : d.Floor ? 0 : 1),
                 Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f, alpha),
                 Sprite = index,

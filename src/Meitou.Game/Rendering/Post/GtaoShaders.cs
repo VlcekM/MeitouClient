@@ -353,7 +353,7 @@ static class GtaoShaders
         {
             uvec4 s = texelFetch(uSurface, px, 0);
             if ((s.w & 256u) == 0u) return vec3(uCurve.z);
-            vec3 c = vec3(float(s.z & 255u), float(s.z >> 8u), float(s.w & 255u)) / 255.0;
+            vec3 c = vec3(float(s.z & 255u), float((s.z >> 8u) & 255u), float(s.w & 255u)) / 255.0;
             return c * c;
         }
 

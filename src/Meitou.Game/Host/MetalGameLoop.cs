@@ -2636,7 +2636,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The squad tour and character flights hold the camera while they fly; otherwise the rig owns the view.
         if (!_tourHolds) host.ApplyCamera(host.Session.CameraAt());
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
-        host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);
+        host.Gpu.Ahead = _tour.ArrivalEye(TourPosition) ?? host.LoadAhead;
         if (_hud is not null)
             host.Gpu.Kept = host.Config.KeepTexturesAtCharacters
                 ? [.. _hud.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];

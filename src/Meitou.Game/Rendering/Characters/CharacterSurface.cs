@@ -18,6 +18,7 @@ static class CharacterSurface
         vec3 surfaceSunTraced(vec3 sun, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
         vec3 surfaceAmbient(vec3 sky);
+        float surfaceSkin();
 
         """;
 
@@ -29,7 +30,7 @@ static class CharacterSurface
     /// <summary>
     /// What the surface adds to the sun's and the sky's light, after <see cref="SunAnchor"/>.
     /// </summary>
-    const string SunHook = "if (surfaceOn) { lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse, 1.0 - tracedShare) + surfaceAmbient(envDiffuse); if (tracedShare > 0.0) tracedSunOut += surfaceSunTraced(tracedSun, albedo * fresnelDiffuse); }";
+    const string SunHook = "if (surfaceOn) { vec3 surfaceSky = surfaceAmbient(envDiffuse); float skinPart = surfaceSkin(); lit += surfaceSun(sun, am.a * 2.0, albedo * fresnelDiffuse, 1.0 - tracedShare) + surfaceSky - skinPart * sun * sunGlint / ATMO_PI; ambientGlossOut += dot(surfaceSky, vec3(0.2126, 0.7152, 0.0722)); if (tracedShare > 0.0) tracedSunOut += surfaceSunTraced(tracedSun, albedo * fresnelDiffuse) - skinPart * tracedSun * sunGlint / ATMO_PI; }";
 
     /// <summary>
     /// The line of the atmosphere text that <see cref="LampHook"/> follows: a lamp's specular.
@@ -39,7 +40,7 @@ static class CharacterSurface
     /// <summary>
     /// What the surface adds to a lamp's specular, after <see cref="LampAnchor"/>.
     /// </summary>
-    const string LampHook = "if (surfaceOn) specular += radiance * surfaceSpecular(l);";
+    const string LampHook = "if (surfaceOn) specular += radiance * (surfaceSpecular(l) - surfaceSkin() * (nl * D * (0.04 * vis + 0.96 * fresnel * vis)) / 3.14159265358979);";
 
     /// <summary>
     /// The atmosphere text with the two hooks only the character fragment has, so no other program's text changes.
@@ -152,17 +153,25 @@ static class CharacterSurface
             vec3 hue = skinAlbedo / max(max(skinAlbedo.r, max(skinAlbedo.g, skinAlbedo.b)), 1e-3);
             return hue * hue;
         }
-        // Skin's oil: two lobes (a tight sheen over a broad one, d'Eon's fit of skin), F0 0.028, and the fine hairs' soft bright edge.
+        // How much of the fragment is skin lit by the skin's own lobe (skinLight): the hooks take the game's lobe off that share.
+        float skinRoughness = 0.5;
+        float surfaceSkin() { return (surfaceParts & 4u) != 0u ? skinShare : 0.0; }
+        // Skin's reflection: one GGX lobe with the height-correlated Smith term, as measured skin is modelled (the roughness the fragment set, 0.5 dry; index
+        // 1.4, 2.8 % at normal incidence). The game's lobe on skin has a chalk's width (its gloss map is 0.08 to 0.23) and an eighth of this lobe's energy, so
+        // skin showed no highlight. In a light's units: its irradiance is pi squared times its term in the world, pi times in the studio.
         vec3 skinLight(vec3 l)
         {
-            float nl = dot(surfaceNormal, l), nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0);
+            float nl = dot(surfaceNormal, l), nv = clamp(dot(surfaceNormal, surfaceView), 1e-3, 1.0);
             if ((surfaceParts & 4u) == 0u || skinShare <= 0.0 || nl <= 0.0) return vec3(0.0);
             vec3 h = normalize(l + surfaceView);
             float nh = clamp(dot(surfaceNormal, h), 0.0, 1.0), lh = clamp(dot(l, h), 0.0, 1.0);
+            // The pores are finer than a pixel at any distance but a close-up's: their slopes (0.19 all round: a 0.4 mm cell 0.075 mm deep, the reference's) widen
+            // the lobe by their variance instead of bumping the normal (Kaplanyan's filtering: the squared width takes the slopes' squared).
+            float a = skinRoughness * skinRoughness, a2 = min(a * a + 0.035, 1.0);
+            float d = nh * nh * (a2 - 1.0) + 1.0;
+            float visible = 0.5 / (nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2));
             float fresnel = 0.028 + 0.972 * pow(1.0 - lh, 5.0);
-            float oil = min(nl * (0.6 * lobeD(nh, 0.22) + 0.4 * lobeD(nh, 0.42)) * fresnel * 0.25 / max(lh * lh, 0.1), 1.5);
-            float fuzz = pow(1.0 - nv, 3.0) * nl * 0.35;
-            return skinShare * (vec3(oil) + skinAlbedo * (view.fogDistance > 0.0 ? ATMO_PI : 1.0) * fuzz);
+            return vec3(skinShare * (view.fogDistance > 0.0 ? ATMO_PI * ATMO_PI : ATMO_PI) * nl * a2 / (ATMO_PI * d * d) * visible * fresnel);
         }
         // Light through a thin part (ears, fingers), in the units of the diffuse N.L: its share of skin, facing away from the light. A thin part curves tightly and is about
         // two radii thick (the curvature bake), and passes exp(-thickness / 0.05 units): red light's reach in skin is some 5 mm, so an ear or a finger glows and a nose
@@ -213,13 +222,9 @@ static class CharacterSurface
             float nv = clamp(dot(surfaceNormal, surfaceView), 0.0, 1.0), edge = 1.0 - nv;
             vec3 added = vec3(0.0);
             if (strandStrength > 0.0) added += strandTint * sky * strandStrength * 0.3 * strandLobe(normalize(vec3(0.0, 1.0, 0.0) + surfaceView), (strandGrain - 0.5) * 0.4, 8.0);
-            if (skinShare > 0.0 && (surfaceParts & 4u) != 0u) added += skinAlbedo * sky * skinShare * 0.5 * edge * edge * edge;
             if (clothSheen > 0.0) added += clothSheen * clothTint * sky * 0.8 * edge * edge;
-            if (eyeShare > 0.0)
-            {
-                vec3 r = reflect(-surfaceView, surfaceNormal);
-                added += eyeShare * sky * (0.05 + 0.95 * pow(edge, 5.0)) * (1.0 + 3.0 * smoothstep(0.1, 0.8, r.y));
-            }
+            // (No reflection of the sky on the eye here: the game's own, at the eye's gloss, is already its cornea's. Added again the eyes took 4.5 times the
+            // reflection a traced cornea has, and stayed bright in the shade.)
             if (metalShare > 0.0 && view.fogDistance < 0.0)   // the studio has no reflection of its own: the sky in the mirror direction, blurred by the gloss
             {
                 vec3 r = reflect(-surfaceView, surfaceNormal);

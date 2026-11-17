@@ -55,8 +55,8 @@ bare. Per race (`CharacterRenderer.SkinRaces`, settings Graphics > Skin, `meitou
 person race of the loaded data (RACE records no ANIMAL_CHARACTER uses, mods included) is on unless RACE `is robot`. World and Meitou
 stage (fog distance -3) and the portraits (the plain model, fog distance 0: their fixed key light is near the camera, so the glow stays on the
 shadowed cheek, jaw and neck); the game's stage and icons keep N·L. Lamps too: the character shader defines `LAMP_SKIN`, and
-`LampShaders.lampLight` takes each lamp's diffuse from `lampSkinDiffuse` (the same term, per-fragment inputs set in `main`); the specular keeps
-N·L. Faithful: push `skinLut` 0, unchanged.
+`LampShaders.lampLight` takes each lamp's diffuse from `lampSkinDiffuse` (the same term, per-fragment inputs set in `main`, one normal for the three channels so the lamp shadows' pass can rebuild it, [render-lights](render-lights.md#traced-lamp-shadows)); the specular keeps
+N·L (the `chars2` skin lobe below replaces it). Faithful: push `skinLut` 0, unchanged.
 Limits: the sun shadow is not scattered, so the band past the terminator ends at the shadow edge; no back-lit
 translucency (ears). The `chars2` switch lifts both (below).
 
@@ -84,11 +84,11 @@ the idea from KenshiNative's skin3; it measures thickness with a ray, which has 
 
 **Water beads** (`wetBeads`, the Advanced materials part `Water beads`, bit 32; engine choice, the game has a wet film only): where the weather or the water's mark leaves a surface wet, drops stand on it. The drops are the wet world's ([weather.md "Wet world"](formats/weather.md), `wetDrops`): the character hands it the mesh's own space (`vBind`, the modelled position; the mesh's X and Y axes in the world come as `vAxisX` and `vColour`) times the mesh's scale (`vAxisX`'s length), so the drops stay on the body as it moves and have one size on any mesh. The share of cells holding a drop follows the wetness, less on what absorbs (cloth: the game's absorbance); rain wets what faces up. Not on hair or eyes, not under the water. **Verified** by pictures, t_flats_shore: after a swim (blades, leather, human and Shek skin, the part on and off) and in forced rain (a face at three times 2 s apart: drops grow, run down with a track, none vanishes at once).
 
-**Skin oil and edges**: two GGX lobes (roughness 0.22 and 0.42, F0 0.028, capped) and a soft edge from the fine hairs in the skin's own albedo, per light (in its normalised hue, dark skin glowed orange, **Observed**); the sky adds an edge to skin and cloth, a sheen along hair and its reflection on the eye (`surfaceAmbient`, **Observed** in the studio and the world).
+**Skin reflection** (`CharacterSurface.skinLight`, the `skin sheen and glow` part, 4): one GGX lobe with the height-correlated Smith visibility, F0 0.028 (IOR 1.4), roughness `CharacterShaders.SkinRoughness` 0.5 (physicallybased.info's measured skin; Epic's skin guide starts at 0.4), or the smoother roughness of the fragment's gloss where wet. The pores are finer than a pixel at all but close range, so their slopes (0.19 all round: a 0.4 mm cell 0.075 mm deep) widen the lobe instead of bumping the normal: the squared width gains 0.035 (Kaplanyan's filtering). In a light's units: pi squared times the term in the world, pi in the studio. The hooks take the game's lobe off the skin share (`surfaceSkin()`, in `SunHook` and `LampHook`): on skin it is a chalk's width (gloss map 0.08 to 0.23) with an eighth of this lobe's energy, so skin had no highlight. The sky's reflection keeps the game's gloss (at 0.5 it doubled against the reference and drew the sky's shapes on a cheek). The two oil lobes, the fine hairs' fuzz and the sky's edge term on skin are gone; cloth keeps its sky edge and hair its sheen (`surfaceAmbient`). A character whose light is gathered gives its sky reflection its ambient's hue ([Characters](render-gi.md#characters)). **Observed** (against a path-traced reference of the same scenes, Blender Cycles with the engine's geometry, lights and per-pixel materials, local tooling not in the repo; the editor's bar at night and an outdoor close-up by day, two scenes only): lamp specular on a lit chest 0.0207 against 0.0187 (0.0056 before), sun specular on lit skin 0.022 against 0.029 (luminance). In the reference the cloth's sheen does not flatten a face in a hood (sheen off: the same face) and the skin's scattering is under a pixel at these sizes (Cycles' Burley radius 4.82 mm is a diffusion length of about 0.2 mm, shadow edges on skin equally wide in both, 23 px), so no screen-space scattering is needed. **Unknown**: explicit pores at close range (only the widening is in), cost.
 
 **Eyes** (needs the skin switch and the race's skin): the game's eyeball is head texture at gloss about 0.93, a mirror of the specular cube (**Observed** by KenshiNative on its
 game data, `docs/features/characters.md` "Eyes"). Port of the surface of its eyes2: the eyeball by data (`eyeOf`: head UV, bare, no skin tone, gloss 0.5 to 0.7 up, curvature 2.5
-to 4.5 up in place of its race list) takes no skin terms, gloss 0.4 for the sky, and a bounded tear-film catchlight from the
+to 4.5 up in place of its race list; hive shells stay out by curvature, **Unknown** until measured) takes no skin terms, gloss 0.4 for the sky (the game's own reflection only: a second sky reflection in `surfaceAmbient` gave the eye 4.5 times a traced cornea's, **Observed** against the path-traced reference, outdoor close-up; without it an eye is 1.0 to 1.4 times the reference), and a bounded tear-film catchlight from the
 sun and the lamps. Not ported: eyes2's refracted iris and eyes3's drawn iris: KenshiNative turned them off after play (they often looked worse than the game's eye), and eyes3 needs a
 table per head mesh, against the modded-race rule.
 **Parts.** The `chars2` switch (Advanced materials) has five parts, each a plain on / off row under it on the Characters tab (`CharacterRenderer.SurfaceParts`, saved as `Meitou: <label>`, all on by default; the colour pass's `fill.a` carries them, `surfaceParts` in the shader): hair highlights (1), cloth sheen (2), skin sheen and glow (4), eye catchlights (8), metal on characters (16). **Observed** (offscreen, a plate-armoured arm): metal alone gives the picture of all five there, and all but metal the picture of the switch off.
@@ -118,6 +118,39 @@ so an orbit or zoom round a fixed target moves the eye smoothly instead of by st
 over 0.001 (the ground read under the eye wavers by a few ten-thousandths frame to frame). Every other scene pass follows the same convention: [renderer-native.md "Render origin"](renderer-native.md#render-origin).
 
 The camera reprojection (`Reprojection.ClipToPrevious`: the velocity pass, the upscaler's and frame generation's `ClipToPrevClip`) takes the eye's step with the residuals (`PostProcess.EyeStep`). By the float eyes alone it was off by up to a float step each frame, a pixel or more for what is within 10 units.
+
+### Visibility buffer (Meitou, for crowds)
+
+`CharacterVisibility`, `CharacterVisibilityShaders`; `CharacterRenderer.VisibilityMode`: by the main view's triangles (on past 400 thousand, off again
+under 250 thousand: a change of way builds the materials' table anew), or `MEITOU_CHARACTER_VISIBILITY=0` / `1` for never / always. **Observed**
+(same measure as the cost below): 1.6 million triangles in a town street 1.75 -> 1.43 ms; 69 thousand in a close-up 0.53 -> 0.65 ms, 53 thousand in the
+desert 0.10 -> 0.17 ms. The main view's colour pass split in
+two so each character pixel is shaded once (Burns and Hunt 2013, JCGT 2(2)); every other view (shadows, reflection, motion, icons, portraits, stage, hover
+masks) draws forward. Needs Vulkan with ray query (meshes read by device address), `VK_KHR_fragment_shader_barycentric` and the geometry shader feature
+(`gl_PrimitiveID` in a fragment program), and no late-depth discard workaround.
+- **Id pass**: outside the scene's pass, the colour pass's vertex program (plus the instance row) over the scene's depth and its shading rate attachment, with
+  the colour pass's discards at the same lookups. Per pixel: row + 1 (0: none), primitive, `gl_ShadingRateEXT`, facing, the perspective barycentrics and their
+  fine and coarse derivatives (RGBA32UI + 2 x RGBA32F: 48 bytes a pixel, 177 MB at 2560x1440).
+- **Resolve**: one triangle over the scene's colour targets (set 0 adds storage 10, the instance rows, and 11, each row's vertex and index addresses). Per
+  pixel the triangle's corners by address (`GpuVertex` character layout), the vertex program's
+  text on each, its outputs interpolated, then the colour pass's `main` text: its lookups and derivatives are macros (`TEXG`, `DFDX`, `FWIDTH`, ...) that the
+  colour pass expands to its original text (the preprocessed program is unchanged) and the resolve to gradients from the triangle: implicit lookups the
+  coarse ones, `dFdx`/`fwidth` the fine ones. A hair card's mipmap bias widens the lookup's derivatives (`hairTexGrad`, by 2^bias): a gradient lookup takes no bias. **Observed** (save flickering-hair): a second texture entry with the bias in its sampler was freed under the records that held it (the cache keeps two entries a texture), and hair drew black whenever the buffer came on.
+  Where the colour pass takes a derivative inside a branch the resolve applies the quad rule below: the worn items' blood splatter lookup, and the blood film's
+  edge and slope, whose neighbour values come from probes (the colour pass's `main` run up to the film at the quad's three other lanes).
+- **Observed** (RTX 4090, same-frame captures of both paths): an implicit lookup's level of detail is the coarse derivatives' (gradients from
+  `dFdxCoarse` matched the implicit lookups bit for bit on 99.1 % of a close-up's character pixels, from `dFdx` on 91 %); `dFdx` is `dFdxFine` and `fwidth`
+  the fine one (replacing them changed no pixel); inside divergent control flow a derivative is 0 for every lane of a quad unless all four lanes took the
+  branch (the blood film's: 0 on all 578 lanes of partly active quads, non-zero on 2068 of 2360 in whole ones); a text edit that leaves a program's meaning
+  moves about 11 % of character pixels by rounding.
+- **Observed** cost (2560x1440, paused, alternated in one session): heavy-scene's characters stage 6.2 -> 2.1 ms, frame 32.4 -> 28.4 ms (about one
+  triangle a pixel: the colour pass shaded quads of tiny triangles and hidden surfaces); the studio close-ups (`lamp`, `studio view 5 2 11` and `5 0 5`,
+  large triangles) 0.55 -> 0.61 and 0.80 -> 0.85 ms: the id pass and three corners a pixel cost more than the quads saved.
+- **Observed** picture: not bit-identical. The resolve interpolates its inputs itself, so most differences are a float's last bits (median 0.07 % of a
+  pixel's value: the close-ups 1 % of character pixels a level of 255 off after a tone map, a handful more, none over 15; screenshots within the
+  temporal floor). Steep functions of them (the blood film's edge, its slope's normal) make about 300 pixels of heavy-scene's 830000 differ by more than
+  8 levels. Not emulated (gaps): derivatives after a cut-out's discard, in the skin's light-through shadow, at the traced sun's boundary and in the wet
+  beads (all where part of a quad left early).
 
 ## Content, LOD and memory
 

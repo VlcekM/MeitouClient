@@ -525,7 +525,20 @@ public sealed unsafe class WaterRenderer : IDisposable
             size *= mix(0.5, 1.0, smoothstep(0.15, 0.65, wNoise(q / 240.0 + o * 1.7 + 70.0)));
         }
 
-        vec4 shoreField(vec2 uv) { return textureLod(uShoreField, uv, 0.0); }
+        // The shore field through a cubic B-spline (four bilinear lookups): read bilinearly, the lines of equal distance to the waterline were straight
+        // across each 10-unit texel and turned at its sides, so the wave fronts, the swash's line and the wet sand's ran in steps along a curved shore.
+        vec4 shoreField(vec2 uv)
+        {
+            vec2 size = vec2(textureSize(uShoreField, 0));
+            if (size.x < 4.0) return textureLod(uShoreField, uv, 0.0);   // the one-texel stand-in of a field with no waterline
+            vec2 st = uv * size - 0.5, i = floor(st), f = st - i;
+            vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0, w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
+            vec2 w3 = f * f * f / 6.0, w2 = 1.0 - w0 - w1 - w3;
+            vec2 g0 = w0 + w1, g1 = w2 + w3;
+            vec2 p0 = (i - 0.5 + w1 / g0) / size, p1 = (i + 1.5 + w3 / g1) / size;
+            return g0.x * (g0.y * textureLod(uShoreField, vec2(p0.x, p0.y), 0.0) + g1.y * textureLod(uShoreField, vec2(p0.x, p1.y), 0.0))
+                 + g1.x * (g0.y * textureLod(uShoreField, vec2(p1.x, p0.y), 0.0) + g1.y * textureLod(uShoreField, vec2(p1.x, p1.y), 0.0));
+        }
 
         // The swell's wave count at time tau (seconds; docs/render-water.md "Shore waves"): a wave every uShore.z seconds on average, in sets of seven over which the period
         // swings 20% either way, so the crests never come evenly spaced. period: the period at tau.
@@ -1454,6 +1467,28 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly uint _gridIndexCount;
 
     /// <summary>
+    /// The grid's segments round the eye and its rings' radii, nearest first (<see cref="PolarRadii"/>); empty without the Meitou waves.
+    /// </summary>
+    readonly int _gridSegments;
+
+    /// <summary>
+    /// See <see cref="_gridSegments"/>.
+    /// </summary>
+    readonly double[] _gridRadii = [];
+
+    /// <summary>
+    /// Meitou: only the grid's rings the picture can show are drawn (<see cref="GridRange"/>). The whole grid is 1.46 million vertices at 1024
+    /// segments, each reading the ocean's maps, whatever the view: 0.33 ms at a town with no water in sight (docs/render-water.md "Grid").
+    /// </summary>
+    public static bool RingsInView { get; set; } = true;
+
+    /// <summary>
+    /// How far the surface is taken to stand from its undisplaced place at most, up, down or sideways (units): the ocean's waves at the strongest
+    /// wind (<see cref="OceanSpectrum.MaxWind"/>: a significant height near 90 units), the breakers and the ripples, twice over.
+    /// </summary>
+    const float GridReach = 200;
+
+    /// <summary>
     /// The water's maps: colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order
     /// of <see cref="WaterProgram.MapNames"/>.
     /// </summary>
@@ -1709,7 +1744,11 @@ public sealed unsafe class WaterRenderer : IDisposable
             _standInArrayTexture.View()));
 
         (_quad, _faithful) = FaithfulWater(gpu);
-        if (meitouWaves) (_grid, _gridIndices, _meitou, _gridIndexCount) = MeitouWater(gpu, gridSegments);
+        if (meitouWaves)
+        {
+            (_grid, _gridIndices, _meitou, _gridIndexCount) = MeitouWater(gpu, gridSegments);
+            (_gridSegments, _gridRadii) = (gridSegments, PolarRadii(gridSegments));
+        }
     }
 
     /// <summary>
@@ -1804,13 +1843,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     internal static (float[] Positions, uint[] Indices) PolarGrid(int segments)
     {
-        double q = 1 + 2 * Math.PI / segments;
-        var radii = new List<double>();
-        for (double r = 1; r < GridDetailRadius; r *= q) radii.Add(r);
-        radii.Add(GridDetailRadius);
-        radii.Add(1e6);   // the outer ring: scaled to the extent in the vertex shader
-        var positions = new float[(1 + radii.Count * segments) * 2];
-        for (int ring = 0; ring < radii.Count; ring++)
+        var radii = PolarRadii(segments);
+        var positions = new float[(1 + radii.Length * segments) * 2];
+        for (int ring = 0; ring < radii.Length; ring++)
             for (int s = 0; s < segments; s++)
             {
                 double a = 2 * Math.PI * s / segments;
@@ -1818,15 +1853,112 @@ public sealed unsafe class WaterRenderer : IDisposable
                 positions[i * 2] = (float)(Math.Cos(a) * radii[ring]);
                 positions[i * 2 + 1] = (float)(Math.Sin(a) * radii[ring]);
             }
-        var indices = new List<uint>(segments * 3 + (radii.Count - 1) * segments * 6);
+        var indices = new List<uint>(segments * 3 + (radii.Length - 1) * segments * 6);
         uint V(int ring, int s) => (uint)(1 + ring * segments + (s % segments));
         // Far rings first, the eye's fan last: the water writes no depth, so where a displaced crest stands in front of water further out the nearer
         // triangle must come later to cover it (drawn near first, the water behind a wave showed through it).
-        for (int ring = radii.Count - 2; ring >= 0; ring--)
+        for (int ring = radii.Length - 2; ring >= 0; ring--)
             for (int s = 0; s < segments; s++)
                 indices.AddRange([V(ring, s), V(ring, s + 1), V(ring + 1, s + 1), V(ring, s), V(ring + 1, s + 1), V(ring + 1, s)]);
         for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
         return (positions, indices.ToArray());
+    }
+
+    /// <summary>
+    /// The polar grid's ring radii, nearest first: from 1 unit, each 1 + 2 pi / segments times the last, out to <see cref="GridDetailRadius"/>,
+    /// then the outer ring's mark (the vertex shader scales it to the plane's extent).
+    /// </summary>
+    internal static double[] PolarRadii(int segments)
+    {
+        double q = 1 + 2 * Math.PI / segments;
+        var radii = new List<double>();
+        for (double r = 1; r < GridDetailRadius; r *= q) radii.Add(r);
+        radii.Add(GridDetailRadius);
+        radii.Add(1e6);
+        return [.. radii];
+    }
+
+    /// <summary>
+    /// The grid's index range for a view: the rings between the nearest and the farthest ground distance at which the picture's rays cross the
+    /// slab the surface stays in (the water level, <see cref="GridReach"/> either side), the indices being the rings from the farthest in
+    /// (<see cref="PolarGrid"/>), so one run of them. A ray going down by angle a meets depth h under the eye at h / tan a from the point under
+    /// the eye: the steepest ray of the picture gives the nearest distance, the flattest the farthest (none when it does not go down). Sideways
+    /// nothing is left out. The whole grid when the eye is within the slab or under it, or the matrix cannot be inverted.
+    /// </summary>
+    (uint First, uint Count) GridRange(Matrix4x4 relativeViewProjection, Vector3 eye, float extent)
+    {
+        var whole = (0u, _gridIndexCount);
+        float depth = eye.Y - WorldWater.Height;
+        if (!RingsInView || _gridRadii.Length < 2 || depth <= GridReach || !Matrix4x4.Invert(relativeViewProjection, out var inverse)) return whole;
+
+        // The picture's corner rays, a twentieth wider than it (the jitter, and a margin): each from two points of its line, so what the matrix
+        // has left of the eye's place cancels.
+        Span<Vector3> corners = stackalloc Vector3[4];
+        ReadOnlySpan<float> xs = [-1.05f, 1.05f, 1.05f, -1.05f], ys = [-1.05f, -1.05f, 1.05f, 1.05f];
+        for (int i = 0; i < 4; i++)
+        {
+            var a = Vector4.Transform(new Vector4(xs[i], ys[i], 0.25f, 1), inverse);
+            var b = Vector4.Transform(new Vector4(xs[i], ys[i], 0.75f, 1), inverse);
+            if (!(MathF.Abs(a.W) > 1e-20f) || !(MathF.Abs(b.W) > 1e-20f)) return whole;
+            Vector3 pa = new Vector3(a.X, a.Y, a.Z) / a.W, pb = new Vector3(b.X, b.Y, b.Z) / b.W, along = pb - pa;
+            float length = along.Length();
+            if (!(length > 1e-9f) || !float.IsFinite(length)) return whole;
+            corners[i] = Vector3.Dot(along, pa + pb) < 0 ? -along / length : along / length;
+        }
+
+        float steepest = MostAlong(corners, -Vector3.UnitY), flattest = -MostAlong(corners, Vector3.UnitY);
+        if (!float.IsFinite(steepest) || !float.IsFinite(flattest)) return whole;
+        if (steepest <= 0)
+        {
+            return (0, 0);   // no ray goes down: the slab is under the eye
+        }
+        double near = steepest >= 1 ? 0 : (depth - GridReach) * Math.Sqrt(1 - (double)steepest * steepest) / steepest - GridReach;
+        double far = flattest <= 0 ? double.PositiveInfinity : (depth + GridReach) * Math.Sqrt(1 - (double)flattest * flattest) / flattest + GridReach;
+
+        // A ring pair holds a point at ground distance d only if its outer ring is at least that far and its inner one no farther, to within a
+        // segment's sag (a 50th is far more).
+        near *= 0.98;
+        far *= 1.02;
+        int rings = _gridRadii.Length, pairs = rings - 1, lo = pairs, hi = -1;
+        for (int k = 0; k < pairs; k++)
+        {
+            double inner = _gridRadii[k], outer = k + 1 == rings - 1 ? Math.Max(extent, GridDetailRadius) : _gridRadii[k + 1];
+            if (outer < near || inner > far) continue;
+            lo = Math.Min(lo, k);
+            hi = Math.Max(hi, k);
+        }
+        bool fan = _gridRadii[0] >= near;
+        uint perPair = 6 * (uint)_gridSegments, first, count;
+        if (hi < lo) (first, count) = (perPair * (uint)pairs, 0);
+        else (first, count) = (perPair * (uint)(pairs - 1 - hi), perPair * (uint)(hi - lo + 1));
+        if (fan && (hi < lo || lo == 0)) count += 3 * (uint)_gridSegments;
+        return (first, count);
+    }
+
+    /// <summary>
+    /// The largest <paramref name="n"/> · d over the unit directions d of the cone between four rays given in order round it (1 when the cone
+    /// holds n): at a ray, or on a face where n's projection onto the face's plane falls between the face's two rays.
+    /// </summary>
+    static float MostAlong(ReadOnlySpan<Vector3> rays, Vector3 n)
+    {
+        var axis = rays[0] + rays[1] + rays[2] + rays[3];
+        bool inside = true;
+        float best = -1;
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 a = rays[i], b = rays[(i + 1) & 3];
+            best = MathF.Max(best, Vector3.Dot(n, a));
+            var across = Vector3.Cross(a, b);
+            float size = across.Length();
+            if (!(size > 1e-9f)) return float.NaN;
+            var inward = Vector3.Dot(across, axis) < 0 ? -across / size : across / size;
+            float side = Vector3.Dot(n, inward);
+            if (side < 0) inside = false;
+            var onFace = n - side * inward;
+            if (Vector3.Dot(Vector3.Cross(a, onFace), across) >= 0 && Vector3.Dot(Vector3.Cross(onFace, b), across) >= 0)
+                best = MathF.Max(best, onFace.Length());
+        }
+        return inside ? 1 : best;
     }
 
     #endregion
@@ -2313,7 +2445,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (meitouWater)
         {
             cmd.BindIndexBuffer(new GpuBufferBinding(_gridIndices!.Handle, 0, _gridIndices.Size), IndexKind.U32);
-            cmd.DrawIndexed(_gridIndexCount);
+            var (first, count) = GridRange(view.ViewProjection, eye, extent);
+            if (count > 0) cmd.DrawIndexed(count, firstIndex: first);
         }
         else cmd.Draw(4);
         Gpu.EndGuest(cmd);

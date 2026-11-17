@@ -110,6 +110,7 @@ static class Program
         // Booting to the Meitou title: the world is loaded round the title's view, which it shows first (docs/engine.md).
         bool toTitle = game.TitlePreview || world.Screenshot is null && !game.NewGame && game.Load is null && !game.Continue && game.Sandbox == 0
             && !game.Duel && game.Battle is null && !game.NoPopulation;
+        game.BootsToTitle = toTitle && world.Screenshot is null;
         if (world.X is null && world.Zone is null && world.Town is null && toTitle) (world.X, world.Z) = TitleComposition.Focus;
         if (world.X is null && world.Zone is null && world.Town is null) world.Town = "The Hub";
     }

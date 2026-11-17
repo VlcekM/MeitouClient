@@ -223,7 +223,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// <summary>
     /// Closes the editor (and its file dialog) and drops the session and its previews.
     /// </summary>
-    void CloseEditor()
+    internal void CloseEditor()
     {
         player.FaithfulScreens.Close("file");
         player.FaithfulScreens.Close("editor");
@@ -285,12 +285,19 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// <summary>
     /// Debug: turns the open editor's camera (false when it is closed).
     /// </summary>
-    public bool TurnEditor(float yaw, float? elevation = null)
+    public bool EditorSettled()
+    {
+        if (!EditorOpen || !Editor!.Drafts.ContainsKey(Editor.Current)) return false;
+        return Previews.EditorPending(Editor.Current) is null && Previews.EditorBlend(Editor.Current) is null;
+    }
+
+    public bool TurnEditor(float yaw, float? elevation = null, float? distance = null)
     {
         if (EditorView() is null) return false;
 
         Editor!.Orbit.SetYaw(yaw);
         if (elevation is { } height) Editor.Orbit.SetElevation(height);
+        if (distance is { } far) Editor.Orbit.SetDistance(far);
         return true;
     }
 

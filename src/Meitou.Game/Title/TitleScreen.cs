@@ -121,6 +121,24 @@ sealed class TitleScreen(GameHost host)
     }
 
     /// <summary>
+    /// The save Continue loads, read on a worker from the boot (<see cref="PrefetchTitleSave"/>); taken by the first <see cref="TitleSaveAppearance"/>.
+    /// </summary>
+    static Task<SaveGame?>? s_titleSave;
+
+    /// <summary>
+    /// Starts reading the save Continue loads on a worker, for the title's character (<see cref="TitleSaveAppearance"/>), as the boot begins.
+    /// </summary>
+    internal static void PrefetchTitleSave(Content.GameInstall install) => s_titleSave = Task.Run(() => ReadTitleSave(install));
+
+    /// <summary>
+    /// The save Continue loads (the newest), read whole; null when there is none.
+    /// </summary>
+    static SaveGame? ReadTitleSave(Content.GameInstall install) =>
+        SaveCatalog.Scan(QuickSave.DefaultRoot, [install.SaveDirectory, .. install.UserSaveDirectories]).FirstOrDefault() is { } slot
+            ? SaveGame.Load(slot.Folder)
+            : null;
+
+    /// <summary>
     /// The first-created character in the player's first squad in the save Continue will load, drawn with its saved look and worn kit.
     /// </summary>
     /// <param name="stats">Its saved stats (null: unread).</param>
@@ -131,11 +149,8 @@ sealed class TitleScreen(GameHost host)
         try
         {
             SaveGame? save = host.StartSave;
-            if (save is null)
-            {
-                var slots = SaveCatalog.Scan(QuickSave.DefaultRoot, [host.Install.SaveDirectory, .. host.Install.UserSaveDirectories]);
-                if (slots.FirstOrDefault() is { } slot) save = SaveGame.Load(slot.Folder);
-            }
+            if (save is null && Interlocked.Exchange(ref s_titleSave, null) is { } read) save = read.GetAwaiter().GetResult();
+            else if (save is null) save = ReadTitleSave(host.Install);
 
             if (save?.PlayerFaction is not { } faction || host.PopData?.Appearances is not { } appearances) return null;
             var platoons = save.Platoons.Where(p => p.FactionId == faction.Id && p.File is not null && p.Characters.Count > 0)

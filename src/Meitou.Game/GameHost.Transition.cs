@@ -76,6 +76,15 @@ sealed partial class GameHost
     /// </summary>
     internal float ReadHour = float.NaN;
     /// <summary>
+    /// Where the save being read was looked at (its camera's pivot), set by the reading worker with its CAMERA; null until then or without a view.
+    /// </summary>
+    internal System.Runtime.CompilerServices.StrongBox<Vector3>? ReadView;
+    /// <summary>
+    /// While a load runs, the destination the streaming loads ahead of the swap (WorldGpu.Ahead, as a flight's landing): the sky's climb, a few seconds
+    /// in which nothing of the destination could load before, now streams its terrain, objects and grass.
+    /// </summary>
+    internal Vector3? LoadAhead => ActiveSceneLoad is not null && Volatile.Read(ref ReadView) is { } view ? view.Value : null;
+    /// <summary>
     /// The view warms up under the loading screen after a load (<see cref="BeginWarm"/>).
     /// </summary>
     internal bool Warming;
@@ -103,6 +112,10 @@ sealed partial class GameHost
     /// The title's last warm-up step (its uploads retired and compacted) was done.
     /// </summary>
     bool _titleWarmFinalized;
+    /// <summary>
+    /// The warm-up's content was ready once: a later frame with a few things pending pauses the smooth run instead of restarting it.
+    /// </summary>
+    bool _warmContentReady;
     /// <summary>
     /// After content is ready, gameplay's smooth-frame target and run, and the pacing limit (title too); the title requires <see
     /// cref="TitleSmoothRun"/>.
@@ -152,6 +165,7 @@ sealed partial class GameHost
                 mainMenuTransition ? Config.MainMenuTransitionSpeed : Config.InGameTransitionSpeed, immediate: !TitleScreen.TitleVisible);
         if (destinationHour is { } hour) SkyArrival?.SetDestination(hour);
         Volatile.Write(ref ReadHour, float.NaN);
+        Volatile.Write(ref ReadView, null);
         foreach (var stage in stages) ActiveSceneLoad.Stages.Enqueue(stage);
         Loading?.Restart();
         LoadingSteps = SceneSteps;
@@ -219,7 +233,7 @@ sealed partial class GameHost
         }
         (Warming, SmoothSeconds, _warmSeconds, ReadySeconds, _guardSeconds) = (true, 0, 0, 0, 0);
         _nextWarmReport = 5;
-        _titleWarmFinalized = false;
+        (_titleWarmFinalized, _warmContentReady) = (false, false);
         SetLoadingStep("view");
     }
 
@@ -278,7 +292,9 @@ sealed partial class GameHost
         }
         if (!sceneReady)
         {
-            SmoothSeconds = ReadySeconds = 0;
+            // Once the content was ready, a few things coming into range (the title's drifting camera, a part resolved the next frame) pause the run:
+            // restarting it held the cover up to a second more each time. A long frame restarts it, as when ready.
+            if (!_warmContentReady || seconds >= SmoothFrame) SmoothSeconds = ReadySeconds = 0;
             if (_warmSeconds >= _nextWarmReport) ReportPreparing(populationReady, charactersReady);
             return;
         }
@@ -290,6 +306,7 @@ sealed partial class GameHost
             SmoothSeconds = 0;
             return;
         }
+        _warmContentReady = true;
         ReadySeconds += seconds;
         SmoothSeconds = seconds < SmoothFrame ? SmoothSeconds + seconds : 0;
         // A machine that cannot draw the view at the smooth pace is let in after WarmLimit seconds of ready content, on the title as in play.

@@ -176,12 +176,14 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
     /// frame).
     /// </summary>
     public static readonly string Apply = GiShaders.Relocating("#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
-        + $$"""
+        + GiResolveShaders.TermLuminances + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform usampler2D uAlbedo;
         uniform sampler2D uTraced;
         uniform float uTracedStrength;
+        uniform sampler2D uTerm;       // the sun's term target: its alpha holds what the fragment took of the sky beside its diffuse light
+        uniform float uTermOn;         // 1: uTerm is bound
 
         void main()
         {
@@ -190,17 +192,21 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
             if ((surface.w & 524288u) == 0u) discard;
             float z = depthAt(px);
             if (z <= 0.0) discard;
-            float sum = 0.0, count = 0.0;
-            for (int dy = -2; dy < 2; dy++)
-                for (int dx = -2; dx < 2; dx++)
+            // The block's mean of what its pixels gathered (each turned the rays' set: the mean holds 16 sets), over the same surface only.
+            vec3 sum = vec3(0.0);
+            float count = 0.0;
+            for (int dy = -{{GiProbes.GatherBlock / 2}}; dy < {{GiProbes.GatherBlock / 2}}; dy++)
+                for (int dx = -{{GiProbes.GatherBlock / 2}}; dx < {{GiProbes.GatherBlock / 2}}; dx++)
                 {
                     ivec2 q = clamp(px + ivec2(dx, dy), ivec2(0), ivec2(uFullSize) - 1);
                     if ((texelFetch(uAlbedo, q, 0).w & 524288u) == 0u || abs(depthAt(q) - z) > 0.004 * z + 0.05) continue;
-                    sum += texelFetch(uTraced, q, 0).r;
-                    count += 1.0;
+                    vec4 traced = texelFetch(uTraced, q, 0);
+                    if (traced.a <= 0.0) continue;
+                    sum += traced.rgb;
+                    count += traced.a;   // the share of its rays the pixel traced (GiShaders.CharacterGather stores the sum over the rays asked)
                 }
-            float visible = count > 0.0 ? sum / count : 1.0;
-            if (visible >= 1.0) discard;
+            if (count <= 0.0) discard;
+            vec3 gathered = sum / count;
 
             vec3 p = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
@@ -210,16 +216,23 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
             {
                 vec4 gi = giIrradiance(p, n, normalize(uGiEye - p));
                 gi.rgb = giSurfaceIrradiance(gi.rgb, ambient, interior);
-                ambient = mix(ambient, gi.rgb, gi.a * uGiParams.y);
+                ambient = mix(ambient, gi.rgb, giWeight(gi.a, interior));
             }
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
-            vec3 albedo = vec3(float(surface.z & 255u), float(surface.z >> 8), float(surface.w & 255u)) / 255.0;
+            vec3 albedo = vec3(float(surface.z & 255u), float((surface.z >> 8) & 255u), float(surface.w & 255u)) / 255.0;
             albedo *= albedo;
-            // Light bounces between the surfaces of an occluded spot (a hood and the face in it): the rays' visibility alone leaves it black. Jimenez et al. 2016's
-            // cubic fit, per channel of the albedo, as GTAO's.
-            vec3 a = 2.0404 * albedo - 0.3324, b = -4.7951 * albedo + 0.6417, c = 2.7552 * albedo + 0.6903;
-            vec3 open = min(max(vec3(visible), ((visible * a + b) * visible + c) * visible), vec3(1.0));
-            fragColour = vec4(albedo * ambient * (1.0 - open) * uTracedStrength * transmittance, 0.0);
+            // The blend takes this off the scene: the ambient the fragment took, less the light gathered for it (below 0 where the rays found more).
+            vec3 taken = albedo * (ambient - gathered);
+            // What the fragment took of the sky beside its diffuse light (the ambient's specular, skin's sheen, a metal's reflection; in the ambient's hue,
+            // kenshiLight) saw the open sky too: it becomes the same share of the gathered light, colour and all. Skin's lobe is nearly as wide as the diffuse
+            // one, so the same light holds; left as it was, the sky shone on a forehead under a fringe and in an eye socket, as much light as the diffuse on a
+            // dark skin.
+            if (uTermOn > 0.5)
+            {
+                float open = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
+                taken += (ambient - gathered) * min(giTermLuminances(texelFetch(uTerm, px, 0).a).z / max(open, 1e-5), 1.0);
+            }
+            fragColour = vec4(taken * uTracedStrength * transmittance, 0.0);
         }
         """);
 

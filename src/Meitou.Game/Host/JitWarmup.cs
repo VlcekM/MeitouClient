@@ -26,6 +26,18 @@ static class JitWarmup
     static readonly string[] Order = ["Meitou.Simulation", "MeitouClient"];
 
     /// <summary>
+    /// The order when the warm-up starts late (after the code mods, <c>GameMods.StartDeferredWarmup</c>): by then the title's first frames are near
+    /// and its world barely ticks, so the game's code (its renderers first) goes before the simulation's. Started after it, the main thread
+    /// compiled some 2.5 s of rendering code itself in the title's first frames.
+    /// </summary>
+    static readonly string[] LateOrder = ["MeitouClient", "Meitou.Simulation"];
+
+    /// <summary>
+    /// The warm-up started late (<see cref="LateOrder"/>).
+    /// </summary>
+    static bool s_late;
+
+    /// <summary>
     /// The game's renderers: compiled before the rest of the game's code, as the first frames call them.
     /// </summary>
     const string RenderingNamespace = "Meitou.Game.Rendering";
@@ -44,9 +56,14 @@ static class JitWarmup
     static int s_compiled, s_failed, s_running;
 
     /// <summary>
-    /// Starts the warm-up: one thread lists the methods, then it and two more compile them (unless <c>--no-precompile</c>, the caller's check).
+    /// Starts the warm-up: one thread lists the methods, then it and two more compile them (unless <c>--no-precompile</c>, the caller's check);
+    /// <paramref name="late"/>: after the code mods (<see cref="LateOrder"/>).
     /// </summary>
-    public static void Start() => Spawn(List);
+    public static void Start(bool late = false)
+    {
+        s_late = late;
+        Spawn(List);
+    }
 
     /// <summary>
     /// Starts a background thread below normal priority.
@@ -87,7 +104,7 @@ static class JitWarmup
             .Select(TryLoad)
             .OfType<Assembly>()
             .Prepend(typeof(JitWarmup).Assembly)
-            .OrderBy(a => Array.IndexOf(Order, a.GetName().Name) is var i and >= 0 ? i : Order.Length)
+            .OrderBy(a => Array.IndexOf(s_late ? LateOrder : Order, a.GetName().Name) is var i and >= 0 ? i : Order.Length)
             .ToList();
         foreach (var assembly in assemblies)
         {

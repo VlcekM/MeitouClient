@@ -284,22 +284,20 @@ static class AtmosphereShaders
             albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
         }
         // Wet foliage (leaves, blades): the game's wetness stays as it is (its darkening and its gloss, 0.3 on grass and 0.5 on leaves at the most), and
-        // the water also shows as drops, seen as glints. (A film of more gloss on top, 0.62, turned a wet field white as if frosted: user report.) In
-        // cells of the leaf's own texture coordinates (40 across the texture, so they stay on the leaf as it sways) about a fifth hold a drop when all is
-        // wet: a small disc where the gloss is 0.95 and the normal leans a way of its own, so each catches the light from a different side. cells: how
-        // many of those cells a pixel covers (the fragment stage's derivatives); the drops go where it is over one.
-        void wetFoliage(vec2 uv, float cells, float wet, float rain, inout vec3 n, inout float gloss)
+        // the water also shows as the drops the characters and the objects wear (wetDrops), so a leaf beside a wet arm carries the same water. (Round
+        // glints in cells of the leaf's texture coordinates before: discs the size of the cell, the same on every leaf, which read as coins: user report.
+        // A film of more gloss on top, 0.62, turned a wet field white as if frosted: user report.) p: a place that stays with the leaf as it sways, in
+        // world units and the world's axes; pixel: the length of p a pixel covers; face: the leaf's own normal.
+        void wetFoliage(vec3 p, float pixel, vec3 face, float wet, float rain, vec3 sun, inout vec3 n, inout vec3 albedo, inout float gloss)
         {
             float amount = max(wet, rain);
             if (amount <= 0.05) return;
-            float shown = 1.0 - smoothstep(0.5, 1.2, cells);
-            if (shown <= 0.0) return;
-            vec2 g = uv * 40.0, c = floor(g);
-            vec3 h = wetHash(vec3(c.x, 5.0, c.y), 5u);
-            if (h.z > 0.22 * amount) return;
-            float r = 0.12 + 0.16 * h.x, drop = smoothstep(r, r * 0.6, length(g - c - 0.3 - 0.4 * h.xy)) * shown;
-            n = normalize(n + (wetHash(vec3(c.x, 6.0, c.y), 6u) - 0.5) * 0.9 * drop);
-            gloss = mix(gloss, 0.95, drop);
+            vec3 bead;
+            float lens, cover = wetDrops(p, pixel, amount, rain, face, vec3(0.0, -1.0, 0.0), sun, bead, lens);
+            if (cover <= 0.0) return;
+            n = normalize(mix(n, bead, 0.8 * cover));
+            gloss = mix(gloss, 0.9, cover);
+            albedo *= 1.0 + cover * (0.25 * smoothstep(0.0, 0.9, -lens) - 0.2 * smoothstep(0.1, 0.9, lens));
         }
         // The slope (x, z) the rain's impacts give a puddle's surface at xz: in each 16 cm cell a drop lands 1 to 1.75 times a second, somewhere new each
         // time, and its ring widens to 11 cm as it dies down. The slope is the ring's profile differentiated (no height is sampled twice).
@@ -344,21 +342,25 @@ static class AtmosphereShaders
         // ground that takes the rain in, absorbance). None on slopes over about 10 degrees. In a puddle the ground shows darker through the water, the
         // surface is level and shines (gloss 0.95), ringed by the rain's impacts while it rains and by the feet that step in it (wetSteps; WetPuddles is this
         // rule on the CPU, which finds those feet); round it a rim of soaked ground. world: the fragment;
-        // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm).
+        // level: the ground's own normal; pixel: the ground a pixel covers (the fine outline and the rings go where it is over 30 cm and 15 cm);
+        // shown: how much of the puddles shows here (they go with the distance: the weather is where the camera is, not across the map).
+        // The ground is as dark just inside the water's edge as in the soaked rim outside it (wet ground either side) and darkens with the depth from
+        // there: a step at the edge drew every puddle as a flat sheet laid on the ground, a second one inside the rim's. The edge itself is at least a
+        // pixel and a half wide (the relief moves the level by about 0.2 a unit of ground).
         // Its open water (any water over the ground, not the rim) sets atmoPuddle: kenshiLight reflects the sky the dome draws there (atmoSkyReflection).
         bool atmoPuddle = false;
-        void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, float hollow, inout vec3 n, inout vec4 surface)
+        void wetGround(vec3 world, vec3 level, float absorbance, float wet, float rain, float pixel, float hollow, float shown, inout vec3 n, inout vec4 surface)
         {
-            float even = smoothstep(0.955, 0.99, level.y);
-            if (even <= 0.0 || wet <= 0.2) return;
+            float even = smoothstep(0.975, 0.997, level.y);
+            if (even <= 0.0 || wet <= 0.2 || shown <= 0.0) return;
             vec3 at = vec3(world.x, 0.0, world.z);
             float low = 0.6 * wetNoise(at / 80.0) + 0.4 * wetNoise(at / 15.0) + 0.1 * (wetNoise(at / 3.0) - 0.5) * (1.0 - smoothstep(1.5, 3.0, pixel)) - hollow;
             float fill = smoothstep(0.2, 1.0, wet) * mix(0.47, 0.3, clamp(absorbance, 0.0, 1.0)) - (1.0 - even) * 0.3;
             float over = fill - low;   // how far the water stands over the ground here (in the noise's units)
-            float rim = smoothstep(-0.07, 0.0, over), water = smoothstep(0.0, 0.025, over);
+            float rim = smoothstep(-0.07, 0.0, over) * shown, water = smoothstep(0.0, clamp(0.3 * pixel, 0.025, 0.1), over) * shown;
             if (rim <= 0.0) return;
-            surface.rgb *= mix(1.0, 0.82, rim) * mix(1.0, mix(0.8, 0.5, smoothstep(0.0, 0.2, over)), water);
-            surface.a = mix(mix(surface.a, max(surface.a, 0.6), rim), 0.95, water);
+            surface.rgb *= mix(1.0, 0.8, rim) * mix(1.0, 0.62, smoothstep(0.0, 0.2, over) * water);
+            surface.a = mix(mix(surface.a, max(surface.a, 0.6), rim), 0.95, water * water);
             if (water <= 0.0) return;
             atmoPuddle = true;
             vec3 up = vec3(0.0, 1.0, 0.0);
@@ -369,7 +371,7 @@ static class AtmosphereShaders
                 if (rain > 0.0) s += wetRings(world.xz) * 0.35 * rain * fine;
                 up = normalize(vec3(-s.x, 1.0, -s.y));
             }
-            n = normalize(mix(n, up, water));
+            n = normalize(mix(n, up, smoothstep(0.0, 0.5, water)));   // level before it shines: a bumpy mirror along the edge outlined every puddle in white glints
         }
         // objects.hlsl / triplanar.hlsl: how far a surface is covered by dust (0..1). n: its normal, gloss: the diffuse alpha before `specular mult`, amount: dustAmount.x (.y inside).
         float dustCover(vec3 n, float gloss, vec3 world, float amount)
@@ -599,9 +601,19 @@ static class AtmosphereShaders
         // (atmoPuddle, with the reflections on; a lamp receiver's bits 20-31 are its own, CharacterShaders).
         uvec4 giAlbedoOut = uvec4(0u);
         bool giInterior = false;
+        // An interior fragment seen from the street (BuildingLodShaders: the outward walls of a viewed building's shell): bit 30 of its surface, on
+        // what is not a character; it is no room's pixel (Gi.RoomMaskPass).
+        bool atmoStreet = false;
         // The sun term the traced sun's pass adds where its rays reach (location 2, GiResolveShaders.WithAlbedo), before the haze, and the kind of surface, set before kenshiLight:
         // 0 solid, 1 grass, 2 foliage cards, 3 characters; below 0: stays with the cascades (impostors, whose quad is not their surface).
         vec3 tracedSunOut = vec3(0.0);
+        // The luminances of the lamps' light a fragment took, written beside the sun's term (its alpha): the diffuse (skin's band in it) and the specular (the
+        // surface's highlights in it), apart as they differ in hue. The lamps' traced shadows take a blocked lamp's share of exactly those back on a character
+        // (LampShadowShaders.Apply).
+        float lampDiffuseOut = 0.0, lampSpecularOut = 0.0;
+        // The luminance of what a fragment took of the sky beside its diffuse light (the ambient's specular, a character's sheen and reflections), written
+        // there too: the characters' gathered light takes back the share the character itself hides (CharacterOcclusionPass.Apply).
+        float ambientGlossOut = 0.0;
         int atmoReceiver = 0;
         // How much of the sun at a world point is written apart (tracedSunOut), on every receiver but the impostors: all of it while the contact shadows take the sun alone (bit 8:
         // with its cascades, PostProcess.ContactSun); while this view traces (uGiParams.z bit 4, uMsFlags.w above 0; the traced sun is the main view's) all of it at every depth with
@@ -688,6 +700,10 @@ static class AtmosphereShaders
                 giAlbedoOut = uvec4(o, c.r | (c.g << 8), c.b | 524288u | (giInterior ? 512u : 0u) | (giAlbedoOut.w & 458752u));
             }
             #endif
+            // Every lit fragment of an interior says so (bit 9), whatever else it writes: the rooms in view are exposed apart (Gi.RoomMaskPass picks them
+            // among these), and a character whose other bits are off would stay at the street's exposure in a room at its own.
+            if (giInterior) giAlbedoOut.w |= 512u;
+            if (atmoStreet) giAlbedoOut.w |= 1073741824u;
             #ifndef GI_IN_SHADER
             // The GI resolve (uGiParams.z, docs/render-gi.md "Resolve"): the sky's ambient here, the albedo out for the post pass that swaps in the probes.
             // z is bits: 1 the resolve, 2 the reflections, which want every lit surface and its gloss too (docs/render-gi.md "Reflections"), 4 the traced sun.
@@ -699,8 +715,19 @@ static class AtmosphereShaders
                 uint stored = c.b | (useGi ? 256u : 0u) | (giInterior ? 512u : 0u);
                 if ((giFlags & 2) != 0) stored |= (uint(gloss * 62.0 + 0.5) + 1u) << 10;
                 stored |= giAlbedoOut.w & 458752u;   // the traced sun's bits 16-18, written above
-                if ((giFlags & 2) != 0 && atmoPuddle) stored |= 1048576u;   // the reflections' sky is the dome's (SsrShaders ssrPuddle)
-                giAlbedoOut = uvec4(o, c.r | (c.g << 8), stored);
+                // A metal's specular colour beside its gloss (red and green over the albedo's, blue and bit 28 in the fourth word): the reflections weigh
+                // what they change by this fragment's own environment BRDF (SsrShaders.Apply). Read as a dielectric's, a metal kept its whole reflection
+                // of the sky in a shut room.
+                uint specular = 0u;
+                if ((giFlags & 2) != 0 && atmoMetalness > 0.0)
+                {
+                    uvec3 s = uvec3(sqrt(clamp(specColour, 0.0, 1.0)) * 255.0 + 0.5);
+                    specular = (s.r << 16) | (s.g << 24);
+                    stored |= (s.b << 20) | 268435456u;
+                }
+                if ((giFlags & 2) != 0 && atmoPuddle) stored |= 536870912u;   // the reflections' sky is the dome's (SsrShaders ssrPuddle)
+                if (atmoStreet) stored |= 1073741824u;
+                giAlbedoOut = uvec4(o, c.r | (c.g << 8) | specular, stored);
             }
             else
                     #endif
@@ -708,7 +735,7 @@ static class AtmosphereShaders
             {
                 vec4 gi = giIrradiance(world, n, v);
                 gi.rgb = giSurfaceIrradiance(gi.rgb, envDiffuse, giInterior);
-                gi.a *= uGiParams.y;
+                gi.a = giWeight(gi.a, giInterior);
                 float sky = dot(envDiffuse, vec3(0.2126, 0.7152, 0.0722));
                 specularOcclusion = mix(1.0, clamp(dot(gi.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(sky, 1e-4), 0.0, 1.0), gi.a);
                 envDiffuse = mix(envDiffuse, gi.rgb, gi.a);
@@ -720,6 +747,16 @@ static class AtmosphereShaders
                 vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + roughness));
                 envSpecular = kenshiEnvBrdf(gloss, nv, specColour) * atmoSkyReflection(dominant, gloss, am.rgb, env, atmoPuddle, world) * specularOcclusion;
             }
+            #ifdef GI_IN_SHADER
+            // A character whose light is gathered (bit 19 above): its reflection of the sky takes the hue of its ambient light, which the gather then turns into
+            // what its rays found (CharacterOcclusionPass.Apply). The sky's own colour on a face indoors was a blue veil over a room lit warm.
+            if (atmoReceiver == 3 && (int(uGiParams.z + 0.5) & 16) != 0)
+            {
+                float envLevel = dot(envDiffuse, vec3(0.2126, 0.7152, 0.0722));
+                if (envLevel > 1e-6) envSpecular = envDiffuse * (dot(envSpecular, vec3(0.2126, 0.7152, 0.0722)) / envLevel);
+            }
+            #endif
+            ambientGlossOut = dot(envSpecular, vec3(0.2126, 0.7152, 0.0722));
             vec3 lit = albedo * (diffuse + envDiffuse) + sunSpecular + envSpecular;
             // The game's point and spot lights, lit like the sun (docs/render-lights.md); none while uLightGrid.w is 0.
             if (uLightGrid.w > 0.5)
@@ -727,6 +764,8 @@ static class AtmosphereShaders
                 vec3 lampDiffuse = vec3(0.0), lampSpecular = vec3(0.0);
                 lampLight(world, n, v, a, a2, lampDiffuse, lampSpecular);
                 lit += albedo * lampDiffuse + lampSpecular;
+                lampDiffuseOut = dot(albedo * lampDiffuse, vec3(1.0 / 3.0));   // the channels' mean, not the luminance: LampShadowShaders.Apply
+                lampSpecularOut = dot(lampSpecular, vec3(0.2126, 0.7152, 0.0722));
             }
             return lit;
         }

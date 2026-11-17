@@ -26,7 +26,7 @@ sealed class TerrainPrograms : IDisposable
     /// <summary>
     /// The resolved colour's programs (TerrainRenderer.Resolve) by parallax march, relief quality, trails and normal maps.
     /// </summary>
-    readonly Dictionary<(bool March, int Quality, bool Trails, bool Normal), TerrainProgram> _resolvePrograms = [];
+    readonly Dictionary<(bool March, int Quality, bool Trails, bool Normal, TerrainShaders.ResolvePart Part), TerrainProgram> _resolvePrograms = [];
 
     /// <summary>
     /// Makes the depth and prepass programs, the colour set for the current relief, and the tessellated variants where the device has tessellation.
@@ -276,13 +276,19 @@ sealed class TerrainPrograms : IDisposable
     /// <summary>
     /// The resolve's program for the colour set in use (<see cref="ColourKey"/>) and <paramref name="normalMaps"/>, made the first time.
     /// </summary>
-    public TerrainProgram ResolveProgram(bool normalMaps)
+    public TerrainProgram ResolveProgram(bool normalMaps, TerrainShaders.ResolvePart part = TerrainShaders.ResolvePart.Whole)
     {
-        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, normalMaps);
+        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, normalMaps, part);
         if (_resolvePrograms.TryGetValue(key, out var p)) return p;
 
-        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normalMaps ? null : false, key.Quality, key.Trails);
-        return _resolvePrograms[key] = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(), fragment, "terrain resolve");
+        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normalMaps ? null : false, key.Quality, key.Trails, part);
+        string name = part switch
+        {
+            TerrainShaders.ResolvePart.Near => "terrain resolve near",
+            TerrainShaders.ResolvePart.Far => "terrain resolve far",
+            _ => "terrain resolve",
+        };
+        return _resolvePrograms[key] = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(), fragment, name);
     }
 
     /// <summary>

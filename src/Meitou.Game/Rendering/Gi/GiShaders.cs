@@ -30,7 +30,7 @@ static class GiShaders
     /// A hit record in GLSL (<see cref="GeometryRecord"/>).
     /// </summary>
     internal const string GeometryStruct = """
-        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; uint charDiffuse; uint charHead; uint charTint; uint pad; };
+        struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint sunMap; float sunCut; uint charDiffuse; uint charHead; uint charTint; uint interior; };
         """;
 
     /// <summary>
@@ -94,6 +94,12 @@ static class GiShaders
         }
         // One cascade: rgb the irradiance (the lighting pass's envDiffuse), a how much of it to take (0 outside, 1 a cell inside its edge).
         // push: how many cells further along the normal to look up (a retry when every probe round the point is inside geometry).
+        // How much of the last lookup's trilinear weight its probes kept after the back-face term, the visibility test and their validity: near 0, the
+        // light is that of probes the point barely sees (the ones past a wall, when the room's own are in the floor or the ground), normalised to full
+        // strength all the same. A room takes its probes in full (giWeight), so it takes them by this trust (giTrust): without it the sunlit ground
+        // outside lit the foot of a room's walls orange, and the sky the top of them blue.
+        float giKept = 1.0;
+        float giTrust() { return smoothstep(0.05, 0.25, giKept); }
         vec4 giCascade(int c, vec3 p, vec3 n, vec3 v, float push)
         {
             vec4 g0 = uGiGrid[c * 2], g1 = uGiGrid[c * 2 + 1];
@@ -110,7 +116,7 @@ static class GiShaders
             vec2 octN = giOct(n) * 0.5 + 0.5;
             uvec2 offset = uvec2(g1.xy);
             vec3 sum = vec3(0.0);
-            float total = 0.0, coverage = 0.0;
+            float total = 0.0, coverage = 0.0, plain = 0.0;
             for (int k = 0; k < 4; k++)
             {
                 ivec2 o = ivec2(k & 1, k >> 1);
@@ -129,6 +135,7 @@ static class GiShaders
                 {
                     int layer = l0 + j;
                     float weight = wxz * heightShare * (j == 1 ? fy : 1.0 - fy);
+                    plain += weight;
                     // A corner the point is nearly opposite of adds next to nothing: skip its fetches.
                     if (weight < GI_MIN_WEIGHT) continue;
                     vec3 probe = vec3(g0.x + float(w.x) * s, base + (float(layer) + 0.5) * sy, g0.y + float(w.y) * s);
@@ -156,6 +163,7 @@ static class GiShaders
                     total += weight;
                 }
             }
+            giKept = total / max(plain, 1e-5);
             return total > 1e-5 ? vec4(sum / total, clamp(edge, 0.0, 1.0) * coverage) : vec4(0.0);
         }
         // The probes' irradiance at a surface (p: world position, n: its normal, v: towards the eye): rgb, a the share to take (0: none cover it).
@@ -166,26 +174,36 @@ static class GiShaders
             // cascade would paint the corner dark. Look again a cell into the room before falling back.
             if (a.a <= 0.0) a = giCascade(0, p, n, v, 1.0);
             if (a.a >= 1.0) return a;
+            float keptA = giKept;
             vec4 b = giCascade(1, p, n, v, 0.0);
             float wa = a.a, wb = b.a * (1.0 - a.a), t = wa + wb;
+            giKept = t > 0.0 ? (keptA * wa + giKept * wb) / t : 0.0;
             return t > 0.0 ? vec4((a.rgb * wa + b.rgb * wb) / t, t) : vec4(0.0);
         }
 
-        // Presentation gain only: never feed amplified light back into the probe solver.
-        // Indoors the light is at least the game's ambient luminance up to InteriorFloorCap (the probes see corners as dark), more
-        // where the GI is brighter. Its colour turns from the ambient's to the GI's as the GI's share of the ambient rises from 0.1 to 0.25 (in the
-        // Hub bar the lamps' surroundings read 0.15-0.3, the rest 0.05-0.15): warm round the lamps, neutral where they barely reach.
-        // uGiParams.w <= 1 leaves the GI as it is.
+        // How much of a fragment's ambient the probes give (the rest is the sky's): the valid probes' share outdoors, where the sky is what
+        // the missing ones would have seen. Indoors a point's invalid probes are the ones in the walls, the floor and the furniture, and the
+        // sky lights no room: the valid ones are taken in full.
+        // (none valid at all indoors: no light but the indoor floor's, giSurfaceIrradiance; the sky's ambient there lit the top of a tall room.)
+        float giWeight(float probes, bool interior) { return (interior ? 1.0 : probes) * uGiParams.y; }
+
+        // Presentation only: never feed this back into the probe solver.
+        // Indoors the light is at least a share of the game's ambient luminance (uGiParams.w - 1, GiProbes.InteriorGain; capped at
+        // InteriorFloorCap), more where the GI is brighter: a net under what the probes leave black (a slab under hidden floors), not the
+        // room's light. Its colour turns from the ambient's to the GI's as the GI rises from 0.1 to 0.25 of the floor.
+        // uGiParams.w <= 1 leaves the GI as it is; 2 and above is the whole of the game's ambient.
         const float InteriorFloorCap = 0.6;
         vec3 giSurfaceIrradiance(vec3 irradiance, vec3 sky, bool interior)
         {
-            if (!interior || uGiParams.w <= 1.0) return irradiance;
+            float share = clamp(uGiParams.w - 1.0, 0.0, 1.0);
+            if (interior) irradiance *= giTrust();
+            if (!interior || share <= 0.0) return irradiance;
             const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
             float value = max(dot(irradiance, lum), 1e-6), ambient = max(dot(sky, lum), 1e-6);
             // The floor is capped: by day the sky's ambient is several times the night's and lit shut rooms evenly, in the sky's colour. Past the cap its hue
             // goes grey as the cap bites (the night's ambient is under it: unchanged).
-            float floorValue = min(ambient, InteriorFloorCap);
-            vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / ambient);
+            float wanted = ambient * share, floorValue = min(wanted, InteriorFloorCap);
+            vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / wanted);
             vec3 hue = mix(skyHue, irradiance / value, smoothstep(0.1, 0.25, value / floorValue));
             return hue * max(value, floorValue);
         }
@@ -217,11 +235,24 @@ static class GiShaders
         float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter);
         #define LAMP_TILE_CHEAP
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
-        float giLampSeen(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter)
+        // What moves is in no tile: a shader that wants the characters' shadows at its hits (the characters' gather) defines LAMP_MOVER_SHADOW.
+        #ifndef LAMP_MOVER_SHADOW
+        #define LAMP_MOVER_SHADOW(world, n, toLamp, d) 1.0
+        #endif
+        // What the still world lets through of a lamp: its tile, or a ray for a lamp without one.
+        float giLampStill(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter)
         {
             return texelFetch(uLightData, ivec2(4, lamp), 0).w != 0.0 ? lampTileVisibility(lamp, toLamp, d, n) : giLampVisibility(world, n, toLamp, indoor, emitter);
         }
+        float giLampSeen(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter)
+        {
+            float still = giLampStill(lamp, world, n, toLamp, d, indoor, emitter);
+            return still <= 0.0 ? 0.0 : still * LAMP_MOVER_SHADOW(world, n, toLamp, d);
+        }
+        // A shader may supply its own (the characters' gather asks one lamp a hit for what moves).
+        #ifndef LAMP_VISIBILITY
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampSeen(lamp, world, n, toLamp, d, indoor, emitter)
+        #endif
         {{LampShaders.Lighting}}
         """;
 
@@ -246,6 +277,16 @@ static class GiShaders
         }
         {{HitCutout}}
         #define TRACE(q) while (rayQueryProceedEXT(q)) { if (solid(rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false), rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false))) rayQueryConfirmIntersectionEXT(q); }
+
+        // Whether a hit is lit as an interior (HitShadeAt): the hit object's own mark, unless the shader knows more (a ray that started in a room).
+        #ifndef HIT_INTERIOR
+        #define HIT_INTERIOR ((g.interior & 1u) != 0u)
+        #endif
+        // What moves between a hit and the sun: the hits' sun rays see the still world alone (GiMask); a shader that wants the characters' shadows at its
+        // hits (the characters' gather) defines SUN_MOVER_SHADOW.
+        #ifndef SUN_MOVER_SHADOW
+        #define SUN_MOVER_SHADOW(hit, n, l) 1.0
+        #endif
 
         float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter)
         {
@@ -311,9 +352,12 @@ static class GiShaders
                 TRACE(shadow)
                 if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
                     sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
+                if (sun.r + sun.g + sun.b > 0.0) sun *= SUN_MOVER_SHADOW(hit, n, l);
             }
             vec4 bounce = giIrradiance(hit, n, -dir);
-            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
+            // The share the probes do not cover is the sky's ambient outdoors. A hit on an interior takes what probes it has in full, and nothing where it has
+            // none: a room's dense grid is short and its coarse probes sit in the walls, and the sky's ambient on the upper walls lit the whole room with it, cold.
+            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, HIT_INTERIOR ? bounce.rgb * giTrust() : bounce.rgb, HIT_INTERIOR ? 1.0 : bounce.a);
             // The lamps around the hit; indoor sources are visibility-tested so occluded lamp light cannot bounce through walls.
             vec3 lamps = vec3(0.0), lampSpecular = vec3(0.0);
             if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);
@@ -388,6 +432,7 @@ static class GiShaders
     /// last frame there (the bounces beyond the first). A ray that misses sees the lighting pass's ambient in its direction. Back faces of objects
     /// count as dark and give a negative distance (the blend marks probes that see many as inside).
     /// </summary>
+
     public static string ProbeTrace(int rays) => $$"""
         #version 460
         #extension GL_EXT_ray_query : require
@@ -432,6 +477,8 @@ static class GiShaders
         // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
         #define GI_NO_VISIBILITY
         {{ProbeSampling}}
+        // A room grid's probe (cascade 0 while an interior is in view, extra.x) is in the room: what its rays hit is lit by the room, a hidden upper floor's underside too.
+        #define HIT_INTERIOR ((g.interior & 1u) != 0u || (c == 0 && extra.x > 0.5))
         {{HitFunctions}}
 
         vec3 fibonacci(uint i, uint n)
@@ -962,6 +1009,290 @@ static class GiShaders
         {{HitShadeAt("1.0")}}
             float reach = 1.0 - smoothstep(0.75, 1.0, t / {{F(ReflectionRange)}});
             imageStore(uHit, cell, vec4(colour * (sun + ambient + lamps), ssrPackHit(reach, t, true)));
+        }
+        """;
+
+    /// <summary>
+    /// The rays of the gather's second bounce (<c>gatherBehind</c>: a hit on a point of a character the screen does not show). A block of pixels
+    /// pools 256 hits, so two a hit give the bar's zones within 3 % of four's (docs/render-gi.md "Characters").
+    /// </summary>
+    internal const int GatherBounceRays = 2;
+
+    /// <summary>
+    /// The characters' indirect light, gathered (docs/render-gi.md "Characters"): for each pixel of a character (the surface target's bit 19),
+    /// <paramref name="rays"/> cosine-weighted rays round its shading normal against the traced scene and its characters, each hit lit as a probe
+    /// ray's (the sun through a shadow ray, the lamps, the probes' light there), each miss the sky's ambient that way. Their mean is the light
+    /// the pixel's surface takes from everything round it, itself and what it wears included: a face in a hood sees the hood's inside, an armpit
+    /// the arm and the flank. The probes alone, read at the character's place, know none of that and stand metres apart. The rays leave the
+    /// drawn facet as the traced sun's do on a body; each pixel of a 4 x 4 block turns the set, so a block holds 16 sets (the apply takes its
+    /// mean). Writes rgb the gathered light (what the albedo multiplies) and a 1; a 0 where no character is.
+    /// </summary>
+
+    /// <summary>
+    /// The last frame's gather pooled for <see cref="CharacterGather"/>'s hits on characters: at each pixel of a character, the mean of the
+    /// block of <paramref name="block"/> pixels a side round it (rgb the light, a: 1 where the block held any). Once a frame for every pixel a
+    /// hit can land on, where each hit summed the block itself: 64 reads a hit, 1.3 of the gather's 7.7 ms in the save heavy-scene.
+    /// </summary>
+    public static string GatherPool(int block) => $$"""
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0) uniform sampler2D uLast;
+        layout(set = 0, binding = 1) uniform usampler2D uAlbedo;
+        layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D uPooled;
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy), size = imageSize(uPooled);
+            // Read only where this frame's surface is a character's (gatherSeen's test): the other texels keep what they held.
+            if (any(greaterThanEqual(px, size)) || (texelFetch(uAlbedo, px, 0).w & 524288u) == 0u) return;
+            vec4 before = vec4(0.0);
+            for (int k = 0; k < {{block * block}}; k++)
+                before += texelFetch(uLast, clamp(px + ivec2(k % {{block}}, k / {{block}}) - {{block / 2}}, ivec2(0), size - 1), 0);
+            imageStore(uPooled, px, vec4(before.rgb / max(before.a, 1e-6), before.a > 0.0 ? 1.0 : 0.0));
+        }
+        """;
+
+    public static string CharacterGather(int rays, string behind, int block = 8, int quad = 2) => $$"""
+        #version 460
+        {{TraceExtensions}}
+        layout(local_size_x = 8, local_size_y = 8) in;
+        {{TraceScene}}
+        layout(set = 0, binding = 2, rgba16f) uniform image2D uHit;
+        {{TraceParams}}
+
+        // A character between a hit and a lamp shadows it: the lamps' tiles hold the still world alone, and without this the floor at a
+        // character's feet and the inside of its own arm sent back the lamps' full light.
+        bool solid(int record, int primitive, vec2 barycentrics);
+        float gatherMoverShadow(vec3 world, vec3 n, vec3 toLamp, float d)
+        {
+            if (d <= 1.5) return 1.0;
+            rayQueryEXT shadow;
+            rayQueryInitializeEXT(shadow, uScene, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsNoOpaqueEXT, {{TracedSunShaders.Characters}}, world - origin.xyz + n * 0.05, {{TracedSunShaders.BodyContactText}}, toLamp / d, d - 1.0);
+            while (rayQueryProceedEXT(shadow))
+            {
+                if (solid(rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false),
+                    rayQueryGetIntersectionPrimitiveIndexEXT(shadow, false), rayQueryGetIntersectionBarycentricsEXT(shadow, false)))
+                    rayQueryConfirmIntersectionEXT(shadow);
+            }
+            return rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+        }
+        // The characters' shadow on the lamps at a hit: one lamp is asked, picked as the lamps are met with the chance of its light there (after
+        // the still world's shadow) over the light so far, and its answer scales the lamps' light together (gatherMoverLamps). A ray for every
+        // lamp was 4.9 of the gather's 11.7 ms under the dozen lamps of a dome; a block of pixels pools 256 hits, each with its own draw.
+        float giLampStill(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter);
+        float moverSum = 0.0, moverD = 0.0, moverDraw = 0.5;
+        vec3 moverTo = vec3(0.0);
+        float gatherLampSeen(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter, float light)
+        {
+            float still = giLampStill(lamp, world, n, toLamp, d, indoor, emitter), weight = still * light;
+            if (weight > 0.0 && d > 1.5)
+            {
+                moverSum += weight;
+                moverDraw = fract(moverDraw + 0.6180339887);
+                if (moverDraw * moverSum < weight) { moverTo = toLamp; moverD = d; }
+            }
+            return still;
+        }
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) gatherLampSeen(lamp, world, n, toLamp, d, indoor, emitter, dot(radiance, vec3(0.2126, 0.7152, 0.0722)) * nl)
+        // After a hit's lamps: what the characters let through of them, by the lamp picked.
+        float gatherMoverLamps(vec3 world, vec3 n)
+        {
+            float seen = moverSum > 0.0 ? gatherMoverShadow(world, n, moverTo, moverD) : 1.0;
+            moverSum = 0.0;
+            return seen;
+        }
+        // The sun at a hit likewise: a chest under the head's shadow, the ground at a character's feet sent back the sun's full light.
+        #define SUN_MOVER_SHADOW(hit, n, l) gatherMoverShadow(hit, n, (l) * 10000.0, 10000.0)
+        // A ray that leaves a character indoors is lit by the room whatever it hits: the underside of a floor the view hides is no interior part of its own.
+        bool gatherIndoors = false;
+        float gatherFillShare = 0.0;   // the rooms' fill (cam.sizes.w), set with gatherIndoors
+        // The rooms' fill light (GiProbes.InteriorGain), as giSurfaceIrradiance gives it to a room's surfaces: what a ray brings a character's pixel from the
+        // room, or from past it, is at least that; a ray a character stops brings none, so the fill is occluded like the rest. Without it a character
+        // stood black in a room the fill lit (its ambient is the gathered light, which knew nothing of the fill). sky: the sky's ambient at the pixel.
+        vec3 gatherFill(vec3 light, vec3 sky)
+        {
+            float share = gatherFillShare;
+            if (!gatherIndoors || share <= 0.0) return light;
+            const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+            float value = max(dot(light, lum), 1e-6), ambient = max(dot(sky, lum), 1e-6);
+            float wanted = ambient * share, floorValue = min(wanted, 0.6);   // giSurfaceIrradiance's InteriorFloorCap
+            vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / wanted);
+            vec3 hue = mix(skyHue, light / value, smoothstep(0.1, 0.25, value / floorValue));
+            return hue * max(value, floorValue);
+        }
+        #define HIT_INTERIOR ((g.interior & 1u) != 0u || gatherIndoors)
+        {{TraceShared}}
+
+        layout(set = 0, binding = 13) uniform usampler2D uAlbedo;
+        layout(set = 0, binding = 14) uniform sampler2D uNearDepth;
+        layout(set = 0, binding = 15, std140) uniform Camera
+        {
+            vec4 eye, right, up, back;
+            vec4 view;         // xy: tan(fov/2) * aspect, tan(fov/2), zw: near, far
+            vec4 sizes;        // xy: the render size, z: 1 while uLast holds the last frame's gather, w: the rooms' fill (GiProbes.InteriorGain - 1, 0 to 1)
+        } cam;
+        layout(set = 0, binding = 19) uniform sampler2D uLast;
+        layout(set = 0, binding = 20) uniform sampler2D uLastPooled;
+        {{DepthConvention.Glsl}}
+
+        vec3 gatherPoint(ivec2 px)
+        {
+            ivec2 q = clamp(px, ivec2(0), ivec2(cam.sizes.xy) - 1);
+            float z = depthViewZ(texelFetch(uNearDepth, q, 0).r, cam.view.zw);
+            vec2 ndc = (vec2(q) + 0.5) / cam.sizes.xy * 2.0 - 1.0;
+            return cam.eye.xyz + (cam.right.xyz * ndc.x * cam.view.x + cam.up.xyz * ndc.y * cam.view.y - cam.back.xyz) * z;
+        }
+
+        // The drawn triangle's plane from the depth, along the neighbours of the smaller step, facing like the shading normal.
+        vec3 gatherPlane(ivec2 px, vec3 at, vec3 like)
+        {
+            vec3 west = at - gatherPoint(px - ivec2(1, 0)), east = gatherPoint(px + ivec2(1, 0)) - at;
+            vec3 south = at - gatherPoint(px - ivec2(0, 1)), north = gatherPoint(px + ivec2(0, 1)) - at;
+            vec3 plane = cross(dot(east, east) < dot(west, west) ? east : west, dot(north, north) < dot(south, south) ? north : south);
+            float len = length(plane);
+            if (!(len > 1e-8)) return like;
+            plane /= len;
+            return dot(plane, like) < 0.0 ? -plane : plane;
+        }
+
+        // The light gathered last frame at a point of a character, where that point is on screen.
+        bool gatherSeen(vec3 point, out vec3 seen)
+        {
+            vec3 fromEye = point - cam.eye.xyz;
+            float depthThere = -dot(fromEye, cam.back.xyz) / dot(cam.back.xyz, cam.back.xyz);
+            if (cam.sizes.z < 0.5 || depthThere <= 0.0) return false;
+            vec2 ndcThere = vec2(dot(fromEye, cam.right.xyz) / dot(cam.right.xyz, cam.right.xyz) / cam.view.x, dot(fromEye, cam.up.xyz) / dot(cam.up.xyz, cam.up.xyz) / cam.view.y) / depthThere;
+            ivec2 there = ivec2(floor((ndcThere * 0.5 + 0.5) * cam.sizes.xy));
+            if (any(lessThan(there, ivec2(0))) || any(greaterThanEqual(there, ivec2(cam.sizes.xy))) || (texelFetch(uAlbedo, there, 0).w & 524288u) == 0u
+                || distance(gatherPoint(there), point) > 0.3 + depthThere * 0.01) return false;
+            // The mean of the block of pixels round it, as the apply takes it: one pixel holds a sixteenth of the block's rays, and read alone it carried
+            // that pixel's own few directions into the bounce (stripes on a cheek with few rays a pixel).
+            vec4 before = texelFetch(uLastPooled, there, 0);   // GatherPool took the mean
+            seen = before.rgb;
+            return before.a > 0.5;
+        }
+
+        // The ambient light at a point of a character the screen does not show (the inside of an arm seen from the flank, a hood's lining): what four rays from
+        // it find, one more bounce. The pixel's own gathered light stood in for it before: right under a hood, but in a crease the hidden side is darker than
+        // the pixel and each bounce of that loop added red (a glowing streak in an armpit where a traced picture has a dark fold). fallback: what a hit of
+        // these rays on a hidden point of a character takes in turn.
+        vec3 gatherBehind(vec3 from, vec3 normal, vec3 fallback, int turn)
+        {
+            vec3 tx = normalize(abs(normal.y) < 0.99 ? cross(normal, vec3(0.0, 1.0, 0.0)) : cross(normal, vec3(1.0, 0.0, 0.0))), ty = cross(normal, tx);
+            float env = lightDir.w;
+            vec3 fill = skyIrradiance(normal) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * ambientMap(from).rgb * env;
+            vec3 sum = vec3(0.0);
+            for (int k = 0; k < {{GatherBounceRays}}; k++)
+            {
+                float radius = sqrt((float(k) + 0.5) / {{GatherBounceRays}}.0), phi = float(k) * 2.3999632 + float(turn) * 0.39269908;
+                vec3 dir = tx * (radius * cos(phi)) + ty * (radius * sin(phi)) + normal * sqrt(1.0 - radius * radius);
+                vec3 world = from + normal * 0.05;
+                rayQueryEXT rq;
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask | TracedSunShaders.Characters}}, world - origin.xyz, {{TracedSunShaders.BodyContactText}}, dir, rayLength.x);
+                TRACE(rq)
+                if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
+                {
+                    sum += gatherFill(skyIrradiance(dir) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * ambientMap(from).rgb * env, fill);
+                    continue;
+                }
+                float t = rayQueryGetIntersectionTEXT(rq, true);
+                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+                Geometry g = geometries[record];
+                if (g.kind == {{GeometryRecord.Character}}u && (g.charTint >> 24) != 0u && !rayQueryGetIntersectionFrontFaceEXT(rq, true)) continue;   // from inside a body: main's rule
+                moverDraw = fract(float(turn * {{GatherBounceRays}} + k) * 0.5698402909 + 0.37);
+        {{HitShadeAt("4.0")}}
+                lamps *= gatherMoverLamps(hit, n);
+                if (g.kind == {{GeometryRecord.Character}}u)
+                {
+                    vec3 seen;
+                    ambient = gatherSeen(hit, seen) ? seen : fallback;
+                    sum += colour * (sun + ambient + lamps);
+                }
+                else sum += gatherFill(colour * (sun + ambient + lamps), fill);
+            }
+            return sum / {{GatherBounceRays}}.0;
+        }
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (any(greaterThanEqual(px, imageSize(uHit)))) return;
+            uvec4 surface = texelFetch(uAlbedo, px, 0);
+            if ((surface.w & 524288u) == 0u || depthIsSky(texelFetch(uNearDepth, px, 0).r)) { imageStore(uHit, px, vec4(0.0)); return; }
+            vec3 at = gatherPoint(px);
+            float pixel = distance(at, cam.eye.xyz) * 2.0 * cam.view.y / cam.sizes.y;
+            // One pixel of each square of quad x quad traces: the first of its character pixels, so a limb a pixel wide still has one. The apply
+            // takes the mean of a block's pixels, and the traced ones hold between them every direction of the block's set. Squares of 2 where a pixel
+            // is wider than cam.back.w (GiProbes.GatherSparse): a quarter of the rays for 64 directions a block, on characters too small on the screen
+            // for that to show (near, on a face in a hood's shadow, it left patches).
+            int quad = cam.back.w > 0.0 && pixel > cam.back.w ? max({{quad}}, 2) : {{quad}};
+            for (int q = 0; q < quad * quad; q++)
+            {
+                ivec2 other = (px / quad) * quad + ivec2(q % quad, q / quad);
+                if (other == px) break;
+                if ((texelFetch(uAlbedo, other, 0).w & 524288u) != 0u && !depthIsSky(texelFetch(uNearDepth, other, 0).r)) { imageStore(uHit, px, vec4(0.0)); return; }
+            }
+            vec3 shading = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+            vec3 side = gatherPlane(px, at, shading);
+            vec3 tx = normalize(abs(shading.y) < 0.99 ? cross(shading, vec3(0.0, 1.0, 0.0)) : cross(shading, vec3(1.0, 0.0, 0.0))), ty = cross(shading, tx);
+            // One spiral of 16 x rays points over the block (the apply takes the block's mean): a pixel takes every 16th point from its place in the block. Sets that
+            // only turned from pixel to pixel shared their heights, so a horizon (a hood's edge) crossed the face in steps of a ray's whole weight: rings and patches.
+            int cells = {{block}} / quad, first = ((px.x / quad) & (cells - 1)) + ((px.y / quad) & (cells - 1)) * cells;
+            float points = float(cells * cells);
+            float env = lightDir.w;
+            gatherIndoors = (surface.w & 512u) != 0u;
+            gatherFillShare = cam.sizes.w;
+            vec3 fill = skyIrradiance(shading) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * ambientMap(at).rgb * env;
+            vec4 own = cam.sizes.z > 0.5 ? texelFetch(uLast, px, 0) : vec4(0.0);
+            vec3 gathered = vec3(0.0);
+            float count = 0.0;
+            for (int i = 0; i < {{rays}}; i++)
+            {
+                float point = float(i) * points + float(first);
+                float radius = sqrt((point + 0.5) / (points * {{rays}}.0)), phi = point * 2.3999632;
+                vec3 dir = tx * (radius * cos(phi)) + ty * (radius * sin(phi)) + shading * sqrt(1.0 - radius * radius);
+                float facing = dot(side, dir);
+                if (facing < 0.05) continue;   // under the drawn facet: the smooth normal's set reaches past it
+                // Off the drawn facet by what the depth can be wrong by, more for a grazing ray, but no more than half a centimetre: lifted two centimetres, the rays
+                // of a fold's bottom left from above the fold and gathered the open room's light (an armpit's crease lit where a traced picture has it dark).
+                // The lift's ceiling grows with the pixel: seen from afar a pixel is wider than the fixed ceiling (0.7 units on a leviathan 800 units off), the
+                // point from the depth lies that far from the traced skin, and a ray left under it or not as the frame's jitter fell: the creature flickered.
+                float clearance = min((0.01 + pixel * 0.5) / max(facing, 0.2), max(0.05, pixel * 1.5));
+                vec3 world = at + side * clearance;
+                count += 1.0;
+                rayQueryEXT rq;
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask | TracedSunShaders.Characters}}, world - origin.xyz, max(clearance, {{TracedSunShaders.BodyContactText}}), dir, rayLength.x);
+                TRACE(rq)
+                if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
+                {
+                    gathered += gatherFill(skyIrradiance(dir) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * ambientMap(at).rgb * env, fill);
+                    continue;
+                }
+                float t = rayQueryGetIntersectionTEXT(rq, true);
+                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+                Geometry g = geometries[record];
+                // The back of a body's or a garment's face (hair cards have two sides): the ray left from inside it, so the pixel lies against it (an arm on a flank).
+                // Nothing comes that way: shaded as a surface, the hit read through the skin the light of the body's lit side, a glowing streak in an armpit's fold.
+                if (g.kind == {{GeometryRecord.Character}}u && (g.charTint >> 24) != 0u && !rayQueryGetIntersectionFrontFaceEXT(rq, true)) continue;
+                moverDraw = fract(point * 0.7548776662 + 0.11);
+        {{HitShadeAt("3.0")}}
+                lamps *= gatherMoverLamps(hit, n);
+                // A hit on a character: the probes' light there knows nothing of the character round it (an armpit's two sides lit each other as if in the open).
+                // Where that point is on screen, the light gathered for it last frame stands in: the bounces between a character's own surfaces settle over a few frames.
+                if (g.kind == {{GeometryRecord.Character}}u)
+                {
+                    // On screen: what was gathered there last frame. Not on screen and near (the inside of an arm seen from the flank, a hood's lining): one more
+                    // bounce from there (gatherBehind). Further off (another character's far side) the probes' light stands.
+                    vec3 seen;
+                    if (gatherSeen(hit, seen)) ambient = seen;
+                    else if (t < {{behind}}) ambient = gatherBehind(hit, n, own.a > 0.0 ? own.rgb / own.a : ambient, i + first);
+                }
+                vec3 brought = colour * (sun + ambient + lamps);
+                gathered += g.kind == {{GeometryRecord.Character}}u ? brought : gatherFill(brought, fill);
+            }
+            // The sum and the count, both over the rays asked: the apply and the bounce pool them over a block (a pixel's own mean, over the rays its facet
+            // let through, weighed a pixel of two rays as one of four).
+            imageStore(uHit, px, count > 0.0 ? vec4(gathered, count) / {{rays}}.0 : vec4(0.0));
         }
         """;
 

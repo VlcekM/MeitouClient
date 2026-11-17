@@ -246,7 +246,7 @@ sealed class LookPresets(SettingsMenu menu)
     {
         "Interior lamps" or "Lamp warmth" => "Advanced",
         "Anti-aliasing" or "Weather particles" => "Hidden",
-        "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" or "Lamp shadows" => "Light",
+        "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
         "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
         "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
             or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
@@ -303,30 +303,35 @@ sealed class LookPresets(SettingsMenu menu)
         t.Remaster && !PerformanceSwitches.Contains(t.Label) && SettingsMenu.GraphicsPages.Contains(SettingsMenu.GraphicsSection(t.Label, true));
 
     /// <summary>
-    /// How much a setting costs, as a level a player can use on any machine: ranked from the measured costs in the docs (RTX 4090, 1440p;
-    /// docs/render-*.md), High about 1 ms or more or a large share of the scene, Medium a few tenths, Low under a tenth or only in some views.
-    /// "Faster with Meitou": a switch whose Meitou side saves work.
+    /// How much a setting costs, as a level a player can use on any machine: the GPU frame time one notch down saves (RTX 4090, 1440p, render
+    /// scale 1) in five views, a hall full of characters at night, a city at night, a town by day, a close-up on sand and a wide view of a desert
+    /// (docs/native-ui.md "Settings"): High 1 ms or more in one of them, Medium 0.3 ms or more, Low less, or only in some views. The distances
+    /// and densities cost memory and streaming more than frame time. "Faster with Meitou": a switch whose Meitou side saves work.
     /// </summary>
     internal static string? ImpactOf(string label) => label switch
     {
-        "Indirect light" or "Hybrid GI" or "Clouds" or "Shadows" or WorldFrame.TracedGrassSwitch or WorldFrame.ObjectDistanceSlider
-            or "Foliage draw distance x" or "Grass draw distance x" or WorldFrame.ShadowDistanceSlider or "Large foliage range (F6 Meitou)"
-            or WorldFrame.WaterReflectionSlider => "High impact",
-        "Ambient occlusion" or "Ground-truth occlusion" or WorldFrame.GtaoQualitySlider or "Lamp shadows" or "Light shafts" or "Water"
-            or "Ground parallax" or "Ground displacement (tessellation)" or "Ground displacement distance (m)" or "Ground parallax distance (m)"
-            or WorldFrame.ShadowMapSlider
-            or "Shadow filter 0-2 (Meitou; 0 low-end)" or WorldFrame.ShadowCascadesSlider or "Landmark distance (Meitou)" or "Distant towns (zones)"
-            or WorldFrame.MaterialDistanceSlider
-            or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or "Medium foliage range" or "Terrain detail: error px (less = finer)"
+        "Indirect light" or WorldFrame.GiCharactersSwitch or "Lamp shadows" or "Indoor GI" or "Planetshine" or "Reflections" or "Anti-aliasing"
+            or "Hybrid GI" or WorldFrame.GiCacheSwitch or WorldFrame.TracedGrassSwitch or WorldFrame.TracedFarCascadesSwitch or WorldFrame.SunShadowsChoice
+            or WorldFrame.WaterReflectionSlider or "Ground parallax" or "Render scale (upscaler)" => "High impact",
+        "Ambient occlusion" or "Ground-truth occlusion" or WorldFrame.GtaoQualitySlider or "Light shafts" or "Water" or "Clouds" or "Cloud shadows"
+            or "Ground trails" or "Ground displacement (tessellation)" or "Ground parallax distance (m)" or "Terrain outline refinement (tessellation)"
+            or WorldFrame.ShadowDistanceSlider or WorldFrame.ShadowMapSlider or "Shadow filter 0-2 (Meitou; 0 low-end)" or "Blood on surfaces"
+            or "Bloody footprints" or "Blood on weapons and gear" or "Water beads" or "Metal on buildings" or "Metal on characters"
+            or "Skin sheen and glow" or "Eye catchlights" or "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS" or "Draw distances"
+            or WorldFrame.DepthOfFieldSwitch => "Medium impact",
+        "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog" or "Bloom strength (0 = game)"
+            or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
+            or "Water contact foam, wakes and ripples" or "Light shafts air (0 = none)" or WorldFrame.ShaftQualitySlider or WorldFrame.GiRaysSwitch
+            or WorldFrame.ShadowCascadesSlider or "Reflection range x (game 0.6)" or WorldFrame.ReflectionSamplesSlider or "Hair highlights" or "Cloth sheen"
+            or "Lamp warmth" or "Soft grazing sun" or "Contact shadows" or "Glass bottles" or "Haze" or "Advanced materials" or "Mesh welding"
+            or WorldFrame.FilteringSlider or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
+            or "Large foliage range (F6 Meitou)" or "Medium foliage range" or "Small foliage range" or "Landmark distance (Meitou)"
+            or "Distant towns (zones)" or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or WorldFrame.TerrainErrorSlider
             or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
-            or "Reflection range x (game 0.6)" or "Anti-aliasing" or WorldFrame.ShaftQualitySlider or "Ground trails"
-            or WorldFrame.DepthOfFieldSwitch or WorldFrame.GiRaysSwitch => "Medium impact",
-        "Cloud shadows" or "Indoor GI" or "Planetshine" or "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)"
-            or "Cloud shadows in fog" or "Terrain outline refinement (tessellation)" or "Small foliage range" or "Bloom strength (0 = game)"
-            or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or "Blood on surfaces" or "Bloody footprints" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
-            or "Water contact foam, wakes and ripples" or "Light shafts air (0 = none)" => "Low impact",
-        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Mesh welding" => "Faster with Meitou",
-        _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Medium impact",
+            or "Ground displacement distance (m)" or WorldFrame.MaterialDistanceSlider or "Character draw distance" or WorldFrame.GroundReliefQualitySlider
+            => "Low impact",
+        "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Shadows" => "Faster with Meitou",
+        _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Low impact",
         _ when IsLook(label, false) || IsLook(label, true) => "No impact",
         _ => null,
     };

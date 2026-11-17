@@ -108,7 +108,7 @@ static class CharacterShaders
     /// The push block's members (<see cref="CharacterPush"/>): the flat colour, the motion pass's depth index, the fill light and the skin table's
     /// index.
     /// </summary>
-    const string PushMembers = """
+    internal const string PushMembers = """
             vec3 flatColour;
             uint depthIndex;
             vec4 fill;          // rgb; a: the chars2 switch's parts (CharacterSurface: 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads; 0 off)
@@ -120,7 +120,7 @@ static class CharacterShaders
     /// The material record (<c>CharMaterial</c>, <see cref="CharacterMaterialRecord"/>) and its storage buffer at binding
     /// <see cref="MaterialsBinding"/>.
     /// </summary>
-    static readonly string Structs = $$"""
+    internal static readonly string Structs = $$"""
         struct CharMaterial
         {
             uint shading;        // 0 item, 1 body, 2 hair
@@ -148,6 +148,23 @@ static class CharacterShaders
     static string Head(string stage) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + stage;
 
     /// <summary>
+    /// Debug (<c>studio metalsource estimate</c>): held items ignore their metalness map and take the estimate, to compare the two.
+    /// </summary>
+    internal static bool IgnoreMetalMaps;
+    static uint MetalMapFlag => IgnoreMetalMaps ? 0 : HasMetalMap;
+    static uint ScabbardFlag => IgnoreMetalMaps ? 0 : Scabbard;
+    /// <summary>
+    /// Debug (<c>studio metalsource noarmour</c>): worn chain and plate stay as the game has them.
+    /// </summary>
+    internal static bool NoArmourMetal;
+    static uint ArmourMetalFlag => NoArmourMetal ? 0 : ArmourMetal;
+    /// <summary>
+    /// Debug (<c>studio metalsource show</c>): the metalness as the albedo.
+    /// </summary>
+    internal static bool ShowMetal;
+    static string ShowMetalCode => ShowMetal ? "if (surfaceOn) { albedo = vec3(metal); metal = 0.0; metalShare = 0.0; }" : "";
+
+    /// <summary>
     /// The colour and depth passes' vertex program (no motion).
     /// </summary>
     public static string Vertex() => VertexSource(false);
@@ -157,10 +174,22 @@ static class CharacterShaders
     public static string MotionVertex() => VertexSource(true);
 
     /// <summary>
-    /// The vertex program: morph, skin and place the vertex relative to the eye, hide limbs, parts and the head by the instance flags;
-    /// <paramref name="motion"/>: also last frame's position for the motion vectors.
+    /// The visibility buffer's id pass (<see cref="CharacterVisibility"/>): the colour pass's vertex program that also hands on the instance row.
     /// </summary>
-    static string VertexSource(bool motion) => ("#version 450\n" + NativeShaders.Prelude(PushMembers) + $$"""
+    public static string IdVertex() => VertexSource(false, true);
+
+    /// <summary>
+    /// The vertex program: morph, skin and place the vertex relative to the eye, hide limbs, parts and the head by the instance flags;
+    /// <paramref name="motion"/>: also last frame's position for the motion vectors; <paramref name="row"/>: also the instance row (flat
+    /// <c>vRow</c>).
+    /// </summary>
+    static string VertexSource(bool motion, bool row = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + VertexBody(motion, row);
+
+    /// <summary>
+    /// <see cref="VertexSource"/> after its prelude: the inputs, the storage buffers, the outputs and <c>main</c>. The visibility buffer's resolve
+    /// runs the same text for each corner of a pixel's triangle (<see cref="CharacterVisibilityShaders"/>).
+    /// </summary>
+    internal static string VertexBody(bool motion, bool row) => ($$"""
         layout(location = 0) in vec3 aPosition;
         layout(location = 1) in vec3 aNormal;
         layout(location = 2) in vec2 aUv;
@@ -197,6 +226,7 @@ static class CharacterShaders
         out vec3 vLocal;        // the vertex in the mesh's own space (a weapon's blade position)
         flat out vec4 vGear;    // a weapon's blood (WeaponBlood): rgb its colour, a its amount
         flat out float vGearFresh;  // how wet it still is (1 just struck, 0 dry)
+        //ROW_OUT
 
         void main()
         {
@@ -261,9 +291,11 @@ static class CharacterShaders
             uint hideSide = (aInstanceData.z >> 16) & 3u;
             if ((hideSide == 1u && aPosition.x >= 0.0) || (hideSide == 2u && aPosition.x < 0.0)) gl_Position *= 0.0;
             //MOTION_BODY
+            //ROW_BODY
         }
         """).Replace("//MOTION_IN", motion ? MotionIn : "").Replace("//MOTION_BUF", motion ? MotionBuf : "")
-          .Replace("//MOTION_OUT", motion ? "out vec4 vNow;\nout vec4 vPrevious;" : "").Replace("//MOTION_BODY", motion ? MotionBody : "");
+          .Replace("//MOTION_OUT", motion ? "out vec4 vNow;\nout vec4 vPrevious;" : "").Replace("//MOTION_BODY", motion ? MotionBody : "")
+          .Replace("//ROW_OUT", row ? "flat out uint vRow;" : "").Replace("//ROW_BODY", row ? "vRow = uint(gl_InstanceIndex);" : "");
 
     /// <summary>
     /// The motion vertex program's inputs: last frame's model matrix rows (locations 12 to 15).
@@ -301,7 +333,7 @@ static class CharacterShaders
     /// instances differ in material) but constant over a primitive, so the derivatives of the quad are fine. The cut-outs discard after every lookup
     /// (no derivatives after an OpKill).
     /// </summary>
-    static readonly string Lookup = """
+    internal static readonly string Lookup = """
         vec4 tex(uint i, vec2 uv) { return texture(textures2D[nonuniformEXT(i)], uv); }
         vec4 hairTex(CharMaterial m, vec2 uv) { return texture(textures2D[nonuniformEXT(m.tex[0])], uv, m.hairColour.w); }
         """ + OpacityDither.Function + $$"""
@@ -327,6 +359,11 @@ static class CharacterShaders
     const float SkinCurvatureScale = SkinScatterScale / (100f * SkinScattering.MaxInverseRadiusMm);
 
     /// <summary>
+    /// Bare skin's roughness under the Meitou skin: measured skin's (physicallybased.info "Skin" 0.5; Epic's skin guide starts at 0.4).
+    /// </summary>
+    const float SkinRoughness = 0.5f;
+
+    /// <summary>
     /// A float as a GLSL literal (invariant culture, always a decimal point).
     /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
@@ -337,7 +374,38 @@ static class CharacterShaders
     /// writes the rasterized depth itself (the backend's discard workaround, <c>DiscardNeedsLateDepth</c>).
     /// </summary>
     public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n"
-        + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + $$"""
+        + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + ForwardMacros + FragmentBody(lateDepth);
+
+    /// <summary>
+    /// What <see cref="FragmentBody"/>'s macros are in the colour pass: the lookups and derivatives the rasteriser's quads give, the cut-outs'
+    /// discards. The text they expand to is the program's as it was before the visibility buffer (<see cref="CharacterVisibilityShaders"/> gives
+    /// the resolve's: the same lookups with the derivatives taken from the triangle).
+    /// </summary>
+    const string ForwardMacros = "\n" + """
+        #define TEXG(i, uv, dx, dy) tex(i, uv)
+        #define HAIRTEXG(m, uv, dx, dy) hairTex(m, uv)
+        #define DFDX(e, d) dFdx(e)
+        #define DFDY(e, d) dFdy(e)
+        #define FWIDTH(e, d) fwidth(e)
+        #define DISCARD discard
+        #define FRONT_FACING gl_FrontFacing
+        #define PROBE_BARE
+        #define PROBE_FILM(lies)
+        #define PROBE_END
+
+        """;
+
+    /// <summary>
+    /// The blood splatter's coordinates (character.hlsl "Bloodyness") from <c>vBlood</c>: its height along the mesh's Y times <c>sx</c>, the angle
+    /// round it (the shifted one where the normal faces back) times <c>sy</c>. A macro, so the colour pass's text is what it was.
+    /// </summary>
+    const string BloodMacro = "\n#define BLOOD_UV(b, sx, sy) vec2((b).x * (sx), ((b).w < 0.0 ? (b).z : (b).y) * (sy))\n";
+
+    /// <summary>
+    /// <see cref="Fragment"/> after its head and the macros: the inputs, the output, the layers' functions and <c>main</c>. Its lookups, derivatives
+    /// and discards are macros (<see cref="ForwardMacros"/>), whose last arguments say what the visibility buffer's resolve takes in their place.
+    /// </summary>
+    internal static string FragmentBody(bool lateDepth) => BloodMacro + $$"""
         in vec3 vWorld;
         in float vCurvature;
         in float vThickness;
@@ -363,9 +431,9 @@ static class CharacterShaders
         // A clothing "vest" layer drawn on the body (docs/characters.md): the coverage is the vest normal map's alpha (skin: what it leaves bare).
         void vest(uint d, uint nm, uint c, bool coloured, vec3 shirt, float layerSheen, vec2 uv, inout vec3 albedo, inout vec4 normalMap, inout float gloss, inout float skin, inout float sheen)
         {
-            vec4 v = tex(d, uv);
-            vec4 vn = tex(nm, uv);
-            if (coloured) v.rgb = mix(v.rgb, shirt * dot(v.rgb, vec3(1.0 / 3.0)), tex(c, uv).r);
+            vec4 v = TEXG(d, uv, vUvGx, vUvGy);
+            vec4 vn = TEXG(nm, uv, vUvGx, vUvGy);
+            if (coloured) v.rgb = mix(v.rgb, shirt * dot(v.rgb, vec3(1.0 / 3.0)), TEXG(c, uv, vUvGx, vUvGy).r);
             albedo = mix(albedo, v.rgb, vn.a);
             normalMap.wy = mix(normalMap.wy, vn.xy, vn.a);
             gloss = mix(gloss, v.a, vn.a);
@@ -400,7 +468,10 @@ static class CharacterShaders
         {{StudioShaders.Functions}}
         vec3 lampSkinDiffuse(vec3 n, vec3 l)
         {
-            vec3 d = skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo);
+            // One normal for the three channels under a lamp (the sun's term softens red and green towards the smooth normal): the lamps' shadow pass takes a
+            // blocked lamp's term back from the shading normal alone (LampShadowShaders.SkinTerm), and a term it cannot rebuild left red and green patches along
+            // the normal map's bumps inside a lamp's shadow, a face that looked painted.
+            vec3 d = skinDiffuse(n, n, l, skinCurvature, skinShare, skinAlbedo);
             return surfaceOn ? d + skinThrough(l) : d;
         }
 
@@ -410,24 +481,24 @@ static class CharacterShaders
             {{(lateDepth ? "gl_FragDepth = gl_FragCoord.z;" : "")}}
             vec3 geometric = normalize(vNormal);
             float curvature = vCurvature;
-            if (vHidden > 0.0) discard;
+            if (vHidden > 0.0) DISCARD;
             if (pc.depthIndex != 0u) { fragColour = vec4(pc.flatColour, 1.0); return; }
             // The chars2 switch's parts: never on the game's own stage or an icon.
             surfaceParts = view.fogDistance >= 0.0 || view.fogDistance < -2.5 ? uint(pc.fill.a + 0.5) : 0u;
             surfaceOn = surfaceParts != 0u;
             if (surfaceOn)
             {
-                vec3 gx = dFdx(geometric), gy = dFdy(geometric);
+                vec3 gx = DFDX(geometric, vbGeometricDx), gy = DFDY(geometric, vbGeometricDy);
                 eyeWiden = min(0.5 * (dot(gx, gx) + dot(gy, gy)), 0.18);
             }
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
-            if (flag(f, 32768u)) discard;   // its cut-out is still streaming in: a solid card would show
+            if (flag(f, 32768u)) DISCARD;   // its cut-out is still streaming in: a solid card would show
             bool glass = m.shading == 0u && flag(f, {{SeeThrough}}u);
-            if (pc.seeThrough == 2u && !glass) discard;
+            if (pc.seeThrough == 2u && !glass) DISCARD;
             float opacity = 1.0;
             vec3 n = geometric;
-            if (m.shading != 2u && !gl_FrontFacing) n = -n;
+            if (m.shading != 2u && !FRONT_FACING) n = -n;
             bool icon = view.fogDistance < 0.0 && view.fogDistance > -1.5;   // an inventory icon (CharacterRenderer.DrawIcon)
             vec2 uv = vUv;
             vec3 albedo = vec3(0.72);
@@ -444,7 +515,7 @@ static class CharacterShaders
 
             if (m.shading == 2u)
             {
-                vec4 t = flag(f, 1u) ? hairTex(m, uv) : vec4(1.0);
+                vec4 t = flag(f, 1u) ? HAIRTEXG(m, uv, vUvGx, vUvGy) : vec4(1.0);
                 cut = flag(f, 1u) && dot(t, m.alphaChannel) < m.alphaThreshold;
                 float brightness = dot(t, m.diffuseChannel);
                 albedo = brightness * m.hairColour.rgb;
@@ -453,29 +524,29 @@ static class CharacterShaders
             }
             else if (m.shading == 1u)
             {
-                vec4 body = flag(f, 1u) ? tex(m.tex[0], uv) : vec4(0.7, 0.6, 0.5, 0.2);
+                vec4 body = flag(f, 1u) ? TEXG(m.tex[0], uv, vUvGx, vUvGy) : vec4(0.7, 0.6, 0.5, 0.2);
                 skin = flag(f, 262144u) && pc.skinLut != 0u ? 1.0 : 0.0;
-                if (flag(f, 2u)) nm = tex(m.tex[1], uv);
+                if (flag(f, 2u)) nm = TEXG(m.tex[1], uv, vUvGx, vUvGy);
                 // The original's muscleBlend: towards the strong or the skinny body normal map (skinTone.w, 0 while that map is not resident).
-                if (flag(f, 2u) && m.skinTone.w > 0.0) nm = mix(nm, tex(m.tex[18], uv), m.skinTone.w);
-                float tone = flag(f, 64u) ? tex(m.tex[6], uv).r : 0.0;
+                if (flag(f, 2u) && m.skinTone.w > 0.0) nm = mix(nm, TEXG(m.tex[18], uv, vUvGx, vUvGy), m.skinTone.w);
+                float tone = flag(f, 64u) ? TEXG(m.tex[6], uv, vUvGx, vUvGy).r : 0.0;
                 vec2 huv = uv + vec2(0.0, 1.0);          // head UVs sit in v -1..0
-                if (flag(f, 8u)) body += tex(m.tex[3], huv);
+                if (flag(f, 8u)) body += TEXG(m.tex[3], huv, vUvGx, vUvGy);
                 else if (flag(f, 65536u) && uv.y < 0.0) body = vec4(0.7, 0.6, 0.5, 0.2);   // the head still streaming in: skin, not the border's black
-                if (flag(f, 16u) && flag(f, 2u)) nm += tex(m.tex[4], huv);
+                if (flag(f, 16u) && flag(f, 2u)) nm += TEXG(m.tex[4], huv, vUvGx, vUvGy);
                 else if (flag(f, 131072u) && uv.y < 0.0) nm = vec4(0.5, 0.5, 1.0, 0.5);
-                if (flag(f, 32u)) tone += tex(m.tex[5], huv).r;
+                if (flag(f, 32u)) tone += TEXG(m.tex[5], huv, vUvGx, vUvGy).r;
                 body.rgb *= 1.0 - m.skinTone.rgb * tone;
                 if (flag(f, 128u))
                 {
-                    vec4 h = tex(m.tex[7], huv);
+                    vec4 h = TEXG(m.tex[7], huv, vUvGx, vUvGy);
                     float cover = clamp(dot(h, m.hairAlpha), 0.0, 1.0);
                     body.rgb = mix(body.rgb, m.hairColour.rgb * clamp(dot(h, m.hairMult), 0.0, 1.0), cover);
                     skin *= 1.0 - cover;
                 }
                 if (flag(f, 256u))
                 {
-                    float b = clamp(dot(tex(m.tex[8], huv), m.beardAlpha), 0.0, 1.0);
+                    float b = clamp(dot(TEXG(m.tex[8], huv, vUvGx, vUvGy), m.beardAlpha), 0.0, 1.0);
                     body.rgb = mix(body.rgb, m.hairColour.rgb * b, b);
                     skin *= 1.0 - b;
                 }
@@ -492,11 +563,11 @@ static class CharacterShaders
             else
             {
                 // An icon's missing texture map is white (the game binds a white texture); the world's items show grey.
-                vec4 d = flag(f, 1u) ? tex(m.tex[0], uv) : icon ? vec4(1.0) : vec4(0.72, 0.72, 0.72, 0.2);
+                vec4 d = flag(f, 1u) ? TEXG(m.tex[0], uv, vUvGx, vUvGy) : icon ? vec4(1.0) : vec4(0.72, 0.72, 0.72, 0.2);
                 if (flag(f, 524288u)) d.rgb *= vColour.rgb;
                 bool clip = flag(f, 512u);
-                if (flag(f, 2u) || clip) nm = tex(m.tex[1], uv);
-                vec3 cm = flag(f, 1024u) ? tex(m.tex[2], uv).rgb : vec3(0.0);
+                if (flag(f, 2u) || clip) nm = TEXG(m.tex[1], uv, vUvGx, vUvGy);
+                vec3 cm = flag(f, 1024u) ? TEXG(m.tex[2], uv, vUvGx, vUvGy).rgb : vec3(0.0);
                 // Inventory RTT materials reject at 0.5; worn clothing retains its separate 0.6 threshold.
                 cut = clip && nm.a < (view.fogDistance < 0.0 ? 0.5 : 0.6);
                 if (glass)
@@ -516,15 +587,15 @@ static class CharacterShaders
                 gloss = flag(f, 16384u) ? 0.0 : d.a * m.shirtColour.w;
                 if (flag(f, 16384u) && !flag(f, {{LimbMetal}}u)) wornGlossMap = d.a; else heldGlossMap = flag(f, {{LimbMetal}}u) && d.a > 0.97 ? 0.0 : d.a;   // a limb's opaque alpha: no gloss painted (a carved bone arm), nothing says it is metal
                 if (flag(f, 16384u) && flag(f, 1024u)) metal = cm.b;
-                if (flag(f, {{HasMetalMap}}u)) metal = tex(m.tex[2], uv).r;
+                if (flag(f, {{MetalMapFlag}}u)) metal = TEXG(m.tex[2], uv, vUvGx, vUvGy).r;
                 sheen = m.diffuseChannel.x * (1.0 - metal);
             }
             if (flag(f, 1048576u))
             {
                 // character.hlsl "Bloodyness": the splatter map (bloody.png, wrapped) tinted with the race's blood colour, laid over the
                 // albedo by its alpha. colour1.rgb: the blood colour; colour2.xy: the race's `blood horizontal` and `blood vertical`.
-                vec2 bc = vec2(vBlood.x * m.colour2.y, (vBlood.w < 0.0 ? vBlood.z : vBlood.y) * m.colour2.x);
-                vec4 blood = tex(m.tex[19], bc) * vec4(m.colour1.rgb, 1.0);
+                vec2 bc = BLOOD_UV(vBlood, m.colour2.y, m.colour2.x);
+                vec4 blood = TEXG(m.tex[19], bc, BLOOD_DX(m.colour2.y, m.colour2.x), BLOOD_DY(m.colour2.y, m.colour2.x)) * vec4(m.colour1.rgb, 1.0);
                 float amount = flag(f, 2097152u) ? 1.0 : vBloodAmount;
                 albedo = mix(albedo, blood.rgb, clamp(blood.a - 1.0 + clamp(amount, 0.0, 1.0), 0.0, 1.0));
             }
@@ -544,8 +615,9 @@ static class CharacterShaders
                 {
                     if (vBloodAmount > 0.0)
                     {
-                        vec2 bc = vec2(vBlood.x * m.hairAlpha.y, (vBlood.w < 0.0 ? vBlood.z : vBlood.y) * m.hairAlpha.x);
-                        vec4 splat = tex(m.tex[19], bc);
+                        vec2 bc = BLOOD_UV(vBlood, m.hairAlpha.y, m.hairAlpha.x);
+                        vec4 splat = TEXG(m.tex[19], bc, vbBloodQuad ? BLOOD_DX(m.hairAlpha.y, m.hairAlpha.x) : vec2(0.0),
+                            vbBloodQuad ? BLOOD_DY(m.hairAlpha.y, m.hairAlpha.x) : vec2(0.0));
                         // A wounded part bleeds, so its blood is wet. What it does to the surface depends on the item, so it is laid below, once the item's gloss and
                         // metal are known.
                         gearLies = clamp(splat.a - 1.0 + vBloodAmount, 0.0, 1.0);
@@ -559,9 +631,11 @@ static class CharacterShaders
                 {
                     float along = (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y;
                     float blade = smoothstep(0.3, 0.5, along);
-                    vec4 splat = tex(m.tex[19], (vLocal.xy + 0.5 * vLocal.zx) * m.hairMult.z);
+                    vec4 splat = TEXG(m.tex[19], (vLocal.xy + 0.5 * vLocal.zx) * m.hairMult.z, (vLocalGx.xy + 0.5 * vLocalGx.zx) * m.hairMult.z,
+                        (vLocalGy.xy + 0.5 * vLocalGy.zx) * m.hairMult.z);
                     // As the body's: the splatter's own alpha is what shows at the full amount (spatters and runs, never a painted blade), a second, finer copy breaks its tiling.
-                    float fine = tex(m.tex[19], (vLocal.yz + 0.5 * vLocal.xy) * m.hairMult.z * 2.7 + 0.37).a;
+                    float fine = TEXG(m.tex[19], (vLocal.yz + 0.5 * vLocal.xy) * m.hairMult.z * 2.7 + 0.37, (vLocalGx.yz + 0.5 * vLocalGx.xy) * m.hairMult.z * 2.7,
+                        (vLocalGy.yz + 0.5 * vLocalGy.xy) * m.hairMult.z * 2.7).a;
                     float amount = min(vGear.a, 1.0) * mix(0.55, 1.0, smoothstep(0.4, 1.0, along));
                     float lies = clamp(mix(splat.a, splat.a * fine, 0.5) * 1.35 - 1.0 + amount, 0.0, 1.0) * blade;   // how thick the blood lies
                     // Wet blood is a film with an edge: opaque a little way in, a deep dark red, darker where it lies thick, and it stands on the steel with a rounded
@@ -580,7 +654,7 @@ static class CharacterShaders
             if (flag(f, {{Wound}}u))
             {
                 float r = length(uv);
-                float splat = flag(f, 1u) ? tex(m.tex[0], uv * 0.5 + 0.5).a : 0.5;
+                float splat = flag(f, 1u) ? TEXG(m.tex[0], uv * 0.5 + 0.5, vUvGx * 0.5, vUvGy * 0.5).a : 0.5;
                 vec3 fluid = m.colour1.rgb;
                 if (flag(f, {{Mechanical}}u))
                 {
@@ -592,7 +666,7 @@ static class CharacterShaders
                 else
                 {
                     // Flesh: wet, lumpy (the splatter map as its height, at two sizes), darker in its hollows and towards the middle; the bone dry and matte, its marrow dark.
-                    float fine = flag(f, 1u) ? tex(m.tex[0], uv * 1.7 + 0.31).a : 0.5;
+                    float fine = flag(f, 1u) ? TEXG(m.tex[0], uv * 1.7 + 0.31, vUvGx * 1.7, vUvGy * 1.7).a : 0.5;
                     float lump = mix(splat, fine, 0.4);
                     albedo = mix(fluid * 0.3, fluid * 0.9, lump * smoothstep(0.0, 1.0, r));
                     // A paler layer under the skin at the rim; the bone's outline uneven, its marrow soft and dark.
@@ -608,14 +682,16 @@ static class CharacterShaders
                 if (woundRelief > 0.0 && flag(f, 1u))
                 {
                     const float e = 0.03;
-                    float h0 = mix(splat, tex(m.tex[0], uv * 1.7 + 0.31).a, 0.4);
-                    float hx = mix(tex(m.tex[0], (uv + vec2(e, 0.0)) * 0.5 + 0.5).a, tex(m.tex[0], (uv + vec2(e, 0.0)) * 1.7 + 0.31).a, 0.4);
-                    float hy = mix(tex(m.tex[0], (uv + vec2(0.0, e)) * 0.5 + 0.5).a, tex(m.tex[0], (uv + vec2(0.0, e)) * 1.7 + 0.31).a, 0.4);
+                    float h0 = mix(splat, TEXG(m.tex[0], uv * 1.7 + 0.31, vUvGx * 1.7, vUvGy * 1.7).a, 0.4);
+                    float hx = mix(TEXG(m.tex[0], (uv + vec2(e, 0.0)) * 0.5 + 0.5, vUvGx * 0.5, vUvGy * 0.5).a,
+                        TEXG(m.tex[0], (uv + vec2(e, 0.0)) * 1.7 + 0.31, vUvGx * 1.7, vUvGy * 1.7).a, 0.4);
+                    float hy = mix(TEXG(m.tex[0], (uv + vec2(0.0, e)) * 0.5 + 0.5, vUvGx * 0.5, vUvGy * 0.5).a,
+                        TEXG(m.tex[0], (uv + vec2(0.0, e)) * 1.7 + 0.31, vUvGx * 1.7, vUvGy * 1.7).a, 0.4);
                     nm.xy = 0.5 + clamp(vec2(h0 - hx, h0 - hy) * 2.5 * woundRelief, -0.35, 0.35);
                 }
                 woundMetal = metal; woundGloss = gloss;
             }
-            if (cut) discard;
+            if (cut) DISCARD;
             if (view.fogDistance < -4.5) { fragColour = vec4(0.0); return; }   // a studio depth draw (CharacterRenderer.Studio): the cut-outs only
             // The game writes character albedo darkened: 0.7 for bodies, heads and hair (character.hlsl DARKEN), 0.8 for worn items (skin.hlsl); not its icons (rtticons.hlsl,
             // a fog distance of -1).
@@ -638,7 +714,8 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
-            if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetal}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{Scabbard}}u) || flag(f, {{HasMetalMap}}u), flag(f, {{HasMetalMap}}u), wornGlossMap, heldGlossMap);
+            if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetalFlag}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{ScabbardFlag}}u) || flag(f, {{MetalMapFlag}}u), flag(f, {{MetalMapFlag}}u), wornGlossMap, heldGlossMap);
+            PROBE_BARE
             if (gearCover > 0.0)   // blood on a blade or plate is no metal: wet, then dry
             {
                 float lies = gearCover;   // how much of the fragment the film takes
@@ -656,6 +733,7 @@ static class CharacterShaders
                     gearGloss = mix(max(gloss, 0.4), 0.92, hard);
                     gearRise *= hard;
                 }
+                PROBE_FILM(lies)
                 // The film lies on top of the metal, after the metal's estimate (which saw the clean surface). The lighting has one albedo, the reflection's colour
                 // where the fragment is metal and the diffuse colour where it is not: mixing steel and blood in it made a pale red metal, pink in the light. So the
                 // albedo is set to what gives the right diffuse light (the film's, over what the bare part had) at the metalness left bare; under any film the bare
@@ -664,19 +742,22 @@ static class CharacterShaders
                 {
                     float bare = metal * (1.0 - lies);
                     vec3 over = (albedo * (1.0 - metal) * (1.0 - lies) + gearFilm * lies) / max(1.0 - bare, 1e-3);
-                    albedo = mix(albedo, over, clamp(lies / max(fwidth(lies) * 1.5, 0.02), 0.0, 1.0));
+                    albedo = mix(albedo, over, clamp(lies / max(FWIDTH(lies, abs(vbPartner(vbFilmQuad, vbLiesX, lies, vbSx)) + abs(vbPartner(vbFilmQuad, vbLiesY, lies, vbSy))) * 1.5, 0.02), 0.0, 1.0));
                     metal = bare;
                     metalShare *= 1.0 - lies;
                 }
                 gloss = mix(gloss, gearGloss, gearCover);
                 if (gearRise > 0.0)   // the wet film's surface: the normal leans down its slope
                 {
-                    vec3 px = dFdx(vWorld), py = dFdy(vWorld), r1 = cross(py, n), r2 = cross(n, px);
+                    vec3 px = DFDX(vWorld, vbRiseQuad ? vWorldDx : vec3(0.0)), py = DFDY(vWorld, vbRiseQuad ? vWorldDy : vec3(0.0)), r1 = cross(py, n), r2 = cross(n, px);
                     float det = dot(px, r1);
-                    vec3 slope = sign(det) * (dFdx(gearRise) * r1 + dFdy(gearRise) * r2) / max(abs(det), 1e-9);
+                    vec3 slope = sign(det) * (DFDX(gearRise, vbPartner(vbRiseQuad, vbRiseX, gearRise, vbSx)) * r1 + DFDY(gearRise, vbPartner(vbRiseQuad, vbRiseY, gearRise, vbSy)) * r2)
+                        / max(abs(det), 1e-9);
                     n = normalize(n - slope * min(1.0, 0.45 / max(length(slope), 1e-4)));   // no steeper than a drop's edge: a hard step in the map drew an outline
                 }
             }
+            PROBE_END
+            {{ShowMetalCode}}
             if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
             if ((surfaceParts & 8u) != 0u)
             {
@@ -688,6 +769,9 @@ static class CharacterShaders
             if ((surfaceParts & 32u) != 0u && m.shading != 2u) wetBeads(n, albedo, gloss, dryGloss, surfaceOn ? metal : 0.0, skin, vSoak);
             if ((surfaceParts & 1u) != 0u && m.shading == 2u) hairSurface(n, v, albedo, gloss, flag(f, {{Strands}}u));
             surfaceNormal = n; surfaceView = v;
+            // Bare skin's own lobe is the measured one, not the game's gloss map's (a chalk's: 0.08 to 0.23); wet skin is as smooth as the water makes it. The sky's
+            // reflection keeps the game's gloss: with the lobe's own it doubled (measured against the reference) and drew the sky's shapes on a cheek.
+            skinRoughness = min({{F(SkinRoughness)}}, 1.0 - clamp(gloss, 0.0, 1.0) * 0.99);
             clothSheen = (surfaceParts & 2u) != 0u ? sheen * 0.25 : 0.0;
             clothTint = sqrt(clamp(albedo, 0.0, 1.0));
             vec3 colour;
@@ -700,8 +784,10 @@ static class CharacterShaders
                 vec3 sunDiffuse = skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo);
                 skinSunBand = sunDiffuse - clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0);
                 colour = kenshiLight(albedo, n, v, gloss, vWorld, sunDiffuse);
-                // Hair is no receiver of the traced lamp shadows (kenshiLight's bit 19): its cards shadow each other into black, and its own shading has no single surface.
-                if (m.shading == 2u) giAlbedoOut.w &= ~524288u;
+                // Hair is no character receiver (kenshiLight's bit 19): its cards shadow each other into black, and its own shading has no single surface.
+                // It says it is hair instead (bit 21), which the lamps' rays alone read: they leave past its own cards (LampShadowShaders lampLift), so a
+                // hat, the head and the room still take a lamp from it. Unshadowed, a beard glowed in a face a hat kept dark.
+                if (m.shading == 2u) giAlbedoOut.w = (giAlbedoOut.w & ~524288u) | 2097152u;
                 // Skin tells the lamp pass its share and its row of the scattering table (bits 28-31 and 20-27), for the band to be taken back with a blocked lamp's light.
                 // What is worn says so (bit 20; skin has its table row there), for the characters' traced occlusion (CharacterOcclusionPass).
                 else if ((giAlbedoOut.w & 524288u) != 0u && skin <= 0.0) giAlbedoOut.w |= flag(f, 16384u) ? 1048576u : 0u;

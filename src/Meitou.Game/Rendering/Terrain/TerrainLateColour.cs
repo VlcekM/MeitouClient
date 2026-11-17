@@ -13,3 +13,15 @@ public static class TerrainLateColour
     /// </summary>
     public static bool Enabled { get; set; } = true;
 }
+
+/// <summary>
+/// The resolved colour in two programs (docs/render-terrain.md "Resolved colour"; <see cref="TerrainShaders.ResolvePart"/>): the pixels the ground
+/// march cannot reach are shaded without its code. The A/B is the console's <c>terrainsplit 0|1</c>.
+/// </summary>
+public static class TerrainResolveSplit
+{
+    /// <summary>
+    /// The resolve is split (true, the default); false shades every pixel with the one full program.
+    /// </summary>
+    public static bool Enabled { get; set; } = true;
+}

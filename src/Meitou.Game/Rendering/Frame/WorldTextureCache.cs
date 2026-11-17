@@ -45,7 +45,7 @@ public sealed class WorldTexture
     /// </summary>
     void Touch()
     {
-        LastUsed = Environment.TickCount64;
+        LastUsed = FrameTick.Now;   // not the system's clock: this runs tens of thousands of times a frame
         if (State == Residency.Unloaded) Owner?.Reload(this);
     }
 

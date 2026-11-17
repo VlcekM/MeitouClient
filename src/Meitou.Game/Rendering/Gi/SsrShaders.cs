@@ -61,6 +61,13 @@ static class SsrShaders
         float ssrHitShare(float a) { return a == 0.0 ? 0.0 : mod(abs(a) - 1.0, 8.0) / 7.0; }
         float ssrHitDistance(float a) { if (a == 0.0) return 0.0; float q = floor((abs(a) - 1.0) / 8.0) / 63.0; return q * q * 4000.0; }
         float ssrGloss(uvec4 surface) { return float(((surface.w >> 10) & 63u) - 1u) / 62.0; }
+        // The surface's specular colour: a dielectric's unless the lit fragment stored a metal's (kenshiLight, bit 28).
+        vec3 ssrSpecular(uvec4 surface)
+        {
+            if ((surface.w & 268435456u) == 0u) return vec3(0.04);   // KenshiLighting.DielectricSpecular
+            vec3 s = vec3(float((surface.z >> 16) & 255u), float(surface.z >> 24), float((surface.w >> 20) & 255u)) / 255.0;
+            return s * s;
+        }
         // How much of the sky's reflection the traced light replaces (the rest keeps the sky, occluded).
         float ssrWeight(float gloss) { return smoothstep(0.25, 0.45, gloss); }
         vec3 ssrNormal(uvec4 surface)
@@ -167,48 +174,42 @@ static class SsrShaders
         """;
 
     /// <summary>
-    /// One texel per block of what the sky's reflection on this surface becomes, minus what the lit fragment already put there (the sky's, as
-    /// <c>kenshiLight</c> reads it), hazed as the fragment was; per unit of the environment BRDF, which <see cref="Apply"/> multiplies in at full size.
-    /// Out: rgb that difference, a the signed view depth as <see cref="GiResolveShaders.Resolve"/>'s. Every surface goes through here: below the gloss
-    /// threshold the difference is the specular occlusion alone, the same ratio the lit fragment takes without the resolve, recovered from the
-    /// resolve's texel of this block. <c>uHit</c>'s alpha is <c>ssrPackHit</c>'s. A rough surface mirrors a cone: the hits round this texel on the
-    /// same surface are averaged over the disc the cone covers at their distance.
+    /// One texel per block of what the sky's reflection on this surface becomes, in two parts (<c>uPart</c>, a target each), hazed as the fragment
+    /// was and per unit of the environment BRDF: 0 the light the rays found in place of the sky; 1 the share of the sky's reflection that stays,
+    /// less one (what <see cref="Apply"/> takes of the reflection the lit fragment put there). Apart, because the sky's reflection is each pixel's
+    /// own: on a bumped glossy surface it changes from pixel to pixel, and one texel's difference from the sky left the rest as speckles, the
+    /// brightest things in a dark room. Out: rgb the part, a the signed view depth as <see cref="GiResolveShaders.Resolve"/>'s. Every surface goes
+    /// through here: below the gloss threshold the kept share is the specular occlusion alone, the same ratio the lit fragment takes without the
+    /// resolve, recovered from the resolve's texel of this block. <c>uHit</c>'s alpha is <c>ssrPackHit</c>'s. A rough surface mirrors a cone: the
+    /// hits round this texel on the same surface are averaged over the disc the cone covers at their distance.
     /// </summary>
     public static readonly string Shade = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
         + "uniform usampler2D uAlbedo;\n" + Common + $$"""
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uHit, uGiLow;
-        uniform float uDiv, uHasGi;
+        uniform sampler2D uHit, uGiLow, uGiLowSky;
+        uniform float uDiv, uHasGi, uPart;
 
-        // A puddle's water (kenshiLight's bit 20 on a surface that is no lamp receiver, bit 19, whose bits 20-31 are its own).
-        bool ssrPuddle(uvec4 surface) { return (surface.w & 1572864u) == 1048576u; }
-        // The sky's reflection as kenshiLight reads it, before the BRDF.
-        vec3 ssrSky(vec3 p, vec3 n, vec3 v, float gloss, vec3 ambient, bool puddle)
-        {
-            if (uAtmoMaps.y < 0.5) return vec3(0.0);
-            float rough = 1.0 - gloss * 0.99;
-            vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + rough));
-            return atmoSkyReflection(dominant, gloss, ambient, uAtmoLight.w, puddle, p);
-        }
-        // The probes' light against the sky's at this texel: GiResolveShaders.Resolve stored (probes - sky) x share x haze, so 1 + its luminance over the sky's is
-        // kenshiLight's mix(1, probes / sky, share), the clamp included.
+        // The probes' light against the sky's at this texel: GiResolveShaders.Resolve stored probes x share x haze and -share x haze, so their sum with the
+        // sky is (probes - sky) x share, and 1 + its luminance over the sky's is kenshiLight's mix(1, probes / sky, share), the clamp included.
         float ssrOcclusion(ivec2 cell, vec3 n, vec3 transmittance, vec3 ambient)
         {
             if (uHasGi < 0.5) return 1.0;
-            vec3 change = texelFetch(uGiLow, cell, 0).rgb / max(transmittance, vec3(1e-3));
             vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * ambient * uAtmoLight.w;
+            vec3 change = (texelFetch(uGiLow, cell, 0).rgb + texelFetch(uGiLowSky, cell, 0).rgb * sky) / max(transmittance, vec3(1e-3));
             const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
             return clamp(1.0 + dot(change, lum) / max(dot(sky, lum), 1e-4), 0.0, 1.0);
         }
 
-        vec3 ssrResolved(vec4 hit, vec3 sky, vec3 occluded)
+        // A hit as the light found (rgb) and the share of the sky's reflection kept beside it (a): all of the rest where a ray proved it open, else
+        // the occluded share.
+        vec4 ssrResolved(vec4 hit, float occlusion)
         {
             float share = ssrHitShare(hit.a);
-            return hit.rgb * share + (hit.a < 0.0 ? sky : occluded) * (1.0 - share);
+            return vec4(hit.rgb * share, (hit.a < 0.0 ? 1.0 : occlusion) * (1.0 - share));
         }
         // The texels of this block's surface within r cells, on a fixed spiral, so the picture is the same every frame.
-        vec3 ssrCone(ivec2 cell, vec3 p, vec3 n, float z, float gloss, vec3 sky, vec3 occluded)
+        vec4 ssrCone(ivec2 cell, vec3 p, vec3 n, float z, float gloss, float occlusion)
         {
             float rough = 1.0 - gloss * 0.99;
             float cellsPerUnit = uFullSize.y / (2.0 * z * uTan.y * uDiv), cone = rough * rough * 0.5;
@@ -221,7 +222,7 @@ static class SsrShaders
                 float packed = texelFetch(uHit, clamp(cell + ivec2(round(vec2(cos(a), sin(a)) * d)), ivec2(0), limit), 0).a;
                 if (ssrHitShare(packed) > 0.0) { total += ssrHitDistance(packed); found += 1.0; }
             }
-            vec3 sum = ssrResolved(texelFetch(uHit, cell, 0), sky, occluded);
+            vec4 sum = ssrResolved(texelFetch(uHit, cell, 0), occlusion);
             float radius = found > 0.0 ? min(total / found * cone * cellsPerUnit, 16.0) : 0.0, weight = 1.0;
             if (radius < 0.5) return sum;
             for (int i = 0; i < 32; i++)
@@ -233,7 +234,7 @@ static class SsrShaders
                 float qz = q.x < 0 ? 0.0 : depthAt(q);
                 if (qz <= 0.0 || abs(dot(n, positionAt(q, qz) - p)) > max(1.5, z * 0.01)) continue;
                 float w = 1.0 - 0.75 * f * f;
-                sum += ssrResolved(texelFetch(uHit, c, 0), sky, occluded) * w;
+                sum += ssrResolved(texelFetch(uHit, c, 0), occlusion) * w;
                 weight += w;
             }
             return sum / weight;
@@ -250,25 +251,37 @@ static class SsrShaders
             float gloss = ssrGloss(surface);
             vec3 ambient = atmoAmbientMapAt(p).rgb;
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
-            vec3 sky = ssrSky(p, n, v, gloss, ambient, ssrPuddle(surface));
-            vec3 occluded = sky * ssrOcclusion(cell, n, transmittance, ambient);
-            vec3 seen = ssrWeight(gloss) > 0.0 ? mix(occluded, ssrCone(cell, p, n, z, gloss, sky, occluded), ssrWeight(gloss)) : occluded;
-            fragColour = vec4((seen - sky) * transmittance, (surface.w & 512u) != 0u ? -z : z);
+            float occlusion = ssrOcclusion(cell, n, transmittance, ambient);
+            vec4 seen = vec4(0.0, 0.0, 0.0, occlusion);
+            if (ssrWeight(gloss) > 0.0) seen = mix(seen, ssrCone(cell, p, n, z, gloss, occlusion), ssrWeight(gloss));
+            fragColour = vec4((uPart < 0.5 ? seen.rgb : vec3(seen.a - 1.0)) * transmittance, (surface.w & 512u) != 0u ? -z : z);
         }
         """;
 
     /// <summary>
-    /// The low target over the scene (blend one, one; red, green and blue): upsampled by depth, times this pixel's environment BRDF (a specular
-    /// colour of 0.04: resolved surfaces are dielectrics).
+    /// The two low targets over the scene (blend one, one; red, green and blue), upsampled by depth: the light found, plus this pixel's own
+    /// reflection of the sky (as <c>kenshiLight</c> read it: its normal, its gloss) times the kept share less one, all times this pixel's
+    /// environment BRDF with its own specular colour (<c>ssrSpecular</c>: a metal's is many times a dielectric's 0.04).
     /// </summary>
-    public static readonly string Apply = "#version 330 core\n" + GiResolveShaders.Reconstruct + AtmosphereShaders.EnvBrdfFunction
-        + "\nuniform usampler2D uAlbedo;\n" + Common + $$"""
+    public static readonly string Apply = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
+        + "uniform usampler2D uAlbedo;\n" + Common + $$"""
 
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uLow;
+        uniform sampler2D uLow, uLowSky;
         uniform vec2 uLowSize;
         uniform float uDiv;
+
+        // A puddle's water (kenshiLight's bit 29 on a surface that is no lamp receiver, bit 19).
+        bool ssrPuddle(uvec4 surface) { return (surface.w & 537395200u) == 536870912u; }
+        // The sky's reflection as kenshiLight reads it, before the BRDF (a puddle's: the dome's sky, atmoSkyReflection).
+        vec3 ssrSky(vec3 p, vec3 n, vec3 v, float gloss, vec3 ambient, bool puddle)
+        {
+            if (uAtmoMaps.y < 0.5) return vec3(0.0);
+            float rough = 1.0 - gloss * 0.99;
+            vec3 dominant = mix(n, reflect(-v, n), gloss * (sqrt(gloss) + rough));
+            return atmoSkyReflection(dominant, gloss, ambient, uAtmoLight.w, puddle, p);
+        }
 
         void main()
         {
@@ -277,9 +290,13 @@ static class SsrShaders
             if (((surface.w >> 10) & 63u) == 0u) discard;
             float z = depthAt(px);
             if (z <= 0.0) discard;
-        {{GiResolveShaders.Upsample}}
-            float nv = clamp(dot(ssrNormal(surface), normalize(uGiEye - positionAt(px, z))), 0.0, 1.0);
-            fragColour = vec4(kenshiEnvBrdf(ssrGloss(surface), nv, vec3({{F(KenshiLighting.DielectricSpecular)}})) * add, 0.0);
+
+        {{GiResolveShaders.UpsamplePair}}
+
+            vec3 n = ssrNormal(surface), p = positionAt(px, z), v = normalize(uGiEye - p);
+            float gloss = ssrGloss(surface);
+            vec3 sky = ssrSky(p, n, v, gloss, atmoAmbientMapAt(p).rgb, ssrPuddle(surface));
+            fragColour = vec4(kenshiEnvBrdf(gloss, clamp(dot(v, n), 0.0, 1.0), ssrSpecular(surface)) * (add + sky * kept), 0.0);
         }
         """;
 

@@ -129,12 +129,12 @@ sealed unsafe class MergedKernels(PostProcess post)
     /// <summary>
     /// The exposure kernel's program (made with its first run).
     /// </summary>
-    GpuProgram? _exposureProgram;
+    GpuProgram? _exposureProgram, _exposureWeightedProgram, _gainProgram;
 
     /// <summary>
     /// The exposure kernel's pipeline (made with its first run).
     /// </summary>
-    GpuComputePipeline? _exposurePipeline;
+    GpuComputePipeline? _exposurePipeline, _exposureWeightedPipeline, _gainPipeline;
 
     /// <summary>
     /// The kernel's state across its workgroups (cleared once, then kept by the kernel).
@@ -156,6 +156,16 @@ sealed unsafe class MergedKernels(PostProcess post)
         /// The adaptation's blend and the band's minimum and maximum.
         /// </summary>
         public float Blend, BandMin, BandMax;
+
+        /// <summary>
+        /// Above 0, an interior in view: the minimum follows the mean times this down, to no less than <see cref="IndoorFloor"/> of itself.
+        /// </summary>
+        public float Indoor, IndoorFloor;
+
+        /// <summary>
+        /// The most an interior's pixels are scaled by (<see cref="PostProcess.IndoorExposureMaxGain"/>).
+        /// </summary>
+        public float MaxGain;
     }
 
     /// <summary>
@@ -164,14 +174,22 @@ sealed unsafe class MergedKernels(PostProcess post)
     /// the last to finish reduces the 256 tiles and adapts. <paramref name="scene"/>: the picture measured; <paramref name="adaptA"/>: last
     /// frame's adaptation, <paramref name="adaptB"/>: this frame's.
     /// </summary>
-    public void Exposure(float blend, (float Min, float Max) band, Target2D scene, Target2D adaptA, Target2D adaptB)
+    /// <param name="rooms">With <paramref name="indoor"/> above 0: the rooms in view (<see cref="Gi.RoomMaskPass"/>: 1 on a room's pixel). The
+    /// rest alone sets the adapted luminance, by the game's rule; the rooms' own mean sets what their pixels are scaled by before the upscaler
+    /// (<see cref="InteriorGain"/>, kept in the state buffer), so a room is read at its own exposure and the street at the street's.</param>
+    public void Exposure(float blend, (float Min, float Max) band, Target2D scene, Target2D adaptA, Target2D adaptB, float indoor = 0,
+        float indoorFloor = PostProcess.IndoorExposureFloor, Target2D? rooms = null)
     {
-        if (_exposureProgram is null)
+        bool weighted = indoor > 0 && rooms is not null;
+        ref var program = ref weighted ? ref _exposureWeightedProgram : ref _exposureProgram;
+        ref var pipeline = ref weighted ? ref _exposureWeightedPipeline : ref _exposurePipeline;
+        if (program is null)
         {
-            _exposureProgram = post.Gpu.Shaders.Compute(MergedShaders.Exposure, "post exposure merged");
-            _exposurePipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(_exposureProgram!.Value, "post exposure merged"));
+            string name = weighted ? "post exposure merged weighted" : "post exposure merged";
+            program = post.Gpu.Shaders.Compute(MergedShaders.ExposureFor(weighted), name);
+            pipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(program!.Value, name));
         }
-        _exposureState ??= DeviceBuffer.Create(post.Gpu, 16 + 256 * 4, BufferUse.Storage | BufferUse.TransferDst, "post exposure state");
+        _exposureState ??= DeviceBuffer.Create(post.Gpu, 16 + 256 * 16, BufferUse.Storage | BufferUse.TransferDst, "post exposure state");
         var cmd = post.Segment();
         if (!_exposureStateZeroed)
         {
@@ -179,17 +197,50 @@ sealed unsafe class MergedKernels(PostProcess post)
             _exposureStateZeroed = true;
         }
         var sampled = post.Sampled(scene);
-        var bindings = stackalloc GpuBinding[4];
+        var bindings = stackalloc GpuBinding[5];
         bindings[0] = GpuBinding.Sampled(0, new SampledTexture(sampled.Sampler, sampled.View));
         bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, adaptA.Texture.View()));
         bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, adaptB.Texture.View()));
         bindings[3] = GpuBinding.Storage(3, new GpuBufferBinding(_exposureState.Handle, 0, _exposureState.Size));
         cmd.Order();
-        cmd.BindPipeline(_exposurePipeline!.Value);
-        cmd.BindProgramResources(_exposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 4));
-        var push = new ExposurePush { Blend = blend, BandMin = band.Min, BandMax = band.Max };
-        cmd.PushConstants(_exposureProgram!.Value, GpuStage.Compute, in push);
+        if (weighted)
+        {
+            var flags = post.Sampled(rooms!);
+            bindings[4] = GpuBinding.Sampled(4, new SampledTexture(flags.Sampler, flags.View));
+        }
+        cmd.BindPipeline(pipeline!.Value);
+        cmd.BindProgramResources(program!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, weighted ? 5 : 4));
+        var push = new ExposurePush { Blend = blend, BandMin = band.Min, BandMax = band.Max, Indoor = indoor, IndoorFloor = indoorFloor,
+            MaxGain = PostProcess.IndoorExposureMaxGain };
+        cmd.PushConstants(program!.Value, GpuStage.Compute, in push);
         cmd.Dispatch(16, 16);
+        cmd.Order();
+    }
+
+    /// <summary>
+    /// Scales the pixels of the rooms in view (<paramref name="rooms"/>, <see cref="Gi.RoomMaskPass"/>) by the gain <see cref="Exposure"/> last
+    /// left in its state: the scene colour in place, before the upscaler. Nothing before the first <see cref="Exposure"/>.
+    /// </summary>
+    public void InteriorGain(Target2D rooms, Target2D colour)
+    {
+        if (_exposureState is null || !_exposureStateZeroed) return;
+        if (_gainProgram is null)
+        {
+            _gainProgram = post.Gpu.Shaders.Compute(MergedShaders.InteriorGain, "post interior gain");
+            _gainPipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(_gainProgram!.Value, "post interior gain"));
+        }
+        var cmd = post.Segment();
+        var flags = post.Sampled(rooms);
+        var bindings = stackalloc GpuBinding[3];
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(flags.Sampler, flags.View));
+        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, colour.Texture.View()));
+        bindings[2] = GpuBinding.Storage(2, new GpuBufferBinding(_exposureState.Handle, 0, _exposureState.Size));
+        cmd.Order();
+        cmd.BindPipeline(_gainPipeline!.Value);
+        cmd.BindProgramResources(_gainProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 3));
+        var size = new Vector2(post.RenderWidth, post.RenderHeight);
+        cmd.PushConstants(_gainProgram!.Value, GpuStage.Compute, in size);
+        cmd.Dispatch((uint)((post.RenderWidth + 15) / 16), (uint)((post.RenderHeight + 15) / 16));
         cmd.Order();
     }
 
@@ -205,6 +256,8 @@ sealed unsafe class MergedKernels(PostProcess post)
         _exposureState?.Dispose();
         if (_velocityProgram is { } vp) post.Gpu.Shaders.Dispose(vp);
         if (_exposureProgram is { } ep) post.Gpu.Shaders.Dispose(ep);
+        if (_exposureWeightedProgram is { } wp) post.Gpu.Shaders.Dispose(wp);
+        if (_gainProgram is { } gp) post.Gpu.Shaders.Dispose(gp);
     }
 
     #endregion
@@ -271,23 +324,36 @@ static class MergedShaders
     /// luminance (the same 16 taps, in the same order), a 16 x 16 tile reduced by 2 x 2 means as the mip chain does, the last tile to finish (an
     /// atomic counter, reset by it) reducing the 256 tile means and adapting.
     /// </summary>
-    public const string Exposure = """
+    /// <param name="weighted">With the rooms' mask bound (<see cref="Gi.RoomMaskPass"/>): a tap on a room's pixel goes to the rooms' mean, any
+    /// other to the rest's.</param>
+    public static string ExposureFor(bool weighted) => Exposure.Replace("//WEIGHT-BINDING", weighted
+        ? "layout(set = 0, binding = 4) uniform sampler2D uRooms;" : "", StringComparison.Ordinal).Replace("//WEIGHT", weighted
+        ? "inside = pc.indoor > 0.0 && texelFetch(uRooms, ivec2(uv * vec2(textureSize(uRooms, 0))), 0).r > 0.5;" : "",
+        StringComparison.Ordinal);
+
+    /// <summary>
+    /// The text <see cref="ExposureFor"/> fills in. The state: the tiles done; the rooms' adapted luminance, their smoothed mean and the gain
+    /// their pixels are scaled by (<see cref="InteriorGain"/>); then each tile's sums (x, y: the luminance and the share of what is no room's;
+    /// z, w: of the rooms', their luminance taken back through the gain it was drawn with).
+    /// </summary>
+    const string Exposure = """
         #version 450
         layout(local_size_x = 16, local_size_y = 16) in;
         layout(set = 0, binding = 0) uniform sampler2D uScene;
         layout(set = 0, binding = 1, rg32f) readonly uniform image2D uLast;
         layout(set = 0, binding = 2, rg32f) writeonly uniform image2D uAdapted;
-        layout(std430, set = 0, binding = 3) coherent buffer State { uint counter; uint pad0; uint pad1; uint pad2; float tiles[256]; } st;
-        layout(push_constant) uniform Push { float blend; float bandMin; float bandMax; } pc;
-        shared float tile[256];
+        layout(std430, set = 0, binding = 3) coherent buffer State { uint counter; float room; float roomMean; float gain; vec4 tiles[256]; } st;
+        //WEIGHT-BINDING
+        layout(push_constant) uniform Push { float blend; float bandMin; float bandMax; float indoor; float indoorFloor; float maxGain; } pc;
+        shared vec4 tile[256];
         shared uint finished;
 
         // The 2 x 2 means of the mip chain down to one value, in the tile.
-        float reduce(uvec2 l)
+        vec4 reduce(uvec2 l)
         {
             for (uint s = 8u; s >= 1u; s >>= 1u)
             {
-                float a = 0.0;
+                vec4 a = vec4(0.0);
                 bool live = l.x < s && l.y < s;
                 if (live) a = 0.25 * (tile[(2u * l.y) * 16u + 2u * l.x] + tile[(2u * l.y) * 16u + 2u * l.x + 1u] + tile[(2u * l.y + 1u) * 16u + 2u * l.x] + tile[(2u * l.y + 1u) * 16u + 2u * l.x + 1u]);
                 barrier();
@@ -303,16 +369,20 @@ static class MergedShaders
             uint li = l.y * 16u + l.x;
             vec2 cell = vec2(1.0 / 256.0);
             vec2 centre = (vec2(gl_GlobalInvocationID.xy) + 0.5) * cell;
-            float sum = 0.0;
+            float drawn = max(st.gain, 1.0);   // what the rooms' pixels were scaled by in the picture measured
+            vec4 sum = vec4(0.0);
             for (int y = 0; y < 4; y++)
                 for (int x = 0; x < 4; x++)
                 {
                     vec2 uv = centre + (vec2(x, y) - 1.5) * 0.25 * cell;
-                    sum += max(dot(textureLod(uScene, uv, 0.0).rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
+                    float lum = max(dot(textureLod(uScene, uv, 0.0).rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
+                    bool inside = false;
+                    //WEIGHT
+                    sum += inside ? vec4(0.0, 0.0, lum / drawn, 1.0) : vec4(lum, 1.0, 0.0, 0.0);
                 }
             tile[li] = sum / 16.0;
             barrier();
-            float mean = reduce(l);
+            vec4 mean = reduce(l);
             if (li == 0u)
             {
                 st.tiles[gl_WorkGroupID.y * 16u + gl_WorkGroupID.x] = mean;
@@ -324,15 +394,55 @@ static class MergedShaders
             memoryBarrierBuffer();
             tile[li] = st.tiles[li];
             barrier();
-            float total = reduce(l);
+            vec4 pooled = reduce(l);
             if (li == 0u)
             {
                 st.counter = 0u;
-                float last = imageLoad(uLast, ivec2(0)).r;
-                float adapted = mix(last, total, pc.blend);
-                float smoothMean = mix(imageLoad(uLast, ivec2(0)).g, total, pc.blend);   // the mean smoothed without the band (the night grading reads it)
-                imageStore(uAdapted, ivec2(0), vec4(clamp(adapted, pc.bandMin, max(pc.bandMin, pc.bandMax)), smoothMean, 0.0, 1.0));
+                vec2 last = imageLoad(uLast, ivec2(0)).rg;
+                // What is no room's sets the adapted luminance, by the game's rule (next to none of it in view: held); the whole picture, as its fragments
+                // were lit, the smoothed mean (the night grading reads it).
+                float outside = pooled.y > 0.02 ? pooled.x / pooled.y : last.r;
+                float adapted = clamp(mix(last.r, outside, pc.blend), pc.bandMin, pc.bandMax);
+                float smoothMean = mix(last.g, (pooled.x + pooled.z) / max(pooled.y + pooled.w, 1e-6), pc.blend);
+                // The rooms in view: their own adapted luminance goes down with their mean, under the game's minimum (PostProcess.IndoorExposure), and
+                // their pixels are scaled by the adapted luminance over it.
+                float gain = 1.0, roomMean = 0.0, room = adapted;
+                bool rooms = pc.indoor > 0.0 && pooled.w > 0.002;
+                if (rooms)
+                {
+                    roomMean = mix(st.roomMean > 0.0 ? st.roomMean : pooled.z / pooled.w, pooled.z / pooled.w, pc.blend);
+                    room = min(clamp(roomMean * pc.indoor, pc.bandMin * pc.indoorFloor, pc.bandMin), adapted);
+                    gain = clamp(adapted / room, 1.0, pc.maxGain);
+                }
+                // With no room in view the gain stays for the next one (nothing is scaled meanwhile): a floor switched and back finds its room as it
+                // left it. A room coming into view takes its own gain at once, then follows it as the eye adapts: eased in from 1 it stayed dark for
+                // a second after every door and floor switch.
+                st.gain = !rooms ? drawn : st.roomMean > 0.0 ? mix(drawn, gain, pc.blend) : gain;
+                st.room = room;
+                st.roomMean = roomMean;
+                imageStore(uAdapted, ivec2(0), vec4(adapted, smoothMean, 0.0, 1.0));
             }
+        }
+        """;
+
+    /// <summary>
+    /// The rooms' pixels (the mask's red) times the gain in <see cref="Exposure"/>'s state, in place.
+    /// </summary>
+    public const string InteriorGain = """
+        #version 450
+        layout(local_size_x = 16, local_size_y = 16) in;
+        layout(set = 0, binding = 0) uniform sampler2D uRooms;
+        layout(set = 0, binding = 1, rgba16f) uniform image2D uColour;
+        layout(std430, set = 0, binding = 2) readonly buffer State { uint counter; float room; float roomMean; float gain; vec4 tiles[256]; } st;
+        layout(push_constant) uniform Push { vec2 size; } pc;
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (px.x >= int(pc.size.x) || px.y >= int(pc.size.y) || st.gain <= 1.001) return;
+            if (texelFetch(uRooms, px, 0).r <= 0.5) return;
+            vec4 c = imageLoad(uColour, px);
+            imageStore(uColour, px, vec4(c.rgb * st.gain, c.a));
         }
         """;
 }

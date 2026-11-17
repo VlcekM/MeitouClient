@@ -67,6 +67,8 @@ sealed class EditorOrbit
     /// </summary>
     public void SetElevation(float radians) => Elevation = radians;
 
+    public void SetDistance(float distance) => Distance = distance;
+
     /// <summary>
     /// Dragging by (<paramref name="dx"/>, <paramref name="dy"/>) pixels: right turns the character to the viewer's right, down looks at it from
     /// higher up.

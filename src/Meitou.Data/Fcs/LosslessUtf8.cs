@@ -20,11 +20,12 @@ public static class LosslessUtf8
         if (Utf8.IsValid(bytes)) return Encoding.UTF8.GetString(bytes);
 
         var sb = new StringBuilder(bytes.Length);
+        Span<char> units = stackalloc char[2];
         while (!bytes.IsEmpty)
         {
             if (Rune.DecodeFromUtf8(bytes, out var rune, out int used) == System.Buffers.OperationStatus.Done)
             {
-                sb.Append(rune.ToString());
+                sb.Append(units[..rune.EncodeToUtf16(units)]);
                 bytes = bytes[used..];
             }
             else

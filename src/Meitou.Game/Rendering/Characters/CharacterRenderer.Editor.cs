@@ -176,7 +176,7 @@ internal sealed unsafe partial class CharacterRenderer
         // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
         // The studio's sun, fixed to the character (the editor's camera turns round it, the shadows stay): as seen from the editor's first view
         // (yaw 0, in front: the character's +z), from the right, about 55 degrees up (a brim shades the face under it).
-        if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(StudioStageSun, l.World));
+        if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(PreviewStudio.StageSun, l.World));
 
         Matrix4x4.Decompose(l.World, out _, out var facing, out _);
         StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
@@ -208,7 +208,8 @@ internal sealed unsafe partial class CharacterRenderer
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         var rect = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
-        cmd.Clear(true, default, true, 1, rect);
+        float grey = PreviewStudio.Background;
+        cmd.Clear(true, grey < 0 ? default : new ClearColour(grey, grey, grey, 1), true, 1, rect);
         Gpu.SetPassViewport(new PixelViewport(0, 0, target.Width, target.Height, 0, 1), rect);
 
         if (constants is { } c)
@@ -273,11 +274,6 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     static readonly Vector3 StageLight = new(3, 2, 3);
 
-    /// <summary>
-    /// The studio's sun on the stage (Meitou, previewsun), in the character's frame (+z its front, the editor's yaw 0; +x the right of a camera
-    /// there; the editor's first view keeps the light it had from the camera).
-    /// </summary>
-    static readonly Vector3 StudioStageSun = new(0.45f, 0.9f, 0.45f);
 
     /// <summary>
     /// The eye and the pivot it looks at, in the world: the pivot is 12 units above the feet (the original's stage root is 12 below the camera rig's

@@ -11,6 +11,11 @@ namespace Meitou.Game.Rendering.Characters;
 public static class PreviewStudio
 {
     /// <summary>
+    /// Debug (<c>studio drawn</c>): every weapon shown drawn; 1 the hip's, 2 the back's, 0 as the character has it.
+    /// </summary>
+    internal static int DrawnWeapon;
+
+    /// <summary>
     /// The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion.
     /// </summary>
     public static bool Sun { get; set; } = true;
@@ -19,6 +24,16 @@ public static class PreviewStudio
     /// The <c>editorbar</c> switch (Meitou, optional): the character editor shows the bar, drawn by the world's pipeline, instead of the platform.
     /// </summary>
     public static bool Bar { get; set; }
+
+    /// <summary>
+    /// The studio's sun on the editor's stage, in the character's frame: from the right of its first view, about 55 degrees up (a brim shades the face under it).
+    /// </summary>
+    public static Vector3 StageSun { get; set; } = new(0.45f, 0.9f, 0.45f);
+
+    /// <summary>
+    /// The stage's background grey (linear; negative: the transparent clear the interface draws over), for pictures of silhouettes.
+    /// </summary>
+    public static float Background { get; set; } = -1;
 }
 
 /// <summary>

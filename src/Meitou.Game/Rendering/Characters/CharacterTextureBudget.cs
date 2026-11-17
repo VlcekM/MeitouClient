@@ -25,7 +25,7 @@ internal sealed class CharacterTextureBudget
     /// <summary>
     /// The next <see cref="Update"/> commits the needs: the frame whose users offer them (and mark their textures used).
     /// </summary>
-    public bool Due => Environment.TickCount64 - _lastRebalance >= IntervalMs;
+    public bool Due => FrameTick.Now - _lastRebalance >= IntervalMs;
 
     /// <summary>
     /// Once per <see cref="IntervalMs"/>: adjusts <see cref="NeedScale"/>, tells the cache how eagerly to coarsen, commits the frame's needs and

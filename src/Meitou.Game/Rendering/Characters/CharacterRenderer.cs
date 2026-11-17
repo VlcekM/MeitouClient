@@ -29,7 +29,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <summary>
     /// The device everything is drawn on.
     /// </summary>
-    IGpuContext Gpu { get; }
+    internal IGpuContext Gpu { get; }
 
     /// <summary>
     /// Zeroed host-visible memory of this frame (the bone palettes, the material table and the instances are written into it), cleared in place: a
@@ -49,7 +49,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <summary>
     /// The programs of the colour pass, the depth-only passes (shadows, prepass) and the motion-vector pass.
     /// </summary>
-    readonly ReflectedProgram _colourProg, _depthProg, _motionProg;
+    ReflectedProgram _colourProg;
+    readonly ReflectedProgram _depthProg, _motionProg;
     /// <summary>
     /// The meshes, textures, rigs, morphs and material table the assets are built from.
     /// </summary>
@@ -908,10 +909,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     uint _textureStandIn;
 
     /// <summary>
-    /// What every material record depends on besides its material: the texture cache's version, the bias, the stand-in and the samplers. A change (or
-    /// a skin setting's) starts a new epoch, and each record is written again when next used.
+    /// What every material record depends on besides its material: the texture cache's version, the bias, the stand-in, the samplers and whether the
+    /// visibility buffer is on (its hair entry). A change (or a skin setting's) starts a new epoch, and each record is written again when next used.
     /// </summary>
-    (int, float, uint, int) _materialInputs;
+    (int, float, uint, int, bool) _materialInputs;
     /// <summary>
     /// The material records' epoch (see <see cref="_materialInputs"/>); a record written in an older one is written again.
     /// </summary>
@@ -941,6 +942,16 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (gpu.Bindless is BindlessTable { Freed: { } freed }) _staleCheck = new StaleMaterialCheck(freed);
         _colourTimer = new PassTimer(gpu);
         _depthTimer = new PassTimer(gpu);
+    }
+
+    /// <summary>
+    /// Debug (<c>studio reload</c>): the colour program made again from <c>MEITOU_SURFACE_FILE</c>. The old one stays alive: frames in flight still hold it.
+    /// </summary>
+    internal void ReloadSurface()
+    {
+        _colourProg = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(),
+            Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth), inShader: true), "characters", CharacterShaders.InstanceLocation);
+        _visibility = null;   // made again from the new text when next used; the old one stays alive as the old colour program does
     }
 
     /// <summary>
@@ -1173,12 +1184,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         int built = 0, boneTotal = 0, partTotal = 0;
         double buildMs = 0;
         float reach = EyeLift.Of(eye, GroundUnderEye) > 0 ? Math.Min(DrawDistance, LiftedReach) : DrawDistance;
-        var items = Draws.Items;
+        // The list's own storage, each instance by reference: copied out one by one (a wide struct of references) they were 2 % of the render thread
+        // in a town. Nothing below adds to the list.
+        var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Draws.Items);
         _keptLooks.Clear();
 
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < items.Length; i++)
         {
-            var inst = items[i];
+            ref readonly var inst = ref items[i];
 
             // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the
             // host's lists still hold it.
@@ -1594,7 +1607,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (_budget.Due) OfferTextureNeeds();
         _budget.Update(_content.Textures);
 
-        var inputs = (_content.Textures.Version, textureBias: _textureBias, textureStandIn: _textureStandIn, Gpu.Samplers.Generation);
+        var inputs = (_content.Textures.Version, textureBias: _textureBias, textureStandIn: _textureStandIn, Gpu.Samplers.Generation, VisibilityBuffer);
         if (inputs != _materialInputs) (_materialInputs, _materialEpoch) = (inputs, _materialEpoch + 1);
         var table = _content.Materials;
         table.BeginFrame();
@@ -1635,7 +1648,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             bool still = l.WeaponDrawn && _portraitKeys.Contains(l.Key);
             foreach (var part in l.Asset.Parts)
             {
-                bool shown = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn) || still && ShowsInPortrait(part, in l);
+                bool shown = part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2)
+                    || still && ShowsInPortrait(part, in l);
                 if (!shown) continue;
                 if (part.MaterialFrame != _updateStamp)
                 {
@@ -1965,6 +1979,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public void Dispose()
     {
         if (_updateCount > 0) Console.WriteLine($"characters {Statistics()}");
+        _visibility?.Dispose();
         _colourProg.Dispose();
         _depthProg.Dispose();
         _motionProg.Dispose();

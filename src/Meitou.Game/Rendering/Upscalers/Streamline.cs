@@ -495,6 +495,37 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public delegate* unmanaged<Queue, PresentInfoKHR*, Result> PresentProxy { get; private set; }
     /// <summary>
+    /// Whether DLSS frame generation is loaded now (<see cref="SetFrameGenerationLoaded"/>): supported, and asked for.
+    /// </summary>
+    public bool FrameGenerationOn { get; private set; }
+
+    /// <summary>
+    /// Loads or unloads DLSS frame generation (<c>slSetFeatureLoaded</c>) and turns Reflex on or off with it (DLSS-G needs it on; without frame
+    /// generation the game does not use it). Loaded, the feature makes every swapchain render off-screen even while its mode is off (NVIDIA's
+    /// guide section 18), so it is loaded only while the setting asks for it. The caller has the device idle and no swapchain alive: one made
+    /// before the change is not the kind the feature's new state expects. False when the feature is not supported or the call fails.
+    /// </summary>
+    public bool SetFrameGenerationLoaded(bool loaded)
+    {
+        if (!FrameGenerationSupported || _disposed) return false;
+        if (loaded == FrameGenerationOn) return true;
+
+        int rc = _setFeatureLoaded(FeatureDlssG, (byte)(loaded ? 1 : 0));
+        if (rc != 0)
+        {
+            Console.WriteLine($"frame generation  slSetFeatureLoaded(DLSS-G, {(loaded ? 1 : 0)}) failed ({rc})");
+            return false;
+        }
+
+        var reflexOptions = new ReflexOptions { StructType = ReflexOptionsType, StructVersion = 1, Mode = loaded ? 1 : 0 };
+        rc = _reflexSetOptions(&reflexOptions);
+        if (rc != 0) Console.WriteLine($"frame generation  slReflexSetOptions failed ({rc})");
+        _openToken = 0;
+        FrameGenerationOn = loaded;
+        return true;
+    }
+
+    /// <summary>
     /// The swapchain calls through the interposer, when <see cref="FrameGenerationSupported"/>.
     /// </summary>
     public SwapchainHooks? Swapchain { get; private set; }
@@ -883,7 +914,7 @@ public sealed unsafe class Streamline : IDisposable
         Swapchain = hooks;
         device.WaitIdleFunction = waitIdle;
         _attached = device;
-        FrameGenerationSupported = true;
+        FrameGenerationSupported = FrameGenerationOn = true;
         Console.WriteLine($"frame generation  DLSS supported on {device.DeviceName} (Reflex low latency on)");
     }
 
@@ -908,7 +939,7 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public void BeginFrame()
     {
-        if (!FrameGenerationSupported || _disposed) return;
+        if (!FrameGenerationOn || _disposed) return;
         _openToken = NewToken();
         if (_openToken == 0) return;
         _reflexSleep(_openToken);

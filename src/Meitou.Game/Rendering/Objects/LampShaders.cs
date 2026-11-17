@@ -103,6 +103,8 @@ static class LampShaders
 
             // Is anything in the way of any part of the lamp, and how far off it: the region a blocker near the lamp can cover, read by a spiral.
             float search = clamp(radius / (texelPerDepth * max(0.1 * d, 15.0)), 1.5, 48.0);
+            // The count is a constant on purpose: with one that follows the search's size (fewer lookups for a far lamp's coarse tile) the spiral's
+            // cosines and sines are no longer folded at compile time, and every lit fragment paid 0.75 ms more a frame in a town.
             float sum = 0.0, held = 0.0;
             for (int k = 0; k < 48; k++)
             {
@@ -114,6 +116,9 @@ static class LampShaders
             if (held < 0.5) return 1.0;
             float blocker = sum / held * reach;
             float spread = clamp(radius * max(d - blocker, 0.0) / max(blocker, 1.0) / texel, 1.5, 64.0);
+            // Every lookup of the search blocked, and the penumbra no wider than the search: the lamp's whole disc is hidden. The filter would read 16 to
+            // 256 more texels to say so, for every fragment in a building's shadow.
+            if (held > 47.5 && spread <= search) return 0.0;
 
             // The filter: a fixed spiral of lookups over the penumbra, more for a wide one.
             float lit = 0.0;
@@ -128,13 +133,22 @@ static class LampShaders
                 return lit / 4.0;
             }
             // A wide one: a spiral of filtered lookups (a single texel per lookup steps along the texels' grid, in plates at a close view).
-            int taps = spread > 8.0 ? 64 : 32;
-            for (int k = 0; k < taps; k++)
+            // Two loops of constant counts, not one whose count follows the spread: the spiral's cosines and sines fold at compile time only then.
+            if (spread > 8.0)
             {
-                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / float(taps)) * spread;
+                for (int k = 0; k < 64; k++)
+                {
+                    float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 64.0) * spread;
+                    lit += lampTileLit(corner, side, st + vec2(cos(a), sin(a)) * r, (d - margin - r * texel * slope) / reach);
+                }
+                return lit / 64.0;
+            }
+            for (int k = 0; k < 32; k++)
+            {
+                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 32.0) * spread;
                 lit += lampTileLit(corner, side, st + vec2(cos(a), sin(a)) * r, (d - margin - r * texel * slope) / reach);
             }
-            return lit / float(taps);
+            return lit / 32.0;
         }
 
         """;

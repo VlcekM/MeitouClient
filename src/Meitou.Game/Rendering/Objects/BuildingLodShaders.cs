@@ -43,8 +43,10 @@ static class BuildingLodShaders
             flat out float vInterior;
             flat out float vScaffold;
             out float vBuildY;
+            out float vTopGap;
             flat out float vScaffoldTiling;
             out vec3 vWetPos;
+            out vec2 vToAxis;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """);
         v = Replace(v, @"void\s+main\s*\(\s*\)\s*\{", """
@@ -56,6 +58,7 @@ static class BuildingLodShaders
                 // A site (BuildingLodShaders.PackSite): the vertex's height over its part's mesh top, and the scaffold tiling.
                 float site = floor(aInstance2.w / 4.0);
                 vBuildY = aPosition.y / max(mod(site, 4096.0) * 0.1, 0.1);
+                vTopGap = mod(site, 4096.0) * 0.1 - aPosition.y;   // a viewed shell's part carries its mesh top too (WorldObjectRenderer.Emit)
                 vScaffoldTiling = floor(site / 4096.0) / 16.0;
                 if ((uFadeMode & 1) == 1)
                 {
@@ -71,6 +74,7 @@ static class BuildingLodShaders
                 // The vertex less the instance's origin, in the world's orientation, moved by a few units the origin picks (so two of a mesh do not wear the
                 // same drops): where the wet world's drops and runs sit (AtmosphereShaders wetObject), small numbers at any place in the world.
                 vWetPos = mat3(uModel) * local.xyz + fract(aInstance3.xyz * 0.371) * 7.0;
+                vToAxis = -(mat3(uModel) * local.xyz).xz;   // from the vertex to the upright through the instance's origin
                 gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """);
         return v;
@@ -184,8 +188,10 @@ static class BuildingLodShaders
             #version 330 core
             in vec2 vRange;
             flat in float vInterior;
+            in float vTopGap;
             flat in float vScaffold;
             in vec3 vWetPos;
+            in vec2 vToAxis;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             float ditherValue() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             """ + OpacityDither.Function + """
@@ -310,7 +316,20 @@ static class BuildingLodShaders
             """, """
             vec3 v = normalize(uEye - vWorld);
             vec3 colour;
-            giInterior = mod(vInterior, 2.0) > 0.5;
+            giInterior = mod(floor(vInterior), 2.0) > 0.5;
+            // A wall of the shell of a building whose inside is viewed (the instance's half, WorldObjectRenderer.Emit) that does not face the
+            // building's middle is seen from the street, whatever hidden part hangs over it (a cornice, a jetty), and so is what faces up (a
+            // plinth, a ledge, the top of a wall the view cuts): lit as the outside and no room's pixel (Gi.RoomMaskPass). Lit as the room, a
+            // ledge under the hidden eaves and a cut wall's top took the room's exposure (light squares and rims on the outside). The mark (surface bit 30) also
+            // tells the traced sun's rays to pass what the view hides (TracedSunShaders): under hidden floors and eaves these were black; lit
+            // without any shadow or probe instead, they were flat and bright in another caster's shadow.
+            vec3 shellFace = cross(dFdx(vWorld), dFdy(vWorld));
+            if (dot(shellFace, uEye - vWorld) < 0.0) shellFace = -shellFace;
+            shellFace /= max(length(shellFace), 1e-20);
+            // The triangle's own plane, not the shading normal: a bevel shaded smooth and a rough stone's normal map left lines and speckles in the room.
+            atmoStreet = fract(vInterior) > 0.25
+                && (shellFace.y > 0.5 || (shellFace.y >= -0.5 && dot(shellFace.xz, vToAxis) <= 0.3 * length(vToAxis)));
+            if (atmoStreet) giInterior = false;
             // The game's metalness map (objects.hlsl), then the named metal textures (MetalTextures): what has no colour of its own; rust and paint are saturated.
             atmoMetalness = uMetalMap != 0u ? texture(uMetal, uv).r : 0.0;
             if ((uSurface & 32u) != 0u)
@@ -346,7 +365,7 @@ static class BuildingLodShaders
         // An EMISSIVE material glows only while its building's lights are on (the instance's spare component carries 2 when they are off,
         // WorldObjectRenderer.Emit).
         f = Literal(f, "if (uEmissive) colour += albedo * (1.0 - nm.a) * 3.2;",
-            "if (uEmissive && vInterior < 1.5) colour += albedo * (1.0 - nm.a) * 3.2;");
+            "if (uEmissive && floor(vInterior) < 1.5) colour += albedo * (1.0 - nm.a) * 3.2;");
 
         // The placement ghost (docs/render-objects.md "Placement ghost") draws with a non-zero flat colour (which an ordinary draw leaves at 0): it
         // tints the lit picture.

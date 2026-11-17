@@ -584,10 +584,10 @@ public sealed class PostOptions
     public const float GtaoStrength = 0.55f;
 
     /// <summary>
-    /// The characters' traced occlusion on (docs/render-post.md "Traced occlusion on characters"). Off: not calibrated against a reference yet, a
-    /// hooded face came out too dark and blotched round the eyes.
+    /// The characters' traced occlusion on (docs/render-post.md "Traced occlusion on characters"): it cuts the ambient light a character's
+    /// fragment took, which indoors is now the probes' (it was the sky's, several times too much, and the cut then read as paint).
     /// </summary>
-    public bool CharacterOcclusion;
+    public bool CharacterOcclusion = true;
 
     /// <summary>
     /// How far the characters' traced occlusion's rays look (<c>Gi.CharacterOcclusionPass</c>), world units.

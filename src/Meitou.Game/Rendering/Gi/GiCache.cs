@@ -111,9 +111,9 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         public Vector4 Eye, Right, Up, Back, Planes, Size, Cells;
 
         /// <summary>
-        /// The frame (from 1), the age a cell is evicted at, this frame's subset of the ring.
+        /// The frame (from 1), the age a cell is evicted at, this frame's subset of the ring, the frames between a cell's traces.
         /// </summary>
-        public uint Frame, EvictAge, Subset, Pad;
+        public uint Frame, EvictAge, Subset, Stride;
     }
 
     /// <summary>
@@ -184,6 +184,29 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
     uint _frame;
 
     /// <summary>
+    /// Seconds a cell takes to trace its whole ring. A subset a
+    /// frame makes the ring 0.53 s long at 30 frames a second and 0.1 s at 165; the rays of a still scene give the same light again, so past this
+    /// length the cells take turns (<see cref="_stride"/>): **Observed** 1.1 ms of the pass's 1.56 are the trace's rays in a town at 73 frames a
+    /// second.
+    /// </summary>
+    const float RingSeconds = 0.5f;
+
+    /// <summary>
+    /// The frames between a cell's traces (1 to 4), from <see cref="RingSeconds"/> and the smoothed time between runs.
+    /// </summary>
+    int _stride = 1;
+
+    /// <summary>
+    /// When the last run started (Stopwatch ticks) and the smoothed seconds between runs.
+    /// </summary>
+    long _lastRun;
+
+    /// <summary>
+    /// See <see cref="_lastRun"/>.
+    /// </summary>
+    double _frameSeconds = 1.0 / 30;
+
+    /// <summary>
     /// Runs the passes over <paramref name="depth"/> and <paramref name="surface"/> (the scene's, closed). Returns the gathered image (rgb the light,
     /// a how much to take), or null before the first probe update or the first traced scene.
     /// </summary>
@@ -198,6 +221,12 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         MakePasses();
         EnsureOutput(v.Width, v.Height);
         _frame++;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_lastRun != 0) _frameSeconds += (Math.Min((now - _lastRun) / (double)System.Diagnostics.Stopwatch.Frequency, 0.1) - _frameSeconds) * 0.05;
+        _lastRun = now;
+        // With some play, so a frame rate at a boundary does not switch back and forth (a change of stride starts the cells' rings at other subsets).
+        double wanted = RingSeconds / (Ring * _frameSeconds);
+        if (wanted < _stride - 0.25 || wanted > _stride + 1.25) _stride = Math.Clamp((int)wanted, 1, 4);
         var view = Constants(v);
         var data = ctx.Frame.Constants.Write(new ReadOnlySpan<ViewConstants>(in view), 256);
         var viewBinding = GpuBinding.Uniform(8, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(ViewConstants)));
@@ -316,7 +345,7 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         Planes = new Vector4(v.Planes, v.Tan.X, v.Tan.Y),
         Size = new Vector4(v.Width, v.Height, v.FullWidth, v.FullHeight),
         Cells = new Vector4(FinestCell, 2 * v.TanY / CellsPerHeight, Range, LevelBlend),
-        Frame = _frame, EvictAge = EvictAge, Subset = _frame % Ring,
+        Frame = _frame, EvictAge = EvictAge, Subset = _frame % Ring, Stride = (uint)_stride,
     };
 
     /// <summary>

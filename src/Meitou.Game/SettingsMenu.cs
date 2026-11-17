@@ -546,7 +546,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// the game started with.
     /// </summary>
     static readonly HashSet<string> RestartKeys =
-        ["frameGeneration", "hdr", WorldFrame.TextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
+        ["hdr", WorldFrame.TextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
     /// <summary>
     /// The value each restart setting had when its row was first built (the menu is made with the game).
     /// </summary>
@@ -618,7 +618,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or WorldFrame.TracedGrassSwitch => "Lighting",
             "Indirect light" or "Indoor GI" or "Hybrid GI" or "Ambient occlusion" or "Ground-truth occlusion" or "Light shafts" or "Planetshine"
                 or WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch
-                or WorldFrame.GiRaysSwitch => "Lighting",
+                or WorldFrame.GiRaysSwitch or WorldFrame.GiCharactersSwitch => "Lighting",
             "Water" or "Water contact foam, wakes and ripples" or "Reflections" => "Water & reflections",
             "Ground parallax" or "Ground displacement (tessellation)" or "Ground trails" or WorldFrame.RockSmoothingSwitch
                 or WorldFrame.OutlineRefineSwitch => "Terrain",
@@ -808,6 +808,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             "Contact shadows" => sun is not (3 or 4),
             WorldFrame.TracedGrassSwitch => sun is -1 or 3 or 4,
             "Indoor GI" or WorldFrame.GiRaysSwitch => gi != 0,
+            WorldFrame.GiCharactersSwitch => gi != 0 && occlusion is -1 or 2,
             WorldFrame.GiRelocateSwitch or WorldFrame.GiCloudShadowsSwitch or WorldFrame.GiCacheSwitch => gi is -1 or 2,
             WorldFrame.GtaoQualitySlider => occlusion != 0 && SwitchOn("Ambient occlusion"),
             WorldFrame.ShaftStrengthSlider or WorldFrame.ShaftAirSlider or WorldFrame.ShaftAirDawnSlider

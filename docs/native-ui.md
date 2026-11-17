@@ -36,7 +36,7 @@ positions turn the global illumination on, whose rays they use), Ambient occlusi
 Probes + hybrid; Off leaves the cascades). Each reads and writes the switches it stands for, which keep their saved keys and get no rows of
 their own; the screen-space contact shadows, in the Shadows group, have no row where the device traces rays. The looks and the tiers set the switches, not the choices.
 
-A row whose setting is read at start-up only (`SettingsMenu.RestartKeys`: frame generation, HDR output, texture quality, the water grid and its wave resolution) carries a tag beside its name: "Needs restart", and a filled "Restart to apply" once its value is no longer the one the game started with. The Display page folds the upscaler's and the HDR output's settings under their rows, as the Graphics features. An optional effect's switch is Off | On.
+A row whose setting is read at start-up only (`SettingsMenu.RestartKeys`: HDR output, texture quality, the water grid and its wave resolution) carries a tag beside its name: "Needs restart", and a filled "Restart to apply" once its value is no longer the one the game started with. The Display page folds the upscaler's and the HDR output's settings under their rows, as the Graphics features. An optional effect's switch is Off | On.
 
 Graphics (`LookPresets`, `QualityTiers`, `FeatureGrouping`; `--settings-showcase` with `--screenshot` captures it) has two
 rows above its tabs:
@@ -62,7 +62,7 @@ rows above its tabs:
   | Advanced materials, ground trails, water contact foam, far grass cover | off | on | on | on | on |
   | Reflections, GTAO (quality Medium; High from Ultra) | off | off | on | on | on |
   | Rock smoothing, outline refinement | off | off | start default | on | on |
-  | Hybrid GI, traced sun shadows with far cascades (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
+  | Hybrid GI, traced sun shadows, lamp shadows, GI traced on characters (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
   | Traced grass shadows | off | off | off | off | on |
 
   The sliders that are not multiples of the start default (`PresetSliders`, fixed values; High is pinned):
@@ -80,8 +80,10 @@ rows above its tabs:
   Medium's ambient occlusion is the SSAO (its GTAO is off), at the twelve taps it always had. Terrain material distance is a quality row, not part of a look: a look preset file that sets it no longer
   applies it.
 
-  Extreme has Ultra's distances: it adds effects and quality, not range. The optional effects (lamp shadows, contact shadows, depth of
-  field, bloom, metal on buildings, rain drops and puddles) are the player's at every tier. High sets render scale Quality 0.67
+  Extreme has Ultra's distances: it adds effects and quality, not range. The optional effects (contact shadows, depth of field, bloom,
+  metal on buildings, rain drops and puddles) are the player's at every tier. Lamp shadows are a tier switch (0.9 to 6.3 ms on an RTX 4090
+  at 1440p, a lit hall at night the most), and so is the GI traced on characters (2.7 to 3.6 ms; High keeps GTAO without it); the lamps
+  among traced grass come with the traced grass shadows. The far cascades past the traced sun are off at every tier. High sets render scale Quality 0.67
   (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS), not counted when reading the tier; Medium, Ultra and Extreme leave
   the scale; distances that follow a switch's side (Draw distances, Shadows) are multiples of that side's mark, so a tier reads
   the same in either look. Low is `--low-end` (`WorldOptions.LowEnd*`): also shadows and relief off, quarter-size particles, no
@@ -105,13 +107,20 @@ them in one saved choice (`WorldFrame.ChoiceSliders`), which the menu shows as t
 (`SettingsMenu.Techniques`: soft cascades or ray traced; SSAO or GTAO; probes or probes and cache); turning the effect back on
 returns to the technique last used. A row shows only while it acts (`RowShown`): an effect's settings while the effect is on, a
 technique's with that technique (map size, filter and cascade count with the cascades; grass shadows with the traced sun; contact
-shadows with the cascades; the cache's parts with the hybrid GI; GTAO quality with GTAO). The launcher shows the choices as
+shadows with the cascades; the cache's parts with the hybrid GI; GTAO quality with GTAO; the GI traced on characters with the indirect light and GTAO). The launcher shows the choices as
 drop-downs and hides by `ShownWhen`. A look row that differs from the preset has a brass name and Reset (a header for anything
 inside); a moved quality row shows as Custom. Named values are drop-downs, amounts sliders with right = more (terrain error
 mirrored, `Slider.Reversed`).
 The `aa` and `particles` switches are hidden and not read back (`HiddenSwitch`): drop-downs cover them. Interior lamps is on
 Advanced (stealth counts its light), and so is Lamp warmth (no look preset sets either). Each Graphics row names its **impact** (No, Low, Medium, High, or Faster with Meitou;
-`ImpactOf`, ranked from measured costs, RTX 4090 1440p: High about 1 ms or more, Medium a few tenths). Advanced and Fixes start
+`ImpactOf`). **Observed** 2026-11-17 (RTX 4090, 1440p, render scale 1, pass meter GPU total, each setting one notch down against a baseline
+re-measured every 12 settings): a hall full of characters at night, a city at night, a town by day, a close-up on sand, and the town's wide
+view for the distances. High saves 1 ms or more in one view (indirect light 2.8 to 11.4, render scale 0.67 3.3 to 8.5, lamp shadows 1.1 to
+4.6, GI traced on characters 2.7 to 3.6, indoor GI 2.3 in the hall, sun shadows 1.7 to 1.9, planetshine 1.4 at night, reflections 0.65 to
+1.4, anti-aliasing 1.2 to 1.4, ground parallax 1.4 on a close-up, hybrid GI and the radiance cache 1.2 to 1.3 in the city, traced grass
+1.15, water reflection 1.0); Medium 0.3 ms or more (AO itself 0.7 to 0.8, clouds 0.3 to 0.6, blood, metal, skin and eye effects 0.3 to 0.4);
+Low less. The distances and densities save under 0.3 ms even in the wide view (foliage 0.47 ms in all there): they cost memory and streaming.
+Noise is about 0.3 ms either way; a scene's baseline that jumps (a stall) is dropped. Advanced and Fixes start
 with an all-Faithful / all-Meitou switch over their page's switches and two-mark sliders (luckyren Mode, Follow camera offset, Item rotation and Hide hats left out: optional, off by default).
 The modal pauses simulation and captures world input; wheel/PageUp/PageDown scroll, Tab/arrows
 focus/adjust, Enter activates. Binding capture rejects conflicting/reserved controls; Esc cancels,

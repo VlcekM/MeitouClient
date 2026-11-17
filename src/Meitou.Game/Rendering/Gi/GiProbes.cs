@@ -245,9 +245,12 @@ internal sealed unsafe class GiProbes : IDisposable
     public float Strength { get; set; } = 1;
 
     /// <summary>
-    /// Indoor surface indirect-light gain; applied once at display, without amplifying probe feedback.
+    /// 1 + the share of the game's ambient that indoor surfaces and characters get at least (<c>giSurfaceIrradiance</c>): 1 none (the probes'
+    /// light as it is), 2 and above the whole of it (a room lit evenly as the game lights it). 1.25: a quarter of it, a fill light. The game's
+    /// lamps reach 7 to 12 m and were set for rooms the ambient lights: with 5 % a room's corners past its lamps were black (the user: "dans les
+    /// batiments il fait super sombre"); with half or more the room is flat again. Applied at display, never fed back into the probes.
     /// </summary>
-    public float InteriorGain { get; set; } = 4;
+    public float InteriorGain { get; set; } = 1.25f;
 
     /// <summary>
     /// False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.
@@ -709,7 +712,7 @@ internal sealed unsafe class GiProbes : IDisposable
             Maps = Read<Vector4>(g, "uAtmoMaps"),
             RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, SleepPeriod, HiddenPeriod),
             LightGrid = lamps?.Grid ?? default,
-            Extra = new Vector4(0, FarPeriod > 1 ? FarPeriod : 1, 0, 0),
+            Extra = new Vector4(_interiorGrid ? 1 : 0, FarPeriod > 1 ? FarPeriod : 1, 0, 0),
             Cloud = Read<Vector4>(g, "uAtmoCloud"),
             CloudWind = Read<Vector4>(g, "uAtmoCloudWind"),
             Sun = Read<Vector4>(g, "uAtmoSun"),
@@ -1061,18 +1064,144 @@ internal sealed unsafe class GiProbes : IDisposable
     }
 
     /// <summary>
+    /// Rays a character's pixel gathers its indirect light with (<see cref="GiShaders.CharacterGather"/>): a block of <see cref="GatherBlock"/>
+    /// pixels a side shares 256 directions, a pixel taking every 64th. With 16 rays a pixel over blocks of 4 the same 256 cost four times as much
+    /// (14 ms of GPU on 36 characters a third of the screen wide at 2560 x 1440, against 4) for a picture no smoother; fewer directions a block
+    /// (8 or 4 rays over blocks of 4) striped a face.
+    /// </summary>
+    public const int GatherRays = 4;
+
+    /// <summary>
+    /// The side of the square of pixels of which one traces (<see cref="GiShaders.CharacterGather"/>); 1: every pixel. With 2 the block of
+    /// <see cref="GatherBlock"/> pixels holds 64 directions instead of 256: 3.5 ms for 7.5 in the save heavy-scene and the bar's zones within
+    /// 2 %, but patches on a face in a hood's shadow (the picture amplified 2.5 times), so not used.
+    /// </summary>
+    public const int GatherQuad = 1;
+
+    /// <summary>
+    /// World units: where a pixel is wider than this on a character, one pixel of each 2 x 2 gathers (<see cref="GiShaders.CharacterGather"/>);
+    /// 0: never. 0.03: a character under some 570 pixels tall at 1440 lines.
+    /// </summary>
+    public const float GatherSparse = 0.03f;
+
+    /// <summary>
+    /// How near a character's hidden surface must be for a ray's hit on it to take one more bounce (world units, as GLSL): a hood's lining, the inside
+    /// of an arm against a flank, lie within it. At 8 the neighbours in a crowd took it too, 5 ms more for the same picture.
+    /// </summary>
+    public const string GatherBehind = "3.0";
+
+    /// <summary>
+    /// The side of the block of pixels that shares one set of directions (<see cref="GiShaders.CharacterGather"/>, <c>CharacterOcclusionPass.Apply</c>).
+    /// </summary>
+    public const int GatherBlock = 8;
+
+    /// <summary>
+    /// The characters' gather's program (made on first use).
+    /// </summary>
+    GpuProgram? _gatherProgram;
+
+    /// <summary>
+    /// The pipeline of <see cref="_gatherProgram"/>.
+    /// </summary>
+    GpuComputePipeline _gatherPipeline;
+
+    /// <summary>
+    /// The program that pools the last frame's gather (<see cref="GiShaders.GatherPool"/>), made with <see cref="_gatherProgram"/>.
+    /// </summary>
+    GpuProgram _gatherPoolProgram;
+
+    /// <summary>
+    /// The pipeline of <see cref="_gatherPoolProgram"/>.
+    /// </summary>
+    GpuComputePipeline _gatherPoolPipeline;
+
+    /// <summary>
+    /// The characters' indirect light gathered into <paramref name="frame"/>'s hit target, a texel a pixel
+    /// (<see cref="GiShaders.CharacterGather"/>), with the reflections' bindings. False when no probe trace ran this frame (its constants and
+    /// images are this frame's): nothing is written.
+    /// </summary>
+    public bool TraceCharacterGather(CommandList cmd, GiScene scene, in ReflectionFrame frame, GpuTexture? last, GpuTexture pooled)
+    {
+        if (scene.Top is null || _traceFrame != _ctx.Frame.Number) return false;
+
+        if (_gatherProgram is null)
+        {
+            (uint, DescriptorType)[] gatherBindings =
+                [.. ReflectBindings(), (19, DescriptorType.CombinedImageSampler), (20, DescriptorType.CombinedImageSampler)];
+            _gatherProgram = _ctx.Shaders.Compute(GiShaders.CharacterGather(GatherRays, GatherBehind, GatherBlock, GatherQuad), "gi character gather",
+                gatherBindings, GpuSetLayout.Bindless);
+            _gatherPipeline = _ctx.Pipelines.Get(new ComputePipelineDesc(_gatherProgram.Value, "gi character gather"));
+            _gatherPoolProgram = _ctx.Shaders.Compute(GiShaders.GatherPool(GatherBlock), "gi character gather pool",
+                [(0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.StorageImage)]);
+            _gatherPoolPipeline = _ctx.Pipelines.Get(new ComputePipelineDesc(_gatherPoolProgram, "gi character gather pool"));
+        }
+        var (program, pipeline) = (_gatherProgram.Value, _gatherPipeline);
+
+        // The divisor's place in the camera block says whether the last frame's gather is there to read.
+        var cameraInfo = WriteReflectionCamera(frame with { Divisor = last is null ? 0 : 1 }, InteriorEnabled ? Math.Clamp(InteriorGain - 1, 0, 1) : 0, GatherSparse);
+        var top = scene.Top.Handle;
+        var asWrite = AccelerationWrite(&top);
+        var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
+        var constants = _traceConstants;
+        var hit = new DescriptorImageInfo(default, _ctx.Device.ViewAt(frame.Hit.View().Index), ImageLayout.General);
+        var images = stackalloc DescriptorImageInfo[11];
+        for (int i = 0; i < _traceImages.Length; i++) images[i] = _traceImages[i];
+        images[9] = SampledImage(_nearest, frame.Surface);
+        images[10] = SampledImage(_nearest, frame.Depth);
+        var tiles = TileImage;
+        var before = SampledImage(_nearest, last ?? frame.Surface);
+        var beforePooled = SampledImage(_nearest, pooled);
+
+        cmd.BeginLabel("gi character gather");
+        cmd.Barrier(BarrierBatch.Full);
+        if (last is not null)
+        {
+            // The last frame's gather, pooled once for every hit on a character (GiShaders.GatherPool).
+            var poolSurface = SampledImage(_nearest, frame.Surface);
+            var poolOut = new DescriptorImageInfo(default, _ctx.Device.ViewAt(pooled.View().Index), ImageLayout.General);
+            var poolWrites = stackalloc WriteDescriptorSet[3];
+            poolWrites[0] = Sampled(0, &before);
+            poolWrites[1] = Sampled(1, &poolSurface);
+            poolWrites[2] = Storage(2, &poolOut);
+            cmd.BindPipeline(_gatherPoolPipeline);
+            cmd.PushDescriptors(_gatherPoolProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(poolWrites, 3), GpuBindPoint.Compute);
+            cmd.Dispatch((uint)((frame.Hit.Desc.Width + 7) / 8), (uint)((frame.Hit.Desc.Height + 7) / 8));
+            cmd.Barrier(BarrierBatch.Full);
+        }
+
+        var writes = stackalloc WriteDescriptorSet[19];
+        writes[16] = Sampled(18, &tiles);
+        writes[17] = Sampled(19, &before);
+        writes[18] = Sampled(20, &beforePooled);
+        writes[0] = Acceleration(0, &asWrite);
+        writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
+        writes[2] = Storage(2, &hit);
+        writes[3] = Buffer(3, DescriptorType.UniformBuffer, &constants);
+        for (int i = 0; i < 11; i++) writes[4 + i] = Sampled((uint)(4 + i), &images[i]);
+        writes[15] = Buffer(15, DescriptorType.UniformBuffer, &cameraInfo);
+
+        cmd.BindPipeline(pipeline);
+        cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 19), GpuBindPoint.Compute);
+        cmd.BindBindlessTable(program, 1, GpuBindPoint.Compute);
+        cmd.Dispatch((uint)((frame.Hit.Desc.Width + 7) / 8), (uint)((frame.Hit.Desc.Height + 7) / 8));
+        cmd.Barrier(BarrierBatch.Full);
+        cmd.EndLabel();
+        return true;
+    }
+
+    /// <summary>
     /// <paramref name="frame"/>'s camera in the frame's constant ring, as the reflections' binding 15.
     /// </summary>
-    DescriptorBufferInfo WriteReflectionCamera(in ReflectionFrame frame)
+    DescriptorBufferInfo WriteReflectionCamera(in ReflectionFrame frame, float fill = 0, float sparse = 0)
     {
         var camera = new ReflectionCamera
         {
             Eye = new Vector4(frame.Eye, 0),
             Right = new Vector4(frame.Right, 0),
             Up = new Vector4(frame.Up, 0),
-            Back = new Vector4(frame.Back, 0),
+            Back = new Vector4(frame.Back, sparse),   // w: the characters' gather's GatherSparse
             View = new Vector4(frame.Tan, frame.Planes.X, frame.Planes.Y),
-            Sizes = new Vector4(frame.Width, frame.Height, frame.Divisor, 0),
+            Sizes = new Vector4(frame.Width, frame.Height, frame.Divisor, fill),   // w: the rooms' fill, for the characters' gather alone
         };
         var block = _ctx.Frame.Constants.Write<ReflectionCamera>(new ReadOnlySpan<ReflectionCamera>(&camera, 1), 256);
         return new DescriptorBufferInfo(_ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(ReflectionCamera));

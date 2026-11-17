@@ -15,6 +15,11 @@ sealed class GameOptions
     /// <c>--title-preview</c>: with <c>--screenshot</c>, a picture of the staged Meitou title scene.
     /// </summary>
     public bool TitlePreview;
+
+    /// <summary>
+    /// The run boots to the title (no save, new game, sandbox or picture named): set once the default view is placed (Program.PlaceDefaultView).
+    /// </summary>
+    public bool BootsToTitle;
     /// <summary>
     /// <c>--fps-limit</c>: the frame limit when vsync is off for this run (0 = unlimited); null keeps the saved one.
     /// </summary>

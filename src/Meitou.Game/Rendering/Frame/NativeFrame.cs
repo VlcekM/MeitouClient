@@ -298,7 +298,7 @@ unsafe struct FrameBinding
     /// <summary>
     /// The most bindings set 0 has: the six uniform buffers and the storage buffers after them.
     /// </summary>
-    public const int MaxBindings = 10;
+    public const int MaxBindings = 12;
 
     /// <summary>
     /// Room for <see cref="MaxBindings"/> bindings inline, so the value can be copied to a recording job.

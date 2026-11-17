@@ -220,6 +220,17 @@ patches' second pass, for comparing). In the main view the patches' colour is no
   night 4.77 -> 2.87; a town with little ground in view 0.24 -> 0.37 (the target's clear and the pass over the picture). The pictures differ by 0.34 / 255 on average
   where two frames of the same setting differ by 0.21, at most 24 / 255 on about 150 pixels along ripple crests (the steps across an outline).
 - Not in the reflection, the viewer's other views or with the wireframe: those draw the patches' colour as before (`ResolveInputs` null).
+- **Split at the march's distance** (`TerrainShaders.ResolvePart`, `TerrainRenderer.NearRect`, switch `TerrainResolveSplit`): with the ground parallax on, the
+  resolve is two triangles. The far program is built without the march (`NO_MARCH`) and leaves out the pixels the march's own test takes
+  (`uParallax > 0.0 && distance < uParallaxEnd`); the near program is the full one, drawn last, keeps those pixels and a unit more (so the two programs' rounding leaves
+  no pixel to neither) and is scissored to the rectangle that can hold them: the selected nodes' boxes within the march's distance, cut to the rows whose rays go down
+  steeply enough to meet ground that near (the eye's height over the highest ground within reach, over the distance). No such rectangle: the near triangle is not drawn.
+  A rectangle over 60 % of the picture: the one full program as before (the far pass would mostly find pixels to leave: +0.06 to 0.08 ms in close views).
+  **Why**: the march's registers are the whole program's ("Registers"), so every pixel paid for it, reached or not. **Observed** (RTX 4090, 2560x1440, paused):
+  a town seen from 170 m 2.18 -> 1.58 ms of terrain (night 2.35 -> 1.79), a dune field from 180 m 1.43 -> 0.92, from 250 m 1.41 -> 0.87 (the cost with the
+  parallax off); from 130 m 1.46 -> 1.40; nearer, and city-night, unchanged. **Verified** (2026-11-16, siwa-test6 and "The boys 123", 10 paused views with a
+  partial rectangle, split against one program in the same session): no hole; 0.09 % of the pixels differ by more than 2 / 255 where two frames of one setting
+  differ on 0.03 %, scattered on cliff faces, no shift of the mean.
 
 ## Material cache
 

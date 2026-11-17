@@ -38,6 +38,18 @@ static partial class GiResolveShaders
     /// <paramref name="none"/>: a fragment without <c>kenshiLight</c> (the water) that only clears the target where it draws. Location 2 is the
     /// traced sun's term (<c>tracedSunOut</c>, docs/render-shadows.md "Traced sun"), written the same way; it goes nowhere without that attachment.
     /// </summary>
+    internal const string TermLuminances = """
+        // The three luminances a lit fragment packed into the sun term's alpha (WithAlbedo): x the lamps' diffuse light it took, y their specular, z what it
+        // took of the sky beside its diffuse light.
+        vec3 giTermLuminances(float packed)
+        {
+            // The number is one more than the three fields (0: nothing written); its sign is the specular's eighth bit.
+            float whole = max(abs(packed) - 1.0, 0.0), high = floor(whole / 16384.0), rest = whole - high * 16384.0, middle = floor(rest / 128.0);
+            return (exp2(vec3(high / 1022.0, (middle + (packed < 0.0 ? 128.0 : 0.0)) / 255.0, (rest - middle * 128.0) / 127.0) * 12.0) - 1.0) / 256.0;
+        }
+
+        """;
+
     public static string WithAlbedo(string fragment, bool inShader = false, bool none = false)
     {
         if (!MainRegex().IsMatch(fragment))
@@ -57,7 +69,18 @@ static partial class GiResolveShaders
 
             layout(location = 1) out uvec4 oGiAlbedo;
             layout(location = 2) out vec4 oTracedSun;
-            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; oTracedSun = {{(none ? "vec4(0.0)" : "vec4(tracedSunOut, 0.0)")}}; }
+            // A level (0 to 16) as a whole number below levels, logarithmic. The term's alpha holds three in its 24 exact bits and its sign: the lamps' diffuse
+            // light the fragment took (1023 levels, steps of 0.8 %), their specular (8 bits, the eighth the sign) and what it took of the sky beside its diffuse
+            // light (7 bits); TermLuminances reads them back. The specular is rounded up: read back below what the fragment took, a blocked lamp's highlight
+            // left a rest that showed green on a face in the lamp's shadow.
+            float giPackLuminance(float x, float levels) { return floor(clamp(log2(1.0 + max(x, 0.0) * 256.0) / 12.0, 0.0, 1.0) * (levels - 1.0) + 0.5); }
+            float giPackTerm(float diffuse, float specular, float gloss)
+            {
+                float s = min(ceil(clamp(log2(1.0 + max(specular, 0.0) * 256.0) / 12.0, 0.0, 1.0) * 255.0 - 1e-3), 255.0), top = floor(s / 128.0);
+                float whole = giPackLuminance(diffuse, 1023.0) * 16384.0 + (s - top * 128.0) * 128.0 + giPackLuminance(gloss, 128.0) + 1.0;
+                return top > 0.5 ? -whole : whole;
+            }
+            void main() { giLitMain(); oGiAlbedo = {{(none ? "uvec4(0u)" : "giAlbedoOut")}}; oTracedSun = {{(none ? "vec4(0.0)" : "vec4(tracedSunOut, giPackTerm(lampDiffuseOut, lampSpecularOut, ambientGlossOut))")}}; }
 
             """;
     }
@@ -101,14 +124,17 @@ static partial class GiResolveShaders
 
     /// <summary>
     /// One texel of the low target per <c>uDiv</c> × <c>uDiv</c> block: the first pixel of the block that takes the probes (its surface flag set),
-    /// its position from the depth, its shading normal as the lit fragment wrote it, the probes' irradiance there and the sky's ambient as the
-    /// fragment had it. Out: rgb = (probes − sky) × the GI share × the strength × the haze's transmittance, a = signed view depth (negative:
-    /// interior, positive: exterior, 0: nothing in the block takes the probes).
+    /// its position from the depth, its shading normal as the lit fragment wrote it, the probes' irradiance there. Two parts (<c>uPart</c>, a
+    /// target each), both times the haze's transmittance: 0 the probes' light × the GI share × the strength; 1 minus that share: how much of the
+    /// sky's ambient <see cref="Apply"/> takes back, of each pixel's own (the sky's ambient follows the pixel's normal: one texel's taken from
+    /// every pixel of a bumped wall left the difference as speckles in the sky's colour, bright in a dark room). Out: rgb the part, a = signed
+    /// view depth (negative: interior, positive: exterior, 0: nothing in the block takes the probes).
     /// </summary>
     public static readonly string Resolve = "#version 330 core\n" + AtmosphereShaders.Functions + Reconstruct + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform usampler2D uAlbedo;
+        uniform float uPart;
         uniform float uDiv;
 
         void main()
@@ -128,13 +154,13 @@ static partial class GiResolveShaders
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 v = normalize(uGiEye - p);
             vec4 gi = giIrradiance(p, n, v);
-            float share = gi.a * uGiParams.y;
-            vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             bool interior = (surface.w & 512u) != 0u;
+            float share = giWeight(gi.a, interior);
+            vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
             // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's was.
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
-            fragColour = vec4((gi.rgb - sky) * share * transmittance, interior ? -z : z);
+            fragColour = vec4((uPart < 0.5 ? gi.rgb * share : vec3(-share)) * transmittance, interior ? -z : z);
         }
         """;
 
@@ -200,14 +226,42 @@ static partial class GiResolveShaders
         """;
 
     /// <summary>
-    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
-    /// bilinear weights divided by how far each one's depth is from this pixel's (relative), times the albedo.
+    /// <see cref="Upsample"/> over two low targets with the same weights: <c>add</c> from <c>uLow</c> (alpha the signed view depth) and
+    /// <c>kept</c> from <c>uLowSky</c>.
     /// </summary>
-    public static readonly string Apply = "#version 330 core\n" + Reconstruct + """
+    internal const string UpsamplePair = """
+            vec2 f = (vec2(px) + 0.5) / uDiv - 0.5;
+            ivec2 i0 = ivec2(floor(f));
+            vec2 w = f - vec2(i0);
+            vec3 add = vec3(0.0), kept = vec3(0.0), nearestAdd = vec3(0.0), nearestKept = vec3(0.0);
+            float total = 0.0, best = 1e9;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 o = ivec2(k & 1, k >> 1);
+                ivec2 at = clamp(i0 + o, ivec2(0), ivec2(uLowSize) - 1);
+                vec4 t = texelFetch(uLow, at, 0);
+                if (t.a == 0.0 || (t.a < 0.0) != ((surface.w & 512u) != 0u)) continue;
+                vec3 s = texelFetch(uLowSky, at, 0).rgb;
+                float rel = abs(abs(t.a) - z) / z;
+                float weight = (o.x == 1 ? w.x : 1.0 - w.x) * (o.y == 1 ? w.y : 1.0 - w.y) / (rel + 0.01);
+                add += t.rgb * weight;
+                kept += s * weight;
+                total += weight;
+                if (rel < best) { best = rel; nearestAdd = t.rgb; nearestKept = s; }
+            }
+            if (total > 1e-6) { add /= total; kept /= total; } else { add = nearestAdd; kept = nearestKept; }
+        """;
+
+    /// <summary>
+    /// The resolve over the scene (blend one, one; red, green and blue): per pixel that takes the probes, its four nearest low texels with their
+    /// bilinear weights divided by how far each one's depth is from this pixel's (relative): the probes' light, less the share of this pixel's own
+    /// sky ambient (as the lit fragment had it: its normal) that the probes replace, times the albedo.
+    /// </summary>
+    public static readonly string Apply = "#version 330 core\n" + AtmosphereShaders.Functions + Reconstruct + $$"""
         in vec2 vUv;
         out vec4 fragColour;
         uniform usampler2D uAlbedo;
-        uniform sampler2D uLow;
+        uniform sampler2D uLow, uLowSky;
         uniform vec2 uLowSize;
         uniform float uDiv;
 
@@ -219,10 +273,12 @@ static partial class GiResolveShaders
             float z = depthAt(px);
             if (z <= 0.0) discard;
 
-        """ + Upsample + """
+        {{UpsamplePair}}
 
-            vec3 albedo = vec3(float(surface.z & 255u), float(surface.z >> 8), float(surface.w & 255u)) / 255.0;
-            fragColour = vec4(albedo * albedo * add, 0.0);
+            vec3 albedo = vec3(float(surface.z & 255u), float((surface.z >> 8) & 255u), float(surface.w & 255u)) / 255.0;
+            vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+            vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(positionAt(px, z)).rgb * uAtmoLight.w;
+            fragColour = vec4(albedo * albedo * (add + sky * kept), 0.0);
         }
         """;
 }

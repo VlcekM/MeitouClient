@@ -26,10 +26,20 @@ public sealed unsafe partial class PostProcess
         public readonly SamplerSlot Lost, Total, Total1;
 
         /// <summary>
+        /// The sun's term target (its alpha: the lamps' specular a character's fragment took) and whether the totals hold what the apply needs of it.
+        /// </summary>
+        public readonly SamplerSlot Specular, Plain;
+
+        /// <summary>
+        /// 1 while <see cref="Specular"/> is bound and the first total's alpha holds the light of a character's lamps.
+        /// </summary>
+        public readonly UniformHandle SpecularOn;
+
+        /// <summary>
         /// Compiles the apply and looks up its slots.
         /// </summary>
         public LampShadowApplyPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.Apply, "post lamp shadows") =>
-            (Lost, Total, Total1) = (P.Sampler("uLost"), P.Sampler("uTotal"), P.Sampler("uTotal1"));
+            (Lost, Total, Total1, Specular, Plain, SpecularOn) = (P.Sampler("uLost"), P.Sampler("uTotal"), P.Sampler("uTotal1"), P.Sampler("uSpecular"), P.Sampler("uPlain"), P.Uniform("uSpecularOn"));
     }
 
     /// <summary>
@@ -88,7 +98,12 @@ public sealed unsafe partial class PostProcess
     Target2D? _lampLost, _lampTotal, _lampTotal1, _lampScratch, _lampFiltered;
 
     /// <summary>
-    /// The last frame's per-lamp shadow areas and the pixels of their rectangles summed (0 before the pass ran).
+    /// The layers the last frame's lamps were dealt into and the rounds they were worked in (0 before the pass ran).
+    /// </summary>
+    public (int Layers, int Rounds) LampShadowLayers => _lampShadowTrace is { } t ? (t.LayersLast, t.RoundsLast) : default;
+
+    /// <summary>
+    /// The last frame's per-lamp shadow areas, the pixels of their rectangles and of their cells summed, and the movers.
     /// </summary>
     public (int Areas, long Pixels, long CellPixels, int Movers) LampShadowAreas =>
         _lampShadowTrace is { } t ? (t.AreasLast, t.AreaPixelsLast, t.CellPixelsLast, t.MoversLast) : default;
@@ -129,7 +144,7 @@ public sealed unsafe partial class PostProcess
         bool perLamp = lamps.Tiles is not null;
         if (!TraceLampShadows(trace, scene, lamps, depth, surface, perLamp)) return;
 
-        ApplyLampShadows(colour, filtered, perLamp ? total1 : _lampTotal!, total1);
+        ApplyLampShadows(colour, filtered, perLamp ? total1 : _lampTotal!, total1, perLamp && TracedTermTarget is not null ? _tracedTerm : null);
     }
 
     /// <summary>
@@ -141,6 +156,7 @@ public sealed unsafe partial class PostProcess
         _lampShadowApply?.P.Dispose();
         _lampShadowFloor?.P.Dispose();
         _lampShow?.P.Dispose();
+        _roomMaskPass?.Dispose();
     }
 
     /// <summary>
@@ -180,20 +196,22 @@ public sealed unsafe partial class PostProcess
 
         // This frame's depth pyramid tells each lamp's pass which cells of the screen can hold a mover's shadow.
         var pyramid = BuildHiz() ? Hiz!.ThisFrame() : default;
-        return trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, lost, total, total1, scratch, filtered, LampShadowViewNow(),
-            SceneToEye, pyramid);
+        return trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, total, total1, filtered, LampShadowViewNow(), SceneToEye, pyramid);
     }
 
     /// <summary>
     /// The filtered lost light off the scene, then the floor pass.
     /// </summary>
-    void ApplyLampShadows(Target2D colour, Target2D filtered, Target2D total, Target2D total1)
+    void ApplyLampShadows(Target2D colour, Target2D filtered, Target2D total, Target2D total1, Target2D? specular)
     {
         var a = _lampShadowApply ??= new LampShadowApplyPass(Gpu);
         SetGiView(a);
         Bind(a.P, a.Lost, filtered);
         Bind(a.P, a.Total, total);
         Bind(a.P, a.Total1, total1);
+        Bind(a.P, a.Specular, specular);
+        Bind(a.P, a.Plain, _lampTotal);
+        a.P.Set(a.SpecularOn, specular is not null ? 1f : 0f);
         a.P.ApplyGlobals();   // the haze's uniforms
         Draw(a.P, colour.Attachment, colour.Format, _width, _height, _width, _height, LampShadowState);
 

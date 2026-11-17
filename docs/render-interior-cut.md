@@ -34,6 +34,7 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   trigger hull its masks write R = 0 (the game's value there: every face seen is a back face). `Boxes` are the drawn mask
   meshes' X/Z bounds.
 - Readers: `InteriorMaskRenderer.WithCut` puts the test first in a fragment program. A `discard` costs the early depth
+- **Under the floor** (Meitou, `InteriorMaskRenderer.CutUnderFloor`, on; no setting yet): the mask pass also writes G = -(depth + 1) of the farthest face that lies flat below the eye (min blend), and where that face is the farthest of all (the mask's floor) the cut reaches 8 units further along the view. **Observed** (save grass-through interior, the Bughouse): a hump of terrain between the floor's boards and the mask's bottom (more than 1 unit behind the mask's back face, so the game's rule keeps it) came through the floor with its grass; cut with the reach, 19,300 -> 150 dark pixels. **Unknown**: whether the original shows the same hump there (its shader rule says it would; not run).
   test, so programs without one stay without it and only work over a box takes the cut:
   - terrain: patches overlapping a box use cut variants of the colour and prepass programs;
   - map features: instances whose sphere overlaps a box form their own batches, drawn with the full (dithered) program

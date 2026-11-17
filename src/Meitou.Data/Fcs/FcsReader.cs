@@ -174,7 +174,9 @@ public static class FcsReader
                 throw new FcsFormatException($"Duplicate reference category '{category}' in {record.StringId}.", r.BaseStream.Position);
         }
 
-        for (int n = ReadCount(r); n > 0; n--)
+        int instances = ReadCount(r);
+        record.Instances.EnsureCapacity(instances);   // grown once: a save's zone records hold hundreds
+        for (int n = instances; n > 0; n--)
         {
             var instance = new FcsInstance
             {
@@ -183,7 +185,9 @@ public static class FcsReader
                 Position = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()),
                 Rotation = ReadRotation(r),
             };
-            for (int s = ReadCount(r); s > 0; s--)
+            int states = ReadCount(r);
+            instance.States.EnsureCapacity(states);
+            for (int s = states; s > 0; s--)
                 instance.States.Add(ReadString(r));
             record.Instances.Add(instance);
         }

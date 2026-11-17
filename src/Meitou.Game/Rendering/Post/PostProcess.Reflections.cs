@@ -36,20 +36,21 @@ public sealed unsafe partial class PostProcess
     sealed class SsrShadePass : GiPass
     {
         /// <summary>
-        /// The hits and the GI resolve's low-size result.
+        /// The hits and the GI resolve's two low-size results.
         /// </summary>
-        public readonly SamplerSlot Hit, GiResolved;
+        public readonly SamplerSlot Hit, GiResolved, GiResolvedSky;
 
         /// <summary>
-        /// 1 while the GI resolve runs, else 0.
+        /// 1 while the GI resolve runs, else 0; and which part is drawn: 0 the light found, 1 the sky's kept share.
         /// </summary>
-        public readonly UniformHandle HasGi;
+        public readonly UniformHandle HasGi, Part;
 
         /// <summary>
         /// Compiles the shade and looks up its slots.
         /// </summary>
         public SsrShadePass(GpuContext gpu) : base(gpu, SsrShaders.Shade, "post ssr shade") =>
-            (Hit, GiResolved, HasGi) = (P.Sampler("uHit"), P.Sampler("uGiLow"), P.Uniform("uHasGi"));
+            (Hit, GiResolved, GiResolvedSky, HasGi, Part) =
+                (P.Sampler("uHit"), P.Sampler("uGiLow"), P.Sampler("uGiLowSky"), P.Uniform("uHasGi"), P.Uniform("uPart"));
     }
 
     /// <summary>
@@ -58,9 +59,9 @@ public sealed unsafe partial class PostProcess
     sealed class SsrApplyPass : GiPass
     {
         /// <summary>
-        /// The shade's result.
+        /// The shade's two results: the light found, the sky's kept share.
         /// </summary>
-        public readonly SamplerSlot Low;
+        public readonly SamplerSlot Low, LowSky;
 
         /// <summary>
         /// The shade's result's size.
@@ -71,7 +72,7 @@ public sealed unsafe partial class PostProcess
         /// Compiles the apply and looks up its slots.
         /// </summary>
         public SsrApplyPass(GpuContext gpu) : base(gpu, SsrShaders.Apply, "post ssr apply") =>
-            (Low, LowSize) = (P.Sampler("uLow"), P.Uniform("uLowSize"));
+            (Low, LowSky, LowSize) = (P.Sampler("uLow"), P.Sampler("uLowSky"), P.Uniform("uLowSize"));
     }
 
     #endregion
@@ -94,9 +95,9 @@ public sealed unsafe partial class PostProcess
     SsrApplyPass? _ssrApply;
 
     /// <summary>
-    /// What the march and the rays found, and what the shade made of it (the GI resolve's size).
+    /// What the march and the rays found, and what the shade made of it: the light found, and the sky's kept share (the GI resolve's size).
     /// </summary>
-    Target2D? _ssrHit, _ssrLow;
+    Target2D? _ssrHit, _ssrLow, _ssrLowSky;
 
     /// <summary>
     /// The lit surfaces store their gloss for <see cref="RunReflections"/>: the scene targets carry the surface target even without
@@ -123,7 +124,9 @@ public sealed unsafe partial class PostProcess
         var a = _ssrApply ??= new SsrApplyPass(Gpu);
         SetGiView(a);
         Bind(a.P, a.Low, _ssrLow);
+        Bind(a.P, a.LowSky, _ssrLowSky);
         a.P.Set(a.LowSize, (float)_ssrLow!.Width, (float)_ssrLow.Height);
+        a.P.ApplyGlobals();   // the atmosphere's uniforms, through the frame globals: each pixel's own reflection of the sky
         Draw(a.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, GiAddState);
         Stamp("ssr");
         CloseSegment();
@@ -150,10 +153,12 @@ public sealed unsafe partial class PostProcess
 
         _ssrHit?.Texture.Dispose();
         _ssrLow?.Texture.Dispose();
+        _ssrLowSky?.Texture.Dispose();
 
         using var batch = Gpu.Uploads.Begin();
         _ssrHit = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr hit");
         _ssrLow = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low");
+        _ssrLowSky = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low sky");
     }
 
     /// <summary>
@@ -176,9 +181,13 @@ public sealed unsafe partial class PostProcess
         SetGiView(s);
         Bind(s.P, s.Hit, _ssrHit);
         Bind(s.P, s.GiResolved, GiResolve > 0 ? _giLow : null);
+        Bind(s.P, s.GiResolvedSky, GiResolve > 0 ? _giLowSky : null);
         s.P.Set(s.HasGi, GiResolve > 0 ? 1f : 0f);
         s.P.ApplyGlobals();   // the atmosphere's uniforms, through the frame globals
+        s.P.Set(s.Part, 0f);
         Draw(s.P, _ssrLow!);
+        s.P.Set(s.Part, 1f);
+        Draw(s.P, _ssrLowSky!);
     }
 
     /// <summary>
