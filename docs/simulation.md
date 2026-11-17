@@ -2140,7 +2140,7 @@ log.txt between ticks. Each line is a category, the game day, hour and tick, the
 
 ### Action log
 
-**Engine** (a debugging aid, on for everyone by default; `--action-log off|squad|everyone`, F10 "Action log"). `ActionLog` writes `log_actions.txt`
+**Engine** (a debugging aid, off by default; `--action-log off|squad|everyone`, F10 "Action log"). `ActionLog` writes `log_actions.txt`
 beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`GameLog`, cut past 10 MiB). At each tick boundary (`World.RunTick`'s end and the orders given while paused), every
 followed awake character whose task or task provenance (`CharacterCold.Running`) changed gets a line: the task left, why (`TaskStart.End`'s reason,
 else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's

@@ -421,10 +421,10 @@ sealed class WorldOptions
     public bool NoAudio;
 
     /// <summary>
-    /// <c>--action-log off|squad|everyone</c>: whose task changes go to log_actions.txt from the start (<see cref="Host.ActionLogHost"/>; everyone by
+    /// <c>--action-log off|squad|everyone</c>: whose task changes go to log_actions.txt from the start (<see cref="Host.ActionLogHost"/>; off by
     /// default, F10 switches it).
     /// </summary>
-    public Simulation.Ai.ActionLogScope ActionLog = Simulation.Ai.ActionLogScope.Everyone;
+    public Simulation.Ai.ActionLogScope ActionLog = Simulation.Ai.ActionLogScope.Off;
 
     /// <summary>
     /// <c>--audio-gain</c>: the whole mix raised or lowered, in dB (0: the game's levels).

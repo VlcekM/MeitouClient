@@ -25,7 +25,7 @@ public enum ActionLogScope : byte
 }
 
 /// <summary>
-/// The action log (<b>engine</b>, a debugging aid, on for everyone by default; the host writes it to log_actions.txt beside log.txt): at each tick's
+/// The action log (<b>engine</b>, a debugging aid, off by default; the host writes it to log_actions.txt beside log.txt): at each tick's
 /// end and after the orders given while paused, a line for every followed character whose task changed: the task it left and why, the task it took up
 /// and the provenance of the start (<see cref="CharacterCold.Running"/>: the source, the row, the job, the target and the site); for the player's
 /// characters, the decision step's trace of that tick (<see cref="DecisionSystem.Tracing"/>, which the log turns on while it follows them). It only
