@@ -196,8 +196,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     /// <summary>
     /// First aid 25 and Splint 249 need the patient alive (else the order leaves the queue) and an able medic with a kit (a medkit or a robot kit
-    /// anyone of its squad near it carries; its own splint kit), Rest an able character; the Medic button an able player character. The failure texts
-    /// are the orders' refusals.
+    /// anyone of its squad near it carries; its own splint kit) with a working arm (<see cref="HasWorkingArm"/>), Rest an able character; the Medic
+    /// button an able player character. The failure texts are the orders' refusals.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -210,7 +210,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (!table.TryResolveNext(order.Target, out int patient) || table.Cold(patient)!.Medical is not { Dead: false })
             return OrderCheck.Gone;
 
-        if (cold is not { Race: not null, Stats: not null } || !CanAct(cold)) return OrderCheck.Blocked();
+        if (cold is not { Race: not null, Stats: not null } || !CanAct(cold) || !HasWorkingArm(cold))
+            return OrderCheck.Blocked();
         if (order.Row == TaskType.SplintOrder)
         {
             // the medic's own kit only (the original's kit search)
@@ -245,6 +246,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// A started treatment order is planned again each update (<c>FUN_14050d970</c> re-tests the running row's list B): a medic whose arms both go
+    /// out stops and the order waits queued (<see cref="HasWorkingArm"/>).
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.Row == TaskType.Rest || HasWorkingArm(world.Characters.Cold(slot)!);
+
+    /// <summary>
     /// The characters an order names, else the player's selection.
     /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
@@ -255,6 +263,16 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// new task (<see cref="TaskStart.Start"/>).
     /// </summary>
     static bool CanAct(CharacterCold cold) => cold.Medical is { Incapacitated: false } && cold.CarriedBy.IsNone;
+
+    /// <summary>
+    /// State 38 <c>hasOneWorkingArm</c> (evaluator <c>FUN_140998470</c>, <b>Verified</b>): an animal always; anyone else awake, alive and with
+    /// either arm working (<see cref="MedicalState.ArmWorks"/>). The treatment rows 25 First aid, 60 Repairing and 249 Splinting need it in list B
+    /// and no row provides it (<b>Verified</b>, registration <c>FUN_140319a60</c>): no order, job or NPC look starts a treatment without it, so a
+    /// medic with both arms out (a robot one too) treats no one, itself included.
+    /// </summary>
+    internal static bool HasWorkingArm(CharacterCold cold) =>
+        cold.Animal is not null
+        || cold.Medical is { Incapacitated: false } arms && (arms.ArmWorks(left: true) || arms.ArmWorks(left: false));
 
     /// <summary>
     /// Registers the treat and rest tasks.
@@ -399,6 +417,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 continue;
             }
 
+            if (ArmsOut(world, i, cold)) continue;
+
             const ushort path = (ushort)MoveFlags.AnyPath;
             var spot = TreatSpot(world, table.Cold(t)!, next[t]);
             if (t == i || InReach(next[i], spot))
@@ -450,6 +470,20 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
         }
+    }
+
+    /// <summary>
+    /// The plan step ends a running treatment whose medic has lost both arms (<c>FUN_14050d970</c> re-tests list B, state 38,
+    /// <see cref="HasWorkingArm"/>): a job's or an NPC's ends here; an order's is only sent to the decision step, whose order queue ends it and keeps
+    /// the order waiting (<see cref="IOrderOwner.StillHolds"/>). True when the arms are out.
+    /// </summary>
+    static bool ArmsOut(World world, int i, CharacterCold cold)
+    {
+        if (HasWorkingArm(cold)) return false;
+        if (cold.Running is { Source: TaskSource.Order }) DecisionSystem.Request(cold);
+        else
+            End(world, i);
+        return true;
     }
 
     /// <summary>

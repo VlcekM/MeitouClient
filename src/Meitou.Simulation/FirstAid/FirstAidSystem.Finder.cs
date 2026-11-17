@@ -439,7 +439,8 @@ public sealed partial class FirstAidSystem
         float Range2, List<int> Candidates);
 
     /// <summary>
-    /// The finder's gates on the medic: able, not fighting (unless ordered), free; an NPC also not while its squad fights or it carries someone.
+    /// The finder's gates on the medic: able, not fighting (unless ordered), free, with a working arm (the treatment rows' state 38,
+    /// <see cref="HasWorkingArm"/>); an NPC also not while its squad fights or it carries someone.
     /// </summary>
     bool MayLook(World world, CharacterCold cold, bool ordered)
     {
@@ -447,8 +448,9 @@ public sealed partial class FirstAidSystem
         // A character carried awake treats no one, itself included, as with orders (engine choice, docs/simulation.md).
         if (!cold.CarriedBy.IsNone) return false;
 
+        var row = ordered ? TaskType.FirstAidOrder : TaskType.JobMedic;
         if (cold.Medical is not { Incapacitated: false } own || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered
-                || cold.IsImprisoned || !TaskStart.Eligible(world, cold, ordered ? TaskType.FirstAidOrder : TaskType.JobMedic))
+                || cold.IsImprisoned || !TaskStart.Eligible(world, cold, row) || !HasWorkingArm(cold))
             return false;
 
         // No fight in the squad: the stand-in for the goal's desire of an NPC the AI weighs no goals for (an AI-run one's think weighs its own
@@ -852,7 +854,8 @@ public sealed partial class FirstAidSystem
 
 
         // no combat test: the original's finder has none (FUN_14099e240)
-        if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats) return -1;
+        if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats || !HasWorkingArm(cold))
+            return -1;
         if (OwnKit(cold, ItemInfo.SplintKitFunction) is not { } kit) return -1;   // the medic's own kit, as the order and the splint use
 
         // No fight test in the original finder (FUN_14099e240) and the job keeps a positive desire (FUN_140998410): a player's splint job runs during
