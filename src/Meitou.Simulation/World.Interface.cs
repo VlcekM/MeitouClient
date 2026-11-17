@@ -56,9 +56,15 @@ public sealed partial class World
         try
         {
             // The systems that take these commands: every order's owner, and the others' handlers.
-            foreach (var system in _systems)
+            for (int k = 0; k < _systems.Count; k++)
             {
-                if (system is IOrderOwner or PlayerSystem or Trading.TradeSystem or Dialogue.DialogueSystem or Combat.CombatSystem)
+                var system = _systems[k];
+                bool takesCommands = system is IOrderOwner or PlayerSystem or Trading.TradeSystem or Dialogue.DialogueSystem or Combat.CombatSystem;
+                if (!takesCommands) continue;
+
+                if (ModFaults.IsMod(k))
+                    ModFaults.Run(k, "inputs", system, this, due, static (s, w, d) => s.Inputs(w, d));
+                else
                     system.Inputs(this, due);
             }
 

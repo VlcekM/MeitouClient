@@ -2882,6 +2882,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.BloodDecals.UpdateBlood();
         host.UpdateTrails();   // no trail renderer here: only the footfalls for the blood prints
         host.Modding.UpdateModHits();
+        host.Modding.UpdateModFaults();
         if (_characters is not null)
         {
             _characters.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(host.WorldOptions.Post);

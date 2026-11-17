@@ -106,7 +106,12 @@ holds refuses the second mod.
   end; systems at one place keep registration order. `StandardSystems.Build` builds the standard list first, then splices
   (`Splice`), so the list without mods is the standard one. Captives and beds have no anchor of their own. A factory gets
   `SystemBuildContext` (`Data`, the standard systems, `Find<T>()`); one that throws or returns null leaves its system out of that world
-  and logs. `IStateHashed` puts a system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
+  and logs. A phase of a mod's system that throws (a bug, or a game method the mod was built against that has since changed) is caught and
+  logged once with the mod id, the system's name and the phase, and the player gets a notice; the system's tick phases (paused orders'
+  `Inputs` too) stop from the next serial step, and the fault enters the state hash (`ModSystemFaults`). A throw in a parallel phase lets
+  that phase's other partitions finish, so that tick's partial work depends on the thread count, and none of the system's effects of that
+  tick are applied. The system's other hooks (observers, filters, task and decision sources) keep their own rules. `IStateHashed` puts a
+  system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
   up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
 - **Resolved combat:** a registered system implementing `ICombatHitObserver` receives `HitResolved(World, in CombatHit)` once per
   landed melee/projectile contact and execution blow on a captive (`CombatSystem.Execute`, `CombatHitSource.Execution`), after its
