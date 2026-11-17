@@ -8,7 +8,7 @@ namespace Meitou.Simulation.Trading;
 /// shop test (<c>Building::isAShop</c>) has a branch for a building of the player's faction (<b>Observed</b>, disassembly): one with an interior,
 /// holding a shop counter (function 9), and public is a shop with no residents needed. The goods for sale are what the shop counters the player
 /// built inside it hold. Confirmed in the original (1.0.68): a townsperson of Squin bought from a Shop Counter the player built in a house bought
-/// there and set public.
+/// there and set public. A building the player built in an outpost is a shop of that outpost the same way, for shoppers standing in it.
 /// </summary>
 static class PlayerShops
 {
@@ -33,13 +33,51 @@ static class PlayerShops
     }
 
     /// <summary>
+    /// The storages of the complete, standing shop counters <paramref name="player"/> built inside buildings it also built (an outpost's), by the
+    /// site id of the building each stands in, in the order of the player's buildings.
+    /// </summary>
+    public static Dictionary<string, List<Inventory>> InBuiltBuildings(World world, int player)
+    {
+        var counters = new Dictionary<string, List<Inventory>>(StringComparer.Ordinal);
+
+        foreach (var site in world.Buildings.All)
+        {
+            if (CounterOf(world, site, player) is not { } storage || world.Buildings.Find(site.Parent!) is null)
+                continue;
+
+            (counters.TryGetValue(site.Parent!, out var list) ? list : counters[site.Parent!] = []).Add(storage);
+        }
+
+        return counters;
+    }
+
+    /// <summary>
     /// The storages of the shop counters <paramref name="player"/> built inside <paramref name="building"/>, in the order of the player's buildings;
-    /// none for a building the player does not own.
+    /// none for a building the player does not own. A building the player built stands in for itself by its site id
+    /// (<see cref="TownBuilding.RuntimeKey"/>).
     /// </summary>
     public static IEnumerable<Inventory> Counters(World world, TownBuilding building, int player)
     {
-        if (!world.Fixtures.OwnsBuilding(building.Key, player)) yield break;
+        if (building.RuntimeKey is { } id && world.Buildings.Find(id) is { } built)
+            return built.Owner == player ? InBuilt(world, id, player) : [];
 
+        return world.Fixtures.OwnsBuilding(building.Key, player) ? InTownBuilding(world, building, player) : [];
+    }
+
+    /// <summary>
+    /// The storages of the shop counters <paramref name="player"/> built inside the building it built with site id <paramref name="id"/>.
+    /// </summary>
+    static IEnumerable<Inventory> InBuilt(World world, string id, int player)
+    {
+        foreach (var site in world.Buildings.All)
+            if (site.Parent == id && CounterOf(world, site, player) is { } storage) yield return storage;
+    }
+
+    /// <summary>
+    /// The storages of the shop counters <paramref name="player"/> built inside the town building <paramref name="building"/>.
+    /// </summary>
+    static IEnumerable<Inventory> InTownBuilding(World world, TownBuilding building, int player)
+    {
         string key = building.Key;
         foreach (var site in world.Buildings.All)
         {

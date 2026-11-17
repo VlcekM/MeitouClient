@@ -37,7 +37,7 @@ public sealed class ShoppingList
     /// </summary>
     readonly int[] _function, _wanted, _done;
     /// <summary>
-    /// The day and town the bought counts are for (<c>int.MinValue</c> and -1: nobody has asked yet).
+    /// The day and town (<see cref="KeyOf"/>) the bought counts are for (<c>int.MinValue</c> and -1: nobody has asked yet).
     /// </summary>
     int _day = int.MinValue, _town = -1;
 
@@ -120,8 +120,8 @@ public sealed class ShoppingList
     }
 
     /// <summary>
-    /// Whether something is left to buy today in the town <paramref name="site"/> the buyer stands in (-1: none): goal 118's desire (0 once every
-    /// entry is done).
+    /// Whether something is left to buy today in the town <paramref name="site"/> the buyer stands in (<see cref="KeyOf"/>; -1: none): goal 118's
+    /// desire (0 once every entry is done).
     /// </summary>
     public bool Pending(int today, int hour, int site = -1)
     {
@@ -129,11 +129,16 @@ public sealed class ShoppingList
 
         // Standing in another town than the one it last bought in starts the list over at every evaluation, as the day's reset does, which also
         // records the day (FUN_140998fa0 calls FUN_140998e40, Verified).
-        if (_town >= 0 && site >= 0 && _town != site) StartOver(today);
+        if (_town != -1 && site != -1 && _town != site) StartOver(today);
         for (int k = 0; k < _function.Length; k++)
             if (_wanted[k] > _done[k]) return true;
         return false;
     }
+
+    /// <summary>
+    /// The list's number for <paramref name="town"/>: a placed town's site, -1 - the number of a player town (an outpost), -1 for none.
+    /// </summary>
+    public static int KeyOf(Population.CampaignTown town) => town.Site >= 0 ? town.Site : town.PlayerTown > 0 ? -1 - town.PlayerTown : -1;
 
     /// <summary>
     /// The day's reset (<c>FUN_140998e40</c>): remembers <paramref name="today"/> and sets every done back to 0.
@@ -150,8 +155,9 @@ public sealed class ShoppingList
     public int OpenFunction(int k) => _wanted[k] > _done[k] ? _function[k] : -1;
 
     /// <summary>
-    /// Starts a buying call at a shop of the town <paramref name="site"/> (<c>FUN_1409a14b0</c> opens with <c>FUN_140998da0</c>, <b>Verified</b>):
-    /// the list starts over when the buyer is in another town than the one it last bought in, and when a new game day has begun.
+    /// Starts a buying call at a shop of the town <paramref name="site"/> (<see cref="KeyOf"/>; <c>FUN_1409a14b0</c> opens with
+    /// <c>FUN_140998da0</c>, <b>Verified</b>): the list starts over when the buyer is in another town than the one it last bought in, and when a new
+    /// game day has begun.
     /// </summary>
     public void Begin(int site, int today, int hour)
     {
@@ -206,7 +212,7 @@ public sealed class ShoppingList
     internal void Hash(ref StateHasher hasher)
     {
         // A list nobody has asked yet is the one its seed makes: nothing to add.
-        if (_day == int.MinValue && _town < 0) return;
+        if (_day == int.MinValue && _town == -1) return;
         hasher.Add(_day);
         hasher.Add(_town);
         for (int k = 0; k < _done.Length; k++) hasher.Add(_done[k]);

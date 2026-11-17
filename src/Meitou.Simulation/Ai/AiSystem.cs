@@ -756,9 +756,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.PatrolTown => 1,
             // Shopping is wanted while its list has something left to buy today (FUN_140999620), and there is a shop to go to.
             // The finder's factor follows its pick: 1 for a shop, 0.4 for any other public building, 0 when it finds none (FUN_1409997f0).
-            AiBehaviour.Shop => !mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, board.Town) ? 0
-                : ShopFor(Places(board.Town), mind, TargetRoll(world, self, behaviour), RandomShopping(world, board.Town)) is { } picked
-                    ? ShopFactor(Places(board.Town), picked) : 0,
+            AiBehaviour.Shop => ShopDesire(world, self, mind, board.Town),
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
             AiBehaviour.Work => WorkAllowed(world, self.Slot, board.HomeTown)
                 && (HoldsWork(mind, board.HomeTown, type) || PickWork(world, self, board.HomeTown, mind.WorkEpoch, type) is not null) ? 1 : 0,
@@ -936,38 +934,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     Vector3? TargetFor(World world, CharacterId self, AiBehaviour behaviour, int town, AiMind mind)
     {
         ulong roll = TargetRoll(world, self, behaviour);
-        var places = Places(town);
         switch (behaviour)
         {
             case AiBehaviour.TownNode:
-            case AiBehaviour.Shop:
                 {
-                    var b = behaviour == AiBehaviour.TownNode
-                        ? PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll)
-                        : ShopFor(places, mind, roll, RandomShopping(world, town));
-                    if (b is null) return null;
-
-                    // A building without a counter is the target itself, its origin on any floor (FUN_1409997f0); the walk ends within WorkReach of
-                    // it.
-                    if (behaviour == AiBehaviour.Shop && ShopFactor(places, b) < 1) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
-
                     // Wandering: a random general node of the drawn building, none: no target and no redraw (FUN_140999a60, FUN_14038c2f0).
-                    if (behaviour == AiBehaviour.TownNode) return RandomNode(b, IsGeneralNode, roll);
-
-                    // A general node; in a shop without one a guard post, else any other node (engine choice: where the original's Task_Shopping
-                    // stands is not decoded).
-                    foreach (var accept in (ReadOnlySpan<Func<HomeSpot, bool>>)[IsGeneralNode, s => s.Kind == HomeSpotKind.Guard, s => s.IsNode])
-                    {
-                        int nodes = 0;
-                        foreach (var s in b.Spots) if (accept(s)) nodes++;
-                        if (nodes == 0) continue;
-                        int pick = Rng.Int(Rng.Mix(roll), nodes);
-                        foreach (var s in b.Spots)
-                            if (accept(s) && pick-- == 0) return s.Position;
-                    }
-
-                    return b.Position;
+                    var b = PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll);
+                    return b is null ? null : RandomNode(b, IsGeneralNode, roll);
                 }
+            case AiBehaviour.Shop:
+                return ShopTarget(world, self, town, mind, roll);
             case AiBehaviour.ToTown:
                 {
                     var at = Flat(world.Characters.Previous[self.Slot].Position);
@@ -987,6 +963,34 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Where goal 118 goes: the shop it picks (<see cref="ShopFor"/>) in the shopper's town (<see cref="ShopTown"/>), at a general node in it; null
+    /// when it picks none.
+    /// </summary>
+    Vector3? ShopTarget(World world, CharacterId self, int town, AiMind mind, ulong roll)
+    {
+        var (places, _, random) = ShopTown(world, self.Slot, town);
+        if (ShopFor(places, mind, roll, random) is not { } b) return null;
+
+        // A building without a counter is the target itself, its origin on any floor (FUN_1409997f0); the walk ends within WorkReach of it. So is
+        // a building the player built (an outpost's shop), which has no nodes.
+        if (ShopFactor(places, b) < 1 || b.RuntimeKey is not null) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
+
+        // A general node; in a shop without one a guard post, else any other node (engine choice: where the original's Task_Shopping stands is not
+        // decoded).
+        foreach (var accept in (ReadOnlySpan<Func<HomeSpot, bool>>)[IsGeneralNode, s => s.Kind == HomeSpotKind.Guard, s => s.IsNode])
+        {
+            int nodes = 0;
+            foreach (var s in b.Spots) if (accept(s)) nodes++;
+            if (nodes == 0) continue;
+            int pick = Rng.Int(Rng.Mix(roll), nodes);
+            foreach (var s in b.Spots)
+                if (accept(s) && pick-- == 0) return s.Position;
+        }
+
+        return b.Position;
     }
 
     /// <summary>
@@ -1042,6 +1046,40 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (ReferenceEquals(shop, building)) return 1;
         return ShopNoCounterFactor;
     }
+
+    /// <summary>
+    /// Goal 118's desire (<c>FUN_140999620</c>): 0 once nothing is left on the list today in the shopper's town (<see cref="ShopTown"/>), else the
+    /// factor of the shop it would go to (<see cref="ShopFactor"/>; 0 with none).
+    /// </summary>
+    float ShopDesire(World world, CharacterId self, AiMind mind, int town)
+    {
+        var (places, key, random) = ShopTown(world, self.Slot, town);
+        if (!mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, key)) return 0;
+
+        return ShopFor(places, mind, TargetRoll(world, self, AiBehaviour.Shop), random) is { } picked ? ShopFactor(places, picked) : 0;
+    }
+
+    /// <summary>
+    /// The town goal 118 shops in, with its places, its key in the shopping list (<see cref="ShoppingList.KeyOf"/>) and whether its random pick
+    /// runs (<see cref="RandomShopping"/>). The original's goal takes the shopper's status town (<c>FUN_1409997f0</c> reads status <c>+0x88</c>,
+    /// <b>Observed</b>, disassembly; <see cref="CharacterCold.StatusTown"/>), so a shopper standing in an outpost shops at that outpost's shops
+    /// (<see cref="TownPlaceIndex.OutpostShops"/>), with no random pick (a town of the player's faction). A shopper of the player's faction (an
+    /// autonomous squad) is left out: the original plans no goals for the player's squads, and its buying would only move the player's goods
+    /// between the player's own counter and character. Elsewhere Meitou keeps the squad's town <paramref name="town"/>.
+    /// </summary>
+    (TownPlaces Places, int Key, bool Random) ShopTown(World world, int slot, int town)
+    {
+        var cold = world.Characters.Cold(slot);
+        if (cold?.StatusTown is { PlayerTown: > 0 and var outpost } && cold.Faction != PlayerFactionOf(world))
+            return (_townPlaces.OutpostShops(outpost), ShoppingList.KeyOf(CampaignTown.OfPlayer(outpost)), false);
+
+        return (Places(town), town, RandomShopping(world, town));
+    }
+
+    /// <summary>
+    /// The player's faction: the world's, else the data's (-1: none).
+    /// </summary>
+    int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
 
     /// <summary>
     /// Whether the random pick of goal 118 runs in <paramref name="town"/>: its finder <c>FUN_1409fc1b0</c> is called only when the faction of the
@@ -2011,8 +2049,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // A shop picked is remembered, so the arrival knows what it sells (the same pick as the target's: the roll is this tick's).
         if (mind.Target is null && behaviour == AiBehaviour.Shop)
         {
-            mind.ShopAt = ShopFor(Places(board.Town), mind, TargetRoll(world, table.IdOf(slot), behaviour),
-                RandomShopping(world, board.Town));
+            var (places, _, random) = ShopTown(world, slot, board.Town);
+            mind.ShopAt = ShopFor(places, mind, TargetRoll(world, table.IdOf(slot), behaviour), random);
         }
 
         mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.Town, mind)

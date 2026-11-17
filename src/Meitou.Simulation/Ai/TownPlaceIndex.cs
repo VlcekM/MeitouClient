@@ -50,6 +50,12 @@ sealed class TownPlaceIndex(PopulationData data)
     readonly Dictionary<int, (IReadOnlyList<TownBuilding> All, IReadOnlyList<TownBuilding> Real)> _outposts = [];
 
     /// <summary>
+    /// The shops of each outpost that has one, by the player town's number (<see cref="OutpostShops"/>): rebuilt with the places (derived, not
+    /// hashed).
+    /// </summary>
+    readonly Dictionary<int, TownPlaces> _outpostShops = [];
+
+    /// <summary>
     /// The stand-in of each player-built workplace, by site id: kept across refreshes, as a worker holds its workplace by reference
     /// (<see cref="AiMind.WorkPost"/>); a site whose record changed gets a new one (derived, not hashed).
     /// </summary>
@@ -83,6 +89,13 @@ sealed class TownPlaceIndex(PopulationData data)
     }
 
     /// <summary>
+    /// The places of outpost <paramref name="number"/> (a player town's number) for its shoppers: its shops and what they stock, nothing else (a town
+    /// of the player's faction gets no random shopping, so its other public buildings are never picked). <see cref="None"/> for an outpost without
+    /// a shop.
+    /// </summary>
+    public TownPlaces OutpostShops(int number) => _outpostShops.TryGetValue(number, out var p) ? p : None;
+
+    /// <summary>
     /// The outposts' workplaces as the last refresh found them, by outpost number in order.
     /// </summary>
     public IEnumerable<TownBuilding> OutpostStandIns() => _outposts
@@ -105,26 +118,31 @@ sealed class TownPlaceIndex(PopulationData data)
     /// template's <c>public day</c> (the original writes it over the home's flag), else as its level state's <c>is public day</c>, else public
     /// (engine choice: the original's default is Unknown); a town building the player owns as its Open to public toggle once set (the stats panel,
     /// <see cref="Locks.FixtureRegistry.PublicOf"/>). A public town building the player owns with an interior and a shop counter the player built in
-    /// it is a shop too (<see cref="Trading.PlayerShops"/>).
+    /// it is a shop too (<see cref="Trading.PlayerShops"/>), and so is a public building the player built in an outpost with one
+    /// (<see cref="OutpostShops"/>).
     /// </summary>
     public void Refresh(World world, AiSystem ai)
     {
         _places.Clear();
         _realWork.Clear();
         _outposts.Clear();
+        _outpostShops.Clear();
         var refresh = new Refresher(this, world, ai, data);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
         refresh.NoteHomes();
         refresh.AddTowns();
-        AddOutposts(world, ai);
+        AddOutposts(world, ai, seen);
+        AddOutpostShops(world, ai, seen);
+
+        foreach (string gone in _standIns.Keys.Where(id => !seen.Contains(id)).ToList()) _standIns.Remove(gone);
     }
 
     /// <summary>
-    /// The workplaces of each outpost a squad has as its town (<see cref="OutpostWorkplaces"/>).
+    /// The workplaces of each outpost a squad has as its town (<see cref="OutpostWorkplaces"/>), their sites noted in <paramref name="seen"/>.
     /// </summary>
-    void AddOutposts(World world, AiSystem ai)
+    void AddOutposts(World world, AiSystem ai, HashSet<string> seen)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is not { Outpost: > 0 and var number } || _outposts.ContainsKey(number)) continue;
@@ -142,8 +160,35 @@ sealed class TownPlaceIndex(PopulationData data)
 
             _outposts[number] = (all, [.. all.Where(b => AiSystem.RealWork(world, b))]);
         }
+    }
 
-        foreach (string gone in _standIns.Keys.Where(id => !seen.Contains(id)).ToList()) _standIns.Remove(gone);
+    /// <summary>
+    /// The shops of each outpost (<see cref="OutpostShops"/>), their sites noted in <paramref name="seen"/>: the original's shop test passes a
+    /// building of the player's faction with an interior, a function 9 piece in it and public, no residents needed (<c>FUN_1409986e0</c>,
+    /// <b>Observed</b>, disassembly), and its list finder takes the shops of the shopper's status town, an outpost when it stands in one
+    /// (<c>FUN_1409997f0</c>, <b>Observed</b>, disassembly). So a complete, standing building the player built in an outpost, set public, with a shop counter the player built
+    /// inside (which gives it the interior), is a shop of that outpost; it sells what its counters hold.
+    /// </summary>
+    void AddOutpostShops(World world, AiSystem ai, HashSet<string> seen)
+    {
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        var shops = new Dictionary<int, (List<TownBuilding> Shops, Dictionary<TownBuilding, ulong> Stock)>();
+
+        foreach (var (id, counters) in Trading.PlayerShops.InBuiltBuildings(world, player))
+        {
+            if (world.Buildings.Find(id) is not { Complete: true, Destroyed: false, Public: true } site || site.Owner != player)
+                continue;
+            if (Construction.TownLookup.PlayerTownOf(world, site) is not { } town) continue;
+
+            var shop = StandIn(site, ai.FunctionOf(site.Record));
+            seen.Add(site.Id);
+            if (!shops.TryGetValue(town.Number, out var of))
+                shops[town.Number] = of = ([], new Dictionary<TownBuilding, ulong>(ReferenceEqualityComparer.Instance));
+            of.Shops.Add(shop);
+            of.Stock[shop] = StockOf(world, shop, null, counters);
+        }
+
+        foreach (var (number, of) in shops) _outpostShops[number] = None with { Shops = of.Shops, Stock = of.Stock };
     }
 
     /// <summary>
