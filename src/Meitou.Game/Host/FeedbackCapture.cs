@@ -260,14 +260,24 @@ sealed class FeedbackCapture(GameHost host)
             }
             saveWritten = host.Saves.SaveWrite;
         }
-        string[] mods = [.. Data.LoadOrder.FromInstall(host.Install).Entries.Select(e => e.Name)];
-        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods,
+        var entries = Data.LoadOrder.FromInstall(host.Install).Entries;
+        string[] mods = [.. entries.Select(e => e.Name)];
+        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods, WorkshopIds(entries),
             form.Screenshot ? _feedbackPicture : null, form.Navmesh ? _feedbackNavPicture : null, _feedbackLocation, saveFolder, saveWritten,
             LogsOf(form));
         _feedbackStatus = _feedbackStatusShown = form.Save ? "Saving the game..." : "Sending...";
         host.Player.FeedbackPanel.FeedbackProgress(_feedbackStatus);
         host.Player.FeedbackPanel.FeedbackSending = true;
         _feedbackSend = Task.Run(() => FeedbackSender.Send(package, s => Volatile.Write(ref _feedbackStatus, s)));
+    }
+
+    /// <summary>
+    /// The workshop item of each load order entry (<see cref="Content.WorkshopItem.IdOf"/>), null for the core files and mods never uploaded.
+    /// </summary>
+    ulong?[] WorkshopIds(IReadOnlyList<Data.LoadOrderEntry> entries)
+    {
+        var mods = Content.ModList.Discover(host.Install).ToDictionary(m => m.Path, StringComparer.Ordinal);
+        return [.. entries.Select(e => mods.TryGetValue(e.Path, out var mod) ? Content.WorkshopItem.IdOf(mod) : null)];
     }
 
     /// <summary>

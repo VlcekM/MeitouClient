@@ -30,6 +30,11 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     const int TitleMax = 100, BodyMax = 5000, VersionMax = 64, LocationMax = 200, ModsMax = 1000, PerDay = 20;
 
     /// <summary>
+    /// The longest issue text GitHub takes (characters); a load order whose workshop links would pass it is listed without them.
+    /// </summary>
+    const int IssueBodyMax = 65_536;
+
+    /// <summary>
     /// The largest upload of a kind: Cloudflare in front of the service takes at most 100 MB a request.
     /// </summary>
     public static long MaxBytes(string kind) => kind == "save" ? 95_000_000 : 16 << 20;
@@ -57,15 +62,35 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         string? commit = Clean(b.Commit, VersionMax, lines: false);
         string platform = b.Platform is { } p && Platforms.Contains(p) ? p : "other";
         string? discord = Clean(b.Discord, 64, lines: false);
-        string[] mods = [.. (b.Mods ?? []).Select(m => Clean(m, 200, lines: false)).OfType<string>().Take(ModsMax)];
+        var (mods, workshop) = Mods(b);
         string? location = Clean(b.Location, LocationMax, lines: false);
         string[] wants = [.. Kinds.Where(k => Wanted(b, k))];
         if (await store.FeedbackCountBy(reporter, DateTimeOffset.UtcNow.AddDays(-1)) >= PerDay)
             return (null, "too many feedback reports today, try again tomorrow");
         foreach (string stale in await store.DeleteFeedbackDrafts(DateTimeOffset.UtcNow.AddDays(-1))) DeleteFiles(stale);
         string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        await store.AddFeedback(token, reporter, title, body, version, commit, platform, mods, wants, discord, location);
+        await store.AddFeedback(token, reporter, title, body, version, commit, platform, mods, workshop, wants, discord, location);
         return (token, null);
+    }
+
+    /// <summary>
+    /// The form's load order (at most <see cref="ModsMax"/> names, empty ones dropped) with each name's workshop item id ("" when none or not a
+    /// number), the two lists in step.
+    /// </summary>
+    static (string[] Mods, string[] Workshop) Mods(FeedbackBody b)
+    {
+        List<string> mods = [], workshop = [];
+        var names = b.Mods ?? [];
+        var ids = b.Workshop ?? [];
+        for (int i = 0; i < names.Count && mods.Count < ModsMax; i++)
+        {
+            if (Clean(names[i], 200, lines: false) is not { } name) continue;
+
+            mods.Add(name);
+            workshop.Add(i < ids.Count && ids[i] is { Length: > 0 and <= 20 } id && id.All(char.IsAsciiDigit) ? id : "");
+        }
+
+        return ([.. mods], [.. workshop]);
     }
 
     /// <summary>
@@ -191,9 +216,19 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     };
 
     /// <summary>
-    /// The GitHub issue's text: the player's text (mentions defused), the game's details and links to the attachments with their sizes.
+    /// The GitHub issue's text: the player's text (mentions defused), the game's details and links to the attachments with their sizes; the load
+    /// order's workshop links are left out when they would make it longer than GitHub takes.
     /// </summary>
     string IssueBody(FeedbackRow row)
+    {
+        string linked = IssueBody(row, links: true);
+        return linked.Length <= IssueBodyMax ? linked : IssueBody(row, links: false);
+    }
+
+    /// <summary>
+    /// <see cref="IssueBody(FeedbackRow)"/> with or without the load order's workshop links.
+    /// </summary>
+    string IssueBody(FeedbackRow row, bool links)
     {
         string Link(string kind) => new Uri(config.PublicUrl, $"feedback/{row.Token}/{FileName(kind)}").AbsoluteUri;
         static string Mb(long bytes) => (bytes / 1_000_000.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
@@ -210,7 +245,8 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         if (row.Mods.Length > 0)
         {
             s.AppendLine("<details><summary>Load order</summary>").AppendLine();
-            foreach (string mod in row.Mods) s.AppendLine($"1. `{mod.Replace('`', '\'')}`");
+            for (int i = 0; i < row.Mods.Length; i++)
+                s.AppendLine($"1. {ModLine(row.Mods[i], links && row.Workshop is { } w && i < w.Length ? w[i] : "")}");
             s.AppendLine().AppendLine("</details>").AppendLine();
         }
         if (row.Location is { } location) s.AppendLine($"Camera: `{location.Replace('`', '\'')}`").AppendLine();
@@ -232,6 +268,15 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
             s.AppendLine($"- The {missing} did not upload.");
         s.AppendLine().AppendLine("<sub>Sent with the in-game feedback button.</sub>");
         return s.ToString();
+    }
+
+    /// <summary>
+    /// A load order line: the mod's file name, linked to its workshop page when the game sent the item's id.
+    /// </summary>
+    static string ModLine(string mod, string workshop)
+    {
+        string name = $"`{mod.Replace('`', '\'')}`";
+        return workshop.Length == 0 ? name : $"[{name}](https://steamcommunity.com/sharedfiles/filedetails/?id={workshop})";
     }
 
     /// <summary>
@@ -260,7 +305,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
 /// The JSON body of <c>POST /feedback</c>: the form, and which attachments will follow.
 /// </summary>
 sealed record FeedbackBody(string? Title, string? Body, string? Version, string? Commit, string? Platform, List<string>? Mods,
-    bool? Screenshot, bool? Save, bool? Log, string? Discord = null, string? Location = null, bool? Navmesh = null);
+    bool? Screenshot, bool? Save, bool? Log, string? Discord = null, string? Location = null, bool? Navmesh = null, List<string?>? Workshop = null);
 
 /// <summary>
 /// <c>POST /feedback</c>: the new form's token.
