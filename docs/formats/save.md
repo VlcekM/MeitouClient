@@ -532,7 +532,10 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   without `serialised interior` (a zone file Meitou made) gets it as 1, as the original's ruins all have it: without it the factory would
   make a ruin's interior from its layout name. A house a town override reset that stands with an interior layout placing objects, and has no
   saved entry inside it (a ruin stood up again: the original's override makes its objects anew), loses the key, so the original makes its
-  interior from its names; with it the house would load empty. **Observed** (headless, METARU): an unchanged capture writes every zone file
+  interior from its names; with it the house would load empty. A standing home an override furnished anew, in any of its town's zones
+  (`FixtureRegistry.IsRebuilt`, [town overrides](../game/factions-squads-towns.md#town-overrides)), loses its saved entries as a ruin does and
+  then the key, and its state loses Meitou's container and lock keys of the old objects; with them the original would load the old layout's
+  objects under the new names. **Observed** (headless, METARU): an unchanged capture writes every zone file
   as it does without `RuinSave`; Free Settlement saved into a zone file Meitou made gives its 8 ruins the key and a second save keeps it;
   after Stoat's Yabuta override stands 3 of half destroyed's ruins up (`39.16:12`, `:24`, `:30-Newwworld-INGAME`) those 3 states lose it.
 - Slot list: the last level layer's list (a layer without one empties it), plus slots allocated in play (the lists Meitou makes this way are within the saved ones in 181 of 183 files, the other two lack
@@ -564,14 +567,17 @@ saved platoons). A load lays each town building whose saved state names an inter
 the saved furniture from them; **Observed** headless, METARU: 972 such buildings, 117 named otherwise than Meitou's housing, all laid out with the saved names), and a
 save writes them back. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles
 name a town state; key set = the real saves' minus the runtime-only keys (`serialised interior`, `internalbuildings`, farm, craft and lock keys of buildings that have none
-here) plus `meitou lock <i>`; doors and an interior chest locked before the save are locked after reload, and a second save writes the same zone files. Base saves 1, 3,
+here) plus `meitou lock <i>`; doors and an interior chest locked before the save are locked after reload, and a second save made with no time passed writes the same zone
+files. Once time passes a live farm's `save time` is the clock then, as the original's farm save (`FUN_1400e3b80`) writes it (**Observed** headless, METARU with
+the player moved to zone 21.25: after 300 ticks all 13 `save time` values of 21.25 and 22.26 are 197.7247, the capture's clock; a reload saved with no tick keeps every
+zone file byte for byte). Base saves 1, 3,
 wade and 2 (moved to Admag) keep every zone file byte for byte except door keys added to buildings whose saved state has none (3 files in save 2, 1 in save 1).
 Loose items (`Saving/GroundItemSave`, `Data/Save/SaveGroundItems`): a load puts every `1-itemlist` item the data can make on the ground at its saved position and rotation;
 a container's contents load into its bag; a save writes each zone's list from the items lying in it, a read item with its own record (unmodelled keys kept), a new one with the key set above minus `uniform`
 and the limb keys (`persist` only on a camp's, above), id `<n>-zone<X>.<Y>-INGAME` above every such number of the file and of the read items written back (a reused id loads as the other item); entries whose item the data lacks are written back as read; a zone whose
 list is unchanged (same records, none retagged by a code mod, no container holding or read holding items) is left as it is, an empty list is not written, a file left empty goes. **Observed** (headless, METARU with the install's load order): 285 of 285 items
-loaded; a capture with nothing changed keeps all 123 zone files byte for byte; an item dropped, saved and reloaded lies where it was, and a second save writes the
-same 124 files.
+loaded; a capture with nothing changed keeps all 142 zone files byte for byte; an item dropped, saved and reloaded lies where it was, and a second save writes the
+same files.
 
 ### Locks, cages and sentences
 

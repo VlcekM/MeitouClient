@@ -31,9 +31,10 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Houses town <paramref name="site"/>'s residents afresh in its buildings <paramref name="keys"/> (a town override reads its zone back from the
-    /// level file and houses the replacement's residents there): a home takes its template's layouts and naming, any other building its level files'
-    /// (<see cref="TownBuilding.LevelLayouts"/>, <see cref="TownBuilding.LevelNaming"/>).
+    /// Houses town <paramref name="site"/>'s residents afresh in its buildings <paramref name="keys"/> (a town override houses the replacement's
+    /// residents): a home takes its template's layouts and naming; any other building its level files' naming (<see cref="TownBuilding.LevelNaming"/>)
+    /// and, unless it stands furnished, their layouts (<see cref="TownBuilding.LevelLayouts"/>): housing leaves the furniture of a building no
+    /// template takes, so a former home keeps its own (docs/game/factions-squads-towns.md "Town overrides").
     /// </summary>
     void RelayTown(World world, PopulationData data, int site, IReadOnlySet<string> keys)
     {
@@ -48,6 +49,8 @@ public sealed partial class FixtureRegistry
             if (!keys.Contains(b.Key)) continue;
             if (homes.TryGetValue(b.Key, out var t))
                 Relay(world, data, site, b, t.LayoutInterior, t.LayoutExterior, ResidentRuins.Naming(t, b.LevelNaming));
+            else if (b.Furnished && !IsDestroyed(b))
+                Relay(world, data, site, b, b.LayoutName(exterior: false), b.LayoutName(exterior: true), b.LevelNaming);
             else Relay(world, data, site, b, b.LevelLayouts.Interior, b.LevelLayouts.Exterior, b.LevelNaming);
         }
     }

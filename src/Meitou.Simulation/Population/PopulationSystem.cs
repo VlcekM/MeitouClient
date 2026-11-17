@@ -863,7 +863,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// What the original drops from a replaced town's zone file (<c>FUN_1409fe340</c>, docs/game/factions-squads-towns.md "Town overrides"): the
     /// state of the town's buildings in that zone that are not the player's (they come back as the level has them, under the town's faction now), the
-    /// item slots' timers there (due at once), and every loose item in the zone. The town's buildings in other zones change owner only.
+    /// item slots' timers there (due at once), and every loose item in the zone. The town's buildings in other zones change owner, and its homes
+    /// in every zone are furnished anew (<see cref="Locks.FixtureRegistry.IsRebuilt"/>).
     /// </summary>
     void ResetZone(World world, TownSite site)
     {

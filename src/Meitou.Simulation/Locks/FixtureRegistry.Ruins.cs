@@ -53,7 +53,7 @@ public sealed partial class FixtureRegistry
     /// The ruins of a replaced town's residents (the original reads the town's zone back from the level file and houses the replacement's residents,
     /// whose ruined templates ruin their homes and whose others stand theirs up, <c>FUN_14057f1f0</c>), for its buildings that are not the player's:
     /// in its own zone a home is a ruin as its template says, any other building as its level file has it; in other zones (which keep their state)
-    /// a home of a ruined template becomes a ruin. A loaded save applies them again from its replacements.
+    /// a home of a ruined template becomes a ruin, and one saved standing stands. A loaded save applies them again from its replacements.
     /// </summary>
     public void ApplyTownRuins(World world, PopulationData data, int site)
     {
@@ -66,9 +66,11 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Applies a town's resident ruins: the homes its override ruins are destroyed, the ones it no longer ruins restored.
+    /// Applies a town's resident ruins: the homes its override ruins are destroyed, the ones it no longer ruins restored. In other zones a home
+    /// stands when its template stands it right after its override housed the residents (<paramref name="housed"/>), or when the save has it
+    /// standing (a level ruin the override stood up, which the level data would ruin again).
     /// </summary>
-    void ApplyTownRuins(World world, PopulationData data, int site, HashSet<string> reset)
+    void ApplyTownRuins(World world, PopulationData data, int site, HashSet<string> reset, bool housed = false)
     {
         var town = data.Sites[site];
         int factionIndex = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
@@ -81,9 +83,15 @@ public sealed partial class FixtureRegistry
             bool home = homes.TryGetValue(b.Key, out var template);
             bool ruined = home && ResidentRuins.Ruins(data.Db, template!, b);
             if (reset.Contains(b.Key)) SetRuin(world, data, site, b, home ? ruined : b.LevelDestroyed);
-            else if (ruined && !IsPlayers(data, site, b, player)) SetRuin(world, data, site, b, true);
+            else if (IsPlayers(data, site, b, player)) continue;
+            else if (ruined || home && (housed || SavedIntact(b))) SetRuin(world, data, site, b, ruined);
         }
     }
+
+    /// <summary>
+    /// Whether the loaded save has a town building standing (<c>destroyed</c> false).
+    /// </summary>
+    bool SavedIntact(TownBuilding b) => Saved?.GetValueOrDefault(b.Key) is { } saved && !saved.Bools.GetValueOrDefault("destroyed", true);
 
     /// <summary>
     /// A loaded save's ruins of standing level buildings that are not the player's (an override's homes outside its zone, kept by later overrides
@@ -155,14 +163,15 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Writes each ruined or stood-up building's <c>destroyed</c> into its saved record (those outside a reset zone have no other writer of it), and
-    /// the layout names of each one laid out afresh; a building listed only for its layouts keeps its saved <c>destroyed</c>.
+    /// the layout names of each one laid out afresh; a building listed only for its layouts keeps its saved <c>destroyed</c>, but a home an override
+    /// furnished anew takes the state the override left (a saved ruin it stood up stands as the level has it).
     /// </summary>
     void WriteRuins(IReadOnlyDictionary<string, Data.Fcs.FcsRecord> states)
     {
         foreach (var (key, ruin) in _ruins)
         {
             if (!states.TryGetValue(key, out var state)) continue;
-            if (ruin.Destroyed != ruin.Building.Destroyed) state.Bools["destroyed"] = ruin.Destroyed;
+            if (ruin.Destroyed != ruin.Building.Destroyed || _rebuilt.Contains(key)) state.Bools["destroyed"] = ruin.Destroyed;
             WriteLayouts(ruin.Building, state);
         }
     }
@@ -186,11 +195,12 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Keeps a town building in <see cref="Ruins"/> while its ruin state differs from the level data's or it was laid out afresh.
+    /// Keeps a town building in <see cref="Ruins"/> while its ruin state differs from the level data's or the save's (a saved ruin an override
+    /// stood up) or it was laid out afresh.
     /// </summary>
     void ListRuin(TownBuilding b, bool destroyed)
     {
-        bool listed = destroyed != b.Destroyed || Relaid(b);
+        bool listed = destroyed != b.Destroyed || Relaid(b) || destroyed != SavedDestroyed(b);
         bool changed = !listed ? _ruins.Remove(b.Key) : !_ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed
                 || !ReferenceEquals(old.Building, b);
         if (listed) _ruins[b.Key] = new RuinedBuilding(b, destroyed);

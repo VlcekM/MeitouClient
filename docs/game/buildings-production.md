@@ -1141,7 +1141,8 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   rotation (below, [power](#power)) and they charge from its surplus and drain on its shortfall. A ruin holds no layout objects
   ([ruins](#ruined-by-residents)): a house set destroyed after its town registered loses its objects' machines, their items destroyed with them
   and none dropped, as the original's ([ruins](#ruined-by-residents)), its generators and draws leave the frame, and when it stands again its
-  objects get new machines (`DropGonePieces`; so does a house laid out anew or stood up again, either of which moves
+  objects get new machines (`DropGonePieces`; so does a house laid out anew or stood up again, or a home a town override furnishes anew under the
+  same layout names (`DropRebuilt`, [town overrides](factions-squads-towns.md#town-overrides)), the first two of which move
   `PopulationData.BuildingsRevision`: **Observed** headless, METARU, The Free City override on a registered Free Settlement: the stood-up Bar
   `44.39:2-rebirth-INGAME` gets its object's machine, the relaid Power Station `:10` its 3, the Hydroponic `:16` its 5). A save writes no entry inside a ruin, so a reloaded ruin's objects
   start new when it stands (`Saving/RuinSave`, [save](../formats/save.md#zone-files)); **Observed** (headless, METARU): the Stack's Power
@@ -1269,6 +1270,10 @@ in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` fo
 A [town override](factions-squads-towns.md#town-overrides) reads its zone back from the level file and houses the replacement's residents, so Meitou
 (`FixtureRegistry.ApplyTownRuins`) sets each of the town's buildings in its own zone that is not the player's: a home of a ruined template that can be destroyed is a
 ruin, any other home stands, and a building with nobody is as its level file has it (a resident ruin of the old town stands again). Its other zones keep their state,
-but a home of a ruined template there becomes a ruin too (not modelled: standing a ruin up there). A loaded save takes its ruins of standing buildings back, then applies its replacements again; the building states it writes carry them. The host replaces those
+but housing covers them too: a home of a ruined template there becomes a ruin, any other home stands, a level ruin among them as well. **Observed** (Beep Fan Club 1,
+an original save after Stack's takeover): in Stack's other zones 19.28, 20.28 and 20.29 every home holds its takeover template (`squad template`) and that template's
+layout names, `20.29:1019-Newwworld-INGAME`, a ruin in the level file, stands as a Battery Station with 7 objects, and the homes of `_ruined empty building` there
+(`20.29:1015`, `:1017`, `20.28:8878`) are saved destroyed. A loaded save takes its ruins of standing buildings back, then applies its replacements again, a home in
+another zone the save has standing standing too; the building states it writes carry them. The host replaces those
 buildings' level placements (drawing, navmesh, lamps) and drops a ruin's particle effects (a standing one's come back); doors, locks and indoor sight follow. **Observed** (data):
 95 overrides change ruins, e.g. Stoat (override) half destroyed 8, Catun (override) fishman takeover 14; Free Settlement to The Free City stands 7 up again.

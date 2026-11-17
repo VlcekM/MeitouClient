@@ -211,8 +211,8 @@ public sealed class ItemSlots
             };
 
             // A slot saved empty waits until its saved hour, at most its longest respawn time from now, and takes no item lying near it (that
-            // item is a neighbouring slot's).
-            if (world.Fixtures.Saved?.GetValueOrDefault(b.Key) is { } saved
+            // item is a neighbouring slot's). A house furnished anew has new item groups.
+            if (world.Fixtures.Saved?.GetValueOrDefault(b.Key) is { } saved && !world.Fixtures.IsRebuilt(b.Key)
                 && saved.Floats.TryGetValue(DueKey + s.Id[(b.Key.Length + 1)..], out float due))
             {
                 slot.DueAt = Math.Min(due, world.GameHours + Math.Max(group.MaxRespawnHours, group.MinRespawnHours));

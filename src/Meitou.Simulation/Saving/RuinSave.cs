@@ -21,19 +21,41 @@ public static class RuinSave
     /// <summary>
     /// Marks every saved ruin's interior as serialised, removes every building-list entry that stands inside a town building the world holds as a
     /// ruin, the save writes as one (<c>destroyed</c> true in <paramref name="states"/>, the zones' building states by key) and is not the player's,
-    /// and lets the original furnish the houses an override stood up again that hold no saved object.
+    /// or inside a home an override furnished anew (<see cref="Rebuilt"/>), and lets the original furnish the houses an override stood up again or
+    /// furnished anew that hold no saved object.
     /// </summary>
     public static void Write(SaveGame game, World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
     {
         foreach (var zone in game.Zones.Values) MarkRuins(zone);
 
-        var ruins = Ruins(world, data, states);
-        if (ruins.Count > 0)
+        var gone = Ruins(world, data, states);
+        gone.UnionWith(Rebuilt(world, data, states));
+        if (gone.Count > 0)
         {
-            foreach (var zone in game.Zones.Values) DropFurniture(zone, ruins);
+            foreach (var zone in game.Zones.Values) DropFurniture(zone, gone);
         }
 
         UnmarkStood(game, world, data, states);
+    }
+
+    /// <summary>
+    /// The handles (container, slot) of the standing homes a town override furnished anew (<see cref="Locks.FixtureRegistry.IsRebuilt"/>): their
+    /// saved objects are the old layout's, which the override's housing destroyed (<b>Observed</b>, Beep Fan Club 1: every home of Stack's and
+    /// Okran's Shield's replacements holds its new template's objects; docs/game/factions-squads-towns.md "Town overrides").
+    /// </summary>
+    static HashSet<(int C, int I)> Rebuilt(World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
+    {
+        var rebuilt = new HashSet<(int C, int I)>();
+        foreach (var site in data.Sites)
+        {
+            foreach (var b in site.Buildings)
+            {
+                if (!world.Fixtures.IsRebuilt(b.Key) || world.Fixtures.IsDestroyed(b)) continue;
+                if (states.GetValueOrDefault(b.Key) is { } state && Hand.Read(state, "handle") is { IsNull: false } hand) rebuilt.Add((hand.C, hand.I));
+            }
+        }
+
+        return rebuilt;
     }
 
     /// <summary>
@@ -103,9 +125,10 @@ public static class RuinSave
         && ruins.Contains((parent.C, parent.I));
 
     /// <summary>
-    /// Takes <c>serialised interior</c> off each house a town override reset that stands with its interior layout placing objects, when no saved
-    /// object stands inside it (a ruin stood up again: the original's override makes its objects anew, which Meitou does not write), so the
-    /// original makes its interior from its layout names on load as for a fresh zone; with the key it would load the house empty.
+    /// Takes <c>serialised interior</c> off each house a town override reset or furnished anew that stands with its interior layout placing objects,
+    /// when no saved object stands inside it (a ruin stood up again, a home furnished anew: the original's override makes its objects anew, which
+    /// Meitou does not write), so the original makes its interior from its layout names on load as for a fresh zone; with the key it would load the
+    /// house empty.
     /// </summary>
     static void UnmarkStood(SaveGame game, World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
     {
@@ -114,7 +137,8 @@ public static class RuinSave
         {
             foreach (var b in site.Buildings)
             {
-                if (!b.Furnished || !world.Fixtures.IsReset(b.Key) || world.Fixtures.IsDestroyed(b)) continue;
+                if (!b.Furnished || world.Fixtures.IsDestroyed(b)) continue;
+                if (!world.Fixtures.IsReset(b.Key) && !world.Fixtures.IsRebuilt(b.Key)) continue;
                 if (states.GetValueOrDefault(b.Key) is not { } state || Hand.Read(state, "handle") is not { IsNull: false } hand) continue;
 
                 if (!parents.Contains((hand.C, hand.I))) state.Ints.Remove(SerialisedKey);

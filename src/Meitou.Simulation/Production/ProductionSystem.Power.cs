@@ -357,10 +357,15 @@ public sealed partial class ProductionSystem
         SavedPieceState(world, piece) is not { } saved || saved.Bools.GetValueOrDefault("gets battery");
 
     /// <summary>
-    /// The saved GAMESTATE_BUILDING of a layout object whose zone loads it (<see cref="Saving.SavedPiece.Fresh"/>); null for none.
+    /// The saved GAMESTATE_BUILDING of a layout object whose zone loads it (<see cref="Saving.SavedPiece.Fresh"/>); null for none, and for the
+    /// objects of a house a town override furnished anew (<see cref="Locks.FixtureRegistry.IsRebuilt"/>: the save's are the old ones').
     /// </summary>
-    static Meitou.Data.Fcs.FcsRecord? SavedPieceState(World world, TownLayoutBuilding piece) =>
-        world.Fixtures.SavedPieces?.Of(piece) is { Fresh: false, State: { } state } ? state : null;
+    static Meitou.Data.Fcs.FcsRecord? SavedPieceState(World world, TownLayoutBuilding piece)
+    {
+        if (world.Fixtures.IsRebuilt(piece.House)) return null;
+
+        return world.Fixtures.SavedPieces?.Of(piece) is { Fresh: false, State: { } state } ? state : null;
+    }
 
     /// <summary>
     /// A town-less building's <c>gets battery</c>, as <see cref="LevelGetsBattery"/> reads it; with no town, the owner is its saved owner alone.

@@ -136,6 +136,23 @@ World-state replacement towns and faction ownership affect both population and b
   `0-buildinglist` entries (only those with a field at +0x88 of -1), the first GAMESTATE_BUILDING state decides: not the player's and naming
   this town (`townC` / `townCS`) drops the entry; an ITEM_PLACEMENT_GROUP state drops it whatever the town. Every `1-itemlist` item goes, and the zone counts as
   fresh, so the residents are made again ([their ruins](buildings-production.md#ruined-by-residents)). Only the town's own zone is trimmed. Existing platoons are untouched.
+- Housing (`FUN_1409370d0`, **Verified** by decompile) runs over a list of the town's buildings: it re-owns them (Building slot 0xa0,
+  `FUN_140557950`), then houses each template's home through `FUN_14092e4b0`, which destroys the interior's item groups and part of its internal
+  buildings (`FUN_14054f4d0` with 1), clears the interior and exterior layout lists and sets the template's names (`FUN_140552140`); then each
+  building's interior is loaded (`FUN_14057f820`). The list covers all the town's zones (**Observed**, Beep Fan Club 1, an original save after
+  Stack's and Okran's Shield's overrides): every home of the replacement, in each of Stack's 4 zones, holds its template's layout names and that
+  layout's objects (105 of 107 entries in `19.29:10`, 7 of 7 in `20.29:1021`), those of the trimmed zone numbered 109394 to 111201, also where
+  the name stayed (`19.29:10` Bar); `19.29:14` 'Old Storm House', which the replacement does not house and Stack's own TOWN houses as a General
+  Shop, holds 46 entries numbered 74360 to 74807, 30 of them that layout's, with interior layout name and `squad template` saved empty. Meitou
+  (`FixtureRegistry.TownReplaced`, `IsRebuilt`): each such home is laid out with its template's names, its objects' fixtures, item slots and
+  machines take none of the save's state, and a save drops the saved objects inside it and its `serialised interior`,
+  so the original lays it out from the names ([save](../formats/save.md#zone-files)); a standing furnished building no template takes keeps its layout
+  and its saved objects, with the level's naming (Stack's `19.29:14`: `squad template` empty as the original's, the interior layout name written).
+  **Observed** (headless, METARU, the same load order, Stack registered and its takeover applied): the save gives each of Stack's homes in the 4
+  zones Beep Fan Club 1's `destroyed`, interior layout name and `squad template`, with no saved object inside and no `serialised interior`;
+  `19.29:14` keeps its 46 entries; a reload stands `20.29:1019` with its 11 layout objects, and a second save writes the same zone files. A
+  second override of the registered town (the takeover's other variant) gives the same-named homes (`20.28:97` Faction HQ, `19.29:22` Bar,
+  `19.29:8` Weapon Shop) new machines for their objects, one each as before.
 - `updatedTownOverrides`: while a town is in it, the check answers "repopulate" at once (no new choice), so each load trims the zone again. The pass that places
   residents after zones load (`FUN_140a0e760`, ZoneManager state 2) places them for the collected towns not of the player's faction and erases them (`FUN_140a22ef0`).
   Nothing else touches it, and it is not saved.

@@ -509,6 +509,7 @@ public sealed partial class FixtureRegistry
         Unregister(building);
         _properties.Remove(building);
         _resetBuildings.Remove(building);
+        _rebuilt.Remove(building);
         _publicFlags.Remove(building);
         _levelPublic.Remove(building);
         _nested.Remove(building);
@@ -2245,6 +2246,13 @@ public sealed partial class FixtureRegistry
     {
         foreach (var f in list)
         {
+            // A rebuilt home's layout objects are new: its saved state is the old ones'.
+            if (_rebuilt.Contains(building) && IsLayoutObject(f, building))
+            {
+                f.Restored = false;
+                continue;
+            }
+
             f.Restored = !level || f.Kind == FixtureKind.Door && state.Ints.ContainsKey("state" + f.DoorIndex.ToString(CultureInfo.InvariantCulture));
             if (f.Contents is { } grid && Items is { } factory && ContainerSave.KeyOf(f, building) is { } contentsKey
                     && state.Strings.TryGetValue(contentsKey, out var saved))
@@ -2278,9 +2286,18 @@ public sealed partial class FixtureRegistry
     /// locked or broken. Null for any other fixture.
     /// </summary>
     static string? InteriorKey(Fixture f, string building) =>
-        f.Kind is FixtureKind.Cage or FixtureKind.Container && f.Id.Length > building.Length + 1 && f.Id[building.Length] == '/'
-                && f.Id.StartsWith(building, StringComparison.Ordinal)
-            ? "meitou lock " + f.Id[(building.Length + 1)..] : null;
+        f.Kind is FixtureKind.Cage or FixtureKind.Container && IsLayoutObject(f, building) ? InteriorLockPrefix + f.Id[(building.Length + 1)..] : null;
+
+    /// <summary>
+    /// The start of <see cref="InteriorKey"/>'s keys.
+    /// </summary>
+    const string InteriorLockPrefix = "meitou lock ";
+
+    /// <summary>
+    /// Whether a fixture of <paramref name="building"/> is one of its layout's objects (id <c>&lt;building&gt;/&lt;object&gt;</c>).
+    /// </summary>
+    static bool IsLayoutObject(Fixture f, string building) =>
+        f.Id.Length > building.Length + 1 && f.Id[building.Length] == '/' && f.Id.StartsWith(building, StringComparison.Ordinal);
 
     /// <summary>
     /// The keys of a building state, from a save's record or the level data's.
@@ -2327,6 +2344,7 @@ public sealed partial class FixtureRegistry
     {
         if (!_byBuilding.TryGetValue(buildingInstance, out var list)) return false;
         WriteReset(buildingInstance, state);
+        DropObjectState(buildingInstance, state);
         WriteProperty(buildingInstance, state);
         if (_publicFlags.TryGetValue(buildingInstance, out bool open)) state.Bools["is public day"] = open;
         WriteRecord(buildingInstance, state);

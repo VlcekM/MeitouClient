@@ -83,6 +83,11 @@ public sealed partial class ProductionSystem
     readonly HashSet<string> _piecesDestroyed = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// How many of <see cref="FixtureRegistry.RebuiltHouses"/> had their objects' machines dropped (<see cref="DropRebuilt"/>).
+    /// </summary>
+    int _rebuiltSeen;
+
+    /// <summary>
     /// The research contributions the town and outpost workers made this tick (<see cref="TownOperate"/>), which the player's operators continue
     /// (<c>FUN_140836b70</c>'s falloff counts every bench worked in the tick; serial).
     /// </summary>
@@ -301,6 +306,7 @@ public sealed partial class ProductionSystem
         if (_towns is not { } data || TownBuildingIndex() is null) return;
 
         DropGonePieces(world, data);
+        DropRebuilt(world);
         foreach (var site in data.Sites)
         {
             if (!world.Fixtures.IsRegistered(site.Index) || !_townSitesMade.Add(site.Index)) continue;
@@ -331,6 +337,35 @@ public sealed partial class ProductionSystem
 
         foreach (string id in gone) DropPiece(world, id);
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// The machines of the objects of each house a town override furnished anew since the last look (<see cref="FixtureRegistry.RebuiltHouses"/>)
+    /// go with their items, its layout's names the same or not: the override's housing clears the interior and lays it out again
+    /// (<c>FUN_14092e4b0</c>), so each object made again is new.
+    /// </summary>
+    void DropRebuilt(World world)
+    {
+        var rebuilt = world.Fixtures.RebuiltHouses;
+        if (_rebuiltSeen == rebuilt.Count) return;
+
+        for (; _rebuiltSeen < rebuilt.Count; _rebuiltSeen++) DropHouse(world, rebuilt[_rebuiltSeen]);
+        world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Drops the machines of a house's layout objects and marks its objects destroyed, so none made again takes the save's entry.
+    /// </summary>
+    void DropHouse(World world, string house)
+    {
+        string prefix = TownWorkPrefix + house + "/";
+        var made = _townWorkSites.Keys
+            .Where(id => id.StartsWith(prefix, StringComparison.Ordinal))
+            .ToList();
+        foreach (string id in made) DropPiece(world, id);
+
+        if (TownBuildingOf(house) is not { } found) return;
+        foreach (var piece in found.Building.LayoutBuildings) _piecesDestroyed.Add(piece.Id);
     }
 
     /// <summary>

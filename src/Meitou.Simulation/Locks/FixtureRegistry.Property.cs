@@ -238,6 +238,7 @@ public sealed partial class FixtureRegistry
         p.Owner = world.Player.Faction;
         p.Purchased = true;
         _resetBuildings.Remove(key);
+        _rebuilt.Remove(key);
         bool ruin = IsDestroyed(p.Building);
         _ownedProperties = null;
         foreach (var f in OfBuilding(key)) f.Owner = p.Owner;
@@ -260,25 +261,83 @@ public sealed partial class FixtureRegistry
     /// A town replaced (docs/game/factions-squads-towns.md "Town overrides"): its buildings that are not the player's go back to their level owner
     /// under the town's new faction. Those in the town's own zone also lose their saved state, as the original drops it from the zone file
     /// (<c>FUN_1409fe340</c>): they are registered again as the level has them (locks, doors, contents), and a held character is bound to its cage or
-    /// bed again. A town not registered yet takes all of that when it is.
+    /// bed again. The replacement's homes in every zone are furnished anew (<see cref="IsRebuilt"/>). A town not registered yet takes all of that
+    /// when it is.
     /// </summary>
     public void TownReplaced(World world, PopulationData data, int site)
     {
         var town = data.Sites[site];
-        int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        bool Players(TownBuilding b) => IsPlayers(data, site, b, player);
-        int LevelOwner(TownBuilding b) => data.LevelOwnerOf(b, townFaction);
-        var reset = town.Buildings.Where(b => b.Zone == town.Zone && !Players(b)).Select(b => b.Key).ToHashSet(StringComparer.Ordinal);
-        RelayTown(world, data, site, reset);
-        ApplyTownRuins(world, data, site, reset);
+        var reset = town.Buildings
+            .Where(b => b.Zone == town.Zone && !IsPlayers(data, site, b, player))
+            .Select(b => b.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var rebuilt = HousedHomes(world, data, site);
+        foreach (string key in rebuilt) MarkRebuilt(key);
+        var relaid = reset
+            .Union(rebuilt)
+            .ToHashSet(StringComparer.Ordinal);
+        RelayTown(world, data, site, relaid);
+        ApplyTownRuins(world, data, site, reset, housed: true);
+        ResetState(data, site, reset);
+        if (!_sites.Contains(site)) return;
+
+        RegisterAgain(world, data, site, reset, rebuilt);
+        Bind(world);
+        _ownedProperties = null;
+        _containerSpots = null;
+        _doorPicks = null;
+        _bedSpots = null;
+        _bedList = null;
+        _cageList = null;
+        _dummySpots = null;
+    }
+
+    /// <summary>
+    /// The keys of a replaced town's homes that are not the player's, in all its zones: the original's housing pass houses the replacement's
+    /// residents in the town's buildings wherever they stand (<c>FUN_1409370d0</c>), each home through <c>FUN_14092e4b0</c>, which clears its
+    /// interior and lays it out from the template's names.
+    /// </summary>
+    HashSet<string> HousedHomes(World world, PopulationData data, int site)
+    {
+        var town = data.Sites[site];
+        int factionIndex = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
+        string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        var players = PlayerOwnedIn(data, site, player);
+        var homes = ResidentRuins.HomeTemplates(data.Db, town.Town, faction, town.Buildings, playerId, players);
+        return homes.Keys
+            .Where(key => !players.Contains(key))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The own zone's buildings <paramref name="reset"/> lose their saved state and their residents' stamps, and are listed as reset with their level
+    /// owner.
+    /// </summary>
+    void ResetState(PopulationData data, int site, HashSet<string> reset)
+    {
+        var town = data.Sites[site];
+        int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         if (Saved is { } saved && reset.Any(saved.ContainsKey))
             Saved = saved.Where(s => !reset.Contains(s.Key)).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
         foreach (string key in reset) _residentStamps.Remove(key);
 
         foreach (var b in town.Buildings)
-            if (reset.Contains(b.Key)) _resetBuildings[b.Key] = (b, data, LevelOwner(b));
-        if (!_sites.Contains(site)) return;
+            if (reset.Contains(b.Key)) _resetBuildings[b.Key] = (b, data, data.LevelOwnerOf(b, townFaction));
+    }
+
+    /// <summary>
+    /// A registered town's buildings after its override: the reset ones registered again as the level has them, the homes furnished anew in other
+    /// zones registered again with their saved state but new objects (<see cref="Rebuild"/>), and every one that is not the player's handed to its
+    /// level owner with its fixtures and item slots.
+    /// </summary>
+    void RegisterAgain(World world, PopulationData data, int site, HashSet<string> reset, HashSet<string> rebuilt)
+    {
+        var town = data.Sites[site];
+        int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         foreach (var b in town.Buildings)
         {
             if (reset.Contains(b.Key))
@@ -288,21 +347,79 @@ public sealed partial class FixtureRegistry
                 RegisterBuilding(world, data, site, b, townFaction);
                 world.ItemSlots.PlaceBuilding(world, data, site, b);   // a house stood up again has its slots back
             }
-            else if (Players(b)) continue;
-            int owner = LevelOwner(b);
+            else if (IsPlayers(data, site, b, player)) continue;
+            else if (rebuilt.Contains(b.Key)) Rebuild(world, data, site, b, townFaction);
+
+            int owner = data.LevelOwnerOf(b, townFaction);
             if (_properties.TryGetValue(b.Key, out var p)) p.Owner = owner;
             foreach (var f in OfBuilding(b.Key)) f.Owner = owner;
             world.ItemSlots.TransferBuilding(world, b, owner);
         }
+    }
 
-        Bind(world);
-        _ownedProperties = null;
-        _containerSpots = null;
-        _doorPicks = null;
-        _bedSpots = null;
-        _bedList = null;
-        _cageList = null;
-        _dummySpots = null;
+    /// <summary>
+    /// A home outside the replaced town's zone furnished anew: registered again from its saved state, which keeps its doors and own lock while its
+    /// layout's objects start new (<see cref="Restore"/>), its doors as they stand now; its item slots go with their items and its layout's come
+    /// (<c>FUN_14054f4d0</c> destroys the interior's item groups).
+    /// </summary>
+    void Rebuild(World world, PopulationData data, int site, TownBuilding b, int townFaction)
+    {
+        var old = OfBuilding(b.Key).ToList();
+        Unregister(b.Key);
+        RegisterBuilding(world, data, site, b, townFaction);
+        CarryDoors(b.Key, old);
+
+        world.ItemSlots.EmptyBuilding(world, b);
+        world.ItemSlots.PlaceBuilding(world, data, site, b);
+    }
+
+    /// <summary>
+    /// The homes a town override furnished anew since the load (<see cref="TownReplaced"/>), the player's left out; a building the player buys
+    /// afterwards leaves it.
+    /// </summary>
+    readonly HashSet<string> _rebuilt = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Every home furnished anew, in order, once per override (<see cref="RebuiltHouses"/>).
+    /// </summary>
+    readonly List<string> _rebuiltLog = [];
+
+    /// <summary>
+    /// The homes town overrides furnished anew since the load, in order, a home once per override: production drops their objects' machines.
+    /// </summary>
+    public IReadOnlyList<string> RebuiltHouses => _rebuiltLog;
+
+    /// <summary>
+    /// Whether a town override furnished the home anew since the load and the player has not bought it since: its layout's objects are new, so no
+    /// saved state of the old ones applies to them, and a save drops the old ones' entries (docs/formats/save.md "Zone files").
+    /// </summary>
+    public bool IsRebuilt(string building) => _rebuilt.Contains(building);
+
+    /// <summary>
+    /// Lists a home as furnished anew.
+    /// </summary>
+    void MarkRebuilt(string key)
+    {
+        _rebuilt.Add(key);
+        _rebuiltLog.Add(key);
+    }
+
+    /// <summary>
+    /// Takes the saved state of a rebuilt home's old layout objects (Meitou's container and lock keys) off its record, which a save patches: the
+    /// live objects write their own.
+    /// </summary>
+    void DropObjectState(string building, FcsRecord state)
+    {
+        if (!_rebuilt.Contains(building)) return;
+
+        var contents = state.Strings.Keys
+            .Where(k => k.StartsWith(ContainerSave.KeyPrefix, StringComparison.Ordinal))
+            .ToList();
+        foreach (string key in contents) state.Strings.Remove(key);
+
+        var locks = state.Ints.Keys
+            .Where(k => k.StartsWith(InteriorLockPrefix, StringComparison.Ordinal))
+            .ToList();
+        foreach (string key in locks) state.Ints.Remove(key);
     }
 
     /// <summary>
@@ -337,6 +454,10 @@ public sealed partial class FixtureRegistry
     {
         foreach (var building in _resetBuildings.Keys)
             if (states.TryGetValue(building, out var state)) WriteReset(building, state);
+
+        // A rebuilt home of a town not registered has no live objects to write theirs (WriteBuilding drops the old keys of the others).
+        foreach (var building in _rebuilt)
+            if (!_byBuilding.ContainsKey(building) && states.TryGetValue(building, out var state)) DropObjectState(building, state);
         WriteRuins(states);
     }
 

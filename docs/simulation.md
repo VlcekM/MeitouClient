@@ -398,7 +398,7 @@ screen (`PrepareLoading`); the winner goes into `TownSite.Replacement`, and `Tow
 kept (engine choice) and the old faction when it names none; `SiteFactions` follows. The town then makes the replacement's residents even if it was made before;
 its old squads stay. Until those residents are made (`SiteState.Repopulate`, the original's `updatedTownOverrides`, not saved) each load makes them afresh without a
 new choice. Each such load resets the zone (`ResetZone`): the town's buildings there that are not the player's are registered again from the level (state, locks,
-doors, contents; `FixtureRegistry.TownReplaced`; a save writes their owner and level `destroyed` into the old record of each, fixtures or not, `WriteResets`), its other buildings change owner only, the zone's item slots are due at once and its loose items are removed.
+doors, contents; `FixtureRegistry.TownReplaced`; a save writes their owner and level `destroyed` into the old record of each, fixtures or not, `WriteResets`), its other buildings change owner, its homes in every zone are furnished anew ([town overrides](game/factions-squads-towns.md#town-overrides)), the zone's item slots are due at once and its loose items are removed.
 Saves write `replacementTown` (and the town's `faction` while replaced) and read it back; a new game or a load clears them first.
 Tests: `PopulationTests.A_town_takes_its_heaviest_qualifying_override_at_each_load_and_makes_its_residents`, `..._whose_residents_were_never_made_...`,
 `TownOverrideSaveTests`.
