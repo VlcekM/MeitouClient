@@ -1381,6 +1381,29 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// A code mod's recruit (engine API, not in the original): the living character <paramref name="character"/>, not the player's, leaves its
+    /// squad and joins the player squad <paramref name="squadId"/> as a player character, as a recruit joins (<c>DialogueSystem.Join</c>: the
+    /// player's faction, orders and class, no AI, jobs or uniform marks, written as a new member at the next save), leading it when it has no
+    /// leader. False, changing nothing, for a squad that is not a living player squad, a character that is not alive, is the player's already or
+    /// is held in a cage or on a pole,
+    /// a squad at <c>max squad size</c> or a faction at <c>max faction size</c> (as <see cref="SpawnIntoPlayerSquad"/>), and during the parallel
+    /// phase. Serial phases only.
+    /// </summary>
+    public bool JoinPlayerSquad(World world, CharacterId character, int squadId)
+    {
+        if (world.Characters.Phase == TablePhase.Parallel) return false;
+        if (world.Squads.Find(squadId) is not { } squad || !SquadManagement.PlayerSquads(world).Contains(squad)) return false;
+
+        var table = world.Characters;
+        if (!table.TryResolveNext(character, out int slot) || table.Cold(slot) is not { IsPlayer: false, DiedTick: < 0, IsImprisoned: false })
+            return false;
+        if (PlayerSquadFull(world, squad)) return false;
+
+        Dialogue.DialogueSystem.Join(world, _data, slot, squad);
+        return true;
+    }
+
+    /// <summary>
     /// Whether a player squad takes no more members: it holds <c>max squad size</c>, or the player faction has <c>max faction size</c> living
     /// characters (the recruit's caps, docs/game/dialogue.md "Recruiting"); a squad a code mod keeps out of that count
     /// (<see cref="Squad.Uncounted"/>) has only the squad cap.

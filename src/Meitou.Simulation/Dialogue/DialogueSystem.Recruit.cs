@@ -118,8 +118,6 @@ public sealed partial class DialogueSystem
     internal static bool JoinPlayer(World world, PopulationData data, int slot)
     {
         var table = world.Characters;
-        var me = table.IdOf(slot);
-        var mc = table.Cold(slot)!;
         var limits = data.Bodies.Constants;
         if (ActiveSquad(world) is not { } squad) return false;
         ExtraSquadAtTheCap(world, data, squad, limits);
@@ -129,6 +127,20 @@ public sealed partial class DialogueSystem
                 data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
         }
 
+        Join(world, data, slot, squad);
+        return true;
+    }
+
+    /// <summary>
+    /// The character at <paramref name="slot"/> leaves its squad and joins the player's squad <paramref name="squad"/> as a player character, as a
+    /// recruit does: the player's faction, orders and class, no AI, jobs or uniform marks, written as a new member at the next save; it leads the
+    /// squad when the squad has no leader. The caller has checked the squad and the caps.
+    /// </summary>
+    internal static void Join(World world, PopulationData data, int slot, Squad squad)
+    {
+        var table = world.Characters;
+        var me = table.IdOf(slot);
+        var mc = table.Cold(slot)!;
         world.Events.Line(world, "recruit", $"{EventLog.Who(world, slot)} joins the player's squad");
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
@@ -153,7 +165,6 @@ public sealed partial class DialogueSystem
         TaskStart.Stand(table, slot);
         squad.Members.Add(me);
         if (squad.Leader.IsNone) squad.Leader = me;
-        return true;
     }
 
     /// <summary>

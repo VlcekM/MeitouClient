@@ -360,7 +360,11 @@ holds refuses the second mod.
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
   added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). It returns the character's id, or none and adds nothing
   for another squad, another record type, a point that is not finite or not walkable, a unique already claimed, or the recruit's caps
-  (`max squad size`, `max faction size`); the `VisitTown` command sends a squad running a wandering trader package to a
+  (`max squad size`, `max faction size`); `PopulationSystem.JoinPlayerSquad(world, character, squadId)` moves a living character that is not
+  the player's (a traveller who settles) into a living player squad as a recruit joins (the player's faction, orders and class; no AI, jobs or
+  uniform marks; written as a new member at the next save), leading it when it has no leader, and returns false, changing nothing, for
+  another squad or character or at the same caps; a squad kept out of the faction size count (`SetSquadUncounted`) has only the squad cap
+  for both; the `VisitTown` command sends a squad running a wandering trader package to a
   player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
   trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
