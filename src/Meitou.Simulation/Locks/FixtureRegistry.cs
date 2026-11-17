@@ -167,6 +167,11 @@ public sealed partial class FixtureRegistry
     public IReadOnlyDictionary<string, FcsRecord>? Saved { get; set; }
 
     /// <summary>
+    /// The player faction's string id in the loaded save; null without a save.
+    /// </summary>
+    public string? SavedPlayer { get; set; }
+
+    /// <summary>
     /// The placements of a loaded save's building lists by building instance id (<see cref="Saving.HeldSave.BuildingSpots"/>): a prisoner whose <c>in
     /// what</c> names a generated interior cage binds to the interior cage fixture of the same record at that place (<see cref="Bind"/>).
     /// </summary>

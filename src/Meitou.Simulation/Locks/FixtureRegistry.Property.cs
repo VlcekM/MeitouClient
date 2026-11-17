@@ -463,16 +463,25 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Whether a town building is a ruin: its saved <c>destroyed</c>, but a level ruin stays one unless the player's repair saved it (<c>meitou town
-    /// construction</c>): a save from before the residents' ruins were laid out (docs/game/buildings-production.md "Ruined by residents") wrote those
-    /// buildings intact. A saved level ruin its residents stand up is not one (<see cref="SavedLevelRuin"/>).
+    /// construction</c>, or the original's repair: saved standing as the player's): a save from before the residents' ruins were laid out
+    /// (docs/game/buildings-production.md "Ruined by residents") wrote those buildings intact. A saved level ruin its residents stand up is not one
+    /// (<see cref="SavedLevelRuin"/>).
     /// </summary>
     public bool SavedDestroyed(TownBuilding b)
     {
         if (Saved?.GetValueOrDefault(b.Key) is not { } saved) return b.Destroyed;
-        if (b.Destroyed && !saved.Bools.GetValueOrDefault("meitou town construction")) return true;
+        if (b.Destroyed && !saved.Bools.GetValueOrDefault("meitou town construction") && !RepairedByPlayer(saved)) return true;
 
         return saved.Bools.GetValueOrDefault("destroyed", b.Destroyed) && !SavedLevelRuin(b, saved);
     }
+
+    /// <summary>
+    /// Whether a saved state is the original's repair of a level ruin: standing and the player's, with no Meitou construction keys (the original
+    /// loads a building's saved <c>destroyed</c> as it is, docs/game/buildings-production.md "Ruined by residents").
+    /// </summary>
+    bool RepairedByPlayer(FcsRecord saved) =>
+        SavedPlayer is { Length: > 0 } player && !saved.Bools.GetValueOrDefault("destroyed", true)
+        && saved.Strings.GetValueOrDefault("owner faction ID") == player;
 
     /// <summary>
     /// Whether a saved <c>destroyed</c> is only the level file's, written by a save from before housing stood such homes up (docs/game/

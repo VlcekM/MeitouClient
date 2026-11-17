@@ -1262,7 +1262,10 @@ and each home of a ruined template that has a destroyed mesh is set destroyed in
 the library ruins). Any other home the level file has destroyed is set standing (`WorldLevelData.ResidentRestored`, `TownBuilding.RestoredByResidents`); 34 base-game
 buildings, e.g. the Snailhouse bar of the Waystation in The Hook (`17.53:4-rebirth-INGAME`, issue #630), the Lost Library, the Lost Armoury, Mourn's shop, and one or
 two `Trashed building` homes each in Bast and Endin, whose other buildings are ruins by their default resident. A saved `destroyed` false does not undo a level ruin
-unless the player's repair saved it (`meitou town construction`; engine choice: saves made before this pass wrote those buildings intact). A saved `destroyed` true
+unless the player's repair saved it (`meitou town construction`; engine choice: saves made before this pass wrote those buildings intact), or the state is saved standing with the player's
+`owner faction ID` and no Meitou keys: the original's repair (**Observed**, Beep Fan Club 1: The Hub's Old Storm House `20.32:34-Newwworld-INGAME` and the Waystation's Watchtower
+`38.29:7-rebirth-INGAME`, level ruins saved `destroyed` false under the player faction with 18 and 11 player buildings inside; the original loads the saved `destroyed`,
+`FUN_140552b70`; `FixtureRegistry.RepairedByPlayer`, **Verified** headless: both load standing, the Hub's as the player's complete construction site). A saved `destroyed` true
 does not ruin a home the residents stand up while the save has the same `residents template` in it and no `meitou town construction` (engine choice: saves made before
 the homes were stood up wrote the level file's ruin; `FixtureRegistry.SavedLevelRuin`). A home housing ruins now stands when the save has it intact under another `residents template` that is not `building ruined` (engine choice, `FixtureRegistry.SavedStanding`: the save was housed differently, e.g. before a mod added residents; **Verified** headless on issue #673's save, where `Bounty hunting for minor factions.mod` adds a Hub resident and the squatters' ruined template lands on the bar's Storm House `20.32:4933-Newwworld-INGAME`). A town's baked distant mesh is a fixed file of the install, drawn as it is (as
 in the original). Meitou: `ResidentRuins.CanBeDestroyed` tests `is wall gate` for the class.
