@@ -2,6 +2,15 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.13.0
+
+- Mods page: mods Meitou has built in say so on their row, and Loot-Scoot-Execute gets a suggested Meitou mod in its place.
+- A covered mod notes when its workshop page has updated since Meitou checked it; other RE_Kenshi mods get a Request button.
+- RE_Kenshi mods with file rebinds or sound banks say so on their row: rebinds are applied to the map files, sound banks load
+  before the game's.
+- Arrange and the details pane accept a header dependency named without ".mod", as the game's load order already did.
+- The game language follows Steam's language override, and mods can ship their own meitou.po translations.
+
 ## v1.12.1
 
 - Graphics page: an unchanged Faithful look no longer shows the "As the game ships" label.
