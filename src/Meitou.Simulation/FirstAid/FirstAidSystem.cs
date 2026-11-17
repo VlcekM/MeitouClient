@@ -707,16 +707,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// One update without a kit: every part takes 1 HP a second, nothing drains; ends once the parts are bandaged up.
+    /// One update without a kit: 1 HP a second, one part after another in part order as with a kit; nothing drains; ends once the parts are
+    /// bandaged up.
     /// </summary>
     void TreatKitless(World world, int m, int p, CharacterCold medicCold, CharacterCold patientCold, CharacterStats stats, RaceData medicRace,
         MedicalState body, RaceData race, float dt)
     {
         patientCold.StuckBolts = null;   // bolts go with the first update that finds no open wound (FUN_14064d800 -> FUN_14052bc10)
 
-        // Without a kit every part takes 1 HP a second, organic or robotic alike, and nothing drains (FUN_140649a00). Done as with a kit: once
-        // the parts are bandaged up,
-        // healing turns bandage into flesh and float dust leaves a sliver of room every update, which would keep the treatment going for ever.
+        // Without a kit 1 HP a second goes to the parts, organic or robotic alike, in part order as with a kit, and nothing drains (FUN_140649a00).
+        // Done as with a kit: once the parts are bandaged up, healing turns bandage into flesh and float dust leaves a sliver of room every update,
+        // which would keep the treatment going for ever.
         if (body.BandageRoom(race, false) + body.BandageRoom(race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
         {
             Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
