@@ -192,6 +192,17 @@ public sealed class Squad
     /// </summary>
     public SortedDictionary<string, string> ModTags { get; } = new(StringComparer.Ordinal);
     /// <summary>
+    /// A player squad a code mod gave its own purse (<see cref="SetSquadPurse"/>): its members pay an NPC-style purchase from <see cref="Money"/>
+    /// instead of the player's money, and what a shop it owns earns stays in it (a shopkeeper keeping its takings). Meitou only; saved with its
+    /// money, hashed while set.
+    /// </summary>
+    public bool OwnPurse { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="OwnPurse"/> (its manifest id); null: none named. A load without that mod running pours the purse into the
+    /// player's money and ends it (<see cref="SquadManagement.DropUnownedPurses"/>). Saved, hashed while set.
+    /// </summary>
+    public string? PurseOwner { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -382,6 +393,8 @@ public sealed class SquadRegistry
                 hasher.Add(Rng.StableHash(mod));
                 hasher.Add(Rng.StableHash(tag));
             }
+            if (s.OwnPurse) hasher.Add(0x50757273);
+            if (s.PurseOwner is { } purseOwner) hasher.Add(Rng.StableHash(purseOwner));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

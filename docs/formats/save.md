@@ -372,8 +372,9 @@ rewrites the collection in the squad's current order, slots and handles unchange
 Meitou-only, for an [autonomous squad](../simulation.md#autonomous-player-squads) (`Saving/AutonomySave`): `meitou autonomous` (bool), its packages in the
 NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou independent` (bool) for one the player does not lead; `meitou home` (string: a town building key or a player building id) while a home is
 assigned; `meitou autonomy owner` (string: the manifest id of the code mod that switched it on) while it names one. Other player platoons' AI keys stay as read.
-A squad a code mod keeps out of the faction size count (`Saving/UncountedSave`, [modding](../modding.md#registration-surface)): `meitou uncounted` (bool) and
-`meitou uncounted owner` (string: the mod's manifest id), each only while set. Each code mod's tag on the squad (`Squad.ModTags`, `Saving/ModTagSave`):
+A squad a code mod keeps out of the faction size count (`Saving/ModSquadSave`, [modding](../modding.md#registration-surface)): `meitou uncounted` (bool) and
+`meitou uncounted owner` (string: the mod's manifest id), each only while set; a squad a mod gave its own purse: `meitou purse` (string: its money
+in cats) and `meitou purse owner` (string: the mod's manifest id), each only while set. Each code mod's tag on the squad (`Squad.ModTags`, `Saving/ModTagSave`):
 `meitou mod tag <mod id>` (string), one key per mod, only while set.
 
 ### Missing character records

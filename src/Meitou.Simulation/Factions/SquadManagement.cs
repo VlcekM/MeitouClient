@@ -57,6 +57,13 @@ public sealed record DismissCommand(CharacterId Character) : SquadCommand;
 public sealed record SetSquadUncounted(int Squad, bool On, string? Owner = null) : SquadCommand;
 
 /// <summary>
+/// A code mod gives a squad of the player's faction its own purse (<paramref name="Own"/>, <see cref="Squad.OwnPurse"/>) or ends it, pouring what
+/// is left into the player's money. <paramref name="Owner"/>: the mod's manifest id, so a load without the mod ends it the same way (one that
+/// names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadPurse(int Squad, bool Own, string? Owner = null) : SquadCommand;
+
+/// <summary>
 /// The player's squads (docs/game/ui-screens.md "Squads tab", from the original's <c>SquadManagementScreen</c>): their order, the active squad, and
 /// the squad screen's commands with the original's limits and refusals (CONSTANTS <c>max squads</c>, <c>max squad size</c>, <c>max faction size</c>).
 /// A player squad's first member leads it.
@@ -210,6 +217,7 @@ public static class SquadManagement
                     world.Post("You must have at least one squad.");
                     return;
                 }
+                EndPurse(world, doomed);   // a purse a code mod gave it goes back to the player's money
                 world.Squads.Remove(doomed.Id);
                 world.SystemOf<PopulationSystem>()?.ForgetSquad(doomed.Id);
                 Renumber(PlayerSquads(world));
@@ -235,6 +243,9 @@ public static class SquadManagement
             case SetSquadUncounted uncounted:
                 SetUncounted(world, uncounted);
                 break;
+            case SetSquadPurse purse:
+                SetPurse(world, purse);
+                break;
         }
     }
 
@@ -248,6 +259,56 @@ public static class SquadManagement
         squad.Uncounted = command.On;
         if (!command.On) squad.UncountedOwner = null;
         else if (command.Owner is { Length: > 0 } owner) squad.UncountedOwner = owner;
+    }
+
+    /// <summary>
+    /// Gives a squad of the player's faction its own purse or ends it (its money into the player's), noting the mod that set it.
+    /// </summary>
+    static void SetPurse(World world, SetSquadPurse command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+
+        if (!command.Own)
+        {
+            EndPurse(world, squad);
+            return;
+        }
+
+        squad.OwnPurse = true;
+        if (command.Owner is { Length: > 0 } owner) squad.PurseOwner = owner;
+    }
+
+    /// <summary>
+    /// Ends a squad's own purse: what is left goes into the player's money.
+    /// </summary>
+    static void EndPurse(World world, Squad squad)
+    {
+        if (squad.OwnPurse)
+        {
+            world.Player.Money += squad.Money;
+            squad.Money = 0;
+        }
+
+        squad.OwnPurse = false;
+        squad.PurseOwner = null;
+    }
+
+    /// <summary>
+    /// Ends every squad purse a code mod gave whose mod is not running now (<paramref name="running"/>: whether a mod id runs), pouring each into
+    /// the player's money. Between ticks after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedPurses(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.PurseOwner is not { } owner || running(owner)) continue;
+
+            EndPurse(world, squad);
+            dropped++;
+        }
+
+        return dropped;
     }
 
     /// <summary>

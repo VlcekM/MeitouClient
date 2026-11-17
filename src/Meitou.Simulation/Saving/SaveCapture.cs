@@ -695,7 +695,7 @@ public static partial class SaveCapture
         kept.Add(platoon.Name);
         NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
         AutonomySave.Write(platoon.Record, squad);
-        UncountedSave.Write(platoon.Record, squad);
+        ModSquadSave.Write(platoon.Record, squad);
         ModTagSave.Write(platoon.Record, squad.ModTags);
         if (index >= 0)
         {

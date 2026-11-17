@@ -186,7 +186,10 @@ sealed class GameMods(GameHost host)
         if (dropped > 0) Notice($"{dropped} squad(s) run by a mod that is not loaded are yours again.");
 
         int counted = Simulation.Factions.SquadManagement.DropUnownedUncounted(world, running.Contains);
-        if (counted > 0) Notice($"{counted} squad(s) a mod that is not loaded kept out of your faction size count again.");
+        if (counted > 0) Notice($"{counted} squad(s) a mod that is not loaded kept out of your faction size count are counted again.");
+
+        int purses = Simulation.Factions.SquadManagement.DropUnownedPurses(world, running.Contains);
+        if (purses > 0) Notice($"{purses} squad purse(s) of a mod that is not loaded went into your money.");
     }
 
     /// <summary>
