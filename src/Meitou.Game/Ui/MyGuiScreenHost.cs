@@ -497,12 +497,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
         var (id, c) = picked;
         var s = _screens[id];
-        if (!s.Panel)
-        {
-            _open.Remove(id);
-            _open.Add(id);
-        }
-
+        if (!s.Panel) Raise(id);
         if (!c.Enabled) return true;
         if (PressWidget(id, c, p)) return true;
 
@@ -528,6 +523,27 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
         BeginWindowDrag(id, s, p);
         return true;
+    }
+
+    /// <summary>
+    /// Raises a pressed window to the top, below the pass-through windows over it: a click through the title's new-game window onto the title
+    /// must not bury the window under the title's modal surroundings (#924).
+    /// </summary>
+    void Raise(string id)
+    {
+        int at = _open.IndexOf(id);
+        if (at < 0) return;
+
+        var passing = _open.Skip(at + 1)
+            .Where(i => PassThrough?.Invoke(i) == true)
+            .ToList();
+        _open.RemoveAt(at);
+        _open.Add(id);
+        foreach (string over in passing)
+        {
+            _open.Remove(over);
+            _open.Add(over);
+        }
     }
 
     /// <summary>
