@@ -136,6 +136,11 @@ public sealed class Platoon
     /// </summary>
     public bool Regenerate { get; set; }
     /// <summary>
+    /// A <see cref="Regenerate"/> platoon that came into the world with only its dead: it stays as it is (its dead lying) while its place is wanted,
+    /// and is made afresh only when it next comes into the world after leaving it (the original keeps it active until it unloads). Not saved.
+    /// </summary>
+    public bool AwaitsLeave { get; set; }
+    /// <summary>
     /// A save's town squad the game never made (<see cref="Saving.SaveLoader"/> "unmade": no file, <c>never been activated</c>, a <c>char count</c>
     /// and a home building): a stand-in made from its template when it activates (<c>FUN_1404ffad0</c>), into this same platoon: it then keeps the
     /// save's record (<see cref="Saved"/>, no members) and holds its squad as a population's own (<see cref="Stored"/>), and this is cleared. Not

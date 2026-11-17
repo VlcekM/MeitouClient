@@ -165,6 +165,12 @@ public sealed partial class PopulationSystem
                         break;
                     }
 
+                    if (p.AwaitsLeave)
+                    {
+                        if (!Wanted(world, p)) p.AwaitsLeave = false;
+                        break;
+                    }
+
                     if (p.State == PlatoonState.Unloaded && Dwelt(world, p, dt) && Wanted(world, p)) Activate(world, p);
                     break;
                 case PlatoonState.Loaded:
@@ -1026,6 +1032,7 @@ public sealed partial class PopulationSystem
         // dropped (its record stays in the save, which will try again at the next load).
         if (p.Unmade)
         {
+            p.Regenerate = false;   // built from its template either way (FUN_1404ffad0)
             if (MakeUnmade(world, p) is null)
             {
                 if (p.Saved is { } none) none.PlatoonId = -1;
@@ -1035,11 +1042,14 @@ public sealed partial class PopulationSystem
             return;
         }
 
-        // A town's squad that lost too many: made afresh (its characters are gone).
+        // A town's or nest's squad that lost too many: made afresh (its characters are gone).
         if (p.Regenerate)
         {
             p.Regenerate = false;
-            if (Regenerate(world, p) is not null) return;   // else (the template plans no one now) it comes back as it is
+            var remade = p.Origin < 0 ? RegenerateWild(world, p)
+                : p.Pinned ? Regenerate(world, p)
+                : RenewRoamer(world, p);
+            if (remade is not null) return;   // else (the template plans no one now) it comes back as it is
         }
 
         if (OffscreenHealing) Recover(world, p);
@@ -1142,7 +1152,10 @@ public sealed partial class PopulationSystem
 
         if (squad is null)
         {
-            // Nobody to spawn: the pool is free to make another (a saved platoon whose members are all dead stays in the save as it is).
+            if (HoldsDead(p)) return;
+
+            // Nobody to spawn: the pool is free to make another (a saved platoon whose members are all dead lies as corpses with no squad; a save
+            // keeps it by the declared-dead rule, SaveCapture.DropsDead).
             if (p.Saved is { } empty) empty.PlatoonId = -1;
             world.Platoons.Remove(p.Id);
             return;
@@ -1155,6 +1168,24 @@ public sealed partial class PopulationSystem
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;
         if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
+    }
+
+    /// <summary>
+    /// A save's platoon that came in with only its dead is declared dead as it comes in (<c>Platoon::declareDead</c> <c>FUN_140797090</c>,
+    /// <b>Verified</b>): one whose template <c>regenerates</c> and whose town or nest lives is only marked (+0x118) and stays, its dead lying, to be
+    /// made afresh when it next comes in (<see cref="Platoon.AwaitsLeave"/>); true then.
+    /// </summary>
+    bool HoldsDead(Platoon p)
+    {
+        if (p.Saved is not { Members.Count: > 0 } saved) return false;
+
+        bool regenerates = p.Origin >= 0 ? Regenerates(p.TemplateId, p.Origin) : saved.WildSite >= 0 && NestRegenerates(p.TemplateId, saved.WildSite);
+        if (!regenerates) return false;
+
+        p.Regenerate = true;
+        p.AwaitsLeave = true;
+        p.State = PlatoonState.Unloaded;
+        return true;
     }
 
     /// <summary>

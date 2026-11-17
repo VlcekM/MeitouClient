@@ -460,11 +460,15 @@ Implemented (`PopulationRoaming.cs`):
     and `popd` and is `started`; a started town never makes residents again, even with every squad dead (it holds what is left). Town roaming
     pools stay as loaded (0 in every base save) and `RoamingShare` still caps roaming squads (see the census conflict in
     [off-screen world](game/factions-squads-towns.md#off-screen-world)).
-  - **Regeneration**: on a town's load, each of its resident squads (platoon id order; of the town's faction, engine choice after the census) that lost ≥ 60 % of its spawn size,
-    while the losses fit `pop` less the living resident members so far, comes back made afresh from its template at its place and home, as a
-    new kept platoon (the old one's characters are dropped; a save's leaves the save). A template whose members are all by chance gets up to
-    8 rolls. **Observed** (headless): new game, Hub squatters 1 of 3 left → 2 fresh; save 2, Squin's Town Guard 2 of 5 → 4 fresh; both the
-    same after save and load.
+  - **Regeneration**: on a town's load, each squad of its resident pool (`sqt` 1: residents and bar squads; platoon id order; of any faction on the town's side of player and non-player) that lost ≥ 60 % of its template's expected size
+    (lost: that size less its count, a save's platoon's `char count` with its dead), while the losses fit `pop` less the count of all its pools' members and the losses
+    marked so far, comes back made afresh from its template at its place and home, into
+    the same platoon (its old characters dropped, its save record and name kept). A template whose members are all by chance gets up to
+    8 rolls. A `regenerates` squad of that pool is marked at any loss, past the share and budget tests. The town's own roamers out of the world follow
+    (their pool's budget, the running living shared), each marked one coming in rolled from its template into the same platoon. A nest's load runs the same pass over the
+    save's platoons of the nest (its roaming pool: share and budget tests only), and a marked one comes back made afresh into the same platoon, round the nest, at its
+    place ([off-screen world](game/factions-squads-towns.md#off-screen-world)). A save's `regenerates` platoon that comes in with only its dead stays as its corpses
+    and is made afresh when it next comes in after leaving the world.
   - **Nests**: the pool starts at 0.7 × `nest resident population` (or the save's `pop2`); a load fills it to `floor(pop2)` members, unless a player character is within 1250 of the centre it picks (then
     it only weighs, as a top-up; engine choice, the original has no load fill: #731, a save loaded beside a nest made squads 150 from the player); one nest a tick in turn (tick mod nest count; the tick stands in for the original's frame),
     so each every N ticks, N = all nests: a loaded one with room makes one squad (rolls keyed after the load's), unless a player character is within 1250, then it only weighs.

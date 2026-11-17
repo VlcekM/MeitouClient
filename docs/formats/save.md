@@ -396,8 +396,8 @@ the same characters by name, record and stats in each town). A count per
 template would not do: housing spends a building on a slot whose rolled squad is empty (68 of 200 `hub squatters` plans), so a town's saved squads are fewer than its entries' `v0`, and the rest rolled
 again at load makes new squads (**Observed**, headless new game with town buildings: The Hub 4 of 7 `hub squatters` slots, 36 NPCs; reloaded 42, three more). Each platoon is made with its town (when the town's zone is active, as the
 town's fresh squads are). On save, a restored platoon is rewritten
-only once loaded (its characters from the world), otherwise only its position/package; a squad the population made is written as a new PLATOON with the
-`SaveBuilder` key set plus `basetown` (town id), `hometown` (the town state's `hand`), `homebuilding` (below), `is resident`, `sqt`, `map area sid` / `map area name`
+only once loaded (its characters from the world), otherwise only its position/package; a squad the population made is written as a new PLATOON (a regenerated one into its own
+platoon's record, its old characters removed, [regeneration](../game/factions-squads-towns.md#off-screen-world)) with the `SaveBuilder` key set plus `basetown` (town id), `hometown` (the town state's `hand`), `homebuilding` (below), `is resident`, `sqt`, `map area sid` / `map area name`
 (the BIOME_GROUP of its cell) and `currentPackage`. Dialogue-given AI (`AiSave`, every written or rewritten platoon but a wild one): `contractjob` (the contract
 AI_PACKAGE id, "" none), `jobhr` (float, the game hours it ends at: the start time + its hours, 10 min under 1 h; `FUN_140272240`), `replacementAI` (the `change AI` package,
 "" the template's), read and written by `FUN_140272c20` / `FUN_14026c2d0` (**Observed**). The running package writes and reads its own handles on the same record: `mission target` (whom the contract is aimed at, a bodyguard's employer), `mission town`, `mission employer` (`FUN_140269640` / `FUN_140269790`, package vfuncs +0x20 / +0x28, **Verified**); Meitou keeps `mission target` (a headless capture of a bodyguard contract reads back to the employer, **Observed**) and a bodyguard contract's
@@ -428,11 +428,19 @@ PLATOON keys (**Verified**):
   `char count` its members, an unloaded one with +0x114 and its kept `char count`, so a made platoon is never written as never activated. A declared-dead one (`dead`
   +0x1f0, a platoon of a faction whose vfunc-0x58 object has +0x250 null, likely not the player's, **Observed**) is not written (dropped from the save) unless it is
   loaded and a member is alive (+0x5bc clear) or carried (+0x3d4), or a platoon of the list from `FUN_1407f2490` (that it is the player's: **Observed**, inferred) is within 500 on X/Z (250000 squared); then it
-  is written as above with its dead (**Verified**, decompile). A wiped `regenerates` squad is not declared dead and is written as usual. Meitou (`SaveLoader.Unmade`, engine rule): only a file-less, never-activated town platoon with `char count` > 0 and a BUILDING
+  is written as above with its dead (**Verified**, decompile). A wiped `regenerates` squad is not declared dead and is written as usual. Meitou applies the rule to
+  every NPC squad it writes (`SaveCapture.KeepsDead`): a squad of no platoon (wild, stray, or a town's) is declared dead with no one left alive unless it is a
+  town's or nest's whose template `regenerates` and whose site is not `ded`, and its place is then where its last member died; a save's platoon that loaded with
+  only its dead (made as corpses with no squad) counts as declared dead at its saved place, its decayed corpses leaving the list; a declared-dead one not made
+  yet since the load counts as loaded at its saved place (the original makes the loaded zones' platoons active at load); one unloaded since (a campaign's
+  stand-in or stored squad) is dropped. **Observed** (headless, #860, two save/load rounds each): 21 Holy Nation soldiers of a platoon and two wild
+  squads of 13 and 7, killed beside the player, load back as corpses where they fell, also when the second save is made 5 ticks after the load; Squin's wiped `regenerates` gate guards, saved with
+  the player 1400 away, are made afresh at the load; with the player over 500 away at the second save, the soldiers are
+  dropped; knocked-out NPCs round-trip either way. Meitou (`SaveLoader.Unmade`, engine rule): only a file-less, never-activated town platoon with `char count` > 0 and a BUILDING
   `homebuilding` becomes a stand-in made from its template on activation (in the player's box at load, else after its 5 s dwell, `PopulationSystem.ActivatesAtLoad`);
   other file-less town platoons stay in the save as they are. Its pool counts `char count` until it is made, and a save then writes its squad into the same record
   (name, handle, `is resident`, `sqt`, homes kept) with `never been activated` false; making it clears the flag on its record at once. Wiped out before a save, it
-  follows the rule above (a dead one dropped, else written with its dead or, unloaded, with none: Meitou stores no corpses), so it is never made again at a later load. A town that makes its own residents (pool not `started`, no other squad of the
+  follows the rule above (a dead one dropped, else written with its dead), so it is never made again at a later load. A town that makes its own residents (pool not `started`, no other squad of the
   save) drops its unmade stand-ins instead, so they are not doubled.
 - `hometown` (handle) puts the platoon into that town's or nest's pool at load (`FUN_1407ec8d0`; the platoon's faction and player status must match the town's);
   the pool counts living characters, `char count` while the platoon is not active (`FUN_1408f6a40`). `basetown` is only kept as a TOWN record pointer.

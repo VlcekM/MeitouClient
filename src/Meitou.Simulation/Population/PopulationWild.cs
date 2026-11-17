@@ -298,7 +298,7 @@ public sealed partial class PopulationSystem
         foreach (var p in world.Platoons.All)
         {
             if (p.SquadId >= 0 || p.Dead) continue;
-            if (p.Saved is { } sp ? sp.Members.Any(m => !m.Dead && !m.Gone) : p.Stored is not null) Add(p.TemplateId);
+            if (p.Stored is not null || p.Saved is { } sp && sp.Members.Any(m => !m.Dead && !m.Gone)) Add(p.TemplateId);
         }
 
         foreach (var list in _keptWild.Values)
@@ -331,9 +331,9 @@ public sealed partial class PopulationSystem
         foreach (var p in world.Platoons.All)
         {
             if (p.Saved is not { Wild: not null } sp || sp.WildSite != site) continue;
-            // A never-made one (SaveLoader.UnmadeWild) counts its `char count`, then, once made, its squad's living (LivingOf): it has no saved
-            // members.
-            int alive = sp.Members.Count == 0
+            // A never-made one (SaveLoader.UnmadeWild) counts its `char count`, then, once made (or made afresh), its squad's living (LivingOf):
+            // it has no saved members that count.
+            int alive = sp.Members.Count == 0 || p.Stored is not null
                 ? LivingOf(world, p)
                 : sp.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true));
             if (alive == 0) continue;
@@ -752,11 +752,13 @@ public sealed partial class PopulationSystem
         {
             // The nest's pool (docs/simulation.md "Off-screen tier"): up to its current max, less the save's members it holds; a wiped-out nest
             // makes none.
+            // Its save's squads that lost too many are marked to be made afresh first, their losses held for them (FUN_14092a020).
             var pools = NestPools(world, site);
+            int remade = CheckNestRegeneration(world, site, state);
             int cap = pools.Ded ? 0 : (int)MathF.Floor(pools.Roaming.Current);
             var counts = new int[site.Nest!.RoamingSquads.Count];
             for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(site.Nest.RoamingSquads[i].Id);
-            var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64, Guard: true);
+            var budget = new NestBudget(cap, (hold?.Members ?? 0) + remade, counts, 0, 64, 64, Guard: true);
             if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, regions, players, budget));
             else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, regions, players, budget)));
             return;

@@ -583,11 +583,27 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **Pool growth** (`FUN_1408f4c20`): each pool's current max (`pop`) grows `+0.21818` per game hour (5.24 a day) up to its desired max
   (`popd`), for every town whether loaded or not; roaming grows only once residents are within 1 of full, and
   keeps its time stamp meanwhile, so the waiting time is credited when it next grows (**Verified**, `FUN_1408f6760`, `FUN_1408f4c20`). Towns never spawn squads over
-  time by themselves (only nests call the pool spawner). Once per town load (`0x14092a020`, **Verified**) a squad that lost ≥ 0.6 × its spawn size (double compare), if
-  the budget allows, is marked to be made afresh from its template on its next activation. The same pass runs over the roaming pool (its own budget, shared running total) and a flag at `+0xd9` forces a resident squad's mark past both tests; neither is modelled.
+  time by themselves (only nests call the pool spawner). Once per town or nest load (`0x14092a020`, slot 5 of the Base, Town and Nest population managers, run by
+  `TownBase`'s activation `FUN_14092dbb0`, which `Nest` shares, while the site is not `ded` and not already active, **Verified**) a squad that lost ≥ 0.6 × its size
+  (`+0xa4`, double compare; lost = `+0xa4` less its count `FUN_140792f90`), if the losses so far fit the pool's current max less its living, is marked to be made afresh from its template on its next activation
+  (+0x118 = 1; `FUN_1404ffad0` then deletes the old characters and builds the template into the same platoon). The pass looks only at a pool member whose `separated`
+  hand (`+0xb8`) is null and whose `canref` (`+0xd8`) is set; it runs over the residents' pool, where the template's `regenerates` (`+0xd9`) forces the mark at any loss,
+  then over the roaming pool (its own budget, the running total shared), which has no such override. A nest's squads are all roaming-pool ones. The running count starts as the count of
+  every member of both pools, whatever its state (`FUN_1408f6a40`). A platoon's `+0xa4` is its template's expected size (at least 1), set by `FUN_1407ed0f0` for a new
+  platoon and a save's alike from `FUN_1408fe0f0` (no other writer); its count is its living while active, else the count it kept (`+0xa0`): a save's platoon its
+  `char count` (dead included), so a squad saved with its dead lying has lost only the members no longer in its list (**Verified**, `FUN_1407ed0f0`, `FUN_140792f90`). Pool membership has no faction test (**Verified**, `FUN_1407ec8d0`): a platoon joins the pool (its
+  `+0xa8`) of its home town (a save's platoon: its `hometown`, `FUN_140624640`) when its faction and the town's owner are both the player's or both not (faction
+  `+0x250`), and the town's spawn puts a `roaming military` template's platoon in pool 2 (`FUN_14057f4c0`). Meitou (`CheckRegeneration`, `CheckNestRegeneration`):
+  `PoolSize`, `PoolCount`; both of a town's passes, each over its pool's platoons outside a campaign (`PoolOf`: a save's `sqt`; one the population made is in pool 1 when town-bound and not
+  `roaming military`, as it is saved; residents and bar squads alike, so the Hub's `Mercenary guild` counts), a town-bound one remade at its home and a roamer by
+  `RenewRoamer`, and a nest's (`RegenerateWild`), in platoon id order and of any faction on the town's side; a declared-dead platoon is out of its pool and not looked at. A marked
+  platoon is remade into itself (`TakeRemade`): its old characters leave, and a save writes the new squad into its record, name and handle kept (**Observed** headless:
+  bench-bases Squin, a marked `Shek Town Guard` came back as 5 in `Shek Kingdom_289` and kept that name and the 5 through a second save and load). **Observed** headless
+  with the counts above: bench-bases Squin, `Shek Town Guard` saved with 3 of 4 dead, and METARU's Hub, `Mercenary guild` saved with 4 of 6 dead, are not marked at the
+  load (their `char count` holds the dead).
 - **Despawn cost** (**Verified**, `FUN_1406bab60`, `FUN_140796b30`): a non-kept platoon that leaves while not intact (the platoon flag, below)
   is taken out of its pool (platoon +0xa8: 1 residents, 2 roaming) and, while that pool is above 0, lowers it by its living members (no floor);
-  a `regenerates` platoon (+0xd9) is charged nothing and only marked to be remade. The platoon's faction's prosperity also drops by 10, floor 0, when its +0xa4 is above 0, pool or not (`FUN_1406bab60`, **Verified**; +0xa4 is the count `FUN_14079acf0` compares with 4, read as the member count: **Observed**). Meitou: roamers and a save's wild platoons that despawn Faithful (`PayRoamerDespawn`, both costs) and nests
+  a `regenerates` platoon (+0xd9) is charged nothing and only marked to be remade. The platoon's faction's prosperity also drops by 10, floor 0, when its +0xa4 is above 0, pool or not (`FUN_1406bab60`, **Verified**; +0xa4 is the template's expected size above, which `FUN_14079acf0` compares with 4). Meitou: roamers and a save's wild platoons that despawn Faithful (`PayRoamerDespawn`, both costs) and nests
   (`PayNestDespawn`). Not intact is the squad-intact rule for all of them (`SquadIntact`); the pool is only charged while above 0, no floor; the prosperity drop applies to every wild site's squad that leaves not intact (nest or sector).
 - **Town pools in saves** (**Observed**, saves 1, 2, wade): every town has `pop` = `popd`, `started` true when populated, `popd2` 0 (none of
   304), while `read_roaming_population_n4` (`0x1408f98d0`) would set pool 2 to the faction's `roaming population`. `pop` is near the living members of the town's resident platoons (`is resident`) of the town's own faction:
@@ -602,8 +618,13 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   The check runs only while the zone at the town's position is loaded (zone byte +0xb1, **Verified** `FUN_1408f6760`). There is no faction test anywhere on the path (**Verified**: the town list's tick `FUN_14092d850`
   -> each town `FUN_14092cd20` -> `FUN_1408f6760` runs the check for every town whose zone is loaded), so Meitou judges the player's towns too.
 - **`regenerates`** (SQUAD_TEMPLATE, 18 true; `Platoon::declareDead`, **Verified**): when the last member dies and the home town is not `ded`, the platoon is not declared
-  dead but set to CM_REFRESH (remade on next activation). Meitou: a loaded pinned platoon whose members are all dead (`DeclareDead`), a town squad that unloads with no one alive, or an
-  empty pinned platoon at the town's load, is marked to regenerate (whatever the budget).
+  dead but set to CM_REFRESH (remade on next activation); the home is the platoon's town or nest. A `regenerates` platoon leaving the world damaged is not charged to its
+  pool, only marked (`FUN_140796b30`, **Verified**). Meitou: a loaded pinned platoon whose members are all dead (`DeclareDead`), a town squad that unloads with no one alive,
+  or a resident platoon with any loss at the town's load, is marked to regenerate (whatever the budget); a nest's squad of such a template is written with its dead and not
+  charged to the nest's pool when it leaves (`PayNestDespawn`). A save's platoon that comes in with only its dead is declared dead then (`HoldsDead`): one that regenerates
+  is marked and stays, its dead lying and its record written not `dead`, until it comes in again after leaving the world (`Platoon.AwaitsLeave`), when it is made afresh
+  (**Observed** headless, bench-bases: Squin's `Shek Gate Guards`, all 5 killed, and a Wolf Den pack of 2 with `regenerates` forced on, saved and loaded twice, lie dead
+  with their platoon kept each time).
 - **Nests** (`NestPopulationManager::vfunc_4`): pool 2 starts at 0.7 × `nest resident population` and grows as above. While the nest's
   zone is loaded it spawns one squad per visit, and it is visited once every N frames, N = every nest in the list, loaded or not (`TownList::vfunc_4`'s nest cursor, **Verified**) (weight `max(0, v0 − existing) × faction wealth`; an entry passes when its size fits the free budget `floor(pop2)` − living, or
   the pool is empty and more than 4 are free, so a squad bigger than the budget can open a nest: `FUN_1408f7e80`, **Verified** by code) unless a

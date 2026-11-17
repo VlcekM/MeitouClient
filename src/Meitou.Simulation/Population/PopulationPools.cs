@@ -1,5 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
+using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 
@@ -209,6 +211,11 @@ public sealed partial class PopulationSystem
     public const int WipeRoamingLiving = 25;
 
     /// <summary>
+    /// The share of its size a squad must have lost to be made afresh at its town's or nest's load (<c>FUN_14092a020</c>, a double, <b>Verified</b>).
+    /// </summary>
+    public const double RegenerationLoss = 0.6;
+
+    /// <summary>
     /// Town wipe-out (<c>TownPopulationManager::vfunc_4</c> <c>FUN_1408f7a80</c>, docs/game/factions-squads-towns.md "Town wipe"): a started town in
     /// a loaded zone that is not yet <c>ded</c>, whose roaming pool is at most 3 and whose roaming platoons have at most 25 living, and none of whose
     /// resident squads (any with a home; engine reading of the resident pool) is intact (<see cref="ResidentIntact"/>: the platoon's flag, which a
@@ -302,7 +309,14 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Whether a squad of <paramref name="templateId"/> of a living town is made again (its template's <c>regenerates</c>).
     /// </summary>
-    bool Regenerates(string templateId, int site) => TownAlive(site) && _data.Db.Find(templateId)?.GetBool("regenerates") == true;
+    internal bool Regenerates(string templateId, int site) => TownAlive(site) && _data.Db.Find(templateId)?.GetBool("regenerates") == true;
+
+    /// <summary>
+    /// Whether a squad of <paramref name="templateId"/> of a living nest is made again (its template's <c>regenerates</c>; <c>Platoon::declareDead</c>
+    /// asks the platoon's town, a nest's being its nest).
+    /// </summary>
+    internal bool NestRegenerates(string templateId, int wildSite) =>
+        NestPoolsOf(wildSite) is not { Ded: true } && _data.Db.Find(templateId)?.GetBool("regenerates") == true;
 
     /// <summary>
     /// Whether a town site's pools say it is not wiped out.
@@ -310,67 +324,190 @@ public sealed partial class PopulationSystem
     bool TownAlive(int site) => site >= 0 && site < _townPools.Length && _townPools[site] is not { Ded: true };
 
     /// <summary>
-    /// The original's regeneration check at a town's load (<c>0x14092a020</c>): each of its own squads (in platoon id order) that lost at least 60 %
-    /// of its size, while the losses so far fit the residents' current max less the living, is marked to be made afresh from its template when it
-    /// next comes into the world.
+    /// The original's regeneration check at a town's load (<c>0x14092a020</c>): each of its resident squads, then each of its roaming ones (in
+    /// platoon id order), that lost at least <see cref="RegenerationLoss"/> of its size, while the losses so far fit that pool's current max less
+    /// the living (both pools' living, then each mark's losses, counted once for both loops), is marked to be made afresh from its template when it
+    /// next comes into the world; a resident one whose template <c>regenerates</c> (platoon <c>+0xd9</c>) is marked with any loss, past both tests.
     /// </summary>
     void CheckRegeneration(World world, int site)
     {
         // A wiped-out town remakes nothing (TownBase::activate runs the pass only while it is not ded).
         if (_townPools[site] is not { Ded: false } pools) return;
 
-        var own = new List<(Platoon P, int Size, int Living)>();
-        int running = 0;
+        var residents = PoolSquads(world, site, residents: true);
+        var roamers = PoolSquads(world, site, residents: false);
+        int running = PoolLiving(world, site);
+        running = MarkRegeneration(residents, running, pools.Residents.Current, Regenerates);
+        MarkRegeneration(roamers, running, pools.Roaming.Current, static _ => false);
+    }
+
+    /// <summary>
+    /// A town's squads out of the world in one of its pools (<see cref="InTownPool"/>) that the regeneration pass looks at
+    /// (<see cref="RegenerationCandidate"/>), with their size and count as the pass reads them (<see cref="PoolSize"/>, <see cref="PoolCount"/>).
+    /// </summary>
+    List<(Platoon P, int Size, int Living)> PoolSquads(World world, int site, bool residents)
+    {
+        var squads = new List<(Platoon P, int Size, int Living)>();
         foreach (var p in world.Platoons.All)
         {
-            if (p.Origin != site || !p.Pinned || p.State != PlatoonState.Unloaded || p.Unmade) continue;
+            if (!InTownPool(world, p, site, residents) || p.State != PlatoonState.Unloaded || !RegenerationCandidate(p)) continue;
 
-            // Residents only: the pool counts them (base saves: <c>pop</c> = the resident platoons' size, not the bar squads').
-            // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
-            if (p.Faction != _data.SiteFactions[site]) continue;
-            if (p.Stored is { HomeBuilding: null } || p.Saved is { } r && !r.Source.Record.Bools.GetValueOrDefault("is resident")) continue;
-
-            int size, living;
-            if (p.Stored is { } stored)
-            {
-                (size, living) = (p.Size, stored.Members.Count(m => m.Cold.Medical is not { Dead: true }));
-            }
-            else if (p.Saved is { } saved)
-            {
-                (size, living) = (saved.Members.Count,
-                    saved.Members.Count(m => !m.Dead && !m.Gone
-                        && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true)));
-            }
-            else
-            {
-                continue;
-            }
-
-            own.Add((p, size, living));
-            running += living;
+            squads.Add((p, PoolSize(p), PoolCount(world, p)));
         }
 
-        foreach (var (p, size, living) in own)
-        {
-            // A `regenerates` squad with no one left comes back whatever the budget (Platoon::declareDead).
-            if (living == 0 && size > 0 && Regenerates(p))
-            {
-                p.Regenerate = true;
-                continue;
-            }
+        return squads;
+    }
 
+    /// <summary>
+    /// A platoon's size as the pass reads it (platoon <c>+0xa4</c>): its template's expected size, at least 1, which <c>FUN_1407ed0f0</c> sets for
+    /// a new platoon and a save's alike (<c>FUN_1408fe0f0</c>, <see cref="SquadFactory.ExpectedSize"/>; nothing else writes it, <b>Verified</b>).
+    /// </summary>
+    int PoolSize(Platoon p)
+    {
+        if (_data.Db.Find(p.TemplateId) is not { } record) return 1;
+
+        return Math.Max(1, SquadFactory.ExpectedSize(SquadTemplate.From(record), _settings.SquadSizeMultiplier));
+    }
+
+    /// <summary>
+    /// A platoon's count as the pools read it (<c>FUN_140792f90</c>): its living while in the world, else the count it kept (<c>+0xa0</c>): a
+    /// save's platoon not in the world since the load its <c>char count</c> (<c>FUN_1407ed0f0</c>; the saved character list, dead included), a
+    /// never-made one its size, one that left the world since its living then.
+    /// </summary>
+    int PoolCount(World world, Platoon p)
+    {
+        if (p is { State: PlatoonState.Unloaded, Unmade: false, Stored: null, Saved: { StoredTick: < 0 } saved })
+            return saved.Source.Record.Ints.GetValueOrDefault("char count", saved.Members.Count);
+
+        return p is { State: PlatoonState.Unloaded, Unmade: false, Stored: null, Saved: { } left } ? SavedLiving(left) : LivingOf(world, p);
+    }
+
+    /// <summary>
+    /// The living of every member of a town's two pools, where the pass starts its running count (<c>FUN_1408f6a40</c> over pool 2, then pool 1:
+    /// each member that resolves, whatever its state).
+    /// </summary>
+    int PoolLiving(World world, int site)
+    {
+        int living = 0;
+        foreach (var p in world.Platoons.All)
+        {
+            if (!InTownPool(world, p, site, residents: true) && !InTownPool(world, p, site, residents: false)) continue;
+
+            living += PoolCount(world, p);
+        }
+
+        return living;
+    }
+
+    /// <summary>
+    /// Whether a platoon is in one of a town's pools (<see cref="PoolOf"/>). Joining one has no faction test (<c>FUN_1407ec8d0</c>, <b>Verified</b>):
+    /// a platoon joins its home town's pool when its faction and the town's owner are both the player's or both not (faction <c>+0x250</c>), so a
+    /// town's squads of other factions (the Hub's Mercenary guild) are members. A declared-dead one is out (<c>declareDead</c> erases it); a
+    /// campaign's is left to its campaign.
+    /// </summary>
+    bool InTownPool(World world, Platoon p, int site, bool residents)
+    {
+        if (p.Origin != site || p.Dead || p.Wild || p.Campaign is not null) return false;
+
+        int player = PlayerFactionOf(world);
+        bool playerTown = player >= 0 && _data.SiteFactions[site] == player;
+        if ((player >= 0 && p.Faction == player) != playerTown) return false;
+
+        return PoolOf(p) == (residents ? 1 : 2);
+    }
+
+    /// <summary>
+    /// A town platoon's pool (platoon <c>+0xa8</c>, saved as <c>sqt</c>): 1 residents and bar squads, 2 roaming. A save's platoon keeps its
+    /// <c>sqt</c> (<c>FUN_1407ed0f0</c> sets it through <c>FUN_1409c44b0</c>, which makes 0 into 1 and 3 or more into 2); one the population made is
+    /// in pool 1 when it belongs to its town, unless its template is <c>roaming military</c>, which the town's spawn puts in pool 2
+    /// (<c>FUN_14057f4c0</c>, <b>Verified</b>; as <c>SaveCapture</c> writes it).
+    /// </summary>
+    int PoolOf(Platoon p)
+    {
+        if (p.Saved is not { } saved) return p.Pinned && !RoamingMilitary(p.TemplateId) ? 1 : 2;
+
+        int sqt = saved.Source.Record.Ints.GetValueOrDefault("sqt", 2);
+        return sqt >= 2 ? 2 : 1;
+    }
+
+    /// <summary>
+    /// Marks the squads of a regeneration pass (<c>FUN_14092a020</c>) in order: each that lost something and at least
+    /// <see cref="RegenerationLoss"/> of its size while the losses so far fit <paramref name="budget"/> less <paramref name="running"/> (the pools'
+    /// living), or that <paramref name="forced"/> passes; each marked adds its losses to the running count, which is returned.
+    /// </summary>
+    static int MarkRegeneration(List<(Platoon P, int Size, int Living)> squads, int running, float budget, Func<Platoon, bool> forced)
+    {
+        foreach (var (p, size, living) in squads)
+        {
             int lost = size - living;
-            if (lost <= 0 || lost < 0.6 * size || lost > pools.Residents.Current - running) continue;
+            if (lost <= 0) continue;
+            if ((lost < RegenerationLoss * size || lost > budget - running) && !forced(p)) continue;
 
             p.Regenerate = true;
             running += lost;
         }
+
+        return running;
     }
 
     /// <summary>
-    /// A town's squad marked for regeneration comes into the world made afresh from its template at its place, homed where it was; its old characters
-    /// are gone (a save's platoon leaves the save, the new one is written as the town's). Returns the new platoon's squad (null when the template
-    /// plans no one).
+    /// A town's roaming squad marked by <see cref="CheckRegeneration"/> comes into the world built afresh from its template into the same platoon
+    /// (<c>FUN_1404ffad0</c> with +0x118 set deletes its characters and rolls the template), keeping its record (<see cref="TakeRemade"/>). Null,
+    /// leaving it as it is, when the template plans no one now.
+    /// </summary>
+    Squad? RenewRoamer(World world, Platoon p)
+    {
+        var site = _data.Sites[p.Origin];
+        float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
+        ReleaseUniques(world, p);
+        if (RollTemplate(world, p).Built is not { } built) return null;
+
+        var squad = SpawnSquad(world, built, site, radius, platoonId: p.Id);
+        squad.Money = p.Money;
+        squad.SpawnSize = built.Plan.TotalMembers;
+        MoveOutOfPlayerWalls(world, squad);
+        TakeRemade(p, squad, built, null, pinned: false);
+        if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
+        Log($"{site.Town.Name}: {squad.Name} made afresh ({squad.Members.Count})");
+        return squad;
+    }
+
+    /// <summary>
+    /// A platoon made afresh takes its new squad (<c>FUN_1404ffad0</c> builds the template into the same platoon object, so a save writes the squad
+    /// into its record, name and handle kept, <c>SaveCapture</c>'s made-from-template path): it holds it as its own with the template's size, and a
+    /// save's members are gone (their characters deleted).
+    /// </summary>
+    static void TakeRemade(Platoon p, Squad squad, BuiltSquad built, TownBuilding? home, bool pinned)
+    {
+        p.Stored = new StoredSquad { Name = squad.Name, HomeBuilding = home, Pinned = pinned };
+        p.Size = built.Plan.TotalMembers;
+        p.State = PlatoonState.Loaded;
+        p.SquadId = squad.Id;
+        p.UnloadAtTick = -1;
+        foreach (var m in p.Saved?.Members ?? []) m.Gone = true;
+    }
+
+    /// <summary>
+    /// Whether the regeneration pass looks at a platoon at all (<c>FUN_14092a020</c>, <b>Verified</b>): not split off another (its <c>separated</c>
+    /// hand null, platoon <c>+0xb8</c>) and <c>canref</c> (<c>+0xd8</c>, true unless a save says otherwise).
+    /// </summary>
+    static bool RegenerationCandidate(Platoon p)
+    {
+        if (p.SeparatedFrom >= 0 || p.SeparatedFromSquad >= 0) return false;
+        if (p.Saved is not { } sp) return true;
+
+        return sp.Source.Record.Bools.GetValueOrDefault("canref", true) && Meitou.Data.Save.Hand.Read(sp.Source.Record, "separated").IsNull;
+    }
+
+    /// <summary>
+    /// The living members of a save's platoon: not dead in the save nor since, not gone.
+    /// </summary>
+    static int SavedLiving(Saving.SavedPlatoon saved) =>
+        saved.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true));
+
+    /// <summary>
+    /// A town's squad marked for regeneration comes into the world made afresh from its template at its place, homed where it was, into the same
+    /// platoon (<see cref="TakeRemade"/>: its record kept, its old characters gone). Returns its squad (null when the template plans no one).
     /// </summary>
     Squad? Regenerate(World world, Platoon p)
     {
@@ -380,47 +517,34 @@ public sealed partial class PopulationSystem
 
         // Its unique members are freed first, so the fresh squad makes them again rather than their replacements.
         ReleaseUniques(world, p);
-        var (built, key) = RollTemplate(world, p);
+        var (built, _) = RollTemplate(world, p);
         if (built is null) return null;
 
-        var fresh = new Platoon
-        {
-            Id = world.Platoons.NextId(),
-            Origin = p.Origin,
-            TemplateId = p.TemplateId,
-            Faction = p.Faction,
-            Key = key,
-            Size = built.Plan.TotalMembers,
-            Position = p.Position,
-            Money = p.Money,
-            Package = p.Package,
-            Stored = new StoredSquad { Name = _data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId, HomeBuilding = home },
-            State = PlatoonState.Loaded,
-        };
+        SettleOldShop(world, p, home);
+        var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: p.Id, pinned: true);
+        squad.Money = p.Money;
+        MoveOutOfPlayerWalls(world, squad);
+        if (home is not null) world.Fixtures.StampResidents(home, p.TemplateId);
+        TakeRemade(p, squad, built, home, pinned: true);
+        Log($"{site.Town.Name}: {squad.Name} made afresh ({squad.Members.Count})");
+        return squad;
+    }
 
-        // The old squad's building shop (kept when it left the world, else a save's): its containers keep its goods for the fresh one, and an
-        // older save's stock read into its window goes to them.
+    /// <summary>
+    /// The old squad's building shop (kept when it left the world, else a save's): its containers keep its goods for the fresh one, and an older
+    /// save's stock read into its window goes to them.
+    /// </summary>
+    void SettleOldShop(World world, Platoon p, TownBuilding? home)
+    {
         var oldShop = p.Stored?.Shop ?? (p.Saved is { } saved
             ? saved.Shop ?? Saving.ShopSave.Read(world,
                 new Squad { Id = -1, TemplateId = p.TemplateId, Faction = p.Faction, Town = p.Origin, HomeBuilding = home }, saved.Source.Record,
                 _data)
             : null);
-        if (oldShop is not null)
-        {
-            world.Fixtures.RegisterSite(world, _data, p.Origin);   // the containers, if the town has not loaded them yet (once)
-            Trading.TradeSystem.Settle(world, oldShop);
-        }
+        if (oldShop is null) return;
 
-        var squad = SpawnSquad(world, built with { Home = home }, site, radius, platoonId: fresh.Id, pinned: true);
-        squad.Money = p.Money;
-        MoveOutOfPlayerWalls(world, squad);
-        if (home is not null) world.Fixtures.StampResidents(home, p.TemplateId);
-        fresh.SquadId = squad.Id;
-        world.Platoons.Add(fresh);
-        Despawn(world, p, release: false);   // its uniques were freed above and the fresh squad holds them
-        if (_townLog.Count >= 256) _townLog.RemoveAt(0);
-        _townLog.Add($"{site.Town.Name}: {fresh.Stored.Name} made afresh ({squad.Members.Count})");
-        return squad;
+        world.Fixtures.RegisterSite(world, _data, p.Origin);   // the containers, if the town has not loaded them yet (once)
+        Trading.TradeSystem.Settle(world, oldShop);
     }
 
     /// <summary>
@@ -498,13 +622,14 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// A town's roamer leaves the world for good (<c>FUN_1406bab60</c> -&gt; <c>FUN_140796b30</c>, <b>Verified</b>): one not intact and not
     /// regenerating takes its living members out of its town's roaming pool, only while the pool is above 0 and with no floor. Its faction's
-    /// prosperity drops by 10 (floor 0) with it, pool or not (<c>FUN_1406bab60</c>; platoon +0xa4 read as the member count).
+    /// prosperity drops by 10 (floor 0) with it, pool or not (<c>FUN_1406bab60</c>, while platoon +0xa4 is above 0: its template's expected size,
+    /// <see cref="PoolSize"/>, at least 1 for any template that makes someone).
     /// </summary>
     void PayRoamerDespawn(World world, Platoon p, Squad squad)
     {
         if (Intact(world, p)) return;
 
-        if (squad.Members.Count > 0) LowerProsperity(world, p.Faction, DamagedDespawnProsperity);
+        LowerProsperity(world, p.Faction, DamagedDespawnProsperity);
         if (p.Regenerate || p.Origin < 0 || p.Origin >= _townPools.Length || _townPools[p.Origin] is not { } pools) return;
 
         if (pools.Roaming.Current > 0) pools.Roaming.Current -= squad.Members.Count(m => Living(world, m));
@@ -543,6 +668,54 @@ public sealed partial class PopulationSystem
     /// A nest site's pools (null: not set up yet).
     /// </summary>
     public SitePools? NestPoolsOf(int wildSite) => _nestPools.GetValueOrDefault(wildSite);
+
+    /// <summary>
+    /// The regeneration pass of a nest's load (<c>FUN_14092a020</c>, slot 5 of <c>NestPopulationManager</c> as of the town's manager, run by
+    /// <c>TownBase</c>'s activation <c>FUN_14092dbb0</c> for a nest as for a town while it is not <c>ded</c>, <b>Verified</b>): a nest's squads are
+    /// all in its roaming pool, whose loop has no <c>regenerates</c> override, so each save's platoon of the nest out of the world (platoon id
+    /// order; <see cref="RegenerationCandidate"/>) that lost at least <see cref="RegenerationLoss"/> of its size, while the losses so far fit the
+    /// pool's current max less its living, is marked to be made afresh (<see cref="RegenerateWild"/>). Returns the members so marked.
+    /// </summary>
+    int CheckNestRegeneration(World world, WildSite site, SiteState state)
+    {
+        var pools = NestPools(world, site);
+        if (pools.Ded) return 0;
+
+        var own = new List<(Platoon P, int Size, int Living)>();
+        foreach (var p in world.Platoons.All)
+        {
+            if (p is not { State: PlatoonState.Unloaded, Dead: false, Saved: { Wild: WildKind.Nest } sp } || sp.WildSite != site.Index)
+                continue;
+
+            if (RegenerationCandidate(p)) own.Add((p, PoolSize(p), PoolCount(world, p)));
+        }
+
+        MarkRegeneration(own, NestLiving(world, site.Index, state), pools.Roaming.Current, static _ => false);
+        return own.Where(o => o.P.Regenerate).Sum(o => o.Size - o.Living);
+    }
+
+    /// <summary>
+    /// A save's wild platoon marked by <see cref="CheckNestRegeneration"/> comes into the world made afresh from its template at its place, round its
+    /// nest, into the same platoon (<c>FUN_1404ffad0</c> with +0x118 set deletes the old characters and builds the template;
+    /// <see cref="TakeRemade"/>: its record kept). Null, leaving it as it is, when the template plans no one now.
+    /// </summary>
+    Squad? RegenerateWild(World world, Platoon p)
+    {
+        if (p.Saved is not { } sp) return null;
+
+        ReleaseUniques(world, p);
+        if (RollTemplate(world, p).Built is not { } built) return null;
+
+        var (centre, homeRadius, nest) = WildHome(sp, p.Position);
+        var squad = SpawnSquad(world, built, null, 0, platoonId: p.Id, wild: true);
+        squad.HomeCentre = centre;
+        squad.HomeRadius = homeRadius;
+        squad.Money = p.Money;
+        BindNest(squad, nest);
+        TakeRemade(p, squad, built, null, pinned: false);
+        Log($"{nest?.Name ?? sp.Name}: {squad.Name} made afresh ({squad.Members.Count})");
+        return squad;
+    }
 
     /// <summary>
     /// The pools of a nest site: the save's nest state's, else (a nest made now) the original's start, 0.7 x <c>nest resident population</c> of it.
@@ -709,7 +882,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// A wild site's squads leave the world: one that is not intact (the squad-intact rule, <see cref="SquadIntact"/>, <b>Verified</b>) takes its
     /// living members out of the pool while it is above 0, with no floor (<c>FUN_140796b30</c>, the original's despawn of a damaged squad it does not
-    /// keep).
+    /// keep); one whose template <c>regenerates</c> is charged nothing (the same function only marks it to be remade).
     /// </summary>
     void PayNestDespawn(World world, WildSite site, SiteState state)
     {
@@ -721,9 +894,10 @@ public sealed partial class PopulationSystem
 
             int living = squad.Members.Count(m => Living(world, m));
 
-            // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60), nest squads and
-            // homeless ones too.
-            if (squad.Members.Count > 0) LowerProsperity(world, squad.Faction, DamagedDespawnProsperity);
+            // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60, its +0xa4, the
+            // template's expected size, above 0), nest squads and homeless ones too.
+            LowerProsperity(world, squad.Faction, DamagedDespawnProsperity);
+            if (_data.Db.Find(squad.TemplateId)?.GetBool("regenerates") == true) continue;
             if (site.Kind == WildKind.Nest && pools is not null && pools.Roaming.Current > 0) pools.Roaming.Current -= living;
         }
     }
