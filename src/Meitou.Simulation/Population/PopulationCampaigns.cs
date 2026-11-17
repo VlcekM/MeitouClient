@@ -33,6 +33,17 @@ public readonly record struct CampaignTown(int Site, int PlayerTown)
     /// The player town numbered <paramref name="number"/>.
     /// </summary>
     public static CampaignTown OfPlayer(int number) => new(-1, number);
+
+    /// <summary>
+    /// The faction owning this town: a placed town's from the population's site factions, a player town's (an outpost) from the player's
+    /// buildings; -1 for no town, a site outside the population's or a player town that is gone.
+    /// </summary>
+    public int Owner(World world, PopulationData data)
+    {
+        if (Site < 0) return world.Buildings.FindTown(PlayerTown)?.Owner ?? -1;
+
+        return Site < data.SiteFactions.Count ? data.SiteFactions[Site] : -1;
+    }
 }
 
 /// <summary>
@@ -449,12 +460,6 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// The faction owning a campaign town (-1: none, or a player town that is gone).
-    /// </summary>
-    int FactionOfTown(World world, CampaignTown t) =>
-        t.Site >= 0 ? _data.SiteFactions[t.Site] : world.Buildings.FindTown(t.PlayerTown)?.Owner ?? -1;
-
-    /// <summary>
     /// A campaign town's name: the site's town name, the player town's, else the player faction's name.
     /// </summary>
     string NameOf(World world, CampaignTown t)
@@ -804,7 +809,7 @@ public sealed partial class PopulationSystem : IStateHashed
             CampaignId = c.Id,
             Target = target,
             Home = home,
-            Enemy = FactionOfTown(world, target),
+            Enemy = target.Owner(world, _data),
             PhaseStart = now,
             Required = (int)(c.NumForces * _settings.RaidSizeMult),
         };
@@ -1200,7 +1205,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
             ulong delayRoll = Rng.Hash(world.Seed, key, RngPurpose.Campaign, SeedSalts.CampaignDialogue + 1);
             float delay = e.V0 + Rng.Float(delayRoll) * Math.Max(0, e.V1 - e.V0);
-            return Queue(world, m, c, town, CampaignTown.None, FactionOfTown(world, town), delay, delay, world.GameHours, callerFlag: true);
+            return Queue(world, m, c, town, CampaignTown.None, town.Owner(world, _data), delay, delay, world.GameHours, callerFlag: true);
         }
 
         return false;
@@ -1221,7 +1226,7 @@ public sealed partial class PopulationSystem : IStateHashed
         if (target.IsNone || !Exists(world, target)) return false;
 
         float delay = Math.Max(0, delayHours);
-        return Queue(world, m, c, target, CampaignTown.None, FactionOfTown(world, target), delay, delay, world.GameHours, callerFlag: true);
+        return Queue(world, m, c, target, CampaignTown.None, target.Owner(world, _data), delay, delay, world.GameHours, callerFlag: true);
     }
 
     /// <summary>

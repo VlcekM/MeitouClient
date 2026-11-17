@@ -11,16 +11,6 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     /// <summary>
-    /// The faction owning a town's buildings (its machine's owner): a site's faction, an outpost's owner; -1 for none.
-    /// </summary>
-    int WorkOwnerOf(World world, Population.CampaignTown town)
-    {
-        if (town.Site >= 0) return town.Site < data.SiteFactions.Count ? data.SiteFactions[town.Site] : -1;
-
-        return world.Buildings.FindTown(town.PlayerTown)?.Owner ?? -1;
-    }
-
-    /// <summary>
     /// The building the plan's current step works at: a machine step (87, 92, 93) or the walk to it names its own building (the fetch from another
     /// machine's output, rows 94 and 92, is at that machine), else the building the goal picked.
     /// </summary>

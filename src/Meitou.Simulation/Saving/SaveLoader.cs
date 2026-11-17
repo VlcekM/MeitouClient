@@ -600,13 +600,9 @@ public static class SaveLoader
             Job = job,
             Saved = sp,
             Unmade = unmade,
-            Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
-            Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
-            IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
             Target = MissionTownOf(platoon.Record, data),
-            ModSpawned = modSpawn,
-            ModTag = ModPlatoonSave.Tag(platoon.Record),
         };
+        ReadSavedState(p, platoon);
         Register(world, platoon, loaded, context, p, sp, unmade, travels);
     }
 
@@ -617,8 +613,7 @@ public static class SaveLoader
     /// </summary>
     static (ulong Key, int Size) SquadOf(World world, SavePlatoon platoon, PopulationData data, bool standIn)
     {
-        var record = platoon.Record;
-        ulong key = (ModPlatoonSave.Spawned(record) ? ModPlatoonSave.Key(record) : null) ?? Rng.Mix(Rng.StableHash(platoon.Name));
+        ulong key = KeyOf(platoon);
         int size = Math.Max(platoon.CharCount, platoon.Characters.Count);
         if (size > 0 || !standIn) return (key, size);
         if (data.Db.Find(platoon.SquadTemplate) is not { } template || !SquadFactory.IsTemplate(template)) return (key, 0);
@@ -820,7 +815,7 @@ public static class SaveLoader
             Origin = -1,
             TemplateId = platoon.SquadTemplate,
             Faction = faction,
-            Key = Rng.Mix(Rng.StableHash(platoon.Name)),
+            Key = KeyOf(platoon),
             Size = Math.Max(platoon.CharCount, platoon.Characters.Count),
             Position = new Vector2(platoon.Position.X, platoon.Position.Z),
             Money = platoon.Money,
@@ -828,11 +823,9 @@ public static class SaveLoader
             Package = package?.Id,
             Job = job,
             Saved = sp,
-            Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
-            Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
-            IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
             Unmade = unmade,
         };
+        ReadSavedState(p, platoon);
         world.Platoons.Add(p);
         sp.PlatoonId = p.Id;
         context.Platoons.Add(sp);
@@ -843,6 +836,26 @@ public static class SaveLoader
 
         return true;
     }
+
+    /// <summary>
+    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned, dead and intact flags and a code mod's marks (its
+    /// spawn flag and tag, <see cref="ModPlatoonSave"/>).
+    /// </summary>
+    static void ReadSavedState(Platoon p, SavePlatoon platoon)
+    {
+        var record = platoon.Record;
+        p.Imprisoned = record.Bools.GetValueOrDefault("imprisoned");
+        p.Dead = record.Bools.GetValueOrDefault("dead");
+        p.IntactFlag = record.Bools.GetValueOrDefault("intact", true);
+        p.ModSpawned = ModPlatoonSave.Spawned(record);
+        p.ModTag = ModPlatoonSave.Tag(record);
+    }
+
+    /// <summary>
+    /// A loaded platoon's member key: a code mod's spawn keeps the one it was saved with, any other is keyed by its name.
+    /// </summary>
+    static ulong KeyOf(SavePlatoon platoon) =>
+        (ModPlatoonSave.Spawned(platoon.Record) ? ModPlatoonSave.Key(platoon.Record) : null) ?? Rng.Mix(Rng.StableHash(platoon.Name));
 
     /// <summary>
     /// Whether a saved wild platoon with no file is one the game never made (<c>never been activated</c> and a <c>char count</c>): the original

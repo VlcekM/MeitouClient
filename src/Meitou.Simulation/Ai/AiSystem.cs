@@ -1406,7 +1406,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         if (player < 0 || world.Characters.Cold(slot) is not { } cold) return true;
-        bool townIsPlayer = WorkOwnerOf(world, town) == player;
+        bool townIsPlayer = town.Owner(world, data) == player;
         bool charIsPlayer = cold.Faction == player;
         return townIsPlayer == charIsPlayer || charIsPlayer && cold.SlaveState == 1;
     }
@@ -2034,7 +2034,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.WorkFunctionality = _work.FunctionalityOf(building);
         mind.WorkHungerRate = _work.HungerRateOf(building);
         mind.WorkBuilding = building;
-        mind.WorkOwner = WorkOwnerOf(world, board.HomeTown);
+        mind.WorkOwner = board.HomeTown.Owner(world, data);
     }
 
     /// <summary>

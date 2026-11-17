@@ -1238,15 +1238,18 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A dependency is met by a core file or by an enabled mod earlier in the list.
+    /// A dependency is met by a core file or by an enabled mod earlier in the list, matched by name as the load order does
+    /// (<see cref="ModList.DependencyName"/>).
     /// </summary>
     bool IsAvailableBefore(string dependency, ModRow row)
     {
-        if (dependency is "gamedata.base" or "Newwworld.mod" or "Dialogue.mod" or "rebirth.mod") return true;
+        string name = ModList.DependencyName(dependency);
+        if (dependency == "gamedata.base" || ModList.CoreModNames.Contains(name)) return true;
+
         foreach (var m in _mods)
         {
             if (m == row) return false;
-            if (m.Enabled && m.Name + ".mod" == dependency) return true;
+            if (m.Enabled && m.Name == name) return true;
         }
         return false;
     }

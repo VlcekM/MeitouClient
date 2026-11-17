@@ -377,7 +377,7 @@ static partial class WikiExport
             ? (modNames.Count == 0 ? "clean install (base game + official DLC files only)" : "base game + mods: " + string.Join(", ", modNames))
             : install.DataDirectory;
         string modsCfgPath = ModList.ModsCfgPath(install);
-        var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
+        var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(ModList.ReadLines(modsCfgPath)).ToList() : [];
         var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)),
             [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg,
             order.Issues.Select(i => $"{i.File}: {i.Message}").ToList(), factsOnly);

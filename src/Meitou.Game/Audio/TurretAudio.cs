@@ -15,7 +15,8 @@ namespace Meitou.Game.Audio;
 sealed class TurretAudio(GameHost host)
 {
     /// <summary>
-    /// Turrets farther than this from the eye are not looked after (the movement sound is dropped beyond <see cref="TurretSounds.Range"/> anyway).
+    /// Turrets farther than this from the eye, as the Sound range setting stretches it (<see cref="WwisePlayer.HeardDistanceSquared"/>), are not
+    /// looked after (the movement sound is dropped beyond <see cref="TurretSounds.Range"/> by the same measure anyway).
     /// </summary>
     const float TurretAudioRadius = 4000;
 
@@ -70,7 +71,7 @@ sealed class TurretAudio(GameHost host)
         foreach (var gunner in characters)
         {
             if (gunner.Turret is not { } post) continue;
-            if (Vector3.DistanceSquared(post.Position, eye) > TurretAudioRadius * TurretAudioRadius) continue;
+            if (sound.Player.HeardDistanceSquared(post.Position, eye) > TurretAudioRadius * TurretAudioRadius) continue;
 
             if (!_turretMounts.TryGetValue(post.Key, out var made)) _turretMounts[post.Key] = made = MountOf(db, post);
             if (made is not { } known) continue;
