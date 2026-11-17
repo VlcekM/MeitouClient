@@ -362,8 +362,12 @@ escaping (re-tagged when of the looker's faction or none, ends) and 40 at an ex-
 ends) or at a stranger inside a closed town (`FUN_140852240`, MY_INTRUDER, ends), 9 at a player character in the looker's closed home
 (`FUN_1408525c0`, ends); the tests are in [trespassing](economy.md#112-how-a-bounty-is-gained). The state each writes does not wait for a
 line. In the base data 46 of the 329 roots on events 3, 27, 66 and 67 have neither a repetition limit nor a chance below 100 (**Verified**,
-gamedata dump). The flag: `FUN_14067e220` sets it when a line for 3, 4, 17, 27, 34, 36, 40, 66 or 67 is added whose name does not contain
-`Unfinished` (**Verified**, 1.0.68 disassembly: the flag is the sight pass's third argument, read from the looker's Dialogue by `FUN_1405c7d40`,
+gamedata dump). The event-67 roots 6862 and 6899 "You saved my life!" (Dialogue.mod; 6862 in the sets of 29 of the 36 Hub residents of a new
+game) say nothing to a fresh player character: both need the squad's long-term tag 2 lifesaver or 3 freed me on it (6862's children by HAS_TAG,
+6899 by DC 52, and only while it is in combat); the root of the Hub's Hungry bandit (Holy Nation Outlaws), "Good Relations - bandit gang"
+(8764-Dialogue.mod), does fire (**Observed**, the Hub's residents spawned from the base data, their sets read through Meitou's dialogue loader).
+The flag: `FUN_14067e220` sets it when a line for 3, 4, 17, 27, 34, 36, 40, 66 or 67 is added whose name does not contain `Unfinished`
+(**Verified**, 1.0.68 disassembly: the flag is the sight pass's third argument, read from the looker's Dialogue by `FUN_1405c7d40`,
 and `FUN_140859680` returns before every reaction past the animal one, the TEMP_ENEMY tag included, while it is clear). The package loader
 `FUN_14067fab0` is the only caller that adds those events, and no clear was found outside the Dialogue constructor (**Observed**, a scan of direct
 writes), so a character seems to keep it after a package swap. Meitou: `Perception.SightSystem` (its own system, run while the dialogue's event

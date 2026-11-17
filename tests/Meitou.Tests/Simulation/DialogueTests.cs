@@ -494,13 +494,16 @@ public class DialogueInstallTests
         var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
         using var map = TerrainHeightmap.Open(install);
         var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
-        var data = PopulationData.Create(db, levels.Towns(), buildings: buildings);
+        var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install.Root), buildings: buildings);
         var hub = data.Sites.Single(s => s.Town.Name == "The Hub");
         var dialogue = new DialogueSystem(data, new DialogueSettings { AmbientEvents = true });
         var walk = new OpenGroundWalkability((_, _) => 300);
+        var bodies = new Meitou.Simulation.Bodies.BodySystem(Meitou.Tests.Bodies.BodyFixtures.BaseGame);
+        var senses = new Meitou.Simulation.Aggro.AggroSystem(data.Relations);
+        var sight = new Meitou.Simulation.Perception.SightSystem(data);
         using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk,
-            [new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1 }), new MovementSystem(new PathService(walk, true)), dialogue,
-                new Meitou.Simulation.Perception.SightSystem(data)]);
+            [new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1 }), new MovementSystem(new PathService(walk, true)), bodies,
+                senses, dialogue, sight]);
         world.Player.Faction = data.PlayerFaction;
         world.Commands.Enqueue(new FocusCommand(hub.Position) { Tick = 0 });
         world.RunTicks(5);
@@ -530,9 +533,11 @@ public class DialogueInstallTests
         Assert.NotEmpty(talk.Text);
         Assert.Equal(2, talk.Choices.Count);   // trade or decline; their texts are picked at random
 
-        // A resident next to the player character says a speech bubble within a few game hours.
-        // The Hub is allied with the player: its residents have event 67 lines (most event 3 lines are disabled or conditional in the data); each is
-        // said at a chance of 30 % once per squad per half game hour, so the loop spans a few of those.
+        // A resident who sees the player character says a speech bubble. The sight pass needs the residents' bodies (their races come with their
+        // looks), update turns (bodies) and senses (aggro). With the Hub allied, a resident reacts on each update turn to one character it senses,
+        // trying its event 67 lines (I_SEE_ALLY_PLAYER) at the player character; a said line cools that speaker's event for 1 s. The Hungry
+        // bandit's (Holy Nation Outlaws) "Good Relations - bandit gang" fires; the "You saved my life!" roots most residents share need a rescue
+        // (docs/game/dialogue.md "Sight").
         for (int i = 0; i < table.HighWater; i++)
             if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: false } resident)
                 data.Relations.Set(resident.Faction, data.PlayerFaction, 100);
