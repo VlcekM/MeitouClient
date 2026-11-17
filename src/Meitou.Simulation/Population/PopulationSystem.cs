@@ -1157,7 +1157,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// slave squad is made as a squad of its template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's
     /// faction, shaven and chained (<b>Verified</b>). <b>Engine choices</b>: they are made at the owner squad's spot; with a home building, each goes
     /// into a random free cage of it (their package's goal is Slave get in Cage, which Meitou does not act out), those left over stand by the owner
-    /// squad. Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>).
+    /// squad. Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>), even when its template lists no AI
+    /// package (the AI runs such a squad of slaves, #938).
     /// </summary>
     void MakeSlaves(World world, BuiltSquad owner, Squad squad, TownSite site, float radius, SiteState state)
     {

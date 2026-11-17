@@ -3059,9 +3059,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var (packages, template) = TemplateOf(squad.TemplateId);
 
-        // A platoon's squad on the road has no building of its own to claim (only one its town gave it).
+        // A platoon's squad on the road has no building of its own to claim (only one its town gave it), nor has a squad without packages (slaves
+        // obeying another squad, Runs).
         bool given = squad.HomeBuilding is not null;
-        var home = PlatoonOf(world, squad) is null ? AssignHome(world, squad, template) : squad.HomeBuilding;
+        var home = PlatoonOf(world, squad) is null && packages.Count > 0 ? AssignHome(world, squad, template) : squad.HomeBuilding;
 
         // A building the squad claims itself takes its template (FUN_140553210); one its town gave it was noted when it was made, a saved squad's
         // (from a save with no building record) now.
@@ -3220,10 +3221,30 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The AI runs a squad that is not the player's, not a roaming platoon's active half (a town's own saved squad, pinned, is run like the town's, a
     /// save's wild one like the wild sites' squads), and whose template lists AI packages. A player's squad only when it is autonomous and a save
-    /// held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package (<see cref="TakePackage"/>).
+    /// held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package (<see cref="TakePackage"/>). A squad of slaves
+    /// whose template lists none (Garret's slave, #938) is run too: its members plan with their master's Slave AI Goals (<see cref="ObeyedRoles"/>),
+    /// as the original's AI slaves run their master's list.
     /// </summary>
     bool Runs(World world, Squad squad) =>
-        IsPlayers(world, squad) ? squad is { Autonomous: true, SavedAi: not null } : TemplateOf(squad.TemplateId).Packages.Count > 0;
+        IsPlayers(world, squad) ? squad is { Autonomous: true, SavedAi: not null }
+            : TemplateOf(squad.TemplateId).Packages.Count > 0 || AllSlaves(world, squad);
+
+    /// <summary>
+    /// Every living member of the squad is a slave (state 1); false for an empty squad.
+    /// </summary>
+    static bool AllSlaves(World world, Squad squad)
+    {
+        var table = world.Characters;
+        bool any = false;
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } cold) continue;
+            if (cold.SlaveState != 1) return false;
+            any = true;
+        }
+
+        return any;
+    }
 
     /// <summary>
     /// The platoon whose squad this is when the population moves it (a loaded roaming or campaign platoon: not a town's own saved squad, nor a wild
