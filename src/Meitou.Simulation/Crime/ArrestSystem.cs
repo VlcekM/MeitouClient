@@ -685,14 +685,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>
     /// The view factor of <see cref="SeesSuspect"/> (<see cref="SightRay.Sees"/>'s v), 0 when the looker does not see the suspect.
     /// </summary>
-    float SuspectView(World world, int w, int s, CharacterCold c, float range)
-    {
-        var next = world.Characters.Next;
-        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
-        float v = SightRay.Sees(world, w, s, next[w].Position, next[s].Position, range, sneaking ? Orders.Stealth(c) : -1);
-
-        return !sneaking || Crimes.Spotted(world, w, world.Characters.IdOf(s)) ? v : 0;
-    }
+    float SuspectView(World world, int w, int s, CharacterCold c, float range) => Crimes.SuspectView(world, w, s, c, range);
 
     /// <summary>
     /// EV_BOUNTY_SPOTTED, EV_ESCAPED_PRISONER_SPOTTED, EV_ESCAPING_SLAVE_SPOTTED.
