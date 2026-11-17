@@ -96,6 +96,11 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// </summary>
     public Vector3? Marker { get; init; }
     /// <summary>
+    /// The <see cref="TownLayoutBuilding.Id"/> of the interior layout object a throne, dummy or workstation of <see cref="TownBuilding.Furniture"/>
+    /// is; null for any other spot and for a building standing alone as one.
+    /// </summary>
+    public string? Piece { get; init; }
+    /// <summary>
     /// A node a goal may stand at: neither a bed, a seat nor a dummy.
     /// </summary>
     public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training
@@ -356,9 +361,15 @@ public sealed record TownDisposal(string Id, string RecordId, Vector3 Position);
 /// <summary>
 /// An object a building's interior or exterior layout places (<see cref="TownBuilding.LayoutBuildings"/>): an interior's <paramref name="Id"/> is a
 /// <see cref="TownPiece"/>'s, an exterior's the parent's <see cref="BuildingKey"/>, "/exterior/" and its index; <paramref name="Outdoors"/> for an
-/// exterior's.
+/// exterior's. <paramref name="Position"/> and <paramref name="Rotation"/> are its world placement (<see cref="BuildingLayouts.Place"/>).
 /// </summary>
-public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoors);
+public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoors, Vector3 Position, Quaternion Rotation)
+{
+    /// <summary>
+    /// The run-time key of the building whose layout places it: its <see cref="Id"/> before the layout part.
+    /// </summary>
+    public string House => Id[..Id.IndexOf('/')];
+}
 
 /// <summary>
 /// A level building no town takes that draws power (<see cref="TownBuildings.Townless"/>): its <see cref="BuildingPlacement.Key"/>, BUILDING, position,

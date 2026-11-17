@@ -371,6 +371,16 @@ public sealed class Fixture
     /// </summary>
     public bool InGateSet { get; init; }
     /// <summary>
+    /// Doors: its building lets animals in (<c>FUN_140547500</c>: its interior's byte <c>+0xe0</c>, the BUILDING's <c>allow animals</c>, copied by
+    /// the interior's setup <c>FUN_140551660</c>; no interior, no <c>interior</c> references: false); derived from the data, not hashed or saved.
+    /// </summary>
+    public bool AdmitsAnimals { get; init; }
+    /// <summary>
+    /// Doors: its building is <c>cavernous</c> (Building <c>+0xc2</c>), which any animal whose race may enter buildings may enter
+    /// (<c>FUN_1405c81d0</c>); derived from the data, not hashed or saved.
+    /// </summary>
+    public bool Cavernous { get; init; }
+    /// <summary>
     /// Doors and beds standing on their own: the building's whole placement turn, tilt included, where it is known (null: a turn of
     /// <see cref="Yaw"/> about +Y); it places the leaf (<see cref="FixtureRegistry.DoorSpotOf"/>) and leans the sleeper
     /// (<see cref="FixtureRegistry.LeanOf"/>). Derived from the data, not hashed or saved.

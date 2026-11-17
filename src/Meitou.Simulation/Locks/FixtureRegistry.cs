@@ -173,6 +173,11 @@ public sealed partial class FixtureRegistry
     public IReadOnlyDictionary<string, SavedSpot>? SavedSpots { get; set; }
 
     /// <summary>
+    /// The loaded save's entries of the towns' layout objects (<see cref="Saving.SavedPieces"/>); null without a save.
+    /// </summary>
+    public Saving.SavedPieces? SavedPieces { get; set; }
+
+    /// <summary>
     /// The item factory a loaded save's container contents are made with (<see cref="ContainerSave"/>); set by the loader.
     /// </summary>
     public Items.ItemFactory? Items { get; set; }
@@ -695,6 +700,8 @@ public sealed partial class FixtureRegistry
         var doorRefs = record.GetReferences("doors");
         bool gate = TownBuildings.IsGate(db, record, _functions);
         bool inGateSet = LockSystem.InGateSet(record);
+        bool admitsAnimals = record.GetReferences("interior").Count > 0 && record.GetBool("allow animals");
+        bool cavernous = record.GetBool("cavernous");
         for (int i = 0; i < doorRefs.Count; i++)
         {
             var door = db.Find(doorRefs[i].TargetStringId);
@@ -715,6 +722,8 @@ public sealed partial class FixtureRegistry
                 HostRecordId = record.StringId,
                 IsGate = gate,
                 InGateSet = inGateSet,
+                AdmitsAnimals = admitsAnimals,
+                Cavernous = cavernous,
                 Leaf = door is null ? new DoorLeaf(0, 30, 1, 0) : DoorLeaf.Of(door),
                 Lock = new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(door, "lock level bonus"), door: true),
                         Hardness = FloatOf(record, "hardness") },

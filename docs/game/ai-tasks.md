@@ -1354,8 +1354,11 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   piece at random (`FreeFurniture`; distinct pieces per member is the engine's claim, **Observed**), sit on a chair, stand at a dummy, or stand at a workstation facing it at the machine's work clip and
   hunger rate (`PretendOperate`: 221's look). 221 runs `Task_OperateMachine`'s update there (**Verified**, `FUN_14035bc90`: `tryOperate`, then
   the operating XP `FUN_1408c7250` for any function but 7, then the building's work step, slot `0x4b0`), so the resident gains the piece's operating
-  XP and at a dummy its training (`ProductionSystem.HomePretenders`); a research or crafting piece's step makes nothing for an NPC owner (no
-  player flag, no queued craft).
+  XP and at a dummy its training; at a workstation Meitou runs `TownOperate` on the layout object's own machine (`ProductionSystem.HomePretenders`,
+  [layout objects](buildings-production.md#npc-town-machines)), while it has power (93), so a refinery's step draws its inputs into its output and a
+  hydroponic farm's harvests; a research or crafting piece's step makes nothing for an NPC owner (no player flag, no queued craft).
+  **Observed** (headless, a Hive Village of the base data): the Worker Drones staying home operate their hut's tanning bench, campfire and other
+  refineries; with empty inputs nothing is made.
 - **275 Sitting around** (`FUN_1408caf00`; the registration's finder thunk `LAB_1400061db` is not in the RE files, so the row link is **Observed**; the rest **Verified** by decompile):
   - Gate: 0 (not wanted, no target) when the character is in no town location (character vfunc `0x78`). A non-player-faction character (faction `+0x250` clear) needs that town to
     be its squad's home town (Ownerships `+0x30`) or owned by the squad's faction (`FUN_140621390`); a player-faction one needs a town owned by a player faction, with no home test.

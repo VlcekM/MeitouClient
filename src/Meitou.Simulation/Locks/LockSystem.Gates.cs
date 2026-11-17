@@ -248,7 +248,7 @@ public sealed partial class LockSystem
     /// <summary>
     /// A building's first door (door index 0, Building slot 124), or null.
     /// </summary>
-    static Fixture? FirstDoor(World world, string building)
+    internal static Fixture? FirstDoor(World world, string building)
     {
         foreach (var f in world.Fixtures.OfBuilding(building))
             if (f.Kind == FixtureKind.Door && f.DoorIndex == 0) return f;

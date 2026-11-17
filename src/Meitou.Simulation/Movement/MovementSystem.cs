@@ -912,6 +912,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     const float DoorDepth = 15, DoorPast = 1.1f, DoorSlotScale = 0.2f;
 
     /// <summary>
+    /// An animal whose radius (footprint x scale) is under this may enter a building that is not <c>cavernous</c> (<c>FUN_1405c81d0</c>,
+    /// <c>DAT_1416e2bc4</c>, <b>Verified</b>).
+    /// </summary>
+    const float AnimalEntryRadius = 4.5f;
+
+    /// <summary>
     /// The follow and wander tasks' decisions of the partition's characters (parallel): a follower's aim, speed and path requests, a wanderer's
     /// next place.
     /// </summary>
@@ -995,10 +1001,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         var here = new Vector2(n.Position.X, n.Position.Z);
         Vector2 slotPos;
         Vector2? door = null;
+        float aimHeight = lead.Position.Y;
 
         if (squad is not null && squad.FormationSlots.TryGetValue(self, out var slot) && squad.Members.Contains(leader))
         {
-            (slotPos, door) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed, moving);
+            (slotPos, door, aimHeight) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed,
+                moving);
         }
         else
         {
@@ -1008,8 +1016,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             slotPos = leadAt + off * PlainDistance(world.Seed, self, leader);
         }
 
-        // The hold point takes the formation aim, not the wait outside a locked building: that wait is Meitou's (see ShutOutAim).
-        CarryHoldPoint(cold, slotPos, lead.Position.Y);
+        // The hold point takes the formation aim, an animal's door aim included, not the wait outside a locked building: that wait is Meitou's (see
+        // ShutOutAim).
+        CarryHoldPoint(cold, slotPos, aimHeight);
         bool shutOut = door is not null;
         if (door is { } outside) slotPos = outside;
 
@@ -1041,8 +1050,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// A follower's aim becomes its hold point on every step (<c>Task_Follow</c>'s update <c>FUN_14033b350</c> writes it whether holding or not,
     /// sneaking too, <b>Verified</b>): a bodyguard on Hold takes its post along. A person's aim is the followed character's position plus a flat
     /// offset (the formation slot, <c>FUN_1403335c0</c>, or the drawn distance, <c>FUN_140333500</c>), so at its height; the door aim of that
-    /// formation branch is an animal's only (the follower's slot 101 is 1 for every person). Turning Hold on resets the point to where the
-    /// character stands, so it is written only while the Hold toggle is on. The update's early returns write nothing; none reaches a holder here:
+    /// formation branch is an animal's only (the follower's slot 101 is 1 for every person, <see cref="AnimalDoorAim"/>), at the door point's
+    /// height. Turning Hold on resets the point to where the character stands, so it is written only while the Hold toggle is on. The update's early returns write nothing; none reaches a holder here:
     /// Meitou follows only characters, a removed one ends the follow first as the unresolved handle does, and the lost-target end needs a follower
     /// outside the player's faction (<c>FUN_14033a700</c>), while Hold is the player's.
     /// </summary>
@@ -1052,10 +1061,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// A squad mate's aim: its slot turned onto its eased heading, one second of the leader's travel ahead of the leader; and, when the leader is
-    /// shut in from it, where it waits outside the door instead (<see cref="ShutOutAim"/>), else null.
+    /// A squad mate's aim: its slot turned onto its eased heading, one second of the leader's travel ahead of the leader; for an animal kept out of
+    /// the building the leader is in, the door aim instead (<see cref="AnimalDoorAim"/>, the original's own aim, so the hold point takes it too);
+    /// and, when the leader is shut in from it, where it waits outside the door instead (<see cref="ShutOutAim"/>), else null; with the aim's
+    /// height (the leader's, or the door point's).
     /// </summary>
-    static (Vector2 Aim, Vector2? ShutOut) FormationAim(World world, int i, float dt, Vector3 at, CharacterCold cold, Vector2 slot, int leader,
+    static (Vector2 Aim, Vector2? ShutOut, float Height) FormationAim(World world, int i, float dt, Vector3 at, CharacterCold cold, Vector2 slot, int leader,
         Vector3 leaderAt, Vector2 leadAt, Vector2 leadDir, float leadSpeed, bool moving)
     {
         var heading = cold.FollowHeading;
@@ -1071,12 +1082,44 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         }
 
         cold.FollowHeading = heading;
-        var slotPos = leadAt + heading * leadSpeed + Formation.ToWorld(slot, heading);
-        if (ShutOutAim(world, leader, i, leaderAt, at) is { } outside)
-            return (slotPos, outside + Formation.ToWorld(slot, heading) * DoorSlotScale);
+        var turned = Formation.ToWorld(slot, heading);
+        if (AnimalDoorAim(world, leader, cold) is { } door)
+        {
+            var aim = new Vector2(door.X, door.Z) + turned * DoorSlotScale;
+            return (aim, aim, door.Y);
+        }
 
-        return (slotPos, null);
+        var slotPos = leadAt + heading * leadSpeed + turned;
+        if (ShutOutAim(world, leader, i, leaderAt, at) is { } outside) return (slotPos, outside + turned * DoorSlotScale, leaderAt.Y);
+
+        return (slotPos, null, leaderAt.Y);
     }
+
+    /// <summary>
+    /// The door aim of the formation (<c>FUN_1403335c0</c>, <b>Verified</b>): when the follower may not enter the building the leader is in (its
+    /// slot 101, <see cref="AnimalMayEnter"/>; 1 for every person, so only an animal's) and the building does not let animals in
+    /// (<c>FUN_140547500</c>, <see cref="Locks.Fixture.AdmitsAnimals"/>), the point past its first door (<c>Building::getDoor</c>
+    /// <c>FUN_1400f7080</c>, the gates' first door) outside: A + (A - B) x 1.1 with A its outer point (<c>doorClosedPositionOut</c>
+    /// <c>+0x3bc</c>) and B its inner (<see cref="Locks.DoorPoints.Outer"/>), at the leaf's height (both points are); null when the branch does
+    /// not run (no such building, no door).
+    /// </summary>
+    static Vector3? AnimalDoorAim(World world, int leader, CharacterCold cold)
+    {
+        if (!SquadRegistry.IsAnimal(cold) || world.Sight.BuildingOf(leader) is not { } inside) return null;
+        if (Locks.LockSystem.FirstDoor(world, inside) is not { } first || first.AdmitsAnimals || AnimalMayEnter(cold, first.Cavernous)) return null;
+        if (world.Fixtures.DoorSpotOf(first) is not { } spot) return null;
+
+        var past = Locks.DoorPoints.Outer(spot, first.Position);
+        return new Vector3(past.X, spot.Centre.Y, past.Y);
+    }
+
+    /// <summary>
+    /// An animal's slot 101 for a building (<c>CharacterAnimal</c> <c>FUN_1405c81d0</c>, <b>Verified</b>): its race lacks <c>cant enter
+    /// buildings</c> (<see cref="Data.Gameplay.Bodies.RaceData.CanEnterBuildings"/>) and either its radius (footprint x scale,
+    /// <see cref="CombatSteering.Radius"/>) is under <see cref="AnimalEntryRadius"/> or the building is <c>cavernous</c>.
+    /// </summary>
+    static bool AnimalMayEnter(CharacterCold cold, bool cavernous) =>
+        cold.Race?.CanEnterBuildings != false && (CombatSteering.Radius(cold) < AnimalEntryRadius || cavernous);
 
     /// <summary>
     /// Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower
@@ -1201,7 +1244,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Where a squad mate waits while its leader is inside a building it cannot enter (engine choice: every door of the building locked and whole;
-    /// the original's door aim in <c>1403335c0</c> is an animal's that may not enter, docs/game/pathfinding.md "Following"): outside the door
+    /// the original's door aim in <c>1403335c0</c> is an animal's that may not enter, <see cref="AnimalDoorAim"/>): outside the door
     /// nearest to it, A + (A − B) × 1.1 with A the door's outer point and B its inner. Null when the leader is not shut in from it.
     /// </summary>
     static Vector2? ShutOutAim(World world, int leader, int self, Vector3 leaderAt, Vector3 at)

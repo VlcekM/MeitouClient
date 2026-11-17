@@ -187,6 +187,7 @@ public static class SaveLoader
         var buildingStates = HeldSave.BuildingStates(save);
         world.Fixtures.Saved = buildingStates;
         world.Fixtures.SavedSpots = HeldSave.BuildingSpots(save);
+        world.Fixtures.SavedPieces = new SavedPieces(save);
         world.Fixtures.Items = data.Items;
         var instanceOf = new Dictionary<FcsRecord, string>(ReferenceEqualityComparer.Instance);
         foreach (var (instance, record) in buildingStates) instanceOf[record] = instance;
@@ -221,7 +222,8 @@ public static class SaveLoader
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } townProduction)
         {
             townProduction.RestoreTownMachine = TownMachineSave.Restorer(save, data.Items);
-            TownMachineSave.Read(camera.Record, world, townProduction, TownMachineSave.Resolver(data));
+            townProduction.RestorePieceMachine = TownMachineSave.PieceRestorer(save, data.Items);
+            TownMachineSave.Read(camera.Record, world, townProduction);
             RockMachineSave.Read(camera.Record, world, townProduction);
         }
 

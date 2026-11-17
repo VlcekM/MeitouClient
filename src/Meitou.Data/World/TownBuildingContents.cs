@@ -62,7 +62,7 @@ sealed class TownBuildingContents
         {
             c.Shop = exterior.GetInt("is shop") != 0;
             c.Bar = exterior.GetInt("is bar") != 0;
-            c.AddExteriorBuildings(layouts, b, exterior);
+            c.AddExteriorBuildings(layouts, resolved, exterior);
         }
 
         if (resolved.Destroyed || layouts.Find(record, b.LayoutName(state, exterior: false), exterior: false) is not { } interior) return c;
@@ -87,12 +87,14 @@ sealed class TownBuildingContents
     /// Adds each object of the exterior layout <paramref name="layout"/> to <see cref="LayoutBuildings"/>, outdoors, as
     /// <c>&lt;key&gt;/exterior/&lt;index&gt;</c>.
     /// </summary>
-    void AddExteriorBuildings(BuildingLayouts layouts, BuildingPlacement b, GameRecord layout)
+    void AddExteriorBuildings(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord layout)
     {
+        var b = resolved.Placement;
         int index = 0;
         foreach (var item in layouts.Items(layout, b))
         {
-            LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true));
+            var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
+            LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true, at, rotation));
             index++;
         }
     }
@@ -132,10 +134,10 @@ sealed class TownBuildingContents
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
             var function = item.Building.GetBool("is node") || IsBed(db, item.Building, beds) ? null : FunctionOf(db, item.Building, functions);
-            bool picked = LaySpot(db, item, at, rotation, beds, function, ref seats);
-
             string id = $"{b.Key}/{index}";
-            LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false));
+            bool picked = LaySpot(db, item, id, at, rotation, beds, function, ref seats);
+
+            LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false, at, rotation));
             int kind = function?.GetInt("function") ?? -1;
             if (kind == CorpseDisposalFunction) Disposals.Add(new TownDisposal(id, item.Building.StringId, at));
 
@@ -153,7 +155,7 @@ sealed class TownBuildingContents
     /// One layout object as a bed or node spot, a chair, or other furniture (<see cref="Furniture"/>); returns whether it stays out of
     /// <see cref="Pieces"/>: a bed or a seat, which have picks of their own, or a node, which has no shape to click; not a dummy or workstation.
     /// </summary>
-    bool LaySpot(GameDatabase db, LayoutItem item, Vector3 at, Quaternion rotation, Dictionary<string, bool> beds, GameRecord? function,
+    bool LaySpot(GameDatabase db, LayoutItem item, string id, Vector3 at, Quaternion rotation, Dictionary<string, bool> beds, GameRecord? function,
         ref List<(int Spot, int Flags)>? seats)
     {
         bool node = item.Building.GetBool("is node");
@@ -185,7 +187,7 @@ sealed class TownBuildingContents
 
         if (function is null || FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is not { } piece) return false;
 
-        Furniture.Add(piece);
+        Furniture.Add(piece with { Piece = id });
         return piece.Kind == HomeSpotKind.ThroneSeat;
     }
 

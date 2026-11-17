@@ -50,6 +50,12 @@ public sealed partial class ProductionSystem
     Dictionary<string, (TownBuilding Building, int Owner, int Site)>? _townBuildings;
 
     /// <summary>
+    /// The objects of the towns' buildings' layouts by <see cref="TownLayoutBuilding.Id"/>, with their building, the faction owning their town and
+    /// the town's site index; made with <see cref="_townBuildings"/>.
+    /// </summary>
+    Dictionary<string, (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)>? _townPieces;
+
+    /// <summary>
     /// The revision of the towns' building lists <see cref="_townBuildings"/> was made from.
     /// </summary>
     int _townBuildingsRevision = -1;
@@ -61,9 +67,10 @@ public sealed partial class ProductionSystem
     readonly HashSet<int> _townSitesMade = [];
 
     /// <summary>
-    /// The machine buildings of registered towns whose machine is not made yet (a ruin until it stands), with the faction owning their town.
+    /// The machine buildings and layout objects (<paramref name="Piece"/> set) of registered towns whose machine is not made yet (in a ruin until it
+    /// stands), with the faction owning their town.
     /// </summary>
-    readonly List<(TownBuilding Building, int Owner)> _townWaiting = [];
+    readonly List<(TownBuilding Building, TownLayoutBuilding? Piece, int Owner)> _townWaiting = [];
 
     /// <summary>
     /// The research contributions the town and outpost workers made this tick (<see cref="TownOperate"/>), which the player's operators continue
@@ -76,6 +83,12 @@ public sealed partial class ProductionSystem
     /// <c>TownMachineSave.Restorer</c>); null: nothing (a new game).
     /// </summary>
     public Action<TownBuilding, Machine>? RestoreTownMachine { get; set; }
+
+    /// <summary>
+    /// What the machine of a town building's layout object takes from the loaded save, as <see cref="RestoreTownMachine"/>: the state of the
+    /// object's own building-list entry (<c>TownMachineSave.PieceRestorer</c>); null: nothing.
+    /// </summary>
+    public Action<TownLayoutBuilding, Machine>? RestorePieceMachine { get; set; }
 
     /// <summary>
     /// The counter of a town farm's random start among its farm draws (above the plantings' and the harvest rolls').
@@ -110,12 +123,30 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The town building of a run-time key and the faction owning its town; null for none.
     /// </summary>
-    (TownBuilding Building, int Owner, int Site)? TownBuildingOf(string key) => TownBuildingIndex()?.GetValueOrDefault(key);
+    (TownBuilding Building, int Owner, int Site)? TownBuildingOf(string key) =>
+        TownBuildingIndex() is { } index && index.TryGetValue(key, out var found) ? found : null;
 
     /// <summary>
-    /// The towns' buildings by run-time key with the faction owning their town, made again when the lists change
-    /// (<see cref="PopulationData.BuildingsRevision"/>, which also has <see cref="TownMachines"/> look at every registered town again); null
-    /// without towns.
+    /// The layout object of a town building of <see cref="TownLayoutBuilding.Id"/> <paramref name="key"/>, with its building, the faction owning its
+    /// town and the town's site index; null for none.
+    /// </summary>
+    (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)? TownPieceOf(string key) =>
+        TownBuildingIndex() is not null && _townPieces!.TryGetValue(key, out var found) ? found : null;
+
+    /// <summary>
+    /// The site index of the town a town machine's site id names: its building's, or for a layout object's machine its building's
+    /// (<c>FUN_140296940</c> climbs from the object to the building it stands in); null for none.
+    /// </summary>
+    int? TownSiteOf(string siteId)
+    {
+        string key = siteId[TownWorkPrefix.Length..];
+        return TownBuildingOf(key)?.Site ?? TownPieceOf(key)?.Site;
+    }
+
+    /// <summary>
+    /// The towns' buildings by run-time key with the faction owning their town, and their layout objects (<see cref="_townPieces"/>), made again
+    /// when the lists change (<see cref="PopulationData.BuildingsRevision"/>, which also has <see cref="TownMachines"/> look at every registered
+    /// town again); null without towns.
     /// </summary>
     Dictionary<string, (TownBuilding Building, int Owner, int Site)>? TownBuildingIndex()
     {
@@ -124,15 +155,31 @@ public sealed partial class ProductionSystem
 
         _townBuildingsRevision = data.BuildingsRevision;
         _townBuildings = new(StringComparer.Ordinal);
+        _townPieces = new(StringComparer.Ordinal);
         _townSitesMade.Clear();
         _townWaiting.Clear();
         foreach (var site in data.Sites)
         {
             int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
-            foreach (var b in site.Buildings) _townBuildings[b.Key] = (b, owner, site.Index);
+            foreach (var b in site.Buildings)
+            {
+                _townBuildings[b.Key] = (b, owner, site.Index);
+                foreach (var piece in b.LayoutBuildings) _townPieces[piece.Id] = (b, piece, owner, site.Index);
+            }
         }
 
         return _townBuildings;
+    }
+
+    /// <summary>
+    /// The machine of a town building or of a layout object of one by its key (<see cref="TownLayoutBuilding.Id"/>), made on the first call
+    /// (<see cref="TownWork"/>, <see cref="PieceWork"/>); null for a key naming neither or one that is no machine. Serial phases only.
+    /// </summary>
+    public Machine? TownWork(World world, string key)
+    {
+        if (TownBuildingOf(key) is { } found) return TownWork(world, found.Building, found.Owner);
+
+        return TownPieceOf(key) is { } piece ? PieceWork(world, piece.House, piece.Piece, piece.Owner) : null;
     }
 
     /// <summary>
@@ -159,14 +206,51 @@ public sealed partial class ProductionSystem
             };
         }
 
+        return Made(world, site, m => RestoreTownMachine?.Invoke(building, m));
+    }
+
+    /// <summary>
+    /// The machine of a town building's layout object, as <see cref="TownWork"/> makes a building's: every object of a layout is a building of its
+    /// own, made by the factory as its functionality's class (<c>FUN_14057cc70</c>, the interior's furniture callback), so a hydroponic farm,
+    /// refinery or battery bank inside a house has its sections, progress and charge. Its site is complete, the house's owner's, inside the house
+    /// for an interior object; its id <c>townwork:&lt;object id&gt;</c>. Serial phases only.
+    /// </summary>
+    public Machine? PieceWork(World world, TownBuilding house, TownLayoutBuilding piece, int owner)
+    {
+        string id = TownWorkPrefix + piece.Id;
+        if (world.Machines.Find(id) is { } known) return known;
+        if (!_townWorkSites.TryGetValue(id, out var site))
+        {
+            _townWorkSites[id] = site = new BuildSite
+            {
+                Id = id,
+                Record = piece.RecordId,
+                Name = _db.Find(piece.RecordId)?.Name ?? "",
+                Position = piece.Position,
+                Owner = _towns?.LevelOwnerOf(house, owner) ?? owner,
+                Materials = [],
+                Complete = true,
+                Rotation = piece.Rotation,
+                Parent = piece.Outdoors ? null : house.Key,
+            };
+        }
+
+        return Made(world, site, m => RestorePieceMachine?.Invoke(piece, m));
+    }
+
+    /// <summary>
+    /// A town site's new machine: a farm at its random start, then what the save holds for it (<paramref name="restore"/>), then the plants spread.
+    /// </summary>
+    Machine? Made(World world, BuildSite site, Action<Machine> restore)
+    {
         if (Ensure(world, site) is not { } m) return null;
 
         // A farm with no saved keys starts at a random growth (Verified, FarmBuilding::loadFromSerialise FUN_1400e3de0: rand() / 32768); a save's
         // keys (TownMachineSave) replace it.
-        if (m.Farm is { } farm) farm.Growth = Rng.Float(Rng.Hash(world.Seed, Rng.StableHash(id), RngPurpose.Farm, RandomStart));
+        if (m.Farm is { } farm) farm.Growth = Rng.Float(Rng.Hash(world.Seed, Rng.StableHash(site.Id), RngPurpose.Farm, RandomStart));
 
-        RestoreTownMachine?.Invoke(building, m);
-        if (m.Farm is not null) SpreadPlants(world, id, m.Farm);
+        restore(m);
+        if (m.Farm is not null) SpreadPlants(world, site.Id, m.Farm);
         return m;
     }
 
@@ -189,7 +273,7 @@ public sealed partial class ProductionSystem
     /// ProductionBuilding and FarmBuilding among them, with its production state from the saved GAMESTATE_BUILDING, so a mine's output and a farm's
     /// crop are there from the start for its workers, the player's loot and the AI's input finder; a farm grows and an unattended producer (an
     /// automatic well, max operators 0) works whether anyone is there (ProductionBuilding::vfunc_28 runs it each frame, #763). A ruin waits until it
-    /// stands.
+    /// stands. The objects of its buildings' layouts are buildings of their own and get theirs alike (<see cref="IsPieceMachine"/>).
     /// </summary>
     void TownMachines(World world)
     {
@@ -200,24 +284,44 @@ public sealed partial class ProductionSystem
             if (!world.Fixtures.IsRegistered(site.Index) || !_townSitesMade.Add(site.Index)) continue;
 
             int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
-            foreach (var b in site.Buildings)
-                if (IsTownMachine(Data(b.BuildingId))) _townWaiting.Add((b, owner));
+            foreach (var b in site.Buildings) WaitForMachines(b, owner);
         }
 
-        if (_townWaiting.Count > 0) _townWaiting.RemoveAll(w => MadeTownMachine(world, w.Building, w.Owner));
+        if (_townWaiting.Count > 0) _townWaiting.RemoveAll(w => MadeTownMachine(world, w.Building, w.Piece, w.Owner));
     }
 
     /// <summary>
-    /// Whether a waiting town building has its machine now: it had one, or it stands and gets it (a ruin keeps waiting).
+    /// A registered town's building waits for its machine when it is one, and so does each machine object of its layouts.
     /// </summary>
-    bool MadeTownMachine(World world, TownBuilding building, int owner)
+    void WaitForMachines(TownBuilding b, int owner)
     {
-        if (world.Machines.Find(TownWorkId(building)) is not null) return true;
+        if (IsTownMachine(Data(b.BuildingId))) _townWaiting.Add((b, null, owner));
+
+        foreach (var piece in b.LayoutBuildings)
+            if (IsPieceMachine(Data(piece.RecordId))) _townWaiting.Add((b, piece, owner));
+    }
+
+    /// <summary>
+    /// Whether a waiting town building or layout object has its machine now: it had one, or its building stands and it gets it (a ruin keeps
+    /// waiting).
+    /// </summary>
+    bool MadeTownMachine(World world, TownBuilding building, TownLayoutBuilding? piece, int owner)
+    {
+        string id = piece is null ? TownWorkId(building) : TownWorkPrefix + piece.Id;
+        if (world.Machines.Find(id) is not null) return true;
         if (world.Fixtures.IsDestroyed(building)) return false;
 
-        TownWork(world, building, owner);
+        if (piece is null) TownWork(world, building, owner);
+        else PieceWork(world, building, piece, owner);
         return true;
     }
+
+    /// <summary>
+    /// Whether a layout object of <paramref name="data"/> gets its machine when its town registers: what a town building gets one for
+    /// (<see cref="IsTownMachine"/>: an interior hydroponic farm, a refinery), and a battery bank, whose charge the town's frame moves
+    /// (docs/game/buildings-production.md "Power"). A layout's generators are the frame's as a town's are (<see cref="NpcOutput"/>).
+    /// </summary>
+    static bool IsPieceMachine(MachineData? data) => IsTownMachine(data) || data is { IsBattery: true };
 
     /// <summary>
     /// Whether a town building of <paramref name="data"/> gets its machine when its town registers: a farm or a producer (a mine, well, refinery
@@ -230,14 +334,15 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A town building's machine as the holder of its faction's goods (<see cref="Crime.StealSource"/>: the building is its own container, and it
-    /// stands in the building its <c>isInsideBuilding</c> handle names, whose residents watch and own it); null for any other site.
+    /// stands in the building its <c>isInsideBuilding</c> handle names, a layout object in its house, whose residents watch and own it); null for
+    /// any other site.
     /// </summary>
     public Crime.StealSource? TownGoods(string site)
     {
         if (!IsTownWork(site) || TownWorkSite(site) is not { } s) return null;
 
         string key = site[TownWorkPrefix.Length..];
-        return new(site, s.Owner, key, s.Position, s.Record, TownBuildingOf(key)?.Building.InsideOf);
+        return new(site, s.Owner, key, s.Position, s.Record, TownBuildingOf(key)?.Building.InsideOf ?? s.Parent);
     }
 
     /// <summary>
@@ -442,22 +547,34 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The residents pretend-operating a workstation or training dummy of their home (row 221, <see cref="Ai.AiMind.PretendAt"/>, set once the seat
-    /// act has them there), as <see cref="TownOperate"/>: at a dummy its training, else the operating XP in the piece's <c>stat used</c>. A
-    /// research or crafting bench's work step makes nothing for them (the player's faction only, a queued craft only).
+    /// act has them there): at a dummy its training; at a workstation <see cref="TownOperate"/> on the piece's own machine (<see cref="PieceWork"/>),
+    /// as <c>Task_OperateMachine</c>'s update does for any machine (<c>FUN_14035bc90</c>: the operating XP, then the building's work step, slot
+    /// <c>0x4b0</c>), so a refinery or hydroponic farm at home fills its output; a research or crafting piece's step makes nothing for them (the
+    /// player's faction only, a queued craft only). A piece with no machine data gives the operating XP alone.
     /// </summary>
     void HomePretenders(World world, float dt)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { Ai: { PretendAt: { Record: { } record } } mind } cold) continue;
+            if (!table.Next[i].Alive || table.Cold(i) is not { Ai: { PretendAt: { Record: { } record } spot } mind } cold) continue;
 
             bool there = mind.Behaviour == Ai.AiBehaviour.Sit && (CharacterTask)table.Next[i].Task == CharacterTask.Idle;
             if (!Able(cold) || !there || Data(record) is not { } data) continue;
 
             if (data.IsTraining) TrainingXp(cold, data, dt);
+            else if (spot.Piece is { } piece && TownWork(world, piece) is { } m) PretendOperate(world, i, cold, m, dt);
             else OperatingXp(world, cold, data.Stat, dt);
         }
+    }
+
+    /// <summary>
+    /// One pretending resident's frame at its piece's machine: <see cref="TownOperate"/> while the piece has power (state 93, a start condition of
+    /// 221 as of 87, which <see cref="TownWorkers"/> holds the AI's workers to alike).
+    /// </summary>
+    void PretendOperate(World world, int slot, CharacterCold cold, Machine m, float dt)
+    {
+        if (Live(world, m) && MachinePowered(world, m)) TownOperate(world, slot, cold, m, dt);
     }
 
     /// <summary>

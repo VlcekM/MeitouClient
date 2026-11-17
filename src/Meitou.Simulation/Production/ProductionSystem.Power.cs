@@ -61,7 +61,8 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<(int Grid, float Demand), float> _pseudoByDemand = [];
     /// <summary>
-    /// The wind range of each placed wind generator's rotor of the level data, by the building's key (null: it has none); read once.
+    /// The wind range of each placed wind generator's rotor of the level data, by the building's key or the layout object's id (null: it has none);
+    /// read once.
     /// </summary>
     readonly Dictionary<string, (float Min, float Max)?> _npcRotors = new(StringComparer.Ordinal);
     /// <summary>
@@ -189,6 +190,14 @@ public sealed partial class ProductionSystem
             if (m.Data.Function == MachineData.RainCollectorFunction)
                 m.Rain = !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Affect: not WeatherAffecting.Acid } here ? here.Wetness : 0;
 
+            // A town layout's battery bank joins the frame of the town its house is in (FUN_1402973f0 registers it with FUN_140296940's town).
+            if (TownBatteryGrid(m) is { } npcTown)
+            {
+                if (!_grids.TryGetValue(npcTown, out var npcGrid)) _grids[npcTown] = npcGrid = [];
+                npcGrid.Add(m);
+                continue;
+            }
+
             if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || IsTownWork(m.Site)
                 || Site(world, m.Site) is not { Complete: true } site)
             {
@@ -207,7 +216,6 @@ public sealed partial class ProductionSystem
             grid.Add(m);
         }
 
-        NpcGeneration(world);
         ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
         {
@@ -225,13 +233,13 @@ public sealed partial class ProductionSystem
             m.Health = site is { Target: > 0 } s ? Math.Clamp(s.Progress / s.Target, 0, 1) : 1;
             m.ProductionMult = UpgradeOf(world, m).ProductionMult;
             m.Efficiency = built ? Efficiency(world, m) : 0;
-            m.HasPower = built && HasPower(world, m, PowerTown(world, Site(world, m.Site)!));
+            m.HasPower = built && (IsTownWork(m.Site) ? TownHasPower(world, m) : HasPower(world, m, PowerTown(world, site!)));
             m.Rotation = !built ? 0 : m.Data.IsGenerator ? (m.PowerOn ? Output(world, m) * 0.01f : 0) : m.Efficiency;
             if (m.Data.IsBattery)
             {
                 // The battery's word reads its town grid's flows, not its own (FUN_140300b40).
                 TownPower grid = default;
-                m.OnGrid = site is not null && _townPower.TryGetValue(PowerTown(world, site), out grid);
+                m.OnGrid = site is not null && _townPower.TryGetValue(TownBatteryGrid(m) ?? PowerTown(world, site), out grid);
                 m.GridCharging = grid.Charging > 0;
                 m.GridDraining = grid.Draining > 0;
             }
@@ -239,30 +247,37 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The generation of each town of the level data that a player machine resolved to (<see cref="PowerTown"/>, a negative key; <b>Observed</b>,
-    /// <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, so an NPC town's frame has the output of the generators
-    /// placed in it). NPC generators ignore empty fuel inputs, but use their saved switch and construction fraction; wind also uses its rotor's
-    /// wind share, nothing below 1. The NPC town's own machine-class buildings
-    /// are consumers of the same frame (<see cref="NpcDraws"/>); with no running generator the player's machine gets 0.
+    /// The generation of the town whose frame runs this pass (<paramref name="town"/>, null: none) when it is a town of the level data, which a
+    /// player machine resolved to (<see cref="PowerTown"/>, a negative key) or a battery bank of its buildings' layouts joins
+    /// (<see cref="TownBatteryGrid"/>) (<b>Verified</b>, <c>FUN_1402973f0</c> registers a building with its power town whatever its owner, a layout
+    /// object with its house's, so an NPC town's frame has the output of the generators placed in it and in its houses). NPC generators ignore
+    /// empty fuel inputs, but use their saved switch and construction fraction; wind also uses its rotor's wind share, nothing below 1. The NPC
+    /// town's own machine-class buildings are consumers of the same frame (<see cref="NpcDraws"/>); with no running generator the player's machine
+    /// gets 0. A player town's frame gets the town-less buildings nearest to it.
     /// </summary>
-    void NpcGeneration(World world)
+    void NpcGeneration(World world, int? town)
     {
         _npcSupply.Clear();
         _npcDraws.Clear();
         _pseudoGrants.Clear();
         _pseudoByDemand.Clear();
-        foreach (var town in _grids.Where(g => g.Value.Count > 0).Select(g => g.Key))
-        {
-            if (town > 0)
-            {
-                if (TownlessDraws(world, town) is { Count: > 0 } townless) _npcDraws[town] = townless;
-                continue;
-            }
+        if (town is not { } picked) return;
 
-            _npcSupply[town] = NpcOutput(world, -town - 1);
-            _npcDraws[town] = NpcDraws(world, -town - 1);
+        if (picked > 0)
+        {
+            if (TownlessDraws(world, picked) is { Count: > 0 } townless) _npcDraws[picked] = townless;
+            return;
         }
+
+        _npcSupply[picked] = NpcOutput(world, -picked - 1);
+        _npcDraws[picked] = NpcDraws(world, -picked - 1);
     }
+
+    /// <summary>
+    /// The grid of a town layout's battery bank (<see cref="PieceWork"/>): the frame of the level town its house stands in; null for any other
+    /// machine.
+    /// </summary>
+    int? TownBatteryGrid(Machine m) => m.Data.IsBattery && IsTownWork(m.Site) && TownSiteOf(m.Site) is { } index ? -(index + 1) : null;
 
     /// <summary>
     /// The draws of the town-less level buildings whose nearest town is grid <paramref name="grid"/> (<see cref="TownlessGrid"/>).
@@ -313,7 +328,7 @@ public sealed partial class ProductionSystem
 
             if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, LevelGetsBattery(world, site, b)));
             foreach (var item in b.LayoutBuildings)
-                if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(new PseudoDraw(item.Id, drawn, GetsBattery: true));
+                if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(new PseudoDraw(item.Id, drawn, PieceGetsBattery(world, item)));
         }
 
         draws.AddRange(TownlessDraws(world, -(index + 1)));
@@ -323,7 +338,6 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// A level building's <c>gets battery</c> (+0x3b4): the UseableStuff constructor (<c>FUN_1402a0900</c>) sets it, and only a building of a saved
     /// zone or of the player's loads it from its state, where a missing key is false (<c>FUN_1402a1750</c>, the guard of "NPC generator state").
-    /// A layout object keeps the constructor's (Meitou does not map the save's ids of generated interiors).
     /// </summary>
     static bool LevelGetsBattery(World world, TownSite site, TownBuilding b)
     {
@@ -332,6 +346,19 @@ public sealed partial class ProductionSystem
 
         return saved is not null ? saved.Bools.GetValueOrDefault("gets battery") : b.LevelState?.GetBool("gets battery") ?? true;
     }
+
+    /// <summary>
+    /// A layout object's <c>gets battery</c>, as <see cref="LevelGetsBattery"/> reads it: its own entry's in the save
+    /// (<see cref="Saving.SavedPieces"/>), else the constructor's (an interior made again from its layout has no state).
+    /// </summary>
+    static bool PieceGetsBattery(World world, TownLayoutBuilding piece) =>
+        SavedPieceState(world, piece) is not { } saved || saved.Bools.GetValueOrDefault("gets battery");
+
+    /// <summary>
+    /// The saved GAMESTATE_BUILDING of a layout object whose zone loads it (<see cref="Saving.SavedPiece.Fresh"/>); null for none.
+    /// </summary>
+    static Meitou.Data.Fcs.FcsRecord? SavedPieceState(World world, TownLayoutBuilding piece) =>
+        world.Fixtures.SavedPieces?.Of(piece) is { Fresh: false, State: { } state } ? state : null;
 
     /// <summary>
     /// A town-less building's <c>gets battery</c>, as <see cref="LevelGetsBattery"/> reads it; with no town, the owner is its saved owner alone.
@@ -392,8 +419,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The grant of a draw of <paramref name="demand"/> on a frame no player machine is on: an NPC town's generators over its town draws
-    /// (<see cref="GrantOf"/>; it has no batteries, which only the player builds); 0 on a player town's, which then has no generator either.
+    /// The grant of a draw of <paramref name="demand"/> on a frame that has not run (no machine is on it: no player machine and no battery bank of
+    /// its houses' layouts, which join it, <see cref="TownBatteryGrid"/>): an NPC town's generators over its town draws (<see cref="GrantOf"/>);
+    /// 0 on a player town's, which then has no generator either.
     /// </summary>
     float UnsharedGrant(World world, int grid, float demand) =>
         grid < 0 ? GrantOf(demand, NpcOutput(world, -grid - 1), [.. NpcDraws(world, -grid - 1).Select(d => d.Demand)], []) : 0;
@@ -475,7 +503,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// What the generators placed in the level-data town of <paramref name="index"/> give now (<see cref="NpcGeneration"/>).
+    /// What the generators placed in the level-data town of <paramref name="index"/> give now (<see cref="NpcGeneration"/>): its standing buildings
+    /// that are generators and the generators of their layouts (a Power Station shack's Small Generators, which join their house's town as its
+    /// battery banks do, <c>FUN_1402973f0</c>).
     /// </summary>
     float NpcOutput(World world, int index)
     {
@@ -484,14 +514,31 @@ public sealed partial class ProductionSystem
         float total = 0;
         foreach (var b in site.Buildings)
         {
-            if (b.Destroyed || Data(b.BuildingId) is not { IsGenerator: true } data) continue;
+            if (b.Destroyed) continue;
 
-            float output = NpcGeneratorHealth(world, site, b) * data.PowerOutput;
-            if (data.IsWind) output *= NpcWind(world, b);
-            if (!data.IsWind || output >= 1) total += output;
+            if (Data(b.BuildingId) is { IsGenerator: true } data)
+                total += Generated(data, NpcGeneratorHealth(world, site, b), data.IsWind ? NpcWind(world, b) : 0);
+
+            foreach (var piece in b.LayoutBuildings)
+            {
+                if (Data(piece.RecordId) is not { IsGenerator: true } pieceData) continue;
+
+                total += Generated(pieceData, PieceGeneratorHealth(world, piece), pieceData.IsWind ? PieceWind(world, piece) : 0);
+            }
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// An NPC generator's output at its switched construction fraction <paramref name="health"/>: <c>power output</c> times it, a wind generator's
+    /// times its <paramref name="wind"/> share and nothing below 1 (<c>FUN_140297760</c>, <c>FUN_140297810</c>).
+    /// </summary>
+    static float Generated(MachineData data, float health, float wind)
+    {
+        float output = health * data.PowerOutput;
+        if (data.IsWind) output *= wind;
+        return !data.IsWind || output >= 1 ? output : 0;
     }
 
     /// <summary>
@@ -503,21 +550,37 @@ public sealed partial class ProductionSystem
         var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
         if (!world.SavedZones.Contains(b.Zone) && !PlayerGeneratorOwner(world, town, b, saved)) return 1;
 
-        bool on = saved is not null ? saved.Bools.GetValueOrDefault("power on") : b.LevelState?.GetBool("power on") ?? true;
-        if (!on) return 0;
-        if (saved is null && b.LevelState is null) return 1;
+        return SwitchedHealth(b.BuildingId, saved, b.LevelState);
+    }
 
-        if (!_npcTargets.TryGetValue(b.BuildingId, out var known) || known.Version != _db.Version)
+    /// <summary>
+    /// A layout generator's switched construction fraction, as <see cref="NpcGeneratorHealth"/> reads a level one's: from its own entry in the save
+    /// (<see cref="SavedPieceState"/>; an entry is only in a zone file that loads, so the guard holds); with no entry (a fresh zone, or an interior
+    /// made again from its layout) complete and switched on (<c>FUN_140562340</c>).
+    /// </summary>
+    float PieceGeneratorHealth(World world, TownLayoutBuilding piece) =>
+        SavedPieceState(world, piece) is { } saved ? SwitchedHealth(piece.RecordId, saved, null) : 1;
+
+    /// <summary>
+    /// The construction fraction of a building of <paramref name="record"/> by its state (the save's, else the level's), 0 when switched off: a
+    /// missing <c>power on</c> is off and missing progress 0 once a state is read; no state at all is complete and on.
+    /// </summary>
+    float SwitchedHealth(string record, Meitou.Data.Fcs.FcsRecord? saved, Meitou.Data.GameRecord? level)
+    {
+        bool on = saved is not null ? saved.Bools.GetValueOrDefault("power on") : level?.GetBool("power on") ?? true;
+        if (!on) return 0;
+        if (saved is null && level is null) return 1;
+
+        if (!_npcTargets.TryGetValue(record, out var known) || known.Version != _db.Version)
         {
-            float value = _db.Find(b.BuildingId) is { } record ? BuildingBuildData.From(record).Target : 0;
-            _npcTargets[b.BuildingId] = known = (_db.Version, value);
+            float value = _db.Find(record) is { } found ? BuildingBuildData.From(found).Target : 0;
+            _npcTargets[record] = known = (_db.Version, value);
         }
 
         float target = known.Target;
         if (target <= 0) return 1;
 
-        float progress = saved is not null ? saved.Floats.GetValueOrDefault("construction progress")
-            : b.LevelState!.GetFloat("construction progress");
+        float progress = saved is not null ? saved.Floats.GetValueOrDefault("construction progress") : level!.GetFloat("construction progress");
         return Math.Clamp(progress / target, 0, 1);
     }
 
@@ -539,22 +602,32 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The wind share of the rotor this level placement spawns, at its own weather region; zero without a rotor or weather.
     /// </summary>
-    float NpcWind(World world, TownBuilding b)
+    float NpcWind(World world, TownBuilding b) => WindAt(world, Rotor(b.Key, b.BuildingId, b.Position), b.Position);
+
+    /// <summary>
+    /// The wind share of a layout wind generator's rotor, as <see cref="NpcWind"/>: the rotor its own placement spawns, at its weather region.
+    /// </summary>
+    float PieceWind(World world, TownLayoutBuilding piece) => WindAt(world, Rotor(piece.Id, piece.RecordId, piece.Position), piece.Position);
+
+    /// <summary>
+    /// A rotor's wind share at <paramref name="at"/>'s weather region; zero without a rotor or weather.
+    /// </summary>
+    static float WindAt(World world, (float Min, float Max)? rotor, Vector3 at)
     {
-        var rotor = Rotor(b);
-        var here = world.Weather?.At(b.Position.X, b.Position.Z);
+        var here = world.Weather?.At(at.X, at.Z);
         return rotor is { } r && here is { } w ? RotorSpec.WindShare(w.WindSpeed, r.Min, r.Max) : 0;
     }
 
     /// <summary>
-    /// The rotor of a placed wind generator, read once.
+    /// The rotor of a placed wind generator of <paramref name="record"/> at <paramref name="at"/> (its placement's seed picks the parts), read once
+    /// by <paramref name="key"/>.
     /// </summary>
-    (float Min, float Max)? Rotor(TownBuilding b)
+    (float Min, float Max)? Rotor(string key, string record, Vector3 at)
     {
-        if (_npcRotors.TryGetValue(b.Key, out var known)) return known;
+        if (_npcRotors.TryGetValue(key, out var known)) return known;
 
-        var rotor = _db.Find(b.BuildingId) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(_db, record, b.Position) : null;
-        return _npcRotors[b.Key] = rotor;
+        var rotor = _db.Find(record) is { } found ? Meitou.Data.World.WorldObjectLayout.WindRotor(_db, found, at) : null;
+        return _npcRotors[key] = rotor;
     }
 
     /// <summary>
@@ -567,10 +640,20 @@ public sealed partial class ProductionSystem
     {
         var towns = _grids.Where(g => g.Value.Count > 0).Select(g => g.Key).Order().ToList();
         foreach (var gone in _townPower.Keys.Where(t => !towns.Contains(t)).ToList()) _townPower.Remove(gone);
-        if (towns.Count == 0) return;
+
+        // A town whose frame has gone reads its generators again (TownHasPower), not the supply of its last frame.
+        foreach (var gone in _townSupply.Keys.Where(t => !towns.Contains(t)).ToList()) _townSupply.Remove(gone);
+
+        if (towns.Count == 0)
+        {
+            NpcGeneration(world, null);
+            return;
+        }
+
         _powerCursor++;
         if (_powerCursor >= towns.Count) _powerCursor = 0;
         int picked = towns[_powerCursor];
+        NpcGeneration(world, picked);
         foreach (var m in _grids[picked]) m.Power = 1;
         Share(world, picked, _grids[picked]);
         foreach (var town in towns) ChargeBatteries(world, town, _grids[town], dt);
@@ -651,14 +734,15 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// <see cref="HasPower"/> of a town's machine (<c>FUN_140299370</c>, <b>Verified</b>): a generator or a machine drawing nothing always; else
-    /// switched on and its town's frame has generator output, the level's generators there (<see cref="NpcOutput"/>) and any of the player's
-    /// machines resolved to that town (<see cref="PowerTown"/>), or its batteries in battery mode; no town: true.
+    /// switched on and its town's frame has generator output, the level's generators there and in its houses' layouts (<see cref="NpcOutput"/>) and
+    /// any of the player's machines resolved to that town (<see cref="PowerTown"/>), or its batteries in battery mode; no town: true. A layout
+    /// object's machine is its house's town's (<see cref="TownSiteOf"/>).
     /// </summary>
     bool TownHasPower(World world, Machine m)
     {
         if (m.Data.IsGenerator || Rated(world, m) == 0) return true;
         if (!m.PowerOn) return false;
-        if (TownBuildingOf(m.Site[TownWorkPrefix.Length..]) is not { Site: >= 0 and var index }) return true;
+        if (TownSiteOf(m.Site) is not (>= 0 and var index)) return true;
 
         int town = -index - 1;
         if (_townSupply.TryGetValue(town, out var supply))
