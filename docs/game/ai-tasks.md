@@ -39,7 +39,7 @@ Factory mappings grouped by identical class; each ID occurs exactly once:
 - Task_FirstAidRig: 249
 - Task_FocusedMeleeAttack: 5, 61
 - Task_Follow: 31, 44, 253, 289
-- Task_Follow / Task_FollowAndTalk: 164
+- Task_FollowAndTalk: 164 (built on the Task_Follow constructor, then its vtable installed)
 - Task_FollowLeader: 141, 171
 - Task_GetOutOfBed: 116, 208, 257
 - Task_GetOutOfCage: 133, 207, 256
@@ -55,7 +55,7 @@ Factory mappings grouped by identical class; each ID occurs exactly once:
 - Task_LeaveBuilding: 200
 - Task_LiftSomething: 68, 170, 213, 225, 240
 - Task_LockDoor: 77, 79, 162, 198
-- Task_Loot_AI / Task_Pickup: 3
+- Task_Loot_AI / Task_Pickup: 3 (Task_Loot_AI for a character target, hand type 1)
 - Task_Loot_Order: 26
 - Task_Loot_ResourcesWeHaveStorageFor: 241
 - Task_MakeAnnouncement: 103, 129
@@ -832,18 +832,15 @@ by it when the row has an effect, `FUN_14060fd80`);
 62, 97, 141, 146, 147, 149, 150, 153, 157, 165, 171, 175, 180, 222, 234, 236, 239, 249, 253, 258, 261, 268, 269, 289. The factory (`FUN_14032ebd0`) acts out 26, 147 and 165 with
 `Task_Loot_Order`, `Task_Stumble` and `Task_TownStalker`, whose slot 4 does not read the byte; the other 34 with classes whose slot 4 is the base one (`Task_Blank` by default)
 (**Verified**, the factory's cases and the vtables; Meitou `TaskDataFlags.NeverDone` on those 34). It is read by the
-base `Tasker`'s slot 4 (`0x20`, `FUN_14032dee0`: true when +0x15 is clear) and the move and door tasks' (`FUN_140332130`, which also needs their byte `+0x94`); 15 other task
-classes override the slot with tests of their own (e.g. `Task_Loot_AI` `+0x78`, `Task_Loot_Order` `+0x7c`) and ignore +0x15 (**Observed**: these two functions are the only
-byte compares at `+0x15` in the exe's code). Slot 4 true gates the list-A tests: the scorer drops a candidate whose list A holds
-(`FUN_14060f570`, `FUN_14050c8e0`), the plan step ends a running task whose list A holds (`FUN_140513f50`), and the job and order passes (`FUN_14050e5b0`, `FUN_140510920`)
-do the same; a row with an empty list A and no effect never holds there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes none of them.
+base `Tasker`'s slot 4 (`FUN_14032dee0`) and the move and door tasks' (`FUN_140332130`); the other classes' own tests ignore it (**Observed**: these two functions are the only
+byte compares at `+0x15` in the exe's code). Readers and every class's test: [finished tests](#finished-tests). A row with an empty list A and no effect never holds
+there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes none of the list-A tests.
 
 - Score = desire x goal weight x crowd^n; x1.25 for the current task. For a committing current task the
   score is at least 0.4 until the commitment ends and at most 0.05 after it, so the character moves on. Then, while the running task (the plan's current step) answers
   slot 4 false and the score is below 1 (`DAT_14167c308`), x1.25 again (`DAT_14168ba14`; **Verified**, `FUN_14050df10`). Man the gate at its desire 1 and the Gate guard packages'
-  weight 1 (val2 0, **Verified** data) scores 1.25 as the current goal, so this never applies to it in the base data. Meitou (`AiSystem.Score`; `DecisionSystem.PickGoal` for the player's characters): the second x1.25 for a
-  running step of a +0x15 row, and such a row's goal is never dropped as done (`PlanContext`). The job and order passes have no x1.25 at all (their keys are list places,
-  `FUN_14050e5b0`, `FUN_140510920`). The move, door and other classes' own slot 4 tests are not modelled: ours drop a goal whose list A holds and raise no running step of theirs.
+  weight 1 (val2 0, **Verified** data) scores 1.25 as the current goal, so this never applies to it in the base data. The job and order passes have no x1.25 at all (their
+  keys are list places, `FUN_14050e5b0`, `FUN_140510920`). Meitou: [finished tests](#finished-tests).
 - Commitment: when a committing task becomes current, end = now + min + rand x range. A candidate that is not the current task has its target cleared
   before it is chosen, so a newly chosen goal gets a fresh target from its finder.
 - Desires (`AI` vtable slots): 19 = 1, 39 = 0.1 (Idleness), 40 = 0.25 (Patrolling, Patrolling town), 41 = 0.5 (Stand at node, Shopkeeper, Static guard,
@@ -873,6 +870,57 @@ do the same; a row with an empty list A and no effect never holds there (`FUN_14
 | 248 Attacking Squad | 0.3 + r x 2 (+0x20 and +0x21 set; **Verified**, the registration in `FUN_140319a60`; Meitou `TaskProfiles`) | 1 |
 | 45 Bodyguard | - | 0.9 |
 | 57, 58, 125, 237, 250 | - | 0.8 |
+
+### Finished tests
+
+**Verified**: which function is slot 4 (`+0x20`) of every `Task_*` vtable (`re/vtables.txt`), the factory's cases (`FUN_14032ebd0`), the constructors' 0 bytes and each byte's
+writers (decompiled). **Observed**: the reader list (a search of the decompile for two-argument calls through `+0x20` on task objects), the clip readings (shares of a clip's
+length), the meanings of state 9, of CharBody `+8` as the fight state, of the line start `FUN_140685750` and of the hand +0x80 as the campaign's lead. Slot 4 takes the task and
+the character (AITaskSytem `+0x278`, the object `+8` also holds). Each reader gates a list-A test (`FUN_14060f570`, then the effect test `FUN_14050c8e0`):
+- the scorer `FUN_14050df10`: a candidate that is not the current goal (another type, or either target hand differs: hand vfunc `0x10` answers "differs", as `FUN_140506b10`
+  reads it) is dropped when its own slot 4 and list A hold; the current goal skips that test, and gets the second x1.25 while slot 4 of the running task (the driver
+  `+0x270` → `+0x68`) is false and the score is below 1;
+- the plan step `FUN_14050d970` (each AI update) and `FUN_14050f0b0` (AI slot 3 `FUN_1405965b0`, with a frame time; only while the goal does not commit or its commitment has
+  passed) end the running task when its slot 4 and its own list A hold (`FUN_140513f50`, then `FUN_14050d7d0`);
+- the job pass `FUN_14050e5b0` skips a job, and the order step `FUN_140510920` pops the front order, when slot 4 and list A hold; the order step asks the running task instead
+  when it matches the front order (`FUN_140506b10`: same type and target).
+
+Goals, jobs and orders are factory instances that never run (the planner builds new ones for its plan, `FUN_14050fe10`, `FUN_1405104d0`), so their own bytes hold the
+constructor's 0. A byte raised together with the task's own end (CharBody slot 4 `FUN_1405c67e0`, AITaskSytem `+0x26c`) or a replan request (slot 5 `FUN_1405c6810`, `+0x26d`)
+is acted on in the same character update (`FUN_1405c7c30`: CharBody slot 1 `FUN_1405c6d20` runs the task's update, then `FUN_14050d920` ends the task through
+`FUN_14050d7d0` or replans through `FUN_14050d080`), so no chooser pass sees it set on a running task; `FUN_14050d920` is skipped while the character is down
+(`FUN_1407d1440`), whose task update runs only on a branch of `FUN_140598c20`.
+
+| Class (rows) | Slot 4 | Never run | Running |
+|---|---|---|---|
+| base `Tasker` (all other classes) | `FUN_14032dee0`: +0x15 clear | as running | +0x15 clear |
+| `Task_Move` (1, 29, 40, 67), `Task_MoveToDoor` and its four subclasses (82, 83, 121, 163, 199) | `FUN_140332130`: +0x15 clear and +0x94, set by every update (`FUN_140354600`, `FUN_140332910`, `FUN_140332c10`, `FUN_140332e40`, `FUN_140333170`), cleared by nothing | false | true from its first update |
+| `Task_MakeAnnouncement` (103, 129) | `FUN_140333f60`: +0x78 (its line started near the target, `FUN_140685750`; update `FUN_140355770`) and +0x79 (the character's conversation then ended, `Dialogue::conversationHasEnded` `FUN_140671c60`); start and end clear both; an update that finds the conversation over but `FUN_140673830(dialogue, 2)` false clears +0x78 and announces again | false | true once announced, the conversation over and `FUN_140673830` true; it has no end of its own (list A 76 ends it) |
+| `Task_MeleeAttack` (4, 227), `Task_FocusedMeleeAttack` (5, 61) | `FUN_140334230` → `FUN_14060cd80` on Character +0x648 (CharBody) → +8: CombatClass state +0x1f0 9 (no target), and no technique (+0x150) whose clip (`FUN_1405b4bb0`; 1.01 when not playing) is at 0.99 (`DAT_141696c78`) or less | same | same |
+| `Task_Loot_Order` (26) | `FUN_1403343c0`: +0x7c, set when an update finds the melee threat flag (Character +0x2b0), with a replan request | false | false |
+| `Task_Loot_AI` (3 on a character target, hand type 1; else `Task_Pickup`, base) | `FUN_140334460`: +0x78, set with its end once the take is done (update `FUN_14034d930`) | false | false |
+| `Task_Loot_ResourcesWeHaveStorageFor` (241) | `FUN_140334590`: +0x78 after 3 s (`DAT_14168a254`, update `FUN_14034e2a0`), with its end (or a replan without a target) | false | false |
+| `Task_StripWeapons` (181) | `FUN_140334600`: +0x78 after 0.8 s (`DAT_14168a178`) when the weapons are taken, with its end | false | false |
+| `Task_ProcessNewSlave` (182) | `FUN_140334670`: +0x78 once the slave is processed (+0x79, after 3 s) and the character's conversation then ended, with its end (`FUN_14035aa20`) | false | false |
+| `Task_GetUp` (52, 65) | `FUN_140334a10`: +0x79, set with its end: the get-up clip past 0.86 (`DAT_1416be6cc`), or at once without a clip or in a bed or cage (start `FUN_14033ca10`, update `FUN_140334a20`) | false | false |
+| `Task_LiftSomething` (68, 170, 213, 225, 240), `Task_Kidnapping` (246) | `FUN_140334d40`: +0x7a, set with its end when the `shoulder lift` clip reaches 0.95 (`DAT_1416b77d8`, update `FUN_140354ff0`, which 246's `FUN_1403552d0` calls); the end `FUN_1403471e0` clears it | false | false |
+| `Task_Stumble` (147) | `FUN_140334f80`: the character's AnimationClass (+0x448) has no stumble clip (+0x228) | same | same |
+| `Task_TownStalker` (165), `Task_FollowAndTalk` (164; case `0xa4` always installs it) | `FUN_14033bc90`: the character's conversation has ended and so has its target's (or the target does not resolve), or its melee threat flag +0x2b0 is set | same | same |
+| `Task_TravelToMissionTarget_ArmyFormation` (215) | `FUN_140349de0`: the leader of the character's platoon's campaign (the faction's war manager, +0x88, `FUN_140283500` → `CampaignInstance` slot 5 `FUN_140285820`: its lead hand +0x80, a character, or a squad's leader `FUN_140792b90`) is the character; else +0x78, which the update sets only for that leader once its mover arrived | as running (+0x78 0) | same |
+
+Meitou (`TaskFinishes.Of`, `TaskFinished`): `TaskFinished.Fresh` is the never-run answer, asked by the done test of `PlanContext.TryPlan` for every goal, the current one too (the
+original ends a current goal's running root task by its slot 4 and list A, then drops the goal at the re-pick by the never-run answer, which implies the running one for every
+class). `TaskFinished.Unfinished` is the running answer, behind the second x1.25 (`AiSystem.Score` with the plan's step, `DecisionSystem.PickGoal` with `CharacterCold.Running`);
+where Meitou's plan names the goal, the act-out names the original's task: a fight (`Attack`) is 4 or 227, or Task_RangedAttack's 262 (base) with `CombatSlot.Ranged`; a
+treatment 25 (60, 249 and 269 answer the same); a lift (`PickUp`) 68; a loot its start's row. Melee reads `CombatSlot.TargetSlot` and `CombatSystem.Playing`; Stumble the hit
+reaction (`StumbleClip` until `StunUntil`); Talk `DialogueSystem.Talking` and `CharacterFacts.ImmediateThreat`; Formation the squad leading its platoon's campaign
+(`CampaignInstance.Leader`) with the character its leader (215's list A, state 131, is not wired and never holds, so this changes no drop yet); a move counts as updated once
+its act-out has had a tick. The fight answer raises a running fight goal below 1 (the `goal-fights` golden scenario). Still different: no goal or plan step Meitou runs is of the
+Announcement, Stumble or Talk classes (147, 164 and 165 are engine systems, 103 and 129 not acted out), so their answers are never asked; Meitou re-plans at every think
+instead of ending a running step by its slot 4 and list A, and tests the current goal's list A whatever step runs; an act-out an engine reaction started is read as the
+current goal's task. The order step and the job pass ask no generic list-A test, so no slot 4: an order leaves when its act-out ends (`ITaskHandler.Done`,
+`PlayerOrders.Prepare`), a job by its contributor's rules (152's `!62` in `ProductionSystem.Blocked`, a base-class row). In the original, list A never pops a running order of an own-end class
+(26, 225, 246) and never skips a job of an own-end or move class.
 
 ## Planner
 

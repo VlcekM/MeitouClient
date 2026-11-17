@@ -39,9 +39,9 @@ public enum TaskDataFlags : byte
     /// </summary>
     KeepsQueue = 32,
     /// <summary>
-    /// Never finished (+0x15, on the rows whose task class keeps the base Tasker's slot 4, <c>FUN_14032dee0</c>, which then answers false): its
-    /// list A neither skips it as done nor ends it as a running step, and the scorer raises a current goal running it once more
-    /// (docs/game/ai-tasks.md "Desire and commitment").
+    /// Never finished (+0x15, on the rows whose task class keeps the base Tasker's slot 4, <c>FUN_14032dee0</c>, which then answers false,
+    /// <see cref="TaskFinish.Base"/>): its list A neither skips it as done nor ends it as a running step, and the scorer raises a current goal running
+    /// it once more (docs/game/ai-tasks.md "Finished tests").
     /// </summary>
     NeverDone = 64,
 }

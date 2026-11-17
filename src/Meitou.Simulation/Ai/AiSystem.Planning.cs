@@ -122,7 +122,7 @@ public sealed partial class AiSystem
 
         /// <summary>
         /// Plans a goal; true (and the plan in <see cref="AiMind.Plan"/>) when it has one whose first step the engine carries out. A goal without a
-        /// TaskData row is its own plan; one whose list A already holds is left out (the scorer's done test).
+        /// TaskData row is its own plan; one whose list A already holds is left out when its class's finished test agrees (the scorer's done test).
         /// </summary>
         public bool TryPlan(AiGoal goal, float desire)
         {
@@ -177,8 +177,9 @@ public sealed partial class AiSystem
 
             var target = row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) ? Find(row, default) : default;
             if (row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) && target.IsNone) return false;
-            // A goal whose list A holds is done (FUN_14060f570), unless its task never finishes (TaskData +0x15: slot 4 false, FUN_14050df10).
-            if (!row.Is(TaskDataFlags.NeverDone) && row.Done.Length > 0 && Array.TrueForAll(row.Done, c => Holds(c, target))) return false;
+            // A goal whose list A holds is done (FUN_14060f570) when a fresh task of its class says it is finished (slot 4, FUN_14050df10).
+            if (row.Done.Length > 0 && TaskFinished.Fresh(_world, _slot, type, CharacterId.None) && Array.TrueForAll(row.Done, c => Holds(c, target)))
+                return false;
             if (TaskPlanner.Local.Plan(row, desire, target, this, _mind.Plan, _scratch) <= 0) return false;
             if (_scratch[0].Type != type && !Carried(_scratch[0].Type)) return false;
             _mind.Plan.Clear();
