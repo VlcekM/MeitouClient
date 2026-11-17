@@ -88,7 +88,9 @@ public sealed partial class CarrySystem
         }
         if (success)
         {
-            victim.KidnapVictim = true;   // Task_Kidnapping vfunc 2 flags the victim of a roll that took (status +0xe9)
+            // Task_Kidnapping vfunc 2 flags the victim of a roll that took (status +0xe9); only the player's order 246 builds that task, so an NPC
+            // kidnapper's sleeper is never flagged (docs/game/carry-loot.md "The kidnap victim flag").
+            if (cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.KidnapOrder }) victim.KidnapVictim = true;
             if (victim.Medical is { Incapacitated: false } medical)
             {
                 float assassination = cold.Stats?[StatsEnumerated.Assassination] ?? 0;
