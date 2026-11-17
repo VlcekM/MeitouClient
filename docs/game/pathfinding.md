@@ -41,6 +41,12 @@ Havok paths, local steering and unloaded-platoon movement are distinct code path
 **Observed** S=max(11,(V-11)*leg*hunger*replacement*encumbrance*statScale+11),
 V=lerp(speedMin,speedMax,athletics/100)*(0.5+0.5*slot115). After the water states `FUN_140886460` overrides S: 7 while
 the posture is 1 (staying low), then 5 when medical `+0x160` (a leg down) is set (**Observed** literals; Meitou `Speed.Run`).
+While sneaking out of combat mode (`Character::isStealthMode`) the term X = (V-11) x the factors is capped before the + 11, the floor and the water
+states: X = min(X, lerp(12, X, max(0, (s - 0.1) / 0.8))), s the stealth term (**Observed**, disassembly of `FUN_140886460`), so the Run speed
+readout and a speed group's slowest member read the capped speed (**Observed** in 1.0.68: a stealth-1 character's Run speed went from 16 to
+"5 (-11) mph" with Sneak on, and a squad mate not sneaking kept beside it in Group speed). Meitou: `Speed.Run` with the stealth term
+(`Speed.SneakCap`), set by `BodySystem.TopSpeed` for a sneaker not in a fight (Meitou's stand-in for combat mode, as for a follower copying a
+leader's sneaking).
 **Verified** (nav agent `FUN_140147ca0` / `FUN_140147fd0`, `FUN_140144440`): the agent's velocity moves toward the wanted one by at most
 a × dt, a = RACE `pathfind acceleration` (Havok units, ×10 in world units; 24 for people, so about 0.2 s to full speed; 3 Murloc, 200 wasps),
 lerp(age, 3a, a); it brakes before corners and its last point to sqrt(2 a d) and snaps onto the goal, arriving within 1 unit; a goal another

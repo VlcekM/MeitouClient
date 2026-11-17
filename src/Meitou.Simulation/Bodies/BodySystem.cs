@@ -264,6 +264,17 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
+    /// The top speed (<see cref="Speed.Run"/>), with the sneaking cap while the character sneaks out of a fight (<c>FUN_140886460</c>, its
+    /// <c>Character::isStealthMode</c> test; out of a fight stands for out of combat mode, as the copy of a leader's sneaking does), so the readout
+    /// and a speed group read the capped speed (#841, #882).
+    /// </summary>
+    static float TopSpeed(CharacterCold cold, RaceData race, CharacterStats stats, MedicalState medical, float encumbrance)
+    {
+        float? stealth = (cold.Orders & CharacterOrders.Sneak) != 0 && !cold.InCombat ? Orders.Stealth(cold) : null;
+        return Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1, stealth: stealth);
+    }
+
+    /// <summary>
     /// One character's body step: its medical tick with the context of the moment, its speeds, the XP of moving and sneaking, and the stops a
     /// knockout or death makes. <paramref name="events"/> is the reused list of the medical events.
     /// </summary>
@@ -303,7 +314,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         events ??= [];
         events.Clear();
         medical.Tick(dt, ctx, events);
-        n.MaxSpeed = Speed.Run(race, stats, medical, encumbrance, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
+        n.MaxSpeed = TopSpeed(cold, race, stats, medical, encumbrance);
         cold.SwimSpeed = Speed.Swim(race, stats, medical, encumbrance);
 
         TrainOnTheStep(world, i, cold, stats, race, medical, in n, carrying, encumbrance, dt);

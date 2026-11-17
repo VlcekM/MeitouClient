@@ -52,19 +52,32 @@ public static class Speed
 
     /// <summary>
     /// S = (V - 11) x leg factor x hunger factor x the fitted legs' athletics multipliers x encumbrance factor x <paramref name="statsFactor"/> (the
-    /// gear factor <c>CharStats+0x18</c>, 1 for none, <see cref="Combat.Fighter.AthleticsFactor"/>) + 11, never below 11; shallow water caps it at
-    /// 45. A crawler moves at <see cref="CrawlSpeed"/> or <see cref="StayingLowSpeed"/> instead.
+    /// gear factor <c>CharStats+0x18</c>, 1 for none, <see cref="Combat.Fighter.AthleticsFactor"/>), capped by <see cref="SneakCap"/> for a sneaker
+    /// (<paramref name="stealth"/>, the stealth term 0..1; null: not sneaking), + 11, never below 11; shallow water caps it at 45. A crawler moves at
+    /// <see cref="CrawlSpeed"/> or <see cref="StayingLowSpeed"/> instead.
     /// </summary>
     public static float Run(RaceData race, CharacterStats stats, MedicalState medical, float encumbranceFactor, bool shallowWater = false,
-        float statsFactor = 1)
+        float statsFactor = 1, float? stealth = null)
     {
         if (medical.Crawling) return CrawlSpeed;
         if (medical.Prone) return StayingLowSpeed;
         float v = RunValue(race, stats.Athletics);
-        float s = (v - Minimum) * LegFactor(medical) * HungerFactor(medical.Hunger) * medical.LegItemFactor(StatsEnumerated.Athletics)
-            * encumbranceFactor * statsFactor + Minimum;
-        s = MathF.Max(s, Minimum);
+        float x = (v - Minimum) * LegFactor(medical) * HungerFactor(medical.Hunger) * medical.LegItemFactor(StatsEnumerated.Athletics)
+            * encumbranceFactor * statsFactor;
+        if (stealth is { } s01) x = SneakCap(x, s01);
+
+        float s = MathF.Max(x + Minimum, Minimum);
         return shallowWater ? MathF.Min(s, ShallowWaterCap) : s;
+    }
+
+    /// <summary>
+    /// The sneaking cap of the speed above the floor (docs/game/pathfinding.md "Speed and orders"): min(X, lerp(12, X, max(0, (s - 0.1) / 0.8))) for
+    /// the stealth term s, the lerp unclamped above, so a clumsy sneaker creeps at 23 units a second.
+    /// </summary>
+    public static float SneakCap(float x, float stealth)
+    {
+        float t = MathF.Max(0, (stealth - 0.1f) / 0.8f);
+        return MathF.Min(x, 12 + (x - 12) * t);
     }
 
     /// <summary>

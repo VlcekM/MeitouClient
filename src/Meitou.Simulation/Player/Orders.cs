@@ -235,18 +235,6 @@ public static class Orders
     }
 
     /// <summary>
-    /// The sneaking speed (docs/game/pathfinding.md "Sneaking", Observed): X = speed - 11, X = min(X, lerp(12, X, clamp((s - 0.1) / 0.8))), then X +
-    /// 11, at least 11. A clumsy sneaker creeps at 23 units a second; from stealth 90 on the cap is gone.
-    /// </summary>
-    public static float SneakSpeed(float speed, float stealth)
-    {
-        float x = speed - 11;
-        float t = Math.Clamp((stealth - 0.1f) / 0.8f, 0, 1);
-        x = MathF.Min(x, 12 + (x - 12) * t);
-        return MathF.Max(x + 11, 11);
-    }
-
-    /// <summary>
     /// The sneaking target's view factor (docs/game/perception.md "Sight", Verified constants): v x 0.75 when v is at least 0.5, else x 0.5, then x
     /// lerp(s, 1, 0.6). Passing this test only fills the looker's spot meter (<see cref="SpotSeconds"/>); the target counts as seen once the meter is
     /// full.

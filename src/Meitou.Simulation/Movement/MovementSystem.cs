@@ -1737,7 +1737,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// The speed a path walker wants: its mode's cap (a carrier's walk raised to a run, a squad's force speed raising it) or a follower's own speed,
-    /// within its top speed in water, then capped in its footwork, by its group, by sneaking, by a campaign's pace, and a crawler's.
+    /// within its top speed (sneaking caps that) in water, then capped in its footwork, by its group, by a campaign's pace, and a crawler's.
     /// </summary>
     float PathSpeed(World world, int i, in CharacterHot p, in CharacterHot n, CharacterCold cold, int water)
     {
@@ -1766,9 +1766,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow)
             desired = MathF.Min(desired, _groupSpeeds.Of(world, i, cold, p.Position));
 
-        if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0)
-            desired = MathF.Min(desired, Orders.SneakSpeed(desired, Orders.Stealth(cold)));
-
         if (cold.PaceCap is { } pace && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat)
             desired = MathF.Min(desired, pace);   // a campaign follower near its trail point
 
@@ -1791,8 +1788,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             float top = s.Water > 0 && cold.Race is { } race ? Speed.InWater(s.Water, n.MaxSpeed, race, cold.SwimSpeed) : n.MaxSpeed;
             s.Dir = gap / dist;
             s.Desired = MathF.Min(MathF.Min(cold.FollowSpeed, top), dist / s.Dt);
-            if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0)
-                s.Desired = MathF.Min(s.Desired, Orders.SneakSpeed(s.Desired, Orders.Stealth(cold)));
 
             if (cold.Medical is { Crawling: true }) s.Desired = MathF.Min(s.Desired, Speed.Crippled);
         }
