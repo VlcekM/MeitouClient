@@ -68,7 +68,8 @@ public sealed class TownBuildingBuilder
         foreach (var t in levels.Towns())
             if (db.Find(t.TownId) is { Type: FcsRecordType.Town } record) _towns.Add((t, Gameplay.TownData.From(record)));
 
-        // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on.
+        // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on, and an isInsideBuilding
+        // handle the building a piece stands in.
         foreach (var b in levels.Buildings())
             if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && IsBuildingHandle(state))
                 _instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
@@ -158,6 +159,7 @@ public sealed class TownBuildingBuilder
             RuinedByResidents = _levels.ResidentRuined.Contains(b.Key),
             RestoredByResidents = _levels.ResidentRestored.Contains(b.Key),
             Turret = turret,
+            InsideOf = HandleTarget(_instances, state, "isInsideBuilding"),
             ResidentsTemplate = state?.GetString("residents template") ?? "",
             LevelState = state,
             InteriorLayout = state?.GetString("interior layout name") ?? "",
@@ -210,9 +212,14 @@ public sealed class TownBuildingBuilder
     /// <summary>
     /// The key of the building a state's <c>mounted</c> handle names; null when the handle is null, not a building, or unknown.
     /// </summary>
-    static string? MountedOn(Dictionary<(int C, int I), string> instances, GameRecord? state) =>
-        state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("mountedI") &&
-        instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
+    static string? MountedOn(Dictionary<(int C, int I), string> instances, GameRecord? state) => HandleTarget(instances, state, "mounted");
+
+    /// <summary>
+    /// The key of the building a state's handle <paramref name="name"/> names; null when the handle is null, not a building, or unknown.
+    /// </summary>
+    static string? HandleTarget(Dictionary<(int C, int I), string> instances, GameRecord? state, string name) =>
+        state is not null && state.GetInt(name + "TYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey(name + "I") &&
+        instances.TryGetValue((state.GetInt(name + "C"), state.GetInt(name + "I")), out string? instance) ? instance : null;
 
     /// <summary>
     /// The layout names housing takes a building record to offer (<see cref="BuildingLayouts.Names"/>, case kept), cached by record and side;

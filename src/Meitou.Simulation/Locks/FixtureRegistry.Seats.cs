@@ -17,6 +17,10 @@ public sealed record SeatSpot(string Id, string Building, string Record, Vector3
     /// The sitter's facing as the game has it (<see cref="HomeSpot.FaithfulYaw"/>).
     /// </summary>
     public float FaithfulYaw { get; init; } = Yaw;
+    /// <summary>
+    /// Its building's town site (-1: none), for the owner its name bar shows.
+    /// </summary>
+    public int Site { get; init; } = -1;
 }
 
 /// <summary>
@@ -50,7 +54,7 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Registers a town building's chairs and thrones as seats, numbered in the building's order.
     /// </summary>
-    void RegisterSeats(TownBuilding building, int owner)
+    void RegisterSeats(TownBuilding building, int site, int owner)
     {
         int index = 0;
         foreach (var spot in building.Spots.Concat(building.Furniture))
@@ -58,7 +62,7 @@ public sealed partial class FixtureRegistry
             if (spot.Kind is not (HomeSpotKind.Chair or HomeSpotKind.ThroneSeat) || spot.Record is null) continue;
             string id = $"{building.Key}@seat{(index++).ToString(CultureInfo.InvariantCulture)}";
             _seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw,
-                    FaithfulYaw = spot.FaithfulYaw };
+                    FaithfulYaw = spot.FaithfulYaw, Site = site };
         }
 
         _publishedSeats = null;

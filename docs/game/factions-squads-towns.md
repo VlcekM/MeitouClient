@@ -38,11 +38,11 @@ Do not reuse one zero-weight convention for both.
 ### Squad leader
 
 `ActivePlatoon` (KenshiLib 1ce4a16, **Observed**) keeps `squadleader` (`+0xa0`, set by `setSquadLeader`, which gives it member type 2) and `backupLeader`
-(`+0xa8`). The effective leader (`getSquadLeader`, `FUN_140792b90`, **Verified**) is the leader while it is not down (`FUN_1405c9e10`: knocked out, dead, ragdolled or carried, or leg
-state 3+) and not `inSomething` (`+0x2f8`, bed or cage), else the backup under the same test, else the first member of the container list (animals included) that is not down and
+(`+0xa8`). The effective leader (`getSquadLeader`, `FUN_140792b90`, **Verified**) is the leader while it is not down (`isDown`, `FUN_1405c9e10`: dead `+0x5bc`, `+0x5b9`, carried `+0x3d4` or a WHOLE or
+CARRY_MODE ragdoll (`FUN_1407d1440`, [ragdolls](ragdolls.md)), or posture `+0xe0` of 3 PS_PLAYING_DEAD or 4 PS_KO; a limb-only ragdoll or a crawl is not down) and not `inSomething` (`+0x2f8`, bed or cage), else the backup under the same test, else the first member of the container list (animals included) that is not down and
 stands in a loaded or requested zone, cached as the backup; else the leader itself, usable or not. That member scan tests the *leader's* `+0x2f8`, not the member's (so a leader in a
 bed or cage is kept). The stored leader is never replaced there. Meitou (`PopulationSystem.EffectiveLeader`, `Squad.Backup`):
-the same rule for a loaded platoon's place and the unload anchor; down = out (unconscious or dead) or carried, a limb hold and playing dead are not modelled. A campaign's announcement is task 129 in the leader's AI package, and animals get only
+the same rule for a loaded platoon's place, the unload anchor and the owner character of a building's goods ([theft](carry-loot.md#theft-and-witnesses)); down is `CharacterFacts.Down`, the same `isDown`. A campaign's announcement is task 129 in the leader's AI package, and animals get only
 `dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (leaving, a save or stand-in without a leader), and an NPC squad whose leader died while a member
 lives, takes its first living member that is not an animal, else its first living one (`SquadRegistry.Successor`, engine choice), who then acts
 the leader's goals (a patrol), so the squad does not stand by the corpse. A player squad edited on the squads screen still makes its index 0 the leader.

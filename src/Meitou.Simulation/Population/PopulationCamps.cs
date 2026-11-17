@@ -24,7 +24,7 @@ public sealed partial class PopulationSystem
     {
         FoldCamp(world, camp);
         world.NestBuildings.Set(camp, layout, owner, centre, record, furniture);
-        foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, _data, piece, owner, site);
+        foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, _data, piece, owner, site, camp >= 0 ? camp : -1);
         if (layout.Drops.Count > 0 && fresh && world.NestBuildings.Stock(camp)) LayItems(world, camp, layout.Drops, owner, centre);
     }
 

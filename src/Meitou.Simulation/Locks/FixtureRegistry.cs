@@ -256,7 +256,10 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public IReadOnlyList<ContainerSpot> ContainerSpots => _containerSpots
             ??= [.. _all.Where(f => f.Contents is not null).Select(f
-                    => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw))];
+                    => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw)
+                    {
+                        Town = FixtureTown.Of(f),
+                    })];
 
     /// <summary>
     /// Every cage, for the host's picking; the list is rebuilt (serial phases) when a building registers or goes, the spots only when a cage's lock,
@@ -279,14 +282,17 @@ public sealed partial class FixtureRegistry
         _publishedCagesKey = key;
         return _publishedCages = [.. _cageList.Select(f
                 => new CageSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, IsFree(table, f) ? CharacterId.None
-                        : f.Occupant, f.Lock?.Level ?? 0, f.Yaw, f.OccupantSelection))];
+                        : f.Occupant, f.Lock?.Level ?? 0, f.Yaw, f.OccupantSelection) { Town = FixtureTown.Of(f) })];
     }
 
     /// <summary>
     /// Every bed, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
     /// </summary>
     public IReadOnlyList<BedSpot> BedSpots => _bedSpots
-            ??= [.. _all.Where(f => f.Kind == FixtureKind.Bed).Select(f => new BedSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
+            ??= [.. _all.Where(f => f.Kind == FixtureKind.Bed).Select(f => new BedSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw)
+            {
+                Town = FixtureTown.Of(f),
+            })];
 
     /// <summary>
     /// Every town training dummy, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
@@ -522,7 +528,7 @@ public sealed partial class FixtureRegistry
             }
         }
 
-        RegisterSeats(b, owner);
+        RegisterSeats(b, site, owner);
         AddBeds(db, site, b, owner, list);
         AddDummies(site, b, owner, list);
         return list;
@@ -729,10 +735,10 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Registers a camp building's cage, lock or bed (<see cref="NestBuildings"/>: a Prisoner Pole of a fog nest, a bandit camp's bedroll, #362),
-    /// owned by the camp's faction: a nest's is marked (<see cref="Fixture.Nest"/>), a town's has the town's <paramref name="site"/>. Then binds the
-    /// held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece with none is left out.
+    /// owned by the camp's faction: a nest's is marked (<see cref="Fixture.Nest"/>) and has its <paramref name="wild"/> site, a town's has the town's
+    /// <paramref name="site"/>. Then binds the held characters whose <see cref="CharacterCold.InWhat"/> names it. A piece with none is left out.
     /// </summary>
-    public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner, int site = -1)
+    public void RegisterNestBuilding(World world, PopulationData data, NestPiece piece, int owner, int site = -1, int wild = -1)
     {
         if (_byBuilding.ContainsKey(piece.Id) || data.Db.Find(piece.Record) is not { } record) return;
         var kind = Lockable(data.Db, record);
@@ -749,6 +755,7 @@ public sealed partial class FixtureRegistry
         }
 
         if (bed is { } b) list.Add(BedOf(data.Db, piece.Id, record, site, owner, piece.Position, piece.Rotation, b));
+        foreach (var f in list) f.Wild = wild;
         _byBuilding[piece.Id] = list;
         _buildings.Add(piece.Id);
         foreach (var f in list)

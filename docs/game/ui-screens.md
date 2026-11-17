@@ -615,7 +615,13 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   ("Name") 5, `StateText` ("Info") 3, `StatsText` ("Stats 1") 6, `ExtendedStatsText` ("Stats 2") 7, `MedicalPanel` 0x10. A panel
   asks the object's slot 40 for its section (`FUN_1406fa7f0`). Building slot 40 (`FUN_140301840`) answers:
   - 5: slot 113 (`FUN_1402fdea0`): the building's name left; right the owner faction's name, the player's faction always, another
-    faction only when the building is in a town that passes slot 0x340 and town+0x111 is clear, else empty.
+    faction only when the building's town (`FUN_1400f6c20`) is explored (slot 0x340) and not `is secret` (+0x111, set from the TOWN record by
+    `FUN_140931090`, the TownBase constructor that Town, Nest and TownNull run), else empty (**Verified** decompile). Town and Nest share the
+    explored slot (`FUN_140951220`). A camp piece's town is the nest (or the town) that stood it up: the camp placer `FUN_140930120` passes it as
+    the building factory's town (`FUN_14057cc70` argument 4, **Verified**). Meitou (`BuildingSync.OwnerName`, `PlayerInterface.OwnerName`): level
+    buildings (owner `PopulationData.LevelOwnerOf`) and their pieces, furniture fixtures, beds and seats (their town site), camp pieces (their
+    nest's knowledge in `PlayerState.Camps`, or their town's); a town machine opened by Loot (a `townwork:` site) shows the same name bar as a left
+    click on it, not the player's.
   - 3: `Type:` the record's name when it differs from the building's name, `Town:` the town's name, then the upgrade lines (slot 116, generic
     `FUN_140303030`, **Verified**): with an upgrade target ([upgrades](buildings-production.md#upgrades)) a full-row button `[UPGRADE]` (Good:
     colour tag + "[" + the uppercased translation of "Upgrade" + "]"), whose tooltip is a list of pairs `Upgrades To:` target name, a row per

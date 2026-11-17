@@ -2001,8 +2001,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !world.Characters.TryResolveNext(taker, out int thief)) return !room;
 
-        if (!room) crimes.PendSteal(world, thief, container, Crime.CrimeCode.Theft);
-        return !room || crimes.Steal(world, thief, container, Crime.CrimeCode.Theft);
+        if (!room) crimes.PendSteal(world, thief, container, Crime.CrimeSystem.TakeKind.RightClick);
+        return !room || crimes.Steal(world, thief, container, Crime.CrimeSystem.TakeKind.RightClick);
     }
 
     /// <summary>

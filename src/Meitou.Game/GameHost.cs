@@ -1109,6 +1109,7 @@ sealed partial class GameHost(
     void ConnectFactions(PlayerInterface ui)
     {
         ui.FactionName = FactionNameOf;
+        ui.OwnerName = (faction, town) => BuildingSync.OwnerName(faction, town);
         ui.PlayerFactionName = () => ui.FactionName?.Invoke(Session.World.Player.Faction) ?? "";
 
         // The rename's test (FUN_1402e7950, as RenameFactionCommand's): another faction of the data has the name.
@@ -1147,7 +1148,7 @@ sealed partial class GameHost(
     /// <summary>
     /// A faction's name: the player's own as they renamed it, else the data's.
     /// </summary>
-    string? FactionNameOf(int faction)
+    internal string? FactionNameOf(int faction)
     {
         if (faction >= 0 && faction == Session.World.Player.Faction && Session.World.Player.FactionName is { } renamed)
             return renamed;

@@ -823,7 +823,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A member the squad's place may follow: there, not down (<see cref="Ai.SquadIntact.Down"/>: out, dead or carried) and not in a bed or cage.
+    /// A member the squad's place may follow: there, not down (<see cref="Ai.SquadIntact.Down"/>, the original's <c>isDown</c>: dead, out cold,
+    /// playing dead, carried or whole-body ragdolled) and not in a bed or cage.
     /// </summary>
     static bool Standing(CharacterTable table, CharacterId id) =>
         !Ai.SquadIntact.Down(table, id) && table.TryResolveNext(id, out int s) && table.Cold(s) is { InSomething: Locks.HeldState.None };
@@ -834,7 +835,7 @@ public sealed partial class PopulationSystem
     /// leader itself, down or not. The member scan is skipped while the leader is in a bed or cage: the original tests the <i>leader's</i> bed or
     /// cage state there, not the member's (<b>Verified</b> by the decompile; possibly a slip of the original).
     /// </summary>
-    CharacterId EffectiveLeader(World world, Squad squad)
+    internal CharacterId EffectiveLeader(World world, Squad squad)
     {
         var table = world.Characters;
         if (Standing(table, squad.Leader)) return squad.Leader;

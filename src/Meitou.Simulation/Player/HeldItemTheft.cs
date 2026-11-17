@@ -54,8 +54,9 @@ static class HeldItemTheft
     }
 
     /// <summary>
-    /// The held item leaves another faction's container or character for another owner: the pending crime of the move (a container: Looting for a
-    /// drag, <c>FUN_140715560</c>, Theft for a give, <c>FUN_140712490</c>; a character: <see cref="Crime.CrimeSystem.TakeCode"/>) and the steal roll
+    /// The held item leaves another faction's container or character for another owner: the pending crime of the move (a container: against its
+    /// owner character, Looting for a drag, <c>FUN_140715560</c>, Theft for a give, <c>FUN_140712490</c>; a character:
+    /// <see cref="Crime.CrimeSystem.TakeCode"/>) and the steal roll
     /// (<see cref="Crime.CrimeSystem.Steal"/>, <see cref="Crime.CrimeSystem.Pickpocket"/>). True when the thief was caught and the item goes back.
     /// </summary>
     internal static bool Caught(World world, HeldItem held, Crime.CrimeSystem.TakeKind kind)
@@ -66,7 +67,7 @@ static class HeldItemTheft
         if (held.From.Holder == ItemHolder.Site)
             return Goods(world, held.From.Site) is { } box && box.Owner >= 0
                 && box.Owner != world.Player.Faction
-                && crimes.Steal(world, thief, box, kind == Crime.CrimeSystem.TakeKind.Drag ? Crime.CrimeCode.Looting : Crime.CrimeCode.Theft);
+                && crimes.Steal(world, thief, box, kind);
         return held.From.Holder == ItemHolder.Character && table.TryResolveNext(held.From.Character,
                 out int owner) && table.Cold(owner) is { IsPlayer: false }
             && crimes.Pickpocket(world, thief, owner, held.Item, kind);

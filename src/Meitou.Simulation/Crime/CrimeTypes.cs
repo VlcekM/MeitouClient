@@ -338,6 +338,12 @@ public sealed class PendingCrime
     /// </summary>
     public CharacterId Victim { get; set; } = CharacterId.None;
     /// <summary>
+    /// The victim when it is a building's holder of goods (its <see cref="StealSource.Id"/>): a thief caught taking out of a building's window
+    /// (<c>FUN_140794810</c> passes the window's building as the victim, <b>Verified</b> decompile); null for any other. The witness function
+    /// (<c>FUN_140854d10</c>) resolves only a CHARACTER victim, so it reads this one as none.
+    /// </summary>
+    public string? VictimHolder { get; set; }
+    /// <summary>
     /// Game seconds the crime stays fresh: counted down by the crime tick, cleared at or below 0; a witness sets it to 20 again.
     /// </summary>
     public float Timer { get; set; }

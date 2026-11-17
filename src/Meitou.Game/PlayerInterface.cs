@@ -1358,6 +1358,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public Func<int, string?>? FactionName { get; set; }
 
     /// <summary>
+    /// The owner a building's name bar shows for an owner faction and the building's town (Building slot 113, docs/game/ui-screens.md "Selected
+    /// building"): the player's faction always, another only in an explored town that is not secret; the host sets it.
+    /// </summary>
+    public Func<int, Simulation.Locks.FixtureTown, string?>? OwnerName { get; set; }
+
+    /// <summary>
     /// The ARMOUR record of an item, null for anything else (the host sets it).
     /// </summary>
     public Func<string, ArmourData?>? ArmourOf { get; set; }

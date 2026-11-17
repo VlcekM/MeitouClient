@@ -221,6 +221,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public TurretPost? Turret { get; init; }
     /// <summary>
+    /// The <see cref="BuildingKey"/> of the building it stands in: the one its level state's <c>isInsideBuilding</c> handle names (type BUILDING,
+    /// the original's RootObject +0x80); null when the handle is null or names no known building.
+    /// </summary>
+    public string? InsideOf { get; init; }
+    /// <summary>
     /// Its interior layout's name (the one its <see cref="Spots"/> come from: its residents', <see cref="LayoutName"/>); empty when none.
     /// </summary>
     public string InteriorLayout { get; init; } = "";

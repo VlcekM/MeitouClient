@@ -223,11 +223,16 @@ public sealed partial class ProductionSystem
     static bool IsTownMachine(MachineData? data) => data is { Farm: not null } or { IsProducer: true };
 
     /// <summary>
-    /// A town building's machine as the holder of its faction's goods (<see cref="Crime.StealSource"/>: the building is its own container, its
-    /// residents watch it); null for any other site.
+    /// A town building's machine as the holder of its faction's goods (<see cref="Crime.StealSource"/>: the building is its own container, and it
+    /// stands in the building its <c>isInsideBuilding</c> handle names, whose residents watch and own it); null for any other site.
     /// </summary>
-    public Crime.StealSource? TownGoods(string site) =>
-        IsTownWork(site) && TownWorkSite(site) is { } s ? new(site, s.Owner, site[TownWorkPrefix.Length..], s.Position, s.Record) : null;
+    public Crime.StealSource? TownGoods(string site)
+    {
+        if (!IsTownWork(site) || TownWorkSite(site) is not { } s) return null;
+
+        string key = site[TownWorkPrefix.Length..];
+        return new(site, s.Owner, key, s.Position, s.Record, TownBuildingOf(key)?.Building.InsideOf);
+    }
 
     /// <summary>
     /// A take out of another faction's town machine (<see cref="Take"/>): the stolen mark the taken items get
@@ -245,8 +250,8 @@ public sealed partial class ProductionSystem
         bool fits = room(mark);
         if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !world.Characters.TryResolveNext(taker, out int thief)) return !fits;
 
-        if (!fits) crimes.PendSteal(world, thief, g, Crime.CrimeCode.Theft);
-        return !fits || crimes.Steal(world, thief, g, Crime.CrimeCode.Theft);
+        if (!fits) crimes.PendSteal(world, thief, g, Crime.CrimeSystem.TakeKind.RightClick);
+        return !fits || crimes.Steal(world, thief, g, Crime.CrimeSystem.TakeKind.RightClick);
     }
 
     /// <summary>

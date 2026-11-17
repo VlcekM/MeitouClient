@@ -192,7 +192,7 @@ sealed class BuildingSelection(PlayerInterface player)
             return (SiteBuilding(site), hit.T);
 
         var name = player.Build.Services?.ItemName(hit.Record) ?? hit.Record;
-        var owner = player.FactionName?.Invoke(hit.Owner);
+        var owner = OwnerOf(hit.Owner, hit.Town);
         var town = TownOf(hit.House, hit.Position);
         return (new SelectedBuilding(name, null, owner, town, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
     }
@@ -254,8 +254,14 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var c = hit.Camp;
         var name = c.Name.Length > 0 ? c.Name : host.ItemName(c.Record);
-        return (new SelectedBuilding(name, null, player.FactionName?.Invoke(c.Owner), null, null, c.Id, c.Position, null, Record: c.Record), hit.T);
+        return (new SelectedBuilding(name, null, OwnerOf(c.Owner, c.CampTown), null, null, c.Id, c.Position, null, Record: c.Record), hit.T);
     }
+
+    /// <summary>
+    /// The owner the name bar shows for <paramref name="faction"/> in <paramref name="town"/> (<see cref="PlayerInterface.OwnerName"/>).
+    /// </summary>
+    string? OwnerOf(int faction, Simulation.Locks.FixtureTown town) =>
+        player.OwnerName is { } shown ? shown(faction, town) : player.FactionName?.Invoke(faction);
 
     /// <summary>
     /// Where the ray meets the camp building <paramref name="camp"/> before <paramref name="ground"/>; null when it misses, it is a bed, or a
@@ -295,25 +301,27 @@ sealed class BuildingSelection(PlayerInterface player)
 
     /// <summary>
     /// The nearest of the bed, container, cage and seat under the pixel: its fixture id, BUILDING record, place, owner faction, the house it stands
-    /// in and ray distance. A container, cage or seat that is a level building of its own (a town's standalone cage, safe, bench or throne) is left
-    /// to the level buildings' pick, which gives its Type, Town and outline. A bed names no house: its panel takes the town from the bed itself.
+    /// in, its town and ray distance. A container, cage or seat that is a level building of its own (a town's standalone cage, safe, bench or
+    /// throne) is left to the level buildings' pick, which gives its Type, Town and outline. A bed names no house: its panel takes the town from the
+    /// bed itself.
     /// </summary>
-    (string Id, string Record, Vector3 Position, int Owner, string? House, float T)? NearestFurnitureAt(Vector2 pixel)
+    (string Id, string Record, Vector3 Position, int Owner, string? House, Simulation.Locks.FixtureTown Town, float T)? NearestFurnitureAt(
+        Vector2 pixel)
     {
-        (string Id, string Record, Vector3 Position, int Owner, string? House, float T)? best = null;
-        void Offer(string id, string record, Vector3 position, int owner, string? house, float t)
+        (string Id, string Record, Vector3 Position, int Owner, string? House, Simulation.Locks.FixtureTown Town, float T)? best = null;
+        void Offer(string id, string record, Vector3 position, int owner, string? house, Simulation.Locks.FixtureTown town, float t)
         {
-            if (best is not { } b || t < b.T) best = (id, record, position, owner, house, t);
+            if (best is not { } b || t < b.T) best = (id, record, position, owner, house, town, t);
         }
 
         if (player.Furniture.PickBedAt(pixel) is ({ } bed, var bedT))
-            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, null, bedT);
+            Offer(bed.Id, bed.Record, bed.Position, bed.Owner, null, bed.Town, bedT);
         if (player.Furniture.PickContainerAt(pixel) is ({ } box, var boxT) && !IsLevelBuilding(box.Id, box.Position))
-            Offer(box.Id, box.Record, box.Position, box.Owner, HouseOf(box.Id), boxT);
+            Offer(box.Id, box.Record, box.Position, box.Owner, HouseOf(box.Id), box.Town, boxT);
         if (player.Furniture.PickCageAt(pixel) is ({ } cage, var cageT) && !IsLevelBuilding(cage.Id, cage.Position))
-            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, HouseOf(cage.Id), cageT);
+            Offer(cage.Id, cage.Record, cage.Position, cage.Owner, HouseOf(cage.Id), cage.Town, cageT);
         if (player.Furniture.PickSeatAt(pixel) is ({ } seat, var seatT) && !StandsAlone(seat))
-            Offer(seat.Id, seat.Record, seat.Position, seat.Owner, seat.Building, seatT);
+            Offer(seat.Id, seat.Record, seat.Position, seat.Owner, seat.Building, new(seat.Site, -1), seatT);
         return best;
     }
 
@@ -404,7 +412,11 @@ sealed class BuildingSelection(PlayerInterface player)
         var stats = new List<PlayerInterface.HudLine>();
         var extended = new List<PlayerInterface.HudLine>();
         bool own = focus.SiteId is not null;
-        bool playerSite = focus.SiteId is { } siteId && !Simulation.Production.ProductionSystem.IsNatural(siteId);
+        bool rock = focus.SiteId is { } siteId && Simulation.Production.ProductionSystem.IsNatural(siteId);
+
+        // A town machine's site (townwork:, its Loot window's) is its town's, not the player's.
+        bool playerSite = own && !rock && !Simulation.Production.ProductionSystem.IsTownWork(focus.SiteId!);
+
         var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
         // A town building the player owns (bought, or the player's in the save) gets the buttons of a building of the player's
         // (the original's slot 79: the owner is the player's faction).
@@ -426,7 +438,7 @@ sealed class BuildingSelection(PlayerInterface player)
         }
 
         AddPublicLines(focus, site, detail, mine, playerSite, stats);
-        var header = HeaderLine(focus, detail, own, playerSite, mine, inspected);
+        var header = HeaderLine(focus, detail, rock, mine, inspected);
         return (header, [.. state], [.. stats], status, bad, [.. extended]);
     }
 
@@ -565,15 +577,16 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building.
+    /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building; a town machine's, its level
+    /// building's (<see cref="WorldBuildingInfo.Owner"/>).
     /// </summary>
-    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool own, bool playerSite, bool mine,
+    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool rock, bool mine,
         Simulation.Production.RichnessView? inspected)
     {
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town
         // NO_TOWN is explored, not secret).
         string? owner = focus.Owner;
-        if (own && !playerSite)
+        if (rock)
         {
             owner = inspected is { Owner: >= 0 and var by } ? player.FactionName?.Invoke(by)
                 : player.RecordName?.Invoke(Simulation.Factions.SquadManagement.DismissFallbackFaction);

@@ -113,14 +113,29 @@ Ground pickup can raise Theft inside another faction's building, and taking from
 
 **Verified** (decompile of the right click `FUN_140713d20`, the drag `FUN_140715560` and the give `FUN_140712490`): the three set the crime and roll
 only when the source window has an owner character (`InventoryGUI` slot 15, `FUN_14070cfe0` -> `FUN_14070cef0`), and book it against that
-character's faction, none when it is the player's (faction `+0x250`, `FUN_1407916d0`). The owner character is the window's character; a CONTAINER's
-character parent (`+0x230`); for a BUILDING, Building slot 59 (`isIndoors`, `FUN_140547530`: the null handle unless the record is `is interior
-furniture`, [lights](../formats/lights.md)) gives the building it stands in, whose resident squad (`+0xD0`, a CHARACTER or PLATOON hand; its
-active platoon `+0x1d8`) gives its leader, or another member when the leader is down (`FUN_140792b90`). So a take out of a building that is no
-interior furniture (the wells, the outdoor farms, mines, refineries and wind generators: `is interior furniture` False in gamedata.base; the indoor farms, rain collectors and generators are True) or out of furniture in a building
-nobody lives in is never a crime and has no roll; `isStealing` alone still marks the item. Meitou (`CrimeSystem.HasOwnerCharacter`, #808): no
-crime and no roll out of a holder whose record is no interior furniture; an interior one is booked against its owner faction whether anyone lives
-in its building.
+character's faction with it as the victim (the setter `FUN_140852c80` gets its handle), none when it is the player's (faction `+0x250`,
+`FUN_1407916d0`). The owner character is the window's character; a CONTAINER's character parent (`+0x230`); for a BUILDING, Building slot 59
+(`isIndoors`, `FUN_140547530`: the null handle for a door or unless the record is `is interior furniture`, [lights](../formats/lights.md)) gives the
+building it stands in: its `isInsideBuilding` hand (`+0x80`), else its interior layout's building; a building of no layout with a null hand has
+none (Building slot 122 returns 0 for every class but doors). That building's resident squad (`+0xD0`, a CHARACTER or PLATOON hand; its active
+platoon `+0x1d8`; [whose](factions-squads-towns.md#whose-template-a-home-carries)) gives its effective leader (`FUN_140792b90`,
+[squad leader](factions-squads-towns.md#squad-leader)), which keeps the member it falls back on as the backup. So a take out of a building that is no interior furniture (the wells, the outdoor farms, mines, refineries
+and wind generators: `is interior furniture` False in gamedata.base; the indoor farms, rain collectors and generators are True), out of interior
+furniture standing outdoors or out of furniture in a building nobody lives in is never a crime and has no roll; `isStealing` alone still marks the
+item. A building window's codes: the right click sets Theft 3 unless the owner character is down, when the loot permission decides
+(`FUN_140793940`, which allows any subject that is no character, so no crime, but the roll follows); the drag sets Looting 10 (its downed-owner
+branch needs a character subject, vfunc `0x20` = 1); the give Theft 3. The roll's object is the window's subject (right click: the GUI's `+0x50`;
+drag: slot 16 `FUN_14070d010`), but the give passes the owner character, so a give out of a building's window rolls as a take out of that
+character (the pickpocket chance below) and a caught thief's Theft is against it; out of the right click and the drag a caught Theft has the
+window's building as its victim, which the witness function (`FUN_140854d10`, resolving only a CHARACTER or type 0x5b victim) reads as none. The window's "Stealing chance:" (`FUN_140712920`) asks only the
+subject's faction (not the player's) and `isStealing`, so it is shown with no owner character too.
+Meitou (`CrimeSystem.PendSteal`, `OwnerCharacter`, #808): the same rule, the building it stands in being an interior piece's house or a town
+building's `isInsideBuilding` parent (`TownBuilding.InsideOf`). The resident squad is the squad living there of the template the building carries
+(the handle and the template are written together), the last made when several are, none when none is; it alone gives the owner character
+(`PopulationSystem.EffectiveLeader`, its `Squad.Backup` kept) and the watcher. A caught Theft names the holder in `PendingCrime.VictimHolder`. **Observed**
+(scratch harness, `PendSteal` on the #808 save): a Rebirth bar's barrels book against its Barman, not its guard housemates; a Hub bar the town's
+faction owns books against its blackmarket residents' faction; an empty Hub house's chest, Rebirth's wells and farms and Farming Village's
+outdoor Biofuel Distillery (interior furniture) book nothing.
 
 **Observed** steal roll (`FUN_140794810`, chance `FUN_1407944d0`; virtual names KenshiLib 1ce4a16): both inventory transfers above and the give
 set their pending crime, then roll; caught refuses the move. **Verified** (`FUN_140713d20` decompile): the right click asks the taker's

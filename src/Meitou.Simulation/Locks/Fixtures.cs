@@ -59,7 +59,30 @@ public enum FixtureKind : byte
 /// <summary>
 /// A bed as the host picks it (<see cref="WorldSnapshot.Beds"/>): its fixture id, BUILDING record, where it is and its owner faction (-1: none).
 /// </summary>
-public sealed record BedSpot(string Id, string Record, Vector3 Position, int Owner = -1, float Yaw = 0);
+public sealed record BedSpot(string Id, string Record, Vector3 Position, int Owner = -1, float Yaw = 0)
+{
+    /// <summary>
+    /// Its town (<see cref="Fixture.Site"/>, -1: none) and its camp's wild site (<see cref="Fixture.Wild"/>), for the owner its name bar shows.
+    /// </summary>
+    public FixtureTown Town { get; init; } = FixtureTown.None;
+}
+
+/// <summary>
+/// The town a piece of furniture belongs to, for the owner its name bar shows (Building slot 113 reads the building's town): a town site, the
+/// wild site of the camp that stood it up, or none (-1 both).
+/// </summary>
+public readonly record struct FixtureTown(int Site, int Wild)
+{
+    /// <summary>
+    /// No town.
+    /// </summary>
+    public static readonly FixtureTown None = new(-1, -1);
+
+    /// <summary>
+    /// A fixture's.
+    /// </summary>
+    public static FixtureTown Of(Fixture f) => new(f.Site, f.Wild);
+}
 
 /// <summary>
 /// A town training dummy as the host picks it (<see cref="WorldSnapshot.Dummies"/>): its fixture id (the site its Training order names), BUILDING
@@ -90,14 +113,26 @@ public readonly record struct UseNode(Vector3 At, float Yaw);
 /// A container with an inventory as the host picks it: its fixture id, BUILDING record, position, owner faction (-1: none), whether its lock is
 /// locked, its lock's level and its yaw.
 /// </summary>
-public sealed record ContainerSpot(string Id, string Record, Vector3 Position, int Owner = -1, bool Locked = false, int Level = 0, float Yaw = 0);
+public sealed record ContainerSpot(string Id, string Record, Vector3 Position, int Owner = -1, bool Locked = false, int Level = 0, float Yaw = 0)
+{
+    /// <summary>
+    /// Its town (<see cref="FixtureTown"/>).
+    /// </summary>
+    public FixtureTown Town { get; init; } = FixtureTown.None;
+}
 
 /// <summary>
 /// A cage for picking: its fixture id, CAGE-function BUILDING record, place, owner faction (-1 none), whether its lock holds, who is in it (None:
 /// free), its lock's level, its yaw and whether pointing at it points at its occupant (<see cref="Fixture.OccupantSelection"/>).
 /// </summary>
 public sealed record CageSpot(string Id, string Record, Vector3 Position, int Owner, bool Locked, CharacterId Occupant, int Level = 0, float Yaw = 0,
-        bool OccupantSelection = false);
+        bool OccupantSelection = false)
+{
+    /// <summary>
+    /// Its town (<see cref="FixtureTown"/>).
+    /// </summary>
+    public FixtureTown Town { get; init; } = FixtureTown.None;
+}
 
 /// <summary>
 /// A door for the host's picking: its fixture id, its key in <see cref="WorldSnapshot.Doors"/>, its owner faction, where its closed leaf is (else its
@@ -256,6 +291,11 @@ public sealed class Fixture
     /// A nest building's (<see cref="NestBuildings"/>): its faction's kidnappers use it wherever they stand.
     /// </summary>
     public bool Nest { get; set; }
+    /// <summary>
+    /// The wild site whose camp stood it up (<see cref="NestBuildings"/>; -1: none): with <see cref="Site"/>, its town, which the original gives a
+    /// camp piece as the nest that made it (the building factory's town argument, <c>FUN_140930120</c> -> <c>FUN_14057cc70</c>).
+    /// </summary>
+    public int Wild { get; set; } = -1;
     /// <summary>
     /// Where an occupant is held, and which way it faces (the item's origin: the cage's attach node is not read, an engine choice).
     /// </summary>

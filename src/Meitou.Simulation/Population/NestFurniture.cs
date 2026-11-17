@@ -413,7 +413,7 @@ public sealed class NestBuildings
     /// </summary>
     public IReadOnlyList<BuildingSnapshot> Published()
     {
-        _published ??= [.. _camps.Values.SelectMany(c => c.Layout.Pieces.Select(p => Snapshot(p, c.Owner)))];
+        _published ??= [.. _camps.SelectMany(kv => kv.Value.Layout.Pieces.Select(p => Snapshot(p, kv.Value.Owner, kv.Key)))];
         return _published;
     }
 
@@ -423,7 +423,12 @@ public sealed class NestBuildings
     public IReadOnlyList<NestMesh> Meshes() => _meshes ??= [.. _camps.Values.SelectMany(c => c.Layout.Meshes)];
 
     /// <summary>
-    /// A camp piece as a complete building snapshot of its owner.
+    /// A camp piece as a complete building snapshot of its owner, in the town of its camp (<paramref name="camp"/>: a wild site, else
+    /// <see cref="TownCamp"/>).
     /// </summary>
-    static BuildingSnapshot Snapshot(NestPiece p, int owner) => new(p.Id, p.Record, p.Position, p.Rotation, 0, null, owner, 0, 0, [], true, false);
+    static BuildingSnapshot Snapshot(NestPiece p, int owner, int camp) => new(p.Id, p.Record, p.Position, p.Rotation, 0, null, owner, 0, 0, [], true,
+        false)
+    {
+        CampTown = camp >= 0 ? new Locks.FixtureTown(-1, camp) : new Locks.FixtureTown(-1 - camp, -1),
+    };
 }

@@ -42,6 +42,12 @@ public sealed record BuildingSnapshot(
     public bool Destroyed { get; init; }
 
     /// <summary>
+    /// A camp building's town (<see cref="Population.NestBuildings"/>: the nest or town that stood it up), for the owner its name bar shows; none
+    /// for any other.
+    /// </summary>
+    public Locks.FixtureTown CampTown { get; init; } = Locks.FixtureTown.None;
+
+    /// <summary>
     /// Whether it wants work: destroyed, incomplete or below its target.
     /// </summary>
     public bool NeedsWork => Destroyed || !Complete || Progress < Target;

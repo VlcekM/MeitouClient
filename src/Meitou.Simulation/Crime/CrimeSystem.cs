@@ -113,9 +113,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// is at least <see cref="MinTimer"/>. True when the crime is now pending. <paramref name="viaWrapper"/>: the original's callers that go through
     /// its wrapper <c>FUN_140852e10</c> (police hit, caught stealing, fencing, kidnapping seen) also drop the culprit's
     /// <see cref="CharacterCold.Freed"/> flag when the crime is set (the other callers do not; <b>Verified</b>). The wrapper also writes the
-    /// recently-wanted marker first, which makes the uniform test a no-op for its callers, so it is skipped for them.
+    /// recently-wanted marker first, which makes the uniform test a no-op for its callers, so it is skipped for them. <paramref name="victimHolder"/>:
+    /// a victim that is a building's holder of goods rather than a character (<see cref="PendingCrime.VictimHolder"/>).
     /// </summary>
-    public bool SetPending(World world, int culprit, CrimeCode code, int victimFaction, CharacterId victim, float timer, bool viaWrapper = false)
+    public bool SetPending(World world, int culprit, CrimeCode code, int victimFaction, CharacterId victim, float timer, bool viaWrapper = false,
+        string? victimHolder = null)
     {
         var c = world.Characters.Cold(culprit);
         if (c is null || IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
@@ -131,11 +133,12 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         {
             same.VictimFaction = victimFaction;
             same.Victim = victim;
+            same.VictimHolder = victimHolder;
             same.Timer = MathF.Max(same.Timer, timer);
             if (viaWrapper) c.Freed = false;
             return true;
         }
-        c.Pending = new PendingCrime { Code = code, VictimFaction = victimFaction, Victim = victim, Timer = timer };
+        c.Pending = new PendingCrime { Code = code, VictimFaction = victimFaction, Victim = victim, VictimHolder = victimHolder, Timer = timer };
         if (viaWrapper) c.Freed = false;
         Note(world, CrimeEventKind.Pending, culprit, code, victimFaction, 0, CharacterId.None);
         return true;
