@@ -99,6 +99,10 @@ static class SaveProbe
             case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
             case ("recruit", >= 1): Recruit(probe, a[0]); return true;
+            case ("hire", >= 3):
+                HireProbe.Run(probe, a[0], a[1] == "walk", float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10, a.Count > 4 ? int.Parse(a[4]) : 300,
+                    a.Count > 5 ? a[5] : null);
+                return true;
             case ("cage", _): PutInCage(probe, a.Count > 0 ? a[0] : null); return true;
             case ("escape", >= 1):
                 Vector3? walk = a.Count > 4 ? new(float.Parse(a[3]), 0, float.Parse(a[4])) : null;
@@ -1588,6 +1592,8 @@ static class SaveProbe
               escape <cage id> [rounds] [interval] [x z]  the leader is caged, sneaks out and walks to x z: who sees, has spotted or fights it (#776)
               uniques [name]           the unique-character table (claimed, state, handle) and every character made from each record
               recruit <name>           a character joins the player, its save platoon unloads: the members it would make again
+              hire <name|-|#platoon> <jump|walk> <dx> [rounds] [interval] [save folder]
+                                       a squad near the leader hired as bodyguards, the player sent dx along X: the hired platoon each round
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
               ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
               sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places

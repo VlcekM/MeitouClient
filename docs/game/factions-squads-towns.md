@@ -189,6 +189,9 @@ faction) when no member is a character that is not dead: with the template's `re
 `dead` flag (+0x1f0) and clears `persistent` (destroyed at its next unload, its PLATOON record deleted by `FUN_1407ec5e0`; a campaign's platoon stays with its campaign, `FUN_1407ec570`); a save before then leaves it out unless the player is near ([save.md](../formats/save.md#npc-platoons-meitou-mapping)).
 Meitou: `Platoon.Dead` (saved as `dead`, read at load), set in `StepLoaded`; the platoon leaves the pool counts at once, is not kept and is despawned when it unloads (its dead lie where they fell).
 Meitou (g-008): a town unloads with its coverage zones only; a town squad with a living member in the loaded box of an active zone, or one carrying a player character (the carry test of `FUN_1404febd0`), then stays in the world as a loaded pinned platoon (`PopulationSystem.KeepLoaded`) that unloads by its own place after `TownUnloadGraceSeconds` (0), as each original platoon checks itself (the old "town stays loaded while a member is active" engine choice is gone; wild sites keep it).
+A pinned platoon is otherwise wanted and made with its town's zone (engine choice), except one under a contract (hired bodyguards, a base defence;
+`PopulationSystem.TownBound`): that one is wanted, gated and activated by its own place like any original platoon, at game load too, and
+unloads after the original's 4 s outside the loaded zones (#858).
 No distance, age or emptiness rule removes a persistent platoon. A wiped-out town refills only through its pools, with non-persistent squads;
 no path re-running the initial resident placement was found.
 
@@ -553,6 +556,17 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   ([ai.md](ai.md)); job 0 becomes 2 for a non-persistent platoon and, for a persistent one with no "separated" hand (+0xb8, null in Meitou), 4 (GOHOME) when its home town (vfunc 0x98 -> +0x30) is over 9216 away (`DAT_141700514`, plain distance), else the idle hook `FUN_1409a7730` runs (job stays 0). Both stand still (GOHOME sets no speed): Meitou's persistent job-0 stand-in does not travel; its non-persistent one keeps the engine's travel. No character data is read or changed:
   no healing, needs or fights (**Observed**).
   - GOHOME: the mover's speed (+0xbc) is reset to 0 every step and only the branch for a platoon handle (+0xb8) sets 55, going to that object; the goto to the home (only once within 2000) sets no speed. So a GOHOME stand-in without a resolving handle stands still (**Verified**, `FUN_1407ee790`, `FUN_14065ef80` takes its speed from +0xbc). Meitou has no such handle: it stands still.
+  - Under a contract (**Verified**, `FUN_1402721a0`, `FUN_140272240`): the contract (+0x210) becomes the current package (+0x48), so its
+    `unloaded func` is the job: Bodyguard and its Dialogue.mod variants 6 (Black Dog's 5), `contract Mercenary outpost guard` 6 (base data dump).
+    The job's target is first `FUN_140269b60`: with a contract, its slot 1; `Contract_HiredAlly`'s (`FUN_1402859e0`) is the package's `mission
+    target` hand (+0x28), which its start (`FUN_140289490`) copies from the employer (+0x48, the dialogue partner); the resolver
+    (`FUN_140284510`) finds a character (type 1) anywhere, so a hired squad that fell behind travels to its employer at 60 / 90 and comes back
+    into the world where it meets the loaded zones. Unresolved, it falls to `FUN_140269cd0`: the contract's `mission town` hand (+0x8), which
+    the starts of `Contract_HiredAlly` and `Contract_DefendPlayerBase` (`FUN_14028a170`) set to the town of the player's faction
+    (`DAT_142134690`+0x2a0) nearest the squad (`FUN_140927f10`), none without one. Meitou: `PlatoonContracts.EmployerGoal`, a town's own hired
+    squad included (with the employer gone from the world, to `Blackboard.ContractTown` and stopping inside its radius; with none it stands);
+    **Observed** (headless, `probe hire`, the Hub's Mercenary guild hired, the player put 20000 away): its stand-in reached the
+    loaded zones after about 480 s and rejoined the player.
   - TRAVEL_TARGET / _FAST: to the mission target: the blackboard's override package's, else the campaign's target, else the current
     package's saved `mission target`, else a fallback (`FUN_140269cd0`); no move when it is the town the squad is in (**Observed**); a campaign's `travel speed unloaded` WALK / JOG / RUN gives 25 / 55 / 90;
     otherwise (GROUPED, NO_SPEED_CHANGE, no campaign) FAST 60 (90 beyond 25000), TRAVEL_TARGET 25. The mover caps speed at 70 (**Observed**: no other writer of the cap). `FUN_140269cd0` (**Verified**): `+0x210` the override target; else the war manager's campaign target when it is a town (hand type 0xd) or nest (0x55); else the blackboard's saved mission target `+0x48`; else (caller flag) the platoon's Ownerships home town `+0x30`; Meitou `PopulationSystem.MissionGoal` for every TRAVEL job outside a campaign: `Platoon.Target` (set to the package's mission town where the squad unloads, saved as `meitou mission town`), a shipping squad with slaves and none chosen the nearest camp, else the origin; it stays once inside that town's radius.

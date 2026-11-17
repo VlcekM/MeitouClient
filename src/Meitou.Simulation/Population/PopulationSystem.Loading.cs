@@ -43,7 +43,7 @@ public sealed partial class PopulationSystem
         // A copy, as the tick's own loop: activating can change the registry (a town's squad that lost too many is made afresh as a new platoon).
         foreach (var platoon in world.Platoons.All.ToList())
         {
-            if (platoon.State == PlatoonState.Unloaded && !platoon.Unmade && Wanted(platoon) && Ready(platoon))
+            if (platoon.State == PlatoonState.Unloaded && !platoon.Unmade && Wanted(world, platoon) && Ready(world, platoon))
                 Activate(world, platoon);
         }
 
@@ -63,17 +63,17 @@ public sealed partial class PopulationSystem
             }
         }
 
-        if (world.Platoons.All.Any(p => p.State == PlatoonState.Activating && Wanted(p))) return false;
+        if (world.Platoons.All.Any(p => p.State == PlatoonState.Activating && Wanted(world, p))) return false;
 
         // A save's never-made squads that come in at load are made last, once everything else is, so that they take no squad id or character slot that
         // another squad would have had (made at once from the template, they leave nothing activating).
         foreach (var platoon in world.Platoons.All.ToList())
         {
-            if (platoon.State == PlatoonState.Unloaded && platoon.Unmade && Wanted(platoon) && Ready(platoon) && ActivatesAtLoad(platoon, _boxZones))
+            if (platoon.State == PlatoonState.Unloaded && platoon.Unmade && Wanted(world, platoon) && Ready(world, platoon) && ActivatesAtLoad(platoon, _boxZones))
                 Activate(world, platoon);
         }
 
-        return !world.Platoons.All.Any(p => p.State == PlatoonState.Activating && Wanted(p));
+        return !world.Platoons.All.Any(p => p.State == PlatoonState.Activating && Wanted(world, p));
     }
 
     /// <summary>

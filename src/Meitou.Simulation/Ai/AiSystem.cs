@@ -2414,6 +2414,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     #region Serial step
 
     /// <summary>
+    /// The AI signal of <c>Contract_HiredAlly</c>, the bodyguard contract.
+    /// </summary>
+    const int HiredAllySignal = 12;
+
+    /// <summary>
     /// The turrets, seats, sitting-around pieces and town guard posts the members claim on the package cadence.
     /// </summary>
     readonly TownPlaceClaims _claims = new(data);
@@ -2476,8 +2481,27 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         _rules.Bind(this, world, squad);
-        if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
-        else squad.Ai!.Replace(package, _rules);
+        if (command is StartContract c)
+        {
+            // the contract already running goes on as it is (Blackboard.StartContract)
+            bool starts = squad.Ai!.Contract?.Id != package.Id;
+            squad.Ai.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
+            if (starts && package.Signal == HiredAllySignal) HiredAllyStart(world, squad, squad.Ai);
+        }
+        else
+        {
+            squad.Ai!.Replace(package, _rules);
+        }
+    }
+
+    /// <summary>
+    /// The mission town of <c>Contract_HiredAlly</c>'s start (<c>FUN_140289490</c>, <b>Verified</b>): the town of the player's faction nearest the
+    /// squad (X/Z, <c>FUN_140927f10</c>), none while the player has none (<see cref="Blackboard.ContractTown"/>).
+    /// </summary>
+    static void HiredAllyStart(World world, Squad squad, Blackboard board)
+    {
+        var at = LeaderPosition(world, squad) ?? squad.Position;
+        board.ContractTown = NearestPlayerTown(world, Flat(at))?.Town ?? Population.CampaignTown.None;
     }
 
     /// <summary>
@@ -2865,7 +2889,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (squad.SavedAi is { } saved)
         {
             _rules.Bind(this, world, squad);
-            saved.Apply(squad.Ai, data.Ai, _rules, world.Saved is { } population ? population.CharacterOf : null);
+            saved.Apply(squad.Ai, data.Ai, _rules, world.Saved is { } population ? population.CharacterOf : null,
+                world.Saved is { } towns ? h => Saving.WarSave.Town(world, towns, h) : null);
             squad.SavedAi = null;
         }
 

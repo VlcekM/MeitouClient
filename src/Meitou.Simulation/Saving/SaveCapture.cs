@@ -122,6 +122,7 @@ public static partial class SaveCapture
         var factionsPopulation = world.Systems.OfType<PopulationSystem>().FirstOrDefault();
         WriteFactionsAndTowns(builder, world, data, loaded, factionsPopulation);
         var (outposts, buildings, campItems) = WriteBuildings(builder, world, data, options);
+        s_memoryPass.TownHands = TownHands(game, data, outposts);
         var races = new Dictionary<string, RaceData?>(StringComparer.Ordinal);
         var written = WritePlayerSquads(builder, world, data, loaded, options, clock, buildings, races);
         WriteSelection(game, world, written);
@@ -321,6 +322,26 @@ public static partial class SaveCapture
         /// The saved items whose <c>ownedby</c> names a character.
         /// </summary>
         public readonly List<(SaveItem Item, CharacterId Owner)> Owners = [];
+        /// <summary>
+        /// The handle a town of the world is written with (a placed town's as the save has it, a player town's as just written); null until the
+        /// buildings are written.
+        /// </summary>
+        public Func<CampaignTown, Hand>? TownHands { get; set; }
+    }
+
+    /// <summary>
+    /// The handle each town of the world is saved with: a placed town's from the save's town list, a player town's from
+    /// <paramref name="outposts"/>; the null handle for one with none.
+    /// </summary>
+    static Func<CampaignTown, Hand> TownHands(SaveGame game, PopulationData data, IReadOnlyDictionary<int, Hand> outposts)
+    {
+        var placed = new Dictionary<string, Hand>(StringComparer.Ordinal);
+        foreach (var t in game.Towns)
+            if (!t.IsNest && t.Instance.Length > 0 && !t.Handle.IsNull) placed.TryAdd(t.Instance, t.Handle);
+
+        return t => t.Site >= 0
+            ? t.Site < data.Sites.Count ? placed.GetValueOrDefault(data.Sites[t.Site].InstanceId, Hand.Null) : Hand.Null
+            : outposts.GetValueOrDefault(t.PlayerTown, Hand.Null);
     }
 
     /// <summary>
@@ -903,7 +924,7 @@ public static partial class SaveCapture
     /// </summary>
     static void WriteAi(FcsRecord platoon, AiSave? ai)
     {
-        AiSave.Write(platoon, ai);
+        AiSave.Write(platoon, ai, s_memoryPass?.TownHands);
         if (ai is { Contract: not null, Target.IsNone: false }) s_memoryPass?.JobTargets.Add((platoon, AiSave.TargetKey, ai.Target));
     }
 
@@ -1058,6 +1079,10 @@ public static partial class SaveCapture
             var p = sp.PlatoonId >= 0 ? world.Platoons.Find(sp.PlatoonId) : null;
             var squad = p is { State: PlatoonState.Loaded } ? world.Squads.Find(p.SquadId) : null;
             if (squad is not null && table.TryResolveNext(squad.Leader, out int leaderSlot)) platoon.Position = table.Previous[leaderSlot].Position;
+
+            // A stand-in that travelled since its characters left (a hired squad on its way to its employer): its place, the characters where they
+            // left (FUN_140372ef0 writes the unloaded platoon's mover place, FUN_14036bad0 its records as they are).
+            if (p is { State: PlatoonState.Unloaded } && Vector2.DistanceSquared(p.Position, sp.Anchor) > 1) platoon.Position = Ground(world, p.Position);
             if (p is not null) platoon.Money = (int)Math.Clamp(squad?.Money ?? p.Money, int.MinValue, int.MaxValue);
 
             // `imprisoned` as it was at the platoon's last unload, else the save's value (FUN_1407ef4b0).
@@ -1641,6 +1666,7 @@ public static partial class SaveCapture
             var at = platoon.Position;
             platoon.Position = new Vector3(p.Position.X, at.Y, p.Position.Y);
             if (p.Package is { } package) platoon.Record.Strings["currentPackage"] = package;
+
         }
     }
 

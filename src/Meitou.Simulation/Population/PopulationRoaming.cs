@@ -60,25 +60,34 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>,
-    /// <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.
+    /// <c>FUN_1404febd0</c>), or (a town's own saved squad, <see cref="TownBound"/>) its town's zone is, as the town's fresh squads are made with the
+    /// town.
     /// </summary>
-    bool Wanted(Platoon p) =>
-        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, _active) || p.Pinned && p.Origin >= 0 && _active.Contains(_data.Sites[p.Origin].Zone);
+    bool Wanted(World world, Platoon p) =>
+        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, _active) || TownBound(world, p) && _active.Contains(_data.Sites[p.Origin].Zone);
 
     /// <summary>
     /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, of its town's zone for a
-    /// town's own (as the town's load is gated; its members may stand in a neighbouring zone), else of its own zone.
+    /// town's own (<see cref="TownBound"/>: as the town's load is gated; its members may stand in a neighbouring zone), else of its own zone.
     /// </summary>
-    bool Ready(Platoon p) =>
-        ZoneGate is not { } gate || gate(p.Pinned && p.Origin >= 0 ? _data.Sites[p.Origin].Zone : WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+    bool Ready(World world, Platoon p) =>
+        ZoneGate is not { } gate || gate(TownBound(world, p) ? _data.Sites[p.Origin].Zone : WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+
+    /// <summary>
+    /// A town's own platoon that comes and goes with its town (engine choice): pinned, of a placed town and under no contract. A hired squad
+    /// (bodyguards following their employer, a base defence at the player's town) is wanted and made by its own place, as the original checks every
+    /// platoon by its own (<c>FUN_1404febd0</c>; at a game load by its zone, <c>FUN_1407f85f0</c>), so it is not held back for a town far behind it
+    /// (#858).
+    /// </summary>
+    bool TownBound(World world, Platoon p) => p.Pinned && p.Origin >= 0 && PlatoonContracts.ContractOf(world, p) is null;
 
     /// <summary>
     /// The activation dwell (<c>FUN_1407ebf30</c>): with its zone ready, a platoon outside the zone's box (<see cref="ZoneActivation.TrimmedBox"/>,
     /// trim 170) waits 2 s again, inside it counts <paramref name="dt"/> down; true once below 0. A zone not ready changes nothing.
     /// </summary>
-    bool Dwelt(Platoon p, float dt)
+    bool Dwelt(World world, Platoon p, float dt)
     {
-        if (!Ready(p)) return false;
+        if (!Ready(world, p)) return false;
         var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);   // the zone at the platoon's own position, as the original
         var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, ZoneActivation.ActivationTrim);
         if (p.Position.X < minX || p.Position.X > maxX || p.Position.Y < minZ || p.Position.Y > maxZ) p.DwellLeft = 2;
@@ -137,8 +146,8 @@ public sealed partial class PopulationSystem
         _movers.Clear();
         foreach (var p in _platoonBuffer)
         {
-            // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here
-            if (p.State == PlatoonState.Unloaded && !p.Pinned) _movers.Add(p);
+            // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here; a town's own moves only when hired
+            if (p.State == PlatoonState.Unloaded && (!p.Pinned || PlatoonContracts.ContractOf(world, p) is not null)) _movers.Add(p);
         }
 
         world.ParallelFor((_movers.Count + MoversPerJob - 1) / MoversPerJob, job =>
@@ -156,7 +165,7 @@ public sealed partial class PopulationSystem
                         break;
                     }
 
-                    if (p.State == PlatoonState.Unloaded && Dwelt(p, dt) && Wanted(p)) Activate(world, p);
+                    if (p.State == PlatoonState.Unloaded && Dwelt(world, p, dt) && Wanted(world, p)) Activate(world, p);
                     break;
                 case PlatoonState.Loaded:
                     StepLoaded(world, p, dt);
@@ -196,11 +205,12 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// One stand-in's off-screen step (any thread): the Faithful orphan timer (a stand-in out of range counts up; despawned in the serial pass past
-    /// the limit), then its travel (<see cref="StandIn"/>, or a code mod's <see cref="ModTravel"/> while held).
+    /// the limit; never a town's own, whose residents the original makes persistent), then its travel (<see cref="StandIn"/>, or a code mod's
+    /// <see cref="ModTravel"/> while held).
     /// </summary>
     void StepOffscreen(World world, Platoon p, float dt)
     {
-        if (!Kept(p) && (p.ReplacedHome || !Wanted(p))) p.OrphanSeconds += dt;
+        if (!p.Pinned && !Kept(p) && (p.ReplacedHome || !Wanted(world, p))) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
         if (p.OrphanSeconds > OrphanLimitSeconds) return;
 
@@ -236,8 +246,9 @@ public sealed partial class PopulationSystem
     /// </summary>
     void StandIn(World world, Platoon p, float dt)
     {
-        // a town's own saved squad, or a wild one, stays where it was; a campaign moves its own
-        if (p.Pinned || p.Wild || p.Campaign is not null) return;
+        // a wild one stays where it was; a campaign moves its own; a hired squad follows its employer; a town's own saved squad stays where it was
+        if (p.Wild || p.Campaign is not null) return;
+        if (FollowEmployer(world, p, dt) || p.Pinned) return;
 
         // GOHOME only issues a goto (FUN_1407ee790, Verified): the mover's speed is reset to 0 each step and only the platoon-handle branch (meaning
         // Unknown, none in Meitou) sets 55, so it stands still.
@@ -286,6 +297,26 @@ public sealed partial class PopulationSystem
         }
 
         Travel(p, goal, StandInSpeed(p, d) * dt);
+    }
+
+    /// <summary>
+    /// A hired squad's stand-in (<see cref="PlatoonContracts.EmployerGoal"/>) on toward its employer (gone from the world: its contract's mission
+    /// town) at its contract's job speed, its road route kept while the goal stays within <see cref="ModFollowSlack"/>; it stands still with no goal,
+    /// as any stand-in of the player's faction, one left with a member caged and one that waits to be made (<c>FUN_1407ee790</c>, <b>Verified</b>).
+    /// False when it runs no such contract. Any thread: changes this platoon only.
+    /// </summary>
+    bool FollowEmployer(World world, Platoon p, float dt)
+    {
+        if (PlatoonContracts.EmployerGoal(world, p, _data, _settings.RoamArrivalRadius) is not { } contract) return false;
+
+        p.Job = contract.Job;
+        if (contract.At is not { } target || p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned || WaitsToLoad(p.Position))
+            return true;
+
+        var goal = p.RouteGoal is { } last && Vector2.Distance(last, target) < ModFollowSlack ? last : target;
+        float d = Vector2.Distance(p.Position, goal);
+        if (d > contract.Reach) Travel(p, goal, StandInSpeed(p, d) * dt);
+        return true;
     }
 
     /// <summary>
@@ -524,6 +555,11 @@ public sealed partial class PopulationSystem
     const float LeaderOutOfZoneRadiusSq = 600 * 600;
 
     /// <summary>
+    /// The seconds an original platoon stays active outside every loaded zone before it unloads (<c>FUN_1404febd0</c>, <b>Verified</b>).
+    /// </summary>
+    const float OutOfZoneSeconds = 4;
+
+    /// <summary>
     /// The members of a squad being thinned that stay and that go.
     /// </summary>
     readonly List<CharacterId> _thinStay = [], _thinGo = [];
@@ -580,12 +616,14 @@ public sealed partial class PopulationSystem
         if (!p.Dead && (p.Faction < 0 || p.Faction != PlayerFactionOf(world)) && AllDead(world, squad)) DeclareDead(p);
 
         // Away from every active zone for long enough: only the stand-in goes on.
-        if (Wanted(p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
-        // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
+        if (Wanted(world, p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
+        // A town's own squad keeps the town's grace (it leaves with its town), a hired one the original's timer, a roaming one the roaming grace.
         else if (p.UnloadAtTick < 0)
         {
-            p.UnloadAtTick = world.Tick
-                + (long)Math.Ceiling((p.Pinned ? _settings.TownUnloadGraceSeconds : _settings.RoamUnloadGraceSeconds) / world.TickSeconds);
+            float grace = TownBound(world, p) ? _settings.TownUnloadGraceSeconds
+                : p.Pinned ? OutOfZoneSeconds
+                : _settings.RoamUnloadGraceSeconds;
+            p.UnloadAtTick = world.Tick + (long)Math.Ceiling(grace / world.TickSeconds);
         }
 
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while
@@ -978,7 +1016,7 @@ public sealed partial class PopulationSystem
         // keeps its characters' places.
         var anchor = p.Stored?.Anchor ?? p.Saved?.Anchor;
         bool travelled = anchor is not { } a || Vector2.DistanceSquared(a, p.Position) > 1;
-        if (travelled && !p.Pinned && !p.Wild && WalkableSpots.Nearest(world.Walkability, p.Position, out var spot)) p.Position = spot;
+        if (travelled && !TownBound(world, p) && !p.Wild && WalkableSpots.Nearest(world.Walkability, p.Position, out var spot)) p.Position = spot;
         ulong seed = world.Seed;
         var position = p.Position;
         int id = p.Id;

@@ -419,10 +419,11 @@ Six Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns b
 
 Implemented (`PopulationRoaming.cs`):
 
-- **Step**: at every population look (15 ticks), every unloaded platoon that is not a town's own steps by the look's game time in a parallel pass
+- **Step**: at every population look (15 ticks), every unloaded platoon that is not a town's own (or is one under a contract) steps by the look's game time in a parallel pass
   (`World.ParallelFor`, 64 stand-ins a job): the Faithful orphan timer and its travel. A step changes only its own platoon, so the result does not
   depend on the order (the roaming hashes agree at 1, 4 and 16 threads). Despawns, activations, loaded squads, pools and fights follow serially in
-  id order. Town squads do no off-screen work (the original's GOHOME at home).
+  id order. Town squads do no off-screen work (the original's GOHOME at home), except a hired one, which follows its employer
+  ([off-screen world](game/factions-squads-towns.md#off-screen-world)).
 - **Job**: the original re-reads it every unloaded step from the blackboard's current package (`unloaded func`, `FUN_1407ee790`, `FUN_140268840`, **Verified**), a campaign's
   while the war manager holds the platoon. Meitou takes it when the squad unloads (the package it runs then) and when a campaign lets the platoon go (its package's); a change to
   GOHOME or a patrol sends a roaming stand-in on its way at once. Job 0 (no branch of its own in the original: 2 for a non-persistent platoon, 4 for a persistent one) stays the engine's travel stand-in.
@@ -441,7 +442,13 @@ Implemented (`PopulationRoaming.cs`):
 - **Hand-off**: a stand-in that travelled comes back on the nearest walkable point (`WalkableSpots.Nearest`: rings of 4 to 128 units, eight
   directions each); its kept characters keep their offsets round it, each moved to a walkable point within 32 if needed, else onto it, and each
   stands on the surface at terrain level there, not a ruin's upper floor over it (`MovedSpot`, #731; engine choice). A town's
-  own or wild platoon, or one that did not move, keeps its characters' exact places.
+  own or wild platoon, or one that did not move, keeps its characters' exact places. The original (**Verified**): the activation
+  (`FUN_1407ebdf0`) hands the active platoon the unloaded one's travel (its mover place +0x64 less a place the decompile hides; **Observed**:
+  the unloaded platoon's constructor `FUN_1407ef040` keeps its place at unload at +0x80 beside the mover's) and its spawn place (the mover's); loading the characters (`FUN_140795b30`) moves each one of a kept platoon by that travel (`FUN_1405c8460`, += on its saved
+  place); one inside walls goes to the spawn place (`FUN_1404ffad0`). A save writes an unloaded platoon's mover place (`FUN_140372ef0`) and its
+  characters' records as they left (`FUN_14036bad0`), and the load starts the unloaded platoon at that saved place (`FUN_1407f85f0` ->
+  `FUN_1407ef4b0`), so only the travel after the load moves them. Meitou the same: `SaveCapture` writes a travelled stand-in's place and its
+  characters where they left.
 - **Cost** (**Observed**, headless, save 2 with 2000 extra travelling stand-ins, warm): the step 0.08-0.1 ms per look at 1 or 8 threads (too little
   work for the threads to pay), pools and fights 0.23-0.26 ms per look (fights run every 4th look), about 0.03 ms a tick in all; save 2 alone
   0.08-0.1 ms per look. Not measured in the viewer's bench harness, which does not run the population.

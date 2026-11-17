@@ -209,7 +209,7 @@ internal static class WarSave
     /// <summary>
     /// The campaign town a saved town handle names: a town site, else a player town; none when it names neither.
     /// </summary>
-    static CampaignTown Town(World world, SavedPopulation saved, Hand h)
+    internal static CampaignTown Town(World world, SavedPopulation saved, Hand h)
     {
         if (h.IsNull) return CampaignTown.None;
         if (saved.TownSites.TryGetValue((h.C, h.Cs), out int site)) return CampaignTown.OfSite(site);

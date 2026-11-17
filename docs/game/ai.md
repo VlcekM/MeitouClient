@@ -205,7 +205,7 @@ Scope: of the 143 task types with a real `Task_*` class (147 of 290 fall to `Tas
 - Which of the six category registries (flag bits 1, 2, 4, 0x10, 0x20, 0x40; [planner](ai-tasks.md#planner)) a character plans with; the meaning of the `*` marker on some
   condition entries (the entry's second flag byte) and of the TaskData flag +0x14.
 - Which AI packages use which `unloaded func` value, beyond the shipping ones (signals 11 and 28: all four have 5 TRAVEL_TARGET, **Verified**
-  by a base-data dump of the AI_PACKAGE records). The unloaded update itself, the keep test `FUN_1407ec570`
+  by a base-data dump of the AI_PACKAGE records) and the contracts ([off-screen world](factions-squads-towns.md#off-screen-world)). The unloaded update itself, the keep test `FUN_1407ec570`
   and the 60 s orphan timer are in [off-screen world](factions-squads-towns.md#off-screen-world).
 - The meaning of `squad mem type` value 3, and Blackboard role list 3. Tiers 0 (JUST_ACTION) and 4 (OBEDIENCE) are never scored by the
   chooser: the normal passes sync role lists with the mask `1 << tier` for tiers 3, 2, 1, and the slave special case in `FUN_14050e5b0`

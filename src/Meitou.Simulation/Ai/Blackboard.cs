@@ -598,6 +598,7 @@ public sealed class Blackboard
 
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
+        ContractTown = Population.CampaignTown.None;
         MissionTarget = target ?? CharacterId.None;
         MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
@@ -667,6 +668,13 @@ public sealed class Blackboard
     /// The squad's mission target: whom its running contract is aimed at (none without one).
     /// </summary>
     public CharacterId MissionTarget { get; private set; } = CharacterId.None;
+
+    /// <summary>
+    /// A bodyguard contract's <c>mission town</c> (the package's hand +0x8): the town of the player's faction nearest the squad when it was hired
+    /// (<c>Contract_HiredAlly</c>'s start <c>FUN_140289490</c>, <b>Verified</b>), where its stand-in goes once its employer is gone from the world;
+    /// none without one. Saved with the contract (<see cref="Saving.AiSave"/>); not hashed.
+    /// </summary>
+    public Population.CampaignTown ContractTown { get; set; } = Population.CampaignTown.None;
 
     /// <summary>
     /// The contract's assault takes its mission target wherever it is, not only within the manoeuvre mode's reach (engine API for code mods,
