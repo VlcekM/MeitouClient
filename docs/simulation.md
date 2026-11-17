@@ -1895,7 +1895,9 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   autonomy; refused for the last squad the player leads): the player does not lead it. Its members stay the player's faction (counted by
   `max faction size`) but cannot be selected (`SelectCommand` skips them, the selection's upkeep drops them), so they take no orders from the
   interface, and a click on one inspects it as another faction's (the snapshot's `IndependentSquads`); its right-click menu keeps the own
-  characters' Bodyguard, Follow and medic rows but offers Pick Up only while it is down and no Trade (its inventory stays its own); it has
+  characters' Bodyguard, Follow and medic rows but offers Pick Up only while it is down and no Trade or inventory row. Only the menu holds the
+  inventory back: it is an own character's (`CarrySystem.CanBeOpened`), so an `OpenLootOrder` opens it beside the selection's and items move
+  and are worn as between own characters, and a held item dropped on a member in the world is given to it (`HeldItems.Give`); it has
   no squad tab, is not on the squads screen or Tab, the squad commands (move, rename, reorder, remove) refuse it, and it does not count against `max squads`
   (`SquadManagement.LedSquads`). Saved as `meitou independent`.
 - **Owner** (`SetSquadAutonomy(..., Owner:)`, `Squad.AutonomyOwner`, saved as `meitou autonomy owner`): the manifest id of the last code mod that

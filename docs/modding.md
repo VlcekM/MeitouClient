@@ -358,7 +358,11 @@ holds refuses the second mod.
   going home and town work on the outpost's own machines use it ([rules](simulation.md#autonomous-player-squads)). The player's orders and
   jobs come first. `SetSquadAutonomy(squadId, true, Independent: true)` makes it a squad the player does not lead: not selectable, no squad
   tab, no squad commands, not counted against `max squads` (for staff, caravans or companions with a will of their own; orders that name its
-  characters still apply; refused for the last squad the player leads; `SetSquadAutonomy(squadId, true)` leads it again). Pass your mod's id
+  characters still apply; refused for the last squad the player leads; `SetSquadAutonomy(squadId, true)` leads it again). Its menu has no
+  inventory row, but a mod may open the inventory: a row of its own (`AddCharacterMenuVerbs`) queues `OpenLootOrder(selection, member)`, and
+  the window works as an own character's (handing out a uniform, a dress code). **Observed** (2026-11-17, release 0.21.0, a test mod's row on an
+  independent member): the window opened, armour moved into its slot was worn, and an item dropped on the member in the world went into its
+  grid. Pass your mod's id
   as `Owner` (`SetSquadAutonomy(squadId, true, Owner: context.Id)`): a load without your mod running (not installed, refused or failed to
   start) gives the squad back to the player (autonomy, independence and home cleared, with a notice), so removing the mod never strands it; a
   squad switched on with no owner, as in a save from before `Owner`, stays as saved until a command names one (send `Independent: true` again
