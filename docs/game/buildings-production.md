@@ -1138,8 +1138,12 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   bank gets a town machine `townwork:<object id>` (the object's id is the house's key, "/", its place in the layout) of the house's owner, inside the
   house; any other workstation gets one when a resident pretends at it. A layout's generators add to `NpcOutput` (switch and progress from their own
   saved entry, else complete and on), its battery banks join the frame of the house's town (`TownBatteryGrid`), so the town's frame runs in the
-  rotation (below, [power](#power)) and they charge from its surplus and drain on its shortfall. A ruin's layout has no objects; a house set
-  destroyed after its town registered keeps the machines made before.
+  rotation (below, [power](#power)) and they charge from its surplus and drain on its shortfall. A ruin holds no layout objects
+  ([ruins](#ruined-by-residents)): a house set destroyed after its town registered loses its objects' machines with their items, its generators
+  and draws leave the frame, and when it stands again its objects get new machines (`DropGonePieces`; so does a house laid out anew). An interior
+  hydroponic farm's plants are drawn as a town farm's ([farm plants](#farm-plants)), with the house's furniture. **Observed** (headless, METARU and
+  the base data): setting the Stack's Power Station shack destroyed drops its Battery Bank's machine, standing it up again makes a new one; a Secret
+  Drug Farm house's 7 object machines likewise.
 - **Output add** (`FUN_1402984b0`, **Verified**): when a producer's accumulator reaches 1 and its output inventory cannot take the item, the accumulator resets to 0, so a full output loses
   the progress (and `isMachineOutputFull`, status 1, stops the operators: row 87 needs !63). Nothing else in the production building removes items.
 - **Who empties it** (**Verified**, a scan of every AI package in the merged data): rows 87, 92, 93, 113, 114, 124, 152, 221, 242 and 247 are in no package; NPCs reach them only through

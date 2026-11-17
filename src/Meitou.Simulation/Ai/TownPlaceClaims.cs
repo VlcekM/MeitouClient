@@ -165,6 +165,7 @@ sealed class TownPlaceClaims(PopulationData data)
         _kept.Clear();
         foreach (var (slot, spot) in board.SeatClaims) _kept[slot] = spot;
         board.SeatClaims.Clear();
+        board.UnpoweredSeats.Clear();
         if (board.Home is null && board.OwnHome is null) return;
 
         int hour = world.Hour;
@@ -206,7 +207,7 @@ sealed class TownPlaceClaims(PopulationData data)
         if (had >= 0 && (relaxes || StaysAt(old.Kind)))
         {
             taken.Add(had);
-            board.SeatClaims[slot] = old;
+            Claim(world, board, slot, old);
             return;
         }
 
@@ -215,7 +216,20 @@ sealed class TownPlaceClaims(PopulationData data)
         if (seat < 0) return;
 
         taken.Add(seat);
-        board.SeatClaims[slot] = seats.At(seat);
+        Claim(world, board, slot, seats.At(seat));
+    }
+
+    /// <summary>
+    /// A member's seat claim, marked in <see cref="Blackboard.UnpoweredSeats"/> when it is a workstation of the house's layout without power:
+    /// staying home leads to 221, whose list B needs 93 BUILDING_HAS_POWER (<c>FUN_140596ab0</c>) and no row provides it, so the original plans
+    /// nothing there and another goal wins (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
+    static void Claim(World world, Blackboard board, int slot, HomeSpot spot)
+    {
+        board.SeatClaims[slot] = spot;
+        if (spot is not { Kind: HomeSpotKind.Workstation, Piece: { } piece }) return;
+
+        if (world.SystemOf<Production.ProductionSystem>()?.PiecePowered(world, piece) == false) board.UnpoweredSeats.Add(slot);
     }
 
     /// <summary>

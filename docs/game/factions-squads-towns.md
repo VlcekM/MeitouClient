@@ -764,7 +764,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   the tenth draw still sends the unmoved point; ten rejections send no move. Meitou (`AiSystem.PatrolPoint`, `MayPatrolInto`): the first of
   10 draws on walkable ground whose nearest navmesh polygon within 300 (X/Z first, the area centre's height as the tie-break; water and
   closed doors left out, `IWalkability.InteriorNear`) is outdoors or in a building passing the person's terms (`FixtureRegistry.HasOpenDoor`,
-  `IsPublic`, `OwnerOf`) and, for an animal, the animal terms (`AdmitsAnimal`: `RaceData.CanEnterBuildings`, `CombatSteering.Radius`); the walk
+  `IsPublic`, `OwnerOf`) and, for an animal, the animal terms (`AdmitsAnimal`: both `Locks.AnimalEntry.MayEnter` and `AnimalEntry.Allows`); the walk
   goes to the drawn point. **Observed** (headless, #803 save, Sho-Battai): before, a Merchant Nomad on
   goal 36 walked into Lord Nagata's private Bughouse, the noble's guards shooed it and the noble house fought it as a trespasser; after, no
   patroller enters it.

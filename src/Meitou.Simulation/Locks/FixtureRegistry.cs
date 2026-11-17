@@ -700,7 +700,7 @@ public sealed partial class FixtureRegistry
         var doorRefs = record.GetReferences("doors");
         bool gate = TownBuildings.IsGate(db, record, _functions);
         bool inGateSet = LockSystem.InGateSet(record);
-        bool admitsAnimals = record.GetReferences("interior").Count > 0 && record.GetBool("allow animals");
+        bool admitsAnimals = AnimalEntry.Allows(record);
         bool cavernous = record.GetBool("cavernous");
         for (int i = 0; i < doorRefs.Count; i++)
         {

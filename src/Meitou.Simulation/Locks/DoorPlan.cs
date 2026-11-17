@@ -199,9 +199,10 @@ sealed class DoorPlan : IPlanWorld
         bool atBuilding = target.Kind == Building;
         bool value = condition.State switch
         {
-            // hasAnOpenDoor (FUN_140597030, the state's evaluator for every goal): a door broken, open or opening, so a closed unlocked door counts
-            // as shut.
-            StateType.DestinationIsAccessible => _world.Fixtures.HasOpenDoor(_building),
+            // FUN_140597030, the evaluator of 59 (default false) and 168 (default true) for every goal: the default for an animal the building
+            // keeps out, else hasAnOpenDoor (a door broken, open or opening, so a closed unlocked door counts as shut).
+            StateType.DestinationIsAccessible => !AnimalEntry.KeptOut(_cold, _door) && _world.Fixtures.HasOpenDoor(_building),
+            StateType.DestinationIsAccessibleAnimal => AnimalEntry.KeptOut(_cold, _door) || _world.Fixtures.HasOpenDoor(_building),
             StateType.IsWithin50Meters => Vector2.Distance(Flat(n.Position), Flat(_destination)) < AiSystem.Within50Meters,
             StateType.DoorIsOpen => _door.DoorBroken || _door.Motion is DoorMotion.Open or DoorMotion.Opening,
             StateType.IsDoorLocked => _door.Lock is { EffectivelyLocked: true } && !_door.DoorBroken,

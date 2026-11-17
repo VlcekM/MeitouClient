@@ -54,6 +54,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     public const float FloorSlack = 20;
 
     /// <summary>
+    /// How near a move order's point a building's navmesh lies to be the building the order is on (engine reading: the order carries the point
+    /// under the cursor, not the clicked object the original passes).
+    /// </summary>
+    const float OrderBuildingReach = 10;
+
+    /// <summary>
     /// Takes the path answers in, then this tick's movement commands (repaths, sandbox settings, follow and move orders), and rebuilds the squads'
     /// formations that changed (serial).
     /// </summary>
@@ -367,8 +373,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// <see cref="MoveOrder"/>: each of the characters (the selection when empty) gets a move to its scattered point; a prisoner keeps it queued,
-    /// a sleeper gets up.
+    /// <see cref="MoveOrder"/>: each of the characters (the selection when empty) gets a move to its point (<see cref="MovePoints"/>); a prisoner
+    /// keeps it queued, a sleeper gets up.
     /// </summary>
     void GiveMove(World world, MoveOrder order)
     {
@@ -396,19 +402,52 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             slots.Add(found);
         }
 
-        var targets = Formation.Scatter(slots.Count, new Vector2(order.Target.X, order.Target.Z));
+        var points = MovePoints(world, slots, order.Target);
 
         for (int k = 0; k < slots.Count; k++)
         {
             int slot = slots[k];
-            var target = targets[k];
             table.Cold(slot)!.FollowOrder = CharacterId.None;
 
             // Shift + right click: after the order in hand.
-            var point = new Vector3(target.X, order.Target.Y, target.Y);
-            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = point, TaskPoint = point };
+            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = points[k], TaskPoint = points[k] };
             PlayerOrders.Give(world, slot, entry, order.Queued);
         }
+    }
+
+    /// <summary>
+    /// The characters' points of a move order (order 0x1d in <c>FUN_1407f9e20</c>, <b>Verified</b>): an animal that the building the order is on
+    /// keeps out and that is not inside it goes past the building's first door, or to the point itself for a building without a door, and draws
+    /// no scatter; the others take <see cref="Formation.Scatter"/> in order.
+    /// </summary>
+    static Vector3[] MovePoints(World world, List<int> slots, Vector3 target)
+    {
+        string? building = world.Walkability.InteriorNear(target, OrderBuildingReach);
+        var points = new Vector3[slots.Count];
+        var kept = new bool[slots.Count];
+        for (int k = 0; k < slots.Count; k++)
+            if (building is not null && KeptOutPoint(world, slots[k], building, target) is { } past) (points[k], kept[k]) = (past, true);
+
+        var spread = Formation.Scatter(slots.Count, new Vector2(target.X, target.Z), kept);
+        for (int k = 0; k < slots.Count; k++)
+            if (!kept[k]) points[k] = new Vector3(spread[k].X, target.Y, spread[k].Y);
+
+        return points;
+    }
+
+    /// <summary>
+    /// Where a move order on <paramref name="building"/> sends a character the building keeps out (<see cref="Locks.AnimalEntry.KeptOut(
+    /// CharacterCold, bool, bool)"/>) from outside it: past its first door (<see cref="Locks.DoorPoints.PastFirstDoor"/>), else the order's
+    /// point; null for any other character.
+    /// </summary>
+    static Vector3? KeptOutPoint(World world, int slot, string building, Vector3 target)
+    {
+        if (world.Characters.Cold(slot) is not { } c || !SquadRegistry.IsAnimal(c) || world.Sight.BuildingOf(slot) == building) return null;
+        if (Locks.LockSystem.FirstDoor(world, building) is { } door)
+            return Locks.AnimalEntry.KeptOut(c, door) ? Locks.DoorPoints.PastFirstDoor(world, door) ?? target : null;
+
+        var record = world.SystemOf<Ai.AiSystem>()?.BuildingRecordOf(world, building, target);
+        return record is not null && Locks.AnimalEntry.KeptOut(c, Locks.AnimalEntry.Allows(record), record.GetBool("cavernous")) ? target : null;
     }
 
     /// <summary>
@@ -912,12 +951,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     const float DoorDepth = 15, DoorPast = 1.1f, DoorSlotScale = 0.2f;
 
     /// <summary>
-    /// An animal whose radius (footprint x scale) is under this may enter a building that is not <c>cavernous</c> (<c>FUN_1405c81d0</c>,
-    /// <c>DAT_1416e2bc4</c>, <b>Verified</b>).
-    /// </summary>
-    const float AnimalEntryRadius = 4.5f;
-
-    /// <summary>
     /// The follow and wander tasks' decisions of the partition's characters (parallel): a follower's aim, speed and path requests, a wanderer's
     /// next place.
     /// </summary>
@@ -1096,30 +1129,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// The door aim of the formation (<c>FUN_1403335c0</c>, <b>Verified</b>): when the follower may not enter the building the leader is in (its
-    /// slot 101, <see cref="AnimalMayEnter"/>; 1 for every person, so only an animal's) and the building does not let animals in
-    /// (<c>FUN_140547500</c>, <see cref="Locks.Fixture.AdmitsAnimals"/>), the point past its first door (<c>Building::getDoor</c>
-    /// <c>FUN_1400f7080</c>, the gates' first door) outside: A + (A - B) x 1.1 with A its outer point (<c>doorClosedPositionOut</c>
-    /// <c>+0x3bc</c>) and B its inner (<see cref="Locks.DoorPoints.Outer"/>), at the leaf's height (both points are); null when the branch does
-    /// not run (no such building, no door).
+    /// The door aim of the formation (<c>FUN_1403335c0</c>, <b>Verified</b>): when the building the leader is in keeps the follower out
+    /// (<see cref="Locks.AnimalEntry.KeptOut(CharacterCold, Locks.Fixture)"/>: an animal whose slot 101 fails, in a building without
+    /// <c>allow animals</c>), the point past its first door (<see cref="Locks.DoorPoints.PastFirstDoor"/>); null when the branch does not run (no
+    /// such building, no door).
     /// </summary>
     static Vector3? AnimalDoorAim(World world, int leader, CharacterCold cold)
     {
         if (!SquadRegistry.IsAnimal(cold) || world.Sight.BuildingOf(leader) is not { } inside) return null;
-        if (Locks.LockSystem.FirstDoor(world, inside) is not { } first || first.AdmitsAnimals || AnimalMayEnter(cold, first.Cavernous)) return null;
-        if (world.Fixtures.DoorSpotOf(first) is not { } spot) return null;
+        if (Locks.LockSystem.FirstDoor(world, inside) is not { } first || !Locks.AnimalEntry.KeptOut(cold, first)) return null;
 
-        var past = Locks.DoorPoints.Outer(spot, first.Position);
-        return new Vector3(past.X, spot.Centre.Y, past.Y);
+        return Locks.DoorPoints.PastFirstDoor(world, first);
     }
-
-    /// <summary>
-    /// An animal's slot 101 for a building (<c>CharacterAnimal</c> <c>FUN_1405c81d0</c>, <b>Verified</b>): its race lacks <c>cant enter
-    /// buildings</c> (<see cref="Data.Gameplay.Bodies.RaceData.CanEnterBuildings"/>) and either its radius (footprint x scale,
-    /// <see cref="CombatSteering.Radius"/>) is under <see cref="AnimalEntryRadius"/> or the building is <c>cavernous</c>.
-    /// </summary>
-    static bool AnimalMayEnter(CharacterCold cold, bool cavernous) =>
-        cold.Race?.CanEnterBuildings != false && (CombatSteering.Radius(cold) < AnimalEntryRadius || cavernous);
 
     /// <summary>
     /// Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower

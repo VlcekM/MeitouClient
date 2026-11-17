@@ -33,4 +33,18 @@ public static class DoorPoints
     /// </summary>
     public static Vector2 Outer(DoorSpot spot, Vector3 origin) =>
         new Vector2(spot.Centre.X, spot.Centre.Z) + Away(spot, origin) * (Offset + 2 * Offset * OuterFactor);
+
+    /// <summary>
+    /// The point past a building's first door (<c>Building::getDoor</c> <c>FUN_1400f7080</c>, <see cref="LockSystem.FirstDoor"/>) where the
+    /// formation aim (<c>FUN_1403335c0</c>) and the Move order (<c>FUN_1407f9e20</c>) send an animal the building keeps out: A + (A - B) x 1.1
+    /// with A the door's outer point (<c>doorClosedPositionOut</c> <c>+0x3bc</c>) and B its inner (<see cref="Outer"/>), at the leaf's height
+    /// (both points are); null without door data.
+    /// </summary>
+    public static Vector3? PastFirstDoor(World world, Fixture door)
+    {
+        if (world.Fixtures.DoorSpotOf(door) is not { } spot) return null;
+
+        var past = Outer(spot, door.Position);
+        return new Vector3(past.X, spot.Centre.Y, past.Y);
+    }
 }

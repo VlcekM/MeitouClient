@@ -369,6 +369,14 @@ public sealed record TownLayoutBuilding(string Id, string RecordId, bool Outdoor
     /// The run-time key of the building whose layout places it: its <see cref="Id"/> before the layout part.
     /// </summary>
     public string House => Id[..Id.IndexOf('/')];
+    /// <summary>
+    /// The floor it stands on (<see cref="LayoutItem.Floor"/>).
+    /// </summary>
+    public int Floor { get; init; }
+    /// <summary>
+    /// An interior object hidden while the house shows its outside (no <see cref="LayoutItem.Outside"/> flag); false for an exterior's.
+    /// </summary>
+    public bool InteriorOnly { get; init; }
 }
 
 /// <summary>

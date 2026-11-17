@@ -1100,29 +1100,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The size under which an animal may stroll into a building that is not <c>cavernous</c> (<c>FUN_1405c81d0</c>, <c>DAT_1416e2bc4</c>,
-    /// <b>Verified</b>): its <c>pathfind footprint radius</c> x its size.
+    /// The animal terms of a patrol draw indoors (<c>FUN_14065eaa0</c>, <b>Verified</b>): both CharacterAnimal slot 101
+    /// (<see cref="Locks.AnimalEntry.MayEnter"/>) and <c>FUN_140547500</c> (<see cref="Locks.AnimalEntry.Allows"/>) let it in.
     /// </summary>
-    const float AnimalIndoorRadius = 4.5f;
-
-    /// <summary>
-    /// The animal terms of a patrol draw indoors (<c>FUN_14065eaa0</c>, <b>Verified</b>): CharacterAnimal slot 101 (<c>FUN_1405c81d0</c>: its race
-    /// may enter buildings, and its footprint x size is under <see cref="AnimalIndoorRadius"/> or the building is <c>cavernous</c>) and
-    /// <c>FUN_140547500</c> (the building has an interior, its record's <c>interior</c> list, whose <c>allow animals</c> is set).
-    /// </summary>
-    bool AdmitsAnimal(World world, CharacterCold c, string building, Vector3 at)
-    {
-        if (c.Race is { CanEnterBuildings: false } || BuildingRecordOf(world, building, at) is not { } record) return false;
-        if (record.GetReferences("interior").Count == 0 || !record.GetBool("allow animals")) return false;
-
-        return Combat.CombatSteering.Radius(c) < AnimalIndoorRadius || record.GetBool("cavernous");
-    }
+    bool AdmitsAnimal(World world, CharacterCold c, string building, Vector3 at) =>
+        BuildingRecordOf(world, building, at) is { } record && Locks.AnimalEntry.Allows(record)
+        && Locks.AnimalEntry.MayEnter(c, record.GetBool("cavernous"));
 
     /// <summary>
     /// The BUILDING record of the building of key <paramref name="building"/>: a player building's, else the town building's (the town at
     /// <paramref name="at"/> looked in first); null when none is known.
     /// </summary>
-    GameRecord? BuildingRecordOf(World world, string building, Vector3 at)
+    internal GameRecord? BuildingRecordOf(World world, string building, Vector3 at)
     {
         if (world.Buildings.Find(building) is { } site) return data.Db.Find(site.Record);
 
@@ -1506,9 +1495,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var table = world.Characters;
 
-        // Staying home sits on the chair its squad claimed for it (the original's 43 operates home furniture, chairs among it); without one it stands
-        // at home.
-        if (type == TaskType.StayInHome && board.SeatClaims.ContainsKey(slot) && !mind.SeatUnreachable) behaviour = AiBehaviour.Sit;
+        // Staying home sits on the chair its squad claimed for it (the original's 43 operates home furniture, chairs among it); without one, or at a
+        // workstation without power (221 has no plan there once home: state 93), it stands at home.
+        if (type == TaskType.StayInHome && board.SeatClaims.ContainsKey(slot) && !mind.SeatUnreachable && !board.UnpoweredSeats.Contains(slot))
+            behaviour = AiBehaviour.Sit;
         if (behaviour == AiBehaviour.Investigate && (fresh || mind.Behaviour != AiBehaviour.Investigate))
             mind.LookAbout = Crime.CrimeSystem.FirstLookAboutSeconds;
 

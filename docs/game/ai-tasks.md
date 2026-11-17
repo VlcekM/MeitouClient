@@ -1355,8 +1355,13 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   hunger rate (`PretendOperate`: 221's look). 221 runs `Task_OperateMachine`'s update there (**Verified**, `FUN_14035bc90`: `tryOperate`, then
   the operating XP `FUN_1408c7250` for any function but 7, then the building's work step, slot `0x4b0`), so the resident gains the piece's operating
   XP and at a dummy its training; at a workstation Meitou runs `TownOperate` on the layout object's own machine (`ProductionSystem.HomePretenders`,
-  [layout objects](buildings-production.md#npc-town-machines)), while it has power (93), so a refinery's step draws its inputs into its output and a
+  [layout objects](buildings-production.md#npc-town-machines)), so a refinery's step draws its inputs into its output and a
   hydroponic farm's harvests; a research or crafting piece's step makes nothing for an NPC owner (no player flag, no queued craft).
+  A piece without power gives 221 no plan: its list B needs 93 and no row provides it, so once the resident is home (18) the goal has no plan
+  and another wins (**Verified**, the row table). Meitou: the claim marks such a piece (`Blackboard.UnpoweredSeats`, `TownPlaceClaims.Claim`),
+  93 on the seat target reads it, and the resident walks home instead of to the piece (`AiSystem.Adopt`); at home 43 has no plan, and the next
+  choice once its commitment ends takes another goal. **Observed** (headless, METARU): a Reaver Camp Neophyte (no generator) whose claimed
+  workstation draws power stands at home under 43, then patrols the town; none stands at such a piece.
   **Observed** (headless, a Hive Village of the base data): the Worker Drones staying home operate their hut's tanning bench, campfire and other
   refineries; with empty inputs nothing is made.
 - **275 Sitting around** (`FUN_1408caf00`; the registration's finder thunk `LAB_1400061db` is not in the RE files, so the row link is **Observed**; the rest **Verified** by decompile):

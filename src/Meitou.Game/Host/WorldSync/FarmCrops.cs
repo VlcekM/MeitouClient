@@ -9,16 +9,19 @@ namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
 /// The crops of the farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot, the player's sites' and the towns'
-/// (<see cref="ProductionSystem.IsTownWork"/>), is laid out once per building (positions, meshes, seeded by its id) and its plants' transforms follow
-/// its <see cref="FarmView.PlantGrowth"/> and death whenever the machines change.
+/// (<see cref="ProductionSystem.IsTownWork"/>: a town building's, or an object of a house's layout, a hydroponic farm inside), is laid out once per
+/// building (positions, meshes, seeded by its id) and its plants' transforms follow its <see cref="FarmView.PlantGrowth"/> and death whenever the
+/// machines change.
 /// </summary>
 sealed class FarmCrops(GameHost host)
 {
     /// <summary>
     /// Where a farm's building stands: its site id, BUILDING record, position and rotation, and the building it was placed in (a player's
-    /// hydroponic farm indoors), null for none.
+    /// hydroponic farm indoors), null for none; a house's layout object instead names its house (<paramref name="House"/>) with its floor and
+    /// whether it shows only in the interior view, as the house's furniture is drawn.
     /// </summary>
-    readonly record struct FarmPlace(string Id, string Record, Vector3 Position, Quaternion Rotation, string? Container = null);
+    readonly record struct FarmPlace(string Id, string Record, Vector3 Position, Quaternion Rotation, string? Container = null, string? House = null,
+        int Floor = 0, bool InteriorOnly = false);
 
     /// <summary>
     /// A farm's crops as laid out once for its building: the place, its farm data, the plant layout and meshes, and what was last handed to
@@ -73,6 +76,10 @@ sealed class FarmCrops(GameHost host)
     /// </summary>
     Dictionary<string, TownBuilding>? _townBuildings;
     /// <summary>
+    /// The objects of the towns' buildings' layouts by <see cref="TownLayoutBuilding.Id"/>, made with <see cref="_townBuildings"/>.
+    /// </summary>
+    Dictionary<string, TownLayoutBuilding>? _townPieces;
+    /// <summary>
     /// See <see cref="_townBuildings"/>.
     /// </summary>
     int _townBuildingsRevision = -1;
@@ -120,32 +127,43 @@ sealed class FarmCrops(GameHost host)
     }
 
     /// <summary>
-    /// Where the farm of a machine's site stands: a player's site shown, else a town building's; null for neither.
+    /// Where the farm of a machine's site stands: a player's site shown, else a town building's or a house's layout object's; null for none.
     /// </summary>
     FarmPlace? PlaceOf(string id)
     {
         if (host.BuildingSync.ShownBuildings.TryGetValue(id, out var site))
             return new(site.Id, site.Record, site.Position, site.Rotation, site.Parent);
-        if (!ProductionSystem.IsTownWork(id) || TownBuildingOf(id[ProductionSystem.TownWorkPrefix.Length..]) is not { } b) return null;
+        if (!ProductionSystem.IsTownWork(id) || !IndexTowns()) return null;
 
-        return new(id, b.BuildingId, b.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw));
+        string key = id[ProductionSystem.TownWorkPrefix.Length..];
+        if (_townBuildings!.TryGetValue(key, out var b))
+            return new(id, b.BuildingId, b.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw));
+        if (!_townPieces!.TryGetValue(key, out var piece)) return null;
+
+        return new(id, piece.RecordId, piece.Position, piece.Rotation, House: piece.House, Floor: piece.Floor, InteriorOnly: piece.InteriorOnly);
     }
 
     /// <summary>
-    /// The town building of a run-time key, over the towns' lists (made again when they change); null for none.
+    /// The towns' buildings and their layout objects by key, over the towns' lists (made again when they change); false without towns.
     /// </summary>
-    TownBuilding? TownBuildingOf(string key)
+    bool IndexTowns()
     {
-        if (host.PopData is not { } data) return null;
-        if (_townBuildings is null || _townBuildingsRevision != data.BuildingsRevision)
+        if (host.PopData is not { } data) return false;
+        if (_townBuildings is not null && _townBuildingsRevision == data.BuildingsRevision) return true;
+
+        _townBuildingsRevision = data.BuildingsRevision;
+        _townBuildings = new(StringComparer.Ordinal);
+        _townPieces = new(StringComparer.Ordinal);
+        foreach (var town in data.Sites)
         {
-            _townBuildingsRevision = data.BuildingsRevision;
-            _townBuildings = new(StringComparer.Ordinal);
-            foreach (var town in data.Sites)
-                foreach (var b in town.Buildings) _townBuildings[b.Key] = b;
+            foreach (var b in town.Buildings)
+            {
+                _townBuildings[b.Key] = b;
+                foreach (var piece in b.LayoutBuildings) _townPieces[piece.Id] = piece;
+            }
         }
 
-        return _townBuildings.GetValueOrDefault(key);
+        return true;
     }
 
     /// <summary>
@@ -170,7 +188,8 @@ sealed class FarmCrops(GameHost host)
     }
 
     /// <summary>
-    /// A plant's mesh as a part of its farm building, with the farm's material; inside another building it goes with that one's interior.
+    /// A plant's mesh as a part of its farm building, with the farm's material; inside another building it goes with that one's interior, and in a
+    /// house's layout with the house's furniture (its floor, the interior view, the house as its parent placement).
     /// </summary>
     static PlacedMesh PlantMesh(FarmPart part, Data.GameRecord building, FarmPlace site, Data.GameRecord? material) =>
         new(part.Mesh, Matrix4x4.Identity, part.Record, building, site.Id, PlacedKind.BuildingPart)
@@ -179,6 +198,9 @@ sealed class FarmCrops(GameHost host)
             FarmPlant = true,
             Contained = site.Container is not null,
             ContainerId = site.Container,
+            Floor = site.Floor,
+            Interior = site.InteriorOnly,
+            ParentPlacementId = site.House,
         };
 
     /// <summary>

@@ -307,6 +307,12 @@ public sealed class Blackboard
     public Dictionary<int, HomeSpot> SeatClaims { get; } = [];
 
     /// <summary>
+    /// The slots of <see cref="SeatClaims"/> whose seat is a workstation without power (state 93 false for row 221 there, so staying home has no
+    /// plan; derived with the claims, not hashed).
+    /// </summary>
+    public HashSet<int> UnpoweredSeats { get; } = [];
+
+    /// <summary>
     /// The furniture each member sitting around (275) claimed (a seat of <see cref="TownBuilding.SeatAt"/> numbering, in any building the finder
     /// allows), as the last serial step found it (derived, not hashed).
     /// </summary>

@@ -94,7 +94,8 @@ sealed class TownBuildingContents
         foreach (var item in layouts.Items(layout, b))
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
-            LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true, at, rotation));
+            LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true, at, rotation)
+                { Floor = item.Floor });
             index++;
         }
     }
@@ -137,7 +138,8 @@ sealed class TownBuildingContents
             string id = $"{b.Key}/{index}";
             bool picked = LaySpot(db, item, id, at, rotation, beds, function, ref seats);
 
-            LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false, at, rotation));
+            LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false, at, rotation)
+                { Floor = item.Floor, InteriorOnly = !item.Outside });
             int kind = function?.GetInt("function") ?? -1;
             if (kind == CorpseDisposalFunction) Disposals.Add(new TownDisposal(id, item.Building.StringId, at));
 

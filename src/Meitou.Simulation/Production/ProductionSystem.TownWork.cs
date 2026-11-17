@@ -73,6 +73,16 @@ public sealed partial class ProductionSystem
     readonly List<(TownBuilding Building, TownLayoutBuilding? Piece, int Owner)> _townWaiting = [];
 
     /// <summary>
+    /// The ruins and towns' building lists the layout objects' machines were last checked against (<see cref="DropGonePieces"/>).
+    /// </summary>
+    (long Ruins, int Buildings) _piecesChecked = (-1, -1);
+
+    /// <summary>
+    /// The layout objects whose machine went with a ruin or a new layout: one made again is new, not the save's (<see cref="RestorePiece"/>).
+    /// </summary>
+    readonly HashSet<string> _piecesDestroyed = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The research contributions the town and outpost workers made this tick (<see cref="TownOperate"/>), which the player's operators continue
     /// (<c>FUN_140836b70</c>'s falloff counts every bench worked in the tick; serial).
     /// </summary>
@@ -173,13 +183,15 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The machine of a town building or of a layout object of one by its key (<see cref="TownLayoutBuilding.Id"/>), made on the first call
-    /// (<see cref="TownWork"/>, <see cref="PieceWork"/>); null for a key naming neither or one that is no machine. Serial phases only.
+    /// (<see cref="TownWork"/>, <see cref="PieceWork"/>); null for a key naming neither, one that is no machine, or an object of a ruin (which holds
+    /// none, <see cref="DropGonePieces"/>). Serial phases only.
     /// </summary>
     public Machine? TownWork(World world, string key)
     {
         if (TownBuildingOf(key) is { } found) return TownWork(world, found.Building, found.Owner);
+        if (TownPieceOf(key) is not { } piece || world.Fixtures.IsDestroyed(piece.House)) return null;
 
-        return TownPieceOf(key) is { } piece ? PieceWork(world, piece.House, piece.Piece, piece.Owner) : null;
+        return PieceWork(world, piece.House, piece.Piece, piece.Owner);
     }
 
     /// <summary>
@@ -235,7 +247,16 @@ public sealed partial class ProductionSystem
             };
         }
 
-        return Made(world, site, m => RestorePieceMachine?.Invoke(piece, m));
+        return Made(world, site, m => RestorePiece(piece, m));
+    }
+
+    /// <summary>
+    /// A layout object's new machine takes its saved entry (<see cref="RestorePieceMachine"/>), unless the object was destroyed since the load: the
+    /// one a house stood up again or laid out anew makes is new.
+    /// </summary>
+    void RestorePiece(TownLayoutBuilding piece, Machine m)
+    {
+        if (!_piecesDestroyed.Contains(piece.Id)) RestorePieceMachine?.Invoke(piece, m);
     }
 
     /// <summary>
@@ -279,6 +300,7 @@ public sealed partial class ProductionSystem
     {
         if (_towns is not { } data || TownBuildingIndex() is null) return;
 
+        DropGonePieces(world, data);
         foreach (var site in data.Sites)
         {
             if (!world.Fixtures.IsRegistered(site.Index) || !_townSitesMade.Add(site.Index)) continue;
@@ -288,6 +310,53 @@ public sealed partial class ProductionSystem
         }
 
         if (_townWaiting.Count > 0) _townWaiting.RemoveAll(w => MadeTownMachine(world, w.Building, w.Piece, w.Owner));
+    }
+
+    /// <summary>
+    /// The machines of layout objects that are gone, checked when the ruins or the towns' lists change: setting a house destroyed destroys its
+    /// interior's objects (<c>Building::setDestroyed</c> <c>FUN_140557280</c> -> <c>FUN_14054f4d0</c>, docs/game/buildings-production.md "A ruin
+    /// holds no furniture"), and a house laid out again has other objects. Each such machine goes with its items; an object of a house that is a
+    /// ruin waits for it to stand again (<see cref="MadeTownMachine"/>) and is made new then.
+    /// </summary>
+    void DropGonePieces(World world, PopulationData data)
+    {
+        var seen = (world.Fixtures.RuinsRevision, data.BuildingsRevision);
+        if (seen == _piecesChecked) return;
+        _piecesChecked = seen;
+
+        List<string>? gone = null;
+        foreach (var (id, site) in _townWorkSites)
+            if (IsPieceGone(world, id, site)) (gone ??= []).Add(id);
+        if (gone is null) return;
+
+        foreach (string id in gone) DropPiece(world, id);
+        world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Whether a town machine site is a layout object's that is gone: no longer in its house's layouts (another record or place under its id) or
+    /// its house is a ruin.
+    /// </summary>
+    bool IsPieceGone(World world, string id, BuildSite site)
+    {
+        string key = id[TownWorkPrefix.Length..];
+        if (!key.Contains('/')) return false;
+        if (TownPieceOf(key) is not { } found) return true;
+
+        return found.Piece.RecordId != site.Record || found.Piece.Position != site.Position || world.Fixtures.IsDestroyed(found.House);
+    }
+
+    /// <summary>
+    /// Drops a gone layout object's machine and site; the object still in a ruin's layout waits for the house to stand.
+    /// </summary>
+    void DropPiece(World world, string id)
+    {
+        string key = id[TownWorkPrefix.Length..];
+        _townWorkSites.Remove(id);
+        world.Machines.Remove(id);
+        _piecesDestroyed.Add(key);
+
+        if (TownPieceOf(key) is { } found && IsPieceMachine(Data(found.Piece.RecordId))) _townWaiting.Add((found.House, found.Piece, found.Owner));
     }
 
     /// <summary>
@@ -576,6 +645,13 @@ public sealed partial class ProductionSystem
     {
         if (Live(world, m) && MachinePowered(world, m)) TownOperate(world, slot, cold, m, dt);
     }
+
+    /// <summary>
+    /// State 93 BUILDING_HAS_POWER of a house's layout object (<c>FUN_140596ab0</c> -> <c>FUN_140299370</c>): its machine's power, true for an
+    /// object that is no machine (a building class below 2) or draws nothing. Makes the machine on the first ask (<see cref="TownWork(World,
+    /// string)"/>); serial phases only.
+    /// </summary>
+    public bool PiecePowered(World world, string piece) => TownWork(world, piece) is not { } m || MachinePowered(world, m);
 
     /// <summary>
     /// <c>Task_EmptyMachine</c> (rows 92 and 284, <c>FUN_14033cd10</c>, <b>Verified</b>) at a machine with an output: the output's items go into the

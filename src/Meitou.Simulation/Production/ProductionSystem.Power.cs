@@ -327,6 +327,8 @@ public sealed partial class ProductionSystem
             if (b.Destroyed) continue;
 
             if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, LevelGetsBattery(world, site, b)));
+            if (world.Fixtures.IsDestroyed(b)) continue;   // a ruin holds no layout objects (FUN_140557280)
+
             foreach (var item in b.LayoutBuildings)
                 if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(new PseudoDraw(item.Id, drawn, PieceGetsBattery(world, item)));
         }
@@ -519,12 +521,25 @@ public sealed partial class ProductionSystem
             if (Data(b.BuildingId) is { IsGenerator: true } data)
                 total += Generated(data, NpcGeneratorHealth(world, site, b), data.IsWind ? NpcWind(world, b) : 0);
 
-            foreach (var piece in b.LayoutBuildings)
-            {
-                if (Data(piece.RecordId) is not { IsGenerator: true } pieceData) continue;
+            total += LayoutOutput(world, b);
+        }
 
-                total += Generated(pieceData, PieceGeneratorHealth(world, piece), pieceData.IsWind ? PieceWind(world, piece) : 0);
-            }
+        return total;
+    }
+
+    /// <summary>
+    /// What the generators of a standing building's layouts give now; none for a ruin, which holds no layout objects (<c>FUN_140557280</c>).
+    /// </summary>
+    float LayoutOutput(World world, TownBuilding b)
+    {
+        if (world.Fixtures.IsDestroyed(b)) return 0;
+
+        float total = 0;
+        foreach (var piece in b.LayoutBuildings)
+        {
+            if (Data(piece.RecordId) is not { IsGenerator: true } data) continue;
+
+            total += Generated(data, PieceGeneratorHealth(world, piece), data.IsWind ? PieceWind(world, piece) : 0);
         }
 
         return total;
