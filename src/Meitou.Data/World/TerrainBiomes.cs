@@ -338,7 +338,8 @@ public sealed record BiomeTerrain
 }
 
 /// <summary>
-/// Paths of the land maps under <c>data/newland/land/</c> used to texture the terrain (docs/formats/terrain.md):
+/// Paths of the land maps under <c>data/newland/land/</c> used to texture the terrain (docs/formats/terrain.md), each but the colour tiles an
+/// <see cref="Overlaymap"/>:
 /// the biome blend map, and the 8 × 8 tiled overlay (<c>new_overlay.X.Y.png</c>) and colour (<c>colour.X.Y.png</c>)
 /// maps, tile X along world +X and Y along +Z.
 /// </summary>
@@ -360,12 +361,39 @@ public static class TerrainMaps
     /// Overlay and colour map tiles per world side.
     /// </summary>
     public const int OverlayTiles = 8;
+    /// <summary>
+    /// The overlay tiles' name before their tile numbers.
+    /// </summary>
+    public const string OverlayKind = "new_overlay";
 
     /// <summary>
-    /// <c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss.
+    /// <c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss. A
+    /// <c>new_overlay</c> tile is an <see cref="Overlaymap"/> (a mod's copy replaces it); a <c>colour</c> tile is read from the install.
     /// </summary>
-    public static string OverlayTile(GameInstall install, string kind, int x, int z) =>
-        GameFiles.Resolve(Path.Combine(install.DataDirectory, LandDirectory, "overlaymaps", $"{kind}.{x}.{z}.png"));
+    public static string OverlayTile(GameInstall install, string kind, int x, int z)
+    {
+        string name = $"{kind}.{x}.{z}.png";
+        string installed = Path.Combine(LandDirectory, "overlaymaps", name);
+        return kind == OverlayKind ? Overlaymap(install, name, installed) : GameFiles.Resolve(Path.Combine(install.DataDirectory, installed));
+    }
+
+    /// <summary>
+    /// The install's <see cref="BiomeMap"/>, or an enabled mod's copy (<see cref="Overlaymap"/>).
+    /// </summary>
+    public static string BiomeMapPath(GameInstall install) => Overlaymap(install, "biomemap.png", BiomeMap);
+
+    /// <summary>
+    /// The install's <see cref="BlendMap"/>, or an enabled mod's copy (<see cref="Overlaymap"/>).
+    /// </summary>
+    public static string BlendMapPath(GameInstall install) => Overlaymap(install, "blendMap.png", BlendMap);
+
+    /// <summary>
+    /// The file the game loads for the image <paramref name="name"/>: the original loads its land images by bare name from the resource group
+    /// <c>Overlaymaps</c> (docs/formats/overview.md), so an enabled mod's copy in a folder of that group replaces the install's
+    /// <paramref name="installed"/> (a path under the data folder; <see cref="Ogre.GameResources.Resolve"/>).
+    /// </summary>
+    public static string Overlaymap(GameInstall install, string name, string installed) =>
+        Ogre.GameResources.Resolve(install, name, "Overlaymaps", installed);
 }
 
 /// <summary>

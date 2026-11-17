@@ -34,4 +34,14 @@ public static class GameResources
         var resources = For(install);
         return resources.Contains(name, group) ? resources.Find(name, group) : null;
     }
+
+    /// <summary>
+    /// The file the game opens for <paramref name="name"/> in <paramref name="group"/> (<see cref="Find"/>), else the install's own
+    /// <paramref name="installed"/> (a path under the data folder). An install without <c>resources.cfg</c> (a test install) reads its own file.
+    /// </summary>
+    public static string Resolve(GameInstall install, string name, string group, string installed)
+    {
+        bool indexed = File.Exists(Path.Combine(install.Root, "resources.cfg"));
+        return (indexed ? Find(install, name, group) : null) ?? GameFiles.Resolve(Path.Combine(install.DataDirectory, installed));
+    }
 }

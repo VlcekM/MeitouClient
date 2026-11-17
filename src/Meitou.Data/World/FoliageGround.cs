@@ -279,11 +279,11 @@ public sealed class FoliageOverlay
 public sealed class FoliageBiomeMap(int size, byte[] rgba)
 {
     /// <summary>
-    /// Reads the install's biome map.
+    /// Reads the biome map (the install's, or an enabled mod's copy).
     /// </summary>
     public static FoliageBiomeMap Open(GameInstall install)
     {
-        var image = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
+        var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.BiomeMapPath(install)));
         return new FoliageBiomeMap(image.Width, image.Pixels);
     }
 

@@ -169,7 +169,7 @@ sealed class SkyTextures : IDisposable
     {
         try
         {
-            var biomes = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
+            var biomes = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.BiomeMapPath(install)));
             var map = AmbientMap.Build(db, biomes);
             _ambientMap?.Dispose();
             _ambientMap = SampledImage.Rgba8(_gpu, map, repeat: false, mipmaps: false, "sky ambient map");
