@@ -315,6 +315,31 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// Tells every <see cref="IWorldReady"/> system, in system order, that the world is ready to run (<paramref name="fromSave"/>: loaded from a
+    /// save, else a new game); one that throws is logged and the rest are still told. Between ticks, before the first.
+    /// </summary>
+    public void TellReady(bool fromSave)
+    {
+        foreach (var system in _systems)
+        {
+            if (system is not IWorldReady ready) continue;
+
+            try
+            {
+                ready.Ready(this, fromSave);
+            }
+            catch (Exception e)
+            {
+                string fault = $"{e.GetType().Name}: {e.Message}";
+                if (SimulationExtensions.FactoryOf(ready) is { } factory)
+                    Console.Error.WriteLine($"mod       {factory.Owner}: world ready of '{factory.Name}' failed: {fault}");
+                else
+                    Console.Error.WriteLine($"world ready of '{ready.GetType().FullName}' failed: {fault}");
+            }
+        }
+    }
+
+    /// <summary>
     /// The walkable ground.
     /// </summary>
     public IWalkability Walkability { get; }
