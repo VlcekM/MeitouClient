@@ -1138,7 +1138,8 @@ internal sealed unsafe class GiProbes : IDisposable
         var (program, pipeline) = (_gatherProgram.Value, _gatherPipeline);
 
         // The divisor's place in the camera block says whether the last frame's gather is there to read.
-        var cameraInfo = WriteReflectionCamera(frame with { Divisor = last is null ? 0 : 1 }, InteriorEnabled ? Math.Clamp(InteriorGain - 1, 0, 1) : 0, GatherSparse);
+        float interior = InteriorEnabled ? Math.Clamp(InteriorGain - 1, 0, 1) : 0;
+        var cameraInfo = WriteReflectionCamera(frame with { Divisor = last is null ? 0 : 1 }, interior, GatherSparse);
         var top = scene.Top.Handle;
         var asWrite = AccelerationWrite(&top);
         var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);

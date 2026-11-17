@@ -465,8 +465,10 @@ static partial class WorldFrame
         // A room lit by its probes (Indoor GI) is as dark as its lamps leave it: the exposure follows it under the game's minimum.
         if (post is PostProcess exposed)
         {
-            exposed.IndoorExposure = gpu.GiActive && gpu.Probes is { InteriorEnabled: true } && gpu.Objects is { InteriorView.Count: > 0 } ? PostProcess.IndoorExposureScale : 0;
-            exposed.IndoorExposureMin = KenshiLighting.MinLuminance(-1, gpu.Sky.Exposure.Min, gpu.Sky.Exposure.NightDarkness) * PostProcess.IndoorExposureFloor;
+            bool indoors = gpu.GiActive && gpu.Probes is { InteriorEnabled: true } && gpu.Objects is { InteriorView.Count: > 0 };
+            float nightFloor = KenshiLighting.MinLuminance(-1, gpu.Sky.Exposure.Min, gpu.Sky.Exposure.NightDarkness);
+            exposed.IndoorExposure = indoors ? PostProcess.IndoorExposureScale : 0;
+            exposed.IndoorExposureMin = nightFloor * PostProcess.IndoorExposureFloor;
         }
         post.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
         UpdateHeatHaze(gpu, post, sun.Y);

@@ -358,7 +358,12 @@ internal sealed unsafe partial class CharacterRenderer
     /// The visibility buffer's choice: 0 never, 1 always, 2 by the main view's triangles (<see cref="MainViewDrawn"/>). The environment's
     /// <c>MEITOU_CHARACTER_VISIBILITY</c> sets 0 or 1.
     /// </summary>
-    public static int VisibilityMode { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CHARACTER_VISIBILITY") switch { "0" => 0, "1" => 1, _ => 2 };
+    public static int VisibilityMode { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CHARACTER_VISIBILITY") switch
+    {
+        "0" => 0,
+        "1" => 1,
+        _ => 2,
+    };
 
     /// <summary>
     /// Past this many triangles in the main view the visibility buffer draws it. **Observed** (RTX 4090, 2560x1440, the colour pass against the
@@ -401,7 +406,8 @@ internal sealed unsafe partial class CharacterRenderer
     /// Whether the main view's characters go through the visibility buffer this frame (<see cref="DrawVisible"/>): it is on, the device has it and
     /// <paramref name="post"/> is the Vulkan chain.
     /// </summary>
-    public bool VisibilityWanted(IWorldPostChain post) => VisibilityBuffer && post is PostProcess && _portraitLive < 0 && CharacterVisibility.Supported(Gpu);
+    public bool VisibilityWanted(IWorldPostChain post) =>
+        VisibilityBuffer && post is PostProcess && _portraitLive < 0 && CharacterVisibility.Supported(Gpu);
 
     /// <summary>
     /// <see cref="Draw"/> for the main view through the visibility buffer, outside the scene's pass (the caller closes it): the id pass over
@@ -637,6 +643,16 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
+    /// Whether <paramref name="part"/> shows with the character's weapons as drawn now (the preview studio's drawn weapon counts too).
+    /// </summary>
+    static bool ShowsNow(AssetPart part, in Live l)
+    {
+        bool drawn = l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0;
+        bool back = l.BackDrawn || PreviewStudio.DrawnWeapon == 2;
+        return part.ShowsWith(drawn, l.RangedDrawn, l.Shots, back);
+    }
+
+    /// <summary>
     /// One character's shown parts placed relative to <paramref name="origin"/>, each part's level chosen and its instance added to the batches.
     /// </summary>
     void CollectCharacter(ViewBatches vb, in Live l, Vector3 eye, Vector3 origin, float lodFloor, float minRadius)
@@ -648,7 +664,7 @@ internal sealed unsafe partial class CharacterRenderer
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
-            if (!part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2)) continue;
+            if (!ShowsNow(part, in l)) continue;
             var model = part.Shared ? world : _attach[l.AttachBase + part.AttachIndex] * world;
             float modelScale = part.Shared ? worldScale : model.ScaleLength();
             if (_depthPass && part.BoundsRadius * modelScale < minRadius) continue;
@@ -809,7 +825,7 @@ internal sealed unsafe partial class CharacterRenderer
         {
             var part = parts[p];
             ref var f = ref _partFrames[l.PartBase + p];
-            f.Shows = part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2);
+            f.Shows = ShowsNow(part, in l);
             // Decapitation: a part on a head bone leaves the body with the head; the cut-off head keeps only those (skinned parts: their head
             // vertices, by the shader).
             if (f.Shows && !part.Shared && !part.IsBody && l.Asset.Appearance is { } look

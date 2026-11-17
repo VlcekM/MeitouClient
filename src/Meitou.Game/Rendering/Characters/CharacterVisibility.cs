@@ -69,7 +69,8 @@ sealed unsafe class CharacterVisibility : IDisposable
     /// Whether the device has what the visibility buffer needs: Vulkan with the meshes read by address, fragment barycentrics, <c>gl_PrimitiveID</c>
     /// in a fragment program, and no late-depth workaround for discards.
     /// </summary>
-    public static bool Supported(IGpuContext gpu) => gpu is GpuContext { HasRayQuery: true, Device: { HasFragmentBarycentric: true, HasGeometryShader: true } }
+    public static bool Supported(IGpuContext gpu) =>
+        gpu is GpuContext { HasRayQuery: true, Device: { HasFragmentBarycentric: true, HasGeometryShader: true } }
         && !gpu.Shaders.DiscardNeedsLateDepth;
 
     /// <summary>

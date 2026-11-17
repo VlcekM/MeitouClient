@@ -104,7 +104,10 @@ public sealed unsafe partial class PostProcess
         var frame = new Gi.GiProbes.ReflectionFrame(_characterVisibility.Texture, surface.Texture, depth.Texture, _eyeNow,
             new(rot.M11, rot.M21, rot.M31), new(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, _fovNow, _aspectNow),
             ViewWindow.Tan(tanY * _aspectNow, tanY), _planes, _width, _height, 1);
-        if (rays is null || !rays.TraceCharacterGather((CommandList)Segment(), scene, frame, hadLast ? _characterGatherLast?.Texture : null, _characterGatherPooled.Texture)) return;
+        if (rays is null) return;
+
+        var last = hadLast ? _characterGatherLast?.Texture : null;
+        if (!rays.TraceCharacterGather((CommandList)Segment(), scene, frame, last, _characterGatherPooled.Texture)) return;
         CloseSegment();
         _characterVisibilityFrame = _frameIndex;
 

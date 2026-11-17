@@ -274,7 +274,8 @@ public sealed class FoliageWorld : IDisposable
             NearestTown = NearestTown,
         };
         var laid = FoliageLayout.Place(input, Catalog, farOnly);
-        if (save) _cache?.Save(zone, farOnly, laid, ground, System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, owned ?? _townsOwned!);
+        double took = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        if (save) _cache?.Save(zone, farOnly, laid, ground, took, owned ?? _townsOwned!);
         return (laid, ground);
     }
 

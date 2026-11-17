@@ -180,7 +180,12 @@ sealed unsafe class LampShadowPass : IDisposable
         ], GpuSetLayout.Bindless);
         _sumHalfPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumHalfProgram, "lamp shadow light half"));
         _classifyProgram = ctx.Shaders.Compute(LampShadowShaders.Classify, "lamp shadow cells",
-            [(0, DescriptorType.UniformBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.StorageBuffer)]);
+            [
+                (0, DescriptorType.UniformBuffer),
+                (1, DescriptorType.StorageBuffer),
+                (2, DescriptorType.StorageBuffer),
+                (3, DescriptorType.StorageBuffer),
+            ]);
         _classifyPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_classifyProgram, "lamp shadow cells"));
         _sampler = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
     }
@@ -843,7 +848,8 @@ sealed unsafe class LampShadowPass : IDisposable
     /// <summary>
     /// The cells of every lamp into its round's lists and map (<see cref="LampShadowShaders.Classify"/>), a dispatch a lamp over its area's cells.
     /// </summary>
-    void Classify(CommandList cmd, WorldLamps lamps, in LampShadowView view, in Meitou.Game.Rendering.Frame.OcclusionView pyramid, in ListLayout layout)
+    void Classify(CommandList cmd, WorldLamps lamps, in LampShadowView view, in Meitou.Game.Rendering.Frame.OcclusionView pyramid,
+        in ListLayout layout)
     {
         // The pyramid's level of 64-pixel blocks (level 0 holds 4 x 4 pixels): its vectors as HizPyramid.Vectors lays them out.
         bool has = !pyramid.IsEmpty && pyramid.Vectors[5].Y > 4.5f;

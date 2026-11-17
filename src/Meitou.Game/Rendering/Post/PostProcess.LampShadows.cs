@@ -39,7 +39,8 @@ public sealed unsafe partial class PostProcess
         /// Compiles the apply and looks up its slots.
         /// </summary>
         public LampShadowApplyPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.Apply, "post lamp shadows") =>
-            (Lost, Total, Total1, Specular, Plain, SpecularOn) = (P.Sampler("uLost"), P.Sampler("uTotal"), P.Sampler("uTotal1"), P.Sampler("uSpecular"), P.Sampler("uPlain"), P.Uniform("uSpecularOn"));
+            (Lost, Total, Total1, Specular, Plain, SpecularOn) = (P.Sampler("uLost"), P.Sampler("uTotal"), P.Sampler("uTotal1"),
+                P.Sampler("uSpecular"), P.Sampler("uPlain"), P.Uniform("uSpecularOn"));
     }
 
     /// <summary>

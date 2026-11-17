@@ -419,7 +419,9 @@ sealed unsafe class TracedGrass : IDisposable
         }
 
         float half = MapSide * MapCell / 2;
-        var origin = new Vector2(MathF.Floor(_eye.X / MapSnap) * MapSnap + MapSnap / 2 - half, MathF.Floor(_eye.Z / MapSnap) * MapSnap + MapSnap / 2 - half);
+        float originX = MathF.Floor(_eye.X / MapSnap) * MapSnap + MapSnap / 2 - half;
+        float originZ = MathF.Floor(_eye.Z / MapSnap) * MapSnap + MapSnap / 2 - half;
+        var origin = new Vector2(originX, originZ);
         float widen = 2 * _maxSway + 1;
         var key = new HashCode();
         key.Add(origin);
@@ -450,7 +452,12 @@ sealed unsafe class TracedGrass : IDisposable
         {
             int cards = (int)(entry.Vertices.Size / (VerticesPerQuad * 12));
             if (cards == 0 || count >= MaxInstances) continue;
-            patches[count++] = new MapPatch { Vertices = _ctx.Device.Address(entry.Vertices.Handle), Cards = (uint)cards, Corner = new Vector4(entry.Corner, 0) };
+            patches[count++] = new MapPatch
+            {
+                Vertices = _ctx.Device.Address(entry.Vertices.Handle),
+                Cards = (uint)cards,
+                Corner = new Vector4(entry.Corner, 0),
+            };
             most = Math.Max(most, cards);
         }
 

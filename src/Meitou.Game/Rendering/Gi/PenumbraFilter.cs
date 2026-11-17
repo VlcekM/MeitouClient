@@ -571,7 +571,8 @@ sealed unsafe class PenumbraFilter : IDisposable
         };
 
         cmd.BindPipeline(half ? _halfPipeline : listed ? _listPipeline : _pipeline);
-        cmd.PushDescriptors(half ? _halfProgram : listed ? _listProgram : _program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 7), GpuBindPoint.Compute);
+        var program = half ? _halfProgram : listed ? _listProgram : _program;
+        cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 7), GpuBindPoint.Compute);
     }
 
     /// <summary>

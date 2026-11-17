@@ -330,7 +330,8 @@ public sealed unsafe class FfxSwapchain : IDisposable
         {
             int first = s_firstQueue + 1;
             string async = s_computeQueue.Handle == s_presentQueue.Handle ? "the present queue" : $"queue {first + 2}";
-            return $"game = graphics queue 0, present = queue {first}, image acquire = queue {first + 1}, async compute = {async} (family {_device.GraphicsFamily})";
+            string queues = $"game = graphics queue 0, present = queue {first}, image acquire = queue {first + 1}";
+            return $"{queues}, async compute = {async} (family {_device.GraphicsFamily})";
         }
     }
 

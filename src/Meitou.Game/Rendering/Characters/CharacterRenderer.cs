@@ -949,8 +949,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// </summary>
     internal void ReloadSurface()
     {
-        _colourProg = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(),
-            Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth), inShader: true), "characters", CharacterShaders.InstanceLocation);
+        string fragment = Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth), inShader: true);
+        _colourProg = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(), fragment, "characters", CharacterShaders.InstanceLocation);
         _visibility = null;   // made again from the new text when next used; the old one stays alive as the old colour program does
     }
 
@@ -1607,7 +1607,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (_budget.Due) OfferTextureNeeds();
         _budget.Update(_content.Textures);
 
-        var inputs = (_content.Textures.Version, textureBias: _textureBias, textureStandIn: _textureStandIn, Gpu.Samplers.Generation, VisibilityBuffer);
+        var inputs = (_content.Textures.Version, textureBias: _textureBias, textureStandIn: _textureStandIn, Gpu.Samplers.Generation,
+            VisibilityBuffer);
         if (inputs != _materialInputs) (_materialInputs, _materialEpoch) = (inputs, _materialEpoch + 1);
         var table = _content.Materials;
         table.BeginFrame();
@@ -1648,7 +1649,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             bool still = l.WeaponDrawn && _portraitKeys.Contains(l.Key);
             foreach (var part in l.Asset.Parts)
             {
-                bool shown = part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2)
+                bool shown = ShowsNow(part, in l)
                     || still && ShowsInPortrait(part, in l);
                 if (!shown) continue;
                 if (part.MaterialFrame != _updateStamp)

@@ -1309,7 +1309,8 @@ internal sealed class CharacterContent : IDisposable
             int at = 12;
             foreach (var part in model.Parts)
             {
-                if (span.Length < at + 4 || System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(span[at..]) != part.Vertices.Length) return false;
+                if (span.Length < at + 4) return false;
+                if (System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(span[at..]) != part.Vertices.Length) return false;
                 at += 4;
                 if (span.Length < at + part.Vertices.Length * 8) return false;
                 at += part.Vertices.Length * 8;
