@@ -163,8 +163,8 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool Tried { get; internal set; }
     /// <summary>
-    /// The row's list B has held since the order started (<see cref="ListTests.OrderNeedsFail"/>): the original runs its row only then, its
-    /// providers' steps over, so only then does a failing list B end it.
+    /// The order runs its own row (<see cref="ListTests.OrderNeedsFail"/>): its list B held at its start, or since, a step of its plan (a follow
+    /// row's fight, 13) being over; the original runs its row only then, so only then does a failing list B end it.
     /// </summary>
     public bool RowRuns { get; internal set; }
 
@@ -370,7 +370,7 @@ public static class PlayerOrders
                 return check;
             }
             front.Started = true;
-            front.RowRuns = false;
+            front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first
             front.Owner.Start(world, slot, front);
             if (q.Front != front || Runs(world, slot, front)) return check;
             q.PopFront();
@@ -543,6 +543,15 @@ public static class PlayerOrders
 
         return fails && front.RowRuns;
     }
+
+    /// <summary>
+    /// Whether the character's follow order (31, 45, 289) runs its own row: its list B has held since its start, so a threat to the followed
+    /// character (16) or its going down (7) ends the order (<see cref="RowEnds"/>) instead of making a fight a step of it, as the original's plan
+    /// step does (<c>FUN_14050d970</c>, <b>Verified</b> in the running game). A pure read.
+    /// </summary>
+    public static bool FollowRowRuns(CharacterCold cold) =>
+        cold.Running is { Source: TaskSource.Order } run && Production.PermaJobs.Follows(run.Row)
+        && cold.OrderQueue.Front is { Started: true, RowRuns: true };
 
     /// <summary>
     /// The decision step's start of source 1: the front starts (<see cref="TryFront"/>).

@@ -23,7 +23,7 @@ public static class ListTests
         var type = Saving.OrderSave.SavedRow(order.Row);
         if (TaskDataTable.Of(type) is not { } row) return false;
 
-        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
+        var target = Target(order);
         if (RowStates.Done(world, slot, row, target) != true || !EffectHolds(row)) return false;
 
         return running ? !TaskFinished.Unfinished(world, slot, type) : TaskFinished.Fresh(world, slot, type, order.Target);
@@ -34,17 +34,34 @@ public static class ListTests
     /// true when an entry of the row's list B that <see cref="RowStates"/> evaluates fails (<see cref="RowStates.NeedFails"/>), false when none
     /// does, null where it is not asked: a row with TaskData <c>+0x16</c> (<see cref="PlanSteps.KeepsHours"/>; the hours never end an order, whose
     /// task the order adds make with the hours 0 to 100, <c>FUN_1405086d0</c>), the walk to the row (the original's plan step of its own; a move is
-    /// that walk), and a follow row (31, 45, 289), which Meitou leaves to its fight step (<see cref="Movement.MovementSystem.FightStepOver"/>).
+    /// that walk), and a follow row's fight (31, 45, 289), a step of its plan (13) whose own list B is not asked
+    /// (<see cref="Movement.MovementSystem.FightStepOver"/>).
     /// </summary>
     public static bool? OrderNeedsFail(World world, int slot, OrderEntry order)
     {
-        var type = Saving.OrderSave.SavedRow(order.Row);
-        if (TaskDataTable.Of(type) is not { } row || PlanSteps.KeepsHours(type) || PermaJobs.Follows(type)) return null;
+        var cold = world.Characters.Cold(slot)!;
         if (!order.IsMove && world.Characters.Next[slot].Task == (byte)Movement.CharacterTask.GoTo) return null;
+        if (cold.Running is { Task: Movement.CharacterTask.Attack } run && PermaJobs.Follows(run.Row)) return null;
 
-        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
-        return RowStates.NeedFails(world, slot, row, target);
+        return OrderNeedsFailNow(world, slot, order);
     }
+
+    /// <summary>
+    /// <see cref="OrderNeedsFail"/>'s list test without its walk and fight-step gates: at the order's start, whether the row could run at once
+    /// (false) or a step of its plan comes first (true); null where the plan step does not ask it.
+    /// </summary>
+    public static bool? OrderNeedsFailNow(World world, int slot, OrderEntry order)
+    {
+        var type = Saving.OrderSave.SavedRow(order.Row);
+        if (TaskDataTable.Of(type) is not { } row || PlanSteps.KeepsHours(type)) return null;
+
+        return RowStates.NeedFails(world, slot, row, Target(order));
+    }
+
+    /// <summary>
+    /// The row target of an order.
+    /// </summary>
+    static RowTarget Target(OrderEntry order) => new(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
 
     /// <summary>
     /// <c>FUN_14050e5b0</c>'s skips of job <paramref name="job"/>, after the jobs switch: a row without +0x14 (<see cref="TaskDataFlags.KeepsJob"/>)

@@ -231,12 +231,15 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
   container work done in place (`Idle`) report `Done` once the character holds no work.
 - A front whose task ended leaves the queue (a move's arrival in the character's own partition, `PlayerOrders.Arrived`, which also starts a queued move at once as the move-only
   queue did; `TaskEnd.Done`; else the decision step, `PlayerOrders.Prepare`) and the next is tried at once. An interrupted move drops the queue (as `GoTo`/`Stop` dropped queued moves),
-  so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow row's fight step does not). A move whose walk finds no path or is given
+  so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow order's fight before its row runs does not). A move whose walk finds no path or is given
   up blocked leaves the queue alone and the next order is tried at the decision step (`PlayerOrders.WalkFailed`: the mover has no path, so state 1 holds).
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
 - A done front leaves before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
   order step, [finished tests](game/ai-tasks.md#finished-tests)), and so does one whose desire is 0 or less (`OrderDesire`: a first aid or splint order with no kit, a lift
-  order once the body is carried) and a running one whose list B fails while its own row runs (`ListTests.OrderNeedsFail`, once it has held since the start, the plan step's end, [precedence](game/ai-tasks.md#precedence));
+  order once the body is carried) and a running one whose list B fails while its own row runs (`ListTests.OrderNeedsFail`; `OrderEntry.RowRuns`: list B held at its start, or since, the plan step's end, [precedence](game/ai-tasks.md#precedence)).
+  A follow order (31) running its row ends so when the followed character is attacked (16) or goes down (7): the follower falls through to its goals (15 Protect allies
+  joins the fight) and does not follow again (`PlayerOrders.FollowRowRuns`; the guards' fight and the fight-step provenance are only for a follow job, or a follow
+  order given while its target is already threatened, whose fight is the step before its row);
   a running one ends its task (`TaskEnd.Done`) when its row is done or cannot run, while a desire of 0 leaves the act-out to its own end. The decision step tests this on every
   tick a character with a front steps (`PlayerOrders.PopsNow`) and decides it then. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
   and its walk goes on (`Task_Move`'s end stops the mover only once it is done), so the next order or job takes the walk over there.
@@ -312,7 +315,7 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
   whose front order runs its task (the original's order step tests it on every AI update); jobs and implicit jobs are found on this re-ask and the triggers. The job step passes
   over a job the general list tests skip (`ListTests.JobSkipped`, [finished tests](game/ai-tasks.md#finished-tests)).
 - **Engine starts outside the step** (a step of a running row, or a reaction to another's act; the step leaves a claimed character alone that tick, `DecisionSystem.Claim`): a follow
-  row's defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
+  job's (or a not yet running follow order's) defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
 - **Trace** (`DecisionSystem.Tracing`, off by default): each decision fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an
   order's failure text, "no attacker in range", a score, a job's index), published as `CharacterSnapshot.Decision` while tracing. Not saved or hashed.
 - **Player-faction characters that are not `IsPlayer`** exist only in Meitou: the sandbox's and `--crowd`'s bystanders and tests' extras (a load, a new game or a recruit makes every

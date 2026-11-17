@@ -1098,7 +1098,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// <paramref name="attacker"/> within <see cref="ImmediateReach"/> of it, in slot order, never against a character of their own faction: the rows
     /// need state 16 (no threat within 40 of the followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of"
     /// provides (docs/game/ai-tasks.md "Precedence"); the fight is a step of the row, which the decision step follows again after it
-    /// (<see cref="MovementSystem.FollowAgain"/>). A bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
+    /// (<see cref="MovementSystem.FollowAgain"/>). A follow order running its own row is not one: the threat ends it
+    /// (<see cref="PlayerOrders.FollowRowRuns"/>). A bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
     /// </summary>
     static void Guards(World world, CharacterTable table, int slot, int attacker, List<CharacterId> defenders, HashSet<int> taken, List<int> guards)
     {
@@ -1115,7 +1116,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
                 continue;
             }
             if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row)
-                || !run.Runs(CharacterTask.Follow)
+                || !run.Runs(CharacterTask.Follow) || PlayerOrders.FollowRowRuns(c)
                 || !Helps(table, s, taken))
                 continue;
 

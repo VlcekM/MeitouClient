@@ -1047,8 +1047,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (`FUN_14059c6d0`) is true when it resolves to nothing, else by the distance to its position; so (**Observed**, from that reach test, the carried body being at its
   carrier) a lift order's 1 holds once the body is on the shoulder, and its list B (80, 27, !26, 1) does not end it after the attach. Meitou:
   `ListTests.OrderNeedsFail` on the running front order, once its list B has held since the start (`OrderEntry.RowRuns`, standing for the provider steps being
-  over): a list B entry `RowStates` evaluates fails (the walk's `isAtLocation` and the follow rows 31, 45 and 289, whose fight Meitou runs as a step of the row,
-  left out); the task ends with `TaskEnd.Done`. The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
+  over, or list B held at the start): a list B entry `RowStates` evaluates fails (the walk's `isAtLocation` and a follow row's fight step left out); the task ends with `TaskEnd.Done`. The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
   skipped while `FUN_14060f0c0` holds, all of list A and a list A or an effect, else a replan is asked), else asks a replan and clears the goal unless it commits and has not
   expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; the
   scorer (`FUN_14050df10`) gives the current goal x1.25, the commitment floor 0.4 or cap 0.05 and, below 1 while the running task's slot 4 says not finished, x1.25 again, and
@@ -1097,6 +1096,11 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   over at the next choice; the implicit jobs come after the list, Idleness last. Passive leaves
   Self preservation alone; the Jobs switch only gates the job passes. A fight is a task (4 `Task_MeleeAttack`) in a goal's or an order's plan; `CombatClassAI` steers it and
   chooses nothing; the fight ends with the task.
+- **A follow order ends by its list B** (**Verified**, the original 1.0.65 through the Kenshi harness, `AITaskSytem` read with `kh peek`: deque count `+0x60`,
+  running task `+0x270`→`+0x68`, `currentGoal` `+0x1c0`, the character's `+0x2b0`): Molly ordered to Follow Metaru (deque 1, front and running 31); Metaru
+  ordered to attack a Dust Bandit; the frame Metaru's `+0x2b0` turned 1 while Molly's stayed 0, Molly's deque was empty and her replan asked, then she took
+  15 Protect allies and fought; she did not follow again. Knocking out the followed character (Re_Dev damage) emptied the follower's deque the same way.
+  Both match the plan step's (e) (`FUN_14050d970` → `FUN_14050d7d0`, which pops the front matching the running task and says nothing).
 - **Threat tests of order rows** (**Verified** against the transcribed registry `TaskDataTable`, list B read row by row): of the player's order rows only 146 Turret gunner tests a
   threat (`!158`, its own +0x2b0; no row provides it, so the plan fails while a melee attacker is within 40 and the order waits in the queue). 225 / 246 lift, 2 Building, 95 Repairing,
   96 Demolishing, 87 Operating, 97 Training, 124 Hauling, 150 Prospecting, 25 / 249 First aid / Splinting, 26 Looting, 69 Putting down, 98 Sleeping, 76 / 201 Lockpicking, 108, 110,
@@ -1109,7 +1113,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   an ally's fight; none has a stepped plan: each is acted out by its engine system, fights by the combat system, 243 by `TownDutySystem`, 277-279 by
   `CaptiveSystem`, 259 by `FeedSystem`, as an NPC's same goal, so the NPC side's plan step has nothing to run for them either), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goal 233 and
   14 Idleness (a player character's routine: it stands; the default task is never reached, as only ROAM_FAR is modelled). A task that ends leaves its character idle for the step to
-  re-decide (the original re-plans; nothing resumes). Followers and bodyguards fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
+  re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard
+  jobs, and a follow order given while its target is already threatened, fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
   within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask every `JobCheckTicks` of a character
   idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
   `RetaliationSystem.JoinFight` at step 4 (below).

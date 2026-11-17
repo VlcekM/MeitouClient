@@ -327,7 +327,7 @@ public static class TaskStart
         if (!Eligible(world, cold, request.Row)) return StartResult.NotEligible;
         var current = (CharacterTask)table.Next[slot].Task;
         var handler = world.Tasks.Of(request.Task, request.Row, request.Site);
-        bool step = cold.Running is { } kept && Step(kept, current, request);
+        bool step = cold.Running is { } kept && Step(cold, kept, current, request);
         PlayerOrders.Replacing(world, slot, request, step);
         if (request.Task != CharacterTask.Attack) world.Tasks.Of(CharacterTask.Attack)?.End(world, slot, CharacterTask.Attack, TaskEnd.Replaced);
         if (current != CharacterTask.Attack && world.Tasks.Of(cold, current) is { } before
@@ -491,11 +491,12 @@ public static class TaskStart
         !DecisionSystem.Decides(cold) && task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle;
 
     /// <summary>
-    /// Whether the request is a step of the running task: a goal's or reaction's attack while a following job runs its follow or attack.
+    /// Whether the request is a step of the running task: a goal's or reaction's attack while a follow row runs its follow or attack, unless it is
+    /// a follow order running its own row (<see cref="PlayerOrders.FollowRowRuns"/>), which a threat ends instead.
     /// </summary>
-    static bool Step(RunningTask running, CharacterTask current, in TaskRequest request) =>
+    static bool Step(CharacterCold cold, RunningTask running, CharacterTask current, in TaskRequest request) =>
         request.Task == CharacterTask.Attack && request.Source is TaskSource.Goal or TaskSource.Reaction && Production.PermaJobs.Follows(running.Row)
-        && running.Runs(current) && current is CharacterTask.Follow or CharacterTask.Attack;
+        && running.Runs(current) && current is CharacterTask.Follow or CharacterTask.Attack && !PlayerOrders.FollowRowRuns(cold);
 
     /// <summary>
     /// The act-out a task is a step of: a builder's delivering, fetching and dismantling are steps of its work (<see cref="CharacterTask.Build"/>;
