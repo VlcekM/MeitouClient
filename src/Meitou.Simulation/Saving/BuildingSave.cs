@@ -387,6 +387,7 @@ public static class BuildingSave
 
             var hand = Hand.Read(state, "hand");
             if (!hand.IsNull && town.SaveHandle is null) town.SaveHandle = hand;
+            ModTagSave.Read(state, town.ModTags);
         }
     }
 
@@ -748,6 +749,7 @@ public static class BuildingSave
         state.Strings["instance"] = instanceId;
         state.Ints.Remove("override");
         state.Floats["override"] = town.Override;
+        ModTagSave.Write(state, town.ModTags);
         if (world.SystemOf<PopulationSystem>() is { } population)
             state.Ints["plevel"] = population.TownLevel(world, town.Number);
         var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);

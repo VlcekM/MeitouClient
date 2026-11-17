@@ -337,7 +337,9 @@ holds refuses the second mod.
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
   kept off screen whatever the keep switches say, is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
   added when no walkable point is found); `Platoon.ModTag` is a free string, saved when set, that finds a mod's platoon again after a load,
-  when platoon ids are given anew; `PopulationSystem.SpawnIntoPlayerSquad` makes one
+  when platoon ids are given anew; for the player's own squads and outposts, whose ids and town numbers are also given anew at every load,
+  `Squad.ModTags[context.Id]` and `PlayerTown.ModTags[context.Id]` hold one tag per mod (keyed by the mod's id, so several mods tag the same
+  squad or town without replacing each other's), saved with the squad and on the outpost's town state; `PopulationSystem.SpawnIntoPlayerSquad` makes one
   character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
   starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an

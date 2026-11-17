@@ -187,6 +187,11 @@ public sealed class Squad
     /// </summary>
     public string? UncountedOwner { get; set; }
     /// <summary>
+    /// The code mods' tags on the squad, by mod manifest id: a mod sets its own entry to find the squad again after a load, when squad ids are
+    /// given anew; one mod's tag never replaces another's. Saved for the player's squads (<see cref="Saving.ModTagSave"/>), hashed while any.
+    /// </summary>
+    public SortedDictionary<string, string> ModTags { get; } = new(StringComparer.Ordinal);
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -372,6 +377,11 @@ public sealed class SquadRegistry
             }
             if (s.Uncounted) hasher.Add(0x556E636E);
             if (s.UncountedOwner is { } uncountedOwner) hasher.Add(Rng.StableHash(uncountedOwner));
+            foreach (var (mod, tag) in s.ModTags)
+            {
+                hasher.Add(Rng.StableHash(mod));
+                hasher.Add(Rng.StableHash(tag));
+            }
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {
