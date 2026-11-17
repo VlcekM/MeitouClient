@@ -78,7 +78,7 @@ public sealed partial class AiSystem
         {
             int function = list.FunctionOf(k);
             ulong roll = Rng.Hash(world.Seed, Rng.Key(id), RngPurpose.Trade, SeedSalts.AiShop ^ (ulong)world.Tick << 8 ^ (ulong)attempt);
-            var sale = NpcTrade.Buy(world, market, data.PlayerFaction, slot, shop, function, roll);
+            var sale = NpcTrade.Buy(world, market, world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction, slot, shop, function, roll);
             if (sale == NpcSale.NoItem)
             {
                 skipped[skips++] = function;
