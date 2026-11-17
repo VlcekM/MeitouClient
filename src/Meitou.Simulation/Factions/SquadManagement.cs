@@ -64,6 +64,12 @@ public sealed record SetSquadUncounted(int Squad, bool On, string? Owner = null)
 public sealed record SetSquadPurse(int Squad, bool Own, string? Owner = null) : SquadCommand;
 
 /// <summary>
+/// A code mod puts a squad of the player's faction to sleep (<paramref name="On"/>, <see cref="Squad.Dormant"/>) or wakes it.
+/// <paramref name="Owner"/>: the mod's manifest id, so a load without the mod wakes it (one that names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadDormant(int Squad, bool On, string? Owner = null) : SquadCommand;
+
+/// <summary>
 /// The player's squads (docs/game/ui-screens.md "Squads tab", from the original's <c>SquadManagementScreen</c>): their order, the active squad, and
 /// the squad screen's commands with the original's limits and refusals (CONSTANTS <c>max squads</c>, <c>max squad size</c>, <c>max faction size</c>).
 /// A player squad's first member leads it.
@@ -246,6 +252,9 @@ public static class SquadManagement
             case SetSquadPurse purse:
                 SetPurse(world, purse);
                 break;
+            case SetSquadDormant dormant:
+                SetDormant(world, dormant);
+                break;
         }
     }
 
@@ -305,6 +314,37 @@ public static class SquadManagement
             if (squad.PurseOwner is not { } owner || running(owner)) continue;
 
             EndPurse(world, squad);
+            dropped++;
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
+    /// Puts a squad of the player's faction to sleep or wakes it, noting the mod that set it.
+    /// </summary>
+    static void SetDormant(World world, SetSquadDormant command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+
+        squad.Dormant = command.On;
+        if (!command.On) squad.DormantOwner = null;
+        else if (command.Owner is { Length: > 0 } owner) squad.DormantOwner = owner;
+    }
+
+    /// <summary>
+    /// Wakes every squad a code mod put to sleep whose mod is not running now (<paramref name="running"/>: whether a mod id runs). Between ticks
+    /// after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedDormant(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.DormantOwner is not { } owner || running(owner)) continue;
+
+            squad.Dormant = false;
+            squad.DormantOwner = null;
             dropped++;
         }
 

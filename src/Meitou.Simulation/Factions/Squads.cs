@@ -203,6 +203,17 @@ public sealed class Squad
     /// </summary>
     public string? PurseOwner { get; set; }
     /// <summary>
+    /// A player squad a code mod put to sleep (<see cref="SetSquadDormant"/>): its members ask for no zones round them, so their place unloads when
+    /// no led character or the camera is near, and while the far-tick cadence runs they are stepped only near the camera or a led player
+    /// character, standing still otherwise (a town that sleeps while the player is away). Meitou only; saved, hashed while set.
+    /// </summary>
+    public bool Dormant { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="Dormant"/> (its manifest id); null: none named. A load without that mod running wakes the squad
+    /// (<see cref="SquadManagement.DropUnownedDormant"/>). Saved, hashed while set.
+    /// </summary>
+    public string? DormantOwner { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -290,6 +301,11 @@ public sealed class SquadRegistry
     /// Whether squad <paramref name="id"/> is one the player does not lead (<see cref="Squad.Independent"/>).
     /// </summary>
     public bool IsIndependent(int id) => Find(id) is { Independent: true };
+
+    /// <summary>
+    /// Whether squad <paramref name="id"/> is one a code mod put to sleep (<see cref="Squad.Dormant"/>).
+    /// </summary>
+    public bool IsDormant(int id) => Find(id) is { Dormant: true };
 
     /// <summary>
     /// Takes the next id.
@@ -395,6 +411,8 @@ public sealed class SquadRegistry
             }
             if (s.OwnPurse) hasher.Add(0x50757273);
             if (s.PurseOwner is { } purseOwner) hasher.Add(Rng.StableHash(purseOwner));
+            if (s.Dormant) hasher.Add(0x446F726D);
+            if (s.DormantOwner is { } dormantOwner) hasher.Add(Rng.StableHash(dormantOwner));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

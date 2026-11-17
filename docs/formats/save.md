@@ -374,7 +374,8 @@ NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou independent` (b
 assigned; `meitou autonomy owner` (string: the manifest id of the code mod that switched it on) while it names one. Other player platoons' AI keys stay as read.
 A squad a code mod keeps out of the faction size count (`Saving/ModSquadSave`, [modding](../modding.md#registration-surface)): `meitou uncounted` (bool) and
 `meitou uncounted owner` (string: the mod's manifest id), each only while set; a squad a mod gave its own purse: `meitou purse` (string: its money
-in cats) and `meitou purse owner` (string: the mod's manifest id), each only while set. Each code mod's tag on the squad (`Squad.ModTags`, `Saving/ModTagSave`):
+in cats) and `meitou purse owner` (string: the mod's manifest id), each only while set; a squad a mod put to sleep: `meitou dormant` (bool) and `meitou dormant owner`
+(string: the mod's manifest id), each only while set. Each code mod's tag on the squad (`Squad.ModTags`, `Saving/ModTagSave`):
 `meitou mod tag <mod id>` (string), one key per mod, only while set.
 
 ### Missing character records

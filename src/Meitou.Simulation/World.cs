@@ -1019,8 +1019,8 @@ public sealed partial class World : IDisposable
             return;
         }
 
-        // Only the characters the player leads keep themselves and their neighbours at full rate; a squad the player does not lead is stepped as
-        // NPCs are (Squad.Independent).
+        // Only the characters the player leads keep themselves and their neighbours at full rate; a squad the player does not lead or a code mod
+        // put to sleep is stepped as NPCs are (Squad.Independent, Squad.Dormant).
         var prev = table.Previous;
         _playerSpots.Clear();
         for (int i = 0; i < n; i++)
@@ -1038,10 +1038,12 @@ public sealed partial class World : IDisposable
                 continue;
             }
 
+            // A sleeping squad's member gets no far tick: it stands still away from the camera and the led characters.
             var at = prev[i].Position;
             var cold = table.Cold(i);
+            bool farTick = (Tick + i) % period == 0 && !(cold is { IsPlayer: true } && Squads.IsDormant(cold.SquadId));
             bool led = cold is { IsPlayer: true } && Led(cold);
-            bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || led || NearPlayer(at);
+            bool near = farTick || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || led || NearPlayer(at);
 
             if (!near)
             {
@@ -1058,9 +1060,9 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Whether a player character is one the player leads for the cadence: not in a squad the player does not lead.
+    /// Whether a player character is one the player leads for the cadence: not in a squad the player does not lead or one put to sleep.
     /// </summary>
-    bool Led(CharacterCold cold) => !Squads.IsIndependent(cold.SquadId);
+    bool Led(CharacterCold cold) => Squads.Find(cold.SquadId) is not ({ Independent: true } or { Dormant: true });
 
     /// <summary>
     /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character the player leads.

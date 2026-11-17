@@ -665,9 +665,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         _players.Clear();
         if (world.Player.Exists)
         {
+            // A squad a code mod put to sleep asks for no zones (Squad.Dormant).
             var prev = world.Characters.Previous;
             for (int i = 0; i < prev.Length; i++)
-                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) _players.Add(prev[i].Position);
+            {
+                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true } cold && !world.Squads.IsDormant(cold.SquadId))
+                    _players.Add(prev[i].Position);
+            }
         }
 
         if (_players.Count == 0 && _focus is null) return;

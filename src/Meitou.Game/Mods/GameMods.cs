@@ -190,6 +190,9 @@ sealed class GameMods(GameHost host)
 
         int purses = Simulation.Factions.SquadManagement.DropUnownedPurses(world, running.Contains);
         if (purses > 0) Notice($"{purses} squad purse(s) of a mod that is not loaded went into your money.");
+
+        int woken = Simulation.Factions.SquadManagement.DropUnownedDormant(world, running.Contains);
+        if (woken > 0) Notice($"{woken} squad(s) a mod that is not loaded put to sleep are awake again.");
     }
 
     /// <summary>
