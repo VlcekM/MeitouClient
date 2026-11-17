@@ -1105,7 +1105,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// The target is down: the guard strips it when it must, then lifts it, giving up after 10 s of failed lifts.
+    /// The target is down: the guard strips it when it must, then lifts it, giving up after 10 s of failed lifts. A guard whose left arm cannot carry
+    /// gives up once nothing comes before the lift: the arrest plan needs the target carried, whose only provider (68 Lifting) needs state 80
+    /// <c>isCarryingArmOK</c>, which no row provides (docs/game/ai-tasks.md "Arrest chain", <b>Verified</b>), so the original's plan fails there
+    /// (#906).
     /// </summary>
     bool StepTargetDown(World world, Arrest a, int g, CharacterCold gc, CharacterCold tc, float dt)
     {
@@ -1124,6 +1127,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return true;
         }
 
+        if (!CanLift(gc)) return End(world, a, ArrestEventKind.GaveUp);
+
         // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards passed
         // the bodies round a full station (#339; the original's arrest goal wants a free cage, docs/game/economy.md "Arrest goal").
         if (CarriedByAlly(world, gc, tc) || !CageFor(world, a, g)) return End(world, a, ArrestEventKind.GaveUp);
@@ -1138,6 +1143,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         a.Waited += dt;
         return a.Waited <= 10 || End(world, a, ArrestEventKind.GaveUp);
     }
+
+    /// <summary>
+    /// Whether stripping the target (<see cref="NeedsStrip"/>, <see cref="StepStrip"/>) could still take something: there is a strip step, the
+    /// guard's right arm works, and the target has a weapon drawn or one in its hip or back sections that is not locked on.
+    /// </summary>
+    bool CanStripFurther(CharacterCold guard, CharacterCold target) =>
+        Captives is not null && guard.Medical is { } m && m.ArmWorks(left: false)
+        && (target.DrawnWeapon != WeaponKinds.None || target.Inventory?.Items.Exists(i => i.Section is "hip" or "back" && !i.LockedOn) == true);
+
+    /// <summary>
+    /// Whether the guard's left arm can carry (state 80 <c>isCarryingArmOK</c>, <see cref="Carrying.CarrySystem.LeftArmUsable"/>).
+    /// </summary>
+    static bool CanLift(CharacterCold guard) => guard.Medical is { } m && Carrying.CarrySystem.LeftArmUsable(m);
 
     /// <summary>
     /// The lift: once the guard carries the target he takes it to the cage; a lift that failed 5 times gives up, else the fight resumes.

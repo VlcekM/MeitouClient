@@ -41,6 +41,11 @@ public sealed partial class ArrestSystem
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, gc);
                 if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HuntBounties) ? 1 : 0;
                 if (listed[role] == 0 || !FreeCageExists(world, g) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
+
+                // A downed target the guard cannot strip any further must be carried next, which a guard whose left arm cannot carry can't plan
+                // (#906, StepTargetDown).
+                bool leftToLift = table.Cold(t) is { Medical.Incapacitated: true } tc && !CanStripFurther(gc, tc);
+                if (leftToLift && !CanLift(gc)) continue;
                 Start(world, g, t, force: true, leashed: false);   // goal 204 lifts with row 68, which has no town needs
             }
         }
