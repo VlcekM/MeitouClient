@@ -79,6 +79,13 @@ sealed class WorkFunctionality(PopulationData data)
         data.Db.Find(b.BuildingId)?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
 
     /// <summary>
+    /// The ITEM (string id) a worker holds in the <c>hands</c> point at functionality <paramref name="functionality"/>: its <c>special tool</c>
+    /// (a mine's Pickaxe, a farm's Hoe), which <c>Task_OperateMachine</c> attaches for 189 / 190's act-outs too; null for none.
+    /// </summary>
+    public string? ToolOf(string? functionality) =>
+        data.Db.Find(functionality ?? "")?.GetReferences("special tool") is [var tool, ..] ? tool.TargetStringId : null;
+
+    /// <summary>
     /// The hunger rate of a worker at a building: its functionality's <c>hunger rate</c> (1 without one), which <c>Task_OperateMachine</c>'s set-up
     /// (<c>FUN_14035b430</c>, <b>Verified</b>) writes to the operator's CharStats <c>+0x178</c> for the real (87) and the pretend (221) act-out
     /// alike.

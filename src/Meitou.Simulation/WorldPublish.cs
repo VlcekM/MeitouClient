@@ -531,12 +531,10 @@ public sealed partial class World
         s.Anchor = cold?.DrawAnchor;
         s.BoneMeshes = cold?.BoneMeshes ?? [];
         s.Carrying = cold?.Carrying ?? CharacterId.None;
-        s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null }
-            ? cold.OperateTool
-            : null;
+        s.WorkEvents = WorkEventsOf(state[i].Task, cold);
+        s.HeldTool = HeldToolOf(state[i].Task, cold, s.WorkEvents);
         s.Mouth = cold?.Mouth?.Record;
         s.MouthTone = cold?.MouthTone ?? default;
-        s.WorkEvents = WorkEventsOf(state[i].Task, cold);
         s.Task = (CharacterTask)state[i].Task;
         s.LookAt = _looks.TryGetValue(i, out var lookAt) ? lookAt : null;
         s.PickingLock = cold?.PickingLock is not null;
@@ -759,6 +757,18 @@ public sealed partial class World
         }
 
         return c.Escaped ? new(StatusKind.EscapedPrisoner) : null;
+    }
+
+    /// <summary>
+    /// The ITEM held in the <c>hands</c> point (docs/game/buildings-production.md "Held tool"; none for an animal): the operate task's tool for the
+    /// whole task, or the standing work's (<paramref name="work"/>, an AI worker or obedient slave) while it works.
+    /// </summary>
+    static string? HeldToolOf(byte task, CharacterCold? cold, WorkEvents? work)
+    {
+        if (cold is not { Appearance.Animal: null }) return null;
+        if (task == (byte)CharacterTask.Operate) return cold.OperateSite is not null ? cold.OperateTool : null;
+
+        return work?.Tool;
     }
 
     /// <summary>

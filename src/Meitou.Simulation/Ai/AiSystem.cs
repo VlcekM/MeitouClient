@@ -1255,10 +1255,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The machine events of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a functionality or clip.
+    /// The machine events and held tool of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a
+    /// functionality or clip.
     /// </summary>
-    internal static WorkEvents? StandingWork(string? functionality, string? clip) =>
-        functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
+    internal static WorkEvents? StandingWork(string? functionality, string? clip, string? tool) =>
+        functionality is not null && clip is not null ? new WorkEvents(functionality, clip, tool) : null;
 
     /// <summary>
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in
@@ -1456,7 +1457,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (world.Characters.Cold(slot) is not { } worker) return;
 
         worker.ActionClip = clip;
-        worker.ActionWork = StandingWork(mind.WorkFunctionality, clip);
+        worker.ActionWork = StandingWork(mind.WorkFunctionality, clip, _work.ToolOf(mind.WorkFunctionality));
     }
 
     #endregion
@@ -2010,7 +2011,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (table.Cold(slot) is { } workerCold)
         {
             workerCold.ActionClip = mind.WorkClip;
-            workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
+            workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip, _work.ToolOf(mind.WorkFunctionality));
         }
 
         WorkAtMachine(mind, type, stepAt);

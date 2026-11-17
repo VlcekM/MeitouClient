@@ -40,7 +40,8 @@ public sealed partial class AiSystem
         var town = Population.CampaignTown.OfSite(site);
         if (PickWork(world, self, town, epoch, type, HeldWork(world, self)) is not { } building) return null;
 
-        return new ObedientWorkplace(building, _work.ClipOf(building), _work.FunctionalityOf(building), _work.HungerRateOf(building),
+        var functionality = _work.FunctionalityOf(building);
+        return new ObedientWorkplace(building, _work.ClipOf(building), functionality, _work.ToolOf(functionality), _work.HungerRateOf(building),
             WorkRangeOf(building), town.Owner(world, data));
     }
 
@@ -162,9 +163,11 @@ public sealed partial class AiSystem
 
 /// <summary>
 /// A workplace an obedient player slave's 189 / 190 picked (<see cref="AiSystem.WorkAt"/>): the building, the clip it plays there, the building's
-/// functionality (null: none), its functionality's <c>hunger rate</c>, how near the worker must come to it and the faction owning its town (-1: none).
+/// functionality (null: none), the <c>special tool</c> held there (null: none), its functionality's <c>hunger rate</c>, how near the worker must come
+/// to it and the faction owning its town (-1: none).
 /// </summary>
-public sealed record ObedientWorkplace(TownBuilding Building, string Clip, string? Functionality, float HungerRate, float Range, int Owner);
+public sealed record ObedientWorkplace(TownBuilding Building, string Clip, string? Functionality, string? Tool, float HungerRate, float Range,
+    int Owner);
 
 /// <summary>
 /// An obedient player slave standing at its workplace (<see cref="CharacterCold.SlaveWork"/>): the workplace, and whether its goal is 189 (real work:

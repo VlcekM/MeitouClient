@@ -783,7 +783,7 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
         if (dx * dx + dz * dz > 1e-4f) n.Yaw = MathF.Atan2(dx, dz);
 
         cold.ActionClip = place.Clip;
-        cold.ActionWork = AiSystem.StandingWork(place.Functionality, place.Clip);
+        cold.ActionWork = AiSystem.StandingWork(place.Functionality, place.Clip, place.Tool);
         cold.SlaveWork = new ObedientWork(place, request.Row == TaskType.AutoLabouringMines);
     }
 

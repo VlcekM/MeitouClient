@@ -30,9 +30,10 @@ public readonly record struct AnimationLayer(string Name, float Time, float Weig
 
 /// <summary>
 /// The sound events a working machine puts on its operator's clip: the BUILDING_FUNCTIONALITY's <c>animation events</c> (string id) and the ANIMATION
-/// record (name) they ride on (docs/audio.md "Character tasks").
+/// record (name) they ride on (docs/audio.md "Character tasks"), and for standing work (<see cref="CharacterCold.ActionWork"/>) the functionality's
+/// <c>special tool</c> ITEM (string id) held in the <c>hands</c> point meanwhile (null: none).
 /// </summary>
-public readonly record struct WorkEvents(string Functionality, string Clip);
+public readonly record struct WorkEvents(string Functionality, string Clip, string? Tool = null);
 
 /// <summary>
 /// What a character is doing about its body: nothing, bandaging someone (<see cref="CharacterTask.Treat"/>) or resting

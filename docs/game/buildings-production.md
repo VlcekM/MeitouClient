@@ -591,8 +591,8 @@ not a natural site, has a functionality and passes the owner test of [resources]
 `special tool` reference gets that item made and attached to the operator's `hands` point (`Bip01 Prop2`); the
 `special tool` records are ITEMs with a `mesh` in Newwworld.mod: Pickaxe (mines, rocks) and Hoe (farms). The attach is
 skipped when a virtual test on the character (`+0x30`) fails (Meitou skips animals). Meitou
-shows it for the whole operate task, the walk there included, and drops it when the task ends (the original's removal
-was not traced).
+shows it for the whole operate task, the walk there included, and drops it when the task ends; AI workers and obedient slaves (189 / 190, whose
+act-outs are `Task_OperateMachine` too, [slave work](ai-tasks.md#slave-work-shout-and-capture)) hold it while they stand at the work clip (#920).
 Operator animation: the functionality's `animation` reference (**Verified**, probe of vanilla BUILDING_FUNCTIONALITY); its `animation events` (the pick hitting ore, stone, a plate)
 sound on that clip ([audio](../audio.md#characters-footsteps-combat-voices) "Machine work"). No
 farming clip exists: cactus, cotton, potato, rice and veg farms use `stonemine` (the mining swing, with the Hoe); `farming
