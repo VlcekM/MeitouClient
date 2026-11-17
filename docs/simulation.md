@@ -114,7 +114,9 @@ precede host orders for their due tick. No concurrent host enqueue may alter tha
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
 Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions); one worker means caller execution.
 Async paths, navmesh and population results enter at tick boundaries; arrival timing is not
-repeatable in play. Determinism tests use synchronous services. `PathService` runs 2-4 threads (a quarter of the cores) and drops a
+repeatable in play. Determinism tests use synchronous services; the headless probes' building collision too
+(`RagdollGeometry.Synchronous`): with zones gathered on a worker, whether a zone was in by a tick depended on the machine's load, and a sight ray it
+blocks changed the look (**Observed**, #803's save, 300 + 1500 ticks: 2 runs in 48 under load ended on the hash every synchronous run gives). `PathService` runs 2-4 threads (a quarter of the cores) and drops a
 request its character replaced before a thread took it up; F12's sim rows show the requests waiting.
 
 `StateHash` is ordered, includes slot/generation/free-list and hashed subsystem state, normalizes

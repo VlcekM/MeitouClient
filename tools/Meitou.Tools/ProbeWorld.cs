@@ -134,12 +134,14 @@ sealed class ProbeWorld : IDisposable
 
     /// <summary>
     /// The buildings' collision the game's boot gives with a navmesh, gathered round <paramref name="start"/> before the first tick: the game
-    /// gathers a zone on a worker when first asked, and a probe's first ticks would otherwise see through walls for as long as that takes.
+    /// gathers a zone on a worker when first asked, and a probe's first ticks would otherwise see through walls for as long as that takes. The
+    /// probe's geometry is synchronous (<see cref="RagdollGeometry.Synchronous"/>): with a worker, whether a zone's collision was in by a tick
+    /// depended on the machine's load, and about one run in 30 of a probe on the same save ended on another hash.
     /// </summary>
     static RagdollGeometry Collision(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> height, NavSystem nav,
         Vector3 start)
     {
-        var geometry = new RagdollGeometry(install, db, levels, height, nav.Runtime);
+        var geometry = new RagdollGeometry(install, db, levels, height, nav.Runtime, synchronous: true);
         var reach = new Vector3(CollisionReach, 0, CollisionReach);
         var triangles = new List<Vector3>();
         var waited = System.Diagnostics.Stopwatch.StartNew();
