@@ -2495,14 +2495,22 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         SavePictures(shown, feedbackShot);
         if (!CaptureStill(shown)) return false;
         UpdateTitle(dt);
-        // The Vulkan loop's cap: only without vsync (vsync already paces the present); the same 30 fps cap in
-        // both comparison runs isolates tearing from the much higher uncapped frame rate.
-        if (!_display.VSync && _fpsLimit > 0)
-        {
-            GameHost.Limit(_clock, frameStart, 1.0 / _fpsLimit);
-        }
+        double period = FramePeriod();
+        if (period > 0) GameHost.Limit(_clock, frameStart, period);
         if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter) return false;
         return true;
+    }
+
+    /// <summary>
+    /// The seconds a frame should take, 0 for no wait. In front: the frame limit, only without vsync (vsync already paces the present). Not in
+    /// front (<see cref="MetalDisplay.InBackground"/>), AppKit stops pacing the presents, so vsync and the limit no longer hold: <see cref="BackgroundPacing"/>.
+    /// A still or a benchmark is paced as in front.
+    /// </summary>
+    double FramePeriod()
+    {
+        if (!_still && !_bench.Active && _display.InBackground) return BackgroundPacing.Period(_display.VSync, _fpsLimit, _display.RefreshRate);
+
+        return !_display.VSync && _fpsLimit > 0 ? 1.0 / _fpsLimit : 0;
     }
 
     /// <summary>
@@ -2736,13 +2744,27 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.ScreenshotScenes.PrepareStill(_ctx, finish: false);
             _stillPrepared = true;
         }
-        if (_settleAfterWorldLoad)
+        // The world swaps in the load's last stage, with the load still active: its destination is the streamers' arrival point and the camera is
+        // still the sky's, and the settle would wait for objects the frames that end the load have to bring. It waits for the load to end.
+        if (_settleAfterWorldLoad && host.ActiveSceneLoad is null)
         {
             _settleAfterWorldLoad = false;
             Console.WriteLine($"metal     settling objects and foliage at the loaded view");
+            ShareViewPoints();
             _objects?.Settle(host.Camera.Eye);
             _foliage?.Settle(host.Camera.Eye);
         }
+    }
+
+    /// <summary>
+    /// Gives the object and foliage streamers this frame's arrival point and kept points, which the draw would only hand them after the settle (they
+    /// would settle with the last frame's: while an arrival point is set a mesh is requested only near it).
+    /// </summary>
+    void ShareViewPoints()
+    {
+        var kept = ObjectStreamer.MergeKept(host.Gpu.Kept, host.Camera.Eye);
+        if (_objects is not null) (_objects.Ahead, _objects.Kept) = (host.Gpu.Ahead, kept);
+        if (_foliage is not null) (_foliage.Ahead, _foliage.Kept) = (host.Gpu.Ahead, kept);
     }
 
     /// <summary>

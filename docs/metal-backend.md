@@ -517,7 +517,11 @@ while events are handled, and a load step holding the thread earlier left the Sp
 loading frames.
 The shared settings menu is now wired on Metal too (F10; Display, Graphics, Interface, Controls, Advanced and Audio),
 including the MetalFX preset (which owns the render scale), VSync, frame limit and full screen, persisted in
-`meitou.user.json`. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
+`meitou.user.json`. **Observed** (reported): a window that is not the key window or is not visible (another app or Space active, covered,
+minimised) is no longer paced by AppKit, display sync on as well, so the frame rate ran unbounded. `MetalDisplay.InBackground`
+(`isKeyWindow`, `occlusionState`) detects it and `BackgroundPacing` sets the loop's pace then: 30 fps without vsync (the frame limit when
+lower), with vsync a whole number of refreshes nearest 30 (60 Hz: 30, 120 Hz: 30, 144 Hz: 28.8; the screen's `maximumFramesPerSecond`).
+Stills and `--play-bench` keep their normal pacing. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
 start chooser, save/load slots and confirmations, the in-game Esc menu, the loading screen and sky transitions, and the
 audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
 Still missing: the pointer sprite, the free camera and the cinema camera.

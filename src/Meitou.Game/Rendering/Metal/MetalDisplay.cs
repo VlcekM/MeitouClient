@@ -72,6 +72,12 @@ public sealed unsafe class MetalDisplay : IDisposable
     const ulong FullScreenStyleMask = 1UL << 14;
 
     /// <summary>
+    /// NSWindowOcclusionStateVisible: set in <c>occlusionState</c> while some part of the window can be seen (not covered, minimised or on another
+    /// Space).
+    /// </summary>
+    const ulong OcclusionVisible = 1UL << 1;
+
+    /// <summary>
     /// How long the state last asked for is reported in place of AppKit's: the change into or out of the Space is animated, and the style mask
     /// follows only during it, so a setting read every frame would otherwise ask again.
     /// </summary>
@@ -228,6 +234,25 @@ public sealed unsafe class MetalDisplay : IDisposable
     {
         var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
         ObjectiveC.objc_msgSend(app, "activateIgnoringOtherApps:", true);
+    }
+
+    /// <summary>
+    /// The window is not the one in front: it is not the key window (another app or window has the focus, or its Space is not the active one), or
+    /// none of it is visible. AppKit then stops pacing the layer's presents, with display sync on as well.
+    /// </summary>
+    public bool InBackground => !ObjectiveC.bool_objc_msgSend(_nsWindow, "isKeyWindow")
+        || (ObjectiveC.ulong_objc_msgSend(_nsWindow, "occlusionState") & OcclusionVisible) == 0;
+
+    /// <summary>
+    /// The refresh rate of the screen the window is on (Hz; ProMotion reports its maximum), 0 when AppKit gives no screen.
+    /// </summary>
+    public double RefreshRate
+    {
+        get
+        {
+            var screen = ObjectiveC.IntPtr_objc_msgSend(_nsWindow, "screen");
+            return screen == IntPtr.Zero ? 0 : ObjectiveC.ulong_objc_msgSend(screen, "maximumFramesPerSecond");
+        }
     }
 
     /// <summary>
