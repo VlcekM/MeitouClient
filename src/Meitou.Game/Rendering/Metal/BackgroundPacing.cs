@@ -19,8 +19,8 @@ static class BackgroundPacing
 
     /// <summary>
     /// The seconds one frame of a background window takes. With vsync on, a whole number of refreshes (the divisor that lands nearest
-    /// <see cref="TargetFps"/>: 2 at 60 Hz, 4 at 120 Hz), so the pace stays a vsync multiple; with it off, <see cref="TargetFps"/>, or the frame limit
-    /// when that is lower.
+    /// <see cref="TargetFps"/>: 2 at 60 Hz, 4 at 120 Hz), so the pace stays a vsync multiple; with it off, <see cref="TargetFps"/>, or the frame
+    /// limit when that is lower.
     /// </summary>
     public static double Period(bool vsync, int fpsLimit, double refreshRate)
     {

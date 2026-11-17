@@ -7,7 +7,8 @@ namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The hash of the inputs every zone's mesh shares (<see cref="NavMeshCache.ContentHash"/>): each file by name, size and write time (not
-/// contents), a missing one as missing, so that a mod update that changes any of them builds the meshes again.
+/// contents), a missing one as missing, so that a mod update that changes any of them builds the meshes again; and the heightmap fix's repairs
+/// (<see cref="HeightmapRepair.StampFor"/>), while it is on.
 /// </summary>
 internal sealed class NavContentHash
 {
@@ -18,8 +19,8 @@ internal sealed class NavContentHash
 
     /// <summary>
     /// The hash of <paramref name="install"/>'s inputs under <paramref name="db"/> and <paramref name="levels"/>: the data files in load order,
-    /// the seed, height, blend, biome, map feature and overlay files, every level file of every layer, every collision file a record names, and
-    /// the DotRecast version.
+    /// the seed, height, blend, biome, map feature and overlay files, the heightmap fix's repairs, every level file of every layer, every collision
+    /// file a record names, and the DotRecast version.
     /// </summary>
     public static uint Of(GameInstall install, GameDatabase db, WorldLevelData levels)
     {
@@ -46,7 +47,7 @@ internal sealed class NavContentHash
     }
 
     /// <summary>
-    /// The seed, height, blend, biome, map feature and overlay files the gather and the foliage placer read.
+    /// The seed, height, blend, biome, map feature and overlay files the gather and the foliage placer read, and the heightmap fix's repairs.
     /// </summary>
     void AddMapFiles(GameInstall install)
     {
@@ -59,6 +60,9 @@ internal sealed class NavContentHash
         for (int x = 0; x < TerrainMaps.OverlayTiles; x++)
             for (int z = 0; z < TerrainMaps.OverlayTiles; z++)
                 Stamp(TerrainMaps.OverlayTile(install, TerrainMaps.OverlayKind, x, z));
+
+        // The heightmap fix changes the ground the gather reads.
+        if (HeightmapRepair.StampFor(TerrainHeightmap.PathOf(install)) is { Length: > 0 } repair) Add(repair);
     }
 
     /// <summary>

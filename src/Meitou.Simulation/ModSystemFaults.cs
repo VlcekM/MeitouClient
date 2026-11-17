@@ -124,6 +124,7 @@ sealed class ModSystemFaults
 
         hash.Add(0x4D4F4453);
         hash.Add(_faults);
+
         for (int k = 0; k < _states.Length; k++)
         {
             if (_states[k] != Running) hash.Add(k);
@@ -139,6 +140,7 @@ sealed class ModSystemFaults
         if (Interlocked.CompareExchange(ref _states[index], Faulted, Running) != Running) return;
 
         Interlocked.Increment(ref _faults);
+
         var factory = _factories[index]!;
         Console.Error.WriteLine($"mod       {factory.Owner}: system '{factory.Name}' stopped for this world, its {phase} threw: {e}");
         string notice = $"Mod {factory.Owner}: its {factory.Name} stopped after an error ({e.GetType().Name}); the rest of the game goes on.";

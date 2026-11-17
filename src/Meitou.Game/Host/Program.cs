@@ -79,6 +79,7 @@ static class Program
         bool showSplash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless;
         using var splash = showSplash ? SplashWindow.Show(install.DataDirectory) : null;
         var config = UserConfig.Load();
+        Data.World.HeightmapRepair.Configure(install, config.FixGround);
         Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         RestoreTextureQuality(args, game, world, config);
         return RunGame(install, game, rest, world, config, splash);

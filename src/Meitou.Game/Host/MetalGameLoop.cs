@@ -2503,12 +2503,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
     /// <summary>
     /// The seconds a frame should take, 0 for no wait. In front: the frame limit, only without vsync (vsync already paces the present). Not in
-    /// front (<see cref="MetalDisplay.InBackground"/>), AppKit stops pacing the presents, so vsync and the limit no longer hold: <see cref="BackgroundPacing"/>.
-    /// A still or a benchmark is paced as in front.
+    /// front (<see cref="MetalDisplay.InBackground"/>), AppKit stops pacing the presents, so vsync and the limit no longer hold:
+    /// <see cref="BackgroundPacing"/>. A still or a benchmark is paced as in front.
     /// </summary>
     double FramePeriod()
     {
-        if (!_still && !_bench.Active && _display.InBackground) return BackgroundPacing.Period(_display.VSync, _fpsLimit, _display.RefreshRate);
+        if (!_still && !_bench.Active && _display.InBackground)
+            return BackgroundPacing.Period(_display.VSync, _fpsLimit, _display.RefreshRate);
 
         return !_display.VSync && _fpsLimit > 0 ? 1.0 / _fpsLimit : 0;
     }

@@ -509,6 +509,7 @@ public sealed partial class World : IDisposable
     /// once.
     /// </summary>
     public bool TryTakeModFaultNotice(out string notice) => ModFaults.TryTakeNotice(out notice);
+
     /// <summary>
     /// The number of ticks run; during a tick, the number of the tick being run.
     /// </summary>

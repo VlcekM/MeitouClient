@@ -31,7 +31,7 @@ static class WorldCommandLine
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
-          --no-load-cache          do not read or write the load caches (foliage layout, character LOD and terrain colour caches)
+          --no-load-cache          do not read or write the load caches (foliage layout, character LOD, terrain colour and heightmap repair caches)
           --cache-root <dir>       keep every derived-data cache (LODs, impostors, shaders, terrain, foliage, navmesh...) under <dir> instead of %LOCALAPPDATA%\Meitou
           --range-large <u>        foliage draw range of the large size class (the range switch, F6; default 50000; the medium and small ranges follow at 12000 : 3500 of it; Tab sliders)
           --impostor-budget <MB>   fixes the most video memory the resident impostor atlases may use (default: 8% of the card's budget, 5% on an integrated GPU, 48-1024 MB; docs/impostors.md section 10; atlases that do not fit are held at coarser mips, then stay meshes)

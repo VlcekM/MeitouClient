@@ -64,9 +64,9 @@ public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int 
 /// <c>%LOCALAPPDATA%\Meitou\foliage\&lt;key&gt;\z&lt;X&gt;.&lt;Y&gt;.&lt;w|f&gt;.mfl</c> (or the constructor's root; never in the repository),
 /// one file per zone and layout kind (whole or far only). The key is a hash of everything the layout reads: the foliage records (every field of the
 /// layers, meshes and grass types reached from the biomes), the towns, the size and write time of the heightmap, blend file, biome map and overlay
-/// tiles, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change alters what the layout places, so an edit
-/// elsewhere keeps the cache (<see cref="FoliageLayoutCacheKey"/>). Settings (foliage and grass range, grass density) are not inputs of the layout
-/// and are not in it.
+/// tiles, the heightmap fix's repairs while it is on, this format's version and <see cref="LayoutVersion"/>, bumped by hand when a code change
+/// alters what the layout places, so an edit elsewhere keeps the cache (<see cref="FoliageLayoutCacheKey"/>). Settings (foliage and grass range,
+/// grass density) are not inputs of the layout and are not in it.
 /// </para>
 /// <para>
 /// A file is written to a temporary name and moved into place, carries its key, zone, sizes and a checksum, and is read whole: anything that does not
