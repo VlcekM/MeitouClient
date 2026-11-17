@@ -630,7 +630,9 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   `FUN_14099bfc0`: the first sensed character (mask 0x400e/0x221) not carried, not of a `not real` faction, not an animal (slot `0x248`), not
   imprisoned, that has a perceived bounty with the guard (`FUN_140853fd0`: the entry for the guard's booking faction, visible while
   `+0x110 > 0`, or when the target is down and an enemy), or that the guard's squad marks with flag 7, or regards as an enemy. Its effect
-  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals.
+  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. Meitou: `ArrestSystem.BountyTarget`
+  takes the nearest such character the guard sees (the sight test with the ray, and for a sneaker a full spot meter), standing for the sense list;
+  the mask's slave bit (0x20, slave state 1) leaves slaves out.
 - **Caging** (goals 112 / 281 "Find and put in cage", subtask 108 `PUT_IN_CAGE`): desire `FUN_1405a1140` (0 unless carrying;
   0.1 / 0.5 / 1.4 / 2.0 by status, death and bounty tests in `FUN_1405a0f10`); cage finder `FUN_1408d0770(ai, wantFree 1, function 8)`
   over the candidates `FUN_1408cbea0` gathers (interiors included): the town in the character's status (`+0x88`), else its faction's nearest town (`FUN_140927f10`, nest markers left out) when within squared `DAT_14172dd88` = 1.5625e7, the buildings within that town's radius x `DAT_1416b1640` = 1.1 of its position (`FUN_140a00690`, each passing the usable test with no character, only complete ones), plus those of the home building's town when it differs; with no town at all every zone is searched, i.e. every building (**Verified**): usable (`FUN_140621230`, `Ownerships::canIUseThisBuilding`, full rule in [locks](locks.md#beds); **Verified** by decompile), not reserved, free; weight
