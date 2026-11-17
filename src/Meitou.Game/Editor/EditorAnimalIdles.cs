@@ -12,8 +12,9 @@ namespace Meitou.Game.Editor;
 sealed class EditorAnimalIdles(GameHost host)
 {
     /// <summary>
-    /// The frame time the original's visual update takes while the world is paused (<c>FUN_140788a00</c>: <c>DAT_141682ad8</c>, 0.01 s). A
-    /// character in the camera's view puts no time by for it (<c>FUN_1405c9f60</c>), and the editor's characters stand together in view.
+    /// The frame time the original's visual update takes while the world is paused (<c>FUN_140788a00</c>: <c>DAT_141682ad8</c>, 0.01 s). No time
+    /// put by is added to it: a player's character never fails the frame's view test (<c>FUN_1405c9f60</c>, <c>FUN_1405c79c0</c>), which also puts
+    /// time by only while the world is unpaused (<c>DAT_1421349c9</c> clear); the editor pauses when it opens.
     /// </summary>
     const float PausedFrame = 0.01f;
 

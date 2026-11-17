@@ -288,8 +288,11 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   first frame; a one-shot holds its last frame. Before the draw, the character shown before and the new one each get their whole update
   once (Character slot 28 `FUN_1405cf130` -> AnimationClass slot 6, layers stepped) by the paused frame time, 0.01 s (`FUN_140788a00`,
   `DAT_141682ad8`), plus the time it put by: each frame `FUN_1405c9f60` adds the frame time to `+0xc0` only while the character fails its
-  view test (beyond the camera's range or outside its view), and slot 28 spends it. **Observed** (harness screenshots): the editor's
-  characters stand together where the camera looks, so none is put by. The idle's rate has no size factor (the world's idle update `FUN_14051d3b0` passes `+0x74`
+  view test (beyond the camera's range or outside its view), and slot 28 spends it. A player's character puts none by, whatever the tab
+  (**Verified**, decompile): `FUN_1405c79c0` holds for the player's faction, so the pass skips the range and frustum tests and the character
+  stays in view ([game-loop](game/game-loop.md#the-character-update-budget)). The pass also adds only while the paused flag `DAT_1421349c9`
+  (GameWorld `+0x8b9`, [speed and pause](game/game-loop.md#speed-and-pause)) is clear, and the editor pauses right after its first show
+  (`FUN_1405f03c0` -> `FUN_140787fb0` with 1). The idle's rate has no size factor (the world's idle update `FUN_14051d3b0` passes `+0x74`
   alike; only movement clips take F, `FUN_14051de70`). **Verified** (Kenshi harness, 1.0.65, Guy with a dog, game clock unchanged, frame
   diffs over 32 CHANGE CHARACTER shows of the Bonedog): a show left it looping (40 s and more), moving about 2.5 s and then still (its
   one-shot `idle noloop`, 2.53 s), or still; in a run of 20 a still show came only after a held one-shot (6 of 6), and a held one-shot never
