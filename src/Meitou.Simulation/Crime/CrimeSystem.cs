@@ -385,9 +385,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// victim's is lawless, when it books bounties and the victim's is a bandit faction, or when it regards the culprit as friendly and the victim is
     /// of another faction. Theft and Looting need it to care about the victim (same faction or allied); Looting also that it does not regard the
     /// culprit as friendly; Kidnapping a victim and that care; an Assault a victim that it does not regard as an enemy; a Murder nothing more. One
-    /// that regards the culprit as friendly costs it <see cref="BetrayalDelta"/>. A witness then sets the timer to 20 and, police-like of a faction
-    /// that books bounties, books the crime. With <paramref name="kidnapping"/>, a witness that cares about the carried body first sets a pending
-    /// Kidnapping (timer 20) on the carrier (the carrying check that runs before the crime check); with <paramref name="premises"/> (the culprit
+    /// that regards the culprit as friendly costs it <see cref="BetrayalDelta"/>. A witness then sets the timer to 20 (not for a culprit that is
+    /// down) and, police-like of a faction that books bounties, books the crime. With <paramref name="kidnapping"/>, a witness that cares about
+    /// the carried body first sets a pending Kidnapping (timer 20) on the carrier (the carrying check that runs before the crime check); with <paramref name="premises"/> (the culprit
     /// inside premises while the sight pass does not run: <b>engine</b> fallback), a witness that does not regard it as an enemy and
     /// <see cref="Trespasses"/> sets a pending Trespassing against its own faction. A culprit is seen by the sight test with the sight ray
     /// (<see cref="SightRay.Sees"/>), a sneaking one only through a full spot meter (<see cref="Spotted"/>).
@@ -424,8 +424,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (Friendly(wf, c.Faction) && Betrays(p.Code))
                 PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta, new(RelationCauseType.Crime, culpritId),
                     $"a friend's crime witnessed ({p.Code})");
-            p.Timer = WitnessTimer;
-            c.RecentlyWanted = RecentlyWantedSeconds;
+            // The refresh (FUN_140851f40) skips a culprit that is down: a knocked-out culprit's crime runs out under its witnesses' eyes.
+            if (!Bodies.CharacterFacts.Down(c))
+            {
+                p.Timer = WitnessTimer;
+                c.RecentlyWanted = RecentlyWantedSeconds;
+            }
+
             var witness = table.IdOf(w);
             // Its squad tags the culprit short-term CRIMINAL (7).
             if (wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, culpritId, Dialogue.MemoryTag.Criminal);
