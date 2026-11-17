@@ -111,7 +111,7 @@ sealed class ApproachQueue(DialogueSystem dialogue)
         if (table.Cold(n)!.InCombat) return;
         if (nh.Task != (byte)CharacterTask.GoTo || Vector2.Distance(nh.Goal, to) > DialogueSystem.TalkReach)
         {
-            TaskStart.Walk(world, n, to, SpeedMode.Free, Data.Gameplay.Ai.TaskType.TalktoNearestPlayerCharacter, TaskSource.Npc);
+            TaskStart.Walk(world, n, to, SpeedMode.Free, Data.Gameplay.Ai.TaskType.SeekAndTalkAndSendSignal, TaskSource.Npc);
         }
     }
 

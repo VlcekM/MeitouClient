@@ -42,7 +42,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     readonly ItemUses _itemUses = new();
 
     /// <summary>
-    /// The pick-ups of loose items and the walks to containers (row 3 "Collecting item").
+    /// The pick-ups of loose items (row 3 "Collecting item") and the walks to containers (26 "Looting" on a site).
     /// </summary>
     readonly PickUps _pickUps = new();
 
@@ -52,7 +52,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     internal PopulationData? Data => data;
 
     /// <summary>
-    /// The owner of the pick-up and container orders (row 3) and their act-outs.
+    /// The owner of the pick-up (row 3) and container (26, 76) orders and their act-outs.
     /// </summary>
     internal PickUps PickUps => _pickUps;
 
@@ -370,9 +370,14 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     #region Upkeep
 
     /// <summary>
-    /// Registers the act-out of row 3 "Collecting item" (<see cref="PickUps"/>).
+    /// Registers the act-outs of row 3 "Collecting item" and of 26 "Looting" on a site (<see cref="PickUps"/>; 26 on a character is the carry
+    /// system's loot).
     /// </summary>
-    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(Meitou.Data.Gameplay.Ai.TaskType.Pickup, _pickUps);
+    public void RegisterTasks(TaskHandlers tasks)
+    {
+        tasks.Register(Meitou.Data.Gameplay.Ai.TaskType.Pickup, _pickUps);
+        tasks.RegisterOnSite(Meitou.Data.Gameplay.Ai.TaskType.LootTarget, _pickUps);
+    }
 
     /// <summary>
     /// The serial upkeep: the debug cheats, burying the dead, the selection's and the active squad's upkeep, the pick-up and container walks and the

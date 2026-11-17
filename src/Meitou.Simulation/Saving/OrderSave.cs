@@ -90,7 +90,7 @@ public static class OrderSave
     /// The row as the original numbers it: the Sleep order is 258 <c>USE_BED_ORDER</c> (Meitou's row 98 is the task it starts); the other rows are
     /// the same.
     /// </summary>
-    static TaskType SavedRow(TaskType row) => row == TaskType.UseBed ? TaskType.UseBedOrder : row;
+    internal static TaskType SavedRow(TaskType row) => row == TaskType.UseBed ? TaskType.UseBedOrder : row;
 
     /// <summary>
     /// An order on an object, whose saved point is where Meitou walks (the container's or the item's) but whose
@@ -162,8 +162,9 @@ public static class OrderSave
         var self = table.IdOf(slot);
         foreach (var o in saved)
         {
-            var row = o.Row == TaskType.UseBedOrder ? TaskType.UseBed : o.Row;
-            if (o.Lost || world.OrderOwnerOf(row) is not { } owner) continue;
+            bool onSite = (o.Site ?? o.InstanceKey) is not null;
+            var row = LoadedRow(o, onSite);
+            if (o.Lost || row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) continue;
 
             var target = CharacterId.None;
             if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone) continue;
@@ -185,6 +186,17 @@ public static class OrderSave
 
         DecisionSystem.Request(cold);
     }
+
+    /// <summary>
+    /// The queue row of a saved order: the original's sleep order 258 is Meitou's 98; a container order an older Meitou wrote as row 3 on a site is 26
+    /// (kind 0, opening it), and one that only walked there (kind 1) is left out (<see cref="TaskType.None"/>).
+    /// </summary>
+    static TaskType LoadedRow(SavedOrder o, bool onSite) => o.Row switch
+    {
+        TaskType.UseBedOrder => TaskType.UseBed,
+        TaskType.Pickup when onSite => o.Kind == 0 ? TaskType.LootTarget : TaskType.None,
+        _ => o.Row,
+    };
 
     /// <summary>
     /// The world character whose saved handle is <paramref name="hand"/>; <see cref="CharacterId.None"/> when none is.

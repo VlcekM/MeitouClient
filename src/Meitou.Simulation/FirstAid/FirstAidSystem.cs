@@ -388,6 +388,48 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         return dx * dx + dz * dz <= Settings.Reach * Settings.Reach && MathF.Abs(medic.Position.Y - spot.Y) <= Settings.ReachHeight;
     }
 
+    /// <summary>
+    /// The desire of a treatment order on <paramref name="patient"/>, which the order step pops at 0 or less (docs/game/ai-tasks.md "Finished
+    /// tests"; <b>Verified</b>): 25 First aid (<c>FUN_14099e0a0</c>) and 60 Repairing (<c>FUN_14099df10</c>, which first gives 0 while the medic
+    /// itself is out or dead) are the patient's need of this medic (<see cref="Need"/>, <c>FUN_140998200</c>) with the kit flag of the order's
+    /// kind: the medic's items or its backpack's hold a kit of that class (<see cref="HoldsKit"/>, charges not looked at). 0 for a patient that does
+    /// not resolve.
+    /// </summary>
+    internal float TreatOrderDesire(World world, int medic, CharacterId patient, bool robot)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(patient, out int p)) return 0;
+
+        var cold = table.Cold(medic)!;
+        if (robot && cold.Medical is { Incapacitated: true }) return 0;
+
+        bool kit = HoldsKit(cold, FunctionOf(robot));
+        return Need(world, medic, p, organicKit: !robot && kit, robotKit: robot && kit);
+    }
+
+    /// <summary>
+    /// The desire of a splint order on <paramref name="patient"/> (249 Splinting, <c>FUN_14099dc40</c>, <b>Verified</b>): 0 for a patient that does
+    /// not resolve, a medic out or dead, a patient fighting; X = min(the medic's skill, the quality of the splint kit with the fewest charges above
+    /// zero in the first of its items and its backpack's that holds one of the class, none: 0); <c>needsSplint</c>(X) (0.1 when a part qualifies, else
+    /// 0 or less); a patient of another faction x the relation / 100, at least 0.05 (no ally test here).
+    /// </summary>
+    internal float SplintOrderDesire(World world, int medic, CharacterId patient)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(patient, out int p) || table.Cold(p) is not { Medical: { } med, Race: { } race } other) return 0;
+
+        var cold = table.Cold(medic)!;
+        if (cold.Medical is not { Incapacitated: false } own || other.InCombat || cold.Stats is not { } stats) return 0;
+        if (SplintKit(cold) is not { } kit) return 0;
+
+        float skill = MathF.Min(stats[StatsEnumerated.Medic] * own.StatMultiplier(StatsEnumerated.Medic), Items.Info(kit.Record)?.Quality ?? 0);
+        if (!med.NeedsSplint(race, skill)) return 0;
+        if (cold.Faction == other.Faction) return SplintWeight;
+
+        float relation = Relations is { } r && r.Contains(cold.Faction) && r.Contains(other.Faction) ? r.Get(cold.Faction, other.Faction) * 0.01f : 0;
+        return SplintWeight * MathF.Max(relation, TakenWeight);
+    }
+
     #endregion
 
     #region Walking to the patient
@@ -759,14 +801,30 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         if (cold.Inventory is not { } own) return false;
         return Holds(own.Items, function) || Holds(own.Backpack?.Contents?.Items, function);
+    }
 
-        static bool Holds(IEnumerable<ItemInstance>? items, int function)
-        {
-            if (items is null) return false;
-            foreach (var item in items)
-                if (item.Type == FcsRecordType.Item && item.ItemFunction == function) return true;
-            return false;
-        }
+    /// <summary>
+    /// Whether <paramref name="items"/> hold an item of the <c>item function</c> (<c>FUN_14004b84e</c>: flat, charges not looked at).
+    /// </summary>
+    static bool Holds(IEnumerable<ItemInstance>? items, int function)
+    {
+        if (items is null) return false;
+        foreach (var item in items)
+            if (item.Type == FcsRecordType.Item && item.ItemFunction == function) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The splint order's kit (<c>FUN_14099dc40</c>): the medic's items when they hold a splint kit, else its backpack's when they do; of those, the
+    /// one with the fewest charges above zero (<see cref="Fewest"/>). Null when none.
+    /// </summary>
+    static ItemInstance? SplintKit(CharacterCold cold)
+    {
+        if (cold.Inventory is not { } own) return null;
+        if (Holds(own.Items, ItemInfo.SplintKitFunction)) return Fewest(own.Items, ItemInfo.SplintKitFunction);
+
+        var worn = own.Backpack?.Contents?.Items;
+        return Holds(worn, ItemInfo.SplintKitFunction) ? Fewest(worn, ItemInfo.SplintKitFunction) : null;
     }
 
     /// <summary>

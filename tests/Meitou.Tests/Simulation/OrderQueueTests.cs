@@ -59,12 +59,12 @@ public class OrderQueueTests
     }
 
     /// <summary>
-    /// A player order that fails to plan stays queued and the chooser goes on (docs/game/ai-tasks.md "Precedence"): a First Aid order with no medkit
-    /// waits while the character's job (operating the well) runs, and starts once a kit is back. Catches a refused order being dropped, or one that
-    /// blocks the character's jobs.
+    /// The order step pops an order whose desire is 0 (docs/game/ai-tasks.md "Finished tests"): a First Aid order given with no medkit (a player
+    /// medic's need counts only with a kit, <c>FUN_140998200</c>) leaves the queue, and the character's job (operating the well) runs. Catches a
+    /// kitless order that blocks the character's jobs.
     /// </summary>
     [Fact]
-    public void An_order_that_cannot_run_stays_queued_while_a_job_runs_and_starts_once_it_can()
+    public void An_order_with_no_desire_leaves_the_queue_and_the_job_runs()
     {
         using var rig = new TaskStartTests.Rig(carrying: false);
         rig.World.RunTicks(3);
@@ -77,21 +77,10 @@ public class OrderQueueTests
         rig.Say(new StopCommand([f]) { Tick = rig.World.Tick });
         rig.Say(new AddJob([f], TaskType.OperateMachinery, rig.WellSite) { Tick = rig.World.Tick });
         rig.Say(new TreatOrder([f], rig.Mate) { Tick = rig.World.Tick });
-        rig.World.RunTick();
-
-        Assert.Equal([TaskType.FirstAidOrder], Rows(rig, f));
-        Assert.False(rig.Cold(f).OrderQueue[0].Started);
-
         rig.World.RunTicks(ProductionSystem.JobCheckTicks * 2);
 
+        Assert.Empty(Rows(rig, f));
         Assert.Equal(CharacterTask.Operate, rig.Task(f));
-        Assert.Equal([TaskType.FirstAidOrder], Rows(rig, f));
-
-        inventory.Add(kit);
-        rig.World.RunTicks(ProductionSystem.JobCheckTicks + 1);
-
-        Assert.Equal(CharacterTask.Treat, rig.Task(f));
-        Assert.True(rig.Cold(f).OrderQueue[0].Started);
     }
 
     /// <summary>

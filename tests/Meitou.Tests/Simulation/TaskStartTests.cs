@@ -169,6 +169,7 @@ public class TaskStartTests
             World.Fixtures.Imprison(World, Prisoner, World.Fixtures.Find(LockedCage)!);
             World.Fixtures.Find(LockedCage)!.Lock!.Locked = true;
             Cold(Mate).Medical!.Parts[RLeg].Flesh = Cold(Mate).Medical!.Parts[RLeg].MaxHp * 0.2f;
+            Cold(Mate).Medical!.Parts[RLeg].Bandage = Cold(Mate).Medical!.Parts[RLeg].MaxHp * 0.05f;   // a splint goes on a bandaged part
             Cold(Carried).Medical!.KnockOut(1000);
             Cold(Downed).Medical!.KnockOut(1000);
             if (carrying) (Cold(Fighter).Carrying, Cold(Carried).CarriedBy) = (Carried, Fighter);

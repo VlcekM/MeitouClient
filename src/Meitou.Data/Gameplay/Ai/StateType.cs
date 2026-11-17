@@ -247,8 +247,8 @@ public enum StateType
     /// </summary>
     IsBuildingDamaged = 71,
     /// <summary>
-    /// Registered as <c>isFullyRested</c>: false off the player's faction, for the player's a MedicalSystem value above 0.9 (Observed); Meitou: false
-    /// off the player's side, else not incapacitated.
+    /// Registered as <c>isFullyRested</c>: false off the player's faction, for the player's the medical rested level (<c>+0xb0</c>) above 0.9
+    /// (Verified).
     /// </summary>
     IsFullyRested = 72,
     /// <summary>

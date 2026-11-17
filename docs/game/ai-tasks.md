@@ -416,9 +416,9 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | id | name |
 |---|---|
 | 0 | `none` |
-| 1 | `isAtLocation` |
+| 1 | `isAtLocation` (`FUN_1405a2450`, **Verified**): of a point: false at the zero point; true when the mover is done (`FUN_14065edb0`: no path, or path state 1 and not moving), or within flat squared distance 144 (`DAT_1416ad830`) and height 20 (`DAT_141683188`); Meitou: evaluated for an order's point (no path or path flags, or that box) |
 | 2 | `isBuildingComplete` |
-| 3 | `isSubjectInInventory` |
+| 3 | `isSubjectInInventory` (`FUN_14059ce30`, **Verified**): the item is in the inventory or held, or resolves to nothing; Meitou: evaluated as the ground item gone (its id cannot tell an item another took from one in the inventory) |
 | 4 | `hasWeapon` |
 | 5 | `hasWeaponEquipped`: a weapon in hand that is not ranged (`FUN_140596a30`, **Verified**) |
 | 6 | `isNoEnemiesInVicinity` |
@@ -474,7 +474,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 69 | `isRouteTraceBlocked` |
 | 70 | `isObjectMine` |
 | 71 | `isBuildingDamaged` |
-| 72 | `isFullyRested` (**Observed**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): false for a character (or character target) whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (`FUN_140643cd0`, the threshold the upper half of `DAT_14168a258`). The field (**Observed**, decompile of the medical update `FUN_140644e60`): starting at 100, for each part with no replacement limb (`+0x28` null) and the flag `+0x7c` of its vfunc-0xd0 object clear, a part whose (h - s) x 100 / M (M = base x mult x scale - wear, [character-stats](character-stats.md)) is below the running value stores its raw h - s; the result x 0.01, snapped to 1 above 0.999. Bandage and rig are not counted. Comparing a percentage but storing raw h - s reads as a decompile quirk; which is meant is **Unknown**. Meitou: false off the player's side, else not incapacitated |
+| 72 | `isFullyRested` (**Verified**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): of the character target, else the character itself (`FUN_140643cd0`); false for one whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (the upper half of `DAT_14168a258`). The field (**Verified**, the medical update `FUN_140644e60`, disassembled at `0x140644f9b`): starting at 100, for each part with no replacement limb (`+0x28` null) and the flag `+0x7c` of its vfunc-0xd0 object clear, a part whose (h - s) x 100 / M (M = base x mult x scale - wear, [character-stats](character-stats.md)) is below the running value stores its raw h - s (the exe compares a percentage and stores the raw value); the result x 0.01, snapped to 1 above 0.999. Bandage and rig are not counted. Meitou: `MedicalState.RestedLevel`, `RowStates.FullyRested` |
 | 73 | `machineHasFreeOperatorSlot` |
 | 74 | `isEnemyForceDefeated` |
 | 76 | `isMessageDelivered` |
@@ -940,11 +940,27 @@ act-out's own end (`ITaskHandler.Done`); the job step's `CanRun` skips a job by 
 evaluated states are marked in [StateType ids](#statetype-ids). Rows this wires: the order rows 2, 5 / 61, 69, 72, 73, 76, 77, 78, 99, 107, 108, 140, 185, 186, 201, 226,
 285, 286 (95, 96, 87, 110 and 221 never pop by it: 0 / 123 in list A); of the jobs, 45 Bodyguard is skipped while its list B (`!16 !39`, nobody threatened) holds, so its
 companion 31 follows (**Observed**, #838's save headless: Miu's 45 skipped, her 31 following; a row with an effect and a finder, as 138, is never
-skipped by it: its finder scoring 0 drops it anyway). Still different: list A of 29 Move,
-98 Sleep and 3 Pick up is not evaluated, so those orders leave by their act-out's end alone: 29's state 1 within 12 or on a finished or failed path would replace the
-movement's arrival (within 10, `MovementSystem.ArriveRadius`) and its failed path clearing the queue; 98's state 72 has a Meitou answer only (not incapacitated), which would
-end a sleep order on lying down; Meitou's row 3 is also the container walk, whose target is no item. An order's desire x finder is not asked (an order whose target is gone
-leaves by its own `Gone`).
+skipped by it: its finder scoring 0 drops it anyway). A 29 Move pops by state 1 within 12 of its point, and its walk goes on: `Task_Move`'s end (Tasker slot 3
+`FUN_1403547b0`) stops the mover only once it is done (`CharMovement` slot 12, then slot 19 `FUN_14065fc70`), so the next order's or job's start takes the walk over (Meitou:
+`OrderQueue.PopDone` leaves the walk running). A walk that finds no path or is given up blocked has no path, so state 1 holds and the move alone leaves the queue
+(`PlayerOrders.WalkFailed`). Row 3 is the ground item's pick-up only; the original's container orders are 26 Loot on the container and, for a walk to it, 29 with the zero
+point, so state 1 never holds and it leaves by its task's end (Meitou: `ContainerAccess.ContainerOrder`, no `TaskPoint`; it leaves at the walk's arrival). The sleep order is 258 (**Verified**, `FUN_140319a60`:
+list A empty, desire 1), so it never pops by list A; Meitou's 98 order (the saved 258) takes it.
+
+The desire half (**Verified**, `FUN_14060fd80`; each row's function from its registration in `FUN_140319a60`, its stub followed to the AI vtable slot): TaskData `+0x108`
+of the order's target and point, times the finder's score only for a row with an effect and a desire above 0 (`DAT_141681b38`); no order row has an effect. Slots 19 and 43
+answer 1 (`FUN_140641550`, `FUN_1406415a0`); slot 39 0.1 (`FUN_140641560`: 76, 186, 201, 286). The rest: 3 slot 72 `FUN_140792650`, 0 while the character is down
+(`FUN_1405c9e10`); 45 slot 44 `FUN_1405991c0`, 0 for itself as target (no sense entry); 225 / 246 slot 59 `FUN_14059e1a0`, 0 while carrying (`+0x348`, set at the attach
+by `FUN_1405cff90`, which the lift update `FUN_140354ff0` calls past 0.4 of the clip, `_DAT_1416c16a0`, so a lift order leaves the queue there) or with the target
+carried by itself, 0.5 for a target that is no character; 146 slot 35 `FUN_140598080` for the player's faction, 0 while carrying or Passive (the `+0x450` object's `+0x12c`) outside melee combat mode, else 1
+(`FUN_140507c10` holds a 146); 25 `FUN_14099e0a0`, the need `FUN_140998200` with an organic kit (a player medic with none: 0); 60 `FUN_14099df10`, 0 for a medic out or dead
+(medical `+0x161` / `+0x164`), else the need with a robot kit; 249 `FUN_14099dc40`, 0 for a patient that does not resolve or fights, or a medic out
+or dead, else `needsSplint` of X = min(the medic's skill, the quality of the splint kit with the fewest charges in the first of its items and its backpack's holding one;
+none: 0), 0.1 when a part qualifies, x the relation / 100 (at least 0.05) for another faction. The pop drops the queue's entry only (`FUN_140518ca0`); the plan step
+(`FUN_14050d970`) ends the running task on its slot 4 and list A, or on its list B, never on the desire. Meitou: `OrderDesire`; a desire pop leaves the act-out
+to its own end (a lift to its clip's 0.95). Asked by `PlayerOrders.PopDone` at each decision (the re-ask cadence, `DecisionSystem.ReAsked`), not on every AI update. 31 / 289 have Following's desire (slot 15 `FUN_1405a33f0`, [shared
+desires](#desire-and-commitment), `followMe` read as 1 as the planner does): 0.5, or 1 for a target that does not resolve, so a follow order never pops by it. 152 is no order in Meitou
+(its operate orders are 87, 97, 124 and 146), so its desire (slot 21 `FUN_14059df00`) is not asked.
 
 ## Planner
 

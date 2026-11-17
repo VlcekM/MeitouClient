@@ -1103,13 +1103,13 @@ public class ProductionTests
 
         Assert.Equal((rig.Sites[0], 0), (cold.OperateSite, JobOf(rig.World, w)));
 
-        // An order takes it off its job; idle again, the list takes over.
+        // An order takes it off its job; once the move leaves the queue (within 12 of its point), the list takes over.
         rig.World.Commands.Enqueue(new MoveOrder([w], At + new Vector3(0, 0, 150)) { Tick = rig.World.Tick });
         rig.World.RunTicks(2);
 
         Assert.Equal(-1, JobOf(rig.World, w));
 
-        for (int t = 0; t < 3000 && rig.World.Characters.Next[w.Slot].Task != (byte)CharacterTask.Idle; t++) rig.World.RunTick();
+        for (int t = 0; t < 3000 && cold.OrderQueue.Count > 0; t++) rig.World.RunTick();
         Look();
 
         Assert.Equal((rig.Sites[0], 0), (cold.OperateSite, JobOf(rig.World, w)));

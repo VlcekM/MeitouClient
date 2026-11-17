@@ -1211,7 +1211,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             world.Fixtures.MarkUnreachable(world, cage, a.Faction);
             return Drop(world, a, g);
         }
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutInIfBounty, TaskSource.Npc);
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutIn, TaskSource.Npc);
         return true;
     }
 
@@ -1320,7 +1320,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var cage = GuardCage(world, g, a);
         if (cage is null) return Drop(world, a, g);
         a.Cage = cage.Id;
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutInIfBounty, TaskSource.Npc);
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutIn, TaskSource.Npc);
         return true;
     }
 

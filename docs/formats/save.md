@@ -640,8 +640,9 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   An order is dropped when no system owns its row (so 16, 60 and the other rows Meitou has no order for), its target character or building is not in the world, or its handle names nothing the
   save holds. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's
-  detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a walk only to a container, a lock order done in place), each written only when set. Ground-item
-  pick-ups (a runtime item id) and the Medic / Rescue buttons' looks are not saved.
+  detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a lock order done in place), each written only when set. Ground-item
+  pick-ups (a runtime item id) and the Medic / Rescue buttons' looks are not saved. A container order is 26 on its site and a walk only to it a 29; a row 3 on a
+  site, as an older Meitou wrote them, loads as 26 (kind 0) or is dropped (a walk only).
 
 Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`), each written only while set and removed otherwise:
 - GAMESTATE_CHARACTER int `floor`: the character's `getFloor` (0 to 3), read back on load (`FUN_140626f50`) and set again by its next movement

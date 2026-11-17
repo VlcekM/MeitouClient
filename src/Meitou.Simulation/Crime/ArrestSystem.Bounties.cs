@@ -571,7 +571,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         _arrests.Add(arrest);
         gc.Engaged = true;
         if (tc.Medical is { Incapacitated: true }
-            && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ArrestTargetsCarriedPerson))
+            && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.LiftPersonSnatchingAllowed))
         {
             arrest.Phase = ArrestPhase.Lift;
         }

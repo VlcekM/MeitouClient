@@ -90,13 +90,15 @@ public static class DestinationAccess
 
     /// <summary>
     /// Whether an engine walk of row <paramref name="row"/> to <paramref name="point"/> is refused (docs/game/locks.md "Locked doors on the way"): the
-    /// original's walk is the step 1 Moving or 67 Running of that row's plan (<see cref="Walks"/>), whose list B holds 59, so its plan fails when the
-    /// destination is a building shut to the walker (<see cref="Accessible"/>; restricted rows open to a character not of the player's side). A row
-    /// without a TaskData row, or whose own task moves it (a flight 35, a stalk 165, blood tracking 176, a formation 215), walks untested.
+    /// original's walk is the step 1 Moving or 67 Running of that row's plan (<see cref="Walks"/>), whose list B holds 60 and 59, so its plan fails
+    /// when the walker stands in a building shut to it with no way out (60, <see cref="LockSystem.CanLeave"/>) or the destination is a building shut
+    /// to it (59, <see cref="Accessible"/>; restricted rows open to a character not of the player's side). A row without a TaskData row, or whose own
+    /// task moves it (a flight 35, a stalk 165, blood tracking 176, a formation 215), walks untested.
     /// </summary>
     public static bool WalkRefused(World world, int slot, TaskType row, Vector3 point)
     {
         if (!TestedRows.Contains(row)) return false;
+        if (world.SystemOf<LockSystem>() is { } locks && !locks.CanLeave(world, slot, new Vector2(point.X, point.Z))) return true;
         if (BuildingAt(world, point) is not { } building) return false;
 
         var cold = world.Characters.Cold(slot)!;

@@ -1,15 +1,18 @@
+using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The target of an order or job row whose lists are tested (<see cref="RowStates"/>): the character it names (<see cref="CharacterId.None"/>: none)
-/// and the site, a fixture or building id (null: none).
+/// The target of an order or job row whose lists are tested (<see cref="RowStates"/>): the character it names (<see cref="CharacterId.None"/>: none),
+/// the site, a fixture or building id (null: none), the task's point (the original's tasker <c>+0x58</c>, <see cref="Player.OrderEntry.TaskPoint"/>;
+/// zero: none) and the ground item it names (<see cref="GroundItems"/> id; null: none).
 /// </summary>
-public readonly record struct RowTarget(CharacterId Character, string? Site);
+public readonly record struct RowTarget(CharacterId Character, string? Site, Vector3 Point = default, int? Item = null);
 
 /// <summary>
 /// The states of the order and job rows' lists for a character with no mind (a player character; docs/game/ai-tasks.md "Finished tests" and
@@ -61,6 +64,16 @@ public static class RowStates
     const float OpenPast = 0.8f;
 
     /// <summary>
+    /// State 1's reach of a point target: flat squared distance (<c>DAT_1416ad830</c>, 144) and height (<c>DAT_141683188</c>, 20).
+    /// </summary>
+    const float AtFlat2 = 144, AtHeight = 20;
+
+    /// <summary>
+    /// The rested level above which state 72 holds (<c>DAT_14168a25c</c>, 0.9 as a float).
+    /// </summary>
+    const float RestedPast = 0.9f;
+
+    /// <summary>
     /// A state's value for the character at <paramref name="slot"/> and its row's target; null for a state not evaluated here.
     /// </summary>
     public static bool? Holds(World world, int slot, StateType state, in RowTarget target)
@@ -71,6 +84,10 @@ public static class RowStates
         {
             // AI slot 10 (FUN_140641540) answers 0: state 0 none (and 135, which shares the thunk) never holds, so 96's and 110's list A never does.
             StateType.None => false,
+            StateType.IsAtLocation => target.Character.IsNone && target.Site is null && AtPoint(world, slot, target.Point),
+            // 3 (FUN_14059ce30) of an item target: in the character's inventory (or the item it holds), or resolving to nothing; Meitou's subject is
+            // the ground item, whose id ends when it leaves the ground, so one another took reads as taken too.
+            StateType.IsSubjectInInventory => target.Item is { } item && world.GroundItems.Find(item) is null,
             // 123 and 136 share the thunk 0x14002fb1c, which returns false.
             StateType.IsWorking or StateType.IsWorkingPretend => false,
             StateType.IsBuildingComplete => BuildingComplete(world, target.Site),
@@ -90,10 +107,28 @@ public static class RowStates
             StateType.IsCarriedDudeDead => Character(world, cold.Carrying) is { Medical.Dead: true },
             StateType.AmImprisoned => cold.InSomething == HeldState.Imprisoned,
             StateType.IsInBed => cold.InSomething == HeldState.Bed,
+            StateType.IsFullyRested => FullyRested(world, Character(world, target.Character) ?? cold),
             StateType.IsAggressionTowards => Threatened(world, target.Character),
             StateType.IsAggressionTowardsMe => world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// 1 isAtLocation of a point target (<c>FUN_1405a2450</c>, <b>Verified</b>): false at the zero point; else the mover is done
+    /// (<c>CharMovement</c> slot 12 <c>FUN_14065edb0</c>: no path, or a finished one and not moving; Meitou: no path followed, asked for or on its
+    /// way) or the character stands within flat squared distance 144 of the point and less than 20 above or below it.
+    /// </summary>
+    static bool AtPoint(World world, int slot, Vector3 point)
+    {
+        if (point == Vector3.Zero) return false;
+
+        ref readonly var n = ref world.Characters.Next[slot];
+        const MoveFlags walking = MoveFlags.HasPath | MoveFlags.NeedPath | MoveFlags.Pending;
+        if (((MoveFlags)n.Flags & walking) == 0) return true;
+
+        float dx = point.X - n.Position.X, dz = point.Z - n.Position.Z;
+        return dx * dx + dz * dz < AtFlat2 && MathF.Abs(point.Y - n.Position.Y) < AtHeight;
     }
 
     /// <summary>
@@ -126,6 +161,14 @@ public static class RowStates
 
         return fixture.Lock is { EffectivelyLocked: true } && !fixture.DoorBroken;
     }
+
+    /// <summary>
+    /// 72 isFullyRested (<c>FUN_1405a0610</c>, <b>Verified</b>), of a character target, else of the character itself: false off the player's faction
+    /// (faction <c>+0x250</c>); for the player's, its medical <c>+0xb0</c> (<see cref="Bodies.MedicalState.RestedLevel"/>) above 0.9
+    /// (<c>FUN_140643cd0</c>, the float at <c>0x14168a25c</c>). The planner asks the same.
+    /// </summary>
+    public static bool FullyRested(World world, CharacterCold c) =>
+        DestinationAccess.PlayerSide(world, c) && c is { Medical: { } medical, Race: { } race } && medical.RestedLevel(race) > RestedPast;
 
     /// <summary>
     /// 16 isAggressionTowards (<c>FUN_14059de10</c>, <b>Observed</b>) of a character target: its immediate-threat flag (+0x2b0, a melee attacker within

@@ -389,6 +389,21 @@ public static class PlayerOrders
     }
 
     /// <summary>
+    /// A move's walk found no path or was given up blocked (the character's own partition): the move leaves the queue and the rest stays, the next
+    /// tried at the decision step (state 1 holds once the mover has no path, <c>FUN_14065edb0</c>, so the original's order step pops the front
+    /// alone). False when the walk was no queued order's move.
+    /// </summary>
+    internal static bool WalkFailed(CharacterCold cold)
+    {
+        var q = cold.OrderQueue;
+        if (!cold.OrderMove || q.Front is not { IsMove: true, Started: true }) return false;
+
+        q.PopFront();
+        DecisionSystem.Request(cold);
+        return true;
+    }
+
+    /// <summary>
     /// <see cref="TaskStart.Start"/>'s hook, before the new start: a start from another source than an order replaces the running front order, which
     /// leaves the queue as <see cref="Settle"/> drops it (a step of a follow row keeps its provenance and is no replacement).
     /// </summary>
@@ -469,8 +484,12 @@ public static class PlayerOrders
 
     /// <summary>
     /// <c>checkOrders</c>' first pop (<c>FUN_140510920</c>, <b>Verified</b>): the front order leaves when its row is done
-    /// (<see cref="ListTests.OrderDone"/>, slot 4 asked of the task when the front runs it); a running one ends its task with it (the plan step ends
-    /// that task on the same test, <c>FUN_14050d970</c>, and its end pops the order, <c>FUN_14050d7d0</c>). One pop per decision, as the original's.
+    /// (<see cref="ListTests.OrderDone"/>, slot 4 asked of the task when the front runs it) or its desire is 0 or less (<see cref="OrderDesire"/>).
+    /// The pop only drops the queue's entry. A running task ends with a done row (the plan step ends it on the same test, <c>FUN_14050d970</c>),
+    /// but not with the desire, which the plan step does not ask: its act-out goes on to its own end (a lift past the attach to its clip's 0.95).
+    /// Nor does a move's walk end: <c>Task_Move</c>'s end (Tasker slot 3 <c>FUN_1403547b0</c>) stops the mover only once it is done
+    /// (<c>CharMovement</c> slot 12, then slot 19 <c>FUN_14065fc70</c>), so a move left within 12 of its point walks on to it unless the next
+    /// order's start takes it over. One pop per decision, as the original's.
     /// </summary>
     static void PopDone(World world, int slot)
     {
@@ -478,9 +497,11 @@ public static class PlayerOrders
         if (q.Front is not { } front || front.Started && !Runs(world, slot, front)) return;
 
         bool running = front.Started;
-        if (!ListTests.OrderDone(world, slot, front, running)) return;
+        bool unwanted = OrderDesire.Of(world, slot, front) is <= 0;
+        bool done = !unwanted && ListTests.OrderDone(world, slot, front, running);
+        if (!unwanted && !done) return;
 
-        if (running) TaskStart.End(world, slot, TaskEnd.Done);
+        if (running && done && !front.IsMove) TaskStart.End(world, slot, TaskEnd.Done);
         if (q.Front == front) q.PopFront();
     }
 

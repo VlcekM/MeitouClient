@@ -149,7 +149,7 @@ the immediate-threat reach inline (Unknown whether they match `FUN_1404378f0`'s 
 Meitou's `CharacterTask` is the act-out, the row is the `TaskType`: a pick-up is 225 for the order (246 kidnap), 148 for the rescue job, 238 foraging, 137 errands; operate 87 (97 training
 dummy), haul 124, turret 146, prospect 150, build 2, door repair 95, dismantle 96, bed 98 / put in bed 99 / job 106, move 29, melee 5 (picked) or 16, a perma-job its own row, the implicit
 jobs 242 / 153 / 275, pick lock 76, shackles 201 / 185 / 186 (putting shackles on has no row), set free 110, get in cage 107, open / close door 72 / 73, lock / unlock door 77 / 140, cut / break
-lock 285 / 286, smash 226, item pick-up and container walks 3, put in cage 108, a warden's round 110 / 77 / 78. Used by `CarrySystem.CanCarry` (replaces its animal and imprisoned tests), every
+lock 285 / 286, smash 226, item pick-up 3, container work 26 on a site (a walk only to it 29), put in cage 108, a warden's round 110 / 77 / 78. Used by `CarrySystem.CanCarry` (replaces its animal and imprisoned tests), every
 start through `TaskStart.Start`, the lock orders' worker choice and the player's job `Runnable`. Consequences (the original's rows):
 a crawler or one staying low (0x40, posture 1 or 2) can start only rows that register it (move, first aid, loot, talk, attacks, prospect, sleep; not carry, put down 69, stealth KO 228, Splint
 Rigging 250, operate, build, repair, dismantle, put in bed, sit 275, ditch 242, set free 110, unlock door 140, put in cage 108, smash 226); an animal only 0x20 rows (so no bed, no carry,
@@ -157,8 +157,10 @@ no loot 26 / 177 / 42, no first aid, no operate, no medic, no lock, cage or door
 "Animals pick up items", whose Faithful side is on and Meitou side (the default) off, `PlayerSystem.AnimalsPickUp`, and only into its bag, its grid being shut; a limb for its mouth always); job 289 is animal-only, so a human with that job never runs it).
 Loot is 26 for the orders, 177 for NPC scavenging and 42 for an NPC arming itself. The engine's starts test their rows too ("Task starts"): a refused errand walk counts
 as a walk that ended short (the errand gives up after its tries); a refused standing task (`TaskStart.Become`) gives way to 14 Idleness, which every repertoire registers (a crippled
-character does not wander, 24, after a flight, a trade or at a roaming mill). Rows with no TaskData (shoo 158, ransack 216, liberate 276, approach 126, the arrest cage walk 206, the
-takeover lift 205) are open to all. The AI's own starts (`TaskStart.StartOwn`) are not tested: its planner chose the row. Not yet routed through it: the trade and talk orders. A caging ends the task through
+character does not wander, 24, after a flight, a trade or at a roaming mill). Shoo 158, ransack 216 and liberate 276 have TaskData rows and are tested.
+The rows of the dialogue's walks are the original's (**Verified**, the dialogue action switch `FUN_140680560`): action 2 orders 102 (`Task_TalktoPlayer`), so the
+approach is 102; action 30 makes the target drop the carried person and orders the speaker 213 and 112, action 29 240 and 112, so the arrest's takeover lift is 213 and
+its cage walk 112. 126, 205 and 206 have no TaskData, and nothing starts them. The AI's own starts (`TaskStart.StartOwn`) are not tested: its planner chose the row. Not yet routed through it: the trade and talk orders. A caging ends the task through
 `TaskStart.End(Stopped)` (`FixtureRegistry.Imprison`), so production's and construction's `Able` and the beds' `CanWalk` test no cage: their rows do not register the caged repertoires. The medic finder keeps its own imprisoned refusal because rows 25 / 58 register the imprisoned repertoire.
 A fight is row 5 when the player picked the target, 13 for a defence, else 16 (13 and 16 register the same repertoires).
 
@@ -175,7 +177,7 @@ stands at its work and its provenance runs `Idle` from then (`LockSystem.AtWork`
 `ITaskHandler` (Start, End, Done), registered by its system (`ITaskOwner`) in `World.Tasks`, an open list later code may add to or replace; a task without one is set as is. Owners: movement
 (GoTo, Follow, Idle, Wander), combat (Attack), first aid (Treat, Rest), carry (PickUp, PutDown, Loot, StealthKo), production (Operate, Haul, Prospect), construction (Build, Dismantle,
 DeliverMaterials, FetchMaterials), beds (Sleep). A row may have its own handler, which takes that row's starts and ends whatever its act-out (the task before is ended through its running row's
-handler): the lock system's rows (lock, shackle, cage, door and round work), the beds' put-in rows 99 / 106, the player system's row 3 (item pick-up, container walks) and the arrest system's
+handler): the lock system's rows (lock, shackle, cage, door and round work), the beds' put-in rows 99 / 106, the player system's rows 3 (item pick-up) and 26 on a site (container work) and the arrest system's
 put in cage 108, all acted out by a walk (`GoTo`) or in place (`Idle`). `TaskRequest.Detail` carries an act-out's own parameters (a shackle job, a ground item, a round). A builder's
 delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut`): `RunningTask.Runs` and the debug check treat them as Build.
 - Routed through it: move, follow and bodyguard (order and job), stop, every fight (`AttackOrder`: picked is an order, `Defensive` a reaction, else a goal), First Aid, Splint, the Medic
@@ -229,12 +231,13 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
   container work done in place (`Idle`) report `Done` once the character holds no work.
 - A front whose task ended leaves the queue (a move's arrival in the character's own partition, `PlayerOrders.Arrived`, which also starts a queued move at once as the move-only
   queue did; `TaskEnd.Done`; else the decision step, `PlayerOrders.Prepare`) and the next is tried at once. An interrupted move drops the queue (as `GoTo`/`Stop` dropped queued moves),
-  so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow row's fight step does not). A walk that finds no path still clears the whole
-  queue (`MovementSystem`; a gap: the original keeps a failed order queued with its text, but Meitou only learns of the failure after the path search, and re-asking it would ask for
-  the path again every `JobCheckTicks`).
+  so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow row's fight step does not). A move whose walk finds no path or is given
+  up blocked leaves the queue alone and the next order is tried at the decision step (`PlayerOrders.WalkFailed`: the mover has no path, so state 1 holds).
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
 - A done front leaves at each decision before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
-  order step, [finished tests](game/ai-tasks.md#finished-tests)); a running one ends its task (`TaskEnd.Done`). So a pick order on a lock already open leaves at once.
+  order step, [finished tests](game/ai-tasks.md#finished-tests)), and so does one whose desire is 0 or less (`OrderDesire`: a first aid or splint order with no kit, a lift
+  order once the body is carried); a running one ends its task (`TaskEnd.Done`) when its row is done, while a desire of 0 leaves the act-out to its own end. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
+  and its walk goes on (`Task_Move`'s end stops the mover only once it is done), so the next order or job takes the walk over there.
 - `PlayerOrders.Holds` (a pure read): the character holds an order, running, waiting or queued (the original's count `+0x60`; a front whose task ended is not counted). The
   implicit ditch job 242 runs only without one ([perma-jobs](game/ai-tasks.md#perma-jobs)). `PlayerOrders.Wins` (pure): the front runs or can start, so source 1 wins; the
   player animals' race-goal jobs (`CaptiveJob.PlayerSide`) end once one runs or can start (a blocked order does not end them).

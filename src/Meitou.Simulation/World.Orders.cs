@@ -33,7 +33,7 @@ public sealed partial class World
     /// </summary>
     public (bool Can, string? Why) CanOrder(TaskType row, CharacterId actor, CharacterId target = default, string? site = null, Vector3 point = default)
     {
-        var entry = OrderOwnerOf(row) is { } owner
+        var entry = OrderOwnerOf(row, site is not null) is { } owner
             ? new OrderEntry(row, owner)
             {
                 Target = target, Site = site, Point = point, Detail = owner is Locks.LockSystem locks ? locks.WorkDetail() : null,
@@ -43,10 +43,12 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The system whose <see cref="IOrderOwner"/> checks and starts the order row (the one each owner gives its orders with), or null when none does.
+    /// The system whose <see cref="IOrderOwner"/> checks and starts the order row (the one each owner gives its orders with), or null when none does;
+    /// <paramref name="onSite"/>: the order names a site (26 Loot on a container is the pick-ups', on a character the carry system's).
     /// </summary>
-    internal IOrderOwner? OrderOwnerOf(TaskType row) => row switch
+    internal IOrderOwner? OrderOwnerOf(TaskType row, bool onSite = false) => row switch
     {
+        TaskType.LootTarget when onSite => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.MoveCusOrdered or TaskType.StayCloseToTarget or TaskType.Bodyguard => SystemOf<MovementSystem>(),
         TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LootTarget or TaskType.StealthKnockout or TaskType.PutDownObject
             => SystemOf<Carrying.CarrySystem>(),

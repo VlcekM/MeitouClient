@@ -738,8 +738,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         {
             LogDropped(world, n, cold, following ? "no path found on asking again (the path it followed is dropped)" : "no path found");
             EndWalk(cold, WalkEnd.Failed);
+            PlayerOrders.WalkFailed(cold);
             TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
-            cold.OrderQueue.Clear();
         }
     }
 
@@ -884,8 +884,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
         LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
         EndWalk(cold, WalkEnd.Failed);
+        PlayerOrders.WalkFailed(cold);
         TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
-        cold.OrderQueue.Clear();
     }
 
     /// <summary>

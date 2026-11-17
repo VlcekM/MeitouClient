@@ -251,6 +251,10 @@ public sealed class TaskHandlers
     /// The handlers of rows that have one of their own.
     /// </summary>
     readonly Dictionary<TaskType, ITaskHandler> _rows = [];
+    /// <summary>
+    /// The handlers of rows whose starts on a site (a fixture or building id) have one of their own.
+    /// </summary>
+    readonly Dictionary<TaskType, ITaskHandler> _siteRows = [];
 
     /// <summary>
     /// Registers the handler of <paramref name="task"/>.
@@ -264,20 +268,34 @@ public sealed class TaskHandlers
     public void Register(TaskType row, ITaskHandler handler) => _rows[row] = handler ?? throw new ArgumentNullException(nameof(handler));
 
     /// <summary>
+    /// Registers the handler of the starts of <paramref name="row"/> on a site, whatever their act-out; its other starts keep the row's or the
+    /// task's handler.
+    /// </summary>
+    public void RegisterOnSite(TaskType row, ITaskHandler handler) =>
+        _siteRows[row] = handler ?? throw new ArgumentNullException(nameof(handler));
+
+    /// <summary>
     /// The handler of <paramref name="task"/>; null: none (the start just sets the task).
     /// </summary>
     public ITaskHandler? Of(CharacterTask task) => _handlers[(byte)task];
 
     /// <summary>
-    /// The handler of a start of <paramref name="row"/> acting out <paramref name="task"/>: the row's own, else the task's.
+    /// The handler of a start of <paramref name="row"/> acting out <paramref name="task"/>, on <paramref name="site"/> (null: none): the row's own on
+    /// a site, else the row's own, else the task's.
     /// </summary>
-    public ITaskHandler? Of(CharacterTask task, TaskType row) => _rows.TryGetValue(row, out var own) ? own : _handlers[(byte)task];
+    public ITaskHandler? Of(CharacterTask task, TaskType row, string? site = null)
+    {
+        if (site is not null && _siteRows.TryGetValue(row, out var onSite)) return onSite;
+
+        return _rows.TryGetValue(row, out var own) ? own : _handlers[(byte)task];
+    }
 
     /// <summary>
     /// The handler of the character's task <paramref name="task"/>: the one of its running row when its provenance runs it
     /// (<see cref="RunningTask.Runs"/>), else the task's.
     /// </summary>
-    public ITaskHandler? Of(CharacterCold cold, CharacterTask task) => cold.Running is { } run && run.Runs(task) ? Of(task, run.Row) : Of(task);
+    public ITaskHandler? Of(CharacterCold cold, CharacterTask task) =>
+        cold.Running is { } run && run.Runs(task) ? Of(task, run.Row, run.Site) : Of(task);
 }
 
 /// <summary>
@@ -308,7 +326,7 @@ public static class TaskStart
         var cold = table.Cold(slot)!;
         if (!Eligible(world, cold, request.Row)) return StartResult.NotEligible;
         var current = (CharacterTask)table.Next[slot].Task;
-        var handler = world.Tasks.Of(request.Task, request.Row);
+        var handler = world.Tasks.Of(request.Task, request.Row, request.Site);
         bool step = cold.Running is { } kept && Step(kept, current, request);
         PlayerOrders.Replacing(world, slot, request, step);
         if (request.Task != CharacterTask.Attack) world.Tasks.Of(CharacterTask.Attack)?.End(world, slot, CharacterTask.Attack, TaskEnd.Replaced);

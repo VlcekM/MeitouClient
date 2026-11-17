@@ -22,14 +22,15 @@ public sealed record PickUpItemOrder(IReadOnlyList<CharacterId> Characters, int 
 
 /// <summary>
 /// Picking up loose items (docs/simulation.md "Ground items"): walk to the item, then into the inventory (<see cref="Items.Inventory.Add"/>), or
-/// a message when it has no room. The pick-up and the walk to a container start through <see cref="TaskStart.Start"/> as row 3 "Collecting item",
-/// which this handles (the player system registers it, <see cref="PlayerSystem.RegisterTasks"/>).
+/// a message when it has no room. The pick-up starts through <see cref="TaskStart.Start"/> as row 3 "Collecting item", the walk to a container as
+/// 26 "Looting" on a site (the original's container order), which this handles (the player system registers both,
+/// <see cref="PlayerSystem.RegisterTasks"/>).
 /// </summary>
 public sealed class PickUps : ITaskHandler, IOrderOwner
 {
     /// <summary>
-    /// A pick-up of the ground item in <see cref="TaskRequest.Detail"/>, or the walk to the container <see cref="TaskRequest.Site"/> (to open it,
-    /// or only to it: <see cref="ContainerAccess.ContainerWalk"/>).
+    /// A pick-up of the ground item in <see cref="TaskRequest.Detail"/> (row 3), or the walk to the container <see cref="TaskRequest.Site"/> to open
+    /// it (26 Loot on a site).
     /// </summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
@@ -42,11 +43,6 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             (walker.PickingUpItem, walker.FetchingFood) = (item, false);
             if (request.Task == CharacterTask.GoTo)
                 MovementSystem.GoToFloor(world, slot, request.Point, walker.RunSpeed);
-            return;
-        }
-        if (request.Detail == ContainerAccess.ContainerWalk)
-        {
-            MovementSystem.GoToFloor(world, slot, request.Point, walker.RunSpeed);
             return;
         }
         var player = world.Player;
@@ -133,7 +129,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     }
 
     /// <summary>
-    /// Collecting an item (row 3) or opening, picking or walking to a container: the item or container is still there (else the order leaves the
+    /// Collecting an item (row 3) or opening (26) or picking (76) a container: the item or container is still there (else the order leaves the
     /// queue), and a player character that is awake, not caged or carried and has an inventory takes it.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
@@ -165,12 +161,11 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     }
 
     /// <summary>
-    /// Saved: a walk to a container (kind 1 only walks there; 0 opens it); a pick-up of a ground item names a runtime id and is not saved.
+    /// Saved: a container order (kind 0); a pick-up of a ground item names a runtime id and is not saved.
     /// </summary>
-    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : order.Detail == ContainerAccess.ContainerWalk ? 1 : -1;
+    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : -1;
     /// <inheritdoc/>
-    object? IOrderOwner.LoadDetail(World world, CharacterId self, Meitou.Data.Gameplay.Ai.TaskType row, int kind, CharacterId target) => kind == 1
-            ? ContainerAccess.ContainerWalk : null;
+    object? IOrderOwner.LoadDetail(World world, CharacterId self, Meitou.Data.Gameplay.Ai.TaskType row, int kind, CharacterId target) => null;
 
     /// <summary>
     /// Each tick: a walker in reach takes its item; one whose item is gone, who was given another goal or stopped, or who is down gives up. Gear

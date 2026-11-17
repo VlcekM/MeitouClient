@@ -259,8 +259,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   animal a building keeps out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine
   walk (an arrest's, an errand's, `TaskStart.Walk`) is refused the same way when its row's plan has a walk (`DestinationAccess.WalkRefused`: list
   B or effect 1 / 46 / 59 / 168, directly or through a provider, the door chains not followed; 195 of the 253 rows): the original runs it as
-  that plan's walk step, whose list B 59 fails (**Verified**, row table and `FUN_14051bae0`). A refused walk ends short (`WalkEnd.Failed`). Still
-  different: an engine walk out of a shut building is not tested (the walk's 60, which the AI's own walks test, `CanLeave`). The
+  that plan's walk step, whose list B 59 fails (**Verified**, row table and `FUN_14051bae0`). A refused walk ends short (`WalkEnd.Failed`). A walk
+  out of a shut building is refused the same way (the walk's 60, `LockSystem.CanLeave`, as the AI's own walks test it). The
   way through the door is a step of the NPC's plan (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut, the providers of 59 / 60 the planner
   inserts; `AiSystem.TakeDoorStep`): ended by its list A on the door (52 open, 54 locked, 56 broken) or when the lock system's way ends, and
   replaced as any running step, which drops the way (**Verified**, the providers in the row table). An NPC without a stepped plan (an engine

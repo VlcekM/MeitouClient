@@ -153,11 +153,11 @@ public class DecisionTests
     }
 
     /// <summary>
-    /// An order that cannot run falls through (the original's chooser goes on): a First Aid order without a medkit stays queued with its text while
-    /// its character defends itself. Catches a blocked order that keeps its character from its goals, or one dropped by the fight.
+    /// An order with no desire leaves the queue at the order step and the chooser goes on: a First Aid order without a medkit (desire 0,
+    /// <c>FUN_140998200</c>) is dropped and its character defends itself. Catches a kitless order that keeps its character from its goals.
     /// </summary>
     [Fact]
-    public void An_order_that_cannot_run_falls_through_to_self_defence()
+    public void An_order_with_no_desire_falls_through_to_self_defence()
     {
         using var rig = Quiet();
         var f = rig.Fighter;
@@ -168,14 +168,12 @@ public class DecisionTests
         rig.Say(new TreatOrder([f], rig.Mate) { Tick = rig.World.Tick });
         rig.World.RunTick();
 
-        Assert.False(rig.Cold(f).OrderQueue[0].Started);
+        Assert.Empty(rig.Cold(f).OrderQueue);
 
         var foe = Attacker(rig);
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 120, "fighting back");
 
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
-        Assert.Equal([TaskType.FirstAidOrder], rig.Cold(f).OrderQueue.Select(e => e.Row));
-        Assert.Contains(rig.Cold(f).Decision!.Lines, l => l.StartsWith("1 Orders: ") && !l.EndsWith("no order"));
     }
 
     /// <summary>

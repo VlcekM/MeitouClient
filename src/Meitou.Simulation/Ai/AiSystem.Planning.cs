@@ -534,10 +534,9 @@ public sealed partial class AiSystem
             StateType.IsLeaderDown => SquadIntact.Down(_world.Characters, _mind.Squad.Leader)
                 || _world.Characters.TryResolveNext(_mind.Squad.Leader, out int lead)
                 && _world.Characters.Cold(lead) is { Medical.Crawling: true },
-            // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
-            // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated". A
-            // player character of an autonomous squad is read as an NPC (engine choice: with that stand-in its sleep goals would never plan).
-            StateType.IsFullyRested => _playerSide && !_mind.Player && cold.Medical is not { Incapacitated: true },
+            // 72 of the character itself (its rows target it or a bed): never for one not of the player's faction, so an NPC's sleep rows
+            // (98, 100, 175, 261) are never done.
+            StateType.IsFullyRested => RowStates.FullyRested(_world, cold),
             StateType.HasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
             // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States
             // 7 and 48 are not wired: no goal reaches those rows.

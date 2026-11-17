@@ -13,16 +13,20 @@ namespace Meitou.Simulation.Ai;
 public static class ListTests
 {
     /// <summary>
-    /// <c>FUN_140510920</c>'s pop: the order's list A (<c>FUN_14060f570</c>), its effect test (<see cref="EffectHolds"/>) and its class's finished test
-    /// (slot 4) hold. Slot 4 is asked of the running task when the order runs it (<paramref name="running"/>, <c>FUN_140506b10</c>: same type and
-    /// target), else of a fresh instance of the order's class.
+    /// <c>FUN_140510920</c>'s list half of the pop: the order's list A (<c>FUN_14060f570</c>), its effect test (<see cref="EffectHolds"/>) and its
+    /// class's finished test (slot 4) hold (the desire half is <see cref="OrderDesire"/>). Slot 4 is asked of the running task when the order runs it
+    /// (<paramref name="running"/>, <c>FUN_140506b10</c>: same type and target), else of a fresh instance of the order's class. The lists are the
+    /// original's order row's (<see cref="Saving.OrderSave.SavedRow"/>: Meitou's sleep order 98 is the original's 258, whose list A is empty).
     /// </summary>
     public static bool OrderDone(World world, int slot, OrderEntry order, bool running)
     {
-        if (TaskDataTable.Of(order.Row) is not { } row) return false;
-        if (RowStates.Done(world, slot, row, new RowTarget(order.Target, order.Site)) != true || !EffectHolds(row)) return false;
+        var type = Saving.OrderSave.SavedRow(order.Row);
+        if (TaskDataTable.Of(type) is not { } row) return false;
 
-        return running ? !TaskFinished.Unfinished(world, slot, order.Row) : TaskFinished.Fresh(world, slot, order.Row, order.Target);
+        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as int?);
+        if (RowStates.Done(world, slot, row, target) != true || !EffectHolds(row)) return false;
+
+        return running ? !TaskFinished.Unfinished(world, slot, type) : TaskFinished.Fresh(world, slot, type, order.Target);
     }
 
     /// <summary>
