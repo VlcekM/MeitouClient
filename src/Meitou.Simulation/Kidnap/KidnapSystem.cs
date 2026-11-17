@@ -118,6 +118,11 @@ public sealed class Abduction
     /// one (goal 112 finds no target).
     /// </summary>
     public bool Hauls { get; init; }
+    /// <summary>
+    /// The carrier is of an AI squad with a cannibal retreat package (signals 1, 25): it runs its captive to the package's mission town, the
+    /// retreat's 130 TRAVEL_TO_TARGET_TOWN_FAST, which the AI does not give a carrier (see <see cref="KidnapSystem"/>'s walk home).
+    /// </summary>
+    public bool Retreats { get; init; }
 
     /// <summary>
     /// Adds the abduction to the world's state hash.
@@ -134,6 +139,7 @@ public sealed class Abduction
         h.Add(HomeSite);
         h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
         if (Hauls) h.Add(0x48617573);   // only when set, so the other carries hash as before
+        if (Retreats) h.Add(0x52657472);
     }
 }
 
@@ -378,7 +384,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 cold.Engaged = true;
                 _reserved.Add(victimId);
                 _abductions.Add(new Abduction { Carrier = member, Victim = victimId, Faction = cold.Faction, Marching = campaign || retreats,
-                        HomeSite = homeSite });
+                        HomeSite = homeSite, Retreats = retreats });
             }
         }
     }
@@ -495,10 +501,37 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) != 0) return true;
         if (a.Hauls) return CageFor(world, gn.Position, gc, a) is { } cageFound ? ToCage(world, a, g, cageFound) : true;
         int town = TownOf(world, gn.Position, gc.Faction);
-        if (a.Marching && town < 0) return true;
-        if (CageFor(world, gn.Position, gc, a) is { } found) return ToCage(world, a, g, found);
-        bool giveUp = a.Marching ? a.HomeSite < 0 || town == a.HomeSite : a.Time > Settings.PatienceSeconds;
-        return giveUp ? Drop(world, a, g) : true;
+        if ((!a.Marching || town >= 0) && CageFor(world, gn.Position, gc, a) is { } found)
+            return ToCage(world, a, g, found);
+        if (!a.Marching) return a.Time > Settings.PatienceSeconds ? Drop(world, a, g) : true;
+
+        int home = a.Retreats ? RetreatHome(world, gc) : a.HomeSite;
+        if (town >= 0 && (home < 0 || town == home)) return Drop(world, a, g);
+        return a.Retreats ? WalkHome(world, a, g, home) : true;
+    }
+
+    /// <summary>
+    /// The town a retreating carrier runs to: its squad's retreat mission town (<see cref="AiSystem.CaptiveStarted"/>), else its home town; -1:
+    /// none.
+    /// </summary>
+    static int RetreatHome(World world, CharacterCold carrier) =>
+        world.Squads.Find(carrier.SquadId)?.Ai is not { } board ? -1
+        : board.MissionTown >= 0 ? board.MissionTown
+        : board.Town;
+
+    /// <summary>
+    /// A retreating carrier out of its home town: standing or milling, it runs there (130 TRAVEL_TO_TARGET_TOWN_FAST, the retreat's own goal, which
+    /// the original's carrier keeps since its cage goals score 0 outside the mission town, docs/game/ai-tasks.md goals 112 / 281); a follower
+    /// follows its leader there. Without a home it waits as an AI squad's carrier does, then drops the captive.
+    /// </summary>
+    bool WalkHome(World world, Abduction a, int g, int home)
+    {
+        if (home < 0) return a.Time > Settings.PatienceSeconds ? Drop(world, a, g) : true;
+        if (world.Characters.Next[g].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander)) return true;
+
+        var centre = data.Sites[home].Position;
+        TaskStart.Walk(world, g, new Vector2(centre.X, centre.Z), SpeedMode.Run, TaskType.TravelToTargetTownFast, TaskSource.Goal);
+        return true;
     }
 
     /// <summary>
