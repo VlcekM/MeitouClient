@@ -97,8 +97,8 @@ sealed class Store(NpgsqlDataSource db)
     public async Task<FeedbackRow?> GetFeedback(string token)
     {
         await using var cmd = db.CreateCommand("""
-            select id, at, title, body, version, commit, platform, mods, wants, screenshot_size, save_size, log_size, issue, issue_url, discord, navmesh_size, location,
-                workshop
+            select id, at, title, body, version, commit, platform, mods, wants, screenshot_size, save_size, log_size, issue, issue_url, discord,
+                navmesh_size, location, workshop
             from feedback where token = $1
             """);
         cmd.Parameters.Add(new() { Value = token });

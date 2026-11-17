@@ -1681,8 +1681,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             // The roll's own odds feed the hover box, the sale prompt and the roll alike; only where the shop would roll on the item at all.
             float thievery = world.Characters.Cold(seller)!.Stats?[StatsEnumerated.Thieving] ?? 0;
             float? odds = sell && stolen && Fences(item, squad, shop.Terms) ? FenceOdds(world, thievery, item, seller, t, squad, shop.Terms) : null;
-            return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity,
-                item.Quality, Price(world, m, item, item.Quantity, sell, shop.Terms, holder), Price(world, m, item, 1, sell, shop.Terms, holder), stolen)
+            long stackPrice = Price(world, m, item, item.Quantity, sell, shop.Terms, holder);
+            long unitPrice = Price(world, m, item, 1, sell, shop.Terms, holder);
+            return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Quality, stackPrice,
+                unitPrice, stolen)
             {
                 Buyback = buyback,
                 Container = item.Contents is not null,

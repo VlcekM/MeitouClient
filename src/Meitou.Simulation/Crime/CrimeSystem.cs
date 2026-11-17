@@ -796,9 +796,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// How well the looker in <paramref name="looker"/> sees the suspect in <paramref name="suspect"/> as a witness does (<see cref="SightRay.Sees"/>'s
-    /// view factor: the sight test, with the ray where it applies, and for a sneaker a full spot meter); 0 when it does not. Read by the alarm's
-    /// investigators (#897: one went after a sneaking criminal through a floor) and the arrest system's bounty spotting.
+    /// How well the looker in <paramref name="looker"/> sees the suspect in <paramref name="suspect"/> as a witness does
+    /// (<see cref="SightRay.Sees"/>'s view factor: the sight test, with the ray where it applies, and for a sneaker a full spot meter); 0 when it
+    /// does not. Read by the alarm's investigators (#897: one went after a sneaking criminal through a floor) and the arrest system's bounty
+    /// spotting.
     /// </summary>
     internal float SuspectView(World world, int looker, int suspect, CharacterCold c, float range)
     {
