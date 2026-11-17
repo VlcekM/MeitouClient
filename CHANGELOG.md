@@ -3,6 +3,58 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.21.0
+
+- AI plans run step by step as in the original: a running step ends by its own finished test and conditions, walks re-plan when they end, and orders and jobs leave by the original's rules (a move order ends within 12, a failed walk drops only that order)
+- NPCs keep a running plan instead of re-choosing it each think; gate guards keep manning their gates (#816)
+- Sight: NPCs look at one sensed character per update in turn with a 1 s line cooldown, so a guard's insult no longer silences the captain (#807); player characters see all round, so Heal All treats the downed behind a medic (#843)
+- Crime reactions (escaped prisoners, slaves, trespass, intruders) come from what NPCs see and cut into conversations, as the original
+- Locked doors: NPCs unlock their own, bash out, or pick and cut their way into another faction's building; player characters do the same on an order, else "I can't get there."; picking or cutting puts a weapon away first, bashing draws one (#803)
+- Town patrols no longer stroll into private buildings such as Sho-Battai's noble house (#803); animals only enter buildings that allow animals and that they fit
+- Noble hunters no longer start a hunt inside a town (#807)
+- Thefts out of buildings book against the building's resident owner; wells, farms and empty houses book nothing (#808)
+- Obedient slaves gain the workplace's XP; town, outpost and home workers gain XP at benches and dummies (#812); guards catch a slave walking off or sneaking (#813)
+- Doors walkers open stay open, as the original; the "Doors close behind" setting is gone (#816)
+- Rebirth's slaves no longer escape after a load: saves name each slave's owner
+- Bodies of NPCs you killed survive a save (#860); wiped town and nest squads regenerate as in the original
+- Hired mercenaries follow their employer off screen and fall back to the outpost they were hired near (#858); base defence contracts guard your outpost (#856)
+- Import keeps the items in your buildings (#811)
+- Shops: stock is drawn and placed as in the original (one of each map or blueprint, money as real cat stacks, unusable cabinets left alone) (#805); a shop you stood in restocks only after its town reloads (#833); you can put items into a shop's stock containers (#851)
+- An open trade stays open at any distance; trading beyond range is refused (#844); townspeople buy from shop counters you built in their town
+- Inventory windows: loot, containers, storages and trade open in one row and close together; Esc closes them all, overview and stats included (#834)
+- Containers show an item's real grade and stats, and their real lock after a restock
+- Backpacks and other gear are equipped by slot as in the original, so bought bags and thieves' backpacks can be worn (#819, #821)
+- A medic with both arms out no longer kneels forever (#837); first aid with only a robot repair kit repairs robotic parts (#884)
+- Sneaking: the Run speed readout and Group speed follow the sneaking cap, and every speed change (injuries, hunger, gear, water) reaches the mover as in the original (#841, #882)
+- Stealth KO and Kidnap chances show on the character under the pointer while paused (#878)
+- Follow orders end when the followed character is attacked or goes down; Hold keeps its point beside the leader (#838)
+- Operate and turret orders end quietly when the machine loses power
+- Fast characters at 5x no longer outrun the navmesh (#824); new "Pause while loading" setting (Advanced, off) holds the game while zones round the camera load, as the original
+- Shark's Swamp Store can be entered (#854); Admag's walls no longer form an island patrols stand on (#798); characters on a too-steep slope walk off it (#894)
+- Buying a ruin removes the squatters' camp pieces and debris round it (#857)
+- Ruins lose all their fixtures and items; a ruin stood up by a town takeover is furnished anew; town takeovers rebuild homes in every zone
+- Town battery banks hold charge and refineries in homes work
+- Saves no longer grow on every resave of an original save; ruins the player repaired in the original load standing
+- The character editor's animal no longer freezes (#825)
+- Mining works on mod rocks that have a collision mesh (#852)
+- Puddles reflect the sky and clouds, not the treeline (#820)
+- Bounty-hunting guards and alarm investigators only chase criminals they can see (#897); a guard who can't carry leaves a downed bounty to one who can (#906)
+- NPCs no longer lift a player character who is standing (#892, #893); a town without a jailer keeps a character in a cage only with a sentence (#889)
+- Death messages say how a character died (#909); the stats window's description follows the row under the pointer (#910)
+- Farmers move on from a watered growing farm (#913, #914); roaming squads stay while a member lies knocked out (#912); birds land beside their target (#880)
+- Squads tab: big squads' portraits wrap into rows (#822); a start's extra squad templates make their own squads (#826)
+- Bags on the ground keep their contents through a save (#862), and a bag holding items can't go inside another (#863)
+- Builders hand over every owed material before building (#855)
+- Raids not made yet keep their men through a save (#861)
+- Corpse disposal: NPCs and the player's job use town pits, furnaces and shredders as the original
+- A town whose prisoners outnumber its cages loads without crashing; Flotsam Village no longer crashes
+- Mods: Workshop collision files are found by bare name; a mod's map files and features replace the game's; RE_Kenshi file rebinds and sound banks work
+- Squad XP and Others' XP settings (Advanced) take in the Player-Only XP mods
+- Bloody footprints follow real footfalls with each body's own sole
+- GI 64 probe rays option under Indirect light; small cards (under 4 GB) keep more VRAM for ranges
+- Debug menu: item browser, character editor and quality filter; logs of actions and dialogue can be attached to feedback
+- Code mods: many new hooks (player squads, outposts, purses, trade prices, map markers, combat hits, wear rules, right-click rows, squad AI options and more)
+
 ## v0.20.1
 
 - Sight: NPCs, witnesses and guards no longer see player characters or sneakers through floors and walls; building collision blocks sight and line of fire (#781)
