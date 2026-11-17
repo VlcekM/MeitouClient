@@ -357,7 +357,7 @@ internal sealed unsafe partial class CharacterRenderer
 
         // The still pose's palette in place of the live one, the live one kept in the pose for EndPortraitPose.
         var pose = new PortraitPose(eye, view, projection, light, _bones, _previousBones, l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn);
-        int bonesCount = l.Asset.Rig.BoneCount;
+        int bonesCount = l.Asset.PaletteCount;
         _bones = _previousBones = AllocateConstants((ulong)Math.Max(bonesCount, 1) * 64, 256);
         _portraitBones.AsSpan(0, bonesCount).CopyTo(new Span<Matrix4x4>(_bones.Pointer, bonesCount));
         if (_attach.Length < _attachCount + l.Asset.AttachCount)
@@ -486,12 +486,15 @@ internal sealed unsafe partial class CharacterRenderer
         if (rig.Layer(_content.Database, asset.Idle, asset.Animal) is { } idle)
             _portraitLayers.Add(new ActiveLayer(idle, 0, 1));
         foreach (var (def, time) in asset.Fixed) _portraitLayers.Add(new ActiveLayer(def, time, 1));
-        if (_portraitBones.Length < rig.BoneCount) _portraitBones = new Matrix4x4[rig.BoneCount];
+        if (_portraitBones.Length < asset.PaletteCount) _portraitBones = new Matrix4x4[asset.PaletteCount];
         if (_portraitAttach.Length < asset.AttachCount) _portraitAttach = new Matrix4x4[asset.AttachCount];
         var scratch = rig.Rent();
         try
         {
             scratch.Pose(asset.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_portraitLayers), _portraitBones);
+
+            // A still pose: swinging gear hangs as posed, its bones' copies equal the bones (CharacterAsset.SwayPalette).
+            if (asset.SwayPalette) _portraitBones.AsSpan(0, rig.BoneCount).CopyTo(_portraitBones.AsSpan(rig.BoneCount));
             foreach (var part in asset.Parts)
             {
                 if (part.AttachIndex >= 0)

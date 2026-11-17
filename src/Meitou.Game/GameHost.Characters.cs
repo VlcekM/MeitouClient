@@ -473,8 +473,10 @@ sealed partial class GameHost
             {
                 rotation = Leaning(c, yaw);
             }
-            var poses = new CharacterPose[DrawnLayerCount(before, c)];
+            var head = HeadPose(c, before, position, yaw, alpha);
+            var poses = new CharacterPose[DrawnLayerCount(before, c) + (head is null ? 0 : 1)];
             BlendLayers(before, c, alpha, poses);
+            if (head is { } turned) poses[^1] = turned;
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
                 ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
             var look = HatLooks.WorldLook(c, out var hatless);
@@ -655,7 +657,7 @@ sealed partial class GameHost
         // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
         // either.
         bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || PortraitWanted(c.Id);
-        var poses = LayerPoses(c, before, alpha, posed);
+        var poses = LayerPoses(c, before, alpha, posed, posed ? HeadPose(c, before, position, yaw, alpha) : null);
         if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
         // The animal the editor shows plays an idle drawn when it was shown, in real time (the world stands paused behind the editor).
         else if (Player.CharacterEditor.IsEditorAnimal(c.Id)) poses = EditorAnimalIdles.Poses(c.Id, c.RecordId, poses);
@@ -735,9 +737,10 @@ sealed partial class GameHost
     /// The poses of <paramref name="c"/>'s animation layers between the ticks (none when it is not <paramref name="posed"/>), in its kept
     /// per-slot array.
     /// </summary>
-    CharacterPose[] LayerPoses(CharacterSnapshot c, CharacterSnapshot? before, float alpha, bool posed)
+    CharacterPose[] LayerPoses(CharacterSnapshot c, CharacterSnapshot? before, float alpha, bool posed, CharacterPose? head = null)
     {
-        int drawn = !posed ? 0 : DrawnLayerCount(before, c);
+        int layers = !posed ? 0 : DrawnLayerCount(before, c);
+        int drawn = layers + (posed && head is not null ? 1 : 0);
         var poses = !posed
             ? []
             : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == drawn
@@ -746,7 +749,27 @@ sealed partial class GameHost
 
         // Between ticks the layers' clip times and weights move on from the last snapshot (BlendLayers).
         if (posed) BlendLayers(before, c, alpha, poses);
+        if (drawn > layers) poses[layers] = head!.Value;
         return poses;
+    }
+
+    /// <summary>
+    /// The drawn head turning (<see cref="HeadTurning"/>), kept per character slot.
+    /// </summary>
+    readonly HeadTurning _headTurning = new();
+
+    /// <summary>
+    /// The head layer of a person drawn at <paramref name="position"/> facing <paramref name="yaw"/> between the ticks (docs/animation.md "Head
+    /// turning"): toward the point its task looks at, between the last two snapshots' points; released (fading out) while it is down, carried or in a
+    /// ragdoll, and, with the Fixes option, once nothing is looked at. Null when none.
+    /// </summary>
+    CharacterPose? HeadPose(CharacterSnapshot c, CharacterSnapshot? before, Vector3 position, float yaw, float alpha)
+    {
+        if (c.Appearance is not { Animal: null }) return null;
+        Vector3? at = c.LookAt is { } now ? before?.LookAt is { } then ? Vector3.Lerp(then, now, alpha) : now : null;
+        bool released = c.Down || !c.CarriedBy.IsNone || c.Ragdoll is not null || Config.FixHeadTurnBack && at is null;
+        double clock = Session.Clock.GameSeconds + alpha * Session.Simulation.TickSeconds;
+        return _headTurning.Pose(c, at, position, yaw, clock, PopData?.Bodies.Constants.AnimationBlendRate ?? 4, released);
     }
 
     #endregion

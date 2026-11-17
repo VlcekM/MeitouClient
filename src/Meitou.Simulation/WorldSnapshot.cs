@@ -653,6 +653,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public CharacterTask Task { get; internal set; }
     /// <summary>
+    /// The point its task has it look at this tick (<see cref="LookTargets"/>; the original's <c>Character::lookatPosition</c>); null when none. The
+    /// host turns the drawn head toward it (docs/animation.md "Head turning").
+    /// </summary>
+    public Vector3? LookAt { get; internal set; }
+    /// <summary>
     /// Working on a cage's lock (the picker's order is given and it is in reach or walking there).
     /// </summary>
     public bool PickingLock { get; internal set; }

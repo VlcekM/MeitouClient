@@ -1520,6 +1520,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         BenchFacingChanged?.Invoke(true);
         Config.FixBagSearch = true;
         BagSearchChanged?.Invoke(true);
+        Config.FixHeadTurnBack = false;
         OffscreenChanged?.Invoke();
         Config.Audio = new();
         AudioChanged?.Invoke();

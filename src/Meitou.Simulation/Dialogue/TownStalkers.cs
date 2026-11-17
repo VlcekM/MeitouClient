@@ -161,6 +161,11 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
+    /// Each stalker and its victim (read only).
+    /// </summary>
+    public IEnumerable<(CharacterId Stalker, CharacterId Victim)> Pairs => _stalkers.Select(p => (p.Key, p.Value.Target));
+
+    /// <summary>
     /// Adds each stalker's victim and state, in stalker id order.
     /// </summary>
     public void Hash(ref StateHasher hasher)

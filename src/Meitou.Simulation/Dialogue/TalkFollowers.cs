@@ -58,6 +58,11 @@ sealed class TalkFollowers(DialogueSystem system)
     }
 
     /// <summary>
+    /// Each follower and the target it follows (read only).
+    /// </summary>
+    public IEnumerable<KeyValuePair<CharacterId, CharacterId>> Pairs => _followers;
+
+    /// <summary>
     /// Adds the followers and their targets, in id order.
     /// </summary>
     public void Hash(ref StateHasher hasher)

@@ -687,6 +687,11 @@ sealed class AgentPlay(GameHost host)
             + "the open trade as JSON (stock, goods, prices, money); open: the first selected character walks to the trader; buy/sell: "
             + "units of the named stock item or of the customer's goods; close", ControlTrade);
 
+        add("look", "look <x> <z> | look off [--id <c:slot.gen>] | look talk <c:slot.gen> | look list", "debug: the selected characters (or the one given) look at the world "
+            + "point as a task's look would (head turning, docs/animation.md), until look off; display only, the world is not changed; list: every "
+            + "character whose published look point is set (tasks' and these) and the point; talk: the selected character gets the Talk order to "
+            + "that character (its walk-up looks at it)", ControlLook);
+
         add("ko", "ko [seconds] [--id <c:slot.gen>]", "debug: knock the selected characters (or the one given) out for that many character seconds "
             + "(default 600), so loot, carry and first aid can be tested on a body", ControlKo);
 
@@ -876,6 +881,50 @@ sealed class AgentPlay(GameHost host)
             Result(con, host.Player.AgentOrders.ControlTradeDeal(sub == "buy", string.Join(' ', words), n, out string m), m);
         }
         else con.Error("usage: trade | trade open <trader id> | trade buy|sell <item name> [n] | trade close");
+    }
+
+    /// <summary>
+    /// The <c>look</c> command (usage and help at its registration in <see cref="RegisterControlPlayMoreCommands"/>): sets or clears
+    /// <see cref="Simulation.World.DebugLooks"/>, which the publish reads.
+    /// </summary>
+    void ControlLook(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (args is ["list"])
+        {
+            var listed = host.Session.CurrentSnapshot.Characters.Where(c => c.LookAt is not null)
+                .Select(c => new { id = $"c:{c.Id.Slot}.{c.Id.Generation}", at = new[] { c.LookAt!.Value.X, c.LookAt.Value.Z } }).ToArray();
+            host.AgentChannel.ControlData = JsonSerializer.Serialize(new { looks = listed });
+            return;
+        }
+        if (!ControlTargets(args, con, "look", out var who, out var rest)) return;
+        var looks = host.Session.World.DebugLooks;
+        if (rest is ["off"])
+        {
+            foreach (var id in who) looks.TryRemove(id, out _);
+            con.Print($"look off for {who.Length}");
+            return;
+        }
+        if (rest is ["talk", var key])
+        {
+            // The right-click's Talk order (order 12): the first selected character walks up to the target, looking at it as it goes.
+            if (!AgentOrders.TryParseCharacter(key, out var target))
+            {
+                con.Error("usage: look talk <c:slot.gen>");
+                return;
+            }
+            host.Session.World.Commands.Enqueue(new Simulation.Dialogue.TalkOrder(who[0], target) { Tick = host.Session.World.Tick });
+            con.Print($"talk order to {key}");
+            return;
+        }
+        if (rest.Count != 2 || !AgentWorld.Num(rest[0], out float x) || !AgentWorld.Num(rest[1], out float z))
+        {
+            con.Error("usage: look <x> <z> | look off [--id <c:slot.gen>] | look talk <c:slot.gen> | look list");
+            return;
+        }
+
+        foreach (var id in who) looks[id] = new Vector3(x, 0, z);
+        con.Print($"{who.Length} look at {x:0.#} {z:0.#}");
     }
 
     /// <summary>
