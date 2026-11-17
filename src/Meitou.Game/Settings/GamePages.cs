@@ -577,6 +577,11 @@ sealed class GamePages(SettingsMenu menu)
             + "confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found.",
             Toggle: new("Bags in the inventory", () => menu.Config.FixBagSearch,
                 v => { menu.Config.FixBagSearch = v; menu.BagSearchChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Guards spare their own",
+            "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. "
+            + "In the game they enslave them too. Arrests that end in slavery are not affected.",
+            Toggle: new("Guards spare their own", () => menu.Config.CagesSpareOwn,
+                v => { menu.Config.CagesSpareOwn = v; menu.GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
     }
 
@@ -658,7 +663,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The world and play rows: decapitation, ragdolls, XP, the speeds, pausing, animals, cage guards, outlines, selection and ground items.
+    /// The world and play rows: decapitation, ragdolls, XP, the speeds, pausing, animals, outlines, selection and ground items.
     /// </summary>
     void AddWorldRows(List<SettingsMenu.Entry> result)
     {
@@ -707,11 +712,6 @@ sealed class GamePages(SettingsMenu menu)
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
             Toggle: new("Animals pick up items", () => !menu.Config.AnimalsPickUp,
                 v => { menu.Config.AnimalsPickUp = !v; menu.AnimalsPickUpChanged?.Invoke(!v); }, Remaster: true)));
-        result.Add(new("Guards spare their own",
-            "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. "
-            + "In the game they enslave them too. Arrests that end in slavery are not affected.",
-            Toggle: new("Guards spare their own", () => menu.Config.CagesSpareOwn,
-                v => { menu.Config.CagesSpareOwn = v; menu.GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
         result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
             Toggle: new("Hover outline", () => menu.Config.HoverOutline, v => menu.Config.HoverOutline = v, Remaster: true, OnOff: true)));
         result.Add(new("Building outline",
