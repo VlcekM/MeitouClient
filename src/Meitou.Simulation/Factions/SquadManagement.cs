@@ -259,11 +259,18 @@ public static class SquadManagement
     }
 
     /// <summary>
+    /// Whether a command naming the mod <paramref name="named"/> may change a squad setting <paramref name="owner"/> holds: one no mod holds, a
+    /// command naming no mod, or the holder itself. Another mod's setting is left alone, so mods marking the same squad never undo each other's.
+    /// </summary>
+    static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
+
+    /// <summary>
     /// Sets or clears <see cref="Squad.Uncounted"/> on a squad of the player's faction, noting the mod that set it.
     /// </summary>
     static void SetUncounted(World world, SetSquadUncounted command)
     {
         if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.UncountedOwner, command.Owner)) return;
 
         squad.Uncounted = command.On;
         if (!command.On) squad.UncountedOwner = null;
@@ -276,6 +283,7 @@ public static class SquadManagement
     static void SetPurse(World world, SetSquadPurse command)
     {
         if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.PurseOwner, command.Owner)) return;
 
         if (!command.Own)
         {
@@ -326,6 +334,7 @@ public static class SquadManagement
     static void SetDormant(World world, SetSquadDormant command)
     {
         if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.DormantOwner, command.Owner)) return;
 
         squad.Dormant = command.On;
         if (!command.On) squad.DormantOwner = null;
