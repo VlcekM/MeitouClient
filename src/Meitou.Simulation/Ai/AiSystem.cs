@@ -1234,9 +1234,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether 189 can really work at a workplace (docs/game/ai-tasks.md "Worker"). Its act-out, 87 Operating machine, needs !62
     /// <c>machineHasEmptyInputs</c>, and with an empty input the plan must fill the machine from a source of its input, so the original's workers
-    /// keep to the workplaces they can run. A mine has no input; a refinery, research or crafting bench counts only with a machine running there with
-    /// its inputs (engine choice: the pick does not ask whether 94 / 93 could fill an empty one). An outpost's workplace (the player's own machine,
-    /// <see cref="TownBuilding.RuntimeKey"/>) also needs power, as the player's operator does (a town machine always has it).
+    /// keep to the workplaces they can run. A mine has no input; a refinery counts only with a machine running there with its inputs, as the
+    /// original's workers keep off unfed ones (<b>Observed</b>, docs/game/ai-tasks.md "Worker": Rebirth's slaves on 189 work the quarries, never
+    /// the four unfed Manual Stone Processors). A research bench has no empty input (no StorageBuilding cast,
+    /// <c>FUN_1402adb10</c>, so state 62 is false) and a crafting bench none while no queued craft binds its inputs (<see cref="BenchRuns"/>). An
+    /// outpost's workplace (the player's own machine, <see cref="TownBuilding.RuntimeKey"/>) and a town's machine also need power (state 93).
     /// </summary>
     internal static bool RealWork(World world, TownBuilding building)
     {
@@ -1245,9 +1247,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         if (building.Function == MineFunction) return true;
         foreach (var m in world.Machines.All)
-            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs;
-        return false;
+            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs && Powered(world, m);
+        return BenchRuns(world, building);
     }
+
+    /// <summary>
+    /// State 93 <c>BUILDING_HAS_POWER</c> of the machine (<see cref="Production.ProductionSystem.MachinePowered"/>), a start condition of 87 and 221.
+    /// </summary>
+    static bool Powered(World world, Production.Machine m) => world.SystemOf<Production.ProductionSystem>()?.MachinePowered(world, m) != false;
+
+    /// <summary>
+    /// A research or crafting bench with no machine made yet whose machine would start with no input to fill: none of its recipe's inputs draws
+    /// anything (a research bench has none; a crafting bench's sections draw nothing until a craft is queued, ProductionSystem.Bind), so 87 can
+    /// run there.
+    /// </summary>
+    static bool BenchRuns(World world, TownBuilding building) =>
+        building.Function is TownBuildings.ResearchFunction or TownBuildings.CraftingFunction
+        && world.SystemOf<Production.ProductionSystem>()?.Data(building.BuildingId) is { } data
+        && data.Inputs.All(i => i.Rate <= 0);
 
     /// <summary>
     /// The player-flag gate of the building finders of goals 189 / 190 (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, <b>Verified</b>): the town's
@@ -1294,7 +1311,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// At a workstation or training dummy, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221; <c>Task_OperateMachine</c>
     /// <c>FUN_14035bc90</c> treats a dummy as any machine): the piece's work clip and hunger rate, as the real operating, with its functionality's
-    /// <c>animation events</c> on the clip (docs/audio.md "Machine work").
+    /// <c>animation events</c> on the clip (docs/audio.md "Machine work"); the production pass gives its XP and work step
+    /// (<see cref="Production.ProductionSystem"/> <c>HomePretenders</c>).
     /// </summary>
     void PretendOperate(World world, int slot, AiMind mind, HomeSpot piece)
     {
@@ -1303,6 +1321,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.WorkClip = clip;
         mind.WorkFunctionality = _work.PieceFunctionalityOf(piece);
         mind.WorkHungerRate = piece.HungerRate;
+        mind.PretendAt = piece;
         if (world.Characters.Cold(slot) is not { } worker) return;
 
         worker.ActionClip = clip;
@@ -1898,6 +1917,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void ActSeated(World world, int slot, AiMind mind, Blackboard board, TaskType type)
     {
         ref var n = ref world.Characters.Next[slot];
+        mind.PretendAt = null;
 
         // At its claimed seat (a chair or throne, else a node; a training dummy is stood at).
         HomeSpot claimed = default;

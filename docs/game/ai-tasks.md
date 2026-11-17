@@ -648,23 +648,27 @@ Meitou: [simulation, captives](../simulation.md#captives).
   (`Blackboard +0x88`) for a building through `BuildingFinder_SpecialFunction` (mask 0x41a read as bits, **Observed**: 1 MINE, 3 RESEARCH, 4 REFINERY, 10 CRAFTING) and takes one at random
   (slot 2 `FUN_1409fb020`: index `FUN_1409b3b40(0, n - 1)`); the town test is the one in the table above. Acting out is 87 (real: needs the machine's inputs and output room, power, a free operator slot) or
   221 (pretend); both `Task_OperateMachine` ([sitting and the held tool](ai-tasks.md#town-goals), [production](buildings-production.md#production)). So a pretending worker
-  gains the operating XP as a real one does ([seat XP](#town-goals); **Verified**: the factory fills the task alike for both rows and the update `FUN_14035bc90` reads no row, so the XP
-  call comes once `tryOperate` passes, whatever the machine holds; Rebirth's Quarry Mines and the Manual Stone Processor both have `stat used` labouring, merged data). Meitou: 189 operates the town building's machine when its plan starts with 87 and empties it when it starts with 92, 190 pretends at the building at its functionality's clip (`stonemine` by default, with its `animation events`, [audio](../audio.md#characters-footsteps-combat-voices) "Machine work"; [NPC town machines](buildings-production.md#npc-town-machines)); **it has arrived within the building functionality's `use range` of the building's position, twice that once stopped ([work distance](buildings-production.md#work-distance)).
+  operates the building as a real one does (**Verified**: the factory fills the task alike for both rows and the update `FUN_14035bc90` reads no row: once `tryOperate` (slot `0x4f8`) passes, whatever the machine holds,
+  it calls the operating XP ([seat XP](#town-goals)) and the building's work step (slot `0x4b0`), which works a fed refinery or a mine as 87 does; Rebirth's Quarry Mines and the Manual Stone Processor both have `stat used` labouring, merged data).
+  At a bench the work step makes nothing for an NPC town (**Verified**): `ResearchBuilding`'s (`FUN_14029b8d0`) acts only when the owner faction has the player flag (`+0x250`), `CraftingBuilding`'s (`FUN_1402b5a40`)
+  only at status 2 with a current craft. Meitou: 189 operates the town building's machine when its plan starts with 87 and empties it when it starts with 92, 190 operates it with 221 (`AiSystem.WorkAtMachine`, `ProductionSystem.TownOperate`) at its functionality's clip (`stonemine` by default, with its `animation events`, [audio](../audio.md#characters-footsteps-combat-voices) "Machine work"; [NPC town machines](buildings-production.md#npc-town-machines)); **it has arrived within the building functionality's `use range` of the building's position, twice that once stopped ([work distance](buildings-production.md#work-distance)).
   - **The finder's visit** (`FUN_1408cebe0`, the query's slot 0, **Verified** by disassembly) keeps a building when all of these hold:
     - `getUseableStuff()` (vfunc 0x300) is set and `getBuildState()` (0x228) is complete;
     - its function (0x2f0) is in the mask, and it is of the query's town;
     - a test of the building against the worker passes (`FUN_14003bd0e`), or the worker is in slave state 1;
     - it is not on a list of the worker's (`+0x650`, `+0x20`), and a foliage building (`+0xc0`) is within reach;
     - `UseableStuff::couldIOperate(worker)` (vfunc 0x500, `FUN_1400f7c90`, the same for UseableStuff, ProductionBuilding and
-      CraftingBuilding) holds: not `dontNeedWorkRightNow()` (0x4e8; false but for ResearchBuilding and FarmBuilding), and the worker already
+      CraftingBuilding) holds: not `dontNeedWorkRightNow()` (0x4e8: a constant 0, `FUN_1402ab3c0`, for UseableStuff, ProductionBuilding and CraftingBuilding; ResearchBuilding's `FUN_1402995e0` is true only for a player-owned bench with no current research, FarmBuilding's for a growing crop), and the worker already
       operates it or the operators (`+0x3d0`) are fewer than `numOperatorsMax` (`+0x3ac`; the functionality's `max operators`, 6 for a
       Stone mine, 1 for Stone processing).
     - So the finder takes a refinery with a free slot whatever its inputs.
   - **The plan refuses an empty machine**: 87's B list has !62 `machineHasEmptyInputs`, whose only provider is 93 Filling machine (67
     `haveSomeResourcesFor`, from 94 and a source of the input). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the
     original's slaves on 189 work only the quarries (Stone mine) and never the four unfed Manual Stone Processors.
-  - Meitou: 189 picks only a workplace it can run (`AiSystem.RealWork`): a mine, or a refinery, research or crafting bench with a machine
-    running there that has its inputs. An NPC town's machine counts only once it holds its inputs: the pick does not ask whether 94 / 93 could fill it (engine choice for the plan's fill-or-fail).
+  - **A bench passes 87's list B** (**Verified**, vtables): a `ResearchBuilding` has no StorageBuilding cast (`0x2f8` `FUN_1402adb10` returns null), so `!62`, `!63` and `!89` hold there, and `!169` needs production class 6 (**Observed**: the class has no slot `0x5a8`); so 189 operates
+    research benches too, power as at any machine.
+  - Meitou: 189 picks only a workplace it can run (`AiSystem.RealWork`): a mine, a research bench, a crafting bench whose sections draw nothing (no queued craft binds them, `CraftingBuilding::vfunc_182`, **Observed**), or a refinery with a machine
+    running there that has its inputs. An NPC town's refinery counts only once it holds its inputs: the pick does not ask whether 94 / 93 could fill it (engine choice for the plan's fill-or-fail).
     190 (pretend, no 62 in 221's B list) still picks any workplace. A member on 189 or 190 holds an operator slot (`AiMind.WorkPost`,
     `AiSystem.ClaimWork`, serial on the package cadence, the kept slots reserved first): up to the functionality's `max operators` per
     workplace, no limit for a building without a functionality record. `Task_OperateMachine` (87 and 221) adds the worker to the building's
@@ -1273,7 +1277,10 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`), then the nest's pieces (`NestBuildings.FurnitureOf`), of `Blackboard.OwnHome`
   are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
   piece at random (`FreeFurniture`; distinct pieces per member is the engine's claim, **Observed**), sit on a chair, stand at a dummy, or stand at a workstation facing it at the machine's work clip and
-  hunger rate (`PretendOperate`: 221's look; no machine runs).
+  hunger rate (`PretendOperate`: 221's look). 221 runs `Task_OperateMachine`'s update there (**Verified**, `FUN_14035bc90`: `tryOperate`, then
+  the operating XP `FUN_1408c7250` for any function but 7, then the building's work step, slot `0x4b0`), so the resident gains the piece's operating
+  XP and at a dummy its training (`ProductionSystem.HomePretenders`); a research or crafting piece's step makes nothing for an NPC owner (no
+  player flag, no queued craft).
 - **275 Sitting around** (`FUN_1408caf00`; the registration's finder thunk `LAB_1400061db` is not in the RE files, so the row link is **Observed**; the rest **Verified** by decompile):
   - Gate: 0 (not wanted, no target) when the character is in no town location (character vfunc `0x78`). A non-player-faction character (faction `+0x250` clear) needs that town to
     be its squad's home town (Ownerships `+0x30`) or owned by the squad's faction (`FUN_140621390`); a player-faction one needs a town owned by a player faction, with no home test.

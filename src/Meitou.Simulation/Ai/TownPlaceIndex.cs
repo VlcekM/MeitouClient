@@ -34,12 +34,6 @@ sealed class TownPlaceIndex(PopulationData data)
     internal const int WorkFunctions = 0x41a;
 
     /// <summary>
-    /// The functions of an outpost's workplaces (<b>engine choice</b>): mines and refineries, the producers a worker runs. A research or crafting
-    /// bench is pretence for a town worker, and at an outpost it would take the operator slot of the player's own researcher or crafter.
-    /// </summary>
-    internal const int OutpostWorkFunctions = 1 << TownBuildings.MineFunction | 1 << TownBuildings.RefineryFunction;
-
-    /// <summary>
     /// The places of each town looked at, by site: rebuilt in the serial step, read by the think on every worker (derived, not hashed).
     /// </summary>
     readonly Dictionary<int, TownPlaces> _places = [];
@@ -78,7 +72,7 @@ sealed class TownPlaceIndex(PopulationData data)
 
     /// <summary>
     /// The workplaces of outpost <paramref name="number"/> (a player town's number): its complete, standing buildings with a function in
-    /// <see cref="OutpostWorkFunctions"/>, each a stand-in known by its site id (<see cref="TownBuilding.RuntimeKey"/>, the id of its machine); 189
+    /// <see cref="WorkFunctions"/> that the finder's <c>couldIOperate</c> takes (<see cref="NeedsWork"/>), each a stand-in known by its site id (<see cref="TownBuilding.RuntimeKey"/>, the id of its machine); 189
     /// takes only those it can really work at (<paramref name="real"/>, <see cref="AiSystem.RealWork"/>). None for an outpost not looked at.
     /// </summary>
     public IReadOnlyList<TownBuilding> OutpostWorkplaces(int number, bool real)
@@ -138,8 +132,8 @@ sealed class TownPlaceIndex(PopulationData data)
             foreach (var site in world.Buildings.All)
             {
                 if (!site.Complete || site.Destroyed || ai.FunctionOf(site.Record) is not (>= 0 and var fn)) continue;
-                if ((OutpostWorkFunctions >> fn & 1) == 0 || Construction.TownLookup.PlayerTownOf(world, site)?.Number != number)
-                    continue;
+                if ((WorkFunctions >> fn & 1) == 0 || !NeedsWork(world, site, fn)) continue;
+                if (Construction.TownLookup.PlayerTownOf(world, site)?.Number != number) continue;
 
                 all.Add(StandIn(site, fn));
                 seen.Add(site.Id);
@@ -150,6 +144,13 @@ sealed class TownPlaceIndex(PopulationData data)
 
         foreach (string gone in _standIns.Keys.Where(id => !seen.Contains(id)).ToList()) _standIns.Remove(gone);
     }
+
+    /// <summary>
+    /// <c>dontNeedWorkRightNow</c> (slot <c>0x4e8</c>) is false, which the finder's <c>couldIOperate</c> (slot <c>0x500</c>, <c>FUN_1400f7c90</c>)
+    /// asks: a constant 0 but for a research bench (<c>FUN_1402995e0</c>: true for the player's bench while no research is current).
+    /// </summary>
+    static bool NeedsWork(World world, Construction.BuildSite site, int function) =>
+        function != TownBuildings.ResearchFunction || site.Owner != world.Player.Faction || world.Research.Queue.Count > 0;
 
     /// <summary>
     /// The stand-in of a player-built workplace (<see cref="_standIns"/>): its place, facing and function, known by its site id.

@@ -287,6 +287,8 @@ public sealed partial class AiSystem
                 StateType.MachineHasEmptyInputs => MachineAt(target)?.HasEmptyInputs == true,
                 StateType.IsMachineOutputFull => MachineAt(target)?.OutputBlocked == true,
                 StateType.IsMachineJammed => MachineAt(target)?.Jammed == true,
+                StateType.BuildingHasPower => MachineAt(target) is not { } machine
+                    || _world.SystemOf<Production.ProductionSystem>()?.MachinePowered(_world, machine) != false,
                 // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
                 StateType.GotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag
                     && _system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
@@ -379,7 +381,7 @@ public sealed partial class AiSystem
             // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md
             // "Planner").
             StateType.IsMovementAllowed or StateType.CanGetUp or StateType.IsBuildingComplete
-                or StateType.BuildingHasPower or StateType.MachineHasFreeOperatorSlot or StateType.IsReadyForAction
+                or StateType.MachineHasFreeOperatorSlot or StateType.IsReadyForAction
                 or StateType.DoorIsOpen or StateType.DoorIsOpenHere or StateType.AtLocationBuildingDoor or StateType.AtCurrentLocationBuildingDoor
                 or StateType.AtLocationBuildingDoorInside or StateType.AtLocationBuildingDoorOutside or StateType.DestinationIsAccessible
                 or StateType.LocationIsAccessible or StateType.DestinationNotBlockedByFortifications or StateType.AtLocationFortificationGate

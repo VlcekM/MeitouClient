@@ -27,6 +27,16 @@ public sealed partial class ProductionSystem
     /// <c>Town::vfunc_87</c>); what <see cref="HasPower"/> reads. Not saved.
     /// </summary>
     readonly Dictionary<int, (bool Generators, bool Batteries)> _townSupply = [];
+
+    /// <summary>
+    /// The level towns' generator output this tick for the towns with no frame of their own (<see cref="NpcOutputNow"/>; derived, not saved).
+    /// </summary>
+    readonly Dictionary<int, float> _npcOutputs = [];
+
+    /// <summary>
+    /// The tick <see cref="_npcOutputs"/> was read for.
+    /// </summary>
+    long _npcOutputTick = -1;
     /// <summary>
     /// Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.
     /// </summary>
@@ -619,9 +629,58 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// State 93 <c>BUILDING_HAS_POWER</c> (<c>FUN_140596ab0</c>, <b>Verified</b>), a start condition of operating (87, 221) and manning a turret (146):
-    /// the target building's <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share.
+    /// true for a building of class (<c>+0x198</c>, slot <c>0x358</c>) below 2, a plain building (0) or a door (1, <c>DoorStuff</c>), so never
+    /// for a machine (UseableStuff 2, StorageBuilding 3, ProductionBuilding 4, ResearchBuilding 5, CraftingBuilding 6, TurretBuilding 8,
+    /// FurnaceBuilding 10, FarmBuilding 13: the constructors' stores, <b>Verified</b> by disassembly); else the target building's
+    /// <see cref="HasPower"/>, read from the town's supply rather than the machine's granted share, a town's machine included
+    /// (<see cref="TownHasPower"/>).
     /// </summary>
-    bool Powered(World world, BuildSite site, Machine m) => IsTownWork(site.Id) || HasPower(world, m, PowerTown(world, site));
+    bool Powered(World world, BuildSite site, Machine m) =>
+        IsTownWork(site.Id) ? TownHasPower(world, m) : HasPower(world, m, PowerTown(world, site));
+
+    /// <summary>
+    /// State 93 of any machine (<see cref="Powered(World, BuildSite, Machine)"/>): a player's by its site, a town's by its level-data town; true for
+    /// a machine whose site is gone.
+    /// </summary>
+    public bool MachinePowered(World world, Machine m)
+    {
+        if (IsTownWork(m.Site)) return TownHasPower(world, m);
+
+        return world.Buildings.Find(m.Site) is not { } site || Powered(world, site, m);
+    }
+
+    /// <summary>
+    /// <see cref="HasPower"/> of a town's machine (<c>FUN_140299370</c>, <b>Verified</b>): a generator or a machine drawing nothing always; else
+    /// switched on and its town's frame has generator output, the level's generators there (<see cref="NpcOutput"/>) and any of the player's
+    /// machines resolved to that town (<see cref="PowerTown"/>), or its batteries in battery mode; no town: true.
+    /// </summary>
+    bool TownHasPower(World world, Machine m)
+    {
+        if (m.Data.IsGenerator || Rated(world, m) == 0) return true;
+        if (!m.PowerOn) return false;
+        if (TownBuildingOf(m.Site[TownWorkPrefix.Length..]) is not { Site: >= 0 and var index }) return true;
+
+        int town = -index - 1;
+        if (_townSupply.TryGetValue(town, out var supply))
+            return supply.Generators || m.GetsBattery && _batteryMode.GetValueOrDefault(town) && supply.Batteries;
+
+        return NpcOutputNow(world, index) > 0;
+    }
+
+    /// <summary>
+    /// <see cref="NpcOutput"/> of a town with no player machine in its frame, once a tick (<see cref="_npcOutputTick"/>).
+    /// </summary>
+    float NpcOutputNow(World world, int index)
+    {
+        if (_npcOutputTick != world.Tick)
+        {
+            _npcOutputTick = world.Tick;
+            _npcOutputs.Clear();
+        }
+
+        if (!_npcOutputs.TryGetValue(index, out float output)) _npcOutputs[index] = output = NpcOutput(world, index);
+        return output;
+    }
 
     /// <summary>
     /// Whether a machine counts as powered for its sound emitter (<c>FUN_140299370</c>, <b>Observed</b>): a generator always (fuel and switch are not

@@ -1310,7 +1310,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   the slave's squad leader stands in (`AiSystem.WorkAt`, the AI's pick, 189 only one it can run) and stand at it at the work clip (`CharacterCold.SlaveWork`; a handler of rows 189 / 190 clears both when another task takes
   the slave), holding one of its operator slots meanwhile: both take the functionality's `hunger rate` (`BodySystem`), 189 works the town machine as the AI's plan does (`ProductionSystem.ObedientWorkers`: a full output into the inventory, else an empty input
   filled from what it carries, else operating; `ObedientJobs.ErrandFor`: walks to make room, to fetch an input from another machine's output, and to put the machine's carried output into a storage,
-  [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), 190 gains the operating XP of the functionality's `stat used` while it stands there, as operating does (`ProductionSystem.PretendXp`),
+  [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), 190 operates it as 189's row 87 does whatever it holds (row 221 is `Task_OperateMachine` too: the work step and the operating XP, `ProductionSystem.ObedientWorkers`),
   **172** walks into the nearest free cage of the owner's faction (`CaptiveSystem.OwnCage`, `FixtureRegistry.Imprison`) and stays there until let out (the original has no own release: caged, its 171 / 189 / 190 plan nothing, **Verified**), **41** / **143** fight as the AI's combat goals (`AiSystem.ObedientFight`, a job fight),
   **35** runs from the sensed enemies (`FleeSystem.EnemyRunPoint`; only with no working arm, the player-faction veto), **14** stands. An order beats it (step 1) and it beats Self preservation and the other goals; the Jobs switch
   off stops it (as any job). Its senses side with the master (`AggroSystem.MasterSpares`, [sense tags](game/perception.md#sense-tags-who-is-an-enemy)): never the master's faction, nor anyone the master calls friendly; chained, the master's side never picks it as a fight target (`TargetScore.SparesSlave`).
@@ -1843,10 +1843,11 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   Patrols start and ring it, "at home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its
   centre. **Engine choice**: a patrol route's town radius is a third of the outpost's radius, so the route stays within it (a site's is its size
   radius times its town radius mult).
-- **Outpost work**: the outpost's complete, standing mines and refineries are its workplaces for goals 189 / 190, stand-ins known by their
-  site id (`TownPlaceIndex.OutpostWorkplaces`); the player-flag gate lets the faction's members work there (`WorkAllowed`). **Engine choices**:
-  research and crafting benches are left out (a town worker only pretends at one, and would hold the player's researcher's slot), and 189 takes
-  and operates only a powered machine, as the player's operator does. A worker runs the player's own machine (`ProductionSystem.TownWorkOf` gives
+- **Outpost work**: the outpost's complete, standing buildings of the workers' functions (MINE, RESEARCH, REFINERY, CRAFTING) are its workplaces for
+  goals 189 / 190, stand-ins known by their site id (`TownPlaceIndex.OutpostWorkplaces`), but a research bench while no research is current (the
+  finder's `couldIOperate`, slot `0x500`, refuses it through `dontNeedWorkRightNow`, `FUN_1402995e0`, **Verified**); the player-flag gate lets the
+  faction's members work there (`WorkAllowed`). A worker's research adds to the tick's bench contributions before the player's operators'
+  (`ProductionSystem._townResearch`), and a queued craft is worked as by the player's smith. 189 takes and operates only a powered machine (state 93). A worker runs the player's own machine (`ProductionSystem.TownWorkOf` gives
   it for a stand-in; no `townwork:` machine is made) and empties and stores its output as a town worker does ([NPC town
   machines](game/buildings-production.md#npc-town-machines)). Operator
   slots are shared: the player's job operators fill the AI's (`ReserveWork`), the AI's holders count against the jobs' (`OperatorsOf`), and a
@@ -1888,8 +1889,8 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
   35 is acted out by `FleeSystem` on the AI's request ([ai-tasks](game/ai-tasks.md#combat-goals)). State 26 is wired (staying low, playing dead, in a bed; not crippled).
 - States (`PlanContext.Holds`): location, distance, bed, sitting, home (within 20 of the home), home town, town, weapon drawn, weapon carried
   (`hasWeapon`), carrying, a first aid kit carried (23), the immediate threat (39, `CombatSystem.ImmediateThreat`), deep water (139), a leg down that could be fixed (103, `MedicalState.LegsMessedUp`), inside the home building (107, `AI::iAmInsideTargetBuilding` for a non-building target) and strangers in a private home (141, so a resident does not
-  go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; moving, getting up, arms, power, buildings, doors, gates, accessibility, machine operator slots and readiness are
-  held true (movement and the lock rounds deal with doors, gate guards' gates included; the bashers' `DoorPlan` evaluates them); machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
+  go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; power (93) is the target machine's (`ProductionSystem.MachinePowered`: a town's machine by its level town's generators;
+  true with no machine); moving, getting up, arms, buildings, doors, gates, accessibility, machine operator slots and readiness are held true (movement and the lock rounds deal with doors, gate guards' gates included; the bashers' `DoorPlan` evaluates them); machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
   machine; no finder gives one yet, the town workers' buildings are level data, [Blocked output](game/buildings-production.md#blocked-output)); every other state is false.
 
 Combat goals (`AiBehaviour.Fight`, `AiSystem.Fights.cs`; [combat goals](game/ai-tasks.md#combat-goals)): 16, 21, 144 and 34 attack whom their finder picks (`AggroSystem.FindFoe`:

@@ -1,14 +1,16 @@
 using System.Numerics;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Kidnap;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Production;
 
 /// <summary>
 /// The <c>obey</c> mode of <c>meitou-tools probe</c>: an enslaved player character stands (its orders cleared), sneaks, or is ordered to walk to a
-/// point, then every 20 ticks its slave state, owner, task and shackles, and how the owner faction's NPCs near it see it (#813: guards who let an
-/// obedient slave walk off).
+/// point, then every 20 ticks its slave state, owner, task, shackles and workplace with its stat, and how the owner faction's NPCs near it see it
+/// (#813: guards who let an obedient slave walk off; #812: a slave's work XP).
 /// </summary>
 static class ObeyProbe
 {
@@ -74,7 +76,20 @@ static class ObeyProbe
 
         Console.WriteLine($"tick {world.Tick} {probe.Who(slave)} slave={c.SlaveState} master={c.SlaveMaster} owner={ownerText} "
             + $"row={c.Running?.Row} order={orderText} sneak={(c.Orders & CharacterOrders.Sneak) != 0} outdoors={world.Sight.Outdoors(slave)} "
-            + $"shackles={shackles?.Record}/{shackles?.Lock is not null}");
+            + $"shackles={shackles?.Record}/{shackles?.Lock is not null}{WorkText(world, c)}");
+    }
+
+    /// <summary>
+    /// The workplace the slave's 189 / 190 holds, whether it operates (189) and the level of the functionality's <c>stat used</c> (#812).
+    /// </summary>
+    static string WorkText(World world, CharacterCold c)
+    {
+        if (c.SlaveWork is not { Place.Building: var b } work) return "";
+
+        var stat = (StatsEnumerated)(world.SystemOf<ProductionSystem>()?.Data(b.BuildingId)?.Stat ?? 0);
+        string level = stat > 0 && c.Stats is { } stats ? $" {stat}={stats[stat]:F4}" : "";
+
+        return $" work={b.Name}/{(work.Operates ? "real" : "pretend")}{level}";
     }
 
     /// <summary>

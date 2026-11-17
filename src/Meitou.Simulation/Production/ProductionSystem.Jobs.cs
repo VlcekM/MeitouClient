@@ -355,8 +355,17 @@ public sealed partial class ProductionSystem
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(site.Position.X - n.Position.X, site.Position.Z - n.Position.Z);
         m.Operators++;
         cold.Operating = true;
+        TrainingXp(cold, m.Data, dt);
+    }
+
+    /// <summary>
+    /// A training dummy's work step (<c>UseableStuff</c> vfunc 0x4b0, <see cref="Train"/>): <paramref name="data"/>'s <c>stat used</c> rises at
+    /// <see cref="TrainingRate"/> up to its cap.
+    /// </summary>
+    void TrainingXp(CharacterCold cold, Meitou.Data.Gameplay.Construction.MachineData data, float dt)
+    {
         if (cold.Stats is { } stats && cold.Race is { } race)
-            _xp.Capped(stats, race, (Meitou.Data.Gameplay.Bodies.StatsEnumerated)m.Data.Stat, dt, TrainingRate, m.Data.OutputValue);
+            _xp.Capped(stats, race, (Meitou.Data.Gameplay.Bodies.StatsEnumerated)data.Stat, dt, TrainingRate, data.OutputValue);
     }
 
     /// <summary>

@@ -989,6 +989,11 @@ public sealed class AiMind
     /// The town building it empties the output of this tick (row 92; see <see cref="WorkOperate"/>; derived, not hashed).
     /// </summary>
     public TownBuilding? CollectFrom { get; set; }
+    /// <summary>
+    /// The workstation or training dummy of its home it pretend-operates (row 221 from 3 or 275); set by the think, applied by
+    /// <see cref="Production.ProductionSystem"/> (derived, not hashed).
+    /// </summary>
+    public HomeSpot? PretendAt { get; set; }
 
     /// <summary>
     /// The town building it fills (Task_FillMachine, row 93, at the building) with the inputs it carries this tick; set by the think, applied by

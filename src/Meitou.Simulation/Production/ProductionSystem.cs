@@ -931,6 +931,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         TownMachines(world);
         TownWorkers(world, world.TickSeconds);
         ObedientWorkers(world, world.TickSeconds);
+        HomePretenders(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.
         if (bench > research.BenchLevel)
@@ -1036,7 +1037,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     int OperatorsStep(World world, float dt)
     {
         var table = world.Characters;
-        int contributions = 0;
+        int contributions = _townResearch;
         for (int i = 0; i < table.HighWater; i++)
         {
             ref var n = ref table.Next[i];
@@ -1142,42 +1143,42 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Works the machine at the operator's skill: research, crafting, a farm's harvest or tending, else production; then the operating XP.
+    /// Works the machine at the operator's skill (<see cref="WorkStep"/>); then the operating XP.
     /// </summary>
     void WorkMachine(World world, int i, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt, ref int contributions)
     {
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
         m.Operators++;
+        cold.Operating = WorkStep(world, i, cold, m, dt, ref contributions);
+        OperatingXp(world, cold, m.Data.Stat, dt);
+    }
+
+    /// <summary>
+    /// The building's work step (<c>Task_OperateMachine</c>'s update calls the building's slot <c>0x4b0</c> once <c>tryOperate</c> passes,
+    /// <c>FUN_14035bc90</c>, <b>Verified</b>) at the operator's skill: research, crafting, a farm's harvest or tending, else production; true when
+    /// it worked.
+    /// </summary>
+    bool WorkStep(World world, int i, CharacterCold cold, Machine m, float dt, ref int contributions)
+    {
         var stat = (StatsEnumerated)m.Data.Stat;
         float skill = m.Data.Stat > 0 ? Effective(cold, stat) : -1;
 
         // No clamp on s: a stat above 100 lifts it past 1.4 (Verified, FUN_1408852a0 hands the lerp straight to the work slot in FUN_14035bc90).
         float s = skill < 0 ? 1 : Lerp(0.5f, 1.4f, skill / 100);
-        bool worked;
-        if (m.Data.IsResearch)
-        {
-            worked = ResearchStep(world, m, s, dt, ref contributions);
-        }
-        else if (m.Data.IsCrafting)
+        if (m.Data.IsResearch) return ResearchStep(world, m, s, dt, ref contributions);
+        if (m.Data.IsCrafting)
         {
             m.Smith = world.Characters.IdOf(i);
-            worked = CraftStep(world, m, skill, s, dt);
-        }
-        else if (m.Farm is not null)
-        {
-            m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
-
-            // A growing crop with water is tended: the operator plays the farm's clip (engine reading of task 87's start conditions,
-            // docs/game/buildings-production.md "Farming").
-            worked = HarvestStep(world, m, skill, s, dt) || Tended(m);
-        }
-        else
-        {
-            worked = ProduceStep(world, m, s, dt);
+            return CraftStep(world, m, skill, s, dt);
         }
 
-        cold.Operating = worked;
-        OperatingXp(world, cold, m.Data.Stat, dt);
+        if (m.Farm is null) return ProduceStep(world, m, s, dt);
+
+        m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
+
+        // A growing crop with water is tended: the operator plays the farm's clip (engine reading of task 87's start conditions,
+        // docs/game/buildings-production.md "Farming").
+        return HarvestStep(world, m, skill, s, dt) || Tended(m);
     }
 
     /// <summary>

@@ -38,11 +38,19 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// A worker of goal 189 at its building: with row 87 first in its plan it operates the machine, with row 92 first it empties the output, with row
-    /// 93 it fills the inputs from what it carries. Goal 190 (221) only pretends: nothing for the production system.
+    /// 93 it fills the inputs from what it carries. Goal 190 pretends (row 221), which operates the machine as 87 does: <c>Task_OperateMachine</c>
+    /// for both, whose update reads no row (<c>FUN_14035bc90</c>, <b>Verified</b>).
     /// </summary>
     static void WorkAtMachine(AiMind mind, TaskType goal, TownBuilding? building)
     {
-        if (goal != TaskType.AutoLabouringMines || building is null) return;
+        if (building is null) return;
+        if (goal == TaskType.AutoLabouringMinesPretend)
+        {
+            if (mind.Step == TaskType.PretendToOperateMachinery) mind.WorkOperate = building;
+            return;
+        }
+
+        if (goal != TaskType.AutoLabouringMines) return;
         if (mind.Step == TaskType.OperateMachinery) mind.WorkOperate = building;
         else if (mind.Step == TaskType.CollectOutputResource) mind.CollectFrom = building;
         else if (mind.Step == TaskType.FillMachine) mind.FillTo = building;

@@ -47,7 +47,7 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The towns' buildings by run-time key with the faction owning their town (<see cref="TownBuildingIndex"/>).
     /// </summary>
-    Dictionary<string, (TownBuilding Building, int Owner)>? _townBuildings;
+    Dictionary<string, (TownBuilding Building, int Owner, int Site)>? _townBuildings;
 
     /// <summary>
     /// The revision of the towns' building lists <see cref="_townBuildings"/> was made from.
@@ -64,6 +64,12 @@ public sealed partial class ProductionSystem
     /// The machine buildings of registered towns whose machine is not made yet (a ruin until it stands), with the faction owning their town.
     /// </summary>
     readonly List<(TownBuilding Building, int Owner)> _townWaiting = [];
+
+    /// <summary>
+    /// The research contributions the town and outpost workers made this tick (<see cref="TownOperate"/>), which the player's operators continue
+    /// (<c>FUN_140836b70</c>'s falloff counts every bench worked in the tick; serial).
+    /// </summary>
+    int _townResearch;
 
     /// <summary>
     /// What a town machine just made takes from the loaded save: its building's production keys and items (set by the save loader,
@@ -104,14 +110,14 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The town building of a run-time key and the faction owning its town; null for none.
     /// </summary>
-    (TownBuilding Building, int Owner)? TownBuildingOf(string key) => TownBuildingIndex()?.GetValueOrDefault(key);
+    (TownBuilding Building, int Owner, int Site)? TownBuildingOf(string key) => TownBuildingIndex()?.GetValueOrDefault(key);
 
     /// <summary>
     /// The towns' buildings by run-time key with the faction owning their town, made again when the lists change
     /// (<see cref="PopulationData.BuildingsRevision"/>, which also has <see cref="TownMachines"/> look at every registered town again); null
     /// without towns.
     /// </summary>
-    Dictionary<string, (TownBuilding Building, int Owner)>? TownBuildingIndex()
+    Dictionary<string, (TownBuilding Building, int Owner, int Site)>? TownBuildingIndex()
     {
         if (_towns is not { } data) return null;
         if (_townBuildings is not null && _townBuildingsRevision == data.BuildingsRevision) return _townBuildings;
@@ -123,7 +129,7 @@ public sealed partial class ProductionSystem
         foreach (var site in data.Sites)
         {
             int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
-            foreach (var b in site.Buildings) _townBuildings[b.Key] = (b, owner);
+            foreach (var b in site.Buildings) _townBuildings[b.Key] = (b, owner, site.Index);
         }
 
         return _townBuildings;
@@ -337,12 +343,13 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The workers of town machines at their building this tick (serial, before the players' operators): the AI's workers that stand at their
-    /// building doing row 87 operate it (a producer only: a research bench counts for the player's research alone, and a crafting bench with no queue
-    /// refuses an operator, <c>dontNeedWorkRightNow</c>, so both are pretence), those doing row 92 empty its output into their inventory.
+    /// building doing row 87 or 221 operate it (<see cref="TownOperate"/>), those doing row 92 empty its output into their inventory and those doing
+    /// row 93 fill its inputs.
     /// </summary>
     void TownWorkers(World world, float dt)
     {
         var table = world.Characters;
+        _townResearch = 0;
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Next[i].Alive
@@ -356,8 +363,7 @@ public sealed partial class ProductionSystem
             if (MachineFor(world, building, mind.WorkOwner) is not { } m || !Live(world, m)) continue;
             if (mind.FillTo is not null) FillInputs(world, cold, m);
             else if (mind.CollectFrom is not null) TakeOutput(world, cold, m);
-            else if (mind.WorkOperate is not null && (building.RuntimeKey is not { } site || Powered(world, site)))
-                TownOperate(world, i, cold, m, dt);
+            else if (mind.WorkOperate is not null && MachinePowered(world, m)) TownOperate(world, i, cold, m, dt);
         }
     }
 
@@ -366,7 +372,8 @@ public sealed partial class ProductionSystem
     /// AI's plan for 189 (87's list B in order: <c>!63</c>, whose provider is 92; <c>!62</c>, whose provider is 93), a full output is emptied into
     /// the inventory (row 92), else an empty input is filled from what it carries (row 93, <see cref="FillInputs"/>), else the machine is operated
     /// (row 87, <see cref="TownOperate"/>). Fetching an input from another machine and putting output away are walks of the job
-    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>); 190 only pretends (<see cref="PretendXp"/>).
+    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>). 190 pretends (row 221, no list B on the machine's
+    /// state) and operates it as row 87 does, whatever it holds.
     /// </summary>
     void ObedientWorkers(World world, float dt)
     {
@@ -376,30 +383,13 @@ public sealed partial class ProductionSystem
             if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Place: var place } work } cold) continue;
             if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(table.Next[i], place.Building, place.Range)) continue;
 
-            if (!work.Operates)
-            {
-                PretendXp(world, cold, place, dt);
-                continue;
-            }
-
             var m = world.Machines.Find(TownWorkId(place.Building)) ?? TownWork(world, place.Building, place.Owner);
             if (m is null || !Live(world, m)) continue;
 
-            if (m.OutputBlocked) TakeOutput(world, cold, m);
-            else if (m.HasEmptyInputs) FillInputs(world, cold, m);
+            if (work.Operates && m.OutputBlocked) TakeOutput(world, cold, m);
+            else if (work.Operates && m.HasEmptyInputs) FillInputs(world, cold, m);
             else TownOperate(world, i, cold, m, dt);
         }
-    }
-
-    /// <summary>
-    /// An obedient player slave pretending at its workplace on goal 190: row 221 is <c>Task_OperateMachine</c> as 87 is, whose update
-    /// (<c>FUN_14035bc90</c>, <b>Verified</b>) trains the functionality's <c>stat used</c> every frame whatever the machine holds, BF_TRAINING
-    /// excepted (<see cref="OperatingXp"/>). No machine is made for it.
-    /// </summary>
-    void PretendXp(World world, CharacterCold cold, Ai.ObedientWorkplace place, float dt)
-    {
-        if (Data(place.Building.BuildingId) is not { Function: not MachineData.TrainingFunction } data) return;
-        OperatingXp(world, cold, data.Stat, dt);
     }
 
     /// <summary>
@@ -425,20 +415,49 @@ public sealed partial class ProductionSystem
         Ai.AiSystem.AtWork(in n, building.Position, reach) && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
 
     /// <summary>
-    /// One worker's frame at a town producer: a farm's harvest or tending (<see cref="HarvestStep"/>, as the player's operator), else
-    /// <see cref="ProduceStep"/>, at the worker's skill; and the operating XP (the same lines as a player's operator).
+    /// One worker's frame at a town machine, rows 87 and 221 alike (<c>Task_OperateMachine</c>'s update reads no row, <c>FUN_14035bc90</c>,
+    /// <b>Verified</b>): the building's work step at the worker's skill (<see cref="WorkStep"/>, as the player's operator) and the operating XP. A
+    /// research bench's work counts only for a player-owned one (<c>FUN_14029b8d0</c>), so only at an outpost, where it adds to the tick's
+    /// contributions (<see cref="_townResearch"/>); a crafting bench's only for a queued craft (<c>FUN_1402b5a40</c>). A crafting bench does not
+    /// refuse its operator: its <c>dontNeedWorkRightNow</c> (slot <c>0x4e8</c>) is a constant 0 (<c>FUN_1402ab3c0</c>). At a training dummy
+    /// (function 7) the operating XP is skipped and the work step is the dummy's training (<see cref="TrainingXp"/>).
     /// </summary>
     void TownOperate(World world, int slot, CharacterCold cold, Machine m, float dt)
     {
-        if (!(m.Data.IsProducer || m.Farm is not null) || m.Data.IsResearch || m.Data.IsCrafting || m.Output is null) return;
-        m.Operators++;
-        var stat = (StatsEnumerated)m.Data.Stat;
-        float skill = m.Data.Stat > 0 ? Effective(cold, stat) : -1;
-        float s = skill < 0 ? 1 : Lerp(0.5f, 1.4f, skill / 100);
-        if (m.Farm is not null) m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
+        // tryOperate (slot 0x4f8, FUN_1400f8030) refuses while the bench needs no work: the player's research bench with no current research.
+        if (m.Data.IsResearch && CanResearch(world, m) && world.Research.Queue.Count == 0) return;
 
-        cold.Operating = m.Farm is not null ? HarvestStep(world, m, skill, s, dt) || Tended(m) : ProduceStep(world, m, s, dt);
+        if (m.Data.IsTraining)
+        {
+            m.Operators++;
+            cold.Operating = true;
+            TrainingXp(cold, m.Data, dt);
+            return;
+        }
+
+        m.Operators++;
+        cold.Operating = WorkStep(world, slot, cold, m, dt, ref _townResearch);
         OperatingXp(world, cold, m.Data.Stat, dt);
+    }
+
+    /// <summary>
+    /// The residents pretend-operating a workstation or training dummy of their home (row 221, <see cref="Ai.AiMind.PretendAt"/>, set once the seat
+    /// act has them there), as <see cref="TownOperate"/>: at a dummy its training, else the operating XP in the piece's <c>stat used</c>. A
+    /// research or crafting bench's work step makes nothing for them (the player's faction only, a queued craft only).
+    /// </summary>
+    void HomePretenders(World world, float dt)
+    {
+        var table = world.Characters;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { Ai: { PretendAt: { Record: { } record } } mind } cold) continue;
+
+            bool there = mind.Behaviour == Ai.AiBehaviour.Sit && (CharacterTask)table.Next[i].Task == CharacterTask.Idle;
+            if (!Able(cold) || !there || Data(record) is not { } data) continue;
+
+            if (data.IsTraining) TrainingXp(cold, data, dt);
+            else OperatingXp(world, cold, data.Stat, dt);
+        }
     }
 
     /// <summary>
