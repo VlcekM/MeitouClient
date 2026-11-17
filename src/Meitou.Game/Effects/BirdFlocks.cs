@@ -187,9 +187,9 @@ public sealed class BirdFlocks
     const float FarSpawn = 1000, NeighbourRadius = 100, WideNeighbourRadius = 1000, FrustumMargin = -10;
     /// <summary>
     /// Below this height over the ground a bird climbs at <c>ClimbRate</c>; the height error is divided by <c>HeightScale</c>; π for a turn of a
-    /// reversed heading; a follower aims this far beside its mate (units).
+    /// reversed heading; a follower aims this far beside its mate; a returning bird aims this far beside its target (units).
     /// </summary>
-    const float TooLow = 30, ClimbRate = 5, HeightScale = 2000, TurnPi = 3.14159f, FollowOffset = 100;
+    const float TooLow = 30, ClimbRate = 5, HeightScale = 2000, TurnPi = 3.14159f, FollowOffset = 100, ReturnOffset = 200;
 
     /// <summary>
     /// The kinds that fly (a speed and a spawn count above 0).
@@ -408,8 +408,8 @@ public sealed class BirdFlocks
         {
             case BirdState.Return:
                 {
-                    float dz = b.Target.Z - b.Position.Z;
-                    var aim = new Vector3(b.Target.X, b.Position.Y, b.Target.Z) + Normalise(new Vector3(dz, 0, b.Position.X - b.Target.X)) * dz;
+                    var side = Normalise(new Vector3(b.Target.Z - b.Position.Z, 0, b.Position.X - b.Target.X));
+                    var aim = new Vector3(b.Target.X, b.Position.Y, b.Target.Z) + side * ReturnOffset;
                     if (inside) b.Timer = 0;
                     return aim - b.Position;
                 }
