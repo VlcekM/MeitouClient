@@ -28,8 +28,8 @@
     "areas": "Slaves, Squads, Saves"
   },
   "dmlen": {
-    "commits": 9,
-    "areas": "Benchmarks, Proton saves, Tracers"
+    "commits": 10,
+    "areas": "Benchmarks, Crossbow bolt tracers"
   },
   "lucasskrewer": {
     "commits": 23,
@@ -48,8 +48,8 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 82,
-    "areas": "Mods, Launcher, Squads, Inventory, Animals"
+    "commits": 120,
+    "areas": "Code mods, Squads, Bags, Launcher"
   },
   "robgreen490": {
     "commits": 4,
