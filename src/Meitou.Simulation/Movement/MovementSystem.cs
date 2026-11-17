@@ -1364,6 +1364,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     const float CorridorSlack = 4;
 
     /// <summary>
+    /// How near the terrain a walker off the mesh must stand to count as on the bare ground, and how far to each side its slope is measured
+    /// (<see cref="OnSteepTerrain"/>, engine choice).
+    /// </summary>
+    const float OnTerrainSlack = 2, SlopeProbe = 4;
+
+    /// <summary>
+    /// The rise per unit of the navmesh's terrain slope limit (<see cref="Navigation.ZoneGeometryGatherer.TerrainSlopeDegrees"/>), for
+    /// <see cref="OnSteepTerrain"/>.
+    /// </summary>
+    static readonly float SteepRise = MathF.Tan(Navigation.ZoneGeometryGatherer.TerrainSlopeDegrees * MathF.PI / 180);
+
+    /// <summary>
     /// How near the last point of a path counts as arrived (<b>Verified</b>, the nav agent's <c>FUN_140144440</c>: 0.01 squared Havok units, 1 unit);
     /// the agent brakes into it (<see cref="PathAcceleration"/>), so a walker stops on its goal rather than a stride short of it.
     /// </summary>
@@ -2072,7 +2084,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         bool escaping = inHole && held && !s.Steering && EscapesToward(walk, n, cold, p.Position, x, z);
         if (escaping) y = p.Position.Y;
 
-        if (stands || offSurface && walk.IsWalkable(x, z) || escaping)
+        // On bare terrain too steep for the mesh (a cliff face, #894) it follows the ground toward its path.
+        bool descending = !escaping && inHole && held && !s.Steering && DescendsToward(walk, n, cold, p.Position, x, z);
+        if (descending) y = walk.TerrainHeight(x, z);
+
+        if (stands || offSurface && walk.IsWalkable(x, z) || escaping || descending)
         {
             n.Position = new Vector3(x, y, z);
             if (s.Speed > 0.1f && !s.Facing) n.Yaw = MathF.Atan2(s.Dir.X, s.Dir.Y);
@@ -2102,16 +2118,43 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// <paramref name="z"/>): only nearer its path's current point, and only when that point is a surface it can stand on, so it walks out and never
     /// further in (docs/game/pathfinding.md "Own builder", shoved into furniture).
     /// </summary>
-    static bool EscapesToward(IWalkability walk, in CharacterHot n, CharacterCold cold, Vector3 from, float x, float z)
+    static bool EscapesToward(IWalkability walk, in CharacterHot n, CharacterCold cold, Vector3 from, float x, float z) =>
+        NearerPathPoint(n, cold, from, x, z) is { } point && walk.TryStand(point.X, point.Z, from.Y, out _);
+
+    /// <summary>
+    /// Whether a walker standing on the bare terrain where it is too steep for the mesh (a cliff face) may follow the terrain to
+    /// (<paramref name="x"/>, <paramref name="z"/>): only nearer its path's current point, and only when that point is a surface at the point's own
+    /// height, however far above or below the walker it lies (docs/game/pathfinding.md "Shoved into furniture").
+    /// </summary>
+    static bool DescendsToward(IWalkability walk, in CharacterHot n, CharacterCold cold, Vector3 from, float x, float z) =>
+        OnSteepTerrain(walk, from) && NearerPathPoint(n, cold, from, x, z) is { } point && walk.TryStand(point.X, point.Z, point.Y, out _);
+
+    /// <summary>
+    /// The walker's path's current point when the step to (<paramref name="x"/>, <paramref name="z"/>) comes nearer it than
+    /// <paramref name="from"/>; null without a path or when the step does not.
+    /// </summary>
+    static Vector3? NearerPathPoint(in CharacterHot n, CharacterCold cold, Vector3 from, float x, float z)
     {
-        if ((n.Flags & (ushort)MoveFlags.HasPath) == 0 || n.PathCursor >= cold.Path.Length) return false;
+        if ((n.Flags & (ushort)MoveFlags.HasPath) == 0 || n.PathCursor >= cold.Path.Length) return null;
 
         var point = cold.Path[n.PathCursor];
         var aim = new Vector2(point.X, point.Z);
-        if (Vector2.Distance(new Vector2(x, z), aim) >= Vector2.Distance(new Vector2(from.X, from.Z), aim))
-            return false;
+        return Vector2.Distance(new Vector2(x, z), aim) < Vector2.Distance(new Vector2(from.X, from.Z), aim) ? point : null;
+    }
 
-        return walk.TryStand(point.X, point.Z, from.Y, out _);
+    /// <summary>
+    /// Whether <paramref name="at"/> is on the terrain itself (within <see cref="OnTerrainSlack"/>, not on a building's floor) where it is
+    /// steeper than the navmesh's terrain slope limit (<see cref="Navigation.ZoneGeometryGatherer.TerrainSlopeDegrees"/>), measured
+    /// <see cref="SlopeProbe"/> to each side.
+    /// </summary>
+    static bool OnSteepTerrain(IWalkability walk, Vector3 at)
+    {
+        if (MathF.Abs(at.Y - walk.TerrainHeight(at.X, at.Z)) > OnTerrainSlack) return false;
+
+        float dx = walk.TerrainHeight(at.X + SlopeProbe, at.Z) - walk.TerrainHeight(at.X - SlopeProbe, at.Z);
+        float dz = walk.TerrainHeight(at.X, at.Z + SlopeProbe) - walk.TerrainHeight(at.X, at.Z - SlopeProbe);
+        float rise = MathF.Sqrt(dx * dx + dz * dz) / (2 * SlopeProbe);
+        return rise > SteepRise;
     }
 
     /// <summary>

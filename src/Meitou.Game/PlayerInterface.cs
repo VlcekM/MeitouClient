@@ -488,6 +488,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public void Draw(DebugOverlay o, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         InterfaceSounds.PollUiSounds();
+        StatsWindow.PollStatHover();
         Width = width;
         Height = height;
         BiomeBanner.PollBiome();

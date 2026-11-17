@@ -17,9 +17,14 @@ sealed class StatsWindow(PlayerInterface player)
     internal StatHelpCatalog StatHelp = new();
 
     /// <summary>
-    /// The stat whose description shows, by its number as text (Katanas at first).
+    /// The stat whose description shows, by its number as text (none at first).
     /// </summary>
-    internal string SelectedStat = ((int)StatsEnumerated.Katanas).ToString(CultureInfo.InvariantCulture);
+    internal string SelectedStat = "";
+
+    /// <summary>
+    /// Whether the window was open at the last <see cref="PollStatHover"/>.
+    /// </summary>
+    bool _statsOpen;
 
     /// <summary>
     /// The category titles are the catalog's own words in dashes ("-Weapons-"): the layout has no text for them (docs/native-ui.md). Each column's
@@ -98,7 +103,25 @@ sealed class StatsWindow(PlayerInterface player)
         MaxColumnLines - VanillaLines((int)column) - ModSkills.All.Count(s => s.Column == column) - pending;
 
     /// <summary>
-    /// The stat rows of the first selected character: each column's headings, labels and values (a click shows the stat's description).
+    /// Once a frame: the description shows the stat whose row is under the pointer and keeps the last one once the pointer leaves the rows; the
+    /// window opens with none (docs/game/ui-screens.md).
+    /// </summary>
+    internal void PollStatHover()
+    {
+        bool open = player.FaithfulScreens.IsOpen("stats");
+        if (open && !_statsOpen) SelectedStat = "";
+        _statsOpen = open;
+
+        if (open && player.FaithfulScreens.HitTest(player.Mouse) is { Screen: "stats", Control.Action: var action }
+            && action.StartsWith("stat:", StringComparison.Ordinal))
+        {
+            SelectedStat = action[5..];
+        }
+    }
+
+    /// <summary>
+    /// The stat rows of the first selected character: each column's headings, labels and values (pointing at a row or clicking it shows the
+    /// stat's description).
     /// </summary>
     internal void AddStatsContent(List<UiControl> controls)
     {

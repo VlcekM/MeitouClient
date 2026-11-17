@@ -103,7 +103,7 @@ public static class HeldSave
     public static void Write(
         FcsRecord state, CharacterCold cold, SavedCharacterLink? loaded, FixtureRegistry fixtures, IReadOnlyDictionary<string, FcsRecord> buildings)
     {
-        if (cold.SentenceLength > 0 || state.Floats.ContainsKey("psts"))
+        if (cold.SentenceStart > 0 || cold.SentenceLength > 0 || state.Floats.ContainsKey("psts"))
         {
             state.Ints["sentence"] = (int)cold.SentenceStart;
             state.Floats["psts"] = cold.SentenceLength;

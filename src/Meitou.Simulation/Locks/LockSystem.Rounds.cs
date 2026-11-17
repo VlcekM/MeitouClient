@@ -436,8 +436,8 @@ public sealed partial class LockSystem : IStateHashed
     /// The release rounds are driven by each goal-211 jailer (the finder <c>FUN_1408cf3c0</c>, <b>Verified</b>): the cages of its town and faction
     /// within one zone cell of it (<c>FUN_1409fc450</c>, <c>FUN_1409fb880</c>: the 3 x 3 cells round the jailer, a building of the given town and
     /// faction), the first in list order whose prisoner is held, up, served and not already being freed; no radius, no nearest-jailer choice.
-    /// <b>Engine choice</b>: a served prisoner of a booking faction is freed by the system only when no NPC of that faction holds goal 211 in its
-    /// hours.
+    /// <b>Engine choice</b>: a served prisoner of a booking faction is freed by the system only when it had a sentence and no NPC of that faction
+    /// holds goal 211 in its hours.
     /// </summary>
     void ReleaseSweep(World world, ref int started)
     {
@@ -469,10 +469,16 @@ public sealed partial class LockSystem : IStateHashed
         for (int s = 0; s < table.HighWater; s++)
         {
             if (table.Next[s].Alive && Served(world, s) is { } cage && !holders.Contains(cage.Owner) && Crimes.Factions.Books(cage.Owner)
-                    && !Busy(table.IdOf(s)))
+                    && Sentenced(table, s) && !Busy(table.IdOf(s)))
                 world.Fixtures.Release(world, table.IdOf(s), cage.Owner, Crimes, jailer: true);   // nobody to do it: the booking jail frees it (engine)
         }
     }
+
+    /// <summary>
+    /// Whether the prisoner in <paramref name="s"/> was given a sentence (a booked bounty sets its start, also for one under an hour long): the
+    /// engine's release frees only those, not a character that walked in or was put in without a bounty.
+    /// </summary>
+    static bool Sentenced(CharacterTable table, int s) => table.Cold(s) is { } c && (c.SentenceStart > 0 || c.SentenceLength > 0);
 
     /// <summary>
     /// The cage of the prisoner in <paramref name="s"/> when it is held, awake, its sentence served and not an enemy of the cage's faction

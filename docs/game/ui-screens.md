@@ -991,6 +991,10 @@ Stats Affected and Ways To Train headings with bullet rows. The right starts wit
 a thin Next Level bar and percentage, followed by Description and wrapped prose.
 Help text is available from the installed [gettext catalog](../formats/gettext.md).
 
+**Observed** in the original (1.0.68): the description shows the stat whose row (label or value, attribute or skill) is under the pointer, with
+no click. It keeps the last stat pointed at once the pointer leaves the rows, and a click pins nothing: pointing at another row shows that one.
+The description is empty each time the window opens, until the pointer reaches a row. Meitou: the same; a click on a row still shows it.
+
 **Levels and Next Level** (**Verified** decompile): a row's value is `floorf(stat × character vfunc 0x398)` (`FUN_1408aaa10`), the bar and its
 `{1,num}%` the fraction `stat - floorf(stat)` (`FUN_1408ab4d0`); both read the raw stat (`FUN_140884ac0` with flag 1, no injury factor). So
 the number only rises when the bar fills.

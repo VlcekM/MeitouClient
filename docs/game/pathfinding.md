@@ -259,6 +259,10 @@ crossed the chest's hole (the ground floor 66 below), every step was refused and
 -51119,2797, scratch sim, PR #230): its path was found, every step was refused, the GoTo dropped after 3 asks and it stood for good; with the rule it walks out and arrives.
 Inside the Storm House's shop counter and tables the mesh is not cut, so a walker there just walks out. The original lets such a walker out (**Observed**, Kenshi 1.0.68, #460's save: the walker inside the chest walked out to its saved goal, -55397,-12831,
 read from a quicksave about ten game minutes after the load).
+A walker standing on the bare terrain where it is steeper than the mesh's 40° terrain limit follows the terrain toward its path's current point, when that point is
+a surface at the point's own height, however far below or above the walker it lies (engine choice, `MovementSystem.DescendsToward`). **Observed** (Kenshi 1.0.68, #894's
+save, a cliff face at -69242,1074.6,-41946 where the pointer shows no walkable ground nearby, the path's next point 31 below): ordered to the cliff's foot, the walker
+walked down it and arrived within 6 s.
 A polygon within `EdgeTolerance` counts across a zone border too (`NavWorld.TryEdgePoint` looks in the next zone's mesh when its own has none; engine
 choice). **Observed** (#774, the issue's save, Iron Valley zone 33.24 at 4614,-36197, `meitou-tools probe --nav`): a hole in the mesh east of the
 zone line x 4608, about 36 square, which the original's `tile33.24` lacks too; a character in it got a path whose first point lay on the line, the
