@@ -248,9 +248,10 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
   player animals' race-goal jobs (`CaptiveJob.PlayerSide`) end once one runs or can start (a blocked order does not end them).
 - A row needing no melee threat (`PlayerOrders.NeedsNoThreat`: `!158` in list B, of the orders only 146 Turret gunner) is blocked while `CombatSystem.ImmediateThreat` holds; at a
   decision its running order ends (`TaskEnd.Stopped`) and waits unstarted, so the gunner falls through to self-defence and mans the turret again once the threat is gone (S3).
-  An owner's `IOrderOwner.StillHolds` does the same for its own start conditions: an operate or gunner order (87, 146) whose machine has no power
-  ([state 93](game/ai-tasks.md)) ends, waits unstarted and says "It needs electricity." again. This differs from the original, whose plan step ends such an
-  order and pops it once its list B (93) fails while the row runs ([precedence](game/ai-tasks.md#precedence)).
+  An owner's `IOrderOwner.StillHolds` does the same for its own start conditions (combat's and first aid's orders). An operate or gunner order (87, 146)
+  whose machine loses power ends and leaves the queue by its list B (state 93, `RowStates`), silently, as the original's plan step ends and pops it
+  (`FUN_14050d970` → `FUN_14050d7d0`, **Verified** by decompile; a power cut during the walk ends it once the row starts there); given unpowered it waits
+  with "It needs electricity.".
   A Loot order (26) walks through a fight; once its window is open the loot ends (`TaskEnd.Done`, closing it) while a threat is within 40 (`Task_Loot_Order`'s update,
   `CarrySystem.HoldWindow`, [carry-loot](game/carry-loot.md)).
 - Group orders keep their pickers (the nearest or first character that can run it: pick up, loot, stealth KO, the turret, item pick-up, containers, lock work); only that character

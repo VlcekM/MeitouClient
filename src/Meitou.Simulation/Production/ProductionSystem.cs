@@ -505,12 +505,6 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// A running operate or turret order stops when its machine loses power (state 93, <see cref="Unpowered"/>).
-    /// </summary>
-    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
-        order.Site is not { } id || Site(world, id) is not { } site || world.Machines.Find(id) is not { } m || !Unpowered(world, order, site, m);
-
-    /// <summary>
     /// Whether the order operates or mans a machine (rows 87 and 146, which need state 93) that has no power (<see cref="Powered"/>).
     /// </summary>
     bool Unpowered(World world, OrderEntry order, BuildSite site, Machine m) =>

@@ -105,6 +105,7 @@ public static class RowStates
             StateType.IsWorking or StateType.IsWorkingPretend => false,
             StateType.IsBuildingComplete => BuildingComplete(world, target.Site),
             StateType.IsBuildingDamaged => BuildingDamaged(world, target.Site),
+            StateType.BuildingHasPower => HasPower(world, target.Site),
             StateType.DoorIsOpen => Door(world, target.Site) is { } open
                 && (open.Motion == DoorMotion.Open || open.Motion == DoorMotion.Opening && open.OpenAmount > OpenPast),
             StateType.DoorIsBroken => Door(world, target.Site) is { DoorBroken: true },
@@ -180,6 +181,18 @@ public static class RowStates
     /// </summary>
     static bool BuildingDamaged(World world, string? site) =>
         site is not null && world.Buildings.Find(site) is { Complete: true } building && building.Progress < building.Target;
+
+    /// <summary>
+    /// 93 BUILDING_HAS_POWER (<c>FUN_140596ab0</c>, <b>Verified</b>): false without an object target; a machine's power by its grid
+    /// (<see cref="Production.ProductionSystem.MachinePowered"/>; one drawing nothing passes); true for a building that is no machine.
+    /// </summary>
+    static bool HasPower(World world, string? site)
+    {
+        if (site is null) return false;
+        if (world.Machines.Find(site) is not { } machine) return true;
+
+        return world.SystemOf<Production.ProductionSystem>() is not { } production || production.MachinePowered(world, machine);
+    }
 
     /// <summary>
     /// 54 isDoorLocked (<c>FUN_1405a00c0</c>, <b>Verified</b>) for an object target: its lock (slot 0x400) locked, neither it nor its owner broken
