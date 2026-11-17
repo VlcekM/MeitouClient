@@ -112,7 +112,7 @@ static class SaveProbe
             case ("talk", >= 1): Talk(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : null); return true;
             case ("converse", >= 1): Converse(probe, a[0], a.Skip(1).Select(int.Parse).ToList()); return true;
             case ("storage", >= 2): Storage(probe, a[0], float.Parse(a[1])); return true;
-            case ("containers", >= 1): Containers(probe, float.Parse(a[0])); return true;
+            case ("containers", >= 1): Containers(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 0); return true;
             case ("shopgrid", >= 1): ShopGrid(probe, a[0]); return true;
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
@@ -1097,28 +1097,20 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The containers within <paramref name="radius"/> of the leader: building, record, lock, own items, and the building shop whose stock
-    /// container each is, with the size its trader window starts at; then each home's squad with its template's vendor lists and, for a building
-    /// shop, its trader window as it would open now.
+    /// The containers within <paramref name="radius"/> of the leader (<see cref="ContainerLines"/>), again after <paramref name="more"/> more ticks
+    /// when above 0 (the host's published lock state read before them, as each frame does); then each home's squad with its template's vendor lists
+    /// and, for a building shop, its trader window as it would open now.
     /// </summary>
-    static void Containers(ProbeWorld probe, float radius)
+    static void Containers(ProbeWorld probe, float radius, int more)
     {
         var world = probe.World;
+        ContainerLines(probe, radius);
 
-        foreach (var f in world.Fixtures.All.Where(f => f.Contents is not null && Vector3.Distance(f.Position, probe.LeaderPosition) < radius))
+        if (more > 0)
         {
-            Console.WriteLine($"container {f.Id} building={f.Building} '{probe.Db.Find(f.RecordId)?.Name}' at {f.Position:F0} "
-                + $"locked={f.Lock?.Locked} own={f.Contents!.Items.Count}");
-            foreach (var it in f.Contents.Items)
-                Console.WriteLine($"    {it.Name} x{it.Quantity} ({it.Type}){(it.Unique ? " unique" : "")}");
-
-            foreach (var q in world.Squads.All)
-            {
-                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.Holds(f.Id)) continue;
-
-                var (columns, rows) = shop.ViewSize;
-                Console.WriteLine($"  stock container of squad {q.Id} '{q.Name}' template={q.TemplateId} window={columns}x{rows}");
-            }
+            probe.Tick(more);
+            Console.WriteLine($"-- after {more} more ticks");
+            ContainerLines(probe, radius);
         }
 
         foreach (var q in world.Squads.All.Where(q => q.HomeBuilding is { } h && Vector3.Distance(h.Position, probe.LeaderPosition) < radius))
@@ -1128,6 +1120,34 @@ static class SaveProbe
                 + $"shop={shop} tick={world.Tick}");
             VendorLists(probe, q.TemplateId);
             if (q.Shop is { Building: not null } open) ShopWindow(probe, open);
+        }
+    }
+
+    /// <summary>
+    /// The containers within <paramref name="radius"/> of the leader: building, record, lock (its own state and as published to the host), own
+    /// items, and the building shop whose stock container each is, with the size its trader window starts at and its restock.
+    /// </summary>
+    static void ContainerLines(ProbeWorld probe, float radius)
+    {
+        var world = probe.World;
+
+        foreach (var f in world.Fixtures.All.Where(f => f.Contents is not null && Vector3.Distance(f.Position, probe.LeaderPosition) < radius))
+        {
+            var spot = world.Fixtures.ContainerSpots.FirstOrDefault(c => c.Id == f.Id);
+            Console.WriteLine($"container {f.Id} building={f.Building} '{probe.Db.Find(f.RecordId)?.Name}' at {f.Position:F0} "
+                + $"locked={f.Lock?.Locked} level={f.Lock?.Level} broken={f.Lock?.Broken} effective={f.Lock?.EffectivelyLocked} "
+                + $"published={spot?.Locked} owner={f.Owner} own={f.Contents!.Items.Count}");
+            foreach (var it in f.Contents.Items)
+                Console.WriteLine($"    {it.Name} x{it.Quantity} ({it.Type}){(it.Unique ? " unique" : "")}");
+
+            foreach (var q in world.Squads.All)
+            {
+                if (q.Shop is not { } shop || shop.Building != f.Building || !shop.Holds(f.Id)) continue;
+
+                var (columns, rows) = shop.ViewSize;
+                Console.WriteLine($"  stock container of squad {q.Id} '{q.Name}' template={q.TemplateId} window={columns}x{rows} "
+                    + $"fills={shop.Fills} restock={shop.NextRestockTick} tick={world.Tick} interior shown={q.HomeInteriorShown}");
+            }
         }
     }
 
@@ -1772,7 +1792,8 @@ static class SaveProbe
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
-              containers <radius>      containers near the leader: their items, building shop stock in each, homes with vendor lists and trader window
+              containers <radius> [ticks]  containers near the leader: their items, lock (own and published), building shop stock in each and its
+                                       restock, again after ticks more; homes with vendor lists and trader window
               shopgrid <squad>         a building shop's trader window as a trade builds it: items, cells, the grid as text
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators

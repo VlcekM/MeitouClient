@@ -146,6 +146,13 @@ public sealed class Squad
     /// </summary>
     public long NextHomeFillTick { get; set; }
     /// <summary>
+    /// Whether one of the player's characters has stood in or on the squad's home building since the squad was made (its town loaded): the
+    /// original builds that building's interior parts (BuildingInterior <c>+0x10</c>) then and keeps them until the building unloads, and no restock
+    /// fills the home meanwhile (<see cref="Trading.TradeSystem"/>, docs/game/economy.md "Building shops"). Not saved, as the original's parts are
+    /// not; hashed while set.
+    /// </summary>
+    public bool HomeInteriorShown { get; set; }
+    /// <summary>
     /// The squad's AI packages and the one running (<see cref="Ai.AiSystem"/>); null for a squad the AI does not run.
     /// </summary>
     public Ai.Blackboard? Ai { get; set; }
@@ -353,6 +360,7 @@ public sealed class SquadRegistry
             if (s.Dead) hasher.Add(0x44656164);
             if (s.Autonomous) hasher.Add(0x4175746F);
             if (s.Independent) hasher.Add(0x496E6470);
+            if (s.HomeInteriorShown) hasher.Add(0x496E7472);
             if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
             if (s.AutonomyOwner is { } owner)
             {

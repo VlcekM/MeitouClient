@@ -381,11 +381,14 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the wages and the shops; then the open trade follows the selection and lasts while its
-    /// parties are there (<see cref="Parties"/>), and the customer's walk opens the trade in talk range (<see cref="Approach"/>).
+    /// Every tick the homes a player character shows (<see cref="MarkShownHomes"/>); every <see cref="TradeSettings.CheckEveryTicks"/> the wages and
+    /// the shops; then the open trade follows the selection and lasts while its parties are there (<see cref="Parties"/>), and the customer's walk
+    /// opens the trade in talk range (<see cref="Approach"/>).
     /// </summary>
     public void SlowWorld(World world)
     {
+        MarkShownHomes(world);
+
         if (world.Tick % Settings.CheckEveryTicks == 0)
         {
             // The wages first: a new squad's members are paid as they are made (Character::giveBirth), before its shop's first fill sets the
@@ -579,6 +582,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     readonly Dictionary<string, SquadTemplate?> _templates = new(StringComparer.Ordinal), _homeTemplates = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The buildings the player's characters stand in or on at this check (<see cref="MarkShownHomes"/>), kept to spare an allocation.
+    /// </summary>
+    readonly HashSet<string> _playerBuildings = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The template of <paramref name="id"/> when it is a squad template with a shop, cached; null otherwise.
     /// </summary>
     SquadTemplate? TemplateOf(string id)
@@ -638,6 +646,42 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     bool PlayersSquad(World world, Squad squad) =>
         squad.Faction >= 0 && (squad.Faction == world.Player.Faction || squad.Faction == _data.PlayerFaction);
+
+    /// <summary>
+    /// Marks the squads whose standing home building a player character is in or on (<see cref="Squad.HomeInteriorShown"/>): the original's interior
+    /// view (<c>FUN_1407f7230</c>, every frame over the player's characters, <c>PlayerInterface</c> <c>+0x2b0</c>) builds the interior parts of each
+    /// building such a character's location (slot 59) names (<c>FUN_140562540</c>, <c>FUN_140561d10</c>), and they stay until the building unloads.
+    /// Every tick, as the original's every frame.
+    /// </summary>
+    void MarkShownHomes(World world)
+    {
+        PlayerBuildings(world);
+        if (_playerBuildings.Count == 0) return;
+
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.HomeInteriorShown || squad.HomeBuilding is not { } home || !_playerBuildings.Contains(home.Key)) continue;
+
+            if (!world.Fixtures.IsDestroyed(home)) squad.HomeInteriorShown = true;
+        }
+    }
+
+    /// <summary>
+    /// Gathers into <see cref="_playerBuildings"/> the building each living player character stands in or on (<see cref="Perception.SightMap.LocationOf"/>).
+    /// </summary>
+    void PlayerBuildings(World world)
+    {
+        _playerBuildings.Clear();
+        var table = world.Characters;
+
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { IsPlayer: true }) continue;
+
+            int place = world.Sight.LocationOf(s);
+            if (place >= 0) _playerBuildings.Add(world.Sight.PlaceKey(place));
+        }
+    }
 
     /// <summary>
     /// Makes a trader squad's shop and its first fill.
@@ -770,7 +814,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     {
         if (world.Tick < squad.NextHomeFillTick) return;
 
+        // While the home's interior is shown the refill waits without moving its time, as the original's restock (FUN_1404ff5e0).
         bool first = squad.NextHomeFillTick == 0;
+        if (!first && squad.HomeInteriorShown) return;
+
         squad.NextHomeFillTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);
         StockHome(world, home, template, new Trader(squad.Town, squad.Faction, template.BuyMult, template.BuysStolen, template.BuysIllegal),
             (ulong)squad.Id, first);
@@ -900,6 +947,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             // Not while an item lifted from the window is held (it goes back to the grid it came from), nor before a save's goods are handed over.
             bool held = shop.View.Live && world.Player.Held?.From.Holder == ItemHolder.Stock;
             if (home is null || BoxesOf(world, shop, out _).Count == 0 || held || shop.View.Pending) return;
+
+            // A restock (not the first fill) waits, its time unmoved, while a player character has shown the home's interior (FUN_1404ff5e0
+            // returns while the building's BuildingInterior +0x10 is set).
+            if (shop.Fills > 0 && squad.HomeInteriorShown) return;
 
             shop.Stock = FillGrid(shop);
         }

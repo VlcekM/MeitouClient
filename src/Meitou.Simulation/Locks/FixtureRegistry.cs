@@ -187,9 +187,19 @@ public sealed partial class FixtureRegistry
     #region Published spots
 
     /// <summary>
-    /// The container spots last built (null: build them again).
+    /// The container spots last built (null: gather the containers and build them again).
     /// </summary>
     IReadOnlyList<ContainerSpot>? _containerSpots;
+
+    /// <summary>
+    /// Every container with an inventory, gathered when <see cref="_containerSpots"/> is built from nothing.
+    /// </summary>
+    List<Fixture> _containerList = [];
+
+    /// <summary>
+    /// The key of the containers' lock state <see cref="_containerSpots"/> was built for.
+    /// </summary>
+    ulong _containerSpotsKey;
 
     /// <summary>
     /// Every cage (null: build it again).
@@ -252,14 +262,42 @@ public sealed partial class FixtureRegistry
     List<Fixture>? _doorList;
 
     /// <summary>
-    /// Where the containers with an inventory stand, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
+    /// Where the containers with an inventory stand, for the host's picking; the list is gathered again (serial phases) when a building registers
+    /// or goes, the spots whenever a container's lock, level or owner changed, whoever changed it (a pick, a cut, a shop's restock relocking, #833).
     /// </summary>
-    public IReadOnlyList<ContainerSpot> ContainerSpots => _containerSpots
-            ??= [.. _all.Where(f => f.Contents is not null).Select(f
+    public IReadOnlyList<ContainerSpot> ContainerSpots
+    {
+        get
+        {
+            if (_containerSpots is null) _containerList = [.. _all.Where(f => f.Contents is not null)];
+
+            ulong key = ContainerLockKey(_containerList);
+            if (_containerSpots is not null && key == _containerSpotsKey) return _containerSpots;
+
+            _containerSpotsKey = key;
+            return _containerSpots = [.. _containerList.Select(f
                     => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw)
                     {
                         Town = FixtureTown.Of(f),
                     })];
+        }
+    }
+
+    /// <summary>
+    /// A key over what a container spot publishes that can change in place: each container's effective lock, lock level and owner.
+    /// </summary>
+    static ulong ContainerLockKey(List<Fixture> containers)
+    {
+        ulong key = 0x426f78 ^ (ulong)containers.Count;
+        for (int i = 0; i < containers.Count; i++)
+        {
+            var f = containers[i];
+            key = Rng.Mix(key ^ (ulong)i) ^ ((ulong)(uint)(f.Lock?.Level ?? 0) << 16) ^ ((ulong)(uint)f.Owner << 40)
+                ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 62 : 0);
+        }
+
+        return key;
+    }
 
     /// <summary>
     /// Every cage, for the host's picking; the list is rebuilt (serial phases) when a building registers or goes, the spots only when a cage's lock,

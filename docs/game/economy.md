@@ -164,8 +164,17 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   stock only for `is trader`; a home building (0) never makes a squad stock, it fills the home's containers (`FUN_14095b9d0`) and returns, retried next update, when the building or its interior is missing. So a housed
   trader with prisoners stocks its home like one without (Meitou `TradeSystem.Stock`). **Verified** (`FUN_14095b210`): it gathers the building's containers (`FUN_1409562f0`) and returns when there are none, so a home without stock containers gets nothing and Meitou makes no squad shop for it either (the base and mod data in the install: 268 shop templates with a level-data home, all with containers).
   A faction test (`+0x250 == 0`) gates both. `FUN_14095b210` also refuses a child object (door, mounted turret; [squad factory](factions-squads-towns.md)). So a resident without `is trader` (e.g. `flotsam refuge`, vendors `house contents`) gets its home's containers stocked. A trader template with no `vendors` but a designation list is filled the same way (`TradeSystem.HomeTemplateOf` accepts a trader whose vendors are empty; one with vendors goes through the shop path); in the merged base and mod data one template is affected (Ninja Gang of rebirth.mod: `is trader`, designation list, no `vendors`), none of the base game.
-- **Restock** (`ActivePlatoon::vfunc_4` calls `FUN_1404ff5e0(platoon, 0)` once `inventory refresh time` passes): the home branch skips a building whose interior object's `+0x10` is set;
-  the first fill passes 1 and never skips.
+- **Restock** (`ActivePlatoon::vfunc_4` calls `FUN_1404ff5e0(platoon, 0)` once `inventory refresh time` passes): the home branch skips a building whose interior object's `+0x10` is set,
+  returning before the next refresh time is set (`+0x1f8`, `vendors refresh time` hours on), so it retries every update; the first fill passes 1 and never skips. **Observed** (decompile): `+0x10` is
+  the interior's parts (`BuildingInterior`, made in `Building::setup` `FUN_140551b20` / `FUN_1405774d0`; built by `FUN_140561bb0` from the record's `interior` list when the interior is
+  turned on, `FUN_140561d10`; freed by its off branch, `FUN_14054b130`). The interior view (`FUN_1407f7230`, every frame over `PlayerInterface` `+0x2b0`, the player's characters) turns
+  on (`FUN_140562540`) every standing building with an interior that one of them is in or on (location, slot 59), and leaving does not turn it off: only the building's unload or
+  destruction (slot 65 `FUN_1405629a0`, the destructor), an interior-editor layout change and the player's own buildings' roof toggle do; `FUN_140781be0` (on/off by argument) has no
+  caller. So a shop the player has stood in restocks only after its town unloaded and loaded again (**Verified** with the Kenshi harness, 1.0.65, #833: the
+  Wanderer standing in the Hub's bar (`Bar blackmarket`, 24 h) through 26 game hours left all its containers unchanged; a quicksave and its load then gave every container new
+  stock at once). Meitou (`Squad.HomeInteriorShown`, `TradeSystem.MarkShownHomes`): set each
+  tick for a squad whose home a living player character is in or on, kept until the squad leaves the world with its town; then a building shop's restock and a
+  home's refill wait, their time unmoved (#833).
 - **Production** (**Observed**, a search of the decompile for production-building calls and keys): no filler reads a production building (`FUN_14095b210`, `FUN_14095b9d0`, `FUN_14095a5b0`, `FUN_1409562f0`, `FUN_140958740`, `FUN_140959800`);
   town production reaches a shop only as a worker's ditch into one of its stock containers ([ditching](ai-tasks.md#ditching)), which then sells it until a restock clears it.
 - Meitou, non-traders (`TradeSystem.FillHome`, `StockEmptyHome`): the stock rolls as a building shop's and is spread as below (`HomeStock`); engine choices: the special items are
