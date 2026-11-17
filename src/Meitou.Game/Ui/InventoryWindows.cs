@@ -710,6 +710,9 @@ sealed class InventoryWindows(PlayerInterface player)
 
         if (columns == 0) return new(DropKind.Section, window, section, 0, 0, b, slot.Clip, takes);
 
+        // Outside the grids the item lies upright, as the placement sets it (a turned 4 x 5 Large Backpack fits the 5 x 4 bag slot).
+        if (h.Rotated && !InventoryCommands.IsGridSection(section)) h = h.Turned();
+
         float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns;
         float ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCellHeight : b.Height / rows;
         bool fits = h.Width <= columns && h.Height <= rows;
