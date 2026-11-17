@@ -156,8 +156,8 @@ sealed class TownPlaceClaims(PopulationData data)
     /// relax or stay. Relaxing takes a chair, else a bar node, else a general node (the original operates furniture of the bar, docs/game/ai-tasks.md
     /// "Town goals", Observed; the node fallbacks are an engine choice); staying home a chair, dummy or workstation of the home, its nest's pieces
     /// round it included (<see cref="SeatsOf"/>). Sitting around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it
-    /// still relaxes or stays (engine choice: reassigning every pass in member order moved every later sitter to another chair whenever one came or
-    /// went); the seats kept, and those a character sits on by an order (the player's Use), are reserved for every squad first
+    /// still relaxes (engine choice: reassigning every pass in member order moved every later sitter to another chair whenever one came or went), and
+    /// its piece while staying home is its current goal (<see cref="ClaimSeat"/>); the seats kept, and those a character sits on by an order (the player's Use), are reserved for every squad first
     /// (<see cref="ReserveSeats"/>).
     /// </summary>
     public void ClaimSeats(World world, Blackboard board, Squad squad)
@@ -182,19 +182,21 @@ sealed class TownPlaceClaims(PopulationData data)
                 sits |= roles[g].Task.Type == TaskType.StayInHome;
             }
 
-            ClaimSeat(world, board, s, id, relaxes, sits && !relaxes, cold.Ai.SeatUnreachable);
+            ClaimSeat(world, board, s, id, relaxes, sits && !relaxes, cold.Ai);
         }
     }
 
     /// <summary>
     /// One member's seat of <see cref="ClaimSeats"/>: the one it kept, else a free one of the building its goal names; one that relaxes and stays
-    /// no longer, or gave its seat up, leaves it to the next member.
+    /// no longer, or gave its seat up, leaves it to the next member. Staying home keeps its piece only while 43 is the member's current goal: the
+    /// finder keeps a target already set, but a candidate that is not the current goal has its target cleared and draws again
+    /// (<c>FUN_14050df10</c>), so a member not on it draws anew at each pass.
     /// </summary>
-    void ClaimSeat(World world, Blackboard board, int slot, CharacterId id, bool relaxes, bool sits, bool unreachable)
+    void ClaimSeat(World world, Blackboard board, int slot, CharacterId id, bool relaxes, bool sits, AiMind mind)
     {
         var building = relaxes ? board.Home : board.OwnHome;
         bool kept = _kept.TryGetValue(slot, out var old);
-        if (!relaxes && !sits || unreachable || building is null)
+        if (!relaxes && !sits || mind.SeatUnreachable || building is null)
         {
             if (kept) Release(world, board, old);
             return;
@@ -204,12 +206,16 @@ sealed class TownPlaceClaims(PopulationData data)
         var taken = TakenOf(building);
         int had = kept ? seats.IndexOf(old) : -1;
         if (had >= 0 && Operated(world, seats.At(had).Position)) had = -1;
-        if (had >= 0 && (relaxes || StaysAt(old.Kind)))
+        bool staying = StaysAt(old.Kind) && mind.Goal?.Task.Type == TaskType.StayInHome;
+        if (had >= 0 && (relaxes || staying))
         {
             taken.Add(had);
             Claim(world, board, slot, old);
             return;
         }
+
+        // A redraw may draw its own piece again: the reservation of the seats held last pass keeps it from the others only.
+        if (had >= 0) taken.Remove(had);
 
         int seat = relaxes ? BarSeat(building, board.BarTable, taken) : FreeFurniture(world, seats, taken, id);
         if (seat < 0 && relaxes && building.IsOutdoorTable) board.SeatClaims[slot] = new HomeSpot(HomeSpotKind.General, building.Position, building.Yaw);
@@ -552,7 +558,7 @@ sealed class TownPlaceClaims(PopulationData data)
 
     /// <summary>
     /// A piece staying home takes, drawn at random from those no one claimed (the finder draws from its list, <c>FUN_1409fb020</c> with
-    /// <c>FUN_1409b3b40</c>); -1: none free.
+    /// <c>FUN_1409b3b40</c>), a new draw at each pass (the roll keyed by the tick); -1: none free.
     /// </summary>
     static int FreeFurniture(World world, HomeSeats seats, HashSet<int> taken, CharacterId who)
     {
@@ -560,7 +566,9 @@ sealed class TownPlaceClaims(PopulationData data)
         for (int i = 0; i < seats.Count; i++)
             if (!taken.Contains(i) && StaysAt(seats.At(i).Kind)) free++;
         if (free == 0) return -1;
-        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(who), RngPurpose.Think, SeedSalts.AiTarget ^ 0x43), free);
+
+        ulong salt = SeedSalts.AiTarget ^ 0x43 ^ (ulong)world.Tick << 8;
+        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(who), RngPurpose.Think, salt), free);
         for (int i = 0; i < seats.Count; i++)
             if (!taken.Contains(i) && StaysAt(seats.At(i).Kind) && pick-- == 0) return i;
         return -1;

@@ -845,7 +845,8 @@ public sealed class AiMind
     public AiGoal? Goal { get; set; }
 
     /// <summary>
-    /// The goal's plan (<see cref="TaskPlanner"/>), leaf first: the step carried out is the first. Planned again at every think.
+    /// The goal's plan (<see cref="TaskPlanner"/>), leaf first: the step carried out is the first. A planned goal keeps it while it stays the current
+    /// goal, its running step ending by its own tests (<see cref="PlanSteps"/>); a goal that is its own plan is planned again at every think.
     /// </summary>
     public List<PlanStep> Plan { get; } = [];
 
@@ -872,6 +873,12 @@ public sealed class AiMind
     /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal (docs/game/ai.md "Packages and goals").
     /// </summary>
     public double CommitUntil { get; set; }
+
+    /// <summary>
+    /// The tick its current goal was taken up (<see cref="AiSystem"/>'s act-out): an engine task started before it does not displace that goal's plan.
+    /// Runtime only: not saved or hashed.
+    /// </summary>
+    public long GoalTick { get; set; }
 
     /// <summary>
     /// Where its town goal goes (a node, a shop, a town; null: not picked yet, picked when the goal is acted out).
@@ -1255,7 +1262,13 @@ public sealed class AiMind
         }
 
         hasher.Add((int)(Goal?.Task.Type ?? TaskType.None));
-        hasher.Add((int)Step);
+        hasher.Add(Plan.Count);
+        foreach (var step in Plan)
+        {
+            hasher.Add((int)step.Type);
+            hasher.Add(step.Target.Kind);
+            hasher.Add(step.Target.Position);
+        }
         hasher.Add((int)Behaviour);
         hasher.Add(Version);
         hasher.Add(Post);

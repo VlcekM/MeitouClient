@@ -1240,26 +1240,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         world.SystemOf<Combat.CombatSystem>() is { } combat && BodySystem.Senses(world, combat, slot, c).Enemies > 0;
 
     /// <summary>
-    /// <c>Town::hasGates</c> (slot 94, Town <c>+0x3b0</c> set; 0 for TownBase), <b>engine reading</b>: a gate
-    /// (<see cref="Meitou.Data.World.TownBuildings.IsGate"/>) among the town's level buildings, or a complete one among a player town's sites.
+    /// <c>Town::hasGates</c> (<see cref="TownExit.HasGates"/>).
     /// </summary>
-    bool HasGates(World world, CampaignTown town)
-    {
-        if (town.Site >= 0)
-        {
-            return data.Sites[town.Site].Buildings.Any(b => data.Db.Find(b.BuildingId) is { } r
-                    && Data.World.TownBuildings.IsGate(data.Db, r, _gateFunctions));
-        }
-
-        foreach (var site in world.Buildings.All)
-        {
-            if (site.Town == town.PlayerTown && site.Complete && data.Db.Find(site.Record) is { } r
-                    && Data.World.TownBuildings.IsGate(data.Db, r, _gateFunctions))
-                return true;
-        }
-
-        return false;
-    }
+    bool HasGates(World world, CampaignTown town) => TownExit.HasGates(world, data, town, _gateFunctions);
 
     /// <summary>
     /// The intruder finder's stand-in for <c>amInsideTownWalls</c> where the gate codes are unknown (<b>engine reading</b>): a placed town's radius,
@@ -1270,8 +1253,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The centre of a town (its site's, else its player town's).
     /// </summary>
-    Vector2 Centre(World world, CampaignTown town) =>
-        town.Site >= 0 ? Flat(data.Sites[town.Site].Position) : world.Buildings.FindTown(town.PlayerTown) is { } t ? Flat(t.Position) : default;
+    Vector2 Centre(World world, CampaignTown town) => TownExit.Centre(world, data, town);
 
     /// <summary>
     /// The reach of a town: a placed town's radius, a player town's farthest building from its centre.
@@ -1294,22 +1276,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     Vector2 Outside(World world, CampaignTown town)
     {
         _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
-        if (town.Site >= 0) return TownExit.Of(data.Sites[town.Site], _locks?.Regions, world.Fixtures.IsDestroyed);
-        return TownExit.Of(Centre(world, town), ExitCandidates(world, town));
-    }
-
-    /// <summary>
-    /// The player town's complete buildings as exit candidates: each one's point and whether it is a way through (an unlocked gate, or a linking
-    /// building with an interior).
-    /// </summary>
-    IEnumerable<(Vector2, bool)> ExitCandidates(World world, CampaignTown town)
-    {
-        foreach (var site in world.Buildings.All)
-        {
-            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r) continue;
-            bool gate = Data.World.TownBuildings.IsGate(data.Db, r, _gateFunctions) && !(_locks?.Regions?.CodeAt(site.Position) > 0);
-            yield return (Flat(site.Position), gate || r.GetBool("links together") && r.GetReferences("interior").Count > 0);
-        }
+        return TownExit.Of(world, data, _locks?.Regions, town, _gateFunctions);
     }
 
     #endregion

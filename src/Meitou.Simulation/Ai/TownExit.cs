@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data;
 using Meitou.Data.World;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Population;
@@ -43,6 +44,71 @@ public static class TownExit
         foreach (var (at, qualifies) in sites) if (qualifies) return Away(centre, at);
         return centre;
     }
+
+    /// <summary>
+    /// A town's point by its handle: a placed town's (destroyed buildings left out), a player town's over its complete sites (a gate outside the
+    /// walls, or a building that links together with an interior). <paramref name="cache"/> is the caller's functionality cache (not shared
+    /// between threads).
+    /// </summary>
+    public static Vector2 Of(World world, PopulationData data, IGateRegions? regions, CampaignTown town, Dictionary<string, GameRecord?> cache)
+    {
+        if (town.Site >= 0) return Of(data.Sites[town.Site], regions, world.Fixtures.IsDestroyed);
+
+        return Of(Centre(world, data, town), PlayerExits(world, data, regions, town, cache));
+    }
+
+    /// <summary>
+    /// <c>Town::hasGates</c> (slot 94, Town <c>+0x3b0</c> set; 0 for TownBase), <b>engine reading</b>: a gate
+    /// (<see cref="TownBuildings.IsGate"/>) among a placed town's buildings, or a complete one among a player town's sites.
+    /// </summary>
+    public static bool HasGates(World world, PopulationData data, CampaignTown town, Dictionary<string, GameRecord?> cache)
+    {
+        if (town.Site >= 0)
+        {
+            foreach (var b in data.Sites[town.Site].Buildings)
+                if (data.Db.Find(b.BuildingId) is { } r && TownBuildings.IsGate(data.Db, r, cache)) return true;
+            return false;
+        }
+
+        foreach (var site in world.Buildings.All)
+        {
+            if (site.Town == town.PlayerTown && site.Complete && data.Db.Find(site.Record) is { } r && TownBuildings.IsGate(data.Db, r, cache))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The centre of a town (its site's, else its player town's).
+    /// </summary>
+    public static Vector2 Centre(World world, PopulationData data, CampaignTown town)
+    {
+        if (town.Site >= 0) return Flat(data.Sites[town.Site].Position);
+
+        return world.Buildings.FindTown(town.PlayerTown) is { } t ? Flat(t.Position) : default;
+    }
+
+    /// <summary>
+    /// The player town's complete buildings as exit candidates: each one's point and whether it is a way through (an unlocked gate, or a linking
+    /// building with an interior).
+    /// </summary>
+    static IEnumerable<(Vector2, bool)> PlayerExits(World world, PopulationData data, IGateRegions? regions, CampaignTown town,
+        Dictionary<string, GameRecord?> cache)
+    {
+        foreach (var site in world.Buildings.All)
+        {
+            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r) continue;
+
+            bool gate = TownBuildings.IsGate(data.Db, r, cache) && !(regions?.CodeAt(site.Position) > 0);
+            yield return (Flat(site.Position), gate || r.GetBool("links together") && r.GetReferences("interior").Count > 0);
+        }
+    }
+
+    /// <summary>
+    /// A point on the ground plane (X, Z).
+    /// </summary>
+    static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
     /// <summary>
     /// The point <see cref="Offset"/> beyond <paramref name="at"/> on the way out from <paramref name="centre"/>; the centre when the two are

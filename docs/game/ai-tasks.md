@@ -453,7 +453,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 56 | `DOOR_IS_BROKEN` |
 | 57 | `AT_LOCATION_BUILDING_DOOR` |
 | 58 | `AT_CURRENT_LOCATION_BUILDING_DOOR` |
-| 59 | `DESTINATION_IS_ACCESSIBLE` |
+| 59 | `DESTINATION_IS_ACCESSIBLE`: `FUN_140597030` with default false; 168 the same with default true (**Verified**). The building is the target's (a character's indoor building, vfunc 0x1d8), else with no target the mover's destination building (`_destinationInsideBuilding`, `FUN_140793230`); none, or the one the walker is in: true; a door of that building (`imADoor`, its `DoorStuff` parent the building): true; an animal it keeps out (AI slot 101 false and no `allow animals`, `FUN_140547500`): the default; else `hasAnOpenDoor`. Meitou: `PlanContext.Accessible` in the main planner, the door chain (85, 72, 78, 81; 285, 76 where restricted rows are open) folded in by the repertoire and `LockSystem.WayThrough`; [locks](locks.md#locked-doors-on-the-way) |
 | 60 | `LOCATION_IS_ACCESSIBLE` |
 | 62 | `machineHasEmptyInputs` (`FUN_1405974e0`, **Verified**): a building target has an empty input, [Blocked output](buildings-production.md#blocked-output) |
 | 63 | `isMachineOutputFull` (`FUN_1405a2ba0`, **Verified**): building slot 175, status `+0x468` == 1 for the production family; Meitou: evaluated for a machine target |
@@ -513,7 +513,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 120 | `TARGET_LOOKS_LIKE_A_SLAVE` |
 | 121 | `CARRYING_EXCESS_LOOT` (`FUN_14059b7b0`, **Verified**): true when the AI's inventory (`AI+0x308`) holds an item passing the stolen predicate `FUN_14079e550` ([carry-loot](carry-loot.md#stolen-ownership)), else when the worn backpack's inventory (`FUN_1405cb320`, the CONTAINER in the back slot) does. The collector `FUN_140748d40` passes a constant strict = 1 to `FUN_140748bc0`, so the second call's 0 is not forwarded (**Observed**, decompiled signature); the collector also lists nested items. The only row naming it is 184 |
 | 122 | `hasTools` |
-| 123 | `IS_WORKING` |
+| 123 | `IS_WORKING`: 123 and 136 share the evaluator thunk `0x14002fb1c`, which jumps to `0x1405974d0`, whose bytes are `32 c0 c3` (return false; **Verified**, installed `kenshi_x64.exe`). So 87's and 221's list A never holds and 189 / 190 (effects 123 / 136) always plan their row. Meitou: false |
 | 124 | `isTargetEscapee` |
 | 125 | `TARGET_IS_CONSCIOUS` (`FUN_14099a480`, **Verified**): a character target not down (carried, ragdolled), unconscious or dead; a non-character target true, none false; no row provides it |
 | 126 | `AT_LOCATION_BUILDING_DOOR_OUTSIDE` |
@@ -521,12 +521,12 @@ from the decompile and agree with this table, except that the decompile shows no
 | 128 | `isAlly` |
 | 129 | `TARGET_IS_ARRESTED` |
 | 130 | `ALARMS_IN_THE_VICINITY` |
-| 131 | `atPackageTarget` |
+| 131 | `atPackageTarget` (`FUN_140506d30`, **Verified**; row 215's list A): true without a platoon (AI `+0x10`). The target is the platoon's package target (`FUN_140796120`): the override package's (`+0x210`, the campaign phase package; `Package_WarBase` `FUN_14028fb10`: its mission target `+0x30`), else the campaign's (war manager vfunc 0x88), else the running package's vtable +0x8 (base `FUN_1402859e0`: the campaign's, else the mission target `+0x30`; `Package_Refugee` `FUN_140288dc0`: a broken one's mission target, else its mission town `+0x10`), kind 1 for a character hand, else 0. Kind 0: unresolved true; a town with gates (vfunc 0x2f0, `hasGates`) within 250 (squared 62500, `DAT_1416e3460`) of its waypoint point (vfunc 0x38) flat; else within 0.4 (`DAT_141696c90`) of its radius (`FUN_140926d50`, false for an object of type 8 LOCATION). Kind 1: unresolved, within 150 (22500) of the hand's point (the package hands leave it at the origin); state 90 false: within 1.1 (`DAT_14169bb44`) of the target's town radius; the same indoor location: true; `FUN_140597030(target, false)` true (outdoors included): true; else within 100 (10000, `DAT_14168dae4`) of A + (A − B) × 3 (`DAT_14168a254`) of the target's building's first door. Meitou: `PlanContext.AtPackageTarget`, `AiSystem.PackageTarget` (campaign target town; a broken refugee's join squad's leader, else its mission town; the mission target, else a town contract's mission town), state 90 held true as everywhere |
 | 132 | `haveroboAidKit` |
 | 133 | `needsFirstAid_robot` |
 | 134 | `isChained` |
 | 135 | `TARGET_IS_EATEN` |
-| 136 | `IS_WORKING_PRETEND` |
+| 136 | `IS_WORKING_PRETEND`: as 123, always false |
 | 137 | `INTRUDER_IS_OUTSIDE` |
 | 139 | `me swim`: water state 3, deep water, and 0 when held in a bed or cage (`FUN_140598e90` over `FUN_1405c7fd0`, **Verified**) |
 | 140 | `target swimming` |
@@ -557,7 +557,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 165 | `crowdLimit8` |
 | 166 | `iHaveSufficientLockSkill` |
 | 167 | `iHaveSufficientLockSkillForShackles` |
-| 168 | `DESTINATION_IS_ACCESSIBLE_ANIMAL` |
+| 168 | `DESTINATION_IS_ACCESSIBLE_ANIMAL`: 59 with default true |
 | 169 | `isMachineInputInvalid` |
 
 ## Stranger states
@@ -910,19 +910,22 @@ is acted on in the same character update (`FUN_1405c7c30`: CharBody slot 1 `FUN_
 | `Task_TownStalker` (165), `Task_FollowAndTalk` (164; case `0xa4` always installs it) | `FUN_14033bc90`: the character's conversation has ended and so has its target's (or the target does not resolve), or its melee threat flag +0x2b0 is set | same | same |
 | `Task_TravelToMissionTarget_ArmyFormation` (215) | `FUN_140349de0`: the leader of the character's platoon's campaign (the faction's war manager, +0x88, `FUN_140283500` → `CampaignInstance` slot 5 `FUN_140285820`: its lead hand +0x80, a character, or a squad's leader `FUN_140792b90`) is the character; else +0x78, which the update sets only for that leader once its mover arrived | as running (+0x78 0) | same |
 
-Meitou (`TaskFinishes.Of`, `TaskFinished`): `TaskFinished.Fresh` is the never-run answer, asked by the done test of `PlanContext.TryPlan` for every goal, the current one too (the
-original ends a current goal's running root task by its slot 4 and list A, then drops the goal at the re-pick by the never-run answer, which implies the running one for every
-class). `TaskFinished.Unfinished` is the running answer, behind the second x1.25 (`AiSystem.Score` with the plan's step, `DecisionSystem.PickGoal` with `CharacterCold.Running`);
-where Meitou's plan names the goal, the act-out names the original's task: a fight (`Attack`) is 4 or 227, or Task_RangedAttack's 262 (base) with `CombatSlot.Ranged`; a
-treatment 25 (60, 249 and 269 answer the same); a lift (`PickUp`) 68; a loot its start's row. Melee reads `CombatSlot.TargetSlot` and `CombatSystem.Playing`; Stumble the hit
-reaction (`StumbleClip` until `StunUntil`); Talk `DialogueSystem.Talking` and `CharacterFacts.ImmediateThreat`; Formation the squad leading its platoon's campaign
-(`CampaignInstance.Leader`) with the character its leader (215's list A, state 131, is not wired and never holds, so this changes no drop yet); a move counts as updated once
-its act-out has had a tick. The fight answer raises a running fight goal below 1 (the `goal-fights` golden scenario). Still different: no goal or plan step Meitou runs is of the
-Announcement, Stumble or Talk classes (147, 164 and 165 are engine systems, 103 and 129 not acted out), so their answers are never asked; Meitou re-plans at every think
-instead of ending a running step by its slot 4 and list A, and tests the current goal's list A whatever step runs; an act-out an engine reaction started is read as the
-current goal's task. The order step and the job pass ask no generic list-A test, so no slot 4: an order leaves when its act-out ends (`ITaskHandler.Done`,
-`PlayerOrders.Prepare`), a job by its contributor's rules (152's `!62` in `ProductionSystem.Blocked`, a base-class row). In the original, list A never pops a running order of an own-end class
-(26, 225, 246) and never skips a job of an own-end or move class.
+Meitou (`TaskFinishes.Of`, `TaskFinished`): `TaskFinished.Fresh` is the never-run answer, asked by the done test of `PlanContext.TryPlan` for every goal but the current one
+(the scorer's drop, `FUN_14050df10`). `TaskFinished.Unfinished` is the running answer, asked by the plan step for the running step (`PlanSteps`, [precedence](#precedence)) and
+behind the second x1.25 (`AiSystem.Score` with the plan's step, `DecisionSystem.PickGoal` with `CharacterCold.Running`); where Meitou's plan names the goal, the act-out names
+the original's task: a fight (`Attack`) is 4 or 227, or Task_RangedAttack's 262 (base) with `CombatSlot.Ranged`; a treatment 25 (60, 249 and 269 answer the same); a lift
+(`PickUp`) 68; a loot its start's row; a task an engine reaction or an NPC's engine start runs its start's row (`TaskFinished.EngineRow`). Melee reads `CombatSlot.TargetSlot`
+and `CombatSystem.Playing`; Stumble the hit reaction (`StumbleClip` until `StunUntil`); Talk `DialogueSystem.Talking` and `CharacterFacts.ImmediateThreat`; Formation the squad
+leading its platoon's campaign (`CampaignInstance.Leader`) with the character its leader (215's list A, state 131: [StateType ids](#statetype-ids)); a move counts as updated
+once its act-out has had a tick. The fight answer raises a running fight goal below 1 (the `goal-fights` golden scenario). Still different: no goal or plan step Meitou runs is
+of the Announcement, Stumble or Talk classes (147, 164 and 165 are engine systems, 103 and 129 not acted out), so their answers are never asked. The order step and the job
+pass ask no generic list-A test: an order leaves when its act-out ends (`ITaskHandler.Done`, `PlayerOrders.Prepare`), a job by its contributor's rules (152's `!62` in
+`ProductionSystem.Blocked`, a base-class row). The original (**Verified**): the order step (`FUN_140510920`) pops the front order, read as the running task when it is the one
+running (`FUN_140506b10`), when its list A, its effect test and its slot 4 hold, or when its desire x finder is 0 or less; the job pass (`FUN_14050e5b0`) skips a job whose
+task's slot 4, list A and effect test hold, and one whose row can run but neither acts nor has an effect. The effect test (`FUN_14050c8e0`) holds for a row without an effect
+(or with TaskData `+0x120` set), else when it has no finder or its finder scores 0 or less (`FUN_14060f460`). An empty list A never holds, so of the jobs Meitou's contributors offer only 138 (99, the carried body
+dead) and 242 (147) can be skipped by it (87's 123 is always false, 234 never finishes). List A never pops a running order of an own-end class (26, 225, 246) and never skips
+a job of an own-end or move class.
 
 ## Planner
 
@@ -987,11 +990,23 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   replan request +0x1b0 and either way reaches the chooser call at `14051121f`). Without a request it first runs the plan step `FUN_14050d970`; with one (`AITaskSytem` vfunc 3
   `FUN_140506cf0`: a plan finished, an order added, a stagger (`forceOrderInsert`), `underMeleeAttack` with the fight off unless the target gets up or is player-side and moving,
   [combat](combat.md#fight-lifecycle-and-orders)) it stops the driver's task (vfunc 0x60) and clears `currentGoal` unless it commits and has not expired. So the order queue's front is
-  planned again each update and an uncommitted goal is scored again; a running goal is kept by its score (x1.25, the commitment floor), not by the chooser staying away.
-  The plan step (**Observed**, decompile) tests the driver's running task (`+0x270` -> `+0x68`, the plan's current step, whose null clears `currentGoal`), not the goal: it ends that
-  task (`FUN_14050d7d0`: the plan's next queued task `+0x300` starts through `FUN_14050d540`, else a replan is asked) when the task is finished and its list A holds
-  (`FUN_140513f50`), when its hours are over, when its row can no longer run (`FUN_14060f940`), and, for a running row 1, 67, 82, 83, 120, 121, 163, 199 or 267 with a task
-  queued, when the queued task's row can already run. A fight step still ends only by itself (nothing left, target down, give-up) or when its row stops being runnable.
+  planned again each update and an uncommitted goal is scored again.
+- **The plan's lifecycle** (**Verified**, decompile): a goal's plan is kept and run task by task. Each frame (AI slot 3 `FUN_1405965b0` → `FUN_14050f0b0`) the 20 s
+  unreachable marks (`+0x218`) count down, a replan is asked when no task runs or no goal is current, the next queued task starts when none runs, and the running task ends when
+  its slot 4 says finished, its commitment (`+0x288`, set for committing rows by `FUN_14050d130`) has passed or it does not commit, its list A (`FUN_14060f570`) and its effect
+  test (`FUN_14050c8e0`) hold; a commit row 248 whose commitment passed ends at once. The update's plan step (`FUN_14050d970`, on the update without a replan request) ends the
+  running task (the driver's `+0x270` → `+0x68`) when: (a) slot 4, list A and the effect test hold (`FUN_140513f50`); (b) the mover is idle (vfunc 0x50) and `isAtLocation`
+  is false: the target is marked unreachable for 20 s (`FUN_140796ed0`, the blackboard told) and a replan asked (`+0x26d`); (c) it is a walk row (1, 67, 82, 83, 120, 121, 163,
+  199, 267) and the next queued task's row can already run; (d) the hours (the plan's tasks carry the goal's, `FUN_14050fe10`) are over, or (e) its own list B no longer holds
+  (`FUN_14060f940`), both unless the row has `+0x16`. The end (`FUN_14050d7d0`) starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
+  skipped while `FUN_14060f0c0` holds, all of list A and a list A or an effect, else a replan is asked), else asks a replan and clears the goal unless it commits and has not
+  expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; the
+  scorer (`FUN_14050df10`) gives the current goal x1.25, the commitment floor 0.4 or cap 0.05 and, below 1 while the running task's slot 4 says not finished, x1.25 again, and
+  drops a candidate that is not current (its target cleared first) when its fresh slot 4 and list A hold, or when it can run but neither acts nor has an effect. After the
+  chooser the update clears `currentGoal` when no task runs. So a walk ends as it arrives (its list A, `isAtLocation`) and the next task or a new plan follows at once; an
+  animal following its leader (141, list B with 59) stops when its leader goes into a building that keeps animals out (59's default false; read with the mover's destination
+  inside the leader's building, **Observed**). A fight step still ends only by itself (nothing left, target down, give-up) or when its row stops being runnable.
+  Meitou: [planner](../simulation.md#planner).
 - **Goal end** (**Verified**, disassembly; fields from KenshiLib `AITaskSytem`: +0x1C0 `currentGoal`, +0x20C its priority, +0x280
   `currentGoalExpiryTime` in game hours):
   - the plan step tests the hours (start < end half-open, overnight otherwise) and whether the row can still run, unless the running task's row has +0x16 set
@@ -1347,7 +1362,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 - **43 Staying home** (`FUN_1408cbc00`): furniture in the home whose BuildingFunction is in mask 0x2049a (bits MINE, RESEARCH, REFINERY, TRAINING,
   CRAFTING, CHAIR; reading the mask as bits is **Observed**). Both it and 275 lead to 221 (pretend operating).
   **Verified** (decompile 2026-11-03): with no target set the finder lists the home interior's buildings that pass the mask (`FUN_1408cbad0`), returns the factor 0 (goal not wanted) when none
-  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0.
+  passes and otherwise draws one at random (`FUN_1409fb020`; no claim test in this finder); a target already set gives 1.0. The scorer clears the
+  target of every candidate that is not the current goal (`FUN_14050df10`, **Verified**), so a resident not on 43 draws again each time it thinks;
+  Meitou draws again at each package cadence while 43 is not the member's current goal (`TownPlaceClaims.ClaimSeat`, the roll keyed by the tick).
   The home is the squad's own building, also under a bar package (**Observed**, 1.0.65, three runs of one Hub save, 10:20 to 13:20: the `hub squatters`, package
   `Squatters` of signal 17, stay at their ruins' campfires and stools, within 120 of where they started), and the furniture its residents' nest stood round it counts
   ([zones](../formats/zones.md#nest-debris-and-loot); a ruin has no interior of its own). Meitou: `HomeSpotKind.Chair` (spots), `Training` and `Workstation`

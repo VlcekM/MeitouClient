@@ -120,13 +120,14 @@ public static class TaskFinished
     /// <summary>
     /// The original's running task for Meitou's act-out, with its character target: a fight is <c>Task_MeleeAttack</c> (4, 227 for an animal) or a
     /// ranged row; a treatment a first aid row (25, 60, 249, 269 all have +0x15); a lift a <c>Task_LiftSomething</c> row; a loot its start's row;
-    /// else <paramref name="planned"/>.
+    /// else <paramref name="planned"/>. A task an engine reaction or NPC start runs (<see cref="EngineRow"/>) is that start's row, not the plan's.
     /// </summary>
     static (TaskType Row, CharacterId Target) RunningRow(World world, int slot, TaskType planned)
     {
         var cold = world.Characters.Cold(slot);
         var task = (CharacterTask)world.Characters.Next[slot].Task;
         var run = cold?.Running is { } r && r.Runs(task) ? r : null;
+        if (EngineRow(world, slot) is { } engine) planned = engine;
         return task switch
         {
             CharacterTask.Attack => (FightRow(world, slot, cold, planned), CharacterId.None),
@@ -147,6 +148,17 @@ public static class TaskFinished
         if (world.SystemOf<CombatSystem>()?.StateOf(world.Characters.IdOf(slot)).Ranged == true) return TaskType.RangedAttack;
 
         return cold is not null && SquadRegistry.IsAnimal(cold) ? TaskType.MeleeAttackAnimal : TaskType.MeleeAttack;
+    }
+
+    /// <summary>
+    /// The row of the task the character runs now when an engine reaction (<see cref="TaskSource.Reaction"/>) or an NPC's engine start
+    /// (<see cref="TaskSource.Npc"/>) started it: in the original those are tasks of their own goals and jobs, which replace the running plan's
+    /// (docs/game/ai-tasks.md "Precedence"). Null for any other.
+    /// </summary>
+    public static TaskType? EngineRow(World world, int slot)
+    {
+        var task = (CharacterTask)world.Characters.Next[slot].Task;
+        return world.Characters.Cold(slot)?.Running is { Source: TaskSource.Reaction or TaskSource.Npc } run && run.Runs(task) ? run.Row : null;
     }
 
     /// <summary>

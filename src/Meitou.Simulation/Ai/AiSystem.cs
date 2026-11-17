@@ -493,9 +493,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static List<(AiGoal Goal, float Score, float Desire)> Candidates => s_candidates ??= [];
 
     /// <summary>
-    /// The goal to act out, with its plan in <see cref="AiMind.Plan"/>: by tier (urgent, non-urgent, fluff), the goals with a positive score highest
-    /// first, leaving out one whose list A already holds; the first whose plan succeeds wins (docs/game/ai-tasks.md "Planner": the pick). Idle when
-    /// none does. With <paramref name="only"/>, only the priority-3 goals that may take over a character the AI does not hold
+    /// The goal to act out, with its plan in <see cref="AiMind.Plan"/>: first the current goal's running step is tested (<see cref="EndStep"/>); then
+    /// by tier (urgent, non-urgent, fluff), the goals with a positive score highest first, leaving out one whose list A already holds; the current goal
+    /// with a step running is kept as it is (<see cref="Kept"/>), else the first whose plan succeeds wins (docs/game/ai-tasks.md "Planner": the pick).
+    /// Idle when none does. With <paramref name="only"/>, only the priority-3 goals that may take over a character the AI does not hold
     /// (<see cref="Preempts"/>) are weighed, and null comes back when none plans.
     /// </summary>
     AiGoal? Choose(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
@@ -504,6 +505,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var race = mind.RaceGoals;
         var candidates = Candidates;
         var plans = PlanContext.Local.Bind(this, world, slot, mind, board);
+        if (only == Restrict.None) EndStep(world, slot, id, mind, squad, board, plans, hour);
 
         // While a goal it committed to is running, only a tier above that goal's priority may take over; if none plans, the goal and its plan stay
         // (FUN_140510ef0 in committed mode, Verified). Not past its hours: the plan step ends a goal's plan then, and the update clears a goal
@@ -545,7 +547,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             for (int k = 0; k < race.Count; k++) Consider(race[k]);
             if (tier == TaskPriority.Urgent && !mind.Player) Consider(SelfPreservationGoal);   // a player character's is the decision step's
             for (int k = 0; k < candidates.Count; k++)
-                if (plans.TryPlan(candidates[k].Goal, candidates[k].Desire)) return candidates[k].Goal;
+            {
+                var g = candidates[k].Goal;
+                if (Kept(mind, g)) return g;
+                if (plans.TryPlan(g, candidates[k].Desire)) return g;
+            }
         }
 
         if (only != Restrict.None) return null;
@@ -561,6 +567,65 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// The plan step before the choice (<see cref="PlanSteps"/>): the current goal's running step ends by its own tests and the next starts; with no
+    /// step left the goal goes, committed or not (the original keeps a committed goal over the next update only for a choice limited to the tiers
+    /// above it, then clears it, <c>FUN_14050d7d0</c>, <c>FUN_140511130</c>; one think here does both), so the choice that follows plans afresh. A
+    /// walk or a stand is first aimed where the act-out goes (<see cref="FollowsWalk"/>).
+    /// </summary>
+    void EndStep(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, PlanContext plans, int hour)
+    {
+        if (mind.Goal is not { } current || !PlanContext.Stepped(current)) return;
+        if (Displaced(world, slot, mind))
+        {
+            mind.Plan.Clear();
+            mind.Goal = null;
+            return;
+        }
+
+        if (FollowsWalk(mind))
+        {
+            var type = current.Task.Type;
+            float desire = Desire(world, TaskBehaviours.Of(type), type, TaskProfiles.Of(type), squad, board, mind, id, current.Task.Target);
+            plans.TryPlan(current, desire, current: true);
+        }
+
+        if (!PlanSteps.Run(world, slot, mind, plans, current, hour)) mind.Goal = null;
+    }
+
+    /// <summary>
+    /// Whether the task running now is an engine reaction's or an NPC engine start's (<see cref="TaskFinished.EngineRow"/>) and not a step of the
+    /// current planned goal's plan, started since that goal was taken up (<see cref="AiMind.GoalTick"/>: an engine stand the act-out keeps, as its
+    /// task is the same, is not news): in the original that task is its own goal's or job's, so the goal Meitou keeps is no longer the current one
+    /// (no continuity) and its plan is over.
+    /// </summary>
+    static bool Displaced(World world, int slot, AiMind mind)
+    {
+        if (mind.Goal is not { } current || !PlanContext.Stepped(current)) return false;
+        if (world.Characters.Cold(slot)?.Running is not { Tick: var since } || since < mind.GoalTick) return false;
+        if (TaskFinished.EngineRow(world, slot) is not { } row || row == current.Task.Type) return false;
+
+        foreach (var step in mind.Plan)
+            if (step.Type == row) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// The pick's keep (<c>FUN_140510650</c>, <b>Verified</b>): a candidate that is the current goal (<c>FUN_140506c00</c>: same type and target)
+    /// while a step of its plan runs is taken as it is, its plan not made again.
+    /// </summary>
+    static bool Kept(AiMind mind, AiGoal candidate) =>
+        mind.Goal is { } current && current.Task.Type == candidate.Task.Type && current.Task.Target == candidate.Task.Target
+        && mind.Plan.Count > 0 && PlanContext.Stepped(current);
+
+    /// <summary>
+    /// Whether the kept plan runs a walk, or the stand at a node it walked to (51): such a plan is made again (engine choice): Meitou has no walk or stand
+    /// task of the plan's own, the goal's act-out walks to its spot and stands there (<see cref="ActOut"/>), and the spots it picks move with the
+    /// package cadence's claims (seats, turrets, town posts) and the guard's visitor spot, so the walk follows where the act-out goes; a failed plan
+    /// keeps the one it has. Once another step runs, the plan is kept as it is.
+    /// </summary>
+    static bool FollowsWalk(AiMind mind) => mind.Step is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.StandAtNode;
+
+    /// <summary>
     /// A candidate goal's score: its desire times its weight and its crowd factor (<see cref="TaskProfile.Crowd"/> per member already on it), the
     /// running goal's continuity, a committed goal's floor or ceiling, and the continuity again below 1 while its running task is not finished.
     /// </summary>
@@ -571,7 +636,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 CrowdTarget(g.Task.Target, squad, board, id), id);
         float score = desire * g.Weight * (crowd > 0 ? MathF.Pow(profile.Crowd, crowd) : 1);
 
-        if (mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target)
+        if (mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target
+            && !Displaced(world, id.Slot, mind))
         {
             score *= Settings.Continuity;
 
@@ -1397,6 +1463,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float ResumeRing = 4;
 
     /// <summary>
+    /// A scratch copy of a plan, one per worker thread (<see cref="PlanAnew"/>).
+    /// </summary>
+    [ThreadStatic] static List<PlanStep>? s_planScratch;
+    /// <summary>
+    /// The calling worker thread's plan scratch, made on its first use.
+    /// </summary>
+    static List<PlanStep> PlanScratch => s_planScratch ??= [];
+
+    /// <summary>
     /// Acts out a goal: sets the movement task it maps to, unless the character is already doing it.
     /// </summary>
     void Act(World world, int slot, AiMind mind, AiGoal goal, Blackboard board)
@@ -1417,6 +1492,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var profile = TaskProfiles.Of(type);
         bool fresh = TakeUp(world, slot, mind, goal, type, profile);
         behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
+        if (fresh) PlanAnew(world, slot, mind, goal, board, profile);
 
         // An animal in a bed has no row that gets it out (116, 208, 257 are not registered for its repertoire): every goal that moves or fights fails
         // to plan, so it lies on with no goal (docs/game/ai-tasks.md "Animals in beds", Verified).
@@ -1460,12 +1536,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var table = world.Characters;
 
-        // A goal taken up anew starts over: a fresh target and, for a goal it commits to, a fresh commitment. So does a committed goal chosen again
-        // after its commitment ran out (engine reading: the original's target finders roll a new target then, so the goal counts as new).
+        // A goal taken up anew starts over: a fresh target and, for a goal it commits to, a fresh commitment. A planned goal stays the current one only
+        // while its plan runs (Kept); once the plan is over it is no longer current (EndStep), so choosing it again is anew. A goal that is its own
+        // plan is chosen again at every think: one it committed to starts over once its commitment ran out (engine reading: the original's target
+        // finders roll a new target then, so the goal counts as new).
         bool fresh = mind.Goal is not { } before || before.Task.Type != type || before.Task.Target != goal.Task.Target
-            || profile.Commits && world.GameHours >= mind.CommitUntil;
+            || profile.Commits && world.GameHours >= mind.CommitUntil && !PlanContext.Stepped(goal);
         if (!fresh) return false;
 
+        mind.GoalTick = world.Tick;
         mind.Walking = false;
         mind.FailedWalks = 0;
         mind.Target = null;
@@ -1485,6 +1564,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// A planned goal taken up anew is planned again once its start is made (a fresh target and node roll, the spots given up tried again), so the plan
+    /// it keeps (<see cref="Kept"/>) walks to where its act-out goes: the scorer clears a candidate's target before it is chosen and its finder draws
+    /// it anew (<c>FUN_14050df10</c>). The choice's plan stays if this one fails.
+    /// </summary>
+    void PlanAnew(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskProfile profile)
+    {
+        if (!PlanContext.Stepped(goal)) return;
+
+        var type = goal.Task.Type;
+        float desire = Desire(world, TaskBehaviours.Of(type), type, profile, mind.Squad, board, mind, world.Characters.IdOf(slot), goal.Task.Target);
+        var kept = PlanScratch;
+        kept.Clear();
+        kept.AddRange(mind.Plan);
+        if (PlanContext.Local.Bind(this, world, slot, mind, board).TryPlan(goal, desire)) return;
+
+        mind.Plan.Clear();
+        mind.Plan.AddRange(kept);
     }
 
     /// <summary>
@@ -2232,13 +2331,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Where 200 Task_LeaveBuilding walks (docs/game/ai-tasks.md): A + (A − B) × 1.1 of the building's first door with a known leaf, A and B its
     /// points 15 either side of the leaf (engine reading of which is outer: the side away from the building's origin). Null: no door known.
     /// </summary>
-    internal static Vector2? LeavePoint(World world, TownBuilding building)
+    internal static Vector2? LeavePoint(World world, TownBuilding building) =>
+        DoorFront(world, building.Key, new Vector2(building.Position.X, building.Position.Z), 1.1f);
+
+    /// <summary>
+    /// A + (A − B) × <paramref name="beyond"/> of the first door of building <paramref name="building"/> with a known leaf (<see cref="DoorExit"/>),
+    /// the outer side the one away from <paramref name="inside"/>; null: no door known.
+    /// </summary>
+    internal static Vector2? DoorFront(World world, string building, Vector2 inside, float beyond)
     {
-        foreach (var door in world.Fixtures.DoorsByBuilding[building.Key])
+        foreach (var door in world.Fixtures.DoorsByBuilding[building])
         {
             if (world.Fixtures.DoorSpotOf(door) is not { } s) continue;
-            return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z),
-                new Vector2(building.Position.X, building.Position.Z));
+            return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z), inside, beyond);
         }
 
         return null;
@@ -2247,13 +2352,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The point outside a door that <c>FUN_140296a40</c> yields (<b>Verified</b>): A + (A - B) x 1.1 with A and B the points 15 either side of the
     /// leaf along its normal; the outer side is the one away from the building's origin (engine reading). Shared by the leave-building task and the
-    /// intruder carry-out.
+    /// intruder carry-out; state 131 takes the same points 3 out (<paramref name="beyond"/>).
     /// </summary>
-    internal static Vector2 DoorExit(Vector2 leafCentre, Vector2 normal, Vector2 building)
+    internal static Vector2 DoorExit(Vector2 leafCentre, Vector2 normal, Vector2 building, float beyond = 1.1f)
     {
         if (Vector2.Dot(normal, leafCentre - building) < 0) normal = -normal;
         Vector2 a = leafCentre + normal * 15, b = leafCentre - normal * 15;
-        return a + (a - b) * 1.1f;
+        return a + (a - b) * beyond;
     }
 
     /// <summary>

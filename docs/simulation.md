@@ -1882,7 +1882,16 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
 
 `TaskPlanner` runs the original's search ([ai-tasks](game/ai-tasks.md#planner)) over `TaskDataTable` (all 253 rows) for the
 goals the engine acts out. The think orders each tier's goals by score, leaves out one whose list A holds, and takes the first
-whose plan succeeds (`AiSystem.Choose`); `AiMind.Plan` holds it leaf first and `AiMind.Step` (hashed) its first step. The goal's
+whose plan succeeds (`AiSystem.Choose`); `AiMind.Plan` holds it leaf first (hashed) and `AiMind.Step` its first step. A goal planned by
+steps (`PlanContext.Stepped`: one whose row acts or has an effect, not acted out by an engine system) keeps its plan as the original does
+([precedence](game/ai-tasks.md#precedence)): each think first runs the plan step (`PlanSteps.Run`: the running step ends by its class's finished
+test and its list A, a walk once the next step can run, else by the goal's hours or its own list B; the next starts, a row that does not act
+skipped while its list A holds; with none left the goal goes), and the current goal with a step left is kept without a new plan
+(`AiSystem.Kept`). Engine choices: the original's per-frame test runs at the think, and a walk's end (followed or given up,
+`MovementSystem.EndWalk`) asks the think at the next tick; a walk or stand step is planned again at each think to where the act-out walks
+(`AiSystem.FollowsWalk`: the spots move with the package cadence's claims); a task an engine reaction or an NPC's engine start runs that is no
+step of the plan (`TaskFinished.EngineRow`, `AiSystem.Displaced`) ends the goal, gives it no continuity and is the running task the finished
+tests read, as the original's own goal and job for it would be. The goal's
 act-out does the walk and the goal's own action; steps of their own are getting out of bed, sheathing and drawing a weapon (one think each,
 then dropped from the plan, so a plan a committed goal keeps goes on to its next step instead of repeating it), going home (19, the GoHome walk),
 entering its home building (156, the same walk), leaving it (200, to A + (A − B) × 1.1 of the home's first door,
@@ -1891,7 +1900,7 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
 - Each character plans with its `Repertoire.Of` category (4, 0x40 crippled or staying low, 0x10, 1, 0x20 animal; so a crippled NPC has no stand-up row and crawls away under threat). Restricted rows (lockpicking, cutting, opening gates) are open to every character whose faction is not the player's, as in the original ([planner](game/ai-tasks.md#planner); the orders-step flag is not planned here). With the held states below, none is ever needed on the way (their states 90, !54, !114 hold), so this changes no plan today; `IPlanWorld.Squadless` keeps its old name for it. A row without a finder wants its effect for its own target. At most 64 nodes per search.
 - A node is made once per row and target (the original allows four copies), so the ancestor-repeat test never fires; a child already
   closed is skipped rather than accepted from the node.
-- Only the step being carried out counts as queued, and only while it can run (Meitou's steps do not end on their own).
+- The kept plan's steps count as queued.
 - Finders: the spots, beds, seats, turrets, towns and (rows 113 / 114 / 242) the ditch storage ([ditching](game/ai-tasks.md#ditching)) the act-outs already pick, at the floor point the walk ends on (`PlanContext.Find`); other finders find nothing,
   so such goals do not plan. Rows on the way have their `TaskProfiles` desire, else 1. The exception is DEFEAT_SQUAD 101, whose plan is the goal alone: the finder's
   pick (`AiSystem.AssaultTargetFor`, [ai-tasks](game/ai-tasks.md#combat-goals)) is sent as an `AttackOrder` by the serial step and the combat system fights it.
@@ -1900,7 +1909,7 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
 - States (`PlanContext.Holds`): location, distance, bed, sitting, home (within 20 of the home), home town, town, weapon drawn, weapon carried
   (`hasWeapon`), carrying, a first aid kit carried (23), the immediate threat (39, `CombatSystem.ImmediateThreat`), deep water (139), a leg down that could be fixed (103, `MedicalState.LegsMessedUp`), inside the home building (107, `AI::iAmInsideTargetBuilding` for a non-building target) and strangers in a private home (141, so a resident does not
   go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; power (93) is the target machine's (`ProductionSystem.MachinePowered`: a town's machine by its level town's generators;
-  true with no machine; a seat target, the claimed piece, by the claim: [town goals](game/ai-tasks.md#town-goals)); moving, getting up, arms, buildings, doors, gates, accessibility, machine operator slots and readiness are held true (movement and the lock rounds deal with doors, gate guards' gates included; the bashers' `DoorPlan` evaluates them); machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
+  true with no machine; a seat target, the claimed piece, by the claim: [town goals](game/ai-tasks.md#town-goals)); moving, getting up, arms, buildings, doors, gates, machine operator slots and readiness are held true (movement and the lock rounds deal with doors, gate guards' gates included; the bashers' `DoorPlan` evaluates them); the destination's accessibility (59, 168: [locks](game/locks.md#doors)) and the package target (131) are evaluated; 123 and 136 are false, as the original's evaluator; machine empty inputs, output full and jammed (62 to 64) are evaluated for a `Targets.Machine` target (a player's
   machine; no finder gives one yet, the town workers' buildings are level data, [Blocked output](game/buildings-production.md#blocked-output)); every other state is false.
 
 Combat goals (`AiBehaviour.Fight`, `AiSystem.Fights.cs`; [combat goals](game/ai-tasks.md#combat-goals)): 16, 21, 144 and 34 attack whom their finder picks (`AggroSystem.FindFoe`:
@@ -1914,7 +1923,7 @@ as attackers (the original's choosers run one after another). That fight is the 
 An engine duty a fight may interrupt (treating, a town errand's walk, a captive job's walk and its meal at a body, #623) is weighed by `Choose` with only the combat goals and 32; any other duty, and a fight the AI did not
 start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fight only its run changes anything); the fight's start ends the duty's task through its handler. Replan triggers
 (`AiMind.Replan`, engine stand-ins): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
-off, the squad mates of the attacker and the attacked), a mate's fight start and the end of its own fight (`CombatSystem.EndFight`); else
+off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
 other character the AI does not hold (fleeing, carried) starts no fight. The members of a squad whose movement the population owns (a loaded roaming platoon or campaign platoon, see "Platoon blackboards" below) or that the AI does not run (a template without packages)
 get an engine-run mind (`AiMind.Engine`, `AiSystem.EngineMinds`): the combat goals of their package for their role and of their race, and Self preservation, weighed on their routine and
@@ -1953,7 +1962,7 @@ A gate's residents are made at the gate guard's spot (engine choice), not the ga
 Defensive Gates is inside the wall about 110 along it from the opening; headless (no door gate, no leaf) they
 are made at the origin and keep that post. Seats are the home's
 interior furniture with a CHAIR functionality (`HomeSpotKind.Chair`; never a standing node), free
-in that building this pass; relaxing falls back to a bar node, then a general node; staying home (43) draws a free chair, training dummy or work piece (mine, research, refinery, crafting) of the home and is not wanted without one ([ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
+in that building this pass; relaxing falls back to a bar node, then a general node; staying home (43) draws a free chair, training dummy or work piece (mine, research, refinery, crafting) of the home, kept only while 43 is the member's current goal and drawn anew at each package cadence otherwise (a candidate that is not current has its finder's target cleared, `FUN_14050df10`, **Verified**), and is not wanted without one ([ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
 claims on its own (`Blackboard.SitClaims`, `TownPlaceClaims.ClaimSitting`): the nearest free chair, throne (BF_THRONE, `HomeSpotKind.ThroneSeat`, sat on like a chair) or, for a character not on the
 player's side, training dummy (BF_TRAINING, `HomeSpotKind.Training`, stood at) in a building of the town it stands in, when that is its squad's home town or owned by the squad's faction and the
 building is owned by the character's faction or the squad's; the throne and dummy pieces, and free-standing chairs, are `TownBuilding.Furniture`. It is not wanted

@@ -737,7 +737,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (n.Task == (byte)CharacterTask.GoTo)
         {
             LogDropped(world, n, cold, following ? "no path found on asking again (the path it followed is dropped)" : "no path found");
-            cold.WalkEnd = WalkEnd.Failed;
+            EndWalk(cold, WalkEnd.Failed);
             TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
             cold.OrderQueue.Clear();
         }
@@ -883,7 +883,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
             : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
         LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
-        cold.WalkEnd = WalkEnd.Failed;
+        EndWalk(cold, WalkEnd.Failed);
         TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
         cold.OrderQueue.Clear();
     }
@@ -898,6 +898,16 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         Console.WriteLine(
             $"order     {cold.Name} blocked on the {part} at tick {world.Tick}, keeps its move and asks again every {BlockedRetrySeconds:0} s; " +
             $"at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
+    }
+
+    /// <summary>
+    /// A walk ended, followed to its end or given up: a character the AI plans for thinks again at its next turn, not at its cadence (the original
+    /// ends a running walk step by its per-frame test and plans again at once, <c>FUN_14050f0b0</c>, <c>FUN_14050d970</c>).
+    /// </summary>
+    static void EndWalk(CharacterCold cold, WalkEnd how)
+    {
+        cold.WalkEnd = how;
+        if (cold.Ai is { Engine: false } mind) mind.Replan = true;
     }
 
     /// <summary>
@@ -1888,7 +1898,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         if (!replaced && n.Task == (byte)CharacterTask.GoTo)
         {
-            cold.WalkEnd = WalkEnd.Finished;
+            EndWalk(cold, WalkEnd.Finished);
 
             // The move order leaves the queue; a queued move after it (shift + right click) starts: a path to it is asked for next tick.
             if (!PlayerOrders.Arrived(cold, ref n)) TaskStart.Step(world.Characters, i, CharacterTask.Idle);

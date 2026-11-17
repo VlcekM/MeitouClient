@@ -248,8 +248,10 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
   attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, a player's character on its way in, cuts (`Lockpicking.CutLock`)
   or picks it (`Lockpicking.Step`, the pick's clip and floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for
-  the player). A picker or cutter puts a weapon in hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's walk is not refused for a destination behind locked doors (engine:
-  no `CanEnter` for the AI); at the door it takes the same way in (its own unlock or a bash). **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
+  the player). A picker or cutter puts a weapon in hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose
+  destination is behind locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock or a bash, as `WayIn` gives; an animal a building keeps
+  out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine walk (an arrest's, an errand's) is not tested.
+  **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities
   family's Longhouse 5565 of his own home town, so a bash desire of 0) stands until the family opens up, then walks out.

@@ -16,12 +16,15 @@ Do not assume every factory Task_Blank goal has no behaviour outside that factor
 dialogue event and already-satisfied A. score=desire*weight*crowdFactor^n*m, n same type/target
 mates, m1.25 for current type/target/second hand. Effect-state evaluation can scale positive
 desire. Sticky current task floors0.4 before commitment expiry, caps0.05 after; while the
-running task's own finished test (slot 4) fails, x1.25 again when score<1 ([finished tests](ai-tasks.md#finished-tests)). Drop nonpositive candidates; B-satisfied/no-effect
-branch also drops. Candidates are keyed by score in an ordered map; while a key is taken the score gets +0.0001 (**Verified**, `FUN_14050df10`), so of equal scores the later-listed goal ranks first (tried highest first, `FUN_140510650`). The default task (IDLE, desire key 0.1, hours 0-100; set by `FUN_14050c030`) is no candidate: `FUN_140510ef0` tries it, at key 1.0, only after priorities 3, 2 and 1 all failed (**Observed**). Desire, commitment and crowd factor per
+running task's own finished test (slot 4) fails, x1.25 again when score<1 ([finished tests](ai-tasks.md#finished-tests)). Drop nonpositive candidates; a candidate that is not current has its target cleared, and is dropped when its fresh slot 4 and list A hold or
+when it can run but neither acts nor has an effect (**Verified**). Candidates are keyed by score in an ordered map; while a key is taken the score gets +0.0001 (**Verified**, `FUN_14050df10`), so of equal scores the later-listed goal ranks first (tried highest first, `FUN_140510650`). The default task (IDLE, desire key 0.1, hours 0-100; set by `FUN_14050c030`) is no candidate: `FUN_140510ef0` tries it, at key 1.0, only after priorities 3, 2 and 1 all failed (**Observed**). Desire, commitment and crowd factor per
 type: [ai-tasks](ai-tasks.md#desire-and-commitment); exact A/B meanings remain unresolved.
 
 The planner (`TaskPathfinder`, [ai-tasks](ai-tasks.md#planner), Observed) chains rows from a goal's effect and unmet B states to the
-rows whose list A achieves them, best-first by desire, and queues the chain leaf first.
+rows whose list A achieves them, best-first by desire, and queues the chain leaf first. The plan is kept and run task by task: a running
+task ends by its own finished test and list A, a walk once the next task can run, or its hours and list B, and the next starts or the AI
+plans again at once; the current goal with a task running is kept by the pick without a new plan (**Verified**,
+[precedence](ai-tasks.md#precedence)).
 Squad toggles inject sleep/ditch/sit goals; slave obedience uses role4. Player commands and job
 queues must coexist without erasing urgent state. Squad-shared sensing, retreat and off-screen
 routing use [perception](perception.md), [population](factions-squads-towns.md), [pathfinding](pathfinding.md).

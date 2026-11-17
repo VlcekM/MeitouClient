@@ -201,6 +201,27 @@ public sealed partial class AiSystem
             : world.Buildings.FindTown(board.Destination.PlayerTown)?.Radius ?? 0;
 
     /// <summary>
+    /// The squad's package target, a town or a character (<c>FUN_140796120</c> over the platoon's <c>FUN_140269b60</c>, <b>Verified</b>): its
+    /// platoon's campaign target while it runs one (<see cref="CampaignInstance.Target"/>); else the running package's (vtable +0x8): a broken
+    /// refugee's squad to join once it has one (its leader), else its mission town (<c>FUN_140288dc0</c>); any other package's mission target
+    /// (<c>FUN_1402859e0</c>: package +0x30), which a contract aimed at a town holds as its mission town (<see cref="Blackboard.AimMissionAtTown"/>).
+    /// Both none: no target.
+    /// </summary>
+    internal (CampaignTown Town, CharacterId Character) PackageTarget(World world, Squad squad, Blackboard board)
+    {
+        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } campaign }) return (campaign.Target, CharacterId.None);
+
+        if (board.CurrentClass == PackageClass.Refugee)
+        {
+            return board.RefugeeBroken && world.Squads.Find(board.RefugeeTarget) is { } join
+                ? (CampaignTown.None, join.Leader)
+                : (board.Destination, CharacterId.None);
+        }
+
+        return board.MissionTarget.IsNone ? (board.ContractTown, CharacterId.None) : (CampaignTown.None, board.MissionTarget);
+    }
+
+    /// <summary>
     /// The town the squad is in, before the package choice (the original's Blackboard +0x138 and its arrival hour +0x140); coming into one, the
     /// leader fires ENTER_TOWN (49).
     /// </summary>
