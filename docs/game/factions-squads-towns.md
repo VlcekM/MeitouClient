@@ -486,10 +486,14 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   (logged), nor any layout of a player-owned building that is not a wall (the name is cleared). With `layout interior` set, a building that does not
   offer it is not housed (`FUN_14055ad40`, before anything changes). A non-empty interior name also becomes the building's display name, then the
   template's `building name` when it has one. Each home has one template (the chooser skips buildings holding another), so the last housing wins:
-  the default resident pass only takes buildings with none. Buildings housed by nobody keep the level state's names. **Observed**, saves (METARU,
+  the default resident pass only takes buildings with none. A building housed by nobody keeps the level state's names, except that a candidate whose
+  level state names a `squad template` is vacated: no template, both layout names empty, nothing furnished, and its building record's name (**Observed**,
+  unmodded saves METARU and redev: World's End's L-House `26.13:748-`, Mud Town's Swamp Dome `22.40:2-` and Trader's Edge's Bughouse `42.22:3119-`,
+  level-named bars and a noble house; Black Scratch's Y-House `50.32:7-`, level-named Ranger Shop, stands empty as `Y-House` in a reporter's video of the original, #922;
+  base data has 16 such buildings). **Observed**, saves (METARU,
   autosaves 1 and 2, redev, Beep Fan Club 1; level buildings of the saved zones): the saved interior name equals the saved `squad template`'s
   `layout interior` for 318 of 324 standing homes in METARU, and the level
-  state's for 590 of 592 buildings with no template. The 6 that differ are [homes saved under a housemate's template](#whose-template-a-home-carries). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
+  state's for 590 of 592 buildings with no template (the other 2 are METARU's vacated L-House and Swamp Dome). The 6 that differ are [homes saved under a housemate's template](#whose-template-a-home-carries). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
   leaves empty (among them every Ash Dome, Cat-Lon's Exile and Ashland Domes I..IV, and the Ancient Tech Lab at zone 2.46: templates `Throne`, `lab`,
   `Lab no.2`); exteriors: 86 replaced, 50 cleared, 67 named.
 - **Chooser** (`FUN_14092e870`, **Verified**): a template with `layout interior` needs a building offering it (own layouts or
@@ -521,7 +525,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   - **Read by** (**Verified**): the squads made for a building (`FUN_14057f820`), the chooser's free test, and
     [For sale](ui-screens.md#selected-building) (`FUN_14029c500`: the template's `sell home`).
   - Meitou: `FixtureRegistry.ResidentsTemplate`: the boot's housing (`ResidentRuins.Apply` writes it into the level state as `residents template`
-    and `squad template`, and empties both for a town building nobody is housed in, since the original drops the level state's), a loaded save's
+    and `squad template`, and empties both for a town building nobody is housed in, since the original drops the level state's; `Vacate` clears a vacated candidate's layouts and name), a loaded save's
     state, a town override's housing, then the template of each squad made from its template with that home (`StampResidents`: a remade squad
     `PopulationSystem.Regenerate`, a save's never-made one `MakeUnmade`). A save writes it under both keys and names the platoon of that template as
     `residents` (`WriteResidents`, `SaveCapture.NameResidents`). A new game's squads are all made at once, housemates first, so every home starts

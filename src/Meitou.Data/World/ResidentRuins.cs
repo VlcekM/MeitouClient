@@ -65,7 +65,7 @@ public static class ResidentRuins
 
                 foreach (var b in list)
                 {
-                    if (!homes.Contains(b)) Vacate(b);
+                    if (!homes.Contains(b)) Vacate(db, b, player);
                 }
             }
             return ruined;
@@ -104,14 +104,31 @@ public static class ResidentRuins
     }
 
     /// <summary>
-    /// A town building nobody is housed in carries no template, whatever its level state names.
+    /// A town building nobody is housed in carries no template, whatever its level state names. A housing candidate whose level state names a
+    /// template also loses that state's layouts and name and takes its building's own (<see cref="Unfurnish"/>).
     /// </summary>
-    static void Vacate(TownBuilding b)
+    static void Vacate(GameDatabase db, TownBuilding b, string? playerFactionId)
     {
         if (b.LevelState is not { } state) return;
 
+        bool templated = state.GetString(SquadTemplateKey).Length > 0;
         if (state.GetString(ResidentsTemplateKey).Length > 0) state.StringTable[ResidentsTemplateKey] = "";
-        if (state.GetString(SquadTemplateKey).Length > 0) state.StringTable[SquadTemplateKey] = "";
+        if (templated) state.StringTable[SquadTemplateKey] = "";
+
+        if (templated && b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId)) Unfurnish(db, b, state);
+    }
+
+    /// <summary>
+    /// Empties a vacated candidate's layout names and gives it its building's name (Observed, unmodded saves METARU and redev: World's End's
+    /// L-House <c>26.13:748-</c>, Mud Town's Swamp Dome <c>22.40:2-</c> and Trader's Edge's Bughouse <c>42.22:3119-</c>, whose level states name a
+    /// bar or noble house and its template, are saved with the building's name and no layouts; the Y-House <c>50.32:7-</c> of Black Scratch,
+    /// level-named Ranger Shop, stands empty and named Y-House in the original, issue #922).
+    /// </summary>
+    static void Unfurnish(GameDatabase db, TownBuilding b, GameRecord state)
+    {
+        state.StringTable[InteriorKey] = "";
+        state.StringTable[ExteriorKey] = "";
+        if (db.Find(b.BuildingId) is { } record) state.StringTable[NameKey] = record.Name;
     }
 
     /// <summary>

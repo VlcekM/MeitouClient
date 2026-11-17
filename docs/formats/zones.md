@@ -87,7 +87,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 
 | Key | Type | Value |
 |---|---|---|
-| `name` | string | display name; housing replaces it ([town residents](../game/factions-squads-towns.md#town-residents)) |
+| `name` | string | display name; housing replaces it, and vacating resets it to the building's ([town residents](../game/factions-squads-towns.md#town-residents)) |
 | `residents` handle, `residents template` | handle, string | the platoon whose home it is and that platoon's SQUAD_TEMPLATE ([which](../game/factions-squads-towns.md#whose-template-a-home-carries)); null / empty with no residents. The reader `FUN_140552b70` drops a non-empty `residents template` (level data's is never used) |
 | `floornum` | int | floor |
 | `destroyed` | bool | +0x1a1 |
