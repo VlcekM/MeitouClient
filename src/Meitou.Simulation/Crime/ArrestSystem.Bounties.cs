@@ -124,7 +124,7 @@ public sealed partial class ArrestSystem : IOrderOwner
                     break;
                 case PutInCageOrder put:
                     foreach (var id in put.Carriers.Count > 0 ? put.Carriers : world.Player.Selection.ToArray())
-                        StartCaging(world, id, put.Cage, put.Queued);
+                        StartCaging(world, id, put);
                     break;
             }
         }
@@ -296,14 +296,15 @@ public sealed partial class ArrestSystem : IOrderOwner
     #region Putting a captive in a cage, and the claim
 
     /// <summary>
-    /// Queues or gives the put-in-cage order (row 108) to a player character carrying a body; <paramref name="chosen"/> names the cage, null:
-    /// the nearest.
+    /// Queues or gives the put-in-cage order (row 108) to a player character carrying a body; the order's cage names it, null: the nearest.
     /// </summary>
-    void StartCaging(World world, CharacterId carrier, string? chosen, bool queued)
+    void StartCaging(World world, CharacterId carrier, PutInCageOrder put)
     {
         var table = world.Characters;
         if (Carry is null || !table.TryResolveNext(carrier, out int s) || table.Cold(s) is not { IsPlayer: true, Carrying.IsNone: false }) return;
-        PlayerOrders.Give(world, s, new OrderEntry(TaskType.PutInCage, this) { Site = chosen }, queued);
+
+        var point = put.Cage is { } id && world.Fixtures.Find(id) is { } cage ? OrderEntry.AtBuilding(world, put, cage.Position) : default;
+        PlayerOrders.Give(world, s, new OrderEntry(TaskType.PutInCage, this) { Site = put.Cage, TaskPoint = point }, put.Queued);
     }
 
     /// <summary>

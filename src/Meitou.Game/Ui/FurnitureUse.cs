@@ -95,12 +95,14 @@ sealed class FurnitureUse(PlayerInterface player)
     /// <summary>
     /// The selection sleeps in <paramref name="bed"/>.
     /// </summary>
-    void SleepIn(BedSpot bed) => player.Say(new UseBedOrder([], bed.Id) { Tick = player.Session.World.Tick });
+    void SleepIn(BedSpot bed, bool clicked = false) =>
+        player.Say(new UseBedOrder([], bed.Id) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     /// <summary>
     /// <paramref name="carriers"/> lay the ones they carry in <paramref name="bed"/>.
     /// </summary>
-    void PutIn(BedSpot bed, CharacterId[] carriers) => player.Say(new PutInBedOrder(carriers, bed.Id) { Tick = player.Session.World.Tick });
+    void PutIn(BedSpot bed, CharacterId[] carriers, bool clicked = false) =>
+        player.Say(new PutInBedOrder(carriers, bed.Id) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     /// <summary>
     /// The right button let go: a press on a bed released before the menu opened.
@@ -110,8 +112,8 @@ sealed class FurnitureUse(PlayerInterface player)
         if (_bedPending is not { } pending) return;
 
         _bedPending = null;
-        if (Carriers() is { Length: > 0 } carriers) PutIn(pending.Bed, carriers);
-        else SleepIn(pending.Bed);
+        if (Carriers() is { Length: > 0 } carriers) PutIn(pending.Bed, carriers, clicked: true);
+        else SleepIn(pending.Bed, clicked: true);
     }
 
     /// <summary>
@@ -187,15 +189,16 @@ sealed class FurnitureUse(PlayerInterface player)
     /// occupied. The player's own: Unlock (78) or Lock (77) by its lock, then Put in when empty and a selected character carries someone, Set Free
     /// when occupied (the release unlocks it).
     /// </summary>
-    internal List<(string Caption, Action Give)> CageVerbs(CageSpot cage)
+    /// <param name="clicked">The verbs give the orders of a quick right click (<see cref="Simulation.Player.OrderCommand.Clicked"/>).</param>
+    internal List<(string Caption, Action Give)> CageVerbs(CageSpot cage, bool clicked = false)
     {
         var verbs = new List<(string, Action)>();
         var selection = player.SelectedIds();
         if (selection.Count == 0) return verbs;
 
         bool occupied = !cage.Occupant.IsNone;
-        if (cage.Owner == player.Session.World.Player.Faction) OwnCageVerbs(verbs, cage, occupied);
-        else OtherCageVerbs(verbs, cage, occupied, selection);
+        if (cage.Owner == player.Session.World.Player.Faction) OwnCageVerbs(verbs, cage, occupied, clicked);
+        else OtherCageVerbs(verbs, cage, occupied, selection, clicked);
 
         return verbs;
     }
@@ -204,7 +207,7 @@ sealed class FurnitureUse(PlayerInterface player)
     /// The player's own cage: Unlock or Lock (a walk and 3.3 s of work, <see cref="DoorLockOrder"/>), then Put in when empty and carrying, Set Free
     /// when occupied.
     /// </summary>
-    void OwnCageVerbs(List<(string, Action)> verbs, CageSpot cage, bool occupied)
+    void OwnCageVerbs(List<(string, Action)> verbs, CageSpot cage, bool occupied, bool clicked)
     {
         bool locking = !cage.Locked;
         verbs.Add((locking ? "Lock" : "Unlock", () => player.Say(new DoorLockOrder([], cage.Id, locking) { Tick = player.Session.World.Tick })));
@@ -219,14 +222,17 @@ sealed class FurnitureUse(PlayerInterface player)
         if (carriers.Length > 0)
         {
             verbs.Add(("Put in",
-                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers)
+                {
+                    Cage = cage.Id, Tick = player.Session.World.Tick, Clicked = clicked,
+                })));
         }
     }
 
     /// <summary>
     /// Another faction's cage: locked, Pick Lock, Use Tools and Use Strength; unlocked, Put in or Get in when empty, Set Free when occupied.
     /// </summary>
-    void OtherCageVerbs(List<(string, Action)> verbs, CageSpot cage, bool occupied, IReadOnlyList<CharacterId> selection)
+    void OtherCageVerbs(List<(string, Action)> verbs, CageSpot cage, bool occupied, IReadOnlyList<CharacterId> selection, bool clicked)
     {
         if (cage.Locked)
         {
@@ -235,6 +241,7 @@ sealed class FurnitureUse(PlayerInterface player)
                 {
                     Cage = occupied ? null : cage.Id,
                     Tick = player.Session.World.Tick,
+                    Clicked = clicked,
                 })));
             verbs.Add(("Use Tools", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Tools) { Tick = player.Session.World.Tick })));
             verbs.Add(("Use Strength", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Strength) { Tick = player.Session.World.Tick })));
@@ -251,9 +258,12 @@ sealed class FurnitureUse(PlayerInterface player)
         if (carriers.Length > 0)
         {
             verbs.Add(("Put in",
-                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers)
+                {
+                    Cage = cage.Id, Tick = player.Session.World.Tick, Clicked = clicked,
+                })));
         }
-        else verbs.Add(("Get in", () => player.Say(new GetInCageOrder([], cage.Id) { Tick = player.Session.World.Tick })));
+        else verbs.Add(("Get in", () => player.Say(new GetInCageOrder([], cage.Id) { Tick = player.Session.World.Tick, Clicked = clicked })));
     }
 
     /// <summary>
@@ -284,7 +294,8 @@ sealed class FurnitureUse(PlayerInterface player)
         }
 
         // The quick order is the cage's use (108 / 107 / 76), never the own cage's Lock or Unlock.
-        Action? quick = cage.Occupant.IsNone ? verbs.FirstOrDefault(v => v.Caption is not ("Lock" or "Unlock")).Give : null;
+        var clickedVerbs = CageVerbs(cage, clicked: true);
+        Action? quick = cage.Occupant.IsNone ? clickedVerbs.FirstOrDefault(v => v.Caption is not ("Lock" or "Unlock")).Give : null;
         return player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, CageVerbs(cage)), quick);
     }
 
@@ -455,7 +466,7 @@ sealed class FurnitureUse(PlayerInterface player)
 
         void Quick() => player.Say(DoorBroken(pick.Door)
             ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick }
-            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick });
+            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick, Clicked = true });
 
         ContextMenuWindow.ContextMenu? DoorMenu(Vector2 at) =>
             player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick));
@@ -529,9 +540,9 @@ sealed class FurnitureUse(PlayerInterface player)
     /// <summary>
     /// The selection trains on <paramref name="dummy"/> (with Shift as the training job).
     /// </summary>
-    void Train(TrainingSpot dummy) => player.Say(player.SlowModifier
+    void Train(TrainingSpot dummy, bool clicked = false) => player.Say(player.SlowModifier
         ? new AddJob(player.SelectedIds(), TaskType.UseTrainingDummy, dummy.Id) { Tick = player.Session.World.Tick }
-        : new OperateOrder(player.SelectedIds(), dummy.Id) { Tick = player.Session.World.Tick });
+        : new OperateOrder(player.SelectedIds(), dummy.Id) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     /// <summary>
     /// The right button let go: a press on a dummy released before the menu opened.
@@ -541,7 +552,7 @@ sealed class FurnitureUse(PlayerInterface player)
         if (_dummyPending is not { } pending) return;
 
         _dummyPending = null;
-        if (player.SelectedIds().Count > 0) Train(pending.Dummy);
+        if (player.SelectedIds().Count > 0) Train(pending.Dummy, clicked: true);
     }
 
     /// <summary>
@@ -608,16 +619,16 @@ sealed class FurnitureUse(PlayerInterface player)
         string title = player.Build.Services?.ItemName(turret.Record) ?? turret.Record;
         ContextMenuWindow.ContextMenu? TurretMenu(Vector2 at) => player.ContextMenuWindow.Menu(title, at, [("Man Turret", () => ManTurret(site))]);
 
-        if (!player.ContextMenuWindow.ContextPressOn(p, TurretMenu, () => ManTurret(site))) ManTurret(site);
+        if (!player.ContextMenuWindow.ContextPressOn(p, TurretMenu, () => ManTurret(site, clicked: true))) ManTurret(site, clicked: true);
         return true;
     }
 
     /// <summary>
     /// The selection mans the town turret <paramref name="site"/> (with Shift as the Turret guard job).
     /// </summary>
-    void ManTurret(string site) => player.Say(player.SlowModifier
+    void ManTurret(string site, bool clicked = false) => player.Say(player.SlowModifier
         ? new AddJob(player.SelectedIds(), TaskType.UseTurret, site) { Tick = player.Session.World.Tick }
-        : new UseTurretOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick });
+        : new UseTurretOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     #endregion
 
@@ -695,9 +706,9 @@ sealed class FurnitureUse(PlayerInterface player)
     /// <summary>
     /// The selection uses <paramref name="seat"/> (with Shift as the operating job).
     /// </summary>
-    void SitOn(SeatSpot seat) => player.Say(player.SlowModifier
+    void SitOn(SeatSpot seat, bool clicked = false) => player.Say(player.SlowModifier
         ? (SimCommand)new AddJob(player.SelectedIds(), TaskType.OperateMachinery, seat.Id) { Tick = player.Session.World.Tick }
-        : new OperateOrder(player.SelectedIds(), seat.Id) { Tick = player.Session.World.Tick });
+        : new OperateOrder(player.SelectedIds(), seat.Id) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     /// <summary>
     /// The right button let go: a press on a seat released before the menu opened gives the quick order.
@@ -707,7 +718,7 @@ sealed class FurnitureUse(PlayerInterface player)
         if (_seatPending is not { } pending) return;
 
         _seatPending = null;
-        SitOn(pending.Seat);
+        SitOn(pending.Seat, clicked: true);
     }
 
     /// <summary>
@@ -790,12 +801,12 @@ sealed class FurnitureUse(PlayerInterface player)
     /// <summary>
     /// <paramref name="selection"/> mines <paramref name="rock"/>: an operate order, or with <paramref name="asJob"/> the operating job.
     /// </summary>
-    void MineRock(IReadOnlyList<CharacterId> selection, ResourceNode rock, bool asJob)
+    void MineRock(IReadOnlyList<CharacterId> selection, ResourceNode rock, bool asJob, bool clicked = false)
     {
         string site = ProductionSystem.NaturalId(rock.Record, rock.Position);
         if (asJob)
             player.Say(new AddJob(selection, TaskType.OperateMachinery, site) { Tick = player.Session.World.Tick });
-        else player.Say(new OperateOrder(selection, site) { Tick = player.Session.World.Tick });
+        else player.Say(new OperateOrder(selection, site) { Tick = player.Session.World.Tick, Clicked = clicked });
     }
 
     /// <summary>
@@ -818,7 +829,7 @@ sealed class FurnitureUse(PlayerInterface player)
         if (_rockPending is not { } pending) return;
 
         _rockPending = null;
-        if (player.SelectedIds() is { Count: > 0 } selection) MineRock(selection, pending.Rock, player.SlowModifier);
+        if (player.SelectedIds() is { Count: > 0 } selection) MineRock(selection, pending.Rock, player.SlowModifier, clicked: true);
     }
 
     /// <summary>

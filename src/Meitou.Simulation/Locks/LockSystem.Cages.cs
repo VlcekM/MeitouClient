@@ -60,7 +60,8 @@ public sealed partial class LockSystem
 
         int best = NearestWorker(world, order.Characters, cage, TaskType.UseCage);
         if (best < 0 || !table.Cold(best)!.Carrying.IsNone) return;
-        StartWork(world, best, CharacterTask.GoTo, TaskType.UseCage, cage.Id, queued: order.Queued);
+        var point = OrderEntry.AtBuilding(world, order, cage.Position);
+        StartWork(world, best, CharacterTask.GoTo, TaskType.UseCage, cage.Id, queued: order.Queued, point: point);
     }
 
     /// <summary>

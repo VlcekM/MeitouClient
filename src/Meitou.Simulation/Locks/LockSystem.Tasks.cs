@@ -69,12 +69,15 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     /// <summary>
     /// Gives the character a lock order's work (<see cref="PlayerOrders.Give"/>), which starts through <see cref="TaskStart.Start"/> as the act-out
     /// <paramref name="task"/>; false (and nothing given) when it cannot run (the row is not the character's): the order's picker then tries the next
-    /// character.
+    /// character. <paramref name="point"/> is the order's <see cref="OrderEntry.TaskPoint"/>.
     /// </summary>
     bool StartWork(World world, int slot, CharacterTask task, TaskType row, string? site, CharacterId? target = null, object? detail = null,
-            bool queued = false)
+            bool queued = false, Vector3 point = default)
     {
-        var order = new OrderEntry(row, this) { Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail) };
+        var order = new OrderEntry(row, this)
+        {
+            Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail), TaskPoint = point,
+        };
         if (!PlayerOrders.CanRun(world, slot, order).CanRun) return false;
         PlayerOrders.Give(world, slot, order, queued);
         return true;

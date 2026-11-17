@@ -167,20 +167,27 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                     // Order 258 goes to every selected character (FUN_1407f9e20 has no gate for it, Verified); the bed takes one, the later arrivals
                     // are refused there.
                     if (world.Fixtures.Find(use.Bed) is not { Kind: FixtureKind.Bed } bed) break;
+                    var point = OrderEntry.AtBuilding(world, use, bed.Position);
                     foreach (var id in Who(world, use.Characters))
                     {
                         if (table.TryResolveNext(id, out int s))
-                            PlayerOrders.Give(world, s, new OrderEntry(TaskType.UseBed, this) { Site = bed.Id }, use.Queued);
+                            PlayerOrders.Give(world, s, new OrderEntry(TaskType.UseBed, this) { Site = bed.Id, TaskPoint = point }, use.Queued);
                     }
 
                     break;
                 case PutInBedOrder put:
+                    var putPoint = put.Bed is { } named && world.Fixtures.Find(named) is { } target
+                        ? OrderEntry.AtBuilding(world, put, target.Position)
+                        : default;
                     foreach (var id in Who(world, put.Carriers))
                     {
                         if (table.TryResolveNext(id, out int s) && table.Cold(s) is { Carrying.IsNone: false })
                         {
-                            PlayerOrders.Give(world, s,
-                                    new OrderEntry(TaskType.PutSomeoneInBed, this) { Site = put.Bed, Detail = put.Bed is not null ? Named : null },
+                            var entry = new OrderEntry(TaskType.PutSomeoneInBed, this)
+                            {
+                                Site = put.Bed, Detail = put.Bed is not null ? Named : null, TaskPoint = putPoint,
+                            };
+                            PlayerOrders.Give(world, s, entry,
                                             put.Queued);
                         }
                     }

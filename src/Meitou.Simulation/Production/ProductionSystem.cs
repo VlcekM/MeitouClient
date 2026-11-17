@@ -393,7 +393,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                             foreach (var id in Who(world, order.Characters))
                             {
                                 if (table.TryResolveNext(id, out int hauler))
-                                    PlayerOrders.Give(world, hauler, new OrderEntry(TaskType.OperateStorage, this) { Site = site.Id }, order.Queued);
+                                    PlayerOrders.Give(world, hauler, Clicked(world, TaskType.OperateStorage, site, order), order.Queued);
                             }
 
                             break;
@@ -404,7 +404,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                         foreach (var id in Who(world, order.Characters))
                         {
                             if (table.TryResolveNext(id, out int slot)
-                                && PlayerOrders.Give(world, slot, new OrderEntry(row, this) { Site = site.Id }, order.Queued) is { Posted: true })
+                                && PlayerOrders.Give(world, slot, Clicked(world, row, site, order), order.Queued) is { Posted: true })
                                 break;   // the machine is in use: said once
                         }
 
@@ -473,8 +473,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 (best, bestGap) = (slot, gap);
         }
 
-        if (best >= 0) PlayerOrders.Give(world, best, new OrderEntry(TaskType.UseTurret, this) { Site = site.Id }, order.Queued);
+        if (best >= 0) PlayerOrders.Give(world, best, Clicked(world, TaskType.UseTurret, site, order), order.Queued);
     }
+
+    /// <summary>
+    /// The <paramref name="row"/> order on <paramref name="site"/> that <paramref name="order"/> gives, made at the site on the terrain when it came
+    /// from a right click on it (<see cref="OrderEntry.AtBuilding"/>).
+    /// </summary>
+    OrderEntry Clicked(World world, TaskType row, BuildSite site, OrderCommand order) =>
+        new(row, this) { Site = site.Id, TaskPoint = OrderEntry.AtBuilding(world, order, site.Position) };
 
     /// <summary>
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150): a player character's

@@ -1309,7 +1309,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The looks-like-a-slave test with the watcher's faction (<c>FUN_1405a6bb0</c>, <b>Verified</b>, docs/game/ai-tasks.md "Looks like a slave"): an
     /// animal passes and a law enforcer or a diplomat (NPC class 1, 5) fails; without the faction's <c>allow slaves weapons</c> a weapon in hand or
     /// in a weapon section fails it; the armour and legs sections must each hold nothing, a slave garment (<c>stigma</c> 6) or one of the faction's
-    /// <c>slave clothing</c>; then the boots section passes with a locked piece, and empty only with a locked armour piece on a shaven head.
+    /// <c>slave clothing</c>; then the boots section passes with shackles in it, and empty only with shackles in the armour section on a shaven head,
+    /// locked or not (<see cref="LockSystem.IsShackles"/>).
     /// </summary>
     internal bool LooksLikeASlave(CharacterCold watcher, CharacterCold c)
     {
@@ -1323,7 +1324,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (!SlaveWear(armour, clothing) || !SlaveWear(c.Inventory?.Items.Find(i => i.Section == "legs"), clothing))
             return false;
 
-        return c.Inventory?.Items.Find(i => i.Section == "boots") is { } boots ? boots.LockedOn : armour is { LockedOn: true } && c.Shaved;
+        return c.Inventory?.Items.Find(i => i.Section == "boots") is { } boots ? LockSystem.IsShackles(boots) : LockSystem.IsShackles(armour) && c.Shaved;
     }
 
     /// <summary>

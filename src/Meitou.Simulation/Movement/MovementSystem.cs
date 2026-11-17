@@ -377,7 +377,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             if (!TaskStart.Eligible(world, table.Cold(found)!, TaskType.MoveCusOrdered))
             {
                 // A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue.
-                PlayerOrders.Give(world, found, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = order.Target }, order.Queued);
+                PlayerOrders.Give(world, found, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = order.Target, TaskPoint = order.Target },
+                        order.Queued);
                 continue;
             }
 
@@ -396,7 +397,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             table.Cold(slot)!.FollowOrder = CharacterId.None;
 
             // Shift + right click: after the order in hand.
-            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = new Vector3(target.X, order.Target.Y, target.Y) };
+            var point = new Vector3(target.X, order.Target.Y, target.Y);
+            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = point, TaskPoint = point };
             PlayerOrders.Give(world, slot, entry, order.Queued);
         }
     }

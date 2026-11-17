@@ -546,8 +546,10 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
 - **Faction `+0x40`** (FACTION loader `FUN_1407fe270`): `fundamental type` 1 (LAW_ENFORCEMENT), else `offers bounties`. Base data:
   Police, Mercenary Police, United Cities, The Holy Nation, Shek Kingdom, Republic of Tertius (**Verified** by `CrimeInstallTests`).
   The loader also stores `fundamental type` at `+0x34` and `not real` at `+0x1d0` (the setter's "lawless" tests). The setter `FUN_140852c80` also refuses a culprit that is law enforcement, in state `+0x2f8` 2, or whose faction is the victim's, and one whose apparent faction (`FUN_140852c20`: the disguise faction while its level is above 0.6 and the recently-wanted marker is zero, else the slave owner for status type 1, else its own) is the victim's unless its slave state is nonzero (**Verified**; Meitou keeps only the own-faction test, the disguise term is **not modelled**).
-- **Hitting the police** (`FUN_140665fa0`): a landed blow between a police-like and a non-police character gives the non-police one a
-  pending Assault (timer 30) against the police faction, booked with it at once, whichever struck. A bolt hit never comes here: the bolt
+- **Hitting the police** (`FUN_140665fa0`, **Verified**): a landed blow between a police-like and a non-police character gives the non-police one, the player's or an NPC, a
+  pending Assault (timer 30) against the police faction through the wrapper `FUN_140852e10` (which refuses a culprit that is down, vfunc `0x30`, or an animal, vfunc `0x248`), booked with it
+  at once, whichever struck. The outcome runs before the blow's damage, so a culprit the blow knocks out is still charged. A slave is no exception (**Verified**, `FUN_140852c80`: its apparent faction is
+  its owner's only in slave state 1, and a nonzero slave state passes that test), so a guard's landed blow on an escaping slave books Assault (500) with the guard's faction. A bolt hit never comes here: the bolt
   hit `FUN_140439c90` does not call this outcome (its only caller is the melee take-hit `FUN_1404394f0`), the crime setter, its wrapper
   `FUN_140852e10` or the booking directly (**Verified**, 1.0.68 disassembly, direct calls only). The crimes its callees can reach are on the
   wound routes it shares with melee (the carry route's code 10; the lost-limb dialogue events 70 and 71 of `FUN_14064edc0`, whose lines' effects

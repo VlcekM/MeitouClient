@@ -217,7 +217,9 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
 ### Order queue
 
 Each character's `CharacterCold.OrderQueue` (`OrderQueue`, the original's `+0x40` deque; [precedence](game/ai-tasks.md#precedence)) holds its orders as `OrderEntry` (row,
-owning `IOrderOwner`, target, site, point, owner detail): the front is the order in hand. Every order command (`OrderCommand`) goes through `PlayerOrders.Give`: without `Queued`
+owning `IOrderOwner`, target, site, point, owner detail, and `TaskPoint`: the point the original's order goal is made at, a ground move's or a
+building's on a quick right click, `OrderCommand.Clicked`, [orders' points](game/ai-tasks.md#slave-work-shout-and-capture)): the front is the order in hand.
+Every order command (`OrderCommand`) goes through `PlayerOrders.Give`: without `Queued`
 (Shift) the queue is cleared first, as `addOrder`; the order is queued; at the front it starts through its owner when `PlayerOrders.CanRun` says so (the row's repertoire, then
 the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, or `Gone` when its target or site no longer fits the verb).
 - A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it.
@@ -893,7 +895,8 @@ Witness sight: the original's sight test with places and light ([perception](gam
 sneaking culprit is seen only once the witness's spot meter is full ([perception](game/perception.md#spotting-a-sneaker);
 the aggro scan's meters, kept for every NPC looker, not saved).
 NPC culprits: an NPC's non-defensive attack order, and each of its landed blows, sets a pending Assault (not an
-animal's; the victim may be a player character), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); both are booked like a player's (**Verified**, the witness function `FUN_140854d10` ends in the booking call with no player test; a Bandit, Diplomat or LawEnforcement class is never booked).
+animal's; the victim may be a player character), a landed blow between it and a police-like NPC sets the police-hit Assault on it as on a player character
+(`CrimeSystem.Hit`), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); both are booked like a player's (**Verified**, the witness function `FUN_140854d10` ends in the booking call with no player test; a Bandit, Diplomat or LawEnforcement class is never booked).
 Every witness that sees the culprit reacts, not only the first after the booking (the witness function runs per looker, `FUN_1408580d0`): with a
 stop there, a police 1480 off in sight range booked a slave hunter's assault at Sho-Battai's gate and the gate guards 40 away never reacted
 (**Observed**, headless, a player quicksave).

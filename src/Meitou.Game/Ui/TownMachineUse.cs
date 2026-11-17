@@ -61,7 +61,7 @@ sealed class TownMachineUse(PlayerInterface player)
         string site = SiteOf(hit.Building);
         ContextMenuWindow.ContextMenu? Menu(Vector2 at) => player.ContextMenuWindow.Menu(hit.Info.Name, at, Verbs(site, hit));
 
-        Action quick = Automatic(site) ? () => Loot(site, hit) : () => Use(site);
+        Action quick = Automatic(site) ? () => Loot(site, hit) : () => Use(site, clicked: true);
         if (!player.ContextMenuWindow.ContextPressOn(p, Menu, quick)) quick();
         return true;
     }
@@ -102,11 +102,11 @@ sealed class TownMachineUse(PlayerInterface player)
     bool Automatic(string site) => player.Production.Machine(site) is { IsAutomatic: true };
 
     /// <summary>
-    /// The selection operates the machine (with Shift as the Operating machine job).
+    /// The selection operates the machine (with Shift as the Operating machine job); <paramref name="clicked"/>: a quick right click gave it.
     /// </summary>
-    void Use(string site) => player.Say(player.SlowModifier
+    void Use(string site, bool clicked = false) => player.Say(player.SlowModifier
         ? new AddJob(player.SelectedIds(), TaskType.OperateMachinery, site) { Tick = player.Session.World.Tick }
-        : new OperateOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick });
+        : new OperateOrder(player.SelectedIds(), site) { Tick = player.Session.World.Tick, Clicked = clicked });
 
     /// <summary>
     /// The selection walks to the machine, whose window then opens beside the character's inventory, the town building selected as its machine.

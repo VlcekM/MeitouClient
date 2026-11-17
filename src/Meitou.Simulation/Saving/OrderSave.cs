@@ -68,7 +68,7 @@ public static class OrderSave
             int kind = e.Row == TaskType.None ? -1 : e.Owner.SaveKind(e);
             if (kind < 0) continue;
 
-            Put(ai, i, SavedRow(e.Row), e.Point, e.Site is { } site ? SiteHand(world, site, buildings) : Hand.Null, e.Site, kind);
+            Put(ai, i, SavedRow(e.Row), e.Point == default ? e.TaskPoint : e.Point, e.Site is { } site ? SiteHand(world, site, buildings) : Hand.Null, e.Site, kind);
             if (!e.Target.IsNone) target(ai, Target + i, e.Target);
             i++;
         }
@@ -91,6 +91,12 @@ public static class OrderSave
     /// the same.
     /// </summary>
     static TaskType SavedRow(TaskType row) => row == TaskType.UseBed ? TaskType.UseBedOrder : row;
+
+    /// <summary>
+    /// An order on an object, whose saved point is where Meitou walks (the container's or the item's) but whose
+    /// <see cref="OrderEntry.TaskPoint"/> is zero: 3 Pickup and 26 Loot.
+    /// </summary>
+    static bool ObjectRow(TaskType row) => row is TaskType.Pickup or TaskType.LootTarget;
 
     /// <summary>
     /// The handle of the building a site or fixture is, when it is the building itself (a bed the player built too) and the save holds its state;
@@ -170,6 +176,7 @@ public static class OrderSave
                 Target = target,
                 Site = site,
                 Point = o.Point,
+                TaskPoint = ObjectRow(row) ? default : o.Point,
                 Detail = owner.LoadDetail(world, self, row, o.Kind, target),
             };
             owner.Restored(world, entry);

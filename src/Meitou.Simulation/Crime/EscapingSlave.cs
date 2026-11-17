@@ -3,6 +3,7 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Kidnap;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 
@@ -59,7 +60,7 @@ public static class EscapingSlave
         var items = c.Inventory?.Items;
         var worn = items?.Find(i => i.Section == "boots") ?? items?.Find(i => i.Section == "armour");
 
-        return worn?.Lock is not null;
+        return LockSystem.IsShackles(worn);
     }
 
     /// <summary>
@@ -71,7 +72,7 @@ public static class EscapingSlave
     static bool WalksAway(World world, int looker, int slave, CharacterCold c, Vector3 owner, CaptiveSystem? captives)
     {
         if (c.Running is { Row: TaskType.RunAway or TaskType.RunAwayHometown }) return true;
-        if (OrderPoint(world, slave, c) is not { } point) return false;
+        if (OrderPoint(c) is not { } point) return false;
 
         ref readonly var n = ref world.Characters.Next[slave];
         float pointToOwner = Vector3.DistanceSquared(point, owner);
@@ -86,16 +87,16 @@ public static class EscapingSlave
     }
 
     /// <summary>
-    /// The point of the move order the slave walks (row 29: the order queue's tasker is made at the order's point, <c>FUN_140508380</c> ->
-    /// <c>FUN_14032ebd0</c>, <b>Verified</b>); null for any other task (<b>engine</b>: the Slave goals' taskers are made at the zero point,
-    /// <c>FUN_140330530</c>, <b>Verified</b>, and the positions of the steps the planner makes from them are not read).
+    /// The point of the slave's task (Tasker <c>+0x58</c>), null for the zero point. Every planned step has its goal's point (<b>Verified</b>: the
+    /// goal tasker's <c>+0x58</c> is the plan's root node point, <c>FUN_14050fe10</c>; each child node gets its parent's, <c>FUN_14051bae0</c>; each
+    /// step's tasker is made at its node's), so the walks of the slave's own job goals have none (the Slave list's goals are made at zero,
+    /// <c>FUN_14026b790</c> -> <c>FUN_140330530</c>) and an order's steps have its <see cref="OrderEntry.TaskPoint"/>.
     /// </summary>
-    static Vector3? OrderPoint(World world, int slave, CharacterCold c)
+    static Vector3? OrderPoint(CharacterCold c)
     {
-        bool walking = world.Characters.Next[slave].Task == (byte)CharacterTask.GoTo && c.OrderMove;
-        if (!walking || c.Running is not { Row: TaskType.MoveCusOrdered, Source: TaskSource.Order }) return null;
+        if (c.Running is not { Source: TaskSource.Order } || c.OrderQueue.Front is not { Started: true } order) return null;
 
-        return c.OrderQueue.Front is { IsMove: true } order ? order.Point : null;
+        return order.TaskPoint == default ? null : order.TaskPoint;
     }
 
     /// <summary>

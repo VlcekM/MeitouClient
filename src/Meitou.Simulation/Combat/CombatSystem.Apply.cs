@@ -189,6 +189,7 @@ public sealed partial class CombatSystem
         events.Clear();
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
         var medical = dc.Medical!;
+        bool defenderWasDown = Bodies.CharacterFacts.Down(dc);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
@@ -219,7 +220,7 @@ public sealed partial class CombatSystem
         if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
         if (medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
 
-        BlowConsequences(world, a, d, ac, dc, medical, death);
+        BlowConsequences(world, a, d, ac, dc, medical, death, defenderWasDown);
         Record(now, a, d, blow, BlowOutcome.Hit, part, damage, knockout, death);
         if (observe && part >= 0)
         {
@@ -327,12 +328,13 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// What a hit means beyond the fighters: the police-hit rule first (the game's hit outcome runs before the damage), then the victim's alarm and
-    /// replan and its faction's relation events (docs/game/factions-squads-towns.md 3.5), and a unique's death.
+    /// replan and its faction's relation events (docs/game/factions-squads-towns.md 3.5), and a unique's death. <paramref name="defenderWasDown"/>:
+    /// the defender was down before the blow landed.
     /// </summary>
-    void BlowConsequences(World world, int a, int d, CharacterCold ac, CharacterCold dc, MedicalState medical, bool death)
+    void BlowConsequences(World world, int a, int d, CharacterCold ac, CharacterCold dc, MedicalState medical, bool death, bool defenderWasDown)
     {
         var table = world.Characters;
-        Crimes?.Hit(world, a, d);
+        Crimes?.Hit(world, a, d, defenderWasDown);
         if (!medical.Incapacitated)
         {
             // the victim senses its attacker, with the alarm flag (FUN_140999f00)

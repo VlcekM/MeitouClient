@@ -1337,19 +1337,30 @@ sealed class BuildMode(PlayerInterface player)
         if (QuickConstruction(pending.Site)) OrderConstruction(pending.Site, player.SelectedIds());
         else if (player.Production.Machine(pending.Site.Id) is { Operable: true }
             or { Function: MachineData.TrainingFunction or TownBuildings.ChairFunction or TownBuildings.ThroneFunction })
-            player.Say(new Simulation.Production.OperateOrder(player.SelectedIds(), pending.Site.Id) { Tick = player.Session.World.Tick });
+        {
+            var operate = new Simulation.Production.OperateOrder(player.SelectedIds(), pending.Site.Id)
+            {
+                Tick = player.Session.World.Tick, Clicked = true,
+            };
+            player.Say(operate);
+        }
         else if (player.Production.Machine(pending.Site.Id) is { Function: ObjectRanges.TurretFunction })
         {
             // the original's order 146 USE_TURRET
-            player.Say(new Simulation.Production.UseTurretOrder(player.SelectedIds(), pending.Site.Id) { Tick = player.Session.World.Tick });
+            var turret = new Simulation.Production.UseTurretOrder(player.SelectedIds(), pending.Site.Id)
+            {
+                Tick = player.Session.World.Tick, Clicked = true,
+            };
+            player.Say(turret);
         }
         else if (player.Production.Machine(pending.Site.Id) is { IsStorage: true } or { Function: MachineData.ItemFurnaceFunction })
             OpenStorage(pending.Site);
         else if (!SiteIsObject(pending.Site) && player.Ray(pending.At) is { } ray && player.Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
         {
             // A finished plain building's quick right click is a move to the point under the cursor (the original: order 29 MOVE_CUS_ORDERED).
-            // The original's target is the building hit's x, z at the terrain height, which the path's goal snap puts on the floor inside or the
-            // ground outside; a pick that went on through the roof or wall to the terrain beyond takes that point instead, so the character goes in
+            // The original's target is the cursor's hit on the building, at the hit's height (Observed, harness: four clicks on the Hub's bar
+            // gave four points on its walls), which the path's goal snap puts on the floor inside or the ground outside; a pick that went on
+            // through the roof or wall to the terrain beyond takes that point instead, so the character goes in
             // rather than to the ground behind. A building floor the pick found (a site with an interior, the hidden roof above it nearer) stays:
             // the terrain under the roof hit lay below the floor. "Beyond" is measured across the ground: the foot of a wall's face the pick
             // stopped at lies short of the wall, though lower.

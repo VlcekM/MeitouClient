@@ -111,16 +111,19 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// diplomat becomes code 9 (<see cref="DiplomatVictim"/>); an Assault does not
     /// replace another pending crime (it raises that one's timer to 20); the same code again keeps the booked flag; a new code clears it. The timer
     /// is at least <see cref="MinTimer"/>. True when the crime is now pending. <paramref name="viaWrapper"/>: the original's callers that go through
-    /// its wrapper <c>FUN_140852e10</c> (police hit, caught stealing, fencing, kidnapping seen) also drop the culprit's
+    /// its wrapper <c>FUN_140852e10</c> (police hit, caught stealing, fencing, kidnapping seen) are refused for a culprit that is down (vfunc
+    /// <c>0x30</c>, <see cref="Bodies.CharacterFacts.Down"/>) or an animal (vfunc <c>0x248</c>), and drop the culprit's
     /// <see cref="CharacterCold.Freed"/> flag when the crime is set (the other callers do not; <b>Verified</b>). The wrapper also writes the
     /// recently-wanted marker first, which makes the uniform test a no-op for its callers, so it is skipped for them. <paramref name="victimHolder"/>:
-    /// a victim that is a building's holder of goods rather than a character (<see cref="PendingCrime.VictimHolder"/>).
+    /// a victim that is a building's holder of goods rather than a character (<see cref="PendingCrime.VictimHolder"/>). <paramref name="wasUp"/>: the
+    /// caller's deed ran before the culprit could go down (the police hit: the game's hit outcome runs before the blow's damage).
     /// </summary>
     public bool SetPending(World world, int culprit, CrimeCode code, int victimFaction, CharacterId victim, float timer, bool viaWrapper = false,
-        string? victimHolder = null)
+        string? victimHolder = null, bool wasUp = false)
     {
         var c = world.Characters.Cold(culprit);
-        if (c is null || IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
+        if (c is null || viaWrapper && (!wasUp && Bodies.CharacterFacts.Down(c) || c.Fighter?.IsAnimal == true)) return false;
+        if (IsPoliceLike(world, c) || c.IsImprisoned || victimFaction == c.Faction
             || !viaWrapper && c.SlaveState == 0 && victimFaction == ArrestSystem.SeenFaction(c) || Factions.Lawless(victimFaction)) return false;
         timer = MathF.Max(timer, MinTimer);
         if (code == CrimeCode.Assault && DiplomatVictim(world, victim)) code = CrimeCode.Terrorism2;
@@ -245,11 +248,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>
     /// A landed hit between <paramref name="attacker"/> and <paramref name="defender"/> (the game's hit outcome <c>FUN_140665fa0</c>,
-    /// <b>Observed</b>): when exactly one of them is police-like, the other gets a pending Assault (timer 30) against the police faction, and
-    /// whatever crime it has pending is booked with that faction at once. The game's code reads as charging the non-police side whichever way the
-    /// blow went (being hit by the police counts too).
+    /// <b>Verified</b>): when exactly one of them is police-like, the other, player's or not, gets a pending Assault (timer 30) against the police
+    /// faction through the setter's wrapper, and whatever crime it has pending is booked with that faction at once, whichever way the blow went
+    /// (being hit by the police counts too). <paramref name="defenderWasDown"/>: the defender was down before the blow.
     /// </summary>
-    public void Hit(World world, int attacker, int defender)
+    public void Hit(World world, int attacker, int defender, bool defenderWasDown = false)
     {
         var table = world.Characters;
         if (table.Cold(attacker) is not { } a || table.Cold(defender) is not { } d) return;
@@ -261,8 +264,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         int culprit = pd ? attacker : defender, police = pd ? defender : attacker;
         var c = table.Cold(culprit)!;
         var p = table.Cold(police)!;
-        if (!c.IsPlayer) return;
-        SetPending(world, culprit, CrimeCode.Assault, p.Faction, table.IdOf(police), PoliceHitTimer, viaWrapper: true);
+        // The outcome runs before the damage: the striker is up, the struck one as it stood before the blow.
+        bool wasUp = culprit == attacker || !defenderWasDown;
+        SetPending(world, culprit, CrimeCode.Assault, p.Faction, table.IdOf(police), PoliceHitTimer, viaWrapper: true, wasUp: wasUp);
         if (c.Pending is not null) Book(world, culprit, p.Faction, table.IdOf(police));
     }
 

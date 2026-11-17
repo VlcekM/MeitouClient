@@ -74,7 +74,13 @@ public sealed partial class LockSystem
     /// handlers set and clear it as such a piece goes on or comes off; a picked, cut or broken lock leaves it set (<b>Verified</b>, docs/game/locks.md).
     /// </summary>
     public static bool Chained(CharacterCold? c) =>
-        c?.Inventory?.Items.Exists(i => i.Lock is not null && Items.InventoryCommands.IsEquipmentSection(i.Section)) == true;
+        c?.Inventory?.Items.Exists(i => IsShackles(i) && Items.InventoryCommands.IsEquipmentSection(i.Section)) == true;
+
+    /// <summary>
+    /// A piece with a lock (<c>LockedArmour</c>), locked or not: the item slot 94 (<c>0x2f0</c>) answers with itself, every other item null
+    /// (<b>Verified</b>, docs/game/ai-tasks.md "Looks like a slave"), so the original's shackle tests take shackles worn open.
+    /// </summary>
+    public static bool IsShackles(Items.ItemInstance? item) => item?.Lock is not null;
 
     /// <summary>
     /// The shackle order: the first named player character able to works on the wearer's shackles (from a cage only its own; cutting needs a tool).

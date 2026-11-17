@@ -165,6 +165,19 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// The <see cref="OrderEntry.TaskPoint"/> of a door's right click: its own order is made at the door on the terrain
+    /// (<see cref="OrderEntry.AtBuilding"/>); the walk to a barred one (no Alt) is a move made at the door's <c>getPositionMarker</c> from the zero
+    /// point (<c>FUN_1407fc6e0</c> -> <c>FUN_1407fa850</c>, vfunc <c>0x470</c> <c>FUN_14054b850</c> with <c>ZERO</c>, <b>Verified</b>).
+    /// </summary>
+    static Vector3 DoorPoint(World world, DoorOrder order, Fixture door, bool barred)
+    {
+        if (!order.Clicked) return default;
+        if (!barred || order.PickLock) return OrderEntry.AtBuilding(world, order, door.Position);
+
+        return world.Fixtures.PositionMarker(door.Id, Vector3.Zero) ?? door.Position;
+    }
+
+    /// <summary>
     /// The door order: the nearest player character able to opens, closes or picks the door.
     /// </summary>
     void DoorOrderInput(World world, DoorOrder order)
@@ -190,7 +203,8 @@ public sealed partial class LockSystem
 
         if (best < 0) return;
         if (barred && !order.PickLock) world.Post("Hold down the ALT key to pick the lock.");
-        StartWork(world, best, CharacterTask.GoTo, row, door.Id, queued: order.Queued);
+
+        StartWork(world, best, CharacterTask.GoTo, row, door.Id, queued: order.Queued, point: DoorPoint(world, order, door, barred));
     }
 
     /// <summary>

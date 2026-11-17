@@ -18,6 +18,12 @@ public abstract record OrderCommand : SimCommand
     /// clears the queue without it).
     /// </summary>
     public bool Queued { get; init; }
+
+    /// <summary>
+    /// Given by a quick right click on the building it names: the order is then made at the building's position on the terrain
+    /// (<see cref="OrderEntry.AtBuilding"/>); false for the other ways of giving it.
+    /// </summary>
+    public bool Clicked { get; init; }
 }
 
 /// <summary>
@@ -136,6 +142,15 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public Vector3 Point { get; init; }
     /// <summary>
+    /// The point the original's order goal is made at (Tasker <c>+0x58</c>, which its plan's steps inherit), zero for none. <b>Verified</b>
+    /// (disassembly of the right-click dispatch <c>FUN_1407fc6e0</c> and the dispatchers it calls, <c>FUN_1407fae70</c>, <c>FUN_1407fa650</c>,
+    /// <c>FUN_1407f9e20</c>, down to <c>FUN_1405d20d0</c> -> <c>FUN_140508380</c>): a ground move's point and a complete building's default order
+    /// on a right click (<see cref="AtBuilding"/>); every other dispatch passes the zero vector (orders on characters <c>FUN_1407fb410</c>, items
+    /// <c>FUN_1407fc440</c> / <c>FUN_1407fb3a0</c>, containers and the walks to them, unfinished or damaged buildings 2 / 95, a verb of the held right
+    /// button's menu <c>FUN_1407a7f10</c>).
+    /// </summary>
+    public Vector3 TaskPoint { get; init; }
+    /// <summary>
     /// The owner's own data for the order (null: none); see <see cref="IOrderOwner.SaveKind"/> for how it is saved.
     /// </summary>
     public object? Detail { get; init; }
@@ -152,6 +167,14 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// Whether the order is a move (row <c>MoveCusOrdered</c>).
     /// </summary>
     public bool IsMove => Row == TaskType.MoveCusOrdered;
+
+    /// <summary>
+    /// The <see cref="TaskPoint"/> of a building's order given by <paramref name="order"/>: on a right click (<see cref="OrderCommand.Clicked"/>)
+    /// the building's position with the terrain's height there (<c>FUN_1407fc6e0</c> passes the clicked object's position, vfunc <c>0x40</c>, at
+    /// the height <c>FUN_1409b32f0</c> gives), else zero.
+    /// </summary>
+    public static Vector3 AtBuilding(World world, OrderCommand order, Vector3 building) =>
+        order.Clicked ? new Vector3(building.X, world.Walkability.TerrainHeight(building.X, building.Z), building.Z) : default;
 }
 
 /// <summary>
