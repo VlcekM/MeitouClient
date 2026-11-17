@@ -42,7 +42,8 @@ empty so far. A mod matches one kind, first of built in, ported, suggested; a mo
 
 - **Source:** `ports/<Name>/`, a class library setting `PortId` (its `meitou.json` id) with `meitou.json` beside it, listed in
   `MeitouClient.slnx`. `ports/Directory.Build.targets` references the game (`Private="false"`) and after each build copies the DLL and
-  manifest to `ports/<PortId>/` beside the game's Debug or Release build; `package-release.ps1` builds each port into the zip's `ports/`.
+  manifest to `ports/<PortId>/` beside the game's Debug or Release build; `package-release.ps1` builds each port into the zip's `ports/`
+  with the game's version (**Observed**, scratch run: a port built against an unversioned game is refused by a 0.1.0 one).
   A port's code is one DLL: no libraries of its own.
 - **Running:** `ModHost.CodeMods` puts an enabled ported mod in its `mods.cfg` place as the port (`ModInfo.WithPort`): manifest and
   assemblies from `ports/<PortId>/` beside the executable (`ModInfo.CodeFolder`, `ModContext.CodeFolder`), name, folder and data the

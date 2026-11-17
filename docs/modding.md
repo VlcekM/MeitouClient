@@ -68,8 +68,8 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 
 - One non-collectible `AssemblyLoadContext` per mod (`ModLoadContext`), loaded once at startup; no unload or hot reload.
 - Resolution by simple name: an assembly on the game's trusted platform list (`Meitou.*`, the framework, Bepu, `0Harmony`) comes from
-  the game even when the mod folder has a copy; anything else comes from the mod folder, so two mods may ship different versions of a
-  library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
+  the game even when the mod folder has a copy; anything else comes from the mod folder (an official port's: its folder beside the game), so
+  two mods may ship different versions of a library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
 - Between the two: an assembly a declared dependency exports comes from that dependency's context, so a framework loads once
   ([dependencies](modding-dependencies.md#assembly-resolution)).
 - **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
