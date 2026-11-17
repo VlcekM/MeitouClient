@@ -418,7 +418,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 0 | `none` |
 | 1 | `isAtLocation` (`FUN_1405a2450`, **Verified**): of a point: false at the zero point; true when the mover is done (`FUN_14065edb0`: no path, or path state 1 and not moving), or within flat squared distance 144 (`DAT_1416ad830`) and height 20 (`DAT_141683188`); Meitou: evaluated for an order's point (no path or path flags, or that box) |
 | 2 | `isBuildingComplete` |
-| 3 | `isSubjectInInventory` (`FUN_14059ce30`, **Verified**): the item is in the inventory or held, or resolves to nothing; Meitou: evaluated as the ground item gone (its id cannot tell an item another took from one in the inventory) |
+| 3 | `isSubjectInInventory` (`FUN_14059ce30`, **Verified**): the item is in the inventory or held, or resolves to nothing; Meitou: the order keeps the item itself (`GroundPick`): still on the ground false, topped up into a stack (no units left) true, else whether it is in this character's inventory or mouth, so one another took is false |
 | 4 | `hasWeapon` |
 | 5 | `hasWeaponEquipped`: a weapon in hand that is not ranged (`FUN_140596a30`, **Verified**) |
 | 6 | `isNoEnemiesInVicinity` |
@@ -860,9 +860,15 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
 - Shared desires (**Verified**: the desire member of each registration in `FUN_140319a60`, the thunks' AI vtable slots, `FUN_1405a33f0` decompiled):
   rows 98, 153, 175, 239 and 261 have Sleeping's desire (AI slot 30, [row 98](#slave-work-shout-and-capture)), so Sleeping on ground weighs danger and the last sleep
   as a bed does. Rows 31, 40, 44, 141 and 289 have Following's (AI slot 15): 0.5 (`DAT_14167e8d8`) times the followed character's StateBroadcastData
-  `+0xa8` (`followMe`, KenshiLib name), 1.0 when the target does not resolve. **Observed** (KenshiOracle Sho-Battai hold, 2026-11-09): skimmer packs (`animal agressive patrol nocturnal`, whose Squad list
-  holds Animal Sleep from its sleep add-on and Follow leader at the same weight) sleep with their sleeping leader, while members follow a patrolling
-  one, so `followMe` stays between 0 and 2 there. Meitou: `AiSystem.FollowDesire` (0.5 for 141 and 44, `followMe` read as 1) and
+  `+0xa8` (`followMe`, KenshiLib name), 1.0 when the target does not resolve. `followMe` (**Verified**, the AI update `FUN_1405a4ae0`) is the
+  character's current goal's TaskData `followMeWeight` (`+0x30` of the `AITaskSytem` `+0x1c0` goal's TaskData; 0 without one), raised to 0.1
+  (`DAT_14167fad0`) when below. The weight (**Verified**, the 24 writes after their rows' registration calls in `FUN_140319a60`, read in the disassembly;
+  the constructor `FUN_14061d350` leaves 0.01): 1.0 for 22, 24, 36, 39, 53, 101, 103, 127, 128, 129, 130, 165, 176, 192, 215 and 248 (patrols, wanders,
+  travel, a squad fight, announcements, retreats); 0.5 for 35 Running away; 0.1 written for 19, 37, 43, 153, 239, 255 and 275. So a member follows a
+  patrolling or travelling leader at 0.5 and one idling, at home or asleep at 0.05. **Observed** (KenshiOracle Sho-Battai hold, 2026-11-09): skimmer
+  packs (`animal agressive patrol nocturnal`, whose Squad list holds Animal Sleep from its sleep add-on and Follow leader at the same weight) sleep with
+  their sleeping leader, while members follow a patrolling one. Meitou: `AiSystem.FollowDesire` with `FollowMe` (each character's value stamped in the
+  serial schedule step from its mind's goal, else the row of its running order, job or goal; `TaskDataTable.FollowMeWeight`) and
   `AiSystem.SleepingDesire` for 175. `AiSystem.FollowFactor` checks the resolved mission target, slave owner or squad leader, as movement does;
   leading its own squad does not prevent a slave from following its owner.
 
@@ -958,8 +964,9 @@ carried by itself, 0.5 for a target that is no character; 146 slot 35 `FUN_14059
 or dead, else `needsSplint` of X = min(the medic's skill, the quality of the splint kit with the fewest charges in the first of its items and its backpack's holding one;
 none: 0), 0.1 when a part qualifies, x the relation / 100 (at least 0.05) for another faction. The pop drops the queue's entry only (`FUN_140518ca0`); the plan step
 (`FUN_14050d970`) ends the running task on its slot 4 and list A, or on its list B, never on the desire. Meitou: `OrderDesire`; a desire pop leaves the act-out
-to its own end (a lift to its clip's 0.95). Asked by `PlayerOrders.PopDone` at each decision (the re-ask cadence, `DecisionSystem.ReAsked`), not on every AI update. 31 / 289 have Following's desire (slot 15 `FUN_1405a33f0`, [shared
-desires](#desire-and-commitment), `followMe` read as 1 as the planner does): 0.5, or 1 for a target that does not resolve, so a follow order never pops by it. 152 is no order in Meitou
+to its own end (a lift to its clip's 0.95). The decision step asks every stepping character with a front order on every tick whether it leaves (`PlayerOrders.PopsNow`), as the original's
+order step runs on every AI update, and decides it then. 31 / 289 have Following's desire (slot 15 `FUN_1405a33f0`, [shared desires](#desire-and-commitment)):
+0.5 x the followed character's `followMe` (at least 0.05), or 1 for a target that does not resolve, so a follow order never pops by it. 152 is no order in Meitou
 (its operate orders are 87, 97, 124 and 146), so its desire (slot 21 `FUN_14059df00`) is not asked.
 
 ## Planner
@@ -1033,7 +1040,15 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   running task (the driver's `+0x270` → `+0x68`) when: (a) slot 4, list A and the effect test hold (`FUN_140513f50`); (b) the mover is idle (vfunc 0x50) and `isAtLocation`
   is false: the target is marked unreachable for 20 s (`FUN_140796ed0`, the blackboard told) and a replan asked (`+0x26d`); (c) it is a walk row (1, 67, 82, 83, 120, 121, 163,
   199, 267) and the next queued task's row can already run; (d) the hours (the plan's tasks carry the goal's, `FUN_14050fe10`) are over, or (e) its own list B no longer holds
-  (`FUN_14060f940`), both unless the row has `+0x16`. The end (`FUN_14050d7d0`) starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
+  (`FUN_14060f940`), both unless the row has `+0x16`. The hours are the Tasker's `+0x64` / `+0x68` against the clock's hour (`*DAT_1421303d0`), given by the task
+  factory `FUN_14032ebd0`; the order adds (`FUN_1405086d0`, `FUN_140508380`, `FUN_140507a90`) pass 0 and 100, so an order is never out of its hours. The end
+  (`FUN_14050d7d0`) first pops the order queue's front when it matches the running task (`FUN_140506b10`), so an order whose list B fails while its own row runs
+  leaves the queue; while a provider step of its plan runs (a door closed before it is locked), the row's own list B is not asked. State 1 of an object target
+  (`FUN_14059c6d0`) is true when it resolves to nothing, else by the distance to its position; so (**Observed**, from that reach test, the carried body being at its
+  carrier) a lift order's 1 holds once the body is on the shoulder, and its list B (80, 27, !26, 1) does not end it after the attach. Meitou:
+  `ListTests.OrderNeedsFail` on the running front order, once its list B has held since the start (`OrderEntry.RowRuns`, standing for the provider steps being
+  over): a list B entry `RowStates` evaluates fails (the walk's `isAtLocation` and the follow rows 31, 45 and 289, whose fight Meitou runs as a step of the row,
+  left out); the task ends with `TaskEnd.Done`. The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
   skipped while `FUN_14060f0c0` holds, all of list A and a list A or an effect, else a replan is asked), else asks a replan and clears the goal unless it commits and has not
   expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; the
   scorer (`FUN_14050df10`) gives the current goal x1.25, the commitment floor 0.4 or cap 0.05 and, below 1 while the running task's slot 4 says not finished, x1.25 again, and

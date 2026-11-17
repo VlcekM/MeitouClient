@@ -10,9 +10,9 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// The target of an order or job row whose lists are tested (<see cref="RowStates"/>): the character it names (<see cref="CharacterId.None"/>: none),
 /// the site, a fixture or building id (null: none), the task's point (the original's tasker <c>+0x58</c>, <see cref="Player.OrderEntry.TaskPoint"/>;
-/// zero: none) and the ground item it names (<see cref="GroundItems"/> id; null: none).
+/// zero: none) and the ground item it names (<see cref="Items.GroundPick"/>; null: none).
 /// </summary>
-public readonly record struct RowTarget(CharacterId Character, string? Site, Vector3 Point = default, int? Item = null);
+public readonly record struct RowTarget(CharacterId Character, string? Site, Vector3 Point = default, Items.GroundPick? Item = null);
 
 /// <summary>
 /// The states of the order and job rows' lists for a character with no mind (a player character; docs/game/ai-tasks.md "Finished tests" and
@@ -38,6 +38,21 @@ public static class RowStates
     /// List B as "can run" reads it without the finder (<c>FUN_14060f940</c>): every entry holds. Null when an entry is not evaluated here.
     /// </summary>
     public static bool? Needs(World world, int slot, TaskDataRow row, in RowTarget target) => All(world, slot, row.Needs, target);
+
+    /// <summary>
+    /// Whether an entry of list B that is evaluated here fails, the walk's <c>isAtLocation</c> left out (the plan step's end of a running row,
+    /// <see cref="ListTests.OrderNeedsFail"/>): one Meitou does not evaluate never ends it.
+    /// </summary>
+    public static bool NeedFails(World world, int slot, TaskDataRow row, in RowTarget target)
+    {
+        foreach (var c in row.Needs)
+        {
+            if (c.State == StateType.IsAtLocation) continue;
+            if (Holds(world, slot, c.State, target) is { } value && value != c.Holds) return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Whether every condition holds: false at the first that does not, null when one is not evaluated here (and none failed before it).
@@ -85,9 +100,7 @@ public static class RowStates
             // AI slot 10 (FUN_140641540) answers 0: state 0 none (and 135, which shares the thunk) never holds, so 96's and 110's list A never does.
             StateType.None => false,
             StateType.IsAtLocation => target.Character.IsNone && target.Site is null && AtPoint(world, slot, target.Point),
-            // 3 (FUN_14059ce30) of an item target: in the character's inventory (or the item it holds), or resolving to nothing; Meitou's subject is
-            // the ground item, whose id ends when it leaves the ground, so one another took reads as taken too.
-            StateType.IsSubjectInInventory => target.Item is { } item && world.GroundItems.Find(item) is null,
+            StateType.IsSubjectInInventory => target.Item is { } pick && SubjectInInventory(world, cold, pick),
             // 123 and 136 share the thunk 0x14002fb1c, which returns false.
             StateType.IsWorking or StateType.IsWorkingPretend => false,
             StateType.IsBuildingComplete => BuildingComplete(world, target.Site),
@@ -108,6 +121,9 @@ public static class RowStates
             StateType.AmImprisoned => cold.InSomething == HeldState.Imprisoned,
             StateType.IsInBed => cold.InSomething == HeldState.Bed,
             StateType.IsFullyRested => FullyRested(world, Character(world, target.Character) ?? cold),
+            // 80 isCarryingArmOK (1405c7930): the left arm works (medical +0x166). 26 IS_CROUCHING_OR_LYING (FUN_140599e90).
+            StateType.IsCarryingArmOk => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
+            StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
             StateType.IsAggressionTowards => Threatened(world, target.Character),
             StateType.IsAggressionTowardsMe => world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot),
             _ => null,
@@ -132,14 +148,28 @@ public static class RowStates
     }
 
     /// <summary>
+    /// 3 isSubjectInInventory (<c>FUN_14059ce30</c>, <b>Verified</b>) of an item target: in the character's inventory or the item it holds, or
+    /// resolving to nothing. An item still on the ground is not; one topped up into a stack (no units left) is gone; else the item itself must be in
+    /// this character's inventory or mouth, so one another character took is not.
+    /// </summary>
+    static bool SubjectInInventory(World world, CharacterCold cold, Items.GroundPick pick)
+    {
+        if (world.GroundItems.Find(pick.Id) is not null) return false;
+        if (pick.Item.Quantity <= 0) return true;
+
+        return ReferenceEquals(cold.Mouth, pick.Item) || cold.Inventory is { } inventory && inventory.All().Contains(pick.Item);
+    }
+
+    /// <summary>
     /// 2 isBuildingComplete (<c>FUN_140596b20</c>, <b>Verified</b>): an object target that is not destroyed (slot 97: 0 for a building, a door's
-    /// broken byte +0x3b6) and whose complete byte (slot 69, +0x160) is set: a player building's <see cref="Construction.BuildSite.Complete"/>, a door
-    /// not broken.
+    /// broken byte +0x3b6) and whose complete byte (slot 69, +0x160) is set: a player building's <see cref="Construction.BuildSite.Complete"/>, a town
+    /// building's machine site (complete, <see cref="Production.ProductionSystem.TownWorkSite"/>), a door not broken.
     /// </summary>
     static bool BuildingComplete(World world, string? site)
     {
         if (site is null) return false;
         if (world.Buildings.Find(site) is { } building) return building.Complete;
+        if (world.SystemOf<Production.ProductionSystem>()?.TownWorkSite(site) is { } town) return town.Complete;
 
         return Door(world, site) is { DoorBroken: false };
     }

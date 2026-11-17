@@ -21,6 +21,12 @@ public sealed record PickUpItemOrder(IReadOnlyList<CharacterId> Characters, int 
 }
 
 /// <summary>
+/// The ground item a pick-up order names: its <see cref="GroundItems"/> id and the item itself, which keeps its identity once taken (a stack topped up
+/// into another is left with no units), so state 3 can tell one in the character's inventory from one another took (<see cref="Ai.RowStates"/>).
+/// </summary>
+public sealed record GroundPick(int Id, ItemInstance Item);
+
+/// <summary>
 /// Picking up loose items (docs/simulation.md "Ground items"): walk to the item, then into the inventory (<see cref="Items.Inventory.Add"/>), or
 /// a message when it has no room. The pick-up starts through <see cref="TaskStart.Start"/> as row 3 "Collecting item", the walk to a container as
 /// 26 "Looting" on a site (the original's container order), which this handles (the player system registers both,
@@ -124,8 +130,11 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.MoveCusOrdered, movement) { Point = item.Position },
                     order.Queued);
         else if (!walkOnly)
-            PlayerOrders.Give(world, best,
-                    new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.Pickup, this) { Point = item.Position, Detail = order.Item }, order.Queued);
+        {
+            var pick = new GroundPick(item.Id, item.Item);
+            PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.Pickup, this) { Point = item.Position, Detail = pick },
+                    order.Queued);
+        }
     }
 
     /// <summary>
@@ -136,7 +145,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     {
         var c = world.Characters.Cold(slot)!;
         if (!c.IsPlayer
-                || (order.Detail is int item ? world.GroundItems.Find(item) is null
+                || (order.Detail is GroundPick pick ? world.GroundItems.Find(pick.Id) is null
                         : world.Fixtures.Find(order.Site!) is not { Contents: not null }))
             return OrderCheck.Gone;
         return c is { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } && c.CarriedBy.IsNone ? OrderCheck.Run
@@ -149,7 +158,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
-        if (order.Detail is not int item)
+        if (order.Detail is not GroundPick pick)
         {
             ContainerAccess.StartContainer(world, slot, order);
             return;
@@ -157,7 +166,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
         bool far = Vector2.Distance(Flat(world.Characters.Next[slot].Position), Flat(order.Point)) > PickUpReach;
         TaskStart.Start(world, slot,
                 new TaskRequest(far ? CharacterTask.GoTo : CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Pickup,
-                        TaskSource.Order) { Point = order.Point, Detail = item });
+                        TaskSource.Order) { Point = order.Point, Detail = pick.Id });
     }
 
     /// <summary>

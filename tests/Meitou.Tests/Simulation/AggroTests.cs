@@ -714,13 +714,13 @@ public class AggroTests
 
     /// <summary>
     /// An attack goal is one goal of the chooser (docs/game/ai-tasks.md "Precedence", "Desire and commitment"): a member whose list holds following
-    /// its leader (priority 3 here, weight 1) and 16 Attack enemies sees a bandit; it attacks only when 16 outscores the follow (its weight above
-    /// 1.25, the follow's continuity bonus once it runs) and only in 16's hours. Catches an attack on sight that ignores the goals' weights and
-    /// hours.
+    /// its leader (priority 3 here, weight 1; desire 0.5 x the idle leader's followMe 0.1) and 16 Attack enemies sees a bandit; it attacks only
+    /// when 16 outscores the follow (its weight above 0.0625, the follow's 0.05 with its continuity bonus once it runs) and only in 16's hours.
+    /// Catches an attack on sight that ignores the goals' weights and hours.
     /// </summary>
     [Theory]
     [InlineData(2f, true, true)]
-    [InlineData(0.5f, true, false)]
+    [InlineData(0.04f, true, false)]
     [InlineData(2f, false, false)]
     public void An_attack_goal_wins_only_when_it_outscores_the_members_other_goals(float weight, bool inHours, bool attacks)
     {
@@ -747,7 +747,8 @@ public class AggroTests
     /// <summary>
     /// A fight is a plan step of its combat goal (docs/game/ai-tasks.md "Combat goals"): a member that attacks a bandit on sight (16) keeps the one fight
     /// across its thinks while it runs at it (one start, the fight's start tick unchanged), and once its lists make following its leader outscore the
-    /// attack (16 at 0.2, x1.25 as the current goal, against the follow's 0.5: weight 1 x desire 0.5), the chooser takes it out of the fight to follow.
+    /// attack (16 at 0.02, x1.25 as the current goal, against the follow's 0.05: weight 1 x desire 0.5 x the idle leader's followMe 0.1), the chooser
+    /// takes it out of the fight to follow.
     /// Catches a fight started again at every think, and a fighter that never thinks.
     /// </summary>
     [Fact]
@@ -781,7 +782,7 @@ public class AggroTests
 
         Assert.Single(a.Aggro.Log, e => e.Attacker == member);
 
-        Lists(squad, [], [follow, Goal(TaskType.AttackEnemies, 0.2f)]);
+        Lists(squad, [], [follow, Goal(TaskType.AttackEnemies, 0.02f)]);
         a.World.RunTicks(2 * 15);
 
         Assert.False(a.Fighting(member), "the follow outscores the attack");
@@ -835,8 +836,9 @@ public class AggroTests
 
     /// <summary>
     /// Self preservation competes with the other priority-3 goals by its desire (<c>FUN_140599d20</c>: 0.7 with an attacker within 181.7, 1 within 40): a
-    /// member following its leader at weight 1.2 (desire 0.5, x1.25 as the current goal and x1.25 again as a never-finishing one under 1,
-    /// <c>FUN_14050df10</c>: 0.94) keeps following while the bandit that attacks it runs in from 120, and fights it once the bandit is within 40.
+    /// member following its leader at weight 12 (desire 0.5 x the idle leader's followMe 0.1, x1.25 as the current goal and x1.25 again as a
+    /// never-finishing one under 1, <c>FUN_14050df10</c>: 0.94) keeps following while the bandit that attacks it runs in from 120, and fights it once
+    /// the bandit is within 40.
     /// Catches a self-defence at any distance whatever the other goals, and one that never outranks a goal above 0.7.
     /// </summary>
     [Fact]
@@ -847,7 +849,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 1.2f, target: TaskTargetType.Leader)]);
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 12f, target: TaskTargetType.Leader)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
         a.World.RunTicks(15);

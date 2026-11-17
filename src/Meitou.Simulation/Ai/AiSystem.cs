@@ -223,6 +223,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     int _leaving;
 
     /// <summary>
+    /// Every character's <c>followMe</c>, stamped in the schedule step for the think to read (<see cref="FollowDesire"/>).
+    /// </summary>
+    readonly FollowMe _followMe = new();
+
+    /// <summary>
+    /// The serial schedule step: stamps every character's <c>followMe</c> before the parallel think.
+    /// </summary>
+    public void Schedule(World world) => _followMe.Stamp(world);
+
+    /// <summary>
     /// The parallel think: each character the AI runs, on its turn or when asked, chooses a goal and acts it out (writes its own slot only).
     /// </summary>
     public void Think(World world, Partition part)
@@ -795,16 +805,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Following's desire (AI slot 15, <c>FUN_1405a33f0</c>, <b>Verified</b>; rows 31, 40, 44, 141 and 289 register it): 0.5 times the followed
-    /// character's <c>followMe</c> (StateBroadcastData <c>+0xa8</c>), 1 when the target does not resolve. What sets <c>followMe</c> is
-    /// <b>Unknown</b>; Meitou reads 1, so a member weighs following its leader at 0.5.
+    /// character's <c>followMe</c> (<see cref="FollowMe"/>, as stamped this tick), so a member follows a patrolling or travelling leader (1) at 0.5
+    /// and one standing about or asleep (0.1) at 0.05. Other follow rows want 1.
     /// </summary>
-    static float FollowDesire(TaskType type) => type is TaskType.FollowSquadleader or TaskType.FollowPlayerOrder ? FollowShare : 1;
+    float FollowDesire(TaskType type, CharacterId target) => type is TaskType.StayCloseToTarget or TaskType.GetNearTo or TaskType.FollowPlayerOrder
+        or TaskType.FollowSquadleader or TaskType.Unnamed289 ? FollowShare * _followMe.Of(target.Slot) : 1;
 
     /// <summary>
     /// Following needs a living target other than self: the contract's mission target, else the slave owner or squad leader, as movement resolves
     /// it. A slave that leads its own squad can therefore follow its master.
     /// </summary>
-    static float FollowFactor(World world, Squad squad, Blackboard board, CharacterId self, TaskTargetType targeting, TaskType type)
+    float FollowFactor(World world, Squad squad, Blackboard board, CharacterId self, TaskTargetType targeting, TaskType type)
     {
         var cold = world.Characters.Cold(self.Slot)!;
         var target = targeting == TaskTargetType.SquadMission
@@ -812,7 +823,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             : Kidnap.ObedientSlave.OwnerOf(world, cold) ?? squad.Leader;
         if (target.IsNone || target == self || !world.Characters.IsAlive(target)) return 0;
 
-        return FollowDesire(type);
+        return FollowDesire(type, target);
     }
 
     /// <summary>

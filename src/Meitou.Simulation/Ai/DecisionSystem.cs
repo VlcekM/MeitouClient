@@ -300,7 +300,9 @@ public sealed class DecisionSystem
             if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, i, cold);
             bool front = cold.OrderQueue.Front is { } f && (!f.Tried || f.Started && !PlayerOrders.Runs(world, i, f));
             bool due = !paused && (world.Tick + i) % Production.ProductionSystem.JobCheckTicks == 0 && ReAsked(world, i, cold);
-            if (!cold.Replan && !front && !due) continue;
+
+            // The order step runs on every AI update: a front that leaves now is decided now.
+            if (!cold.Replan && !front && !due && (paused || !PlayerOrders.PopsNow(world, i))) continue;
             if (!paused && Claimed(world, i))
             {
                 cold.Replan = false;

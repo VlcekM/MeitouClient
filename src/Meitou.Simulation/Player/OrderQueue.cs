@@ -162,6 +162,11 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// Its check ran at the front once (its failure text was shown); a front not tried yet is tried at once.
     /// </summary>
     public bool Tried { get; internal set; }
+    /// <summary>
+    /// The row's list B has held since the order started (<see cref="ListTests.OrderNeedsFail"/>): the original runs its row only then, its
+    /// providers' steps over, so only then does a failing list B end it.
+    /// </summary>
+    public bool RowRuns { get; internal set; }
 
     /// <summary>
     /// Whether the order is a move (row <c>MoveCusOrdered</c>).
@@ -365,6 +370,7 @@ public static class PlayerOrders
                 return check;
             }
             front.Started = true;
+            front.RowRuns = false;
             front.Owner.Start(world, slot, front);
             if (q.Front != front || Runs(world, slot, front)) return check;
             q.PopFront();
@@ -383,6 +389,7 @@ public static class PlayerOrders
         q.PopFront();
         if (q.Front is not { IsMove: true } next) return false;
         next.Started = next.Tried = true;
+        next.RowRuns = false;
         n.Goal = new Vector2(next.Point.X, next.Point.Z);
         n.Flags |= (ushort)MoveFlags.NeedPath;
         return true;
@@ -483,26 +490,58 @@ public static class PlayerOrders
     }
 
     /// <summary>
-    /// <c>checkOrders</c>' first pop (<c>FUN_140510920</c>, <b>Verified</b>): the front order leaves when its row is done
-    /// (<see cref="ListTests.OrderDone"/>, slot 4 asked of the task when the front runs it) or its desire is 0 or less (<see cref="OrderDesire"/>).
-    /// The pop only drops the queue's entry. A running task ends with a done row (the plan step ends it on the same test, <c>FUN_14050d970</c>),
-    /// but not with the desire, which the plan step does not ask: its act-out goes on to its own end (a lift past the attach to its clip's 0.95).
-    /// Nor does a move's walk end: <c>Task_Move</c>'s end (Tasker slot 3 <c>FUN_1403547b0</c>) stops the mover only once it is done
-    /// (<c>CharMovement</c> slot 12, then slot 19 <c>FUN_14065fc70</c>), so a move left within 12 of its point walks on to it unless the next
-    /// order's start takes it over. One pop per decision, as the original's.
+    /// The order step and the plan step on the front order (<c>FUN_14050d970</c>, then <c>checkOrders</c>' first pop <c>FUN_140510920</c>,
+    /// <b>Verified</b>; docs/game/ai-tasks.md "Finished tests"). The plan step ends a running front's task when its row is done
+    /// (<see cref="ListTests.OrderDone"/>, slot 4 asked of the running task) or its list B fails (<see cref="ListTests.OrderNeedsFail"/>), and
+    /// the end pops the order (<c>FUN_14050d7d0</c>); a move's walk goes on (<c>Task_Move</c>'s end, Tasker slot 3 <c>FUN_1403547b0</c>, stops the
+    /// mover only once it is done, so a move left within 12 of its point walks on unless the next order's start takes it over). The order step drops
+    /// the entry alone when its desire is 0 or less (<see cref="OrderDesire"/>), the act-out going on to its own end (a lift past the attach to its
+    /// clip's 0.95), and a front not yet started whose row is done.
     /// </summary>
     static void PopDone(World world, int slot)
     {
         var q = world.Characters.Cold(slot)!.OrderQueue;
-        if (q.Front is not { } front || front.Started && !Runs(world, slot, front)) return;
+        if (Step(world, slot) is not { } step) return;
+
+        if (step.EndsTask && !step.Front.IsMove) TaskStart.End(world, slot, TaskEnd.Done);
+        if (q.Front == step.Front) q.PopFront();
+    }
+
+    /// <summary>
+    /// Whether the front order leaves at this AI update (<see cref="PopDone"/>'s tests; serial, it records <see cref="OrderEntry.RowRuns"/>): the
+    /// decision step asks it of every character with a front on every tick it steps, as the original's order step runs on every AI update.
+    /// </summary>
+    internal static bool PopsNow(World world, int slot) =>
+        world.Characters.Cold(slot)!.OrderQueue.Front is not null && Step(world, slot) is not null;
+
+    /// <summary>
+    /// The front's pop, if it leaves now: whether it ends its running task with it (the plan step's) or only leaves the queue (the order step's).
+    /// </summary>
+    static (OrderEntry Front, bool EndsTask)? Step(World world, int slot)
+    {
+        var q = world.Characters.Cold(slot)!.OrderQueue;
+        if (q.Front is not { } front || front.Started && !Runs(world, slot, front)) return null;
 
         bool running = front.Started;
-        bool unwanted = OrderDesire.Of(world, slot, front) is <= 0;
-        bool done = !unwanted && ListTests.OrderDone(world, slot, front, running);
-        if (!unwanted && !done) return;
+        bool ends = running && (ListTests.OrderDone(world, slot, front, true) || RowEnds(world, slot, front));
+        if (ends) return (front, true);
 
-        if (running && done && !front.IsMove) TaskStart.End(world, slot, TaskEnd.Done);
-        if (q.Front == front) q.PopFront();
+        bool leaves = OrderDesire.Of(world, slot, front) is <= 0 || !running && ListTests.OrderDone(world, slot, front, false);
+        if (leaves) return (front, false);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the running front's row ends by its list B now (<see cref="ListTests.OrderNeedsFail"/>), after it held since the start
+    /// (<see cref="OrderEntry.RowRuns"/>, recorded here).
+    /// </summary>
+    static bool RowEnds(World world, int slot, OrderEntry front)
+    {
+        if (ListTests.OrderNeedsFail(world, slot, front) is not { } fails) return false;
+        if (!fails) front.RowRuns = true;
+
+        return fails && front.RowRuns;
     }
 
     /// <summary>

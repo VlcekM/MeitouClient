@@ -39,9 +39,9 @@ public static class OrderDesire
         {
             _ when TaskDataTable.Of(order.Row) is null => null,
 
-            // AI slot 15 (FUN_1405a33f0): 0.5 x the followed character's followMe, read as 1 as the planner's follow desire does; 1 for a target
-            // that does not resolve. Never 0, so a follow order never leaves by it.
-            TaskType.StayCloseToTarget or TaskType.Unnamed289 => world.Characters.TryResolveNext(order.Target, out _) ? FollowShare : 1,
+            // AI slot 15 (FUN_1405a33f0): 0.5 x the followed character's followMe (at least 0.1); 1 for a target that does not resolve. Never 0,
+            // so a follow order never leaves by it.
+            TaskType.StayCloseToTarget or TaskType.Unnamed289 => FollowDesire(world, order.Target),
             TaskType.PickLock or TaskType.PickLockOnShackles or TaskType.BruteForceShackles or TaskType.BruteForceLock => Low,
 
             // AI slot 72 (FUN_140792650): 0 while the character itself is down (Character slot 6 FUN_1405c9e10).
@@ -56,6 +56,17 @@ public static class OrderDesire
             TaskType.SplintOrder => world.SystemOf<FirstAidSystem>()?.SplintOrderDesire(world, slot, order.Target),
             _ => 1,
         };
+    }
+
+    /// <summary>
+    /// Following's desire of a follow order (AI slot 15): 0.5 x the followed character's <see cref="FollowMe"/>; 1 when it does not resolve.
+    /// </summary>
+    static float FollowDesire(World world, CharacterId target)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(target, out int t) || table.Cold(t) is not { } followed) return 1;
+
+        return FollowShare * FollowMe.Current(table, t, followed);
     }
 
     /// <summary>

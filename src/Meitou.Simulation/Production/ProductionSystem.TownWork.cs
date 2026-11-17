@@ -118,7 +118,7 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The virtual site of a town building made by <see cref="TownWork"/>, else null.
     /// </summary>
-    BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
+    internal BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
 
     /// <summary>
     /// The site of the town building a player's order names by its <see cref="TownWorkId"/> (a turret's 146 USE_TURRET, a machine's 87 or its

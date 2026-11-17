@@ -23,10 +23,27 @@ public static class ListTests
         var type = Saving.OrderSave.SavedRow(order.Row);
         if (TaskDataTable.Of(type) is not { } row) return false;
 
-        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as int?);
+        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
         if (RowStates.Done(world, slot, row, target) != true || !EffectHolds(row)) return false;
 
         return running ? !TaskFinished.Unfinished(world, slot, type) : TaskFinished.Fresh(world, slot, type, order.Target);
+    }
+
+    /// <summary>
+    /// The plan step's list B test of a running order's row (<c>FUN_14050d970</c>, <b>Verified</b>: (e) in docs/game/ai-tasks.md "Precedence"):
+    /// true when an entry of the row's list B that <see cref="RowStates"/> evaluates fails (<see cref="RowStates.NeedFails"/>), false when none
+    /// does, null where it is not asked: a row with TaskData <c>+0x16</c> (<see cref="PlanSteps.KeepsHours"/>; the hours never end an order, whose
+    /// task the order adds make with the hours 0 to 100, <c>FUN_1405086d0</c>), the walk to the row (the original's plan step of its own; a move is
+    /// that walk), and a follow row (31, 45, 289), which Meitou leaves to its fight step (<see cref="Movement.MovementSystem.FightStepOver"/>).
+    /// </summary>
+    public static bool? OrderNeedsFail(World world, int slot, OrderEntry order)
+    {
+        var type = Saving.OrderSave.SavedRow(order.Row);
+        if (TaskDataTable.Of(type) is not { } row || PlanSteps.KeepsHours(type) || PermaJobs.Follows(type)) return null;
+        if (!order.IsMove && world.Characters.Next[slot].Task == (byte)Movement.CharacterTask.GoTo) return null;
+
+        var target = new RowTarget(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
+        return RowStates.NeedFails(world, slot, row, target);
     }
 
     /// <summary>

@@ -234,9 +234,11 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
   so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow row's fight step does not). A move whose walk finds no path or is given
   up blocked leaves the queue alone and the next order is tried at the decision step (`PlayerOrders.WalkFailed`: the mover has no path, so state 1 holds).
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
-- A done front leaves at each decision before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
+- A done front leaves before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
   order step, [finished tests](game/ai-tasks.md#finished-tests)), and so does one whose desire is 0 or less (`OrderDesire`: a first aid or splint order with no kit, a lift
-  order once the body is carried); a running one ends its task (`TaskEnd.Done`) when its row is done, while a desire of 0 leaves the act-out to its own end. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
+  order once the body is carried) and a running one whose list B fails while its own row runs (`ListTests.OrderNeedsFail`, once it has held since the start, the plan step's end, [precedence](game/ai-tasks.md#precedence));
+  a running one ends its task (`TaskEnd.Done`) when its row is done or cannot run, while a desire of 0 leaves the act-out to its own end. The decision step tests this on every
+  tick a character with a front steps (`PlayerOrders.PopsNow`) and decides it then. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
   and its walk goes on (`Task_Move`'s end stops the mover only once it is done), so the next order or job takes the walk over there.
 - `PlayerOrders.Holds` (a pure read): the character holds an order, running, waiting or queued (the original's count `+0x60`; a front whose task ended is not counted). The
   implicit ditch job 242 runs only without one ([perma-jobs](game/ai-tasks.md#perma-jobs)). `PlayerOrders.Wins` (pure): the front runs or can start, so source 1 wins; the
@@ -244,7 +246,8 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
 - A row needing no melee threat (`PlayerOrders.NeedsNoThreat`: `!158` in list B, of the orders only 146 Turret gunner) is blocked while `CombatSystem.ImmediateThreat` holds; at a
   decision its running order ends (`TaskEnd.Stopped`) and waits unstarted, so the gunner falls through to self-defence and mans the turret again once the threat is gone (S3).
   An owner's `IOrderOwner.StillHolds` does the same for its own start conditions: an operate or gunner order (87, 146) whose machine has no power
-  ([state 93](game/ai-tasks.md)) ends, waits unstarted and says "It needs electricity." again.
+  ([state 93](game/ai-tasks.md)) ends, waits unstarted and says "It needs electricity." again. This differs from the original, whose plan step ends such an
+  order and pops it once its list B (93) fails while the row runs ([precedence](game/ai-tasks.md#precedence)).
   A Loot order (26) walks through a fight; once its window is open the loot ends (`TaskEnd.Done`, closing it) while a threat is within 40 (`Task_Loot_Order`'s update,
   `CarrySystem.HoldWindow`, [carry-loot](game/carry-loot.md)).
 - Group orders keep their pickers (the nearest or first character that can run it: pick up, loot, stealth KO, the turret, item pick-up, containers, lock work); only that character

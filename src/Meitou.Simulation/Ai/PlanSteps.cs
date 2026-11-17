@@ -111,6 +111,6 @@ static class PlanSteps
     /// <summary>
     /// The rows whose TaskData <c>+0x16</c> is set (12, 102, 159, 161, <c>FUN_140319a60</c>): the plan step tests neither their hours nor their list B.
     /// </summary>
-    static bool KeepsHours(TaskType type) => type is TaskType.PlayerTalkTo or TaskType.SeekAndTalkAndSendSignal or TaskType.SendDialogueSignal
+    internal static bool KeepsHours(TaskType type) => type is TaskType.PlayerTalkTo or TaskType.SeekAndTalkAndSendSignal or TaskType.SendDialogueSignal
         or TaskType.SendDialogueSignalWithoutMoving;
 }
