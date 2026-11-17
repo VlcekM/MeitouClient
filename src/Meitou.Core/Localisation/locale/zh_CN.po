@@ -134,8 +134,17 @@ msgstr "浏览"
 msgid "Install folder"
 msgstr "安装目录"
 
-msgid "Where versions are installed; changing it moves them."
-msgstr "各版本安装的位置；更改后会移动这些版本。"
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "各版本安装的位置；更改时会询问是否移动这些版本。"
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "要把已安装的版本从 {1} 移动到 {2} 吗？保留则它们留在原处，新文件夹只列出其中已有的版本。"
+
+msgid "Move them"
+msgstr "移动"
+
+msgid "Keep them"
+msgstr "保留"
 
 msgid "Open"
 msgstr "打开"

@@ -283,6 +283,15 @@ public sealed class Releases(HttpClient http)
     public static string VersionDirectory(string version) => Path.Combine(VersionsDirectory, version);
 
     /// <summary>
+    /// Whether <paramref name="folder"/> holds an installed version, standard or legacy.
+    /// </summary>
+    public static bool HasInstalled(string folder) =>
+        new[] { "versions", "versions-legacy" }
+            .Select(family => Path.Combine(folder, family))
+            .Where(Directory.Exists)
+            .Any(family => Directory.EnumerateDirectories(family).Any(d => FindGame(d) is not null));
+
+    /// <summary>
     /// Moves standard and legacy installed versions from <paramref name="from"/> to <paramref name="to"/>, copying across drives.
     /// A version already in the target is left where it was.
     /// </summary>

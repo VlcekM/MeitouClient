@@ -31,7 +31,7 @@ items); the launcher never downloads or hosts mods.
   `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
   matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
   `MeitouLauncherLegacy` / `Meitou Launcher Legacy`; installed games live in `versions-legacy/`, separately from standard builds.
-  Settings are shared; changing the install folder moves both build families. A release with no matching zip is listed but not installable.
+  Settings are shared; moving the installed versions to a new install folder moves both build families. A release with no matching zip is listed but not installable.
 - The list comes from the REST API without a token (60 requests an hour per IP). Every page is read (`per_page=100`, until a short page),
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count
   against the quota.
@@ -168,8 +168,9 @@ folder containing `data/gamedata.base`. DepotDownloader is not bundled or automa
 
 The version folders and `downloads/` live in the install folder, by default the data folder. On first start (until `FoldersConfirmed`
 is saved) an overlay asks for the install folder, the Kenshi folder and the renderer, prefilled with the current and the
-detected ones. Changing the install folder there or in Settings moves the installed versions (copied, then deleted,
-across drives).
+detected ones. Changing the install folder there moves the installed versions (copied, then deleted, across drives). In
+Settings, when the old folder holds versions, a question asks to move them or keep them; kept versions stay in the old folder
+and the list shows only the new folder's versions as installed.
 
 ## Graphics
 

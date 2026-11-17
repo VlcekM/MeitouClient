@@ -129,8 +129,17 @@ msgstr "Procurar"
 msgid "Install folder"
 msgstr "Pasta de instalação"
 
-msgid "Where versions are installed; changing it moves them."
-msgstr "Onde as versões são instaladas; alterá-la move os arquivos."
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "Onde as versões são instaladas; ao alterá-la, pergunta se elas devem ser movidas."
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "Mover as versões instaladas de {1} para {2}? Se mantidas, ficam onde estão e a nova pasta lista apenas as suas."
+
+msgid "Move them"
+msgstr "Mover"
+
+msgid "Keep them"
+msgstr "Manter"
 
 msgid "Open"
 msgstr "Abrir"

@@ -355,7 +355,7 @@
               <Grid ColumnDefinitions="*,460">
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Classes="name" Text="Install folder" />
-                  <TextBlock x:Name="InstallStatus" Classes="desc" Text="Where versions are installed; changing it moves them." />
+                  <TextBlock x:Name="InstallStatus" Classes="desc" Text="Where versions are installed; changing it asks whether they move." />
                 </StackPanel>
                 <DockPanel Grid.Column="1">
                   <Button DockPanel.Dock="Right" Content="Open" Click="OpenInstallFolder_Click" Margin="6,0,0,0" />

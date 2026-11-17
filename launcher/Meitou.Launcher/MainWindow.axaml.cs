@@ -771,7 +771,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Browse for the install folder: the installed versions move there (not during a download).
+    /// Browse for the install folder (not during a download): asks whether the installed versions move there or stay where they
+    /// are; the versions list then shows what the new folder holds.
     /// </summary>
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
     {
@@ -780,25 +781,51 @@ public sealed partial class MainWindow : Window
             InstallStatus.Text = Tr("Wait for the download to finish first.");
             return;
         }
+
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Install folder" });
         if (folders is not [var folder] || folder.TryGetLocalPath() is not { } path || path == LauncherConfig.InstallDirectory)
             return;
+
+        if (await MoveInstalledAsked(path)) UseInstallFolder(path);
+    }
+
+    /// <summary>
+    /// When the current install folder holds versions, asks whether they move to <paramref name="path"/> and moves them if so;
+    /// false when the move failed.
+    /// </summary>
+    async Task<bool> MoveInstalledAsked(string path)
+    {
         var previous = LauncherConfig.InstallDirectory;
+        if (!Releases.HasInstalled(previous)) return true;
+
+        var text = Tr("Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own.",
+            previous, path);
+        if (!await AskAsync("Install folder", text, "Move them", "Keep them")) return true;
+
         InstallStatus.Text = Tr("Moving installed versions…");
         try
         {
             await Task.Run(() => Releases.MoveInstalled(previous, path));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             InstallStatus.Text = Tr("Could not move the versions to {1}: {2}", path, ex.Message);
             RefreshInstalled();
-            return;
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Saves <paramref name="path"/> as the install folder and shows the versions installed there.
+    /// </summary>
+    void UseInstallFolder(string path)
+    {
         _config.InstallFolder = Path.GetFullPath(path) == Path.GetFullPath(LauncherConfig.DataDirectory) ? null : path;
         _config.Save();
+
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
-        InstallStatus.Text = Tr("Where versions are installed; changing it moves them.");
+        InstallStatus.Text = Tr("Where versions are installed; changing it asks whether they move.");
         RefreshInstalled();
         ShowReleases();
     }
