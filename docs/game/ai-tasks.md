@@ -546,7 +546,7 @@ from the decompile and agree with this table, except that the decompile shows no
 | 154 | `FINAL_FOUND_AND_PUT_CARRIED_IN_A_CAGE` |
 | 155 | `iHaveSomeSlaves` |
 | 156 | `hasWeaponEquipped`: a ranged weapon in hand (`FUN_140596a70`, **Verified**); 6 Equipping weapon draws only melee, 264 Equipping crossbow only ranged, else the hand is emptied (`FUN_140346c30`) |
-| 157 | `hasWeaponEquipped` |
+| 157 | `hasWeaponEquipped`: a weapon of either kind in hand, 156 or 5 (`FUN_14060e540`, **Verified**); only 7 Sheathing weapon gives !157 |
 | 158 | `iAmBeingMeleeAttacked immediate` |
 | 159 | `iAmBeingMeleeAttacked general` |
 | 160 | `isWithinMyBowRange` |

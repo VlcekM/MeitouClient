@@ -30,6 +30,10 @@ public enum PickOutcome : byte
     /// A roll succeeded: the lock is unlocked.
     /// </summary>
     Success,
+    /// <summary>
+    /// The picker put its weapon away first (row 7, <see cref="Lockpicking.Sheathe"/>): no time added, no crime booked.
+    /// </summary>
+    Sheathing,
 }
 
 /// <summary>
@@ -83,15 +87,31 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     }
 
     /// <summary>
+    /// Row 7 Sheathing weapon before a pick or a cut (docs/game/locks.md "Weapon away"): rows 76, 201, 185 and 285 need !157, no weapon of either
+    /// kind in hand, which only row 7 gives, and their list B puts it after the walk. Its task puts the weapon away at once, with no clip, and takes
+    /// that update. True when it did.
+    /// </summary>
+    static bool Sheathe(CharacterCold c)
+    {
+        if (c.DrawnWeapon == WeaponKinds.None) return false;
+
+        c.DrawnWeapon = WeaponKinds.None;
+        return true;
+    }
+
+    /// <summary>
     /// One update of picking <paramref name="target"/> by the character in <paramref name="picker"/> for <paramref name="dt"/> game seconds (the
-    /// task's update time): sets the pending crime, adds the time, and once it passes the lock's next-roll time rolls <c>rand() &lt; p</c>: success
-    /// unlocks; failure waits uniform 5-20 s. Every roll trains lockpicking (1.2 x race[37] on success, 0.24 x on failure).
+    /// task's update time): a weapon in hand is put away first (<see cref="Sheathe"/>); then it sets the pending crime, adds the time, and once it
+    /// passes the lock's next-roll time rolls <c>rand() &lt; p</c>: success unlocks; failure waits uniform 5-20 s. Every roll trains lockpicking
+    /// (1.2 x race[37] on success, 0.24 x on failure).
     /// </summary>
     public PickOutcome Step(World world, int picker, Fixture target, float dt, CrimeSystem? crimes = null)
     {
         var c = world.Characters.Cold(picker);
         if (target.Lock is not { EffectivelyLocked: true } l) return PickOutcome.Open;
         if (c is null || !Allowed(c, l.Level)) return PickOutcome.NotAllowed;
+        if (Sheathe(c)) return PickOutcome.Sheathing;
+
         Crime(world, picker, c, target, crimes);
         var outcome = Roll(world, c, l, Rng.StableHash(target.Id), dt);
         if (outcome == PickOutcome.Success) world.Fixtures.Touch(target);
@@ -131,13 +151,15 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
 
     /// <summary>
     /// One update of picking shackles (Task_PickLock_Shackles 201, the same rules as a cage's lock): the picker's own (a caged picker takes the -10)
-    /// or another character's, which books code 7 against the wearer's faction.
+    /// or another character's, which books code 7 against the wearer's faction. A weapon in hand is put away first (<see cref="Sheathe"/>).
     /// </summary>
     public PickOutcome StepShackles(World world, int picker, CharacterId wearer, Items.ItemInstance item, float dt, CrimeSystem? crimes = null)
     {
         var c = world.Characters.Cold(picker);
         if (item.Lock is not { EffectivelyLocked: true } l) return PickOutcome.Open;
         if (c is null || !Allowed(c, l.Level)) return PickOutcome.NotAllowed;
+        if (Sheathe(c)) return PickOutcome.Sheathing;
+
         ShackleCrime(world, picker, wearer, crimes);
         return Roll(world, c, l, ShackleKey(wearer, item), dt);
     }
@@ -170,12 +192,14 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
 
     /// <summary>
     /// One update of cutting shackles (Task_CutShackles 185, <b>Observed</b>): hardness falls by <c>clamp(0.01 x strength, 0.05, 0.2) x dt x 2</c>;
-    /// at 0 the best tool is used up and the lock is broken (true). False while still cutting. Books the picking crime.
+    /// at 0 the best tool is used up and the lock is broken (true). False while still cutting, or while a weapon in hand is put away first
+    /// (<see cref="Sheathe"/>). Books the picking crime.
     /// </summary>
     public bool CutShackles(World world, int cutter, CharacterId wearer, Items.ItemInstance item, float dt, CrimeSystem? crimes = null)
     {
         var c = world.Characters.Cold(cutter);
-        if (c is null || item.Lock is not { Broken: false } l) return false;
+        if (c is null || item.Lock is not { Broken: false } l || Sheathe(c)) return false;
+
         ShackleCrime(world, cutter, wearer, crimes);
         l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;
@@ -199,12 +223,13 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// <summary>
     /// One update of cutting a fixture's lock (Task_CutLock 285, the shackle task's update, <b>Observed</b>): hardness falls by <c>clamp(0.01 x
     /// strength, 0.05, 0.2) x dt x 2</c>; at 0 the best tool is used up and the lock is broken, so it no longer holds (true). Books the picking
-    /// crime. The needed tool is checked by the caller.
+    /// crime. A weapon in hand is put away first (<see cref="Sheathe"/>, false). The needed tool is checked by the caller.
     /// </summary>
     public bool CutLock(World world, int cutter, Fixture target, float dt, CrimeSystem? crimes = null)
     {
         var c = world.Characters.Cold(cutter);
-        if (c is null || target.Lock is not { Broken: false } l) return false;
+        if (c is null || target.Lock is not { Broken: false } l || Sheathe(c)) return false;
+
         Crime(world, cutter, c, target, crimes);
         l.Hardness -= Math.Clamp(0.01f * CutStrength(c), 0.05f, 0.2f) * dt * 2;
         if (l.Hardness > 0) return false;

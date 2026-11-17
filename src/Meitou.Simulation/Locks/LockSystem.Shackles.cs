@@ -234,7 +234,8 @@ public sealed partial class LockSystem
                 if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             }
 
-            if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
+            // A stagger interrupts the work; a fight runs instead of it (its weapon drawn, which the pick or cut would put away again).
+            if (c.StaggeredUntil > world.Tick || c.InCombat) continue;
             Work(world, next, s, w, c, job, item);
         }
     }

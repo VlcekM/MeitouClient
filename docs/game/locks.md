@@ -83,6 +83,16 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
   with the time accumulated since its last full update (coarser for characters outside the every-frame tier). The accumulated total is the same, so the time to open is statistically equal; a roll
   can come up to one update interval earlier and the crime booking is per tick. Per-character update tiers are not modelled (negligible effect).
 - **Animation** (**Verified** `FUN_140520bc0`, `FUN_140359160`:86-90): every update the picker plays the target cage functionality's `animation lockpick`, else `medic` (`crawl use` when crawling), at speed `0.55 + 1.45 x 0.01 x skill` (the lerp `FUN_140015b63`, lo 0.55, hi 2.0; not a clamp). The speed is cosmetic: it does not change the roll timing. Meitou: `CharacterCold.PickWork` (set by `LockSystem` each picking tick), `AnimationSystem.HeldClip`, `CharacterAnimation.HeldRate`; a prisoner picking its own cage plays it in place of the caged pose (the base `Cage` names no `animation lockpick`, so `medic`; only `Cage- prisoner post` names one, `stand pole`).
+- **Weapon away** (picking and cutting; **Verified**, row table and `FUN_14060e540`): list B of 76, 201, 185 and 285 ends in isAtLocation (1)
+  and !157, in that order; state 157 `hasWeaponEquipped` holds for a weapon of either kind in hand (156 ranged `FUN_140596a70` or 5 melee `FUN_140596a30`),
+  and only 7 Sheathing weapon gives !157 (list A !5 !157 !156). The planner follows a node's first unmet B entry ([planner](ai-tasks.md#planner)),
+  so the worker walks to the lock, sheathes there, then works. Task_SheatheWeapon's update (`FUN_140336c00` -> Character vfunc 0x2d0
+  `FUN_1405cc820`, **Observed**) puts the weapon away at once in that one update: it detaches the `hands` attachment, clears the animation's
+  combat stance flags (`FUN_14051c9c0`) and empties the combat weapon (`FUN_140897f30` with null), with no clip. Breaking (186 / 286, list B
+  `38 1`) and unlocking need no sheathing; bashing (81, 226, 287) needs a melee weapon in hand (5). Meitou (`Lockpicking.Sheathe`): `Step`,
+  `StepShackles`, `CutLock` and `CutShackles` first put a weapon in hand away, which takes that update with no time, crime or clip, for every
+  pick and cut, the way through a door included (its walk's task stays on, so a player's character would otherwise keep the weapon out); a
+  shackle worker in a fight leaves the shackles alone while it fights.
 - **XP** (`FUN_1408c62e0`, **Verified**): after each roll, stat 37 gains `k x map[37] x ((101 - stat) / 101)^2` with
   `k = 1.2` on success, 0.24 on failure. The lock level is passed but unused.
 - **Bar** (**Verified**, Task_PickLock slot 2 `FUN_140359160`): each update sets the task's floating bar
@@ -226,7 +236,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   bash desire is above 0; else, for a player's order (the restricted rows 76, 140, 185, 285, 202, 122 and 270 are offered to the player's
   planner only), cut (285: list B 122 `hasTools`, at the door, no weapon drawn) or picked (76: list B 166, the skill condition, at the door, no
   weapon drawn); else the plan fails, and a player's move order (B list !24, !83, 60, 90, 59: the leaving test first) shows 59's text "I can't get
-  there." (`FUN_140610250`). 185 Cutting shackles has list A !114 (shackles), so it never serves a door (**Verified**, row table). `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
+  there." (`FUN_140610250`). 185 Cutting shackles has list A !114 (shackles), so it never serves a door (**Verified**, row table), and the context menu offers it only on locked shackles: a door's, container's or cage's Use Tools is 285 (**Verified**, `FUN_1407a6bc0`: 0xb9 only for a locked armour item and a character wearing one, 0x11d for the door, container and cage locks). `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
   resident squads, or the walker's faction owns it (faction `+0x80`), or the door's faction is the walker's (a player cage of the walker's own
   faction is excluded); no alliance term. So a walker whose door it is unlocks it (0.3 per second) and opens it; anyone else stays in, or out,
   unless the bash desire is above 0 (not in its home town: a bandit, a hostile, or a non-trader, non-civilian faction); a plan with no row of
@@ -238,7 +248,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
   attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, a player's character on its way in, cuts (`Lockpicking.CutLock`)
   or picks it (`Lockpicking.Step`, the pick's clip and floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for
-  the player). The weapon sheathing of 76 / 285 is not modelled. An NPC's walk is not refused for a destination behind locked doors (engine:
+  the player). A picker or cutter puts a weapon in hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's walk is not refused for a destination behind locked doors (engine:
   no `CanEnter` for the AI); at the door it takes the same way in (its own unlock or a bash). **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities

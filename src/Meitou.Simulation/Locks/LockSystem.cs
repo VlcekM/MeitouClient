@@ -162,7 +162,8 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
 
     /// <summary>
-    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work and the escapes.
+    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work, the escapes and the
+    /// lock pickers.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -176,6 +177,15 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         CageWorkers(world);
         OpportunisticEscapes(world);
         ShackleEscapes(world);
+        LockPickers(world);
+    }
+
+    /// <summary>
+    /// Each tick: a character in reach of the lock it picks (a prisoner at its own cage where it stands) works it; one downed or carried, or whose
+    /// lock is gone, gives up, and one sent elsewhere on its walk there drops it.
+    /// </summary>
+    void LockPickers(World world)
+    {
         var table = world.Characters;
         var next = table.Next;
         for (int s = 0; s < table.HighWater; s++)
@@ -202,37 +212,53 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
             }
 
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the picking
-            c.PickWork = (world.Tick, f.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
-            switch (Picking.Step(world, s, f, world.TickSeconds, Crimes))
-            {
-                case PickOutcome.Open:
-                    c.PickingLock = null;
-                    world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
-                    break;
-                case PickOutcome.Success:
-                    c.PickingLock = null;
-                    world.Fixtures.Touch(f);
-                    world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
-                    PickFloater(world, s, true);
 
-                    // Task_PickLock: the freed character to the picker.
-                    if (f.Occupant is { IsNone: false } held && held != table.IdOf(s))
-                        world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+            var work = (world.Tick, f.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
+            var outcome = Picking.Step(world, s, f, world.TickSeconds, Crimes);
+            if (outcome == PickOutcome.Sheathing) continue;
 
-                    break;
-                case PickOutcome.Failed:
-                    PickFloater(world, s, false);
+            c.PickWork = work;
+            Picked(world, s, c, f, outcome);
+        }
+    }
 
-                    // A failed roll: the captive says event 14.
-                    if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s))
-                        world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });
+    /// <summary>
+    /// What one update of picking <paramref name="f"/> led to: open or picked, the work ends (the captive of a picked cage thanks the picker); a
+    /// failed roll floats and the captive says so; a picker not skilled enough gives up.
+    /// </summary>
+    void Picked(World world, int s, CharacterCold c, Fixture f, PickOutcome outcome)
+    {
+        var table = world.Characters;
+        var at = table.Next[s].Position;
+        switch (outcome)
+        {
+            case PickOutcome.Open:
+                c.PickingLock = null;
+                world.EmitSound(SoundKind.Unlocked, s, at);
+                break;
+            case PickOutcome.Success:
+                c.PickingLock = null;
+                world.Fixtures.Touch(f);
+                world.EmitSound(SoundKind.Unlocked, s, at);
+                PickFloater(world, s, true);
 
-                    break;
-                case PickOutcome.NotAllowed:
-                    c.PickingLock = null;
-                    if (c.IsPlayer) Say(world, c, "I'm not skilled enough...");
-                    break;
-            }
+                // Task_PickLock: the freed character to the picker.
+                if (f.Occupant is { IsNone: false } held && held != table.IdOf(s))
+                    world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+
+                break;
+            case PickOutcome.Failed:
+                PickFloater(world, s, false);
+
+                // A failed roll: the captive says event 14.
+                if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s))
+                    world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });
+
+                break;
+            case PickOutcome.NotAllowed:
+                c.PickingLock = null;
+                if (c.IsPlayer) Say(world, c, "I'm not skilled enough...");
+                break;
         }
     }
 

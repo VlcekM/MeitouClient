@@ -575,7 +575,7 @@ public enum StateType
     /// </summary>
     HasWeaponEquipped156 = 156,
     /// <summary>
-    /// Registered as <c>hasWeaponEquipped</c>.
+    /// Registered as <c>hasWeaponEquipped</c>: a weapon of either kind in hand, 156 or 5 (<c>FUN_14060e540</c>, Verified).
     /// </summary>
     HasWeaponEquipped157 = 157,
     /// <summary>

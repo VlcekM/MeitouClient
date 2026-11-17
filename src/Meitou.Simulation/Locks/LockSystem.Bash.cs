@@ -586,15 +586,18 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// The door's lock picked on the way (Task_PickLock, <see cref="Lockpicking.Step"/>, with the pick's clip and floaters): picked, the door is
-    /// opened and the walk goes on.
+    /// The door's lock picked on the way (Task_PickLock, <see cref="Lockpicking.Step"/>, with the pick's clip and floaters; a weapon in hand is put
+    /// away first, an update with no clip): picked, the door is opened and the walk goes on.
     /// </summary>
     void PickOnTheWay(World world, int s, CharacterCold c, Fixture door)
     {
         if (c.StaggeredUntil > world.Tick) return;   // a stagger interrupts the picking
 
-        c.PickWork = (world.Tick, door.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
+        var work = (world.Tick, door.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
         var outcome = Picking.Step(world, s, door, world.TickSeconds, Crimes);
+        if (outcome == PickOutcome.Sheathing) return;
+
+        c.PickWork = work;
         if (outcome is PickOutcome.Success or PickOutcome.Failed) PickFloater(world, s, outcome == PickOutcome.Success);
         if (outcome is not (PickOutcome.Success or PickOutcome.Open)) return;
 
@@ -604,7 +607,8 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// The door's lock cut on the way (Task_CutLock, <see cref="Lockpicking.CutLock"/>): cut through, the door is opened and the walk goes on.
+    /// The door's lock cut on the way (Task_CutLock, <see cref="Lockpicking.CutLock"/>, a weapon in hand put away first): cut through, the door is
+    /// opened and the walk goes on.
     /// </summary>
     void CutOnTheWay(World world, int s, CharacterCold c, Fixture door)
     {

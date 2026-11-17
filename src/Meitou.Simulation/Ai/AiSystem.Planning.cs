@@ -304,8 +304,7 @@ public sealed partial class AiSystem
                     target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(carried).Any()
                     : MachineAt(target) is { } fillable && Production.ProductionSystem.CarriesInputOf(cold, fillable),
                 StateType.HaveSomeResourcesFrom => MachineAt(target) is { } emptiable && Production.ProductionSystem.CarriesOutputOf(cold, emptiable),
-                // 5: a weapon in hand that is not ranged; 156: a ranged one (FUN_140596a30 / FUN_140596a70, Verified); 157's evaluator is an
-                // undecoded stub.
+                // 5: a weapon in hand that is not ranged; 156: a ranged one; 157: either (FUN_140596a30 / FUN_140596a70 / FUN_14060e540, Verified).
                 StateType.HasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.HasWeaponEquipped156 => cold.DrawnWeapon == BowHold,
                 StateType.HasWeaponEquipped157 => cold.DrawnWeapon != WeaponKinds.None,
