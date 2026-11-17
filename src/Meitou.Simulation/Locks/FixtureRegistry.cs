@@ -1881,7 +1881,10 @@ public sealed partial class FixtureRegistry
                 continue;
 
             ref var n = ref table.Next[s];
-            if (n.Position != f.Position || n.Yaw != f.Yaw) table.Place(s, f.Position, f.Yaw);
+            if (n.Position == f.Position && n.Yaw == f.Yaw) continue;
+            (byte task, var time) = (n.Task, n.TaskTime);
+            table.Place(s, f.Position, f.Yaw);
+            (n.Task, n.TaskTime) = (task, time);   // Place stands it: the task is kept, only the place is written
         }
 
         HoldSleepers(world);

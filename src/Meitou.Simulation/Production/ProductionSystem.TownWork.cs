@@ -45,20 +45,22 @@ public sealed partial class ProductionSystem
     readonly PopulationData? _towns;
 
     /// <summary>
-    /// The towns' buildings by run-time key with the faction owning their town (<see cref="TownBuildingIndex"/>).
+    /// The towns' buildings by run-time key with the faction owning their town, the objects of their layouts by <see cref="TownLayoutBuilding.Id"/>
+    /// (with their building, the faction owning their town and the town's site index), and the revision of the towns' building lists they were
+    /// made from (<see cref="TownBuildingIndex"/>).
     /// </summary>
-    Dictionary<string, (TownBuilding Building, int Owner, int Site)>? _townBuildings;
+    sealed record TownIndex(int Revision, Dictionary<string, (TownBuilding Building, int Owner, int Site)> Buildings,
+        Dictionary<string, (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)> Pieces);
 
     /// <summary>
-    /// The objects of the towns' buildings' layouts by <see cref="TownLayoutBuilding.Id"/>, with their building, the faction owning their town and
-    /// the town's site index; made with <see cref="_townBuildings"/>.
+    /// The current <see cref="TownIndex"/>, replaced whole: the think phase's power checks read it from every worker (<see cref="MachinePowered"/>).
     /// </summary>
-    Dictionary<string, (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)>? _townPieces;
+    volatile TownIndex? _townIndex;
 
     /// <summary>
-    /// The revision of the towns' building lists <see cref="_townBuildings"/> was made from.
+    /// Held while <see cref="_townIndex"/> is made again, so two workers that find it out of date do not both make it.
     /// </summary>
-    int _townBuildingsRevision = -1;
+    readonly Lock _townIndexGate = new();
 
     /// <summary>
     /// The registered towns (site indices) whose buildings have been given their machines (<see cref="TownMachines"/>); cleared when the towns'
@@ -139,14 +141,14 @@ public sealed partial class ProductionSystem
     /// The town building of a run-time key and the faction owning its town; null for none.
     /// </summary>
     (TownBuilding Building, int Owner, int Site)? TownBuildingOf(string key) =>
-        TownBuildingIndex() is { } index && index.TryGetValue(key, out var found) ? found : null;
+        TownBuildingIndex() is { } index && index.Buildings.TryGetValue(key, out var found) ? found : null;
 
     /// <summary>
     /// The layout object of a town building of <see cref="TownLayoutBuilding.Id"/> <paramref name="key"/>, with its building, the faction owning its
     /// town and the town's site index; null for none.
     /// </summary>
     (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)? TownPieceOf(string key) =>
-        TownBuildingIndex() is not null && _townPieces!.TryGetValue(key, out var found) ? found : null;
+        TownBuildingIndex() is { } index && index.Pieces.TryGetValue(key, out var found) ? found : null;
 
     /// <summary>
     /// The site index of the town a town machine's site id names: its building's, or for a layout object's machine its building's
@@ -159,31 +161,35 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The towns' buildings by run-time key with the faction owning their town, and their layout objects (<see cref="_townPieces"/>), made again
+    /// The towns' buildings by run-time key with the faction owning their town, and their layout objects (<see cref="TownIndex"/>), made again
     /// when the lists change (<see cref="PopulationData.BuildingsRevision"/>, which also has <see cref="TownMachines"/> look at every registered
     /// town again); null without towns.
     /// </summary>
-    Dictionary<string, (TownBuilding Building, int Owner, int Site)>? TownBuildingIndex()
+    TownIndex? TownBuildingIndex()
     {
         if (_towns is not { } data) return null;
-        if (_townBuildings is not null && _townBuildingsRevision == data.BuildingsRevision) return _townBuildings;
+        if (_townIndex is { } current && current.Revision == data.BuildingsRevision) return current;
 
-        _townBuildingsRevision = data.BuildingsRevision;
-        _townBuildings = new(StringComparer.Ordinal);
-        _townPieces = new(StringComparer.Ordinal);
-        _townSitesMade.Clear();
-        _townWaiting.Clear();
-        foreach (var site in data.Sites)
+        lock (_townIndexGate)
         {
-            int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
-            foreach (var b in site.Buildings)
-            {
-                _townBuildings[b.Key] = (b, owner, site.Index);
-                foreach (var piece in b.LayoutBuildings) _townPieces[piece.Id] = (b, piece, owner, site.Index);
-            }
-        }
+            if (_townIndex is { } made && made.Revision == data.BuildingsRevision) return made;
 
-        return _townBuildings;
+            var buildings = new Dictionary<string, (TownBuilding Building, int Owner, int Site)>(StringComparer.Ordinal);
+            var pieces = new Dictionary<string, (TownBuilding House, TownLayoutBuilding Piece, int Owner, int Site)>(StringComparer.Ordinal);
+            foreach (var site in data.Sites)
+            {
+                int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+                foreach (var b in site.Buildings)
+                {
+                    buildings[b.Key] = (b, owner, site.Index);
+                    foreach (var piece in b.LayoutBuildings) pieces[piece.Id] = (b, piece, owner, site.Index);
+                }
+            }
+
+            _townSitesMade.Clear();
+            _townWaiting.Clear();
+            return _townIndex = new TownIndex(data.BuildingsRevision, buildings, pieces);
+        }
     }
 
     /// <summary>

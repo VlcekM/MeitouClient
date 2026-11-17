@@ -37,6 +37,12 @@ public sealed partial class ProductionSystem
     /// The tick <see cref="_npcOutputs"/> was read for.
     /// </summary>
     long _npcOutputTick = -1;
+
+    /// <summary>
+    /// Held while <see cref="_npcOutputs"/> is read or filled: the think phase asks it from every worker (a town's seats, <c>TownPlaceClaims</c>;
+    /// the planning's power checks), and two workers filling the dictionary at once corrupted it (a crash at the next tick's read).
+    /// </summary>
+    readonly Lock _npcOutputsGate = new();
     /// <summary>
     /// Per town, the grid's totals after the last tick (the town panel's power and battery bars, <see cref="TownPower"/>). Not saved.
     /// </summary>
@@ -776,14 +782,17 @@ public sealed partial class ProductionSystem
     /// </summary>
     float NpcOutputNow(World world, int index)
     {
-        if (_npcOutputTick != world.Tick)
+        lock (_npcOutputsGate)
         {
-            _npcOutputTick = world.Tick;
-            _npcOutputs.Clear();
-        }
+            if (_npcOutputTick != world.Tick)
+            {
+                _npcOutputTick = world.Tick;
+                _npcOutputs.Clear();
+            }
 
-        if (!_npcOutputs.TryGetValue(index, out float output)) _npcOutputs[index] = output = NpcOutput(world, index);
-        return output;
+            if (!_npcOutputs.TryGetValue(index, out float output)) _npcOutputs[index] = output = NpcOutput(world, index);
+            return output;
+        }
     }
 
     /// <summary>

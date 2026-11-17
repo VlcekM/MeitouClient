@@ -107,9 +107,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     readonly IResourceNodes? _nodes;
 
     /// <summary>
-    /// The machine facts of each record, by record id (null: not a machine); derived from the data.
+    /// The machine facts of each record, by record id (null: not a machine); derived from the data. Concurrent: the think phase's power checks fill
+    /// it from every worker (<see cref="MachinePowered"/>).
     /// </summary>
-    readonly Dictionary<string, MachineData?> _machineData = new(StringComparer.Ordinal);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, MachineData?> _machineData = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Some character may still hold a machine that is gone.
@@ -174,13 +175,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// What a BUILDING does once built (null for one that neither works nor stores); read once.
     /// </summary>
-    public MachineData? Data(string record)
-    {
-        if (!_machineData.TryGetValue(record, out var data))
-            _machineData[record] = data = _db.Find(record) is { Type: FcsRecordType.Building } r ? MachineData.From(_db, r) : null;
-
-        return data;
-    }
+    public MachineData? Data(string record) =>
+        _machineData.GetOrAdd(record, static (id, db) => db.Find(id) is { Type: FcsRecordType.Building } r ? MachineData.From(db, r) : null, _db);
 
     #endregion
 
