@@ -146,6 +146,11 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   unlocked and the door opened, sound `Break`. The task ends once the door is broken, open or opening; no timer (**Verified**, `FUN_140348c10`: the door's vfunc `0x3e0`
   `FUN_1402adcc0` returns the door itself, so the "lock owner" tests are the door's own broken flag `+0x3ec` and state `+0x380` 1 or 2; the lock object's locked and broken flags are never read,
   so a closed unlocked door, or one whose lock was cut, is struck on). The Burglary booking comes on every update that passes the in-the-way test, before the blow test.
+  **Weapon in hand** (**Verified**, row table): list B of 81, 226 and 287 holds 5 (a melee weapon in hand) ahead of 57 (at the door), so the
+  planner's 6 Equipping weapon draws it first, at once in one update ([combat](combat.md#fight-lifecycle-and-orders)), then the basher walks to
+  the door. Meitou (`LockSystem.DrawForBash`): a basher out of a fight (the Smash order, a ransacker's errand, a way through a door) draws its
+  melee weapon before it walks, which takes that update, and a player's character keeps it out while it bashes; a fighter's weapon is its
+  fight's.
   Meitou: every basher (the player's Smash order, a planner NPC, the pursuit's) books Burglary each update in reach against a door owner other than its own faction (**Verified**, `FUN_140348c10`, shared by rows 81/123/226/272/287/290); an NPC basher still drops its plan once the door is no longer locked (its planner replans).
   - **Who** (**Verified** scans): only the planner makes 81 and 287; 226 is the player's Smash order (not a provider, desire 1). Row 226's own list B is `!70 !128 5 57` (**Verified**, row table): the order is refused on a door of the smasher's faction or of an ally's (`LockSystem.SmashRefused`); the context menu already offers Smash only on doors not owned by the player's faction.
   - **When** (**Verified**, evaluator `FUN_140597030` is one function for state 59 on every goal: `FUN_1405499a0`, a door broken, open or opening): a row needing DESTINATION_IS_ACCESSIBLE (59; every walk to a target, attacks, entering) finds the target's building without an open
@@ -231,10 +236,10 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   287 Bashing door (list B !70, !128, a weapon, 57; desire `scoreAggressiveAction` `FUN_14079d1a0`, the 81 bash's: 0 for a building of the
   basher's ownership town, [bash door](#cutting-and-breaking-285--185-cut-286--186-break)); lockpicking (76) gives !54, not !55, so it opens
   only the way in. The way in goes through 59, 85, 52 (72 Opening door, which needs !54, or 81 / 287) and !54 (76, 78, 81, 123, 140, 285, 290);
-  the planner's best-first order (`takeBestNode` `FUN_140519730`, the lowest g + h, ties to the first added) and the desires (78 / 140 1.0, 285
+  the planner's best-first order (`takeBestNode` `FUN_140519730`, the highest g + h, ties to the first added, **Verified**) and the desires (78 / 140 1.0, 285
   1.0, 76 0.1, 81 `scoreAggressiveAction`; 81's list B has !70, so it never serves an own door) give: its own door unlocked; else bashed when the
-  bash desire is above 0; else, for a player's order (the restricted rows 76, 140, 185, 285, 202, 122 and 270 are offered to the player's
-  planner only), cut (285: list B 122 `hasTools`, at the door, no weapon drawn) or picked (76: list B 166, the skill condition, at the door, no
+  bash desire is above 0; else, where the restricted rows (76, 140, 185, 285, 202, 122, 270) are offered (every plan of a character not of the
+  player's faction, and a player's character's only in an order's search, [planner](ai-tasks.md#planner), **Verified** `FUN_14051bae0`), cut (285: list B 122 `hasTools`, at the door, no weapon drawn) or picked (76: list B 166, the skill condition, at the door, no
   weapon drawn); else the plan fails, and a player's move order (B list !24, !83, 60, 90, 59: the leaving test first) shows 59's text "I can't get
   there." (`FUN_140610250`). 185 Cutting shackles has list A !114 (shackles), so it never serves a door (**Verified**, row table), and the context menu offers it only on locked shackles: a door's, container's or cage's Use Tools is 285 (**Verified**, `FUN_1407a6bc0`: 0xb9 only for a locked armour item and a character wearing one, 0x11d for the door, container and cage locks). `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
   resident squads, or the walker's faction owns it (faction `+0x80`), or the door's faction is the walker's (a player cage of the walker's own
@@ -246,11 +251,14 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   started (the AI stands; a player's move order waits with that text), nor a player's move into another shut building without a way in ("I can't
   get there."); a walker stopped at a locked door, or standing in a shut building with a walk leading out (`LeaveSweep`), walks to the
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
-  attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, a player's character on its way in, cuts (`Lockpicking.CutLock`)
-  or picks it (`Lockpicking.Step`, the pick's clip and floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for
-  the player). A picker or cutter puts a weapon in hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose
-  destination is behind locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock or a bash, as `WayIn` gives; an animal a building keeps
-  out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine walk (an arrest's, an errand's) is not tested.
+  attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, on its way in where the restricted rows are offered (an NPC, a
+  player's character on an order: `LockSystem.Restricted`), cuts (`Lockpicking.CutLock`) or picks it (`Lockpicking.Step`, the pick's clip and
+  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player). A picker or cutter puts a weapon in
+  hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose destination is behind
+  locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock, a bash, a cut or a pick, as `WayIn` gives; an
+  animal a building keeps out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine
+  walk (an arrest's, an errand's) is not tested. **Engine choice**: the AI leaves an NPC on its way through a door alone until the door opens
+  (only Self preservation takes it over), so a long pick or cut holds it.
   **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities

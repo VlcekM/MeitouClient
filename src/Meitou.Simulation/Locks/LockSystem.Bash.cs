@@ -143,6 +143,8 @@ public sealed partial class LockSystem
             return;
         }
 
+        if (DrawForBash(c)) return;   // 6 Equipping weapon, the first step of the bash's plan
+
         var stand = door.IsGate ? GateStandSpot(spot, Flat(next[s].Position)) : StandSpot(door, spot);
         bool there = door.IsGate ? GatePlan.AtGate(next[s], spot) : DoorPlan.AtDoor(next[s], spot);
         if (!there && c.BashOrdered)
@@ -408,11 +410,11 @@ public sealed partial class LockSystem
         /// </summary>
         Bash,
         /// <summary>
-        /// 76 Lockpicking: picked, then opened (a player's character on its way in).
+        /// 76 Lockpicking: picked, then opened (on the way in).
         /// </summary>
         Pick,
         /// <summary>
-        /// 285 Cutting lock: the lock cut through with a tool, then the door opened (a player's character on its way in).
+        /// 285 Cutting lock: the lock cut through with a tool, then the door opened (on the way in).
         /// </summary>
         Cut,
     }
@@ -425,15 +427,15 @@ public sealed partial class LockSystem
     /// <summary>
     /// The row that takes the walker in <paramref name="s"/> through the building's locked doors (docs/game/locks.md "Locked doors on the way"):
     /// out of the building it stands in (<see cref="WayOut"/>), else into it (<see cref="WayIn"/>, through <paramref name="door"/>, else its main
-    /// door).
+    /// door). <paramref name="order"/>: the walk is a player's order being planned (<see cref="Restricted"/>).
     /// </summary>
-    internal DoorWayKind WayThrough(World world, int s, string building, Fixture? door = null)
+    internal DoorWayKind WayThrough(World world, int s, string building, Fixture? door = null, bool order = false)
     {
         var c = world.Characters.Cold(s)!;
         var at = world.Characters.Next[s].Position;
         if (world.Sight.BuildingOf(s) == building) return WayOut(world, c, building, at);
 
-        return WayIn(world, c, building, at, door ?? MainDoor(world, building));
+        return WayIn(world, c, building, at, door ?? MainDoor(world, building), order);
     }
 
     /// <summary>
@@ -450,18 +452,25 @@ public sealed partial class LockSystem
     /// <summary>
     /// The way in (state 59's 52 and !54, <b>Verified</b>, row table and the planner's best-first order): 78 / 140 Unlocking door when the door is
     /// its own (list B <c>isObjectMine</c>, which 81's list B excludes); else 81 Bashing door when it may (<see cref="Bashes"/>; desire 1 or 1.1);
-    /// else, for a player's character (the rows only the player's planner offers), 285 Cutting lock (desire 1.0) with a tool (122 <c>hasTools</c>)
-    /// and a working arm, else 76 Lockpicking (desire 0.1) when its skill condition holds (166, <see cref="Lockpicking.Allowed"/>); else none.
+    /// else, where the restricted rows are offered (<see cref="Restricted"/>), 285 Cutting lock (desire 1.0) with a tool (122 <c>hasTools</c>) and
+    /// a working arm, else 76 Lockpicking (desire 0.1) when its skill condition holds (166, <see cref="Lockpicking.Allowed"/>); else none.
     /// </summary>
-    DoorWayKind WayIn(World world, CharacterCold c, string building, Vector3 at, Fixture? door)
+    DoorWayKind WayIn(World world, CharacterCold c, string building, Vector3 at, Fixture? door, bool order)
     {
         if (IsMine(world, c, building)) return DoorWayKind.Unlock;
         if (Bashes(world, c, building, at)) return DoorWayKind.Bash;
-        if (!c.IsPlayer || door is not { IsGate: false, Lock: { } l }) return DoorWayKind.None;
+        if (!Restricted(c, order) || door is not { IsGate: false, Lock: { } l }) return DoorWayKind.None;
 
         if (Lockpicking.BestTool(c) is not null && CanWorkLock(c)) return DoorWayKind.Cut;
         return Picking.Allowed(c, l.Level) ? DoorWayKind.Pick : DoorWayKind.None;
     }
+
+    /// <summary>
+    /// The restricted rows (76, 140, 185, 285, 202, 122, 270) are offered to the plan (<c>FUN_14051bae0</c>, <b>Verified</b>): always to a character
+    /// whose faction is not the player's, to the player's characters only in the search of an order (the order being planned, or the walk an
+    /// order runs).
+    /// </summary>
+    static bool Restricted(CharacterCold c, bool order) => !c.IsPlayer || order || c.Running is { Source: TaskSource.Order };
 
     /// <summary>
     /// Whether the character can work a lock with its hands: conscious, not carried or carrying, one arm working.
@@ -504,7 +513,8 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// State 59 DESTINATION_IS_ACCESSIBLE with its providers (<c>FUN_140597030</c>, <b>Verified</b>): a walk to <paramref name="to"/> can be planned
-    /// unless the point lies in another building shut by locked doors and the walker has no way in through them (<see cref="WayIn"/>).
+    /// unless the point lies in another building shut by locked doors and the walker has no way in through them (<see cref="WayIn"/>). Asked for a
+    /// player's move order, so the restricted rows are offered.
     /// </summary>
     public bool CanEnter(World world, int s, Vector3 to)
     {
@@ -513,7 +523,7 @@ public sealed partial class LockSystem
 
         string building = world.Sight.PlaceKey(place);
         if (building == world.Sight.BuildingOf(s) || !world.Fixtures.IsShut(building)) return true;
-        return WayThrough(world, s, building) != DoorWayKind.None;
+        return WayThrough(world, s, building, order: true) != DoorWayKind.None;
     }
 
     /// <summary>
@@ -533,8 +543,8 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): at the door, one no longer locked is opened (74 / 72); else the way
-    /// works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
+    /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): a basher draws first (<see cref="DrawForBash"/>); at the door, one no
+    /// longer locked is opened (74 / 72); else the way works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
     /// </summary>
     void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
     {
@@ -549,23 +559,27 @@ public sealed partial class LockSystem
             DropDoorWay(c);
             return;
         }
+
+        bool locked = door.Lock is { EffectivelyLocked: true };
+        var way = locked ? WayThrough(world, s, door.Building, door) : DoorWayKind.None;
+        if (way == DoorWayKind.Bash && DrawForBash(c)) return;
         if (!ReachDoor(table, next, s, c, spot)) return;
 
-        if (door.Lock is not { EffectivelyLocked: true })
+        if (!locked)
         {
             FixtureRegistry.OpenDoor(door);
             WalkOn(table, s, c);
         }
-        else WorkOnTheWay(world, s, c, door, spot);
+        else WorkOnTheWay(world, s, c, door, spot, way);
     }
 
     /// <summary>
-    /// Works the walker's locked door by its way (<see cref="WayThrough"/>): its own lock for <see cref="LockWorkSeconds"/> (80 / 78), anyone
-    /// else's bashed as an attacker bashes (287 / 81), picked (76) or cut (285); with no way left the way fails.
+    /// Works the walker's locked door by its <paramref name="way"/> (<see cref="WayThrough"/>): its own lock for <see cref="LockWorkSeconds"/>
+    /// (80 / 78), anyone else's bashed as an attacker bashes (287 / 81), picked (76) or cut (285); with no way left the way fails.
     /// </summary>
-    void WorkOnTheWay(World world, int s, CharacterCold c, Fixture door, DoorSpot spot)
+    void WorkOnTheWay(World world, int s, CharacterCold c, Fixture door, DoorSpot spot, DoorWayKind way)
     {
-        switch (WayThrough(world, s, door.Building, door))
+        switch (way)
         {
             case DoorWayKind.Unlock:
                 UnlockOnTheWay(world, s, c, door);
@@ -583,6 +597,22 @@ public sealed partial class LockSystem
                 FailDoorWay(world.Characters, s, c);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Row 6 Equipping weapon before a bash (docs/game/locks.md "Bash door"): list B of 81, 226 and 287 holds 5, a melee weapon in hand, ahead of
+    /// the walk to the door (57), and row 6 draws it at once, which takes that update (Task_EquipBestWeapon). True when it drew. A fighter's
+    /// weapon is its fight's, left alone; a character without a melee weapon (an animal, its natural one) draws nothing.
+    /// </summary>
+    static bool DrawForBash(CharacterCold c)
+    {
+        if (c.InCombat || c.Fighter is not { } f) return false;
+
+        var melee = CombatSystem.MeleeDrawn(f);
+        if (melee == WeaponKinds.None || c.DrawnWeapon == melee) return false;
+
+        c.DrawnWeapon = melee;
+        return true;
     }
 
     /// <summary>

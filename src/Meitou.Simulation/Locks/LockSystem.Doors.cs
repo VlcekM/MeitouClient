@@ -468,9 +468,9 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// The walkers at a locked door (docs/game/locks.md "Locked doors on the way"): the planner's way through (<see cref="WayThrough"/>: out, 80
-    /// unlocking its own or 287 bashing; in, 81 bashing, 78 / 140 unlocking its own, or for a player's character 285 cutting or 76 picking), then
-    /// 72 / 74 opening it, so the first with a way goes through (<see cref="StartDoorWay"/>) unless someone already works the door; the others stop
-    /// there, a player's character saying "It's locked.".
+    /// unlocking its own or 287 bashing; in, 81 bashing, 78 / 140 unlocking its own, or where the restricted rows are offered 285 cutting or 76
+    /// picking), then 72 / 74 opening it, so the first with a way goes through (<see cref="StartDoorWay"/>) unless someone already works the door;
+    /// the others stop there, a player's character saying "It's locked.".
     /// </summary>
     void AtLockedDoor(World world, Fixture door, List<int> stopped)
     {

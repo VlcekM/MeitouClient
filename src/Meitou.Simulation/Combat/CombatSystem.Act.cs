@@ -253,9 +253,9 @@ public sealed partial class CombatSystem
 
         FollowArms(cold, ref s);
 
-        // A player's character out of a fight keeps its weapon out while it walks or follows on an order; idle or at work it sheathes (Idleness and
-        // the jobs need it away).
-        if (cold.IsPlayer && !cold.InCombat && cold.DrawnWeapon != WeaponKinds.None
+        // A player's character out of a fight keeps its weapon out while it walks or follows on an order, or bashes a door (the bash rows need it in
+        // hand); idle or at work it sheathes (Idleness and the jobs need it away).
+        if (cold.IsPlayer && !cold.InCombat && cold.DrawnWeapon != WeaponKinds.None && cold.Bashing is null
             && next[i].Task is not ((byte)CharacterTask.GoTo or (byte)CharacterTask.Follow or (byte)CharacterTask.Attack))
             cold.DrawnWeapon = WeaponKinds.None;
 

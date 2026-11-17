@@ -941,7 +941,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   locks a closed one that `wants lock`; locking a home's doors closes them (animated, the lock holds at once). Engine stand-in for
   Task_OpenDoor: every 3 ticks a walker within 40 of a closed door's leaf whose current or next path leg crosses the leaf's plane within its half
   width + 6 (`IDoorGate.DoorSpotOf`: the door collision's box via `NavDoorGeometry`; headless: none, so no walk-through opening) opens it; at an
-  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player, once per door while it stays within 40 of where it said it) unless it has a way through: its own door it unlocks, another's it bashes when it wants to, and a player's character on its way in cuts or picks
+  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player, once per door while it stays within 40 of where it said it) unless it has a way through: its own door it unlocks, another's it bashes when it wants to (drawing a melee weapon first), and on its way in an NPC, or a player's character on an order, cuts or picks
   it ([locked doors on the way](game/locks.md#doors)). Both reaches run from
   the leaf's nearest point, not its centre (a gate's leaf is 70..80 wide). The box's normal is the thinnest horizontal direction of the door
   collision's footprint (`NavDoorGeometry.Fit`), not the nearer building axis: **Verified** (that footprint for every BUILDING with `doors`, plain
