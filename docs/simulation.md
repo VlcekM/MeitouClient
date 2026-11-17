@@ -1597,7 +1597,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - Research benches add to the research queue; crafting benches work their queue.
   - More characters than `max operators` are refused with "X is already in use.".
   - Farms tick whether anyone is there; rain tops up an outdoor farm's water (`FarmTick`, [farming](game/buildings-production.md#farming)). Unloaded zones: the *Production far away* switch (Meitou on: farms, automatic machines and generator fuel
-    run everywhere; Faithful off: only in `World.ActiveZones`, and a farm back after over an hour runs `TimeSkip` from its `save time` stamp,
+    run everywhere, and an NPC farm outside the active zones grows as if watered, as the catch-up treats it (`WateredFarAway`; a dry town
+    farm, e.g. UCTM's Heft, #918, would otherwise never grow); Faithful off: only in `World.ActiveZones`, and a farm back after over an hour runs `TimeSkip` from its `save time` stamp,
     `FarmState.LiveHours`); facts in [unloaded zones](game/buildings-production.md#unloaded-zones).
 - **Rocks** (`ProductionSystem.Natural.cs`, UI `FurnitureUse`; facts in [resources](game/buildings-production.md#resources)). A foliage
   rock is a natural site, operated like a mine: a right click on it with characters selected is an `OperateOrder`, with Shift an Operating machine

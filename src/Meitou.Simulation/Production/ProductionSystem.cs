@@ -987,9 +987,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 TimeSkip(world, m, (float)(world.GameHours - farm.LiveHours), site.Owner != world.Player.Faction);
 
             farm.LiveHours = world.GameHours;
-            FarmTick(world, m, dt);
+            FarmTick(world, m, dt, WateredFarAway(world, m, site));
         }
     }
+
+    /// <summary>
+    /// Whether a farm grows as if watered: with <see cref="UnloadedProduction"/>, an NPC farm outside the active zones, as the original's catch-up
+    /// treats one there (<c>timeSkip</c> with ignoreWater for a farm the player does not own), so a dry town farm grows while the player is away.
+    /// </summary>
+    bool WateredFarAway(World world, Machine m, BuildSite site) =>
+        UnloadedProduction && site.Owner != world.Player.Faction && !InActiveZone(world, m);
 
     /// <summary>
     /// A machine that takes operators clears its blocked status by itself (Verified, ProductionBuilding::vfunc_28 FUN_14029ad90, when +0x3a9 is
@@ -1296,8 +1303,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// Whether a machine updates: always with <see cref="UnloadedProduction"/>, else only in an active zone (Verified, ZoneManager updates the
     /// buildings of its active zones only).
     /// </summary>
-    bool Live(World world, Machine m) =>
-        UnloadedProduction || world.ActiveZones is not { } active || active.Contains(Meitou.Data.World.WorldLayout.ZoneOf(m.Position.X, m.Position.Z));
+    bool Live(World world, Machine m) => UnloadedProduction || InActiveZone(world, m);
+
+    /// <summary>
+    /// Whether a machine stands in an active zone (every zone counts as active when the world tracks none).
+    /// </summary>
+    static bool InActiveZone(World world, Machine m) =>
+        world.ActiveZones is not { } active || active.Contains(Meitou.Data.World.WorldLayout.ZoneOf(m.Position.X, m.Position.Z));
 
     /// <summary>
     /// A farm's catch-up for <paramref name="h"/> unloaded game hours (<b>Verified</b>, <c>FarmBuilding::timeSkip</c> <c>FUN_1400df6e0</c>,
@@ -1432,9 +1444,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building
     /// (<see cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level +=
-    /// wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).
+    /// wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>). An <paramref name="ignoreWater"/> farm draws none and
+    /// counts as watered (<see cref="WateredFarAway"/>).
     /// </summary>
-    void FarmTick(World world, Machine m, float dt)
+    void FarmTick(World world, Machine m, float dt, bool ignoreWater)
     {
         var f = m.Farm!;
         var fd = m.Data.Farm!;
@@ -1442,7 +1455,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Inputs.Length > 0 && !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Wetness: > 0 } rain)
             m.Inputs[0].Level = MathF.Min(1, m.Inputs[0].Level + rain.Wetness * m.WaterRate * m.Inputs[0].Rate * dt * RainWaterFactor);
 
-        bool watered = m.Inputs.Length == 0 || DrawWater(world, m, dt * m.WaterRate);
+        bool watered = ignoreWater || m.Inputs.Length == 0 || DrawWater(world, m, dt * m.WaterRate);
         float inc = h * m.Yield / fd.GrowthTime;
         if (Rated(world, m) != 0) inc *= m.Health * m.Power;   // slot 109 only for a farm that uses power (FUN_1402976a0)
         if (!watered) inc *= fd.DroughtMultiplier;
