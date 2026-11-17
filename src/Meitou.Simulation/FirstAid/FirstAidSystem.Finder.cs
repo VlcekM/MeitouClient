@@ -387,6 +387,8 @@ public sealed partial class FirstAidSystem
         if (!MayLook(world, cold, ordered)) return (-1, 0);
 
         bool organic = HoldsKit(cold, ItemInfo.FirstAidKitFunction), robotic = HoldsKit(cold, ItemInfo.RobotKitFunction);
+        if (cold.Medical!.PlayingDead) return Itself(world, i, cold, robotics, organic, robotic);
+
         bool healAllies = (world.Player.SquadAi & SquadAi.Heal) != 0;
         bool healAll = cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer
                 && (world.Player.SquadAi & SquadAi.HealNeutrals) != 0;
@@ -403,12 +405,8 @@ public sealed partial class FirstAidSystem
         // Pass 1: allies.
         if ((organic || robotic) && Allies(look, taken, healAllies, ref best, ref bestScore)) return (best, bestScore);
 
-        float self = cold.Race!.IsRobot && !robotics ? 0 : Need(world, i, i, organic, robotic);
-        if (bestScore < self)
-        {
-            best = i;
-            bestScore = self;
-        }
+        var self = Itself(world, i, cold, robotics, organic, robotic);
+        if (bestScore < self.Score) (best, bestScore) = self;
 
         if (best >= 0) return (best, bestScore);
 
@@ -433,6 +431,17 @@ public sealed partial class FirstAidSystem
     }
 
     /// <summary>
+    /// The medic as its own patient at its plain need (a robot race only for Robotics); slot -1 with no need. All a medic playing dead treats: its
+    /// body lies as a whole ragdoll, which the original moves no step (<c>FUN_1405d00b0</c> updates no mover then), so it reaches no one else
+    /// (Meitou does not walk it to another patient, engine choice).
+    /// </summary>
+    (int Slot, float Score) Itself(World world, int i, CharacterCold cold, bool robotics, bool organic, bool robotic)
+    {
+        float need = cold.Race!.IsRobot && !robotics ? 0 : Need(world, i, i, organic, robotic);
+        return need > 0 ? (i, need) : (-1, 0);
+    }
+
+    /// <summary>
     /// One finder run's medic and what its passes share: its kits, its sight range (squared) and the characters to test.
     /// </summary>
     readonly record struct MedicLook(World World, int Slot, CharacterCold Cold, bool Organic, bool Robotic, bool Robotics, Vector3 Origin,
@@ -449,7 +458,7 @@ public sealed partial class FirstAidSystem
         if (!cold.CarriedBy.IsNone) return false;
 
         var row = ordered ? TaskType.FirstAidOrder : TaskType.JobMedic;
-        if (cold.Medical is not { Incapacitated: false } own || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered
+        if (!Awake(cold.Medical) || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered
                 || cold.IsImprisoned || !TaskStart.Eligible(world, cold, row) || !HasWorkingArm(cold))
             return false;
 

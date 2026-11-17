@@ -185,7 +185,9 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
 KenshiLib 1ce4a16 names): posture 3 is chosen on getting up when `isItSafeToGetUp` fails, and kept while it does (the test
 runs each tick while WHOLE). Safe: the character's `SensoryData::numEnemies` (`+0x94`) is 0, or its state broadcast's slave
 state is 1 (a slave), or `numConsciousAllies` (`+0x4c`) is above 0 (sensed allies in posture 0, not unconscious or dead). A
-player order gets it up (1 when sneaking), as does a thief's watcher noticing.
+player order gets it up (1 when sneaking), as does a thief's watcher noticing. It is awake to its AI (**Verified**, `FUN_1405d00b0`: posture 3
+is reached only while `FUN_140598c20` holds, medical `+0x161` knocked out and `+0x164` dead clear, and the AI update then runs as an awake
+one's), so its Medic job treats it where it lies ([medic jobs](ai-tasks.md#medic-jobs)).
 - Counts (`FUN_1408593d0`, per sensed character): `numEnemies` (`+0x94`) and `numNeutrals` (`+0x98`) skip the unconscious
   (vfunc 0x30), the dead (`+0x5bc`) and the carried (`+0x3d4`), so downed enemies do not count; allies count in
   `FUN_1408580d0` (above).
@@ -200,7 +202,8 @@ player order gets it up (1 when sneaking), as does a thief's watcher noticing.
   the blood ends a knockout on the tick it heals, which no window foresees: one whose senses faded (`SenseBlock.Faded`, not carried
   or a slave) is held down, unconscious, until its next look (`MedicalContext.GetUpUnasked`, engine choice), then asked; a player
   order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead. Rechecked every 15 ticks
-  (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`.
+  (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`. The medic gates read it as awake
+  (`FirstAidSystem.Awake`), and `BodySystem` keeps its treatment of itself.
 
 ## Bodies: kinematic or simulated
 

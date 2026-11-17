@@ -341,13 +341,15 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// An incapacitated character stops: its task and path go, or only its path when it lies in a bed.
+    /// An incapacitated character stops: its task and path go, or only its path when it lies in a bed or treats itself playing dead.
     /// </summary>
     static void StopIncapacitated(CharacterTable table, int i, CharacterCold cold, MedicalState medical, ref CharacterHot n)
     {
-        // One lying in a bed keeps its task there (it would get up with any other, BedSystem); only its path goes.
-        if (medical.Incapacitated && cold.InSomething == Locks.HeldState.Bed
-            && n.Task == (byte)CharacterTask.Sleep)
+        // One lying in a bed keeps its task there (it would get up with any other, BedSystem); only its path goes. One playing dead is awake to the
+        // original's AI (posture 3, docs/game/ragdolls.md "Playing dead"): it keeps the first aid it gives itself, lying (FirstAidSystem).
+        bool keeps = cold.InSomething == Locks.HeldState.Bed && n.Task == (byte)CharacterTask.Sleep
+            || medical.PlayingDead && n.Task == (byte)CharacterTask.Treat;
+        if (medical.Incapacitated && keeps)
         {
             n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         }

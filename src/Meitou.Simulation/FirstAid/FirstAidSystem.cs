@@ -272,7 +272,14 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     internal static bool HasWorkingArm(CharacterCold cold) =>
         cold.Animal is not null
-        || cold.Medical is { Incapacitated: false } arms && (arms.ArmWorks(left: true) || arms.ArmWorks(left: false));
+        || Awake(cold.Medical) && (cold.Medical!.ArmWorks(left: true) || cold.Medical.ArmWorks(left: false));
+
+    /// <summary>
+    /// A medic awake for its treatments: alive and not knocked out, or playing dead (posture 3 is set only while the medical knocked-out and dead
+    /// bytes <c>+0x161</c> / <c>+0x164</c> are clear, and the AI then updates as an awake one's, <c>FUN_1405d00b0</c> / <c>FUN_140598c20</c>,
+    /// <b>Verified</b>), which <see cref="MedicalState.PlayingDead"/> keeps <see cref="MedicalState.Unconscious"/> to everyone else.
+    /// </summary>
+    internal static bool Awake(MedicalState? medical) => medical is { Dead: false } m && (!m.Unconscious || m.PlayingDead);
 
     /// <summary>
     /// Registers the treat and rest tasks.
@@ -452,7 +459,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             ref var n = ref next[i];
             if (!n.Alive || n.Task != (byte)CharacterTask.Treat) continue;
             var cold = table.Cold(i)!;
-            if (cold.Medical is not { Incapacitated: false } || cold.InCombat
+            if (!Awake(cold.Medical) || cold.InCombat
                 || !table.TryResolveNext(cold.TreatTarget, out int t) || table.Cold(t)!.Medical is not { Dead: false })
             {
                 End(world, i);
@@ -470,7 +477,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 // row 25's state 42).
                 if (t != i) AskToStandStill(world, table.Cold(t)!);
                 bool patientStill = Speed2(table.Previous[t].Velocity) <= Settings.StillSpeed * Settings.StillSpeed;
-                cold.TreatKneels = t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill;
+                cold.TreatKneels = !cold.Medical!.PlayingDead && (t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill);
                 if ((n.Flags & path) != 0)
                 {
                     n.Flags = (ushort)(n.Flags & ~path);
@@ -561,7 +568,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 continue;
 
             var cold = table.Cold(i)!;
-            if (cold.Medical is not { Incapacitated: false } medical || cold.InCombat || medical.Aggregates().BothArmsDisabled
+            if (!Awake(cold.Medical) || cold.InCombat || cold.Medical!.Aggregates().BothArmsDisabled
                     || cold.StaggeredUntil > world.Tick)
                 continue;
 
@@ -598,7 +605,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         var medicCold = table.Cold(m)!;
         if (!table.TryResolveNext(medicCold.TreatTarget, out int t) || t != p) return;
         var patientCold = table.Cold(p)!;
-        if (medicCold is not { Medical: { Incapacitated: false } medical, Stats: { } stats, Race: { } medicRace }
+        if (!Awake(medicCold.Medical) || medicCold is not { Medical: { } medical, Stats: { } stats, Race: { } medicRace }
                 || patientCold is not { Medical: { Dead: false } body, Race: { } race })
         {
             End(world, m);
