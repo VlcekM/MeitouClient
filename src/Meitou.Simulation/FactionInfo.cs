@@ -49,27 +49,38 @@ public sealed partial class World
     const int HiredAllySignal = 12, DefendBaseSignal = 15;
 
     /// <summary>
-    /// Active Contracts (<c>FUN_1404927f0</c>, <c>getGUIData</c> of the two contract packages): per squad running one for a player character,
-    /// "Bodyguard Contract" or "Base Defence Contract" with the hired squad's faction, "-Protecting:" and the target's name, "-Expires in:" and the
-    /// time left, then a rule. One entry per hired squad (the original lists each hired character's package; Meitou's packages are the squad's).
+    /// Active Contracts (<c>FUN_1404927f0</c>, <c>getGUIData</c> of the two contract packages): per squad running one that involves the player
+    /// (<see cref="Population.MapSquads.InvolvesPlayer"/>), "Bodyguard Contract" or "Base Defence Contract" with the hired squad's faction,
+    /// "-Protecting:" and the name of what it protects when that resolves (the bodyguard's mission target, a character; the base defender's mission
+    /// town, <c>FUN_1402953f0</c>), "-Expires in:" and the time left, then a rule. One entry per hired squad (the original lists each hired
+    /// character's package; Meitou's packages are the squad's).
     /// </summary>
     public List<FactionInfoLine> ActiveContracts(Func<int, string?> factionName)
     {
         var lines = new List<FactionInfoLine>();
-        var table = Characters;
         foreach (var squad in Squads.All)
         {
-            if (squad.Ai is not { Contract.Signal: HiredAllySignal or DefendBaseSignal } board || board.MissionTarget is not { IsNone: false } target
-                || !table.TryResolveNext(target, out int slot) || table.Cold(slot) is not { IsPlayer: true } protectedOne)
+            if (squad.Ai is not { Contract.Signal: HiredAllySignal or DefendBaseSignal } board || !Population.MapSquads.InvolvesPlayer(this, board))
                 continue;
 
             string title = board.Contract.Signal == HiredAllySignal ? "Bodyguard Contract" : "Base Defence Contract";
             lines.Add(new(FactionInfoKind.Name, title, factionName(squad.Faction) ?? ""));
-            lines.Add(new(FactionInfoKind.Detail, "-Protecting:", protectedOne.Name));
+            if (ProtectedName(board) is { } name) lines.Add(new(FactionInfoKind.Detail, "-Protecting:", name));
             lines.Add(new(FactionInfoKind.Detail, "-Expires in:", "", board.ContractEnd - GameHours));
             lines.Add(new(FactionInfoKind.Rule, "-----------"));
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// The name of what a contract protects: a base defender's mission town, a bodyguard's mission target; null when it does not resolve.
+    /// </summary>
+    string? ProtectedName(Ai.Blackboard board)
+    {
+        if (board.Contract?.Signal == DefendBaseSignal) return Buildings.FindTown(board.ContractTown.PlayerTown)?.Name;
+
+        var table = Characters;
+        return table.TryResolveNext(board.MissionTarget, out int slot) ? table.Cold(slot)?.Name : null;
     }
 }

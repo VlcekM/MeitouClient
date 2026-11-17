@@ -224,6 +224,11 @@ public sealed partial class AiSystem
     #region Package steps
 
     /// <summary>
+    /// The AI signals of <c>Contract_HiredAlly</c> (hired bodyguards) and <c>Contract_DefendPlayerBase</c> (the timed base defence).
+    /// </summary>
+    internal const int HiredAllySignal = 12, DefendBaseSignal = 15;
+
+    /// <summary>
     /// The running package's update (the original's vtable +0x48, after the choice): the trader's arrival; under an assault or occupation the squad
     /// treats the town's faction as enemies (<see cref="Squad.War"/>; the original tags each one it sees with squad memory 4) and roams the town
     /// (engine choice: its wander centre).
@@ -261,15 +266,39 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The update of Contract_HiredAlly (12), Contract_UntilOutOfDanger (14) and Contract_DefendPlayerBase (15) (<c>FUN_1402910e0</c>,
-    /// <c>FUN_140290f90</c>, <c>FUN_140291410</c>, <b>Verified</b>): the package's mission target, a character, is tagged TEMP ALLY (3) in the
-    /// squad's memory each update; the defend package does so only once it has its player town (else it runs its start). The sensing hook
-    /// (<see cref="AggroSystem"/> <c>EmployerTags</c>) tags the employer's faction as it is seen, separately.
+    /// <c>FUN_140290f90</c>, <c>FUN_140291410</c>, <b>Verified</b>): the package's mission target, when it is a character, is tagged TEMP ALLY (3)
+    /// in the squad's memory each update; the defend package's is its town, so it tags nobody, and without a town it runs its start again
+    /// (<see cref="ContractStart"/>). The sensing hook (<see cref="AggroSystem"/> <c>EmployerTags</c>) tags the employer's faction as it is
+    /// seen, separately.
     /// </summary>
     void TagMissionTarget(World world, Squad squad, Blackboard board)
     {
-        if (Memory is null || board.MissionTarget.IsNone || board.Contract?.Signal is not (12 or 14 or 15)) return;
-        if (board.Contract.Signal == 15 && world.Buildings.Towns.Count == 0) return;
+        if (board.Contract?.Signal is not (HiredAllySignal or 14 or DefendBaseSignal) || board.Contract is not { } contract) return;
+        if (contract.Signal == DefendBaseSignal && board.ContractTown.IsNone)
+        {
+            ContractStart(world, squad, board, contract);
+            return;
+        }
+
+        if (Memory is null || board.MissionTarget.IsNone) return;
         Memory.Flag(world, squad.Id, board.MissionTarget, Dialogue.MemoryTag.TempAlly);
+    }
+
+    /// <summary>
+    /// The start of <c>Contract_HiredAlly</c> (<c>FUN_140289490</c>) and <c>Contract_DefendPlayerBase</c> (<c>FUN_14028a170</c>), <b>Verified</b>:
+    /// the contract's mission town is the town of the player's faction nearest the squad's leader (X/Z, <c>FUN_140927f10</c>), none while the player
+    /// has none (<see cref="Blackboard.ContractTown"/>). The bodyguard's clears the blackboard's target town and keeps its employer as the mission
+    /// target; the base defender's makes the town both its target town (its goals travel there, 130, and patrol it, 36) and its mission
+    /// (<see cref="Blackboard.AimMissionAtTown"/>).
+    /// </summary>
+    void ContractStart(World world, Squad squad, Blackboard board, AiPackage package)
+    {
+        var at = LeaderPosition(world, squad) ?? squad.Position;
+        board.ContractTown = NearestPlayerTown(world, Flat(at))?.Town ?? CampaignTown.None;
+        if (package.Signal != DefendBaseSignal) return;
+
+        board.Destination = board.ContractTown;
+        board.AimMissionAtTown();
     }
 
     #endregion

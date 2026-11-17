@@ -1042,38 +1042,29 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// The faction <paramref name="cold"/>'s squad is contracted to (<see cref="Scan.Employer"/>): the contract target's (the hirer) for signals 12
-    /// and 15; -1 otherwise.
+    /// The faction <paramref name="cold"/>'s squad is contracted to (<see cref="Scan.Employer"/>): the mission employer's (the hirer) for signal 12,
+    /// the mission town's owner for 15; -1 otherwise.
     /// </summary>
     static int EmployerOf(World world, CharacterCold cold, out bool allies, out bool defending)
     {
         allies = defending = false;
         var table = world.Characters;
 
-        // Contract_DefendPlayerBase (15): the exempt faction is the owner of the player town nearest the platoon leader (FUN_14028a290 against the
-        // town set at the start by FUN_14028a170), not a stored hirer; none without a player town.
-        if (cold.Ai?.Squad.Ai is { Contract.Signal: 15 })
+        // Contract_DefendPlayerBase (15): the exempt faction is the owner of its mission town, the player town nearest the platoon leader when it
+        // started (FUN_14028a290 against the town FUN_14028a170 set), not a stored hirer; none without a player town.
+        if (cold.Ai?.Squad.Ai is { Contract.Signal: 15 } defence)
         {
             defending = true;
-            var from = cold.Ai.Squad.Position;
-            Construction.PlayerTown? nearest = null;
-
-            foreach (var t in world.Buildings.Towns)
-            {
-                if (nearest is null || Vector3.DistanceSquared(t.Position, from) < Vector3.DistanceSquared(nearest.Position, from))
-                    nearest = t;
-            }
-
-            return nearest?.Owner ?? -1;
+            return world.Buildings.FindTown(defence.ContractTown.PlayerTown)?.Owner ?? -1;
         }
 
-        if (cold.Ai?.Squad.Ai is not { Contract.Signal: 12 or 15 } board || board.MissionTarget is not { IsNone: false } id
+        if (cold.Ai?.Squad.Ai is not { Contract.Signal: 12 } board || board.MissionEmployer is not { IsNone: false } id
             || id.Slot >= table.HighWater || table.Previous[id.Slot].Generation != id.Generation || table.Cold(id.Slot) is not { } h)
         {
             return -1;
         }
 
-        allies = board.Contract.Signal == 12;
+        allies = true;
         return h.Faction;
     }
 

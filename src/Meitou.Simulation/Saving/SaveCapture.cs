@@ -925,13 +925,17 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>); the handle of its contract's mission target is written
-    /// once every character has one (<see cref="MemoryPass.JobTargets"/>), one not saved keeps the handle the save named.
+    /// Writes a squad's dialogue-given AI on its platoon record (<see cref="AiSave"/>): its towns as they were written
+    /// (<see cref="MemoryPass.TownHands"/>); the handles of its contract's mission target and employer once every character has one
+    /// (<see cref="MemoryPass.JobTargets"/>), one not saved keeps the handle the save named.
     /// </summary>
     static void WriteAi(FcsRecord platoon, AiSave? ai)
     {
         AiSave.Write(platoon, ai, s_memoryPass?.TownHands);
-        if (ai is { Contract: not null, Target.IsNone: false }) s_memoryPass?.JobTargets.Add((platoon, AiSave.TargetKey, ai.Target));
+        if (ai is not { Contract: not null } contract) return;
+
+        if (!contract.Target.IsNone) s_memoryPass?.JobTargets.Add((platoon, AiSave.TargetKey, contract.Target));
+        if (!contract.Employer.IsNone) s_memoryPass?.JobTargets.Add((platoon, AiSave.EmployerKey, contract.Employer));
     }
 
     /// <summary>

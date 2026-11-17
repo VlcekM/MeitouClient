@@ -1106,7 +1106,7 @@ unless marked; Meitou: `FactionWindow`.
   - **Contracts** are AI packages of characters: a package that involves a player character registers (its character's hand, package id) in a static list (`FUN_140285ac0`).
     Per entry, in list order: the character must still exist and run that package, else the entry is dropped; the package's `getGUIData` (vtable +0x70) writes the rows, and false drops
     the entry. Only `Contract_HiredAlly` (`FUN_140294f40`: hired bodyguards) and `Contract_DefendPlayerBase` / `Campaign_DefendPlayerBase` (`FUN_1402953f0`) write rows: a heading
-    "Bodyguard Contract" / "Base Defence Contract" in `#492620` with the hired character's faction name (**Observed**: name at +0x1a8 of what its vfunc +0x58 returns); "-Protecting:" and the protected target's name (when it resolves); "-Expires in:"
+    "Bodyguard Contract" / "Base Defence Contract" in `#492620` with the hired character's faction name (**Observed**: name at +0x1a8 of what its vfunc +0x58 returns); "-Protecting:" and the name of what it protects when that resolves (the bodyguard's mission target; the base defender's mission town, `FUN_1402953f0` reading the package's +0x8, **Verified**); "-Expires in:"
     and the time to the contract's expiry as below, both in `#afa68b`. A "Manage Contract" button keyed "Renew" is added when the package's `wantsRenewButton` (+0x80) is true, which no
     1.0.68 class returns (all `xor al,al`), so no row has it. Each entry ends with a `-----------` rule.
   - **Upcoming Events** (with the player-only flag set): for each faction of the list at `DAT_1421345b8`, its `FactionWarMgr` (`FUN_1407ac9c0`). When it has active campaigns or

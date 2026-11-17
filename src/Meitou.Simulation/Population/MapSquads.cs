@@ -12,8 +12,8 @@ public readonly record struct MapSquadSnapshot(int Key, Vector2 Position, int Fa
 
 /// <summary>
 /// The squads the world map tracks besides the player's (the original's MapScreen set, filled by <c>CampaignInstance</c> slot 1 and
-/// <c>AIPackage</c> slot 15): every platoon of a running campaign and every squad under a contract whose mission target is a player character.
-/// Listed again once a second, as the original moves its markers.
+/// <c>AIPackage</c> slot 15): every platoon of a running campaign and every squad under a contract that involves the player
+/// (<see cref="InvolvesPlayer"/>). Listed again once a second, as the original moves its markers.
 /// </summary>
 public sealed class MapSquads
 {
@@ -61,19 +61,27 @@ public sealed class MapSquads
     }
 
     /// <summary>
-    /// The squads under a contract on a player character (hired guards and the like): allies.
+    /// The squads under a contract that involves the player (hired guards, base defenders and the like): allies.
     /// </summary>
     static void AddContracts(World world, List<MapSquadSnapshot> list, HashSet<int> listed)
     {
         foreach (var squad in world.Squads.All)
         {
-            if (squad.Ai is not { Contract: not null } board || !IsPlayer(world, board.MissionTarget)) continue;
+            if (squad.Ai is not { Contract: not null } board || !InvolvesPlayer(world, board)) continue;
             if (listed.Contains(squad.Id) || LeaderPlace(world, squad) is not { } at) continue;
 
             // Contract keys sit below the platoon ids.
             list.Add(new(-1 - squad.Id, at, squad.Faction, true));
         }
     }
+
+    /// <summary>
+    /// Whether the running contract involves the player (<c>FUN_140285ac0</c>, <b>Verified</b>: its mission employer, mission town or mission
+    /// target is of a player faction): a player character hired it or is its target, or its mission town is a player town.
+    /// </summary>
+    internal static bool InvolvesPlayer(World world, Ai.Blackboard board) =>
+        IsPlayer(world, board.MissionEmployer) || IsPlayer(world, board.MissionTarget)
+        || world.Buildings.FindTown(board.ContractTown.PlayerTown) is not null;
 
     /// <summary>
     /// Whether <paramref name="id"/> is a living character of the player's.

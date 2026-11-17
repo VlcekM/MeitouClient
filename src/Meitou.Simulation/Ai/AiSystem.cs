@@ -391,7 +391,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static bool EngineRoutine(in CharacterHot n, CharacterCold cold) => (CharacterTask)n.Task switch
     {
         CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow => true,
-        CharacterTask.GoTo => cold.Running is { Source: TaskSource.Goal, Row: TaskType.TravelToTargetTown, Task: CharacterTask.GoTo },
+        CharacterTask.GoTo => OnTrip(n, cold),
         _ => false,
     };
 
@@ -1014,14 +1014,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
-    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: its mission town, else its home town) at a scatter of half the town's radius,
+    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: a running contract's mission town, <see cref="Blackboard.ContractTown"/>, even
+    /// none; else its mission town, else its home town) at a scatter of half the town's radius,
     /// at least 500; a nest squad's town is its nest (the original's <c>Nest</c> is a town: #771, Meitou had its members random-walk kilometres
     /// away); with none, the character's own position at 1250. The centre's height is the town's (a nest's, which Meitou keeps flat, the
     /// character's).
     /// </summary>
     (Vector3 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
-        var town = board.Destination.IsNone ? board.HomeTown : board.Destination;
+        var town = board.Contract is not null
+            ? board.ContractTown
+            : board.Destination.IsNone
+                ? board.HomeTown
+                : board.Destination;
         if (town.Site >= 0)
         {
             var site = data.Sites[town.Site];
@@ -2438,11 +2443,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     #region Serial step
 
     /// <summary>
-    /// The AI signal of <c>Contract_HiredAlly</c>, the bodyguard contract.
-    /// </summary>
-    const int HiredAllySignal = 12;
-
-    /// <summary>
     /// The turrets, seats, sitting-around pieces and town guard posts the members claim on the package cadence.
     /// </summary>
     readonly TownPlaceClaims _claims = new(data);
@@ -2505,27 +2505,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         _rules.Bind(this, world, squad);
-        if (command is StartContract c)
-        {
-            // the contract already running goes on as it is (Blackboard.StartContract)
-            bool starts = squad.Ai!.Contract?.Id != package.Id;
-            squad.Ai.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
-            if (starts && package.Signal == HiredAllySignal) HiredAllyStart(world, squad, squad.Ai);
-        }
-        else
-        {
-            squad.Ai!.Replace(package, _rules);
-        }
-    }
-
-    /// <summary>
-    /// The mission town of <c>Contract_HiredAlly</c>'s start (<c>FUN_140289490</c>, <b>Verified</b>): the town of the player's faction nearest the
-    /// squad (X/Z, <c>FUN_140927f10</c>), none while the player has none (<see cref="Blackboard.ContractTown"/>).
-    /// </summary>
-    static void HiredAllyStart(World world, Squad squad, Blackboard board)
-    {
-        var at = LeaderPosition(world, squad) ?? squad.Position;
-        board.ContractTown = NearestPlayerTown(world, Flat(at))?.Town ?? Population.CampaignTown.None;
+        if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
+        else squad.Ai!.Replace(package, _rules);
     }
 
     /// <summary>
@@ -2684,20 +2665,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         bool own = squad.Autonomous && cold.IsPlayer;
         bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
-        if (!populationMoves && (moved || cold.Ai is null or { Engine: true }))
-        {
-            var p = table.Next[s].Position;
-            cold.Ai = new AiMind
-            {
-                Squad = squad,
-                MemberIndex = k,
-                Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
-                Player = own,
-                RaceGoals = cold.Race is { } race && !own ? data.Ai.RaceGoals(race.StringId) : [],
-                Resume = squad.Resume,
-                Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
-            };
-        }
+        if (!populationMoves && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
 
         if (cold.Ai?.Goal is { } g)
         {
@@ -2705,6 +2673,36 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
         }
     }
+
+    /// <summary>
+    /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package. A leader the population had walking its trip
+    /// (an engine mind's routine, <see cref="EngineRoutine"/>) is stopped first: the trip is the engine's stand-in for the package that moved it,
+    /// and in the original the package that takes over (a contract started on the way) gives the leader its own goals at once.
+    /// </summary>
+    void GiveMind(World world, Squad squad, Blackboard board, int k, int s, bool own)
+    {
+        var table = world.Characters;
+        var cold = table.Cold(s)!;
+        if (cold.Ai is { Engine: true } && OnTrip(table.Next[s], cold)) TaskStart.End(world, s, TaskEnd.Stopped);
+
+        var p = table.Next[s].Position;
+        cold.Ai = new AiMind
+        {
+            Squad = squad,
+            MemberIndex = k,
+            Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
+            Player = own,
+            RaceGoals = cold.Race is { } race && !own ? data.Ai.RaceGoals(race.StringId) : [],
+            Resume = squad.Resume,
+            Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
+        };
+    }
+
+    /// <summary>
+    /// Whether the character walks the population's trip (row 53 of its travel stand-in, <see cref="EngineRoutine"/>'s walk).
+    /// </summary>
+    static bool OnTrip(in CharacterHot n, CharacterCold cold) =>
+        n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Row: TaskType.TravelToTargetTown, Task: CharacterTask.GoTo };
 
     #endregion
 
@@ -3378,6 +3376,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     break;
                 case PackageClass.Refugee:
                     _system.RefugeeStarted(_world, _squad, board);
+                    break;
+                case PackageClass.Contract when package.Signal is HiredAllySignal or DefendBaseSignal:
+                    _system.ContractStart(_world, _squad, board, package);
                     break;
             }
         }

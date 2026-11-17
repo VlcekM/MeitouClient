@@ -307,7 +307,7 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A hired squad's stand-in (<see cref="PlatoonContracts.EmployerGoal"/>) on toward its employer (gone from the world: its contract's mission
-    /// town) at its contract's job speed, its road route kept while the goal stays within <see cref="ModFollowSlack"/>; it stands still with no goal,
+    /// town; a base defender's: its outpost) at its contract's job speed, its road route kept while the goal stays within <see cref="ModFollowSlack"/>; it stands still with no goal,
     /// as any stand-in of the player's faction, one left with a member caged and one that waits to be made (<c>FUN_1407ee790</c>, <b>Verified</b>).
     /// False when it runs no such contract. Any thread: changes this platoon only.
     /// </summary>

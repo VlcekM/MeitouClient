@@ -563,8 +563,10 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     (`FUN_140284510`) finds a character (type 1) anywhere, so a hired squad that fell behind travels to its employer at 60 / 90 and comes back
     into the world where it meets the loaded zones. Unresolved, it falls to `FUN_140269cd0`: the contract's `mission town` hand (+0x8), which
     the starts of `Contract_HiredAlly` and `Contract_DefendPlayerBase` (`FUN_14028a170`) set to the town of the player's faction
-    (`DAT_142134690`+0x2a0) nearest the squad (`FUN_140927f10`), none without one. Meitou: `PlatoonContracts.EmployerGoal`, a town's own hired
-    squad included (with the employer gone from the world, to `Blackboard.ContractTown` and stopping inside its radius; with none it stands);
+    (`DAT_142134690`+0x2a0) nearest the squad (`FUN_140927f10`), none without one. `Contract_DefendPlayerBase`'s slot 1 (`FUN_14028fa10`) gives
+    the mission town itself (outside a campaign), so a base defender's stand-in travels to its outpost. Meitou: `PlatoonContracts.EmployerGoal`, a
+    town's own hired squad included (with the employer gone from the world, or for a base defence, to `Blackboard.ContractTown` and stopping
+    inside its radius; with none it stands);
     **Observed** (headless, `probe hire`, the Hub's Mercenary guild hired, the player put 20000 away): its stand-in reached the
     loaded zones after about 480 s and rejoined the player.
   - TRAVEL_TARGET / _FAST: to the mission target: the blackboard's override package's, else the campaign's target, else the current

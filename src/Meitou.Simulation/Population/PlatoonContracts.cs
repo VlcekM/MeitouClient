@@ -18,9 +18,10 @@ readonly record struct ContractGoal(Vector2? At, float Reach, PlatoonJob Job);
 static class PlatoonContracts
 {
     /// <summary>
-    /// The signal of <c>Contract_HiredAlly</c>, the bodyguard contract (docs/game/ai.md "Package classes").
+    /// The signals of <c>Contract_HiredAlly</c>, the bodyguard contract, and <c>Contract_DefendPlayerBase</c>, the base defence (docs/game/ai.md
+    /// "Package classes").
     /// </summary>
-    const int HiredAllySignal = 12;
+    const int HiredAllySignal = 12, DefendBaseSignal = 15;
 
     /// <summary>
     /// The AI_PACKAGE id of the contract the platoon's squad runs, null for none: the loaded squad's (its blackboard's, else the AI it has still to
@@ -37,15 +38,18 @@ static class PlatoonContracts
     /// is the contract's (<c>FUN_140269b60</c> -> slot 1 <c>FUN_1402859e0</c>: the package's <c>mission target</c> hand), which
     /// <c>Contract_HiredAlly</c>'s start (<c>FUN_140289490</c>) sets to the employer, a character the resolver finds wherever it is, alive or dead
     /// (<c>FUN_140284510</c>). With the employer gone from the world it is the contract's mission town (<c>FUN_140269cd0</c>,
-    /// <see cref="Blackboard.ContractTown"/>), reached once inside its radius; with none it stands still. Null when the platoon runs no bodyguard
-    /// contract with such a job. Any thread: reads the characters and towns only.
+    /// <see cref="Blackboard.ContractTown"/>), reached once inside its radius; with none it stands still. A base defence's target
+    /// (<c>Contract_DefendPlayerBase</c>'s slot 1, <c>FUN_14028fa10</c>) is its mission town itself. Null when the platoon runs neither contract with
+    /// such a job. Any thread: reads the characters and towns only.
     /// </summary>
     public static ContractGoal? EmployerGoal(World world, Platoon p, PopulationData data, float arrival)
     {
-        if (OffscreenAi(p) is not { Contract: { } id } contract || data.Ai.Package(id) is not { Signal: HiredAllySignal } package) return null;
+        if (OffscreenAi(p) is not { Contract: { } id } contract) return null;
+        if (data.Ai.Package(id) is not { Signal: HiredAllySignal or DefendBaseSignal } package) return null;
 
         var job = PlatoonJobs.JobOf(package.Unloaded);
         if (job is not (PlatoonJob.TravelTarget or PlatoonJob.TravelTargetFast)) return null;
+        if (package.Signal == DefendBaseSignal) return TownGoal(world, data, MissionTownOf(world, contract), job);
 
         var employer = contract.Target.IsNone ? world.Saved?.CharacterOf(contract.TargetHand) ?? CharacterId.None : contract.Target;
         if (!employer.IsNone && world.Characters.TryResolveNext(employer, out int slot))

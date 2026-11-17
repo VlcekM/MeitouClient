@@ -389,8 +389,9 @@ public sealed class Blackboard
     public double InTownSince { get; set; }
 
     /// <summary>
-    /// The running package's mission town (its <c>mission town</c> hand): the trader's next town, the assaulted or occupied player town; none for
-    /// other classes.
+    /// The running package's mission town (its <c>mission town</c> hand): the trader's next town, the assaulted or occupied player town; for a
+    /// contract the blackboard's target town (+0xf0, saved as <c>target town</c>), which a base defender's start sets to its outpost and a
+    /// bodyguard's clears (the contract's own mission town is <see cref="ContractTown"/>); none for other classes.
     /// </summary>
     public CampaignTown Destination { get; set; } = CampaignTown.None;
 
@@ -593,13 +594,13 @@ public sealed class Blackboard
         if (Contract is { } running)
         {
             if (running.Id == package.Id) return;
-            _ended = (running, MissionTarget);
+            _ended = (running, MissionEmployer);
         }
 
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         ContractTown = Population.CampaignTown.None;
-        MissionTarget = target ?? CharacterId.None;
+        MissionTarget = MissionEmployer = target ?? CharacterId.None;
         MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
     }
@@ -617,13 +618,15 @@ public sealed class Blackboard
     }
 
     /// <summary>
-    /// The running contract ends: kept for its end talk (<see cref="TakeEnded"/>), the mission target cleared, and the slots choose again.
+    /// The running contract ends: kept for its end talk to its employer (<see cref="TakeEnded"/>; <c>FUN_14026a110</c> aims event 30 at the
+    /// package's <c>mission employer</c>), the mission target and employer cleared, and the slots choose again.
     /// </summary>
     void EndRunning(AiPackage contract)
     {
-        _ended = (contract, MissionTarget);
+        _ended = (contract, MissionEmployer);
         Contract = null;
-        MissionTarget = CharacterId.None;
+        ContractTown = Population.CampaignTown.None;
+        MissionTarget = MissionEmployer = CharacterId.None;
         MissionAnyRange = false;
         Current = null;
     }
@@ -648,15 +651,22 @@ public sealed class Blackboard
 
     /// <summary>
     /// A saved contract (<see cref="Saving.AiSave"/>) running again until <paramref name="end"/>, aimed at <paramref name="target"/> (none: the
-    /// save named none, or a character that is not in the world).
+    /// save named none, or a character that is not in the world) for <paramref name="employer"/> (none: the target). As the original's load
+    /// (<c>FUN_140272c20</c>), the package starts first, then the saved state replaces what the start set: the blackboard's target town
+    /// <paramref name="targetTown"/> (<see cref="Destination"/>) when the save names one, and the package's mission town <paramref name="town"/>
+    /// (<see cref="ContractTown"/>; none when the save names none).
     /// </summary>
-    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false)
+    public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false,
+        CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null)
     {
         Contract = package;
         ContractEnd = end;
         MissionTarget = target ?? CharacterId.None;
+        MissionEmployer = employer is { IsNone: false } hirer ? hirer : MissionTarget;
         MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
+        if (targetTown is { IsNone: false } saved) Destination = saved;
+        if (town is { } mission) ContractTown = mission;
     }
 
     /// <summary>
@@ -670,11 +680,29 @@ public sealed class Blackboard
     public CharacterId MissionTarget { get; private set; } = CharacterId.None;
 
     /// <summary>
-    /// A bodyguard contract's <c>mission town</c> (the package's hand +0x8): the town of the player's faction nearest the squad when it was hired
-    /// (<c>Contract_HiredAlly</c>'s start <c>FUN_140289490</c>, <b>Verified</b>), where its stand-in goes once its employer is gone from the world;
-    /// none without one. Saved with the contract (<see cref="Saving.AiSave"/>); not hashed.
+    /// The running contract's <c>mission town</c> (the package's hand +0x8): the town of the player's faction nearest the squad when it started
+    /// (<c>Contract_HiredAlly</c>'s start <c>FUN_140289490</c> and <c>Contract_DefendPlayerBase</c>'s <c>FUN_14028a170</c>, <b>Verified</b>): where a
+    /// bodyguard's stand-in goes once its employer is gone from the world, the outpost a base defender guards (whose start also makes it the
+    /// blackboard's target town, <see cref="Destination"/>, and its mission target, <see cref="AimMissionAtTown"/>); while a contract runs it is the
+    /// squad's town for its town goals (<c>FUN_140269cd0</c>). None without one. Saved with the contract (<see cref="Saving.AiSave"/>); not hashed.
     /// </summary>
     public Population.CampaignTown ContractTown { get; set; } = Population.CampaignTown.None;
+
+    /// <summary>
+    /// Whom the running contract works for (the package's <c>mission employer</c>, <c>FUN_140285ba0</c> writes the dialogue target into it and the
+    /// mission target): its end talk's partner; none without a contract.
+    /// </summary>
+    public CharacterId MissionEmployer { get; private set; } = CharacterId.None;
+
+    /// <summary>
+    /// The contract's mission is its mission town, not a character (<c>Contract_DefendPlayerBase</c>'s start copies the town hand over the
+    /// mission target, <c>FUN_14028a170</c>): the mission target is cleared; the employer stays.
+    /// </summary>
+    public void AimMissionAtTown()
+    {
+        MissionTarget = CharacterId.None;
+        MissionAnyRange = false;
+    }
 
     /// <summary>
     /// The contract's assault takes its mission target wherever it is, not only within the manoeuvre mode's reach (engine API for code mods,
@@ -683,7 +711,7 @@ public sealed class Blackboard
     public bool MissionAnyRange { get; private set; }
 
     /// <summary>
-    /// The contract that ended on the last <see cref="Update"/> and whom it was aimed at, until <see cref="TakeEnded"/> takes it.
+    /// The contract that ended on the last <see cref="Update"/> and its employer, until <see cref="TakeEnded"/> takes it.
     /// </summary>
     (AiPackage Package, CharacterId Target)? _ended;
 
@@ -721,6 +749,7 @@ public sealed class Blackboard
         hasher.Add(Contract is not null);
         hasher.Add(ContractEnd);
         if (!MissionTarget.IsNone) hasher.Add(MissionTarget);
+        if (!MissionEmployer.IsNone && MissionEmployer != MissionTarget) hasher.Add(MissionEmployer);   // differs only for a town mission
         if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
