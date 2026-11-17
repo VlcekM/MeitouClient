@@ -159,13 +159,14 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
 ### Building shops (**Observed**, decompile)
 
 - **Which** (squad factory `FUN_140583a10`): a squad whose template has vendor lists (`FUN_140959420`, **Verified**: its `vendors`, else by its building designation the owner
-  FACTION's 2/5 `item spawns armoury`, 3 `bar`, 6 `treasure`, 8 `HQ`, 9 `resident`, 11 `resident small` (`FUN_140958560`); `is trader` is not tested; Meitou `ShopFiller.VendorLinks`) with a home building is filled by
+  FACTION's 2/5 `item spawns armoury`, 3 `bar`, 6 `treasure`, 8 `HQ`, 9 `resident`, 11 `resident small` (`FUN_140958560`; the designation lists only for a building fill: the squad filler's `FUN_140959a90` passes no building, so a squad stock reads `vendors` alone); `is trader` is not tested; Meitou `ShopFiller.VendorLinks`) with a home building is filled by
   `FUN_14095b210` into its home; one that also made prisoner or slave squads goes through `FUN_1404ff5e0(squad, 1)` instead, whose branch is chosen by the home handle's type (**Verified**): no home (0xb) fills a squad
   stock only for `is trader`; a home building (0) never makes a squad stock, it fills the home's containers (`FUN_14095b9d0`) and returns, retried next update, when the building or its interior is missing. So a housed
   trader with prisoners stocks its home like one without (Meitou `TradeSystem.Stock`). **Verified** (`FUN_14095b210`): it gathers the building's containers (`FUN_1409562f0`) and returns when there are none, so a home without stock containers gets nothing and Meitou makes no squad shop for it either (the base and mod data in the install: 268 shop templates with a level-data home, all with containers).
   A faction test (`+0x250 == 0`) gates both. `FUN_14095b210` also refuses a child object (door, mounted turret; [squad factory](factions-squads-towns.md)). So a resident without `is trader` (e.g. `flotsam refuge`, vendors `house contents`) gets its home's containers stocked. A trader template with no `vendors` but a designation list is filled the same way (`TradeSystem.HomeTemplateOf` accepts a trader whose vendors are empty; one with vendors goes through the shop path); in the merged base and mod data one template is affected (Ninja Gang of rebirth.mod: `is trader`, designation list, no `vendors`), none of the base game.
 - **Restock** (`ActivePlatoon::vfunc_4` calls `FUN_1404ff5e0(platoon, 0)` once `inventory refresh time` passes): the home branch skips a building whose interior object's `+0x10` is set,
-  returning before the next refresh time is set (`+0x1f8`, `vendors refresh time` hours on), so it retries every update; the first fill passes 1 and never skips. **Observed** (decompile): `+0x10` is
+  returning before the next refresh time is set (`+0x1f8`, `vendors refresh time` hours on), so it retries every update; the first fill passes 1 and never skips. Every fill clears: `FUN_14095b9d0` and the squad factory's two direct calls pass the clear flag as 1, the factory's
+  calls the specials flag too (**Verified** by disassembly, `1405840bc` and `14058648d`). **Observed** (decompile): `+0x10` is
   the interior's parts (`BuildingInterior`, made in `Building::setup` `FUN_140551b20` / `FUN_1405774d0`; built by `FUN_140561bb0` from the record's `interior` list when the interior is
   turned on, `FUN_140561d10`; freed by its off branch, `FUN_14054b130`). The interior view (`FUN_1407f7230`, every frame over `PlayerInterface` `+0x2b0`, the player's characters) turns
   on (`FUN_140562540`) every standing building with an interior that one of them is in or on (location, slot 59), and leaving does not turn it off: only the building's unload or
@@ -177,10 +178,10 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   home's refill wait, their time unmoved (#833).
 - **Production** (**Observed**, a search of the decompile for production-building calls and keys): no filler reads a production building (`FUN_14095b210`, `FUN_14095b9d0`, `FUN_14095a5b0`, `FUN_1409562f0`, `FUN_140958740`, `FUN_140959800`);
   town production reaches a shop only as a worker's ditch into one of its stock containers ([ditching](ai-tasks.md#ditching)), which then sells it until a restock clears it.
-- Meitou, non-traders (`TradeSystem.FillHome`, `StockEmptyHome`): the stock rolls as a building shop's and is spread as below (`HomeStock`); engine choices: the special items are
-  spread with the vendor items, the purse is untouched, and a refill comes every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
+- Meitou, non-traders (`TradeSystem.FillHome`, `StockEmptyHome`): the stock rolls as a building shop's and is placed as below (`PlaceFill`, `HomeStock`); engine choices: the
+  purse is untouched, and a refill comes every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
 - **Observed** in the original (KH 1.0.65, a new "The Slaves" start, `kh containers` after 50 s of play): in Rebirth only the four garrison towers' containers (`rebirth garrison`, `vendors`) hold items, 6 to 12 each; the workmaster / cage guard houses (designation 0 and 10, no lists) and the slave processing HQ (8, the Holy Nation has no `item spawns HQ`) stay empty, as in Meitou (#768).
-- Meitou, traders (`TradeSystem.SpreadStock`): each fill of a building shop clears its stock containers but their unique items and is spread the same way over them.
+- Meitou, traders (`TradeSystem.RefillBuilding`, `PlaceFill`): each fill of a building shop unlocks its stock containers, clears only the usable ones but their unique items and spreads the same way over them; the others keep what they hold, unlocked. With none usable nothing is made, the purse and the specials untouched, and the restock time moves on (`FUN_1404ff5e0` sets it after the filler returns).
 - **Containers** (`FUN_1409562f0`): the home's interior objects whose functionality is 2 BF_RESOURCE_STORAGE, 9 BF_SHOP or 13 BF_GENERAL_STORAGE and that have an inventory. Each
   has a type (the `StorageBuilding` field `+0x440`, read as a function 2 building's `itemtype limit`; ITEM for any other building, **Observed**), its section's `limit inventory`
   list (function 2 only, [storage](buildings-production.md)) and its lock's level (0 without a lock).
@@ -188,41 +189,73 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   bread, dried meat, kits and clothes over every barrel and basket; read, not traced: the item's `+0x13c` as its record type and its vfunc `0x288` as its unit value, Meitou
   `Market.BaseValue`). The filler unlocks every container, then drops those that cannot hold what the template's vendor lists make: one of
   another type than ITEM with no entry of that record type, one with a list holding none of the entries. With none left nothing is made. The rest are ordered by lock level,
-  highest first, optionally cleared (unique items stay), and each special item goes into the first container that takes it of a `random_shuffle` of them. The vendor items are made one unit
-  each and ordered by value, highest first. The first half of them (trunc(count x 0.5), at least one): the containers at least half full (used cells / cells; a one-item storage:
+  highest first, optionally cleared (unique items stay), and each special item goes into the first container that takes it of a `random_shuffle` of them. The vendor items, each a
+  stack as the draw made it (the money stacks too), are ordered by unit value, highest first (`FUN_140969ff0` over reversed bounds; equal values keep no defined order, Meitou breaks the
+  tie by record id). The first half of them (trunc(count x 0.5), at least one): the containers at least half full (used cells / cells; a one-item storage:
   quantity / capacity) are dropped from a working copy for good, each other gets score + U(0, 1) x 0.01, and the item goes into the first that takes it, highest score first.
   Score: 0 when the lock level is above 0 and the item's value is below 10 x the level (not for a money item); else level + 1, for an ITEM container as it is without a
   list, + 150 for a listed item, 0 for an unlisted one; for a container of another type x 1.5 for an item of that record type, else 0; x 100 for a money item (`item function` 14).
   Each later item: the whole list is shuffled again and the item goes into the first that takes it. "Takes" (`FUN_140954480`) is the section's own test
   ([by hand](buildings-production.md): a WEAPON-limited container only weapons, a listed one only its list), topping up stacks first, then the first free cell row by row. What fits
-  nowhere is destroyed; then each container holding something is locked. So cheap goods never score for a locked container and a Weapon Cabinet ends up with the weapons only.
+  nowhere is destroyed; a stack a container took only part of goes on with the rest to the next one (the placing loops stop only once the item itself is in an
+  inventory, its `+0xd8`); then each container holding something is locked. So cheap goods never score
+  for a locked container and a Weapon Cabinet ends up with the weapons only. Meitou `HomeStock.Spread` returns what went in, the purse's value.
 - **Bag copies** (**Observed**, `FUN_14057c030`, `FUN_140763810`, split `FUN_14074a950`, spread `FUN_140954480`): splitting a stack or spreading stock
   constructs each new bag from its template, with its own inner inventory sized by `storage size width/height`; the source bag's items are not copied.
 - **Special items** (`FUN_140958740`, **Verified**): on a refresh with specials, the template's `special items` (ITEM, 34 templates) and then its `special map items` (MAP_ITEM, 10), both when both exist: v0 of each,
-  in stacks of at most the record's raw `stackable` (a map item too; the stack limit of 1 for map items is not used here), flagged unique with their quantity, offered to the building inventories first; what fits nowhere is destroyed. Meitou: on a squad's first fill, into
-  the stock before the vendor items; the unique flag is not modelled.
-- **Count**: n = round(U(0.8, 1.2) x `vendors fill total amount` x wealth), at least 1. Items: the vendor lists share n by weight as for squads (`FUN_140959800`, **Verified**: each list's share is (v / sum) x n rounded half away from zero, and the last list takes max(what is left, its own share), so the total can exceed n; Meitou `ShopFiller.Fill`), but every list's
-  money roll (`money item prob` against U(0, 1), then U[`money item min`, `money item max`]) is summed into one stack of the money item first.
+  in stacks of at most the record's raw `stackable` (a map item too; the stack limit of 1 for map items is not used here), flagged unique with their quantity, offered to the building inventories first; what fits nowhere is destroyed. Meitou (`ShopFiller.Specials`,
+  flagged `Unique`): a squad's into the stock before the vendor items, a building's each into the first usable container of a fresh shuffle (`TradeSystem.PlaceFill`).
+- **Count**: n = round(U(0.8, 1.2) x `vendors fill total amount` x wealth), at least 1. Items: the vendor lists share n by weight as for squads (`FUN_140959800`, **Verified**: each list's share is (v / sum) x n in floats rounded half away from zero, and the last list takes max(what is left, its own share), so the total can exceed n; Meitou `ShopFiller.Shares`). The weight v is the link's raw v0: **Verified** by disassembly (`1409598b4`, a `cvtdq2ps` of the int with no test), so a list linked with v0 0 gets an own share of 0 (unlike a list entry's 0, which counts 100), the last list still taking what is left (template `vendors` in the merged base and mod data of the install: 629 links, none 0 or below). The rounding (`FUN_1409b32b0`, **Verified** by disassembly) truncates with `cvttss2si`, so when every v0 is 0 (0 / 0) each share is int.MinValue, and a negative share makes the draw take the list's own `items count` (40 when below 0): every list then draws its `items count`. Each list's money roll (`FUN_140956060`, **Verified**, decompile) pays nothing when `money item prob` is below U(0, 1), else `money item min` + an int in [0, max - min] clamped to [min, max] (`FUN_1409b3b40`; min when max is below it); all lists roll before the first draw and the rolls are summed
+  and made into money items at the head of the fill (the item manager's `FUN_1401641d0`, **Verified**, decompile): its denominations (`FUN_140165c10`) are every ITEM of
+  `item function` 14 with a `value` above 0, dearest first, at equal value the larger `stackable` first (comparator `FUN_1401640a0` under a sort over reversed bounds);
+  each takes amount / value of what is left, in full stacks of its `stackable` and then the rest (base data: String of Cats 10, then Cats 1, both `stackable` 100).
+  Meitou `ItemFactory.MoneyStacks`; a `stackable` of 0, which would divide by zero in the original, counts 1.
 - **List entries** (`FUN_140956ba0`, **Verified**): `items` ITEM, `weapons` WEAPON (with `weapon manufacturers`), `armours` / `clothing` ARMOUR, `containers`
   CONTAINER, `blueprints` RESEARCH (a blueprint item), `crossbows` CROSSBOW, `robotics` LIMB_REPLACEMENT, `maps` MAP_ITEM; `armour blueprints` / `crossbow blueprints` /
-  `backpack blueprints` name gear and give its `<id>.TECH.1` research's blueprint (skipped when missing), never the gear. Merged base data: `armour blueprints` 318,
+  `backpack blueprints` name gear and give its `<id>.TECH.1` research's blueprint (skipped when missing), never the gear. The builder reads `weapon manufacturers` first,
+  then the lists in the order `weapons`, `items`, `armours`, `clothing`, `containers`, `blueprints`, `crossbows`, `robotics`, the three gear blueprint lists, `maps`, each
+  taking only records of its type (Meitou `VendorList.From`, the table's order). Merged base data: `armour blueprints` 318,
   `blueprints` 141, `crossbow blueprints` 20, `backpack blueprints` 0 entries. A `weapons` entry is stocked only when it is a `weapon types` entry of one of the list's
   `weapon manufacturers` (the types of every listed manufacturer form a set, a weapon outside it logs "No valid manufacturer found for weapon" and is dropped, an empty
   set skips the whole weapons branch); other lists are not gated. Every entry goes into one weighted table of the list with its v0 as the weight, a v0 of 0 counting
-  100 and a negative v0 left out (**Verified** by disassembly: every list branch, `items` and the twelve inserts, compares the weight with 0.0 and replaces a 0
+  100 and a negative v0 left out; v1 and v2 are never read (the thirteen weight loads, the manufacturers' and the twelve branches', take each reference's first int, and
+  the builder loads nothing at +4 or +8) (**Verified** by disassembly: every list branch, `items` and the twelve inserts, compares the weight with 0.0 and replaces a 0
   by 100.0, `DAT_141683250`, before the insert `FUN_1405778d0`, which skips a weight not above 0). Meitou `VendorList.From`; a shop fill leaves out the entries of
-  weight 0 or less (`ShopFiller.Fill`).
-- **Draw** (`FUN_1409555d0`, **Observed**, decompile; the building filler reaches it through `FUN_140959800`, the squad filler `FUN_14095ab10` through `FUN_140959a90`): a
-  list's share is drawn one unit at a time from its table by a float roll in [0, total weight); a unit other than a weapon tops up the first item of its record whose
-  quantity is below the record's `stackable`, else a new item is made. A blueprint (item type 90) or map (102) made anew leaves the table (`FUN_140969100`) until the
-  list is next fetched for a fill (`FUN_1409592a0`, which puts the taken entries back, `FUN_140953250`), so a fill stocks each blueprint and map at most once per list;
-  the draw stops when the table is empty. Meitou `ShopFiller.Draw` (a unit tops up a stack of its record, quality and maker below its stack limit).
-- **Purse** (the platoon's money): `vendor money` < 1: trunc(clamp(0.25 x value of the placed items, 3000, 25000) x wealth); else trunc((`vendor money` + r) x wealth) with r an int from
-  -0.4 x `vendor money` (the upper bound is not shown by the decompile).
+  weight 0 or less (`ShopFiller.DrawLists`). Only the `items` branch tests a forbidden set (**Verified**, decompile): the FACTION record's own `forbidden items` and those
+  of each of its `trade culture` records (`FUN_1407fe270`, `FUN_1407fd9a0`); the other branches and the town's culture play no part (`ShopFiller.Forbidden`).
+- **Draw** (`FUN_1409555d0`, **Verified** by disassembly; the building filler reaches it through `FUN_140959800`, the squad filler `FUN_14095ab10` through
+  `FUN_140959a90`; the two marked **Observed** are decompile readings): a list's share is drawn one unit at a time from its table; a table of one entry is taken with no roll (`1409557dd`), else a float roll
+  in [0, total weight) against the running sums. The draw ends when the table is empty. A weapon (`1409558b3`): a manufacturer from the list's own table
+  (one with no roll; none ends the draw), then the factory; no item ends the draw; a weapon is always a new item. Anything else first rolls a grade (a
+  crossbow `FUN_140955210`, a limb `FUN_140955370`, everything else the faction's armour table, **Observed**), then tops up the first item of the whole fill (every list's,
+  `140955aa6`) of its record whose quantity is below the record's raw `stackable` (a missing field reads 0, so gear, RESEARCH and records without it never
+  stack here), else is made anew by the factory, whose result is read with no null test (`140955afc`: a failed make would fault). A blueprint (item type
+  90) or map (102) made anew leaves the table (`FUN_140969100`, which drops every entry of that record) until the list is next fetched, so a fill stocks
+  each blueprint and map at most once per list. Meitou `ShopFiller.Draw`; engine choice: an item other than a weapon that cannot be made ends the draw too (the
+  install's data has none: 157 lists checked).
+- **List cache** (`FUN_1409592a0`, **Verified**, decompile): one table per (list, faction), built once (`FUN_140956ba0`, so its forbidden items are left out for
+  every user of that key) and kept for the game session: the "Reset game" step `FUN_14036cb80`, which a load, an import and a new game start run
+  (`FUN_14047c310` actions 2, 3 and 4), deletes every table (`FUN_1409543a0`). A blueprint or map made anew is noted in the table with its weight map's weight
+  (the last insert's) as it leaves (`FUN_1409540d0`, `FUN_1409555d0`); each fetch first puts the noted ones back (`FUN_140953250`): each once, at the end of the
+  table, so a record listed twice comes back once. The users: the shop draws and the usable-container test (`FUN_140959800`, `FUN_140959a90`, `FUN_140959d30`)
+  fetch per list each fill; an item slot fetches once and keeps the table (`FUN_140547e10`, so what its later picks take comes back only on another user's
+  fetch); a camp's `loot spawn` fetches per entry (`FUN_140938440`); a pack animal's load fetches per list and then picks its `items count` (`FUN_14074a3d0`).
+  Meitou `World.VendorTables` (`Items.VendorTables`: new with each world, as the original's is reset with each session; not saved), used by `ShopFiller`,
+  `TradeSystem.VendorEntries`, `ItemSlots`, `PopulationCamps` and `PackLoad`.
+- **Weapon level** (**Verified**, decompile): the draw hands the weapon factory `FUN_140580750` the manufacturer and a quality of 0; the factory picks the model and
+  sets the level from it (its v0, or the fallback 1057 / 1058 level plus `overall level`, [loose items](factions-squads-towns.md#loose-items-in-buildings)). Meitou `ShopFiller.Weapon`, `Maker`.
+- **Squad stock** (`FUN_14095ab10`, **Verified**, decompile): cleared but its unique items, the special items, then the units dearest first by unit price (a sort over
+  reversed bounds, `FUN_140969ff0`; equal prices keep no defined order, Meitou breaks the tie by record id); what does not fit is destroyed. Meitou `ShopFiller.StockSquad`.
+  Its trader window is a copy as a building's is (**Observed**, decompile: `FUN_140953f90` makes the same wrapper `FUN_140953850` for a homeless trader,
+  gathering its members' inventories, and `FUN_1409528d0` auto-adds every item but those of `item function` 14), so the money and its cells stay out of it.
+  Meitou: the goods are `Shop.Stock` (saved and hashed), the window `Shop.Window`, built, written back and dropped by `ShopView` as a building shop's.
+- **Purse** (the platoon's money): `vendor money` < 1: trunc(clamp(0.25 x value of the placed items, money stacks included, special items not, 3000, 25000) x wealth); else trunc((`vendor money` + r) x wealth) with r an int in
+  [-trunc(0.4 x `vendor money`), +trunc(0.4 x `vendor money`)] (**Verified** by disassembly, `14095b8b8`: the bounds passed to `FUN_1409b3b40`). Both fillers
+  leave the purse as it was when the fill made no item, money stack included (`FUN_14095b210`, `FUN_14095ab10`).
 - **Wealth** = clamp(faction wealth, 0.2, 1), but the faction wealth function (`FUN_1402dd530`) is a stub returning 1.0, so wealth is always 1
   (**Verified**, kenshi_x64.exe decompile: 9-byte function, constant return). It scales only shop stock count, purse and nest spawn weight; no price reads it.
 - **Trader window** (**Observed**, decompile): a copy of the containers. Each time it opens (`FUN_1406e6af0` makes the shop wrapper `FUN_140953850` anew) the merged section ([ui-screens](ui-screens.md#6-inventory-trade-dialogue-build)) takes a copy of every item of the containers but money (item `+0x124` function 14) by auto-add (`FUN_1409528d0`; an item with no room grows it by twice its `inventory footprint height`, `FUN_140954ba0`), then is arranged (`FUN_140749d30`, ARRANGE's per-section sort). Its callbacks write the trade back: an item put in is copied to the first container whose section takes it (`FUN_140952c70`, `FUN_1409529e0`), the copy destroyed (`FUN_140799af0`) when none does while the item stays in the window; a quantity change adds or removes the difference (`FUN_140952cf0`); a removal takes the units from the containers' items of the same record (a RESEARCH item by its research), first container first (`FUN_140952da0`, `FUN_140952a70`). ARRANGE arranges only the copy (`DAT_142135548` turns the callbacks off).
-- Meitou (`Shop`, `ShopView`): the goods stay in the containers, saved and hashed with their building; a fill is made in a scratch grid and spread over them, and waits while none is registered. The window is built when the trade opens and again after a restock while open; each tick what the trade changed in it is written back by comparing it with what it last matched (engine choice), units matching by stack (record, material, quality, marks, unique flag) where the original matches the record. The window is not state: unhashed, unsaved (`meitou shop` is `[]` for a building shop; an older Meitou save's stock under it goes to the containers). The money stack goes to the purse, r is symmetric.
+- Meitou (`Shop`, `ShopView`; a squad shop's window works the same way over its stock): the goods stay in the containers, saved and hashed with their building; a fill is rolled (`ShopFiller.Roll`) and placed in them (`PlaceFill`), and waits while none is registered. The window is built when the trade opens and again after a restock while open; each tick what the trade changed in it is written back by comparing it with what it last matched (engine choice), units matching by stack (record, material, quality, marks, unique flag) where the original matches the record. The window is not state: unhashed, unsaved (`meitou shop` is `[]` for a building shop; an older Meitou save's stock under it goes to the containers). Money items stay in the containers and out of the window, as in the original.
 
 ## Artifacts
 
@@ -683,10 +716,6 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   decides which neighbours have factors already.
 - **Whether `Zones_TownSetup` runs on a save load** and, if so, whether the saved `trade goods` factors (section 7.2, saved by `FUN_140376b80`,
   loaded by `FUN_1403715c0`) overwrite or are overwritten by a fresh roll. (That the factors are saved is settled.)
-- **How weapon quality is rolled for shop stock** and how VENDOR_LIST reference value 1 (and a value 0 in the first slot, as in
-  `(0,100,0)`) is read for clothing, armour and weapon entries (`FUN_140956ba0` / `FUN_1409555d0` read them; "val0 is relative
-  chance" per the editor, but 472 entries have (0, 100, 0)). It follows the NPC clothing rule in [characters.md](../characters.md)
-  that quantity 0 never spawns, but this was not re-verified for shops.
 - **How a pending crime's timer counts down** (`+0x90`; set by `FUN_140851f40` / `FUN_140852e10`, the decrement was not found), and so how long an unseen crime stays pending.
 - **Arrest and jail gaps** (11.5, 11.7, 11.8): what a guard carrying a captive does when no cage is free (`CAGES_ARE_ALL_FULL` 97 is
   registered but no TaskData row uses it); how `+0x110` decays;
@@ -703,7 +732,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
 - Trader factor `T` and the stolen test: `T = buyMult * (0.5 if stolen-to-the-player-faction) * culturePrice(item)`; `+0x250 == 0`
 - Market factor: `f = uniform in [1 - m, 1 + m)`; `m = trade profit margins`; `w = d / 1,000,000 * m * 10`; `m = 0.3`; `p = 1.0`; `v0 = trunc(factor * 10000)`
 - Buying, selling, fencing: `{1} = 100 - round(100 * p)`; `p = lerp(thievery / 100, 0.4, 1.25)`
-- Stock size and money (`FUN_14095ab10`, squad shops; `FUN_14095b210`, building shops; **Observed**, decompile and: `fill = vendors fill total amount`; `wealth = clamp(FUN_1402dd530(faction), 0.2, 1.0)`; `n = round( uniform(0.8, 1.2) * fill * wealth )`; `money = trunc( clamp(0.25 * stockValue, 3000, 25000) * wealth )`; `money = trunc( (vendor money + r) * wealth )`
+- Stock size and money (`FUN_14095ab10`, squad shops; `FUN_14095b210`, building shops; **Observed**, decompile and: `fill = vendors fill total amount`; `wealth = clamp(FUN_1402dd530(faction), 0.2, 1.0)`; `n = round( uniform(0.8, 1.2) * fill * wealth )`; `money = trunc( clamp(0.25 * placedValue, 3000, 25000) * wealth )`; `money = trunc( (vendor money + r) * wealth )`
 - Restock: `+0x58 == 0`
 - Pending crimes, witnesses and the cage sentence: `+0x34 == 8`
 - Slaves, prisoners, animals: `buyValue = clamp( trunc( S + attack + D * k ) * RACE buy value, 1000, 20000 )`

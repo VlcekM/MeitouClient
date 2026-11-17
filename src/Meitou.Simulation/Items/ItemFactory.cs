@@ -64,6 +64,51 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
         .Select(r => r.StringId).OrderBy(id => id, StringComparer.Ordinal).FirstOrDefault());
 
     /// <summary>
+    /// The money denominations (value, <c>stackable</c>, record id) of <see cref="MoneyStacks"/>, found once.
+    /// </summary>
+    readonly Lazy<List<(int Value, int Stackable, string Id)>> _denominations = new(() => [
+        .. db.OfType(FcsRecordType.Item)
+            .Where(r => r.GetInt("item function") == Player.PlayerSystem.MoneyFunction && r.GetInt("value") > 0)
+            .Select(r => (Value: r.GetInt("value"), Stackable: r.GetInt("stackable"), Id: r.StringId))
+            .OrderByDescending(d => d.Value)
+            .ThenByDescending(d => d.Stackable)
+            .ThenBy(d => d.Id, StringComparer.Ordinal)
+    ]);
+
+    /// <summary>
+    /// <paramref name="amount"/> cats as money items (the item manager's <c>FUN_1401641d0</c>, <b>Verified</b>, decompile): its denominations
+    /// (<c>FUN_140165c10</c>) are every ITEM of <c>item function</c> 14 with a <c>value</c> above 0, dearest first and at equal value the larger
+    /// <c>stackable</c> first (the comparator <c>FUN_1401640a0</c> under a sort over reversed bounds); each takes amount / value of what is left, in
+    /// full stacks of its <c>stackable</c> and then the rest. Base data: String of Cats (10), then Cats (1), both <c>stackable</c> 100. A
+    /// <c>stackable</c> of 0 would divide by zero in the original; it counts 1 here.
+    /// </summary>
+    public List<ItemInstance> MoneyStacks(int amount)
+    {
+        var stacks = new List<ItemInstance>();
+        if (amount <= 0) return stacks;
+
+        foreach (var (value, stackable, id) in _denominations.Value)
+        {
+            int count = amount / value;
+            amount -= count * value;
+
+            int per = Math.Max(stackable, 1);
+            for (int full = count / per; full > 0; full--) AddMoney(stacks, id, per);
+            if (count % per > 0) AddMoney(stacks, id, count % per);
+        }
+
+        return stacks;
+    }
+
+    /// <summary>
+    /// Adds one stack of the money item <paramref name="id"/> to <paramref name="stacks"/>.
+    /// </summary>
+    void AddMoney(List<ItemInstance> stacks, string id, int quantity)
+    {
+        if (Create(id, quantity) is { } stack) stacks.Add(stack);
+    }
+
+    /// <summary>
     /// CHARACTER <c>money item prob</c> / <c>min</c> / <c>max</c> for a newly made character not of the player's faction
     /// (<c>RootObjectFactory::process</c>, <b>Verified</b>): when a roll in [0, 1) is at most the prob (so the data's 80-100 always pass), a stack of
     /// the money item worth U[min, max] goes into the inventory; one that does not fit is lost.

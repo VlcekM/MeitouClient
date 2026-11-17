@@ -422,6 +422,10 @@ public sealed partial class World : IDisposable
     /// </summary>
     public Items.GroundItems GroundItems { get; } = new();
     /// <summary>
+    /// The session's vendor list tables, which shop fills, item slots, camp loot and pack loads draw from (<see cref="Items.VendorTables"/>).
+    /// </summary>
+    public Items.VendorTables VendorTables { get; } = new();
+    /// <summary>
     /// The loose-item slots of the towns' interiors (docs/simulation.md "Ground items"); hashed once a town with any registered.
     /// </summary>
     public Items.ItemSlots ItemSlots { get; } = new();

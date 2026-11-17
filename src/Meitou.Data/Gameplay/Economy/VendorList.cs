@@ -10,18 +10,25 @@ public readonly record struct VendorEntry(string Id, FcsRecordType Type, int Wei
 /// <summary>
 /// A VENDOR_LIST (docs/game/economy.md sections 9.2 and 13): the weighted items a shop, a container or a nest's loot is rolled from, and the
 /// money roll.
-/// <para>The names of its reference lists are not written down in the docs (<c>items</c>, <c>weapons</c>, <c>clothing</c>, ...), so every list is
-/// read and its entries kept by the type of the record they point at: item kinds become <see cref="Entries"/>, WEAPON_MANUFACTURERs
-/// <see cref="Manufacturers"/>. The game merges a list's entries into one weighted table (the item-group picker of factions-squads-towns.md section
-/// 8, <b>Observed</b>). The weight is the entry's v0, "relative chance" in the editor; a v0 of 0 counts as 100 (<b>Verified</b> by disassembly of
-/// the list builder <c>FUN_140956ba0</c>, docs/game/economy.md "Building shops": 472 entries are (0, 100, 0)).</para>
+/// <para>Each named reference list gives the records of one type (<see cref="From"/>), <c>weapon manufacturers</c> the
+/// <see cref="Manufacturers"/>; the list builder <c>FUN_140956ba0</c> puts them all into one weighted table. The weight is the entry's v0,
+/// "relative chance" in the editor; a v0 of 0 counts as 100 (<b>Verified</b> by disassembly of the builder, docs/game/economy.md "Building shops":
+/// 472 entries are (0, 100, 0)).</para>
 /// </summary>
 public sealed record VendorList
 {
     /// <summary>
-    /// The lists whose entries name gear and give its blueprint.
+    /// The entry lists in the list builder's order, each with the record type it takes; the gear blueprint lists name gear and give its
+    /// blueprint (<c>FUN_140956ba0</c>, <b>Verified</b>, decompile).
     /// </summary>
-    static readonly string[] GearBlueprintLists = ["armour blueprints", "crossbow blueprints", "backpack blueprints"];
+    static readonly (string List, FcsRecordType Type, bool Gear)[] Branches =
+    [
+        ("weapons", FcsRecordType.Weapon, false), ("items", FcsRecordType.Item, false), ("armours", FcsRecordType.Armour, false),
+        ("clothing", FcsRecordType.Armour, false), ("containers", FcsRecordType.Container, false), ("blueprints", FcsRecordType.Research, false),
+        ("crossbows", FcsRecordType.Crossbow, false), ("robotics", FcsRecordType.LimbReplacement, false),
+        ("armour blueprints", FcsRecordType.Research, true), ("crossbow blueprints", FcsRecordType.Research, true),
+        ("backpack blueprints", FcsRecordType.Research, true), ("maps", FcsRecordType.MapItem, false),
+    ];
 
     /// <summary>
     /// The record's string id (a VENDOR_LIST, or another record read as one).
@@ -55,7 +62,7 @@ public sealed record VendorList
     public int MoneyItemMax { get; init; }
 
     /// <summary>
-    /// The items, weapons, armour, crossbows, limbs, containers and maps of every list, in the record's order, and the blueprints: a
+    /// The items, weapons, armour, crossbows, limbs, containers and maps of the entry lists, in the builder's order, and the blueprints: a
     /// <c>blueprints</c> entry is a RESEARCH (made into a blueprint item), an <c>armour blueprints</c> / <c>crossbow blueprints</c> / <c>backpack
     /// blueprints</c> entry the gear's <c>&lt;id&gt;.TECH.1</c> research (<b>Verified</b>, <c>FUN_140956ba0</c> -> <c>Research::getBlueprintsFor</c>;
     /// never the gear itself).
@@ -75,21 +82,24 @@ public sealed record VendorList
         or FcsRecordType.LimbReplacement or FcsRecordType.Container or FcsRecordType.MapItem;
 
     /// <summary>
-    /// Reads every reference list of <paramref name="r"/>: item kinds and blueprints into <see cref="Entries"/>, WEAPON_MANUFACTURERs into
-    /// <see cref="Manufacturers"/>; a WEAPON no listed manufacturer makes is dropped.
+    /// Builds the list's table as the list builder does (<c>FUN_140956ba0</c>, <b>Verified</b>, decompile): <c>weapon manufacturers</c> into
+    /// <see cref="Manufacturers"/>, then each entry list in <see cref="Branches"/> order taking only records of its type; a WEAPON no listed
+    /// manufacturer makes is dropped.
     /// </summary>
     public static VendorList From(GameDatabase db, GameRecord r)
     {
+        var makers = r.GetReferences("weapon manufacturers")
+            .Where(e => db.Find(e.TargetStringId) is { Type: FcsRecordType.WeaponManufacturer })
+            .Select(RecordLink.From)
+            .ToList();
         var entries = new List<VendorEntry>();
-        var makers = new List<RecordLink>();
-        foreach (string list in r.ReferenceLists)
+        foreach (var (list, type, gear) in Branches)
             foreach (var e in r.GetReferences(list))
-                AddEntry(db, list, e, entries, makers);
+                AddEntry(db, e, type, gear, entries);
 
         // A weapon is stocked only when it is a `weapon types` entry of one of the list's manufacturers (<b>Verified</b>, `FUN_140956ba0`: "No valid
         // manufacturer found for weapon" otherwise); no manufacturer or manufacturers without weapon types skip the weapons altogether.
         var makable = makers
-            .Where(m => db.Find(m.Id) is { Type: FcsRecordType.WeaponManufacturer })
             .SelectMany(m => db.Find(m.Id)!.GetReferences("weapon types"))
             .Select(t => t.TargetStringId)
             .ToHashSet();
@@ -110,27 +120,13 @@ public sealed record VendorList
     }
 
     /// <summary>
-    /// Sorts one reference of a list into the entries (items and blueprints) or the manufacturers; a reference to a record the database lacks
-    /// is skipped.
+    /// Adds one reference of an entry list when its record is of the list's <paramref name="type"/> (a gear blueprint list names the gear: the
+    /// entry is its <c>&lt;id&gt;.TECH.1</c> research); a reference to a record the database lacks is skipped.
     /// </summary>
-    static void AddEntry(GameDatabase db, string list, GameReference e, List<VendorEntry> entries, List<RecordLink> makers)
+    static void AddEntry(GameDatabase db, GameReference e, FcsRecordType type, bool gear, List<VendorEntry> entries)
     {
-        bool gear = GearBlueprintLists.Contains(list);
-        if (db.Find(gear ? e.TargetStringId + ".TECH.1" : e.TargetStringId) is not { } target) return;
+        if (db.Find(gear ? e.TargetStringId + ".TECH.1" : e.TargetStringId) is not { } target || target.Type != type) return;
 
-        int weight = e.Values.Value0 == 0 ? 100 : e.Values.Value0;
-        if (gear || list == "blueprints")
-        {
-            if (target.Type == FcsRecordType.Research)
-                entries.Add(new VendorEntry(target.StringId, target.Type, weight));
-        }
-        else if (IsItemType(target.Type))
-        {
-            entries.Add(new VendorEntry(target.StringId, target.Type, weight));
-        }
-        else if (target.Type == FcsRecordType.WeaponManufacturer)
-        {
-            makers.Add(RecordLink.From(e));
-        }
+        entries.Add(new VendorEntry(target.StringId, target.Type, e.Values.Value0 == 0 ? 100 : e.Values.Value0));
     }
 }

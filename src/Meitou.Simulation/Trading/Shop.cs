@@ -11,10 +11,10 @@ namespace Meitou.Simulation.Trading;
 
 /// <summary>
 /// A trader squad's shop: the stock it sells, its trade terms and when it restocks (docs/game/economy.md section 9). The purse is the squad's
-/// <see cref="Squad.Money"/>, the game's <c>Platoon+0x88</c>. A squad shop's stock is one inventory of <see cref="Width"/> x <see cref="Height"/>
-/// cells held by the squad (<b>Engine choice</b>: in the original it is offered to "the inventory sections", not decoded). A building shop's goods
-/// lie in the shop building's stock containers (<see cref="Containers"/>), as in the original; its <see cref="Stock"/> is only the trader window's
-/// copy of them (<see cref="ForBuilding"/>, <see cref="ShopView"/>).
+/// <see cref="Squad.Money"/>, the game's <c>Platoon+0x88</c>. A squad shop's goods are one inventory of <see cref="Width"/> x <see cref="Height"/>
+/// cells held by the squad (<b>Engine choice</b>: in the original they lie in its members' inventories); a building shop's lie in the shop
+/// building's stock containers (<see cref="Containers"/>), as in the original. Either way the trader window is a copy of the goods
+/// (<see cref="Window"/>, <see cref="ShopView"/>), as the original's shop wrapper <c>FUN_140953850</c> is for both.
 /// </summary>
 public sealed class Shop
 {
@@ -30,9 +30,26 @@ public sealed class Shop
 
     /// <summary>
     /// The stock: a squad shop's own goods, a building shop's trader window (<see cref="ShopView"/>); cells hold <see cref="StockStackMult"/> x each
-    /// item's <c>stackable</c>. A building shop's grows while its view is built and is replaced by a fill's scratch grid while the fill runs.
+    /// item's <c>stackable</c>. A building shop's grows while its view is built.
     /// </summary>
     public Inventory Stock { get; internal set; } = new(Width, Height) { StackBonusMult = StockStackMult };
+    /// <summary>
+    /// A squad shop's trader window (<see cref="Window"/>).
+    /// </summary>
+    Inventory _window = new(Width, Height) { StackBonusMult = StockStackMult };
+    /// <summary>
+    /// The grid the trade window shows and trades on: a copy of the goods (<see cref="ShopView"/>), so their money items and the cells those take
+    /// are not in it; a building shop's is its <see cref="Stock"/>, a squad shop's a grid of its own.
+    /// </summary>
+    internal Inventory Window
+    {
+        get => Building is null ? _window : Stock;
+        set
+        {
+            if (Building is null) _window = value;
+            else Stock = value;
+        }
+    }
     /// <summary>
     /// The trader's terms the prices read.
     /// </summary>
@@ -58,7 +75,7 @@ public sealed class Shop
     /// </summary>
     public (int Columns, int Rows) ViewSize { get; init; } = (Width, Height);
     /// <summary>
-    /// A building shop's trader window state (<see cref="ShopView"/>).
+    /// The trader window's state (<see cref="ShopView"/>).
     /// </summary>
     internal ShopView View { get; } = new();
 
@@ -104,25 +121,24 @@ public sealed class Shop
 }
 
 /// <summary>
-/// Fills a shop as the squad filler <c>FUN_14095ab10</c> does (docs/game/economy.md 9.2, <b>Observed</b>; the constants <b>Verified</b>):
+/// The units a fill made, its money stacks first, and the special items it adds (unique), with the purse a building shop's <c>vendor money</c>
+/// gives (null: none set, the purse comes from the placed units' value).
+/// </summary>
+public sealed record ShopFill(List<ItemInstance> Units, List<ItemInstance> Specials, long? VendorPurse);
+
+/// <summary>
+/// Fills a shop as the squad filler <c>FUN_14095ab10</c> and the building filler <c>FUN_14095b210</c> do (docs/game/economy.md "Building shops" and
+/// 9.2, <b>Verified</b>, decompile and disassembly where cited):
 /// <list type="number">
 /// <item>n = round(U(0.8, 1.2) x <c>vendors fill total amount</c> x wealth), half away from zero; wealth is 1 (the game's faction wealth function is
-/// a stub returning 1).</item>
-/// <item>The vendor lists share n by their weights (v0; 0 counts as 100, engine reading), round(n x w / sum), the last taking what the rounding
-/// left.</item>
-/// <item>Each unit is a weighted pick from its list (<see cref="VendorList"/>), skipping the <c>forbidden items</c> of the trader's town and faction
-/// cultures. Armour gets a grade from the faction's armour chances and the grade's quality (5 / 20 / 40 / 60 / 80 / 95); a weapon a manufacturer from
-/// the list and a model from the manufacturer (how the original rolls a shop weapon's quality is <b>Unknown</b>; this is the character generator's
-/// rule); a robotic limb a level from <see cref="LimbGrade"/>, a crossbow from <see cref="CrossbowGrade"/> (no manufacturer).</item>
-/// <item>The units are merged into stacks up to their stack limit, sorted by unit price (dearest first: the sort key is the price, its direction
-/// <b>Unknown</b>) and put into the stock; what does not fit is destroyed.</item>
-/// <item>The purse is trunc(clamp(0.25 x the stock's value at full price, 3000, 25000) x wealth); the template's <c>vendor money</c> is a building
-/// shop's and is not read.</item>
-/// <item>A building shop (<see cref="Shop.Building"/>, the filler <c>FUN_14095b210</c>) makes at least one unit and its purse is <c>vendor money</c>
-/// +/- 0.4 x it, or the rule above when that is 0 (its money rolls are one stack of the money item in the stock in the original; the purse here, as
-/// for a squad).</item>
-/// <item>Each list's money roll (<c>money item prob</c> against U(0, 1), so 1 or more always pays) adds U[min, max] cats. The game adds them as a
-/// stack of the money item; here they go straight to the purse (<b>engine choice</b>: a shop selling its own cats would be a no-op trade).</item>
+/// a stub returning 1); a building fill makes at least one.</item>
+/// <item>Every list's money roll (<see cref="Money"/>) goes into one sum, made into money stacks (<see cref="ItemFactory.MoneyStacks"/>) at the
+/// head of the units.</item>
+/// <item>The vendor lists share n by their raw v0 (<see cref="Shares"/>), the last taking what the rounding left; each draws its share from its
+/// table (<see cref="VendorTables"/>, <see cref="Draw"/>).</item>
+/// <item>A squad shop (<see cref="StockSquad"/>) puts the units into its stock dearest first; a building shop's are spread over its containers
+/// (<c>TradeSystem</c>). The purse is trunc(clamp(0.25 x the placed units' value, 3000, 25000) x wealth), a building shop's <c>vendor money</c>
+/// +/- 0.4 x it when that is set (<see cref="Purse"/>); a fill that makes no unit leaves the purse as it was.</item>
 /// </list>
 /// </summary>
 public static class ShopFiller
@@ -133,10 +149,10 @@ public static class ShopFiller
     static readonly int[] DefaultGradeChances = [50, 100, 50, 2, 0, 0];
 
     /// <summary>
-    /// The vendor lists a squad's stock rolls from (<c>FUN_140958560</c>, <b>Verified</b>): the template's <c>vendors</c>; when it has none, by its
-    /// building designation the owner FACTION's 2 BARRACKS / 5 ARMOURY <c>item spawns armoury</c>, 3 BAR <c>item spawns bar</c>, 6 TREASURE <c>item
-    /// spawns treasure</c>, 8 HQ <c>item spawns HQ</c>, 9 RESIDENTIAL <c>item spawns resident</c>, 11 RESIDENTIAL_SMALL <c>item spawns resident
-    /// small</c>; other designations none.
+    /// The vendor lists a fill rolls from (<c>FUN_140958560</c>, <b>Verified</b>): the template's <c>vendors</c>; when it has none, for a building fill
+    /// only (the squad filler passes no building; a squad shop always has <c>vendors</c>), by its building designation the owner FACTION's 2 BARRACKS
+    /// / 5 ARMOURY <c>item spawns armoury</c>, 3 BAR <c>item spawns bar</c>, 6 TREASURE <c>item spawns treasure</c>, 8 HQ <c>item spawns HQ</c>, 9
+    /// RESIDENTIAL <c>item spawns resident</c>, 11 RESIDENTIAL_SMALL <c>item spawns resident small</c>; other designations none.
     /// </summary>
     public static IReadOnlyList<RecordLink> VendorLinks(SquadTemplate template, GameRecord? faction)
     {
@@ -157,95 +173,173 @@ public static class ShopFiller
     }
 
     /// <summary>
-    /// Replaces the shop's stock but its unique items and returns the new purse; <paramref name="specials"/> (a squad's first fill) puts its
-    /// template's special items in first.
+    /// Rolls a fill: the units, the special items when <paramref name="specials"/> (the first fill), and a building shop's <c>vendor money</c>
+    /// purse. Counts the fill (<see cref="Shop.Fills"/>, the key of its rolls).
     /// </summary>
-    public static long Fill(Shop shop, SquadTemplate template, Market market, PopulationData data, ulong seed, ulong key, bool specials = false)
+    public static ShopFill Roll(Shop shop, SquadTemplate template, Market market, PopulationData data, VendorTables tables, ulong seed, ulong key,
+        bool specials)
     {
         var rng = new RandomStream(seed, Rng.Mix(key ^ ((ulong)shop.Fills << 40)), RngPurpose.Trade);
         shop.Fills++;
 
-        // The fills clear everything but unique items (docs/game/economy.md "Artifacts").
-        shop.Stock.Items.RemoveAll(i => !i.Unique);
         int n = (int)MathF.Round((0.8f + 0.4f * rng.NextFloat()) * template.VendorsFillTotalAmount, MidpointRounding.AwayFromZero);
         if (shop.Building is not null) n = Math.Max(n, 1);   // the building filler makes at least one
 
-        var faction = (uint)shop.Terms.Faction < (uint)data.Factions.Count ? data.Db.Find(data.Factions[shop.Terms.Faction].Id) : null;
-        var lists = new List<(VendorList List, int Weight)>();
+        int factionIndex = shop.Terms.Faction;
+        var faction = (uint)factionIndex < (uint)data.Factions.Count ? data.Db.Find(data.Factions[factionIndex].Id) : null;
+        var units = new List<ItemInstance>();
+        var draw = new DrawContext(units, faction, factionIndex, template, market, data, tables);
+        DrawLists(draw, Lists(template, faction, data.Db), n, ref rng);
+
+        var special = specials ? Specials(template.Id, data.Db, market) : [];
+        return new ShopFill(units, special, shop.Building is null ? null : VendorPurse(template, ref rng));
+    }
+
+    /// <summary>
+    /// Rolls every list's money into one sum made into money stacks at the head of the units (<c>FUN_140959800</c> rolls them before the first
+    /// draw), then draws every list's share from its table.
+    /// </summary>
+    static void DrawLists(DrawContext draw, List<(VendorList List, float Weight)> lists, int n, ref RandomStream rng)
+    {
+        int cats = 0;
+        foreach (var (list, _) in lists) cats += Money(list, ref rng);
+        draw.Units.AddRange(draw.Market.Items.MoneyStacks(cats));
+
+        var shares = Shares(lists, n);
+
+        for (int l = 0; l < lists.Count; l++)
+        {
+            var list = lists[l].List;
+            Draw(draw, draw.Tables.Fetch(draw.Data, list, draw.FactionIndex), shares[l], list, ref rng);
+        }
+    }
+
+    /// <summary>
+    /// The template's vendor lists with their weights: each link's raw v0 (<c>FUN_140959800</c>, <b>Verified</b> by disassembly: it converts the
+    /// int with no test, so a v0 of 0 weighs 0, unlike a list entry's).
+    /// </summary>
+    static List<(VendorList List, float Weight)> Lists(SquadTemplate template, GameRecord? faction, GameDatabase db)
+    {
+        var lists = new List<(VendorList List, float Weight)>();
 
         foreach (var link in VendorLinks(template, faction))
         {
-            if (data.Db.Find(link.Id) is { Type: FcsRecordType.VendorList } record)
-                lists.Add((VendorList.From(data.Db, record), link.V0 == 0 ? 100 : link.V0));
+            if (db.Find(link.Id) is { Type: FcsRecordType.VendorList } record)
+                lists.Add((VendorList.From(db, record), link.V0));
         }
 
-        long totalWeight = lists.Sum(l => (long)l.Weight);
-        var town = market.SiteCulture(shop.Terms.Site);
-        var own = market.FactionCulture(shop.Terms.Faction);
+        return lists;
+    }
 
-        var units = new List<ItemInstance>();
-        long cats = 0;
-        int assigned = 0;
+    /// <summary>
+    /// Each list's share of <paramref name="n"/> (<c>FUN_140959800</c>, <b>Verified</b> by disassembly): (w / sum) x n in floats, rounded by
+    /// <see cref="RoundAway"/>, taken off what is left; the last list adds what is left when that is above 0, so the total can exceed n. A share below
+    /// 0 (a negative weight, or 0 / 0 when every weight is 0) draws the list's own <c>items count</c> (<see cref="Draw"/>).
+    /// </summary>
+    static int[] Shares(List<(VendorList List, float Weight)> lists, int n)
+    {
+        float total = 0;
+        foreach (var (_, weight) in lists) total += weight;
 
-        for (int l = 0; l < lists.Count && totalWeight > 0; l++)
+        var shares = new int[lists.Count];
+        int left = n;
+
+        for (int l = 0; l < lists.Count; l++)
         {
-            var (list, weight) = lists[l];
+            shares[l] = RoundAway(lists[l].Weight / total * n);
+            left = unchecked(left - shares[l]);
 
-            // FUN_140959800 (Verified): each list's own share is (v / sum) x n rounded half away from zero; the last adds what is left when that is
-            // above 0, so it takes max(n - assigned before it, its own share) and the total can exceed n.
-            int count = (int)MathF.Round((float)weight / totalWeight * n, MidpointRounding.AwayFromZero);
-            if (l == lists.Count - 1) count = Math.Max(n - assigned, count);
-
-            assigned += count;
-            var entries = list.Entries
-                .Where(e => e.Weight > 0 && town?.Forbidden.Contains(e.Id) != true && own?.Forbidden.Contains(e.Id) != true)
-                .ToList();
-            Draw(units, entries, count, list, faction, template, market, data.Db, ref rng);
-
-            if (list.MoneyItemProb > 0 && rng.NextFloat() <= list.MoneyItemProb && list.MoneyItemMax >= list.MoneyItemMin)
-                cats += list.MoneyItemMin + rng.NextInt(list.MoneyItemMax - list.MoneyItemMin + 1);
+            if (l == lists.Count - 1 && left > 0) shares[l] = unchecked(shares[l] + left);
         }
 
-        if (specials) AddSpecials(shop, template.Id, data.Db, market);
+        return shares;
+    }
 
-        // Dearest first, ties by record id so the order never depends on anything but the data.
-        foreach (var item in units.OrderByDescending(u => market.UnitPrice(u, false, shop.Terms, shop.Terms.Faction)).ThenBy(u => u.Record,
-            StringComparer.Ordinal))
-            shop.Stock.Add(item);
+    /// <summary>
+    /// The exe's rounding (<c>FUN_1409b32b0</c>, <b>Verified</b> by disassembly): ceil(x - 0.5) below 0, else floor(x + 0.5), truncated by
+    /// <c>cvttss2si</c>, which gives int.MinValue for NaN and anything out of the int range.
+    /// </summary>
+    static int RoundAway(float x)
+    {
+        float r = x < 0 ? MathF.Ceiling(x - 0.5f) : MathF.Floor(x + 0.5f);
 
-        // The purse counts what this fill made, not the unique items it kept (FUN_14095b210 sums its new stock only).
-        long value = shop.Stock.All().Where(i => !i.Unique).Sum(i => market.StackPrice(i, false, shop.Terms, shop.Terms.Faction));
-        if (shop.Building is null) return (long)Math.Clamp(0.25f * value, 3000, 25000) + cats;
+        return float.IsNaN(r) || r >= 2147483648f || r < -2147483648f ? int.MinValue : (int)r;
+    }
 
-        // A building shop's purse (FUN_14095b210): vendor money with a roll from -0.4 x it (the roll's upper bound is not shown by the decompile;
-        // engine: +0.4 x it), else the squad rule.
+    /// <summary>
+    /// One list's money roll (<c>FUN_140956060</c>, <b>Verified</b>: decompile): none when <c>money item prob</c> is below U(0, 1), so 1 or more
+    /// always pays; else <c>money item min</c> + an int in [0, max - min] (<c>FUN_1409b3b40</c>, clamped to [min, max], so min when max is below it).
+    /// </summary>
+    static int Money(VendorList list, ref RandomStream rng)
+    {
+        if (list.MoneyItemProb < rng.NextFloat()) return 0;
+
+        return list.MoneyItemMax < list.MoneyItemMin
+            ? list.MoneyItemMin
+            : list.MoneyItemMin + rng.NextInt(list.MoneyItemMax - list.MoneyItemMin + 1);
+    }
+
+    /// <summary>
+    /// A building shop's purse from <c>vendor money</c> (<c>FUN_14095b210</c>, <b>Verified</b> by disassembly): it + an int in [-trunc(0.4 x it),
+    /// +trunc(0.4 x it)]; null when it is below 1.
+    /// </summary>
+    static long? VendorPurse(SquadTemplate template, ref RandomStream rng)
+    {
         int vm = template.VendorMoney;
-        if (vm < 1) return (long)Math.Clamp(0.25f * value, 3000, 25000) + cats;
+        if (vm < 1) return null;
 
         int spread = (int)(vm * 0.4);
-        return vm - spread + rng.NextInt(2 * spread + 1) + cats;
+        return vm - spread + rng.NextInt(2 * spread + 1);
+    }
+
+    /// <summary>
+    /// The purse after a fill whose placed units are worth <paramref name="placedValue"/>: a building shop's <c>vendor money</c> purse when set, else
+    /// trunc(clamp(0.25 x the value, 3000, 25000)) (<c>FUN_14095ab10</c>, <c>FUN_14095b210</c>: the value of the units placed, money stacks
+    /// included, not of the special items nor of what the stock kept).
+    /// </summary>
+    public static long Purse(ShopFill fill, long placedValue) => fill.VendorPurse ?? (long)Math.Clamp(0.25f * placedValue, 3000, 25000);
+
+    /// <summary>
+    /// A squad shop's stock after a fill (<c>FUN_14095ab10</c>): cleared but its unique items, the special items, then the units dearest first by
+    /// unit price (a sort over reversed bounds, <c>FUN_140969ff0</c>; ties by record id here, the original's by the items' addresses); what does not
+    /// fit is destroyed. Returns the purse, or null when the fill made no unit (the purse stays).
+    /// </summary>
+    public static long? StockSquad(Shop shop, ShopFill fill, Market market)
+    {
+        shop.Stock.Items.RemoveAll(i => !i.Unique);
+        foreach (var special in fill.Specials) shop.Stock.Add(special);
+        if (fill.Units.Count == 0) return null;
+
+        var ordered = fill.Units
+            .OrderByDescending(u => market.UnitPrice(u, false, shop.Terms, shop.Terms.Faction))
+            .ThenBy(u => u.Record, StringComparer.Ordinal);
+        foreach (var item in ordered) shop.Stock.Add(item);
+
+        long value = shop.Stock.All().Where(i => !i.Unique).Sum(i => market.StackPrice(i, false, shop.Terms, shop.Terms.Faction));
+        return Purse(fill, value);
     }
 
     /// <summary>
     /// SQUAD_TEMPLATE <c>special items</c> (ITEM references), then <c>special map items</c> (MAP_ITEM references), on a fill with specials
     /// (<c>FUN_140958740</c> from the shop refresh <c>FUN_14095b210</c>, <b>Verified</b>): both lists are stocked when both exist (the original skips
-    /// both only when both are empty). Each entry's v0 items go into the stock before the vendor items in stacks of at most the record's raw
-    /// <c>stackable</c> (at least 1: a 0 loops forever in the original), also for a map item whose stack limit elsewhere is 1; what fits nowhere is
-    /// lost. Engine: the original also marks them unique (<c>Item::isUnique</c>), which is not modelled.
+    /// both only when both are empty). Each entry's v0 items in stacks of at most the record's raw <c>stackable</c> (at least 1: a 0 loops forever in
+    /// the original), also for a map item whose stack limit elsewhere is 1, each flagged unique (<c>Item::isUnique</c>), so no fill clears them.
     /// </summary>
-    static void AddSpecials(Shop shop, string templateId, GameDatabase db, Market market)
+    static List<ItemInstance> Specials(string templateId, GameDatabase db, Market market)
     {
-        if (db.Find(templateId) is not { } template) return;
+        var specials = new List<ItemInstance>();
+        if (db.Find(templateId) is not { } template) return specials;
 
-        AddSpecialList(shop, template.GetReferences("special items"), FcsRecordType.Item, db, market);
-        AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MapItem, db, market);
+        AddSpecialList(specials, template.GetReferences("special items"), FcsRecordType.Item, db, market);
+        AddSpecialList(specials, template.GetReferences("special map items"), FcsRecordType.MapItem, db, market);
+        return specials;
     }
 
     /// <summary>
-    /// Puts each <paramref name="type"/> record of <paramref name="list"/> into the stock, its v0 units in stacks of at most its <c>stackable</c> (at
-    /// least 1).
+    /// Adds each <paramref name="type"/> record of <paramref name="list"/>, its v0 units in unique stacks of at most its <c>stackable</c> (at least
+    /// 1).
     /// </summary>
-    static void AddSpecialList(Shop shop, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
+    static void AddSpecialList(List<ItemInstance> specials, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
     {
         foreach (var r in list)
         {
@@ -256,7 +350,11 @@ public static class ShopFiller
             for (int left = r.Values.Value0; left > 0;)
             {
                 int stack = Math.Min(left, perStack);
-                if (market.Items.Create(r.TargetStringId, stack) is { } item) shop.Stock.Add(item);
+                if (market.Items.Create(r.TargetStringId, stack) is { } item)
+                {
+                    item.Unique = true;
+                    specials.Add(item);
+                }
 
                 left -= stack;
             }
@@ -265,10 +363,12 @@ public static class ShopFiller
 
     /// <summary>
     /// A weighted pick of <paramref name="entries"/> by one float draw (entries of weight 0 or less never picked; the first when no weight is
-    /// above 0).
+    /// above 0); a single entry is taken with no draw (<c>FUN_1409555d0</c>, <b>Verified</b> by disassembly: a table of one is read without a roll).
     /// </summary>
     internal static VendorEntry Pick(IReadOnlyList<VendorEntry> entries, ref RandomStream rng)
     {
+        if (entries.Count == 1) return entries[0];
+
         long total = entries.Sum(e => (long)Math.Max(e.Weight, 0));
         if (total <= 0) return entries[0];
 
@@ -285,63 +385,109 @@ public static class ShopFiller
     }
 
     /// <summary>
-    /// Draws one list's share, <paramref name="count"/> units, from its <paramref name="entries"/> into <paramref name="units"/> (<c>FUN_1409555d0</c>,
-    /// <b>Observed</b>, decompile): a blueprint or map made anew leaves the entries, so each is stocked at most once per list and fill, and the draw
-    /// ends when no entry is left.
+    /// What every list of one fill draws with: the fill's units (a unit tops up any list's stack), the trader's faction (record and index),
+    /// template, the market, the data and the session's list tables.
     /// </summary>
-    static void Draw(List<ItemInstance> units, List<VendorEntry> entries, int count, VendorList list, GameRecord? faction, SquadTemplate template,
-        Market market, GameDatabase db, ref RandomStream rng)
-    {
-        for (int k = 0; k < count && entries.Count > 0; k++)
-        {
-            var entry = Pick(entries, ref rng);
-            if (Make(entry, list, faction, template, market, db, ref rng) is not { } item) continue;
+    readonly record struct DrawContext(List<ItemInstance> Units, GameRecord? Faction, int FactionIndex, SquadTemplate Template, Market Market,
+        PopulationData Data, VendorTables Tables);
 
-            if (Merge(units, item) && item.Type is FcsRecordType.Blueprint or FcsRecordType.MapItem)
-                entries.Remove(entry);
+    /// <summary>
+    /// Draws one list's share, <paramref name="count"/> units (a share below 0: the list's <c>items count</c>), from its
+    /// <paramref name="table"/> into the fill's units (<c>FUN_1409555d0</c>, <b>Verified</b> by disassembly): one pick a unit, the draw ending
+    /// when no entry is left or a unit cannot be made (<see cref="DrawOne"/>).
+    /// </summary>
+    static void Draw(DrawContext draw, VendorTable table, int count, VendorList list, ref RandomStream rng)
+    {
+        if (count < 0) count = list.ItemsCount;
+
+        for (int k = 0; k < count && table.Entries.Count > 0; k++)
+        {
+            if (!DrawOne(draw, table, Pick(table.Entries, ref rng), list, ref rng)) return;
         }
     }
 
     /// <summary>
-    /// Puts one unit into the list: onto a stack of the same record and quality with room, else as a new item (then true).
+    /// One unit of <paramref name="entry"/>; false ends the list's draw. A weapon is always a new item and ends the draw when the list has no
+    /// manufacturer or it cannot be made. Anything else first rolls its grade, then tops up the first unit of its record below the record's raw
+    /// <c>stackable</c> (0 when missing, so gear, RESEARCH and records without it never stack here); else it is made anew, and a blueprint or map made
+    /// anew leaves the table (<see cref="VendorTable.Take"/>), so a fill stocks each at most once per list. The original reads such an item it failed
+    /// to make without a test (it would fault there); <b>engine choice</b>: the draw ends, as for a weapon.
     /// </summary>
-    static bool Merge(List<ItemInstance> units, ItemInstance item)
+    static bool DrawOne(DrawContext draw, VendorTable table, VendorEntry entry, VendorList list, ref RandomStream rng)
     {
-        foreach (var u in units)
+        if (entry.Type == FcsRecordType.Weapon)
         {
-            if (u.Record == item.Record && u.Quality == item.Quality && u.Level == item.Level && u.CompanyId == item.CompanyId
-                && u.Quantity < u.StackLimit)
-            {
-                u.Quantity++;
-                return false;
-            }
+            if (Weapon(draw, entry, list, ref rng) is not { } weapon) return false;
+
+            draw.Units.Add(weapon);
+            return true;
         }
 
-        units.Add(item);
+        int grade = CharacterGenerator.QualityOfGrade(GradeOf(draw, entry, ref rng));
+        if (TopUp(draw, entry)) return true;
+        if (Make(draw, entry, grade) is not { } item) return false;
+
+        draw.Units.Add(item);
+        if (item.Type is FcsRecordType.Blueprint or FcsRecordType.MapItem) table.Take(entry);
+
         return true;
     }
 
     /// <summary>
-    /// A new unit of <paramref name="entry"/>: armour of a rolled grade's quality, a limb or crossbow of a rolled level, a weapon with a manufacturer
-    /// and model; null when the record makes none.
+    /// The grade a unit other than a weapon rolls before the top-up: a crossbow's from <see cref="CrossbowGrade"/>, a limb's from
+    /// <see cref="LimbGrade"/>, anything else the faction's armour grade (<see cref="Grade"/>).
     /// </summary>
-    static ItemInstance? Make(VendorEntry entry, VendorList list, GameRecord? faction, SquadTemplate template, Market market, GameDatabase db,
-        ref RandomStream rng)
+    static int GradeOf(DrawContext draw, VendorEntry entry, ref RandomStream rng) => entry.Type switch
     {
-        float quality = entry.Type == FcsRecordType.Armour ? CharacterGenerator.QualityOfGrade(Grade(faction, ref rng)) : 0;
-        if (market.Items.Create(entry.Id, 1, quality) is not { } item) return null;
-        if (entry.Type == FcsRecordType.LimbReplacement)
-            item.Level = CharacterGenerator.QualityOfGrade(LimbGrade(template.RoboticsLevels, ref rng));
-        if (entry.Type == FcsRecordType.Crossbow)
-            item.Level = CharacterGenerator.QualityOfGrade(CrossbowGrade(template.CrossbowLevels, ref rng));
+        FcsRecordType.Crossbow => CrossbowGrade(draw.Template.CrossbowLevels, ref rng),
+        FcsRecordType.LimbReplacement => LimbGrade(draw.Template.RoboticsLevels, ref rng),
+        _ => Grade(draw.Faction, ref rng),
+    };
 
-        if (entry.Type == FcsRecordType.Weapon && Maker(list, db, ref rng) is { } made)
+    /// <summary>
+    /// Adds one to the first unit of <paramref name="entry"/>'s record whose quantity is below the record's raw <c>stackable</c>; false when none.
+    /// </summary>
+    static bool TopUp(DrawContext draw, VendorEntry entry)
+    {
+        int stackable = draw.Data.Db.Find(entry.Id)?.GetInt("stackable") ?? 0;
+
+        foreach (var u in draw.Units)
         {
-            item.CompanyId = made.Maker.StringId;
-            item.MaterialId = made.Model ?? "";
-            item.Level = made.Level;
+            if (u.Record != entry.Id || u.Quantity >= stackable) continue;
+
+            u.Quantity++;
+            return true;
         }
 
+        return false;
+    }
+
+    /// <summary>
+    /// A new unit of <paramref name="entry"/> with its rolled grade (5 / 20 / 40 / 60 / 80 / 95): armour's quality, a limb's or crossbow's level;
+    /// null when the record makes none.
+    /// </summary>
+    static ItemInstance? Make(DrawContext draw, VendorEntry entry, int grade)
+    {
+        float quality = entry.Type == FcsRecordType.Armour ? grade : 0;
+        if (draw.Market.Items.Create(entry.Id, 1, quality) is not { } item) return null;
+        if (entry.Type is FcsRecordType.LimbReplacement or FcsRecordType.Crossbow) item.Level = grade;
+
+        return item;
+    }
+
+    /// <summary>
+    /// A new weapon of <paramref name="entry"/> with a manufacturer from the list and its model (<see cref="Maker"/>); null when the list has no
+    /// manufacturer or the weapon cannot be made. Its level is the model's, nothing else (<b>Verified</b>, decompile: the draw hands the weapon
+    /// factory <c>FUN_140580750</c> the manufacturer and a quality of 0, and the factory sets the level from the model it picks).
+    /// </summary>
+    static ItemInstance? Weapon(DrawContext draw, VendorEntry entry, VendorList list, ref RandomStream rng)
+    {
+        if (Maker(list, draw.Data.Db, ref rng) is not { } made) return null;
+        if (draw.Market.Items.Create(entry.Id) is not { } item) return null;
+
+        item.CompanyId = made.Maker.StringId;
+        item.MaterialId = made.Model ?? "";
+        item.Level = made.Level;
         return item;
     }
 

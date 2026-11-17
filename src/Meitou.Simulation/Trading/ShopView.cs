@@ -4,8 +4,8 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Trading;
 
 /// <summary>
-/// A building shop's trader window (docs/game/economy.md "Building shops", <b>Observed</b> decompile): its goods stay in the stock containers and
-/// the window shows copies of them. Each time the window opens (<c>FUN_1406e6af0</c> makes the shop wrapper <c>FUN_140953850</c> anew) the grid
+/// A shop's trader window (docs/game/economy.md "Building shops", <b>Observed</b> decompile): its goods stay in the stock containers (a squad
+/// shop's in its <see cref="Shop.Stock"/>) and the window (<see cref="Shop.Window"/>) shows copies of them. Each time the window opens (<c>FUN_1406e6af0</c> makes the shop wrapper <c>FUN_140953850</c> anew) the grid
 /// takes a copy of every item of the containers but money (item function 14) by auto-add (<c>FUN_1409528d0</c>; an item with no room grows it by
 /// twice its footprint height, <c>FUN_140954ba0</c>) and is arranged (<c>FUN_140749d30</c>). What the trade changes in the grid goes back to the
 /// containers (the section callbacks <c>FUN_140952c70</c>, <c>FUN_140952cf0</c>, <c>FUN_140952da0</c>): units taken out leave the containers'
@@ -35,7 +35,7 @@ sealed class ShopView
     public void Build(Shop shop, IReadOnlyList<StockBox> boxes)
     {
         var (columns, rows) = shop.ViewSize;
-        shop.Stock = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
+        shop.Window = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
 
         foreach (var box in boxes)
         {
@@ -43,8 +43,8 @@ sealed class ShopView
                 if (item.ItemFunction != PlayerSystem.MoneyFunction) Put(shop, item.Copy());
         }
 
-        InventoryCommands.Arrange(shop.Stock);
-        _mirrored = Frozen(Tally(shop.Stock.Items));
+        InventoryCommands.Arrange(shop.Window);
+        _mirrored = Frozen(Tally(shop.Window.Items));
         Live = true;
         Pending = false;
     }
@@ -66,7 +66,7 @@ sealed class ShopView
     {
         if (!Live) return;
 
-        var now = Tally(shop.Stock.Items);
+        var now = Tally(shop.Window.Items);
         bool changed = false;
 
         foreach (var was in _mirrored)
@@ -97,7 +97,7 @@ sealed class ShopView
     public void Drop(Shop shop)
     {
         var (columns, rows) = shop.ViewSize;
-        shop.Stock = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
+        shop.Window = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
         _mirrored = [];
         Live = false;
         Pending = false;
@@ -109,9 +109,9 @@ sealed class ShopView
     /// </summary>
     static void Put(Shop shop, ItemInstance item)
     {
-        if (item.Width > shop.Stock.Width) return;
+        if (item.Width > shop.Window.Width) return;
 
-        while (!shop.Stock.AddTo("main", item)) shop.Stock = Taller(shop.Stock, 2 * item.Height);
+        while (!shop.Window.AddTo("main", item)) shop.Window = Taller(shop.Window, 2 * item.Height);
     }
 
     /// <summary>

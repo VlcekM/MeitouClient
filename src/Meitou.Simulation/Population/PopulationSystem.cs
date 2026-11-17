@@ -1260,7 +1260,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (plan.IsAnimal && record is not null && cold.Inventory is { } carried)
         {
             ulong key = Rng.Key(table.PeekNextId());
-            Items.PackLoad.Fill(_data, carried, record, built.Plan.Template, built.Home is null, squad.Faction, world.Seed, key);
+            Items.PackLoad.Fill(_data, world.VendorTables, carried, record, built.Plan.Template, built.Home is null, squad.Faction, world.Seed, key);
         }
 
         // The fresh-character factory (FUN_140581770) gives organic members of a malnourished template 170 hunger, not its free-food floor.

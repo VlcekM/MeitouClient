@@ -1725,13 +1725,13 @@ Facts: [Prospecting](game/ui-screens.md#prospecting), [Task_Prospecting](game/ai
 
 `TradeSystem`: trader-squad stock/purse/restock, open trade, buying/selling/fencing. Charge,
 quality, culture, market, forbidden/stolen factors follow [economy.md](game/economy.md).
-A squad shop holds one 18 x 18 stock grid (the building storage size and the vanilla trader window width); `ArrangeStock` arranges it. A housed trader whose template makes no
+A squad shop holds one 18 x 18 stock grid (the building storage size and the vanilla trader window width); its trade window is a copy of it without the money items (`Shop.Window`, `ShopView`), which `ArrangeStock` arranges. A housed trader whose template makes no
 prisoners or slaves and whose home has stock containers gets a building shop instead ([building shops](game/economy.md#building-shops-observed-decompile)): its goods lie in
 those containers and its trade window is a copy of them written back as it changes (`Shop.ForBuilding`, `ShopView`), its own purse rule, the containers' locks opened at each fill. Stock cells stack 50 x an item's `stackable`. A housed squad with vendors that is no
 trader has its home's containers filled instead (`FillHome`). A squad without a shop that a Trade line opens a trade with gets an empty one, never filled, or when housed its
 home's stock containers for the trade (`StockFor`, [who trades](game/economy.md#who-trades)). A trader on a walk (a caravan's boss) stops for the customer's walk-up and its AI goes on once the trade opens (engine choice; the original holds no trader for a trade). Only members that trade
 (`DialogueSystem.Trades`, [who trades](game/economy.md#who-trades)) publish `IsTrader`, the Trade verb and pointer.
-Shop state is hashed; the open trade and a building shop's window are not, except the buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: a squad shop's stock, fill count,
+Shop state is hashed; the open trade, the trader windows and the vendor list tables (`VendorTables`: per world and unsaved, as the original resets its list cache with every load, [economy](game/economy.md#building-shops-observed-decompile)) are not, except the buyback receipts (below). A shop is saved on its platoon (`Saving/ShopSave`: a squad shop's stock, fill count,
 `inventory refresh time`, [economy](game/economy.md#building-shops-observed-decompile)) and kept by a saved platoon that leaves the world; a save without it gets a fresh fill.
 Customer: the original buys into the character window the stock is dropped on (`FUN_140712490`, **Observed**). Meitou keeps one customer; the inventory window shows the lead
 selected character, also while trading. A buy or sell names the window's character (`BuyItem.Into`, `SellItem.From`, a held item's window) and the trade passes to them within

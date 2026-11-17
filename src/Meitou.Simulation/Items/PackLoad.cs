@@ -27,8 +27,8 @@ public static class PackLoad
     /// Loads the bag <paramref name="inventory"/> wears from each list in turn. <b>Engine choice</b>: a <paramref name="homeless"/> squad with a shop
     /// loads none, as its squad stock stands in for its bags (the original's squad fill empties them and fills them again, economy.md "Who trades").
     /// </summary>
-    public static void Fill(PopulationData data, Inventory inventory, GameRecord animal, SquadTemplate template, bool homeless, int faction,
-        ulong seed, ulong key)
+    public static void Fill(PopulationData data, VendorTables tables, Inventory inventory, GameRecord animal, SquadTemplate template, bool homeless,
+        int faction, ulong seed, ulong key)
     {
         if (inventory.Backpack?.Contents is not { } bag || homeless && template.HasShop) return;
 
@@ -38,19 +38,24 @@ public static class PackLoad
             : animal.GetReferences("inventory").Select(r => r.TargetStringId);
 
         foreach (string id in lists.ToList())
-            if (data.Db.Find(id) is { Type: FcsRecordType.VendorList } list) FillFrom(data, bag, VendorList.From(data.Db, list), faction, ref rng);
+        {
+            if (data.Db.Find(id) is { Type: FcsRecordType.VendorList } list)
+                FillFrom(data, tables, bag, VendorList.From(data.Db, list), faction, ref rng);
+        }
     }
 
     /// <summary>
-    /// Puts the list's <c>items count</c> picks into <paramref name="bag"/>, in at most twice as many tries: a pick that does not fit is lost.
+    /// Puts the list's <c>items count</c> picks into <paramref name="bag"/>, in at most twice as many tries: a pick that does not fit is lost. The
+    /// list's table is fetched once for the whole load (<c>FUN_14074a3d0</c>, <b>Verified</b>), so a blueprint or map it takes stays out of it.
     /// </summary>
-    static void FillFrom(PopulationData data, Inventory bag, VendorList list, int faction, ref RandomStream rng)
+    static void FillFrom(PopulationData data, VendorTables tables, Inventory bag, VendorList list, int faction, ref RandomStream rng)
     {
-        if (list.Entries.Count == 0) return;
+        var table = tables.Fetch(data, list, faction);
+        if (table.Entries.Count == 0) return;
 
         int left = list.ItemsCount < 1 ? DefaultItemsCount : list.ItemsCount;
 
         for (int tries = left * 2; left > 0 && tries > 0; tries--)
-            if (ItemSlots.Roll(data, list, faction, ref rng).Item is { } item && bag.AddTo("backpack_content", item)) left--;
+            if (ItemSlots.Roll(data, list, table, faction, ref rng).Item is { } item && bag.AddTo("backpack_content", item)) left--;
     }
 }

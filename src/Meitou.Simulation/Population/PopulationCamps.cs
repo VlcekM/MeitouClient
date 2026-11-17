@@ -285,12 +285,20 @@ public sealed partial class PopulationSystem
 
         foreach (var drop in drops)
         {
-            var item = drop.List
-                ? _data.Db.Find(drop.Record) is { } list
-                    ? Items.ItemSlots.Roll(_data, VendorList.From(_data.Db, list), owner, ref rng).Item
-                    : null
-                : _data.Items.Create(drop.Record, 1, 0);
+            var item = drop.List ? Loot(world, drop, owner, ref rng) : _data.Items.Create(drop.Record, 1, 0);
             if (item is not null) world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
         }
+    }
+
+    /// <summary>
+    /// A <c>loot spawn</c> entry's item, rolled from its list's table, fetched for the entry from the session's list cache
+    /// (<c>FUN_140938440</c>, <b>Verified</b>, decompile); null for a missing list or no item.
+    /// </summary>
+    Items.ItemInstance? Loot(World world, NestDrop drop, int owner, ref RandomStream rng)
+    {
+        if (_data.Db.Find(drop.Record) is not { } record) return null;
+
+        var list = VendorList.From(_data.Db, record);
+        return Items.ItemSlots.Roll(_data, list, world.VendorTables.Fetch(_data, list, owner), owner, ref rng).Item;
     }
 }

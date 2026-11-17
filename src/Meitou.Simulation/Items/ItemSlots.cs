@@ -88,6 +88,11 @@ public sealed class ItemSlots
         /// How many items it has made (the rolls' key).
         /// </summary>
         public int Made;
+        /// <summary>
+        /// The group's table for the owner, fetched on the first fill and kept (<c>FUN_140547e10</c> stores it in the slot, <b>Verified</b>): later
+        /// fills draw from it without a fetch, so what they take comes back only when another draw fetches it.
+        /// </summary>
+        public VendorTable? Table;
     }
 
     /// <summary>
@@ -377,7 +382,8 @@ public sealed class ItemSlots
         var group = Group(data.Db, s.GroupId)!;
         var rng = new RandomStream(world.Seed, Rng.StableHash(s.Id) ^ ((ulong)s.Made << 40), RngPurpose.Loot);
         s.Made++;
-        var (item, type, noMaker) = Roll(data, group.Items, s.Owner, ref rng);
+        s.Table ??= world.VendorTables.Fetch(data, group.Items, s.Owner);
+        var (item, type, noMaker) = Roll(data, group.Items, s.Table, s.Owner, ref rng);
         if (item is null)
         {
             // The data cannot make it: try again later; a weapon with no usable manufacturer is tried again on the next update (FUN_1409540d0,
@@ -393,14 +399,17 @@ public sealed class ItemSlots
     }
 
     /// <summary>
-    /// One item of an item list as the original's pick makes it (<c>FUN_1409540d0</c>): a weighted entry, the grade's quality for armour (from
-    /// <paramref name="owner"/>'s faction), a weapon's manufacturer and model. Null (with the entry's type) when the data cannot make it, or a weapon
-    /// has no usable manufacturer (<c>NoMaker</c>).
+    /// One item of an item list as the original's pick makes it (<c>FUN_1409540d0</c>): a weighted entry of the list's <paramref name="table"/>,
+    /// the grade's quality for armour (from <paramref name="owner"/>'s faction), a weapon's manufacturer and model; a blueprint or map made leaves
+    /// the table (<see cref="VendorTable.Take"/>, <b>Verified</b>). Null (with the entry's type, ITEM for an empty table) when the table is empty,
+    /// the data cannot make it, or a weapon has no usable manufacturer (<c>NoMaker</c>).
     /// </summary>
-    public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, VendorList list, int owner, ref RandomStream rng)
+    public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, VendorList list, VendorTable table, int owner,
+        ref RandomStream rng)
     {
-        // FUN_1409540d0: one entry is taken with no draw
-        var entry = list.Entries.Count == 1 ? list.Entries[0] : ShopFiller.Pick(list.Entries, ref rng);
+        if (table.Entries.Count == 0) return (null, FcsRecordType.Item, false);
+
+        var entry = ShopFiller.Pick(table.Entries, ref rng);   // one entry is taken with no draw
         var faction = (uint)owner < (uint)data.Factions.Count ? data.Db.Find(data.Factions[owner].Id) : null;
 
         // The original hands every pick the grade's quality (FUN_140580750, Verified): it becomes the level of armour, crossbows and limbs; what it
@@ -409,6 +418,7 @@ public sealed class ItemSlots
         if (entry.Type is not (FcsRecordType.Armour or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement))
             quality = 0;
         if (data.Items.Create(entry.Id, 1, quality) is not { } item) return (null, entry.Type, false);
+        if (item.Type is FcsRecordType.Blueprint or FcsRecordType.MapItem) table.Take(entry);
         if (entry.Type != FcsRecordType.Weapon) return (item, entry.Type, false);
         if (ShopFiller.Maker(list, data.Db, ref rng) is not { } made) return (null, entry.Type, true);
         item.CompanyId = made.Maker.StringId;

@@ -7,19 +7,29 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Simulation.Trading;
 
 /// <summary>
-/// One stock container of a home being filled: its fixture and its record's storage rules (null: a record that says nothing).
+/// One stock container of a home being filled: its cells, its fixture and its record's storage rules (null: a record that says nothing); a squad
+/// shop's goods are one with neither (<see cref="StockBox(Inventory)"/>).
 /// </summary>
-sealed record StockBox(Fixture Fixture, MachineData? Data)
+sealed record StockBox(Inventory Grid, Fixture? Fixture, MachineData? Data)
 {
     /// <summary>
-    /// The container's cells.
+    /// A container fixture with its record's rules.
     /// </summary>
-    public Inventory Grid => Fixture.Contents!;
+    public StockBox(Fixture fixture, MachineData? data) : this(fixture.Contents!, fixture, data)
+    {
+    }
+
+    /// <summary>
+    /// A squad shop's goods, which take anything that fits.
+    /// </summary>
+    public StockBox(Inventory goods) : this(goods, null, null)
+    {
+    }
 
     /// <summary>
     /// Its lock's level; 0 without a lock.
     /// </summary>
-    public int LockLevel => Fixture.Lock?.Level ?? 0;
+    public int LockLevel => Fixture?.Lock?.Level ?? 0;
 
     /// <summary>
     /// The record type it is for: a resource storage's <c>itemtype limit</c> (the <c>StorageBuilding</c> field <c>+0x440</c>), ITEM for any other
@@ -82,6 +92,11 @@ static class HomeStock
     const float OwnTypeFactor = 1.5f;
 
     /// <summary>
+    /// The factor on a money item's score (<c>DAT_141683250</c>).
+    /// </summary>
+    const float MoneyFactor = 100;
+
+    /// <summary>
     /// The random term added to each score, times a roll in [0, 1) (<c>DAT_14167c310</c>): it orders equal containers.
     /// </summary>
     const float ScoreNoise = 0.01f;
@@ -98,35 +113,36 @@ static class HomeStock
     }
 
     /// <summary>
-    /// Puts <paramref name="items"/> into <paramref name="boxes"/> unit by unit, dearest first (ties by record id): the first half (at least one)
-    /// each into the best-scoring container that takes it, the rest each into the first that takes it of a fresh shuffle. What no container takes
-    /// is lost.
+    /// Puts the fill's <paramref name="items"/>, each stack as the draw made it, into <paramref name="boxes"/> dearest first by unit value (a sort
+    /// over reversed bounds, <c>FUN_140969ff0</c>; ties by record id here, the original's by the items' addresses): the first half of the items
+    /// (trunc(count x 0.5), at least the first) each into the best-scoring container that takes it, the rest each into the first that takes it of a
+    /// fresh shuffle. What no container takes is lost. Returns what was placed, each with the quantity that went in.
     /// </summary>
-    public static void Spread(List<StockBox> boxes, IEnumerable<ItemInstance> items, Func<ItemInstance, int> value, ref RandomStream rng)
+    public static List<ItemInstance> Spread(List<StockBox> boxes, IEnumerable<ItemInstance> items, Func<ItemInstance, int> value, ref RandomStream rng)
     {
-        var ordered = items.SelectMany(Units).OrderByDescending(value).ThenBy(i => i.Record, StringComparer.Ordinal).ToList();
+        var ordered = items.OrderByDescending(value).ThenBy(i => i.Record, StringComparer.Ordinal).ToList();
         int scored = Math.Max((int)(ordered.Count * Half), 1);
         var open = new List<StockBox>(boxes);
+        var placed = new List<ItemInstance>();
 
         for (int k = 0; k < ordered.Count; k++)
         {
-            if (k < scored) PlaceScored(open, ordered[k], value(ordered[k]), ref rng);
-            else PlaceShuffled(boxes, ordered[k], ref rng);
-        }
-    }
+            var item = ordered[k];
+            int quantity = item.Quantity;
+            var piece = item.WithQuantity(quantity);
+            int left = k < scored ? PlaceScored(open, item, value(item), ref rng) : PlaceShuffled(boxes, item, ref rng);
 
-    /// <summary>
-    /// The stack as single units (the filler makes and places its items one by one).
-    /// </summary>
-    static IEnumerable<ItemInstance> Units(ItemInstance stack)
-    {
-        for (int k = 0; k < stack.Quantity; k++) yield return stack.WithQuantity(1);
+            if (left < quantity) placed.Add(piece.WithQuantity(quantity - left));
+        }
+
+        return placed;
     }
 
     /// <summary>
     /// A scored item: the containers at least half full leave <paramref name="open"/> for good, the others are tried from the highest score down.
+    /// Returns the quantity no container took.
     /// </summary>
-    static void PlaceScored(List<StockBox> open, ItemInstance item, int value, ref RandomStream rng)
+    static int PlaceScored(List<StockBox> open, ItemInstance item, int value, ref RandomStream rng)
     {
         open.RemoveAll(b => b.Fill >= Half);
 
@@ -134,13 +150,16 @@ static class HomeStock
         foreach (var box in open) scores.Add((box, Score(box, item, value) + rng.NextFloat() * ScoreNoise));
 
         foreach (var (box, _) in scores.OrderByDescending(s => s.Score))
-            if (box.Take(item)) return;
+            if (box.Take(item)) return 0;
+
+        return item.Quantity;
     }
 
     /// <summary>
-    /// An unscored item: every container, shuffled again for each item (the original's <c>random_shuffle</c> of the list), tried in that order.
+    /// An item put into the first container that takes it of <paramref name="boxes"/> shuffled again for it (the original's <c>random_shuffle</c> of
+    /// the list): the unscored half of the units and each special item. Returns the quantity no container took.
     /// </summary>
-    static void PlaceShuffled(List<StockBox> boxes, ItemInstance item, ref RandomStream rng)
+    internal static int PlaceShuffled(List<StockBox> boxes, ItemInstance item, ref RandomStream rng)
     {
         for (int i = 1; i < boxes.Count; i++)
         {
@@ -149,20 +168,31 @@ static class HomeStock
         }
 
         foreach (var box in boxes)
-            if (box.Take(item)) return;
+            if (box.Take(item)) return 0;
+
+        return item.Quantity;
     }
 
     /// <summary>
-    /// How well the container suits the item (<c>FUN_140952df0</c>): 0 for an item worth less than ten times the lock's level; else the level + 1,
-    /// for an ITEM container as it is without a list, + 150 for an item on its list and 0 for one off it; for a container of another type x 1.5
-    /// for an item of that type and 0 for any other. The original's money items (x 100, no lock test) are not stocked here.
+    /// How well the container suits the item (<c>FUN_140952df0</c>): 0 for an item worth less than ten times the lock's level (money is not
+    /// tested); else the level + 1, for an ITEM container as it is without a list, + 150 for an item on its list and 0 for one off it; for a
+    /// container of another type x 1.5 for an item of that type and 0 for any other; x 100 for money (<c>item function</c> 14).
     /// </summary>
     static float Score(StockBox box, ItemInstance item, int value)
     {
+        bool money = item.ItemFunction == Player.PlayerSystem.MoneyFunction;
         int level = box.LockLevel;
-        if (level > 0 && value < level * ValuePerLockLevel) return 0;
+        if (level > 0 && !money && value < level * ValuePerLockLevel) return 0;
 
-        float score = level + 1;
+        float score = Fit(box, item, level + 1);
+        return money ? score * MoneyFactor : score;
+    }
+
+    /// <summary>
+    /// The score before the money factor: <paramref name="score"/> (the lock level + 1) as the container's type and list take the item.
+    /// </summary>
+    static float Fit(StockBox box, ItemInstance item, float score)
+    {
         if (box.Type != FcsRecordType.Item) return item.Type == box.Type ? score * OwnTypeFactor : 0;
         if (box.Limit.Count == 0) return score;
         return box.Limit.Contains(item.Record) ? score + ListedBonus : 0;
