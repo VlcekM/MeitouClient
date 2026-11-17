@@ -221,9 +221,9 @@ public interface ITradeSource
 public sealed class TradeSettings
 {
     /// <summary>
-    /// How close another selected character must stand to the trader to take over the open trade: the original's item move between two characters'
-    /// inventories (the stock dropped on a character window) allows 1000 when unflagged (<c>FUN_14070d290</c>, <b>Observed</b>; whether the trade
-    /// window flags it is <b>Unknown</b>, docs/game/economy.md "Trading range").
+    /// How close a player's character must stand to the trader for the open trade's items to move through its window (and for another to take the
+    /// trade over): the original's item move between two characters' inventories allows 1000 when unflagged, and a paid trade's move is unflagged
+    /// (<c>FUN_14070d290</c>, the flag being the stealing test; docs/game/economy.md "Trading range"). The trade itself stays open farther.
     /// </summary>
     public float PassRange { get; init; } = 1000;
     /// <summary>
@@ -381,8 +381,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the wages and the shops; then the open trade follows the selection, and the customer's walk
-    /// opens the trade in talk range, keeps it within <see cref="TradeSettings.PassRange"/> or closes it.
+    /// Every <see cref="TradeSettings.CheckEveryTicks"/>: the wages and the shops; then the open trade follows the selection and lasts while its
+    /// parties are there (<see cref="Parties"/>), and the customer's walk opens the trade in talk range (<see cref="Approach"/>).
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -396,28 +396,46 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (_open) FollowSelection(world);
 
-        if (!_customer.IsNone)
-        {
-            if (!Resolve(world, out int c, out int t, out _)) Close(world);
-            // opens in talk range, stays open within the pass-on reach
-            else if (_open ? InReach(world, c, t, Settings.PassRange) : InReach(world, c, t))
-            {
-                if (!_open)
-                {
-                    TaskStart.Stand(world.Characters, c);   // the customer stops where it stands, not at the trader's spot behind a counter
-                    BuildView(world);
-                }
-
-                _open = true;
-                Hold(world, t);
-            }
-            else if (_open || !_approach.Follow(world, _customer, c, t))
-                Close(world);   // walked away, or gave up the walk (another order, or stuck)
-            else Hold(world, t);
-        }
+        // The original closes an open trade by no distance: farther than PassRange only its items stop moving (docs/game/economy.md "Trading range").
+        if (_open && !Resolve(world, out _, out _, out _)) Close(world);
+        else if (!_open && !_customer.IsNone) Approach(world);
 
         WriteOpenView(world);
         RefreshView(world);
+    }
+
+    /// <summary>
+    /// The customer's walk to the trader, who is held for it: in talk range the trade opens; it closes when either party cannot trade or the walk is
+    /// given up (another order, or stuck).
+    /// </summary>
+    void Approach(World world)
+    {
+        if (!Resolve(world, out int c, out int t, out _))
+        {
+            Close(world);
+            return;
+        }
+
+        if (InReach(world, c, t))
+        {
+            Open(world, c);
+            return;
+        }
+
+        if (_approach.Follow(world, _customer, c, t)) Hold(world, t);
+        else Close(world);
+    }
+
+    /// <summary>
+    /// Opens the trade: the customer stops where it stands (not at the trader's spot behind a counter) and the trader goes back to its AI, as the
+    /// original holds no trader for a trade (the Trade effect <c>FUN_1409524f0</c> only queues the windows, docs/game/economy.md "Trading range").
+    /// </summary>
+    void Open(World world, int c)
+    {
+        TaskStart.Stand(world.Characters, c);
+        BuildView(world);
+        _open = true;
+        Release(world);
     }
 
     /// <summary>
@@ -450,24 +468,22 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     bool CustomerTrades(World world, CharacterId window)
     {
         if (!window.IsNone) return TradeWith(world, window);
-        if (FollowSelection(world)) return true;
+        if (FollowSelection(world)) return TradeWith(world, _customer);
 
         world.Post("Out of trading range.");
         return false;
     }
 
     /// <summary>
-    /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from, when within
-    /// <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (one who cannot trade, not the player's, dead
-    /// or without an inventory, is refused silently), as the original refuses such a drop beyond the item limit (<c>FUN_140712490</c>,
-    /// docs/game/economy.md "Trading range").
+    /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from (the customer's
+    /// own too), when within <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (another who cannot
+    /// trade, not the player's, dead or without an inventory, is refused silently), as the original refuses such a move beyond the item limit
+    /// (<c>FUN_140712490</c>, docs/game/economy.md "Trading range").
     /// </summary>
     internal bool TradeWith(World world, CharacterId who)
     {
-        if (who == _customer) return true;
-        if (!world.Characters.TryResolveNext(who, out int c) || !world.Characters.TryResolveNext(_trader, out int t)
-            || !Trades(world.Characters.Cold(c)))
-            return false;
+        if (!world.Characters.TryResolveNext(who, out int c) || !world.Characters.TryResolveNext(_trader, out int t)) return false;
+        if (who != _customer && !Trades(world.Characters.Cold(c))) return false;
 
         if (InReach(world, c, t, Settings.PassRange))
         {
@@ -495,30 +511,53 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     public TradeView? PublishTrade() => _view;
 
     /// <summary>
-    /// Keeps the trader standing while the customer comes and trades (residents wander; the original's shopkeepers stand at their node). Its wander
-    /// resumes on close; a travelling trader (a caravan's boss) stops too and its AI walks on after (<see cref="TaskStart.OnAiWalk"/>). A walk
-    /// another system holds it for is left alone.
+    /// Keeps the trader standing while the customer walks up (residents wander; the original's shopkeepers stand at their node). Its wander
+    /// resumes when the trade opens or closes (<see cref="Release"/>); a travelling trader (a caravan's boss) stops too and its AI walks on after
+    /// (<see cref="TaskStart.OnAiWalk"/>). A walk another system holds it for is left alone.
     /// </summary>
     void Hold(World world, int t)
     {
         ref var n = ref world.Characters.Next[t];
         bool travelling = TaskStart.OnAiWalk(world.Characters, t);
-        world.Characters.Cold(t)!.Engaged = true;   // the AI leaves it alone until the trade closes
+        world.Characters.Cold(t)!.Engaged = true;   // the AI leaves it alone until it is released
         if (n.Task == (byte)CharacterTask.Wander) _traderWandered = true;
         if (n.Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle || travelling)
             TaskStart.Stand(world.Characters, t);
     }
 
     /// <summary>
-    /// Closes the open trade: its session ends, the trader is released (and wanders again when it was), and the view goes.
+    /// Gives the held trader back to its AI, wandering again when it was.
+    /// </summary>
+    void Release(World world)
+    {
+        if (!world.Characters.TryResolveNext(_trader, out int t)) return;
+
+        world.Characters.Cold(t)!.Engaged = false;
+        if (_traderWandered && world.Characters.Next[t].Task == (byte)CharacterTask.Idle)
+            TaskStart.Become(world, t, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
+
+        _traderWandered = false;
+    }
+
+    /// <summary>
+    /// Ends the open trade with every inventory window (<see cref="World.CloseInventories"/>); a customer walking up to a trader goes on.
+    /// </summary>
+    internal void EndTrade(World world)
+    {
+        if (!_open) return;
+
+        WriteOpenView(world);
+        Close(world);
+    }
+
+    /// <summary>
+    /// Closes the open trade: its session ends, the trader is released (<see cref="Release"/>), and the view goes.
     /// </summary>
     void Close(World world)
     {
         _session.Active = false;
         _session = new();
-        if (world.Characters.TryResolveNext(_trader, out int held)) world.Characters.Cold(held)!.Engaged = false;
-        if (_traderWandered && world.Characters.TryResolveNext(_trader, out int t) && world.Characters.Next[t].Task == (byte)CharacterTask.Idle)
-            TaskStart.Become(world, t, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
+        if (!_open) Release(world);
 
         _customer = _trader = CharacterId.None;
         _open = _traderWandered = false;
@@ -985,10 +1024,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer and the trader can trade, whatever the trader stocks: the trader up, not asleep when the trade opens (a sleeper
-    /// answers no Talk, <see cref="Dialogue.DialogueSystem.SleepsThrough"/>), not held in a cage (engine choice, #641), not fighting nor an enemy;
-    /// the customer the player's with an inventory, alive, and awake to open a trade (an open one passes to a knocked-out squad member's window
-    /// and stays with it, <see cref="Trades"/>).
+    /// Whether the customer and the trader can trade, whatever the trader stocks: both in the world, the customer the player's with an inventory.
+    /// An open trade needs nothing more: the original closes it for no distance, fight, knock-out or cage of either party (docs/game/economy.md
+    /// "Trading range"). Opening one needs <see cref="CanOpen"/>.
     /// </summary>
     bool Parties(World world, out int c, out int t)
     {
@@ -997,11 +1035,20 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!table.TryResolveNext(_customer, out c) || !table.TryResolveNext(_trader, out t)) return false;
 
         var cc = table.Cold(c)!;
+        if (!cc.IsPlayer || cc.Inventory is null) return false;
+
+        return _open || CanOpen(table, cc, t);
+    }
+
+    /// <summary>
+    /// Whether a trade may open: the customer alive and awake; the trader up, not asleep (a sleeper answers no Talk,
+    /// <see cref="Dialogue.DialogueSystem.SleepsThrough"/>), not held in a cage (engine choice, #641), not fighting nor an enemy.
+    /// </summary>
+    bool CanOpen(CharacterTable table, CharacterCold cc, int t)
+    {
         var tc = table.Cold(t)!;
-        bool customerDown = cc.Medical is { Dead: true } || (!_open && cc.Medical is { Incapacitated: true });
-        if (!cc.IsPlayer || customerDown || tc.Medical is { Incapacitated: true } || tc.InCombat || tc.IsImprisoned || cc.Inventory is null)
-            return false;
-        if (!_open && Carrying.CarrySystem.Asleep(table, t)) return false;
+        if (cc.Medical is { Dead: true } or { Incapacitated: true }) return false;
+        if (tc.Medical is { Incapacitated: true } || tc.InCombat || tc.IsImprisoned || Carrying.CarrySystem.Asleep(table, t)) return false;
 
         return !AggroSystem.IsEnemy(_data.Relations, cc.Faction, tc.Faction);
     }
@@ -1084,6 +1131,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         world.Post("Got caught selling stolen item.");
+        world.CloseInventories();   // result 9 closes every inventory window (FUN_140715560)
 
         if (Crimes is { } crimes
             && crimes.SetPending(world, c, Crime.CrimeCode.Fencing, squad.Faction, _trader, Crime.CrimeSystem.MinTimer, viaWrapper: true))
@@ -1108,6 +1156,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         world.Post("Attempted smuggling!");
+        world.CloseInventories();   // result 0xf closes every inventory window (FUN_140713d20, FUN_140715560)
         if (!terms.BuysStolen)
             world.Defer(new Dialogue.DialogueEvent(_trader, world.Characters.IdOf(seller), 8) { Tick = world.Tick + 1 });
 
@@ -1269,6 +1318,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (item.IsStolenFor(cold.Faction, _data) && Fences(item, squad, shop.Terms) && Caught(world, c, t, item, squad, shop.Terms))
         {
             world.Post("Got caught selling stolen item.");
+            world.CloseInventories();   // result 9 closes every inventory window (FUN_140715560)
 
             if (Crimes is { } crimes
                 && crimes.SetPending(world, c, Crime.CrimeCode.Fencing, squad.Faction, _trader, Crime.CrimeSystem.MinTimer, viaWrapper: true))

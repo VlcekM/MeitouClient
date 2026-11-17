@@ -253,6 +253,7 @@ public sealed partial class World
             ContainerOpener = Player.OpenContainer is null ? CharacterId.None : Player.ContainerOpener,
             Held = Player.Held is { } held ? Items.HeldItemView.Of(held) : null,
             HeldSerial = Player.HeldSerial,
+            InventoriesClosed = Player.InventoriesClosed,
             Buildings = Buildings.Published(),
             BuildingsRevision = Buildings.Revision,
             NestBuildings = NestBuildings.Published(),

@@ -213,10 +213,11 @@ public class TradeTests
         Assert.Contains("You can't afford that.", b.World.TakeMessages());
         Assert.Empty(b.Bag(hero).All());
 
-        // Walking away (beyond TradeSettings.PassRange) closes the trade; the stock is replaced when the refresh time comes.
+        // Walking away (beyond TradeSettings.PassRange) leaves the trade open, as the original's; the stock is replaced when the refresh time comes.
         b.Say(new MoveOrder([hero], new Vector3(-1100, 150, 0)) { Tick = 0 });
         b.World.RunTicks(1500);
-        Assert.Null(b.World.Snapshot.Trade);
+        Assert.NotNull(b.World.Snapshot.Trade);
+        b.Say(new CloseTrade { Tick = 0 });
         b.World.RunTicks((int)(shop.NextRestockTick - b.World.Tick) + 15);
         Assert.Equal(2, shop.Fills);
     }

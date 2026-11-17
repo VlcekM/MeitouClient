@@ -75,6 +75,11 @@ sealed class InventoryWindows(PlayerInterface player)
     CharacterId _pinnedFrom = CharacterId.None;
 
     /// <summary>
+    /// The world's count of closings of every inventory window last acted on (<see cref="WorldSnapshot.InventoriesClosed"/>).
+    /// </summary>
+    long _inventoriesClosed;
+
+    /// <summary>
     /// The bag window's layout as read, registered again for each pinned window's bag.
     /// </summary>
     internal MyGuiLayout? BagLayout;
@@ -284,6 +289,19 @@ sealed class InventoryWindows(PlayerInterface player)
     internal void CloseInventoryWindows()
     {
         foreach (string screen in ItemScreens.Where(s => s != "trader").Concat(PinnedInventories.Keys)) player.FaithfulScreens.Close(screen);
+    }
+
+    /// <summary>
+    /// Once an arrangement: closes every inventory window when the world closed them all (a town alarm against the player's; the trade and the open
+    /// container close in the world).
+    /// </summary>
+    internal void SyncClosedInventories()
+    {
+        long closed = player.Session.CurrentSnapshot.InventoriesClosed;
+        if (closed == _inventoriesClosed) return;
+
+        _inventoriesClosed = closed;
+        CloseInventoryWindows();
     }
 
     /// <summary>

@@ -516,6 +516,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void SyncScreens()
     {
+        InventoryWindows.SyncClosedInventories();
         TradeWindows.SyncTradeScreens();
         Production.SyncMachineScreens();
         TradeWindows.SyncLootScreen();

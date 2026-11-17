@@ -257,6 +257,12 @@ public sealed class PlayerState
     /// </summary>
     public long HeldSerial { get; set; }
 
+    /// <summary>
+    /// How often the world closed every inventory window (a town alarm raised against the player's, <see cref="Crime.CrimeSystem.TownAlarm"/>);
+    /// the interface closes its windows when it changes (display only: not hashed, not saved).
+    /// </summary>
+    public long InventoriesClosed { get; set; }
+
     #endregion
 
     #region Map and factions met

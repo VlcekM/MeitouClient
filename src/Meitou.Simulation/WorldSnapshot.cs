@@ -993,6 +993,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public long HeldSerial { get; init; }
     /// <summary>
+    /// How often the world closed every inventory window (<see cref="Player.PlayerState.InventoriesClosed"/>).
+    /// </summary>
+    public long InventoriesClosed { get; init; }
+    /// <summary>
     /// Player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
     /// </summary>
     public IReadOnlyList<Construction.BuildingSnapshot> Buildings { get; init; } = [];

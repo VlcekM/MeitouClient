@@ -87,6 +87,19 @@ Opening a trade from dialogue (**Observed**, read): the Trade effect (`FUN_14095
 characters) on the player interface (`FUN_140791830`; kind 3 is loot/inspect, `FUN_140354dc0`); its per-frame update (`FUN_1406ea070`) opens both inventory windows
 (`FUN_1407918a0`) with no distance test and no walk, so the trade opens where the conversation stands. Only item moves are range-checked (above).
 
+Closing a trade (**Observed**, decompile: every caller of the window close `FUN_1406e53d0`, the close-all `FUN_1406e5740`, the deferred trade close `FUN_140791890`
+and every poster of GameWorld's system messages, list `+0x5c8`): no caller closes the trade's windows for distance, either party moving, a fight or a knock-out
+(distance **Verified** in the original 1.0.65 with the Kenshi harness, 2026-11-17: a trade opened with the Construction Trader by "Let's trade." kept the
+trader's, character's and bag windows open with the customer 1600 X/Z away, where a right-click sale posted "Out of trading range."). They
+close when the player closes them (close button, Esc `FUN_140917120`), when another trade or loot opens (`FUN_1407918a0` closes all first), when a window's owner is
+destroyed (`FUN_140622a80`), and when every inventory window closes (`FUN_1406e5740`): after an item move with result 8 "Got caught stealing.", 9 "Got caught selling
+stolen item." or 15 "Attempted smuggling!" (`FUN_140713d20`, `FUN_140715560`, `FUN_140712490`), and with a town alarm against the player's (system message 9,
+[town alarms](#town-alarms)). The deferred trade close (ForgottenGUI `+0x5c`) is set only by the loot order's end (`FUN_1403466a0`). A paid trade's item moves are
+unflagged, so 1000: the flag the trade window passes is the stealing test `FUN_140711740` (`FUN_140715560`, `FUN_140712490`). No trader is held for a trade: the Trade
+effect only queues the windows. Meitou: an open trade lasts while both characters are in the world and the customer is the player's with an inventory
+(`TradeSystem.Parties`); beyond 1000 of the trader its items stay put with "Out of trading range." (`TradeWith`, `HeldItems.PassTrade`); the trader held for the
+customer's walk-up goes back to its AI when the trade opens; the close-all is `World.CloseInventories` (the open trade, container and loot at once, `PlayerState.InventoriesClosed` for the interface's windows).
+
 Meitou (engine choices): window moves to and from a machine or storage need the character within `ProductionSettings.TransferReach` 40 of the building's footprint hull (for the
 bounds radius + 40) or within 60 of its position (so a small storage is never stricter than the original; a General Storage Chest's hull is about 14 x 9, **Observed** with the probe, #505), to and from a container within `ContainerAccess.TradingRange` 60; both post "Out of trading range.". The loot window closes beyond 1.5 x the carry reach, or over 20 units apart in height (Meitou: the reach is on the body's floor, and the looter walks to that floor, #292; the height is the body's root or the floor under it, as a big ragdoll's root rests well off the ground: a downed Cleanser Unit 67 over the terrain, **Observed** on a player save). A held item given to a
 character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange` 60 out of a non-player window. No faction or floor test, no sound (`gui_notrade` is in no bank, [audio](../audio.md)).
@@ -111,7 +124,7 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
   (`TradeSystem.TakeBags`; engine choice: the goods then stay in the squad's stock, as a trader squad's, whose pack animals get no load of their own). A
   housed squad without a shop trades from its home's stock containers through a building shop's window for that trade (none without containers).
 - Meitou (the right-click Trade verb, engine): a member of a shop squad, or of a homeless squad whose template has `vendors` (a Caravan), whose record sets `is trader` or whose
-  dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked). A trader held in a cage or on a pole offers no Trade and an open trade with one closes (engine choice, #641).
+  dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked). A trader held in a cage or on a pole offers no Trade (engine choice, #641); an open trade stays open when its trader is caged, as the original's ([closing a trade](#trading-range)).
 - A shop squad can have several traders: Flotsam Village's armoury (50348-rebirth.mod, 3 Flotsam Ninja + 3 Flotsam Refugee) has three same-named Flotsam Refugee traders, since the
   refugee's dialogue package reaches Trade under `IS_A_TRADER` and `IN_MY_BUILDING` only (**Verified**: the original's METARU save holds the same 6 members, and the dialogue data; #180).
 - The context menu's pick-up verb tests "not a trader" with `FUN_1405cff70` itself (`FUN_140796f80`, **Verified**), so any member of a trader squad counts, guards included. Meitou: `World.VerbFactsOf` reads the squad template's `is trader`.
@@ -523,7 +536,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   target's pending crime code and victim faction, at the target) and a failed kidnap ([carry-loot](carry-loot.md#kidnapping): code 15, the
   victim's faction, at the kidnapper). The town keeps its alarms per code; one of the same code and faction is moved (position, building,
   floor), else a new one is made; only the new one sets `+0x24` = 8.0 (the merge path leaves it alone), a life in game seconds that the town update counts down (`FUN_14092bfe0`, `Town::periodicUpdate` dt), the alarm being
-  deleted below 0 whether answered or not (**Verified**). So an alarm dies 8 game s after it was created, however often it is raised again; the next raise then makes a new one. "Alarm raised" when the culprit is the player's, at most every 30 s.
+  deleted below 0 whether answered or not (**Verified**). So an alarm dies 8 game s after it was created, however often it is raised again; the next raise then makes a new one. "Alarm raised" when the culprit is the player's, at most every 30 s, queued with system message 9, which closes every inventory window (`FUN_1406e5740`, **Verified**: the literal 9 in the same 30 s branch, KenshiLib 1ce4a16 `SYS_CLOSE_ALL_INVENTORIES`; [closing a trade](#trading-range)).
 - **Investigators**: goals 209 INVESTIGATE_ALARMS and 210 (the task's flag: only alarms of its own faction), Urgent, weight 0.1, 0-24 h, in 51
   packages of the merged load order (town and gate guards, police, shops, residents, throne rooms; **Verified** by probe). Row 209: effect
   !130 ALARMS_IN_THE_VICINITY, needs 86 atATown. Finder `FUN_14092a810(town, 0, 375, me, faction or 0)`: the nearest alarm of the An alarm raised in a building whose every entrance is closed (`FUN_1405499a0` false: doors present and none open or passable) is skipped for an investigator in the same building and halves the reach a second time otherwise (`FUN_14092a810`:52-62, **Verified**; Meitou `CrimeSystem.AlarmFor`, `FixtureRegistry.HasOpenDoor`).

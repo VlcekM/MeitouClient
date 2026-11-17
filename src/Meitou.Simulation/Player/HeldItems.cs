@@ -428,12 +428,12 @@ sealed class HeldItems(PopulationData? data)
     }
 
     /// <summary>
-    /// A player's character window other than the customer's takes the trade over when in reach; false (after "Out of trading range.") when it is too
-    /// far.
+    /// A player's character window trades when in reach of the trader, one other than the customer's taking the trade over; false (after "Out of
+    /// trading range.") when it is too far.
     /// </summary>
     static bool PassTrade(World world, Trading.TradeSystem trade, ItemOwner window, ref CharacterId customer)
     {
-        if (window.Holder != ItemHolder.Character || window.Character == customer) return true;
+        if (window.Holder != ItemHolder.Character) return true;
         if (!world.Characters.TryResolveNext(window.Character, out int w) || world.Characters.Cold(w) is not { IsPlayer: true })
             return true;
         if (!trade.TradeWith(world, window.Character)) return false;

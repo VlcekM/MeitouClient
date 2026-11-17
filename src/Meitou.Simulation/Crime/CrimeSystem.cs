@@ -571,7 +571,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     /// <summary>
     /// The alarm of <paramref name="town"/> raised at <paramref name="target"/> (<c>FUN_1409335e0</c>, <b>Observed</b>), for the crime
-    /// <paramref name="code"/> against <paramref name="faction"/>: nothing for code 0; "Alarm raised" at most every 30 s for the player's; the town
+    /// <paramref name="code"/> against <paramref name="faction"/>: nothing for code 0; "Alarm raised" at most every 30 s for the player's, every
+    /// inventory window closing with it (<see cref="World.CloseInventories"/>); the town
     /// keeps one alarm per code and faction, a repeated raise only moving it to the target (the life, set at the first raise, is not extended:
     /// <b>Verified</b>, the merge path of <c>FUN_1409335e0</c> leaves <c>+0x24</c> alone). The town's investigators answer it
     /// (<see cref="Investigate"/>).
@@ -583,8 +584,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         if (t.IsPlayer && world.GameHours - _lastAlarmHours >= AlarmPostSeconds / World.SecondsPerGameHour)
         {
             _lastAlarmHours = world.GameHours;
+            world.CloseInventories();   // the raise queues system message 9, close all inventories, with the message (Verified)
             world.Post(Loc.Tr("Alarm raised"));
         }
+
         var at = table.Next[target].Position;
         int place = world.Sight.LocationOf(target), floor = FloorOf(world, target, at);
         foreach (var a in _alarms)
