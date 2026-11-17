@@ -160,8 +160,9 @@ public sealed class WorldSession : IDisposable
         }
         var old = World;
         World = next;
-        // Ticks the old world ran ahead go with it.
+        // Ticks the old world ran ahead go with it, and so does its loading pause.
         (_aheadTicks, _held, _heldPrevious, _heldCurrent) = (0, false, null, null);
+        (Simulation.LoadingHold, ZonesLoading) = (false, false);
         Discard(old);
         // The navmesh door table follows the new world: the old one's locked doors are forgotten, the new one's told.
         if (_worldWalkability is Simulation.Locks.IDoorGate gate)
@@ -246,6 +247,7 @@ public sealed class WorldSession : IDisposable
     public int AdvanceSimulation(double realSeconds)
     {
         EnsureNotRunning();
+        StepLoadingPause();
         int n = Simulation.Advance(realSeconds);
         if (!Simulation.IsPaused)
         {
@@ -313,6 +315,37 @@ public sealed class WorldSession : IDisposable
         World.RunTick(publish);
         Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
         Clock.Advance(Simulation.TickSeconds);
+    }
+
+    #endregion
+
+    #region Loading pause
+
+    /// <summary>
+    /// The original's loading pause is on (Advanced settings "Pause while loading", its Faithful side; <c>UserConfig.LoadingPause</c>): the game is
+    /// held while the zones round the camera load (<see cref="SimulationClock.LoadingHold"/>, docs/game/game-loop.md "Loading pause").
+    /// </summary>
+    public bool LoadingPause { get; set; }
+    /// <summary>
+    /// With <see cref="LoadingPause"/> on, the camera's load is under way: the HUD shows the original's <c>Loading...</c> panel.
+    /// </summary>
+    public bool ZonesLoading { get; private set; }
+
+    /// <summary>
+    /// The frame's loading pause, before its ticks are counted: off, nothing is held; on, the world holds or lets go
+    /// (<see cref="World.StepLoadingPause"/>). A world paused otherwise is not held, as the original tests only while its paused flag is clear, but its
+    /// zones go on loading.
+    /// </summary>
+    void StepLoadingPause()
+    {
+        if (!LoadingPause)
+        {
+            (Simulation.LoadingHold, ZonesLoading) = (false, false);
+            return;
+        }
+
+        bool held = Simulation.LoadingHold;
+        (Simulation.LoadingHold, ZonesLoading) = World.StepLoadingPause(held, !held && Simulation.IsPaused);
     }
 
     #endregion

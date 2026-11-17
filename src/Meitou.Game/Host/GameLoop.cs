@@ -1453,6 +1453,7 @@ sealed class GameLoop(GameHost host)
         host.UpdateCameraLeash(_cinemaHolds || _tour.Active);
         host.Session.World.Profile.Enabled = host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off }
             || host.GameOptions.PlayBench is not null || SpikeLog.Enabled;
+        host.UpdateLoadingPause();
         if (!host.Covered) host.Session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
         host.Duel.DuelHoldClock();
         double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;

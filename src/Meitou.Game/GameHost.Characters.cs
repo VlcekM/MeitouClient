@@ -68,6 +68,13 @@ sealed partial class GameHost
         _sentFocus = true;
     }
 
+    /// <summary>
+    /// Switches the loading pause for the frame (<see cref="WorldSession.LoadingPause"/>): on with its setting, except on the title and in the play
+    /// benchmark, which have no original counterpart to hold.
+    /// </summary>
+    internal void UpdateLoadingPause() =>
+        Session.LoadingPause = Config.LoadingPause && !TitleScreen.TitleVisible && GameOptions.PlayBench is null;
+
     #endregion
 
     #region Drawn pose

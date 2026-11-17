@@ -28,6 +28,12 @@ public static class ZoneActivation
     public const float RecentreDistance = 4147.2f;
 
     /// <summary>
+    /// Half the side of the square round the camera focus whose four corners the loading pause tests (<c>FUN_140a0f820</c>: the focus minus 600 on
+    /// each axis, plus 0 or 1200 on x and z; constants 600.0 and 1200.0, <b>Verified</b> against the disassembly).
+    /// </summary>
+    public const float LoadingPauseReach = 600;
+
+    /// <summary>
     /// How long a zone of the camera's block stays loaded once nothing asks for it (timer index 0 of <c>FUN_140a0e570</c>, <b>Verified</b>: 4 s).
     /// </summary>
     public const float LoadedLingerSeconds = 4;

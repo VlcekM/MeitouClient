@@ -689,6 +689,10 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
             Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
+        result.Add(new("Pause while loading",
+            "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and "
+            + "shows Loading... until they are. Meitou: the game runs on while they load.",
+            Toggle: new("Pause while loading", () => !menu.Config.LoadingPause, v => menu.Config.LoadingPause = !v, Remaster: true)));
         result.Add(new("Camera stays near your squads",
             "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. "
             + "Off, it can fly anywhere in the world.",

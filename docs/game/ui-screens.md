@@ -215,6 +215,13 @@ Empire Citizen and The Cannibal Hunters). The "Meitou" sentences are engine choi
 
 Layer Middle, per-frame update FUN_140728d50 (**Observed**):
 
+### Paused and loading panels
+
+**Verified** (`FUN_14072d3b0`, `FUN_140787d40`, `FUN_1406e9fa0`): `PausedPanel` (`lbPaused`, "PAUSED") shows while the paused byte is set, whether by the
+player, a menu or the [loading pause](game-loop.md#loading-pause). `LoadingPanel` (a TextBox; the exe sets the catalog's "Loading..." over the
+layout's "Loading ...") shows while a load started by the camera's block runs, held or not. Both are hidden at start. Meitou: `PausedPanel` at
+speed 0 and under the loading pause; `LoadingPanel` only with the loading pause switch on.
+
 ### Squad bar
 
 **Verified** (decompiled `FUN_14072d3b0`, `FUN_140415e00`, `FUN_1404131e0`, `FUN_140412ed0`; constant 10 read from the exe):

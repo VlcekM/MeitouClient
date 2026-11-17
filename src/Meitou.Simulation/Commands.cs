@@ -105,6 +105,22 @@ public sealed class CommandQueue
         for (int k = 0; k < commands.Length; k++) commands[k] = due[k].Command;
         return commands;
     }
+
+    /// <summary>
+    /// The last of the <typeparamref name="T"/> commands due at or before <paramref name="tick"/> in <see cref="TakeDue"/>'s order (latest tick, then
+    /// latest queued), left in the queue; null when none.
+    /// </summary>
+    public T? LastDue<T>(long tick) where T : SimCommand
+    {
+        // The pending list is in queue order, so a later one of the same tick replaces the one before.
+        lock (_gate)
+        {
+            T? last = null;
+            foreach (var (command, _) in _pending)
+                if (command is T due && due.Tick <= tick && (last is null || due.Tick >= last.Tick)) last = due;
+            return last;
+        }
+    }
 }
 
 /// <summary>

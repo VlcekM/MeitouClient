@@ -2621,6 +2621,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_bench.Active) host.Session.World.Profile.Enabled = true;
         long started = Stopwatch.GetTimestamp();
 
+        host.UpdateLoadingPause();
         if (!host.Covered) host.Session.Advance(dt);
         if (_hud is not null) host.Duel.DuelHoldClock();
 

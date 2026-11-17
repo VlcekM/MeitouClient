@@ -110,9 +110,14 @@ public sealed class SimulationClock
     /// </summary>
     public bool RequestedPause { get; set; }
     /// <summary>
-    /// No ticks run: a requested pause or speed 0.
+    /// The world is held by the loading pause (<see cref="Population.LoadingPause"/>, a Faithful switch) without touching the speed, as the original's
+    /// zone manager sets its paused flag (docs/game/game-loop.md "Loading pause").
     /// </summary>
-    public bool IsPaused => RequestedPause || _speed == 0;
+    public bool LoadingHold { get; set; }
+    /// <summary>
+    /// No ticks run: a requested pause, the loading pause or speed 0.
+    /// </summary>
+    public bool IsPaused => RequestedPause || LoadingHold || _speed == 0;
 
     /// <summary>
     /// The speed, the speed pause returns to and what the pause key remembers: all a host that runs the clock its own way for a while (photo mode's
@@ -185,10 +190,18 @@ public sealed class SimulationClock
     }
 
     /// <summary>
-    /// The pause key: running, it pauses (<see cref="Pause"/>); paused, it resumes at the stored speed.
+    /// The pause key: running, it pauses (<see cref="Pause"/>); paused, it resumes at the stored speed. Under the loading pause at a running speed
+    /// it only stores that speed: the original's key sees the paused flag and resumes at the speed it has just stored, and the zone manager holds the
+    /// game again (<b>Observed</b>, harness: Space during the hold leaves it held at 1x).
     /// </summary>
     public void PauseKey()
     {
+        if (LoadingHold && _speed > 0)
+        {
+            Remember();
+            return;
+        }
+
         if (_speed > 0)
         {
             Pause();

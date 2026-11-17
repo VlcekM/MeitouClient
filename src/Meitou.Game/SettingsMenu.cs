@@ -1504,6 +1504,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
         Config.PauseOnLoad = true;
+        Config.LoadingPause = false;
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);

@@ -310,7 +310,8 @@ sealed partial class PlayerInterface
         // The orders, jobs and squad tab stay the player's while another faction's character is inspected.
         var own = Selected().FirstOrDefault() ?? lead;
         OrdersPanel.BindOrders(b, own);
-        foreach (string name in new[] { "LoadingPanel", "TownPanel", "TooltipPanel", "MessagePanel" }) b.Hidden.Add(name);
+        foreach (string name in new[] { "TownPanel", "TooltipPanel", "MessagePanel" }) b.Hidden.Add(name);
+        BindLoadingPanel(b);
         BiomeBanner.BindBiome(b);
         BindFloorAndPanels(b, lead);
         bool buildingFocus = BindBuildingFocus(b, lead);
@@ -394,7 +395,22 @@ sealed partial class PlayerInterface
         if (!InfoExpanded && CollapsedExtendingPanel() is { } collapsed) b.Positions["ExtendingPanel"] = collapsed;
 
         b.Actions["ExtendedStatsButton"] = "meitou:extendedstats";
-        if (Session.Simulation.Speed != 0) b.Hidden.Add("PausedPanel");
+        if (Session.Simulation.Speed != 0 && !Session.Simulation.LoadingHold) b.Hidden.Add("PausedPanel");
+    }
+
+    /// <summary>
+    /// The HUD's <c>LoadingPanel</c>: shown, with the catalog's "Loading..." over the layout's caption as the exe sets it, while the loading pause is
+    /// on and the camera's load is under way (<see cref="WorldSession.ZonesLoading"/>, docs/game/game-loop.md "Loading pause"); hidden otherwise.
+    /// </summary>
+    void BindLoadingPanel(UiBindings b)
+    {
+        if (!Session.ZonesLoading)
+        {
+            b.Hidden.Add("LoadingPanel");
+            return;
+        }
+
+        b.Text["LoadingPanel"] = Loc.Tr("Loading...");
     }
 
     /// <summary>
@@ -1386,13 +1402,14 @@ sealed partial class PlayerInterface
     double ButtonSpeed(int index) => index == 0 ? 0 : Session.Simulation.Speeds[index - 1];
 
     /// <summary>
-    /// The lit speed button's action: the button whose speed is the clock's (none for a console speed off the steps).
+    /// The lit speed button's action: the button whose speed is the clock's (none for a console speed off the steps); the pause button while the
+    /// loading pause holds the game, as the original lights the button of 0 while its paused flag is set (<c>FUN_140724880</c>).
     /// </summary>
     string SpeedButtonAction
     {
         get
         {
-            double speed = Session.Simulation.Speed;
+            double speed = Session.Simulation.LoadingHold ? 0 : Session.Simulation.Speed;
             int index = speed == 0 ? 0 : Session.Simulation.StepOf(speed) is var i and >= 0 ? i + 1 : -1;
             return $"meitou:speed.{index}";
         }

@@ -419,6 +419,11 @@ sealed class UserConfig
     /// </summary>
     public bool PauseOnLoad { get; set; } = true;
     /// <summary>
+    /// The game pauses while the zones round the camera load, as the original does (Advanced settings "Pause while loading", a Faithful / Meitou
+    /// switch whose Faithful side is on; off by default, Meitou; <c>WorldSession.LoadingPause</c>, docs/game/game-loop.md "Loading pause").
+    /// </summary>
+    public bool LoadingPause { get; set; }
+    /// <summary>
     /// A character's bag window opens with their inventory until OPEN BAG closes it (Advanced settings, a Faithful / Meitou switch; on by default,
     /// Meitou: in the game each bag stays shut until OPEN BAG is pressed once per session).
     /// </summary>

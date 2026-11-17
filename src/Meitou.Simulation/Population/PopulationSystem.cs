@@ -232,6 +232,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// The camera's focus of the last <see cref="FocusCommand"/> (null: none yet).
     /// </summary>
     public Vector3? Focus => _focus;
+    /// <summary>
+    /// The camera's load is under way, as the original shows its <c>Loading...</c> panel: from a move of the loaded block
+    /// (<see cref="Recentres"/>) until every requested zone is loaded (docs/game/game-loop.md "Loading pause").
+    /// </summary>
+    public bool CameraLoading { get; private set; }
 
     /// <summary>
     /// The commands and the population's start of a tick: the artifacts, formations and forced speeds set up once, the camera's focus, the builds
@@ -558,10 +563,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void RefreshLoaded(World world, Vector3 camera)
     {
-        bool move = _loadCentre is not { } c
-            || MathF.Abs(camera.X - ZoneActivation.CentreOf(c).X) > ZoneActivation.RecentreDistance
-            || MathF.Abs(camera.Z - ZoneActivation.CentreOf(c).Y) > ZoneActivation.RecentreDistance;
+        bool move = Recentres(camera);
         if (move) _loadCentre = WorldLayout.ZoneOf(camera.X, camera.Z);
+        CameraLoading |= move;
         long now = world.Tick;
         long until = now + (long)Math.Ceiling(ZoneActivation.LoadedLingerSeconds * LingerSpeed(world) / world.TickSeconds);
         var centre = _loadCentre!.Value;
@@ -591,7 +595,20 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (gone is not null) foreach (var zone in gone) _loadedUntil.Remove(zone);
         world.LoadedZones = Ready(world, _loadedUntil.Keys);
         Buildings?.HoldZones(world.LoadedZones);
+
+        // The original hides its Loading... panel once the load list is all loaded (FUN_140a0f820 state 5 to 0) or had nothing to load
+        // (FUN_140a0f590).
+        if (world.LoadedZones.Count == _loadedUntil.Count) CameraLoading = false;
     }
+
+    /// <summary>
+    /// Whether the camera focus at <paramref name="camera"/> moves the loaded block: none yet, or more than
+    /// <see cref="ZoneActivation.RecentreDistance"/> from the centre zone's middle on either axis (<c>FUN_140a0f820</c>, <b>Verified</b>).
+    /// </summary>
+    bool Recentres(Vector3 camera) =>
+        _loadCentre is not { } c
+            || MathF.Abs(camera.X - ZoneActivation.CentreOf(c).X) > ZoneActivation.RecentreDistance
+            || MathF.Abs(camera.Z - ZoneActivation.CentreOf(c).Y) > ZoneActivation.RecentreDistance;
 
     /// <summary>
     /// The requested zones that are also ready (<see cref="Accepted"/>): the zones the original flags loaded (<c>FUN_140a0f820</c>:66-96 sets the
@@ -671,12 +688,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
 
         if (_players.Count == 0 && _focus is null) return;
-        RefreshLoaded(world, _focus ?? _players[0]);
-        (_active, _spareActive) = (_spareActive, _active);
-        _active.Clear();
-        foreach (var zone in _loadedUntil.Keys) _active.Add(zone);
-        world.ActiveZones = world.LoadedZones;   // the ready ones (RefreshLoaded)
-        world.VisitedZones.UnionWith(world.ActiveZones!);
+        PublishZones(world, _focus ?? _players[0]);
         long grace = (long)Math.Ceiling(_settings.UnloadGraceSeconds / world.TickSeconds);
         long townGrace = (long)Math.Ceiling(_settings.TownUnloadGraceSeconds / world.TickSeconds);
         foreach (var site in _data.Sites)
@@ -703,6 +715,38 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
         StepWild(world, grace);
     }
+
+    /// <summary>
+    /// The zones asked for round <paramref name="camera"/> and the player's characters (<see cref="RefreshLoaded"/>), published as
+    /// <see cref="ActiveZones"/> (the requested ones) and <see cref="World.ActiveZones"/> (the ready ones).
+    /// </summary>
+    void PublishZones(World world, Vector3 camera)
+    {
+        RefreshLoaded(world, camera);
+        (_active, _spareActive) = (_spareActive, _active);
+        _active.Clear();
+        foreach (var zone in _loadedUntil.Keys) _active.Add(zone);
+        world.ActiveZones = world.LoadedZones;   // the ready ones (RefreshLoaded)
+        world.VisitedZones.UnionWith(world.ActiveZones!);
+    }
+
+    /// <summary>
+    /// The zone step of a world that runs no tick under the loading pause switch (<see cref="LoadingPause"/>: held, or paused with a load under way):
+    /// the camera focus taken and the zones asked for and published again, as the original's zone manager runs every frame under any pause. No town
+    /// or squad loads or moves, and no time passes.
+    /// </summary>
+    internal void StepZones(World world, Vector3 focus)
+    {
+        _focus = focus;
+        PublishZones(world, focus);
+    }
+
+    /// <summary>
+    /// Whether a load is under way, the original's zone manager out of its idle state: a requested zone is not loaded yet, or the focus at
+    /// <paramref name="focus"/> moves the loaded block so that new zones will be asked for.
+    /// </summary>
+    internal bool LoadPending(World world, Vector3 focus) =>
+        Recentres(focus) || world.LoadedZones is { } loaded && loaded.Count < _active.Count;
 
     /// <summary>
     /// Whether a living member of one of a wild site's squads stands in an active zone (a nest then stays loaded). A town does not use it: its squads
