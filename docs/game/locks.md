@@ -253,7 +253,11 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
   attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, on its way in where the restricted rows are offered (an NPC, a
   player's character on an order: `LockSystem.Restricted`), cuts (`Lockpicking.CutLock`) or picks it (`Lockpicking.Step`, the pick's clip and
-  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player). A picker or cutter puts a weapon in
+  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player). An NPC on 36
+  Patrolling town stops at a locked gate, its own faction's too: the patrol's move goes straight to the movement (`FUN_1405c6b30`,
+  **Verified**), and row 36's list B has 60 but not 90, whose provider 122 Open gate (after 78) is what opens a gate on the way (**Verified**,
+  row table); Meitou `LockSystem.PatrolsPast`. **Observed** (headless, #885 save and a fresh Mourn): before, a Tech Hunter patroller unlocked Mourn's Ancient Lab gate, which then stood open, and the Great White Gorillo fought the guards and left; after, the gate
+  stayed locked for 40,000 ticks. A picker or cutter puts a weapon in
   hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose destination is behind
   locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock, a bash, a cut or a pick, as `WayIn` gives; an
   animal a building keeps out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine

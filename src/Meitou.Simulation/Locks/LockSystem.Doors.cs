@@ -470,7 +470,7 @@ public sealed partial class LockSystem
     /// The walkers at a locked door (docs/game/locks.md "Locked doors on the way"): the planner's way through (<see cref="WayThrough"/>: out, 80
     /// unlocking its own or 287 bashing; in, 81 bashing, 78 / 140 unlocking its own, or where the restricted rows are offered 285 cutting or 76
     /// picking), then 72 / 74 opening it, so the first with a way goes through (<see cref="StartDoorWay"/>) unless someone already works the door;
-    /// the others stop there, a player's character saying "It's locked.".
+    /// the others stop there, a player's character saying "It's locked.". A patroller has no way through a gate (<see cref="PatrolsPast"/>).
     /// </summary>
     void AtLockedDoor(World world, Fixture door, List<int> stopped)
     {
@@ -481,7 +481,8 @@ public sealed partial class LockSystem
             var c = table.Cold(slot)!;
             ref var n = ref table.Next[slot];
             if (c.DoorWay is not null) continue;
-            var way = worked || c.Bashing is not null || Busy(table.IdOf(slot)) ? DoorWayKind.None : WayThrough(world, slot, door.Building, door);
+            bool none = worked || c.Bashing is not null || Busy(table.IdOf(slot)) || PatrolsPast(c, door);
+            var way = none ? DoorWayKind.None : WayThrough(world, slot, door.Building, door);
             if (way != DoorWayKind.None)
             {
                 StartDoorWay(world, slot, door, n.Goal, n.Mode);
@@ -494,6 +495,14 @@ public sealed partial class LockSystem
             if (c.IsPlayer) SayLocked(world, c, door, n.Position);
         }
     }
+
+    /// <summary>
+    /// Whether an NPC on 36 Patrolling town walks up to a locked gate: the patrol's move goes straight to the movement (<c>FUN_1405c6b30</c>,
+    /// <b>Verified</b>), not through the planner, and row 36's list B holds 60 but not 90 <c>DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS</c>,
+    /// whose provider 122 Open gate (after 78 Unlocking door) opens a gate on the way (<b>Verified</b>, row table). So the patroller stops at
+    /// the gate, even its own faction's (#885: Mourn's guards opened the Ancient Lab gate on the Great White Gorillo).
+    /// </summary>
+    static bool PatrolsPast(CharacterCold c, Fixture door) => door.IsGate && !c.IsPlayer && c.Ai?.Goal?.Task.Type == TaskType.PatrolTown;
 
     /// <summary>
     /// Someone is on its way through the door (<see cref="StartDoorWay"/>).
