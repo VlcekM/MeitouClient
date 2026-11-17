@@ -1819,9 +1819,13 @@ sealed class GameLoop(GameHost host)
         if (ui && !feedbackShot) _panel?.Draw(size.X, size.Y);
         StageClock.UiPart(StageClock.UiSettings);
         // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
+        // Flushed at once: left queued, it went out with the next frame's first flush, under that frame's HUD.
         if (_overlay is not null && !covered)
+        {
             _cinema.Draw(_overlay, size.X, size.Y,
                 shot || take || feedbackShot || (host.AgentChannel.InterfaceHidden && !_cinema.EditorVisible), showStatus: false);
+            _overlay.Flush(size.X, size.Y);
+        }
         if (_overlay is not null && !covered && _photo.Active)
         {
             _photo.Panel.Draw(_overlay, size.X, size.Y, shot || take || feedbackShot);
