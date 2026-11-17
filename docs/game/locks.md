@@ -219,18 +219,27 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   (`FUN_1405499a0`: none, one open or opening, or broken). Its provider 84 Open current door wants 53, given by 74 Opening door here, whose list B
   needs !55 (that door not locked) and 58 (at it, walked to by 83). !55 comes only from 80 Unlocking door here (list B 70 `isObjectMine`, 58) or
   287 Bashing door (list B !70, !128, a weapon, 57; desire `scoreAggressiveAction` `FUN_14079d1a0`, the 81 bash's: 0 for a building of the
-  basher's ownership town, [bash door](#cutting-and-breaking-285--185-cut-286--186-break)); lockpicking (76) gives !54, not !55. The way in is
-  the same through 59, 85, 72, !54 and 78 / 81. `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
+  basher's ownership town, [bash door](#cutting-and-breaking-285--185-cut-286--186-break)); lockpicking (76) gives !54, not !55, so it opens
+  only the way in. The way in goes through 59, 85, 52 (72 Opening door, which needs !54, or 81 / 287) and !54 (76, 78, 81, 123, 140, 285, 290);
+  the planner's best-first order (`takeBestNode` `FUN_140519730`, the lowest g + h, ties to the first added) and the desires (78 / 140 1.0, 285
+  1.0, 76 0.1, 81 `scoreAggressiveAction`; 81's list B has !70, so it never serves an own door) give: its own door unlocked; else bashed when the
+  bash desire is above 0; else, for a player's order (the restricted rows 76, 140, 185, 285, 202, 122 and 270 are offered to the player's
+  planner only), cut (285: list B 122 `hasTools`, at the door, no weapon drawn) or picked (76: list B 166, the skill condition, at the door, no
+  weapon drawn); else the plan fails, and a player's move order (B list !24, !83, 60, 90, 59: the leaving test first) shows 59's text "I can't get
+  there." (`FUN_140610250`). 185 Cutting shackles has list A !114 (shackles), so it never serves a door (**Verified**, row table). `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
   resident squads, or the walker's faction owns it (faction `+0x80`), or the door's faction is the walker's (a player cage of the walker's own
   faction is excluded); no alliance term. So a walker whose door it is unlocks it (0.3 per second) and opens it; anyone else stays in, or out,
   unless the bash desire is above 0 (not in its home town: a bandit, a hostile, or a non-trader, non-civilian faction); a plan with no row of
   desire above 0 fails (**Verified**, [planner](ai-tasks.md#planner)). A player's move order (29) lists 60 too, and an order whose plan fails
   shows the failing state's text ([planner](ai-tasks.md#planner)): 60's is "I can't get out of here." (condition table `FUN_140610250`). Meitou
-  (`LockSystem.WayThrough`, `CanLeave`, `StartDoorWay`): a walk out of a shut building without a way is not started (the AI stands; a player's
-  move order waits with that text); a walker stopped at a locked door, or standing in a shut building with a walk leading out (`LeaveSweep`),
-  walks to the building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s) or bashes another's (Burglary booked, the
-  blows of the attackers' bash; never a gate, which its own rows bash, [gates](#doors)) and walks on once it is open; anyone else stops at the
-  door ("It's locked." for the player). **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
+  (`LockSystem.WayThrough`: `WayOut` / `WayIn`, `CanLeave`, `CanEnter`, `StartDoorWay`): a walk out of a shut building without a way is not
+  started (the AI stands; a player's move order waits with that text), nor a player's move into another shut building without a way in ("I can't
+  get there."); a walker stopped at a locked door, or standing in a shut building with a walk leading out (`LeaveSweep`), walks to the
+  building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
+  attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, a player's character on its way in, cuts (`Lockpicking.CutLock`)
+  or picks it (`Lockpicking.Step`, the pick's clip and floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for
+  the player). The weapon sheathing of 76 / 285 is not modelled. An NPC's walk is not refused for a destination behind locked doors (engine:
+  no `CanEnter` for the AI); at the door it takes the same way in (its own unlock or a bash). **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities
   family's Longhouse 5565 of his own home town, so a bash desire of 0) stands until the family opens up, then walks out.

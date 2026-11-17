@@ -230,8 +230,9 @@ public class DialogueTests
     }
 
     /// <summary>
-    /// A guard greets a stranger of another squad and faction he sees on his sight pass (event 3; its line refuses player targets) with a crowd
-    /// trigger: his mate cheers (event 74), and the chain passes to the line the stranger says back (speaker T_TARGET).
+    /// A guard greets a stranger of another squad and faction he sees on his sight pass (event 3; its line refuses player targets), the chain
+    /// passes to the line the stranger says back (speaker T_TARGET), and the guard's third line has a crowd trigger: the whole squad, the guard
+    /// with it, cheers (event 74), the cheer taking the place of the line that set it off.
     /// </summary>
     [Fact]
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
@@ -248,10 +249,18 @@ public class DialogueTests
             {
                 r.Strings["text0"] = "Hail, /YOURNAME/.";
                 r.References["conditions"] = [Ref("player-dc", 0)];
-                r.References["crowd trigger"] = [Ref("cheer-d", 100)];
                 r.References["lines"] = [Ref("answer-l")];
             }),
-            Rec("answer-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Hail yourself."; }),
+            Rec("answer-l", FcsRecordType.DialogueLine, r =>
+            {
+                (r.Ints["speaker"], r.Strings["text0"]) = ((int)Talker.Target, "Hail yourself.");
+                r.References["lines"] = [Ref("cheer-on-l")];
+            }),
+            Rec("cheer-on-l", FcsRecordType.DialogueLine, r =>
+            {
+                r.Strings["text0"] = "Cheer, lads!";
+                r.References["crowd trigger"] = [Ref("cheer-d", 100)];
+            }),
             Rec("cheer-d", FcsRecordType.Dialogue, r => { r.Bools["monologue"] = true; r.References["lines"] = [Ref("cheer-l")]; }),
             Rec("cheer-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Hurrah!"),
         ]), []);
@@ -259,7 +268,8 @@ public class DialogueTests
         var ground = new OpenGroundWalkability((_, _) => 150);
         var senses = new Meitou.Simulation.Aggro.AggroSystem(data.Relations);
         var bodies = new Meitou.Simulation.Bodies.BodySystem(Meitou.Tests.Bodies.BodyFixtures.BaseGame);
-        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [bodies, senses, dialogue]);
+        var sight = new Meitou.Simulation.Perception.SightSystem(data);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [bodies, senses, dialogue, sight]);
         world.Player.Faction = data.PlayerFaction;
         world.ViewPosition = new Vector3(0, 150, 100);   // NPCs look at NPCs only in view (+0x1a9); all face +Z
         int villagers = data.FactionIndex("f-d");
@@ -293,7 +303,7 @@ public class DialogueTests
 
         string[] all = [.. said.Order()];
 
-        Assert.Equal(["Guard: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."], all);
+        Assert.Equal(["Guard: Hail, Stranger.", "Guard: Hurrah!", "Mate: Hurrah!", "Stranger: Hail yourself."], all);
     }
 
     /// <summary>
@@ -489,7 +499,8 @@ public class DialogueInstallTests
         var dialogue = new DialogueSystem(data, new DialogueSettings { AmbientEvents = true });
         var walk = new OpenGroundWalkability((_, _) => 300);
         using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk,
-            [new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1 }), new MovementSystem(new PathService(walk, true)), dialogue]);
+            [new PopulationSystem(data, new PopulationSettings { CheckEveryTicks = 1 }), new MovementSystem(new PathService(walk, true)), dialogue,
+                new Meitou.Simulation.Perception.SightSystem(data)]);
         world.Player.Faction = data.PlayerFaction;
         world.Commands.Enqueue(new FocusCommand(hub.Position) { Tick = 0 });
         world.RunTicks(5);

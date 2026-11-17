@@ -298,15 +298,10 @@ public sealed class DialogueNode
     public string? Interrupt { get; internal set; }
 
     /// <summary>
-    /// <c>crowd trigger</c>: the DIALOGUE the speaker's squadmates start (event 74) and its val0 (a percent; where the original reads it is
-    /// <b>Unknown</b>).
+    /// <c>crowd trigger</c>: the DIALOGUE the speaker's squad starts (event 74): the first reference that resolves (the loader <c>FUN_14067d260</c>,
+    /// <b>Verified</b>; its val0 is never read).
     /// </summary>
     public string? CrowdTrigger { get; internal set; }
-
-    /// <summary>
-    /// The <c>crowd trigger</c>'s val0 (0 without a trigger).
-    /// </summary>
-    public int CrowdChance { get; internal set; }
 
     /// <summary>
     /// <c>change AI</c>: the AI_PACKAGE that replaces the speaker squad's packages; <c>AI contract</c>: the AI_PACKAGE run as a contract and its
@@ -726,8 +721,7 @@ public sealed class DialogueDatabase(GameDatabase db)
         node.UnlockButKeepMe = [.. record.GetReferences("unlock but keep me").Select(r => r.TargetStringId)];
         node.Locks = [.. record.GetReferences("locks").Select(r => r.TargetStringId)];
         node.Interrupt = record.GetReferences("interrupt").FirstOrDefault().TargetStringId;
-        var crowd = record.GetReferences("crowd trigger").FirstOrDefault();
-        (node.CrowdTrigger, node.CrowdChance) = (crowd.TargetStringId, crowd.TargetStringId is null ? 0 : crowd.Values.Value0);
+        node.CrowdTrigger = record.GetReferences("crowd trigger").Select(r => r.TargetStringId).FirstOrDefault(id => db.Find(id) is not null);
         node.ChangeAi = record.GetReferences("change AI").FirstOrDefault().TargetStringId;
         var contract = record.GetReferences("AI contract").FirstOrDefault();
         node.AiContract = contract.TargetStringId is { } package ? (package, contract.Values.Value0) : null;

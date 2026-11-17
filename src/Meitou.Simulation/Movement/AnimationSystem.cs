@@ -442,7 +442,7 @@ public sealed class AnimationSystem(
         _ when CrouchGoal(cold) != 0 && SquatClip >= 0 => SquatClip,
         // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks
         // (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
-        _ when cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1
+        _ when (cold.PickingLock is not null || cold.DoorWay is not null) && cold.PickWork.Tick >= tick - 1
             => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
         // A medic kneels only at a patient keeping still (Task_FirstAid's update plays the clip; FirstAidSystem);
@@ -1389,7 +1389,7 @@ public sealed class AnimationSystem(
     {
         if (cold.StandingUp && held == SquatClip) return -1;
         if (held == SquatClip && CrouchGoal(cold) != 0) return CrouchGoal(cold);
-        if (cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1) return cold.PickWork.Rate;
+        if ((cold.PickingLock is not null || cold.DoorWay is not null) && cold.PickWork.Tick >= tick - 1) return cold.PickWork.Rate;
 
         bool seated = task == CharacterTask.Rest && cold.Ai?.SitClip is not null;
         return task == CharacterTask.Operate || seated ? OperateRateOf(task, cold) : 1;

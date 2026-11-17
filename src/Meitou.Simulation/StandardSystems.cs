@@ -773,7 +773,10 @@ public static class StandardSystems
             }
 
             if (Has(StandardParts.Dialogue))
+            {
                 _systems.Add(StandardParts.Dialogue, _talk = new Dialogue.DialogueSystem(_data, _o.Dialogue, _population));
+                _systems.Add(StandardParts.Dialogue, new Perception.SightSystem(_data));
+            }
 
             // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
             if (_deeds is not null && _talk is not null)

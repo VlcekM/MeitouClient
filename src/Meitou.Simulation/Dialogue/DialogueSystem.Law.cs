@@ -69,8 +69,8 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// Fires <paramref name="ev"/> at <paramref name="npc"/> now, with <paramref name="target"/> as its partner (<c>FUN_140684990</c>; the police's
-    /// spotting, events 44 and 45): a line of its list for the event said as a speech bubble, its effects at once. Returns whether a line was said;
-    /// false while the event lines are off (<see cref="DialogueSettings.AmbientEvents"/>).
+    /// spotting, event 44, and the engine's slave catching, 36): a line of its list for the event said as a speech bubble, its effects at once.
+    /// Returns whether a line was said; false while the event lines are off (<see cref="DialogueSettings.AmbientEvents"/>).
     /// </summary>
     public bool FireEvent(World world, CharacterId npc, CharacterId target, int ev) => Settings.AmbientEvents && Fire(world, npc, target, ev);
 

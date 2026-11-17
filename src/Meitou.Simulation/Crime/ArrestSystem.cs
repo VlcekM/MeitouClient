@@ -368,8 +368,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// </summary>
     public IReadOnlyList<Spotting> Spottings => _spottings;
     /// <summary>
-    /// The dialogue spotting fires events 44 and 45 through; null, or its event lines off (<see cref="Dialogue.DialogueSettings.AmbientEvents"/>):
-    /// the engine's fine or arrest instead.
+    /// The dialogue spotting fires event 44 through (45 and 36 are the sight pass's, <see cref="SightCrimes"/>); null, or its event lines off
+    /// (<see cref="Dialogue.DialogueSettings.AmbientEvents"/>): the engine's fine or arrest instead.
     /// </summary>
     public Dialogue.DialogueSystem? Talk { get; set; }
     /// <summary>
@@ -600,17 +600,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// no disguise level at all (status <c>+0x100</c> at 0: any uniform piece hides it, not only a working disguise) or a running blown cooldown
     /// (<c>+0x110</c>).
     /// </summary>
-    static bool EscapeShows(CharacterCold c) => c.Escaped && (c.RecentlyWanted > 0 || c.DisguiseLevel <= 0);
+    internal static bool EscapeShows(CharacterCold c) => c.Escaped && (c.RecentlyWanted > 0 || c.DisguiseLevel <= 0);
 
     /// <summary>
     /// The spotting pass over the suspects in slot order: slave catching, the recognition meter from the lookers that see the target, then event
-    /// 44/45 or the engine's arrest, and a hunt for a seen bounty.
+    /// 44 or the engine's arrest, the escapee's arrest without the sight pass, and a hunt for a seen bounty.
     /// </summary>
     void Spot(World world, float seconds)
     {
         var table = world.Characters;
         var next = table.Next;
         float range2 = Settings.SpotRange * Settings.SpotRange;
+        // The sight pass fires event 45 itself (Perception.SightCrimes); without it the engine arrests the escapee.
+        bool sight = SightSystem.Running(world);
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!Suspect(world, s)) continue;
@@ -642,7 +644,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 // A working disguise hides the bounty: only a looker that sees through it recognises it (Disguise; disguiseMods' bounty branch needs
                 // no disguise level).
                 bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
-                bool escapee = EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
+                bool escapee = !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = HuntsFor(wc, c);
                 if (!spots && !escapee && !hunts) continue;
                 if (!SeesSuspect(world, w, s, c, Settings.SpotRange)) continue;
@@ -683,6 +685,16 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     bool SeesSuspect(World world, int w, int s, CharacterCold c, float range) => SuspectView(world, w, s, c, range) > 0;
 
     /// <summary>
+    /// The spot value of the slave events (<c>FUN_140853620</c>): the looker's view factor of the target with its daylight sight range
+    /// (<see cref="SuspectView"/>).
+    /// </summary>
+    internal float SpotValue(World world, int w, int s)
+    {
+        var table = world.Characters;
+        return SuspectView(world, w, s, table.Cold(s)!, AggroSystem.RangeOf(table.Cold(w)!, AggroSystem.OutdoorSight));
+    }
+
+    /// <summary>
     /// The view factor of <see cref="SeesSuspect"/> (<see cref="SightRay.Sees"/>'s v), 0 when the looker does not see the suspect.
     /// </summary>
     float SuspectView(World world, int w, int s, CharacterCold c, float range)
@@ -702,9 +714,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>
     /// Slave catching (docs/simulation.md "Arrest and jail"): an awake NPC of the slave's owner faction in its own town (<b>engine</b> gate) that
     /// sees a slave (state 1; its daylight sight test, full range) with a view factor above <see cref="EscapingSlave.SpotValue"/> tags it escaping
-    /// when <see cref="EscapingSlave.Test"/> holds (the original's sight pass, <b>Verified</b>); the nearest such police-like or slaver NPC then
-    /// captures an escaping slave (state 2; <b>engine</b> for the event 36 line's attack): it fights it down and cages it, and the caging makes it
-    /// the faction's slave again. True when a capture started (the slave is then the arrest's, not the bounty spotting's).
+    /// when <see cref="Escapes"/> holds, unless the sight pass runs, which tags it and fires event 36 itself (<see cref="SightCrimes"/>); either way
+    /// the nearest such police-like or slaver NPC then captures an escaping slave (state 2; <b>engine</b> for the event 36 line's attack): it
+    /// fights it down and cages it, and the caging makes it the faction's slave again. True when a capture started (the slave is then the
+    /// arrest's, not the bounty spotting's).
     /// </summary>
     bool CatchSlave(World world, int s, CharacterCold c)
     {
@@ -712,6 +725,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         var next = table.Next;
         var at = next[s].Position;
+        bool sight = SightSystem.Running(world);
         int catcher = -1;
         float catcherD2 = float.MaxValue;
         for (int w = 0; w < table.HighWater; w++)
@@ -727,7 +741,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             float view = SuspectView(world, w, s, c, range);
             if (view <= 0) continue;
 
-            if (c.SlaveState == 1 && view > EscapingSlave.SpotValue && Escapes(world, w, s, c, at)) FixtureRegistry.TagEscaped(world, c);
+            if (!sight && c.SlaveState == 1 && view > EscapingSlave.SpotValue && Escapes(world, w, s, c, at)) FixtureRegistry.TagEscaped(world, c);
             if (c.SlaveState == 2 && d2 < catcherD2
                 && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && FreeGuard(world, w))
             {
@@ -740,7 +754,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         _arrests.Add(arrest);
         gc.Engaged = true;
         BeginFight(world, arrest, catcher, s);
-        if (Talks) Talk!.FireEvent(world, arrest.Guard, arrest.Target, EscapingSlaveSpotted);
+        if (Talks && !sight) Talk!.FireEvent(world, arrest.Guard, arrest.Target, EscapingSlaveSpotted);
         return true;
     }
 
@@ -748,7 +762,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// The escape test of slave catching: <see cref="EscapingSlave.Test"/>, and for a slave whose owner Meitou does not know (a saved master that
     /// never loads) standing outside the looker's town (<b>engine</b>: the original's owner hand then resolves to nothing, which escapes at once).
     /// </summary>
-    bool Escapes(World world, int w, int s, CharacterCold c, Vector3 at) =>
+    internal bool Escapes(World world, int w, int s, CharacterCold c, Vector3 at) =>
         EscapingSlave.Test(world, w, s, c, Captives, Crimes) || Kidnap.ObedientSlave.OwnerOf(world, c) is null && !InTownOf(world, w, at);
 
     /// <summary>

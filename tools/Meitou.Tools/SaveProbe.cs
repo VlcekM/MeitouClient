@@ -76,6 +76,10 @@ static class SaveProbe
             case ("crowd", >= 1): Crowd(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("fight", >= 1): Fight(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("crime", >= 1): Crime(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 10); return true;
+            case ("meet", >= 2):
+                Meet(probe, a[0], a[1], a.Count > 2 ? float.Parse(a[2]) : 300, a.Count > 3 ? int.Parse(a[3]) : 20, a.Count > 4 ? int.Parse(a[4]) : 10,
+                    a.Count > 5 && a[5] == "forget");
+                return true;
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
@@ -329,8 +333,75 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// Heals the characters named like <paramref name="name"/> (<see cref="DebugHeal"/>, limbs too) and puts them <paramref name="gap"/> from the
+    /// first character named like <paramref name="near"/> (#807: a healed player character meeting the noble hunters), that one's squad first
+    /// dropping its TEMP_ENEMY tag on them with <paramref name="forget"/>; then every <paramref name="interval"/> ticks, <paramref name="rounds"/>
+    /// times, the lines said and how each member of that squad senses the first of them, whom it fights and what the squad remembers of it.
+    /// </summary>
+    static void Meet(ProbeWorld probe, string name, string near, float gap, int rounds, int interval, bool forget)
+    {
+        var world = probe.World;
+        var t = probe.Characters;
+        var movers = probe.Named(name).Select(t.IdOf).ToList();
+        if (movers.Count == 0 || probe.Named(near) is not [int host, ..])
+        {
+            Console.WriteLine("no such characters");
+            return;
+        }
+
+        // Out of everyone's senses first, so no looker holds them quiet from the first look (SightSystem): then healed and brought over.
+        world.Commands.Enqueue(new DebugTeleport(movers, t.Next[host].Position + new Vector3(0, 0, AwaySpot)) { Tick = world.Tick });
+        probe.Tick(AwayTicks);
+        var to = t.Next[host].Position + new Vector3(gap, 0, 0);
+        world.Commands.Enqueue(new DebugHeal(movers, Limbs: true) { Tick = world.Tick });
+        world.Commands.Enqueue(new DebugTeleport(movers, to) { Tick = world.Tick });
+        world.ViewPosition = to;   // the camera on the meeting: the NPCs there are in view and get their update turns
+        if (forget && world.Systems.OfType<DialogueSystem>().FirstOrDefault() is { } talk)
+            foreach (var id in movers) talk.Memory.ClearShort(t.Cold(host)!.SquadId, id, MemoryTag.TempEnemy);
+        Console.WriteLine($"{movers.Count} healed and sent {gap:F0} from {probe.Who(host)}{(forget ? ", TEMP_ENEMY dropped" : "")}");
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(interval);
+            foreach (var line in world.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
+            foreach (string line in world.DialogueLines.Take()) Console.WriteLine($"  LOG {line}");
+            Console.WriteLine($"tick {world.Tick} {probe.Who(movers[0].Slot)}{Down(t.Cold(movers[0].Slot)!)} target={Target(probe, movers[0].Slot)}");
+            MetBy(probe, world.Squads.Find(t.Cold(host)!.SquadId), movers[0]);
+            probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
+    /// How far off <see cref="Meet"/> first sends its characters, and for how many ticks.
+    /// </summary>
+    const float AwaySpot = 3000;
+    /// <summary>
+    /// The ticks <see cref="Meet"/>'s characters stay away (several sight rounds of every looker).
+    /// </summary>
+    const int AwayTicks = 200;
+
+    /// <summary>
+    /// How each member of <paramref name="squad"/> senses <paramref name="who"/> (seen, heard or stale, and its tags), whom it fights and what
+    /// its squad remembers of it.
+    /// </summary>
+    static void MetBy(ProbeWorld probe, Squad? squad, CharacterId who)
+    {
+        var t = probe.Characters;
+        var memory = probe.World.Systems.OfType<DialogueSystem>().FirstOrDefault()?.Memory;
+        foreach (var m in squad?.Members ?? [])
+        {
+            if (!t.TryResolveNext(m, out int i)) continue;
+
+            var sensed = Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, i)?.Entries
+                .FirstOrDefault(e => e.Target == who.Slot && e.Generation == who.Generation);
+            string sense = sensed is { } e ? $"{(e.Seen ? "seen" : e.Heard ? "heard" : "stale")}/{e.Tags}" : "-";
+            Console.WriteLine($"  {probe.Who(i)} senses={sense} target={Target(probe, i)} tags=[{Tags(probe, memory, t.Cold(i)!.SquadId, who)}]");
+        }
+    }
+
+    /// <summary>
     /// The characters named like <paramref name="name"/> as the law sees them every <paramref name="interval"/> ticks, <paramref name="rounds"/>
-    /// times: the pending crime, bounties and wanted flags, then everyone who targets one with its goal and its squad's memory tags of it.
+    /// times: the lines said, the pending crime, bounties and wanted flags, then everyone who targets one with its goal and its squad's memory tags
+    /// of it.
     /// </summary>
     static void Crime(ProbeWorld probe, string name, int rounds, int interval)
     {
@@ -341,6 +412,7 @@ static class SaveProbe
 
         for (int round = 0; round < rounds; round++)
         {
+            foreach (var line in probe.World.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
             foreach (int slot in probe.Named(name))
             {
                 string law = CrimeLine(probe, memory, slot);
@@ -1811,6 +1883,8 @@ static class SaveProbe
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, water state, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
               crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags
+              meet <name> <near> [gap] [rounds] [interval] [forget]  heals <name>, puts it gap from <near> (forget: its squad drops TEMP_ENEMY),
+                                       then the lines said and how that squad senses, fights and remembers it
               nests                    the wild layout's nests whose first candidate spot the original would refuse
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks

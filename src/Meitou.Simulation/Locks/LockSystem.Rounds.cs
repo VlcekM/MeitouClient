@@ -406,7 +406,7 @@ public sealed partial class LockSystem : IStateHashed
         bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0 || c.WalkEnd == WalkEnd.Failed;
         if (!walking || world.Sight.Covers(building, n.Goal.X, n.Goal.Y)) return null;
 
-        return WayThrough(world, c, building, n.Position) != DoorWayKind.None ? MainDoor(world, building) : null;
+        return WayThrough(world, s, building) != DoorWayKind.None ? MainDoor(world, building) : null;
     }
 
     /// <summary>

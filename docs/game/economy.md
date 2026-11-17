@@ -459,19 +459,30 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
   original shows those as well. Meitou: `CrimeTable.Name` translates at the point a message or the HUD is built;
   the ledger and saves keep the code (the bit mask `crimes<n>`), the world hash never sees the text.
 
-- **Trespassing** (perception `FUN_140859680` -> test `FUN_140852350`, **Observed**): an NPC seeing a player character inside a
-  building sets a pending Trespassing (code 11) against **its own** faction (victim: itself), fires dialogue event 17 and gives its
+- **Trespassing** (perception `FUN_140859680` -> test `FUN_140852350`, **Verified**, 1.0.68 decompile): an NPC seeing a player character inside a
+  building sets a pending Trespassing (code 11) against **its own** faction (victim: itself), cuts in dialogue event 17 and gives its
   faction's memory of the player (`FUN_140673a20` -> `FUN_140673930`: one entry for the whole player faction, a `SubjectiveTags`
   stamped with the time) the long-term tag 1 MY_INTRUDER ([dialogue](dialogue.md#enums), DC 23); no base-game line reads that tag
-  (**Verified** by probe). Not tested when the witness regards the target as an enemy (Character `vfunc 125`) or an ally
-  (`vfunc 126`: same faction, else `FactionRelationsIsAlly`), when the target is in a code-0xb place, or is chained to the witness
-  (`FUN_14032e1e0`: target `+0x320` "chained mode" and the chain's hand id = the witness's). Two cases, both needing the residents'
-  **"house locked"** flag (the owner platoon's AI `+0xe8`, saved as `homelok`, [locks](locks.md#doors)) unless noted:
-  the **resident** case (the target is in the witness's own home): flag set, and the home is not public (vfunc 82, `public day`; or `+0xc4 != 1`) or the hour is outside 7..22 (game clock `DAT_1421303d0`+0, the hour int). Same-town targets of
-  NPC class 1, 2, 5 are exempt. The **police** case (a police-like witness, someone else's building): the building's faction does
-  not regard the target's as an ally, the building is not public, and the target has a slave state or the owner platoon's flag is
-  set; never when that platoon's leader regards the target as an ally. No hour test. The witness function then books it as any
-  crime (amount 100). `FUN_140852240` fires event 17 without a crime (a squad of the witness's town; NPC side). What follows is the
+  (**Verified** by probe). Not tested when the witness regards the target as an enemy (Character `vfunc 125`, in the caller) or as friendly
+  (`vfunc 126`), when the target is in a code-0xb place (outdoors), is an animal, or holds a live access pass. The **access pass** (BountyManager
+  at Character `+0xf0`: `+0x138` the faction, `+0x140` the expiry; names from KenshiLib, **Observed**) is never given: the Character constructor
+  (`FUN_1406223f0`) zeroes it, and its only setter `giveAccessPass` (`FUN_140337c20`) has no caller (**Verified**, a rel32, rip-relative,
+  pointer and image-relative scan of 1.0.68 `kenshi_x64.exe` finds only its unreferenced jump thunk), so the test always passes. Two cases:
+  the **resident** case (the target is in the witness's own home, ownerships `+0x38`): never a target chained to the witness
+  (`FUN_14032e1e0`: target `+0x320` "chained mode" and the chain's hand id = the witness's), nor one of the witness's ownership town (`+0x30`;
+  none for both counts as the same) of NPC class 1, 2 or 5; else the residents' **"house locked"** flag (the witness's platoon AI `+0xe8`,
+  saved as `homelok`, [locks](locks.md#doors)) and the home neither a shop (designation `+0xc4` 1, BD_SHOP) nor public (Building vfunc `0x290`, `public day`), or no home, or the hour
+  outside 7..22 (game clock `DAT_1421303d0`+0, the hour int). The **police** case (a police-like witness, someone else's building): the
+  building's faction does not regard the target's as an ally and, when it has an owner platoon, that platoon's leader does not regard the
+  target as friendly; then the owner platoon's flag set, or the building not public and the target with a slave state. No hour test; a
+  locked-up house is trespassed in even when public. The witness function then books it as any crime (amount 100). `FUN_140852240` cuts in
+  event 17 and MY_INTRUDER without a crime at any target (not only the player's) standing in the witness's ownership town (status `+0x88`)
+  inside its walls (`amInsideTownWalls` not 0), when that town is not public (Town vfunc `0x298` `isPublic`: a Town's `+0x380`, from TOWN
+  `is public`, player towns 0; TownBase, Nest and TownNull 1), the target is no slave (state 1), does not look like one (`FUN_1405a6bb0`) and
+  is not caged. `FUN_1408525c0` cuts in event 9 at a player character standing in the witness's home that is not public, not chained to it,
+  not friendly, no animal and in no bed or cage. Each ends the reaction ([sight](dialogue.md#ambient-conversations)). **Verified** (probe of
+  the base data): 36 TOWN records have `is public` false (Black Dog HQ, Cannibal Village, Tengu's Vault, Watchtower, Fort Mirage, ...), 310 true.
+  Meitou: `SightCrimes`, `CrimeSystem.Trespasses` (the designation from the building record). What follows is the
   event-17 lines' data (**Verified** by probe: "Intruder!" with DA 6, "Leave my abode" with DA 12 then DA 33/34, "/GUARDS/!" with DA 33).
 - **Spawn bounties** (`FUN_14062b210`, **Observed**): CHARACTER `bounty chance` vs an inclusive roll 0..100 (`roll < chance`);
   amount `trunc(bounty amount + 0.5*k)`, `k` an integer in `[0, 2*bounty amount fuzz]` (the fuzz only adds), for each
@@ -645,11 +656,12 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   character whose bounty with the looker's faction is at least a class threshold (`FUN_1408520c0`: LAW_ENFORCEMENT 1, MILITARY 4000
   or 2000, ADVENTURER 1000, SLAVE never, others 10000), immediately while `+0x110 > 0`, else through a recognition meter
   (`FUN_140856cb0`, fires above 1.0; rate `5 + 40 * k`, `k` a 1..2 value from the target's stats scaled by status factors 0.5 / 0.6 /
-  0.75 and x2, not decoded); not while the target is carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44). The same function
-  handles escaped slaves (events 36 / 40). `EV_ESCAPED_PRISONER_SPOTTED` (45) fires in `FUN_140859680` for a target with the
-  escaped flag, seen by a police-like looker (or one of a bandit town's faction) in his own town, only while the target's disguise
-  level (`+0x100`) is 0 or its blown cooldown (`+0x110`) runs (**Verified**: any uniform piece hides an escapee, not only a working
-  disguise) and it is not imprisoned. Meitou: `ArrestSystem.EscapeShows`.
+  0.75 and x2, not decoded); not while the target is carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44). The escaping-slave
+  events (36 / 40) are the sight pass's ([sight](dialogue.md#ambient-conversations)). `EV_ESCAPED_PRISONER_SPOTTED` (45) is cut in by
+  `FUN_140859680` (**Verified**) at a target with the escaped flag, while its disguise level (`+0x100`) is 0 or its blown cooldown (`+0x110`)
+  runs (any uniform piece hides an escapee, not only a working disguise) and it is not imprisoned, by a looker standing in its own ownership
+  town (`+0x30` against its current town) while the target stands in a town: when that town's faction is a bandit one (type 8), a looker of that
+  faction, else a police-like one (`FUN_140599600`). Meitou: `SightCrimes`, `ArrestSystem.EscapeShows`.
 - **Bounty hunters** (**Verified** by probe): squads "Bounty hunters wandering between towns", "Bounty hunters low", "Bounty Hunter
   Solo Shek", rebirth "Bounty hunters" (faction Bounty Hunters, `legal system` United Cities) run "hang out in a bar" / "Wandering
   from town to town" / "Patrol map (short range) LOOTING", none of which has goal 204 or a cage goal. Their dialogue answers

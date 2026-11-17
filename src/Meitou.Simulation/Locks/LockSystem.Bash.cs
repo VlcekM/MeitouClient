@@ -407,6 +407,14 @@ public sealed partial class LockSystem
         /// 287 / 81 Bashing door: broken open.
         /// </summary>
         Bash,
+        /// <summary>
+        /// 76 Lockpicking: picked, then opened (a player's character on its way in).
+        /// </summary>
+        Pick,
+        /// <summary>
+        /// 285 Cutting lock: the lock cut through with a tool, then the door opened (a player's character on its way in).
+        /// </summary>
+        Cut,
     }
 
     /// <summary>
@@ -415,18 +423,63 @@ public sealed partial class LockSystem
     const float DoorWayFresh = -3;
 
     /// <summary>
-    /// The row that takes a walker through the building's locked doors (<b>Verified</b>, row table): 80 / 78 when they are its own
-    /// (<see cref="IsMine"/>); else 287 / 81 when the door's faction is no ally of its own (128), it has a weapon (an animal its natural one) and its
-    /// bash desire is above 0 (<see cref="DoorPlan.AggressiveTowards"/>); else none.
+    /// The row that takes the walker in <paramref name="s"/> through the building's locked doors (docs/game/locks.md "Locked doors on the way"):
+    /// out of the building it stands in (<see cref="WayOut"/>), else into it (<see cref="WayIn"/>, through <paramref name="door"/>, else its main
+    /// door).
     /// </summary>
-    internal DoorWayKind WayThrough(World world, CharacterCold c, string building, Vector3 at)
+    internal DoorWayKind WayThrough(World world, int s, string building, Fixture? door = null)
+    {
+        var c = world.Characters.Cold(s)!;
+        var at = world.Characters.Next[s].Position;
+        if (world.Sight.BuildingOf(s) == building) return WayOut(world, c, building, at);
+
+        return WayIn(world, c, building, at, door ?? MainDoor(world, building));
+    }
+
+    /// <summary>
+    /// The way out (state 60's !55, <b>Verified</b>, row table): 80 Unlocking door here when the door is its own (<see cref="IsMine"/>); else 287
+    /// Bashing door (<see cref="Bashes"/>); else none (lockpicking and cutting give !54, which only the way in asks for).
+    /// </summary>
+    DoorWayKind WayOut(World world, CharacterCold c, string building, Vector3 at)
     {
         if (IsMine(world, c, building)) return DoorWayKind.Unlock;
-        if (c.Fighter is not { } f || !f.IsAnimal && f.Unarmed || AlliedTo(c, world.Fixtures.DoorOwner(building))) return DoorWayKind.None;
 
-        // A gate is bashed by its own rows (123 / 290, GatePlan), not as a house door.
-        if (MainDoor(world, building) is { IsGate: true }) return DoorWayKind.None;
-        return DoorPlan.AggressiveTowards(world, Combat, c, building, at) > 0 ? DoorWayKind.Bash : DoorWayKind.None;
+        return Bashes(world, c, building, at) ? DoorWayKind.Bash : DoorWayKind.None;
+    }
+
+    /// <summary>
+    /// The way in (state 59's 52 and !54, <b>Verified</b>, row table and the planner's best-first order): 78 / 140 Unlocking door when the door is
+    /// its own (list B <c>isObjectMine</c>, which 81's list B excludes); else 81 Bashing door when it may (<see cref="Bashes"/>; desire 1 or 1.1);
+    /// else, for a player's character (the rows only the player's planner offers), 285 Cutting lock (desire 1.0) with a tool (122 <c>hasTools</c>)
+    /// and a working arm, else 76 Lockpicking (desire 0.1) when its skill condition holds (166, <see cref="Lockpicking.Allowed"/>); else none.
+    /// </summary>
+    DoorWayKind WayIn(World world, CharacterCold c, string building, Vector3 at, Fixture? door)
+    {
+        if (IsMine(world, c, building)) return DoorWayKind.Unlock;
+        if (Bashes(world, c, building, at)) return DoorWayKind.Bash;
+        if (!c.IsPlayer || door is not { IsGate: false, Lock: { } l }) return DoorWayKind.None;
+
+        if (Lockpicking.BestTool(c) is not null && CanWorkLock(c)) return DoorWayKind.Cut;
+        return Picking.Allowed(c, l.Level) ? DoorWayKind.Pick : DoorWayKind.None;
+    }
+
+    /// <summary>
+    /// Whether the character can work a lock with its hands: conscious, not carried or carrying, one arm working.
+    /// </summary>
+    static bool CanWorkLock(CharacterCold c) =>
+        c.Medical is not { Incapacitated: true } && c.CarriedBy.IsNone && c.Carrying.IsNone && c.Medical?.Aggregates().BothArmsDisabled != true;
+
+    /// <summary>
+    /// 81 / 287 Bashing door may serve (<b>Verified</b>, row table): the door is not its own (70) and its faction is no ally of the walker's (128),
+    /// it has a weapon (an animal its natural one) and its bash desire is above 0 (<see cref="DoorPlan.AggressiveTowards"/>); never at a gate,
+    /// which its own rows bash (123 / 290, <see cref="GatePlan"/>).
+    /// </summary>
+    bool Bashes(World world, CharacterCold c, string building, Vector3 at)
+    {
+        if (c.Fighter is not { } f || !f.IsAnimal && f.Unarmed || IsMine(world, c, building)) return false;
+        if (AlliedTo(c, world.Fixtures.DoorOwner(building)) || MainDoor(world, building) is { IsGate: true }) return false;
+
+        return DoorPlan.AggressiveTowards(world, Combat, c, building, at) > 0;
     }
 
     /// <summary>
@@ -438,7 +491,7 @@ public sealed partial class LockSystem
     /// <summary>
     /// State 60 LOCATION_IS_ACCESSIBLE with its providers (<c>FUN_1405a2710</c>, <b>Verified</b>): a walk to <paramref name="to"/> can be planned
     /// unless the character stands in a building shut by locked doors (a closed unlocked door is opened on the way, 74) that does not cover the
-    /// point, and has no way through its doors (<see cref="WayThrough"/>).
+    /// point, and has no way out through its doors (<see cref="WayOut"/>).
     /// </summary>
     public bool CanLeave(World world, int s, Vector2 to)
     {
@@ -446,7 +499,21 @@ public sealed partial class LockSystem
             return true;
 
         var c = world.Characters.Cold(s)!;
-        return c.IsImprisoned || WayThrough(world, c, building, world.Characters.Next[s].Position) != DoorWayKind.None;
+        return c.IsImprisoned || WayThrough(world, s, building) != DoorWayKind.None;
+    }
+
+    /// <summary>
+    /// State 59 DESTINATION_IS_ACCESSIBLE with its providers (<c>FUN_140597030</c>, <b>Verified</b>): a walk to <paramref name="to"/> can be planned
+    /// unless the point lies in another building shut by locked doors and the walker has no way in through them (<see cref="WayIn"/>).
+    /// </summary>
+    public bool CanEnter(World world, int s, Vector3 to)
+    {
+        int place = world.Sight.PlaceAtPoint(to);
+        if (place < 0) return true;
+
+        string building = world.Sight.PlaceKey(place);
+        if (building == world.Sight.BuildingOf(s) || !world.Fixtures.IsShut(building)) return true;
+        return WayThrough(world, s, building) != DoorWayKind.None;
     }
 
     /// <summary>
@@ -466,9 +533,8 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): at the door, one no longer locked is opened (74 / 72), its own lock is
-    /// worked for <see cref="LockWorkSeconds"/> and opened (80 / 78), anyone else's is bashed as an attacker bashes (287 / 81); once the door is
-    /// open, broken or gone the walk goes on.
+    /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): at the door, one no longer locked is opened (74 / 72); else the way
+    /// works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
     /// </summary>
     void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
     {
@@ -490,8 +556,63 @@ public sealed partial class LockSystem
             FixtureRegistry.OpenDoor(door);
             WalkOn(table, s, c);
         }
-        else if (WayThrough(world, c, door.Building, next[s].Position) == DoorWayKind.Unlock) UnlockOnTheWay(world, s, c, door);
-        else BashOnTheWay(world, s, c, door, spot);
+        else WorkOnTheWay(world, s, c, door, spot);
+    }
+
+    /// <summary>
+    /// Works the walker's locked door by its way (<see cref="WayThrough"/>): its own lock for <see cref="LockWorkSeconds"/> (80 / 78), anyone
+    /// else's bashed as an attacker bashes (287 / 81), picked (76) or cut (285); with no way left the way fails.
+    /// </summary>
+    void WorkOnTheWay(World world, int s, CharacterCold c, Fixture door, DoorSpot spot)
+    {
+        switch (WayThrough(world, s, door.Building, door))
+        {
+            case DoorWayKind.Unlock:
+                UnlockOnTheWay(world, s, c, door);
+                break;
+            case DoorWayKind.Bash:
+                BashOnTheWay(world, s, c, door, spot);
+                break;
+            case DoorWayKind.Pick:
+                PickOnTheWay(world, s, c, door);
+                break;
+            case DoorWayKind.Cut:
+                CutOnTheWay(world, s, c, door);
+                break;
+            default:
+                FailDoorWay(world.Characters, s, c);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The door's lock picked on the way (Task_PickLock, <see cref="Lockpicking.Step"/>, with the pick's clip and floaters): picked, the door is
+    /// opened and the walk goes on.
+    /// </summary>
+    void PickOnTheWay(World world, int s, CharacterCold c, Fixture door)
+    {
+        if (c.StaggeredUntil > world.Tick) return;   // a stagger interrupts the picking
+
+        c.PickWork = (world.Tick, door.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
+        var outcome = Picking.Step(world, s, door, world.TickSeconds, Crimes);
+        if (outcome is PickOutcome.Success or PickOutcome.Failed) PickFloater(world, s, outcome == PickOutcome.Success);
+        if (outcome is not (PickOutcome.Success or PickOutcome.Open)) return;
+
+        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        FixtureRegistry.OpenDoor(door);
+        WalkOn(world.Characters, s, c);
+    }
+
+    /// <summary>
+    /// The door's lock cut on the way (Task_CutLock, <see cref="Lockpicking.CutLock"/>): cut through, the door is opened and the walk goes on.
+    /// </summary>
+    void CutOnTheWay(World world, int s, CharacterCold c, Fixture door)
+    {
+        if (!Picking.CutLock(world, s, door, world.TickSeconds, Crimes)) return;
+
+        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        FixtureRegistry.OpenDoor(door);
+        WalkOn(world.Characters, s, c);
     }
 
     /// <summary>

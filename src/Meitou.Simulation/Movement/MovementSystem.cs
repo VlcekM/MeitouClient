@@ -92,9 +92,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// A move order (29) needs an awake character (one out cold keeps it queued until it wakes) and, out of a building shut by locked doors, a way
-    /// through them (state 60, <see cref="Locks.LockSystem.CanLeave"/>: "I can't get out of here.", the state's failure text in the condition table
-    /// <c>FUN_140610250</c>); a follow order (31, 45) a target that is there, and an awake, free character (not caged or carried).
+    /// A move order (29) needs an awake character (one out cold keeps it queued until it wakes); out of a building shut by locked doors, a way
+    /// out (state 60, <see cref="Locks.LockSystem.CanLeave"/>: "I can't get out of here."), and into one, a way in (state 59,
+    /// <see cref="Locks.LockSystem.CanEnter"/>: "I can't get there."), the states' failure texts in the condition table <c>FUN_140610250</c>, in the
+    /// order the move row lists them; a follow order (31, 45) a target that is there, and an awake, free character (not caged or carried).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -102,11 +103,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (order.IsMove)
         {
             if (table.Cold(slot)!.Medical?.Incapacitated == true) return OrderCheck.Blocked();
+            if (world.SystemOf<Locks.LockSystem>() is not { } locks) return OrderCheck.Run;
 
-            var to = new Vector2(order.Point.X, order.Point.Z);
-            return world.SystemOf<Locks.LockSystem>() is { } locks && !locks.CanLeave(world, slot, to)
-                ? OrderCheck.Blocked(Loc.Tr("I can't get out of here."))
-                : OrderCheck.Run;
+            if (!locks.CanLeave(world, slot, new Vector2(order.Point.X, order.Point.Z)))
+                return OrderCheck.Blocked(Loc.Tr("I can't get out of here."));
+            return locks.CanEnter(world, slot, order.Point) ? OrderCheck.Run : OrderCheck.Blocked(Loc.Tr("I can't get there."));
         }
         if (!table.TryResolveNext(order.Target, out int led) || led == slot) return OrderCheck.Gone;
 

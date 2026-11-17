@@ -186,7 +186,7 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// DC 52 I_LOVE_THIS_GUY (<c>FUN_140599590</c>): the squad's long-term tags on the character hold LIFESAVER or FREED_ME.
     /// </summary>
-    bool Loves(World world, CharacterCold mc, CharacterId who) => (Memory.Find(world, mc.SquadId, who)?.Long & MemoryTag.LoveMask) is > 0;
+    internal bool Loves(World world, CharacterCold mc, CharacterId who) => (Memory.Find(world, mc.SquadId, who)?.Long & MemoryTag.LoveMask) is > 0;
 
     /// <summary>
     /// DC 53 I_HATE_THIS_GUY (<c>FUN_1405995d0</c>): STOLE_FROM_ME, MY_CAPTOR, DEFEATED_MY_SQUAD_ONCE or KILLED_MY_FRIEND.

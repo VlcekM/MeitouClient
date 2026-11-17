@@ -905,14 +905,14 @@ An Assault on a Diplomat standing in its faction's `biomes` is set as code 9, Te
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running; not a Trespassing
 (an NPC gets one from a DA 33 in a private home), whose event-17 line only restarts a chase forever (#519). So a town's
 guards turn on hungry bandits (Starving Bandits, -10 to all: not hostile, so no aggro target) attacking someone there.
-Trespassing (`Trespasses`, [economy 11.2](game/economy.md#112-how-a-bounty-is-gained)): a player character inside
-(`SightMap.BuildingOf`, not on the roof) a town building that a squad lives in is a suspect each sweep; a witness that sees it and
-regards its faction as neither ally nor enemy sets the pending crime when it lives there, its squad has locked up
-(`LockSystem.IsHouseLocked`, the lock-up round's flag; the original also sets it when a resident closes a lockable door) and the
-building is not open (template `public day`, kept as `Blackboard.HomePublic`; open 7:00-22:59); or when it is police-like, the
-building is not public, its residents' faction is not an ally, and the culprit is a slave or the residents have locked up. The
-witness rules above then fire event 17 and a police-like witness books 100. The MY_INTRUDER memory tag is not kept (nothing reads
-it). DA 33 CRIME_ALARM (`CrimeSystem.Alarm`): the speaker attacks the target, the target's crime timer is 30 and it is recently
+Trespassing (`CrimeSystem.Trespasses`, [economy 11.2](game/economy.md#112-how-a-bounty-is-gained)): the sight pass sets it (`SightCrimes`, with
+event 17 and the MY_INTRUDER tag); without one, a player character inside (`SightMap.BuildingOf`, not on the roof) a town building that a squad
+lives in is a suspect each sweep and a witness that sees it and does not regard it as an enemy runs the same test (engine fallback). The test:
+resident (`LockSystem.IsHouseLocked`, the lock-up round's flag; the original also sets it when a resident closes a lockable door) when locked up
+and the building is not open (a shop by its record's designation, or `HomePublic`: the player's toggle, else template `public day`; open
+7:00-22:59); police-like in another's
+building when the residents' faction and leader do not regard the culprit as an ally and the residents have locked up, or the building is not
+public and the culprit has a slave state. The witness rules above then fire event 17 and a police-like witness books 100. DA 33 CRIME_ALARM (`CrimeSystem.Alarm`): the speaker attacks the target, the target's crime timer is 30 and it is recently
 wanted; a speaker of a town squad sets Trespassing on a target with nothing pending inside its private home, and raises the town alarm for
 the target's pending crime, which the town's investigators answer ([town alarms](game/economy.md#town-alarms)).
 Stealing (`CrimeSystem.Steal`, [carry-loot](game/carry-loot.md#theft-and-witnesses)): taking from another faction's container (right click: Theft;
@@ -941,7 +941,8 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   locks a closed one that `wants lock`; locking a home's doors closes them (animated, the lock holds at once). Engine stand-in for
   Task_OpenDoor: every 3 ticks a walker within 40 of a closed door's leaf whose current or next path leg crosses the leaf's plane within its half
   width + 6 (`IDoorGate.DoorSpotOf`: the door collision's box via `NavDoorGeometry`; headless: none, so no walk-through opening) opens it; at an
-  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player, once per door while it stays within 40 of where it said it) unless it has a way through: its own door it unlocks, another's it bashes when it wants to ([locked doors on the way](game/locks.md#doors)). Both reaches run from
+  effectively locked one a walker within 15 of the leaf whose current leg crosses it stops ("It's locked." for the player, once per door while it stays within 40 of where it said it) unless it has a way through: its own door it unlocks, another's it bashes when it wants to, and a player's character on its way in cuts or picks
+  it ([locked doors on the way](game/locks.md#doors)). Both reaches run from
   the leaf's nearest point, not its centre (a gate's leaf is 70..80 wide). The box's normal is the thinnest horizontal direction of the door
   collision's footprint (`NavDoorGeometry.Fit`), not the nearer building axis: **Verified** (that footprint for every BUILDING with `doors`, plain
   game; each leaf is one box), 9 of 47 leaves are turned in their building (Saloon and Double House 45°, Outpost s-II/s-IV and Outpost Stairs 42°,
@@ -1026,9 +1027,10 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   a booking or a witnessed crime; engine: the countdown), else after 45 s of being seen (engine: one meter per target,
   rate not decoded); only the nearest free police-like looker acts. MILITARY threshold: engine 2000 (original 4000 or 2000);
   the police-like NPCs of the five towns `CrimeInstallTests` loads are MILITARY (**Observed**).
-  A police-like NPC in its own town acts on an escaped prisoner (`CharacterCold.Escaped`) it sees, unless a disguise hides it (`EscapeShows`). `AggroSystem` no longer
+  An escaped prisoner (`CharacterCold.Escaped`) that a disguise does not hide (`EscapeShows`) gets event 45 from the sight pass (`Perception.SightCrimes`,
+  [sight](game/dialogue.md#ambient-conversations)); without it (no dialogue events) a police-like NPC in its own town that sees it arrests it (engine). `AggroSystem` no longer
   attacks wanted characters.
-- **Spotting talks** (`ArrestSystem.Talk`, the dialogue system, while its event lines are on): the looker fires event 44 (escapee: 45) at the target
+- **Spotting talks** (`ArrestSystem.Talk`, the dialogue system, while its event lines are on): the looker fires event 44 at the target
   (`DialogueSystem.FireEvent`, a bubble now) and the data decides ([economy 11.7](game/economy.md#117-arrest)): DA 29 arrests (`ArrestFromDialogue`,
   below; an animal target, or a guard outside his town, is attacked instead: `ArrestSystem.CapturesInTown`), "Small bounty" sends the leader to talk (DA 2) and its interrupt opens the fine window (DA 8 + 49 pay and clear; the rest DA 29), others
   say nothing more. The target is then left alone for 60 game s (`SpotRetrySeconds`, engine), longer while the guard still talks or walks up; paying ends it.
@@ -1119,11 +1121,11 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   enemies (engine: Heng's Outlaw slaves, uncaged without building data, drew its Samurai into fights). **Observed** (real-data
   probe 2026-10-21): Rebirth's 10 Rebirth Cage Guards squads make 34 caged Rebirth Slaves.
 - **Slave catching** (`ArrestSystem.CatchSlave`, the spotting sweep; the packages' Capture Slaves, 167, in `addon- slave catching`, which Rebirth's gate guards and garrison inherit): an awake NPC of the owner faction in its own town that sees a player slave (daylight sight, full range; a sneaking one, like a sneaking escaped prisoner or bounty in the spotting sweep, only once that NPC's spot meter on it is full, `ArrestSystem.SeesSuspect`)
-  with a view factor above 0.05 tags it escaping (2) by the original's test (`EscapingSlave`, [escaping slave spotted](game/ai-tasks.md#slave-work-shout-and-capture)): sneaking, no
+  with a view factor above 0.05 tags it escaping (2) by the original's test (`EscapingSlave`, [escaping slave spotted](game/ai-tasks.md#slave-work-shout-and-capture); with the sight pass `SightCrimes` tags it and fires 36 instead): sneaking, no
   shackles worn, walking a move order away from its master (its point farther than 250 from the owner and than the slave, not heading at it, and outdoors, past 433 or not
   looking like a slave), or fighting the looker's ally; the looker's own-town gate is the engine's, and so is tagging a slave whose master Meitou does not know when it
   stands outside that town. The nearest police-like or slaver one then captures an escaping slave as an arrest with
-  `Enslave` (fight down, lift, cage; event 36 ESCAPING_SLAVE_SPOTTED as a bubble; engine for the line's DA 6 attack), and the caging makes it a slave (1) again and chains it
+  `Enslave` (fight down, lift, cage; without the sight pass event 36 ESCAPING_SLAVE_SPOTTED as a bubble; engine for the line's DA 6 attack), and the caging makes it a slave (1) again and chains it
   (`CharacterAssembly.Chain`; the original cuffs before the carry; unchained, it never looks like a slave and is processed forever, #508). A town here is `InOwnTown`'s extent, else no farther
   from its centre than its gate nearest the point plus 100 (Rebirth's gates stand about 1500 out, its radius is 184); without gates, the extent only. A caged slave's master is
   the resident squad of its cage's building when loaded (engine stand-in for `FUN_140330600` assigning the cage's owner handle). **Observed** (probe `obey`, #813 save, Rebirth):
@@ -1773,7 +1775,12 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
   squad mission through `AiMind.FollowTarget`; on its end the leader's `contract end talk passive`), DA 25 / 53 (`FixtureRegistry.TagEscaped` / `FreeSlave`) and DA 29
   (`ArrestSystem.ArrestFromDialogue`), DA 43 (the bail list, [Arrest and jail](#arrest-and-jail)), DA 7, 13, 14, 19-21, 23, 28, 33, 34, 52, 54, 56 (`DialogueSystem.Acts`), DA 16 (`TalkFollowers`); the rest is listed in [dialogue](game/dialogue.md#meitou-design).
 - **Events from other systems**: `DialogueEvent` (deferred to the next tick) fires an event at an NPC as bubbles, or a given DIALOGUE (the contract end talk);
-  first aid, shackles and the release rounds send them. The police's spotting fires 44 / 45 at once (`FireEvent`, which says whether a line was said).
+  first aid, shackles and the release rounds send them. The police's spotting fires 44 at once (`FireEvent`, which says whether a line was said).
+- **Sight pass** (`Perception.SightSystem`, its own system after the dialogue, run while its event lines are on; [sight](game/dialogue.md#ambient-conversations)):
+  one sensed character per update turn gets the sight events (3, 27, 34, 59, 66, 67) and the crime events (`SightCrimes`: 45, 36 / 40, 17, 9) in the
+  original's order; the crime events cut into a running conversation (`DialogueSystem.CutIn`). Every event is refused by the starter test
+  (`ConversationStarters`, [firing an event](game/dialogue.md#firing-an-event)). Crime and arrest test worlds have no dialogue, so no sight pass: their
+  engine fallbacks stay (the escapee's arrest, slave catching's tag and 36, the witnesses' trespass).
 - **Recruiting** ([facts](game/dialogue.md#recruiting)): at the `max faction size` cap the line "It looks like your squad is a little full." is
   posted and the conversation ends; otherwise the speaker leaves its squad (its leader passes to the first member left) and joins the player's
   active squad (the first selected player character's, else `Player.Squad`, else the talker's), or a new "blank squad" squad when that one has
