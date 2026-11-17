@@ -2084,8 +2084,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         bool escaping = inHole && held && !s.Steering && EscapesToward(walk, n, cold, p.Position, x, z);
         if (escaping) y = p.Position.Y;
 
-        // On bare terrain too steep for the mesh (a cliff face, #894) it follows the ground toward its path.
-        bool descending = !escaping && inHole && held && !s.Steering && DescendsToward(walk, n, cold, p.Position, x, z);
+        // On bare terrain too steep for the mesh (a cliff face, #894) it follows the ground toward its path, also where its own spot counts as a
+        // surface (the terrain at its height under a mesh slope far above, #886) but no step off it does.
+        bool descending = !escaping && !stands && held && !s.Steering && DescendsToward(walk, n, cold, p.Position, x, z);
         if (descending) y = walk.TerrainHeight(x, z);
 
         if (stands || offSurface && walk.IsWalkable(x, z) || escaping || descending)

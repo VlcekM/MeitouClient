@@ -262,7 +262,9 @@ read from a quicksave about ten game minutes after the load).
 A walker standing on the bare terrain where it is steeper than the mesh's 40° terrain limit follows the terrain toward its path's current point, when that point is
 a surface at the point's own height, however far below or above the walker it lies (engine choice, `MovementSystem.DescendsToward`). **Observed** (Kenshi 1.0.68, #894's
 save, a cliff face at -69242,1074.6,-41946 where the pointer shows no walkable ground nearby, the path's next point 31 below): ordered to the cliff's foot, the walker
-walked down it and arrived within 6 s.
+walked down it and arrived within 6 s. The rule also holds where the walker's own spot counts as a surface (the terrain at its height, a mesh slope far
+above) but no step off it does. **Observed** (#886's save, `meitou-tools probe walk --nav`): Gorefiend on a shore rock face at -34421,94,-59855, the mesh 30 above,
+every step refused; with the rule he climbs off into the water and swims to his goal 1,900 away.
 A polygon within `EdgeTolerance` counts across a zone border too (`NavWorld.TryEdgePoint` looks in the next zone's mesh when its own has none; engine
 choice). **Observed** (#774, the issue's save, Iron Valley zone 33.24 at 4614,-36197, `meitou-tools probe --nav`): a hole in the mesh east of the
 zone line x 4608, about 36 square, which the original's `tile33.24` lacks too; a character in it got a path whose first point lay on the line, the
