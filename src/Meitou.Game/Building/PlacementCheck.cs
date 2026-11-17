@@ -89,13 +89,18 @@ public sealed class PlacementServices
     /// </summary>
     public Func<Vector3, Vector3, float, IEnumerable<PlacedBuilding>> StaticAlong { get; init; } = (_, _, _) => [];
     /// <summary>
-    /// The collision triangles of a building record in its own space (a click on a building is tested against them); empty without level data.
+    /// The collision triangles of a building record in its own space, intact or (true) destroyed (a click on a building is tested against them);
+    /// empty without level data.
     /// </summary>
-    public Func<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> CollisionMesh { get; init; } = _ => [];
+    public Func<string, bool, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> CollisionMesh { get; init; } = (_, _) => [];
     /// <summary>
     /// For each shape of <see cref="CollisionMesh"/>, in order: the index of the door it is a part of, -1 for none.
     /// </summary>
-    public Func<string, IReadOnlyList<int>> CollisionMeshDoors { get; init; } = _ => [];
+    public Func<string, bool, IReadOnlyList<int>> CollisionMeshDoors { get; init; } = (_, _) => [];
+    /// <summary>
+    /// Whether a level building is drawn as a ruin now (a town's override, else its save or level state).
+    /// </summary>
+    public Func<BuildingPlacement, bool> LevelDestroyed { get; init; } = _ => false;
     /// <summary>
     /// The triangles of a collision file by its record path (an item's <c>physics file</c>), in its own space; empty when it is not in the install.
     /// </summary>

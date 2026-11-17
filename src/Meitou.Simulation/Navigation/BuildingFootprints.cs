@@ -300,30 +300,32 @@ public sealed class BuildingFootprints
 
     /// <summary>
     /// The triangles of a building record's collision shapes in its own space (scale applied, as the hull is): what a click on a building is tested
-    /// against after its hull. Read from the cache on demand, not kept; empty without a database record or collision files.
+    /// against after its hull. A <paramref name="destroyed"/> building's are its ruin's (destroyed collision, no doors), as it is drawn and as the
+    /// navmesh has it. Read from the cache on demand, not kept; empty without a database record or collision files.
     /// </summary>
-    public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh(string buildingId) =>
-        [.. MeshShapes(buildingId).Select(s => (s.Vertices, s.Indices))];
+    public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh(string buildingId, bool destroyed) =>
+        [.. MeshShapes(buildingId, destroyed).Select(s => (s.Vertices, s.Indices))];
 
     /// <summary>
     /// Each shape of <see cref="Mesh"/>, in the same order, with the index of the door whose part it belongs to in the building's <c>doors</c>
     /// list (closed placement); -1 for a shape of any other part.
     /// </summary>
-    public IReadOnlyList<int> MeshDoors(string buildingId) => [.. MeshShapes(buildingId).Select(s => s.Door)];
+    public IReadOnlyList<int> MeshDoors(string buildingId, bool destroyed) => [.. MeshShapes(buildingId, destroyed).Select(s => s.Door)];
 
     /// <summary>
     /// The shapes behind <see cref="Mesh"/> and <see cref="MeshDoors"/>.
     /// </summary>
-    List<(Vector3[] Vertices, int[] Indices, int Door)> MeshShapes(string buildingId)
+    List<(Vector3[] Vertices, int[] Indices, int Door)> MeshShapes(string buildingId, bool destroyed)
     {
         var result = new List<(Vector3[], int[], int)>();
         if (_db.Find(buildingId) is not { } building) return result;
 
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
-        foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
+        var state = new BuildingState(destroyed);
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, state))
         {
-            string path = mesh.Source.GetPath("xml collision");
+            string path = mesh.CollisionPath(destroyed);
             if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
                 result.Add(([.. shape.Vertices.Select(v => v * scale)], shape.Indices, mesh.DoorIndex));
@@ -552,7 +554,7 @@ public sealed class BuildingFootprints
                     if (Wait(b.BuildingId) is not { } footprint || y < b.Position.Y + footprint.YMin - 1 || y > b.Position.Y + footprint.YMax + 1)
                         continue;
 
-                    Cut(Mesh(b.BuildingId), b.Position, b.Rotation, y, segments);
+                    Cut(Mesh(b.BuildingId, destroyed: false), b.Position, b.Rotation, y, segments);
                 }
             }
         }

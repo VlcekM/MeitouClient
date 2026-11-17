@@ -158,7 +158,7 @@ sealed class WorldPicking(PlayerInterface player)
             // inside, and a click on a closed house's wall goes in.
             if (candidate.Plot || HasRooms?.Invoke(b.Key) == true || player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;
 
-            var mesh = ClosedMeshOf(b.BuildingId, b.Key);
+            var mesh = ClosedMeshOf(b.BuildingId, b.Key, host.Placement.LevelDestroyed(b));
             float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
             var hull = candidate.Footprint.Place(b.Position, b.Rotation);
             if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax) is null)
@@ -181,7 +181,7 @@ sealed class WorldPicking(PlayerInterface player)
             if (HasRooms?.Invoke(site.Id) == true || player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
             if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
 
-            var mesh = ClosedMeshOf(site.Record, site.Id);
+            var mesh = ClosedMeshOf(site.Record, site.Id, site.Destroyed);
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
             var hull = footprint.Place(site.Position, yaw);
             float y = site.Position.Y;
@@ -194,12 +194,13 @@ sealed class WorldPicking(PlayerInterface player)
 
     /// <summary>
     /// The collision triangles of building record <paramref name="record"/> placed as <paramref name="placement"/>, without the parts of its doors
-    /// that are open (an open gate's leaves): a click through an open gateway goes to the ground beyond it.
+    /// that are open (an open gate's leaves): a click through an open gateway goes to the ground beyond it. A <paramref name="destroyed"/> one's
+    /// are its ruin's, which has no doors at all (the Hub's ruined gates).
     /// </summary>
-    IReadOnlyList<(Vector3[] Vertices, int[] Indices)> ClosedMeshOf(string record, string placement)
+    IReadOnlyList<(Vector3[] Vertices, int[] Indices)> ClosedMeshOf(string record, string placement, bool destroyed)
     {
-        var mesh = CollisionMeshOf(record);
-        var doors = CollisionDoorsOf(record);
+        var mesh = CollisionMeshOf(record, destroyed);
+        var doors = CollisionDoorsOf(record, destroyed);
         if (doors.Count != mesh.Count || !doors.Any(d => d >= 0)) return mesh;
 
         var open = player.Session.CurrentSnapshot.Doors;
@@ -580,34 +581,35 @@ sealed class WorldPicking(PlayerInterface player)
     /// against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
     /// files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
     /// </summary>
-    readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
+    readonly Dictionary<(string Record, bool Destroyed), IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
     /// <summary>
-    /// Each shape of <see cref="_collisionMeshes"/>' meshes, by record: the index of the door it is a part of, -1 for none.
+    /// Each shape of <see cref="_collisionMeshes"/>' meshes, by record and state: the index of the door it is a part of, -1 for none.
     /// </summary>
-    readonly Dictionary<string, IReadOnlyList<int>> _collisionDoors = [];
+    readonly Dictionary<(string Record, bool Destroyed), IReadOnlyList<int>> _collisionDoors = [];
 
     /// <summary>
-    /// The collision triangles of building record <paramref name="record"/>, read once (empty without collision files).
+    /// The collision triangles of building record <paramref name="record"/>, intact or <paramref name="destroyed"/> (a ruin's: no doors), read once
+    /// (empty without collision files).
     /// </summary>
-    IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
+    IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record, bool destroyed)
     {
-        if (_collisionMeshes.TryGetValue(record, out var known)) return known;
+        if (_collisionMeshes.TryGetValue((record, destroyed), out var known)) return known;
 
-        var mesh = player.Build.Services?.Placement.CollisionMesh(record) ?? [];
-        _collisionMeshes[record] = mesh;
+        var mesh = player.Build.Services?.Placement.CollisionMesh(record, destroyed) ?? [];
+        _collisionMeshes[(record, destroyed)] = mesh;
         return mesh;
     }
 
     /// <summary>
     /// The door index of each of <see cref="CollisionMeshOf"/>'s shapes for building record <paramref name="record"/>, read once.
     /// </summary>
-    IReadOnlyList<int> CollisionDoorsOf(string record)
+    IReadOnlyList<int> CollisionDoorsOf(string record, bool destroyed)
     {
-        if (_collisionDoors.TryGetValue(record, out var known)) return known;
+        if (_collisionDoors.TryGetValue((record, destroyed), out var known)) return known;
 
-        var doors = player.Build.Services?.Placement.CollisionMeshDoors(record) ?? [];
-        _collisionDoors[record] = doors;
+        var doors = player.Build.Services?.Placement.CollisionMeshDoors(record, destroyed) ?? [];
+        _collisionDoors[(record, destroyed)] = doors;
         return doors;
     }
 
@@ -621,7 +623,7 @@ sealed class WorldPicking(PlayerInterface player)
         if (BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
         if (record is null) return prism;
 
-        var mesh = CollisionMeshOf(record);
+        var mesh = CollisionMeshOf(record, destroyed: false);
         return mesh.Count == 0 ? prism : RayMesh(ray, mesh, new Vector3(position.X, y, position.Z), rotation);
     }
 

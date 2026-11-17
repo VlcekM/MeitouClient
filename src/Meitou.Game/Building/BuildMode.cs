@@ -1540,7 +1540,7 @@ sealed class BuildMode(PlayerInterface player)
         if (!_ghostBoxes.TryGetValue(record, out var box))
         {
             Vector3 min = new(float.MaxValue), max = new(float.MinValue);
-            foreach (var (vertices, _) in host.Placement.CollisionMesh(record))
+            foreach (var (vertices, _) in host.Placement.CollisionMesh(record, false))
                 foreach (var v in vertices) (min, max) = (Vector3.Min(min, v), Vector3.Max(max, v));
             _ghostBoxes[record] = box = min.X <= max.X ? (min, max) : null;
         }

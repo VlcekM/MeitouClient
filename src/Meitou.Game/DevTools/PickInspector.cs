@@ -249,7 +249,7 @@ sealed class PickInspector(PlayerInterface player)
                 }
             }
             if (InspectorMesh && isPicked && player.Build.Services is { } host && b.Record is { } record)
-                CollisionEdges(edges, host.Placement.CollisionMesh(record), b, origin, new Vector4(0.3f, 0.8f, 1f, 0.9f));
+                CollisionEdges(edges, host.Placement.CollisionMesh(record, false), b, origin, new Vector4(0.3f, 0.8f, 1f, 0.9f));
         }
         InspectorGeometry = (origin, [.. fill], [.. edges]);
         InspectorRevision++;

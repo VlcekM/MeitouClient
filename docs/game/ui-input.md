@@ -197,7 +197,9 @@ foundation's side near Flats Lagoon, or on a wall, sent the character to the gro
 through, and went on 336 units to the seabed; rays at its outside stairs fell through the risers to the deck below. Steep is over the 40° slope limit. For
 a building with rooms it is the first collision triangle on the shown floors, when no floor lies beneath it (`FloorSurfaces.FaceHit`); its collision can
 reach well past the room footprint (the lagoon houses' foundations, more than 4 units). A level building or a player's site without rooms (a wall, a gate,
-a prop) is tested on its own collision, less the parts of its doors that are at least half open (engine choice: a click through an open gate goes to the ground beyond); a site above the viewed floor of an opened house is not. **Verified** (scratch probe, the base game's 40 wall
+a prop) is tested on its own collision, less the parts of its doors that are at least half open (engine choice: a click through an open gate goes to the ground beyond); a destroyed one on its ruin's collision, which has no doors
+(**Verified**, scratch probe: the Hub's gate `20.32:4617-Newwworld-INGAME` is destroyed and its closed leaf box stood across the drawn gateway, so a click beyond it
+went to the leaf's foot mid-gate); a site above the viewed floor of an opened house is not. **Verified** (scratch probe, the base game's 40 wall
 records): their sides' normals are horizontal (steep), their tops flat. The destination is the foot of the face: 1, 3 or 6 units back towards the camera, on the highest navmesh surface not above the hit; with
 none there (a wall standing in water) the pick is kept. A raised surface within 4 units of the hit, not above it and more than 5 over the foot stays (a
 wall walk behind its parapet). A wall click on a closed house still goes onto its floor inside. A quick click on a plain site with verbs
