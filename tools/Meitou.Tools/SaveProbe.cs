@@ -125,6 +125,8 @@ static class SaveProbe
             case ("resave", _): Resave(probe); return true;
             case ("sites", >= 1): Sites(probe, float.Parse(a[0])); return true;
             case ("machines", >= 1): Machines(probe, float.Parse(a[0])); return true;
+            case ("platoons", >= 1): Platoons(probe, float.Parse(a[0])); return true;
+            case ("mine", >= 4): MineRock(probe, a[0], Point(a, 1), a.Count > 4 ? int.Parse(a[4]) : 10); return true;
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
@@ -1277,6 +1279,45 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// The save's platoons within <paramref name="radius"/> of the leader (X/Z), nearest first: name, faction, template, whether its file is there,
+    /// character count, base and home town, and the distance (#852: whether the session had made the wild squads round the player).
+    /// </summary>
+    static void Platoons(ProbeWorld probe, float radius)
+    {
+        var at = new Vector2(probe.LeaderPosition.X, probe.LeaderPosition.Z);
+        var near = probe.Save.Platoons
+            .Select(p => (Platoon: p, Distance: Vector2.Distance(new(p.Position.X, p.Position.Z), at)))
+            .Where(p => p.Distance < radius)
+            .OrderBy(p => p.Distance);
+        foreach (var (p, distance) in near)
+        {
+            string basetown = p.Record.Strings.GetValueOrDefault("basetown", "");
+            Console.WriteLine($"platoon '{p.Name}' {p.FactionName} template='{p.SquadTemplate}' file={p.IsLoaded} chars={p.CharCount} "
+                + $"basetown='{basetown}' hometown={Meitou.Data.Save.Hand.Read(p.Record, "hometown")} at {p.Position:F0} distance={distance:F0}");
+        }
+    }
+
+    /// <summary>
+    /// The player's squad leader ordered to mine the rock of BUILDING <paramref name="record"/> at <paramref name="at"/> (the probe has no rock
+    /// source, so no rock need stand there), then every 200 ticks its task and the rock's machine (#852: a rock whose mine needs no resource).
+    /// </summary>
+    static void MineRock(ProbeWorld probe, string record, Vector3 at, int rounds)
+    {
+        var t = probe.Characters;
+        var squad = probe.World.Squads.Find(probe.World.Player.Squad)!;
+        string site = Meitou.Simulation.Production.ProductionSystem.NaturalId(record, at);
+        probe.World.Commands.Enqueue(new Meitou.Simulation.Production.OperateOrder([squad.Members[0]], site) { Tick = probe.World.Tick });
+
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(200);
+            string who = t.TryResolveNext(squad.Members[0], out int slot) ? probe.Who(slot) : "-";
+            string machine = probe.World.Machines.Find(site) is { } m ? $"{MachineLine(m)} yield={m.Yield:F2}" : "no machine";
+            Console.WriteLine($"tick {probe.World.Tick} {who} | {machine}");
+        }
+    }
+
+    /// <summary>
     /// A machine's status, output, inputs and, for a crafting bench, its queue, repeat flag and finished items.
     /// </summary>
     static string MachineLine(Meitou.Simulation.Production.Machine m)
@@ -1809,6 +1850,8 @@ static class SaveProbe
               shopgrid <squad>         a building shop's trader window as a trade builds it: items, cells, the grid as text
               sites <radius>           the player's buildings near the leader with floor and parent, and each machine's state and craft queue
               machines <radius>        town buildings' machines near the leader: status, output, inputs, farm growth and operators
+              mine <building> <x> <y> <z> [rounds]  the leader ordered to mine that rock: its task and the rock's machine and yield
+              platoons <radius>        the save's platoons near the leader: faction, template, file, characters, base and home town
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)

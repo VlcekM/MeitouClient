@@ -669,7 +669,15 @@ field prefixes by MiningResource: `iron`, `stone`, `copper`, `carbon`, `water`, 
   f = clamp((d² - r²) / (1500² - r²)), r = the rock's mean horizontal half-size, at least 25 (Meitou always 25: the term
   moves the result under 0.5% for rocks up to 100). No `resources` record or no rock: 0.
 - Rocks are BUILDINGs with `is foliage` placed by the foliage system as a FOLIAGE_MESH's `building type` ("Iron
-  Resource", "Copper Resource", "Stone Resource"; functionality 1 with the resource, not 27). Level data also places
+  Resource", "Copper Resource", "Stone Resource"; functionality 1 with the resource, not 27). **Verified** (`FUN_1406d2410`, `FUN_1400b64b0`,
+  `FUN_14057cc70`): each placed copy of a mesh whose `building type` list has an entry gets the BUILDING of entry 0, found where it stands or
+  made, only when the mesh's `collision` file is set (else the log line "Foliage object '...' with associated building '...' has no physics
+  file" and no building; **Observed** with `meitou-tools objects`: Genesis's skeleton "Salvage Gather Resource" meshes have none); the factory gets the flag that makes it natural (+0xc0) whether
+  or not it has `is foliage`, and neither reads `world resource mining`. So a rock whose mine a mod sets to 0 (Godsend's Resources: `Ore mine`,
+  `copper mine`, read with `meitou-tools record`, #852) is still a rock, and its yield is 1 (`FUN_14029c670` returns before the natural branch).
+  What a right click does is the building's class ([ui-input](ui-input.md)): `mine` and Operate for a mine. Meitou (`FoliageResourceNodes`) lists
+  those rocks; every rock BUILDING of the base game and Genesis is a mine (**Observed**, `meitou-tools record`), and one of another class would
+  not be picked (engine choice). **Observed**: probe `mine` under Godsend's Resources, yield 1, output growing. Level data also places
   `is foliage` buildings (1241 "Iron Resource" entries in the merged building lists, **Observed**). A rock is a natural site
   (Building `+0xc0`): its yield is `FUN_140a12ff0` where it stands, at least 0.1 (`FarmBuilding::vfunc_92` returns it):
   WATER/GROUND as above, STONE the stone noise x `stone mult`, else the resources record's `<p> mult` (0 when missing).

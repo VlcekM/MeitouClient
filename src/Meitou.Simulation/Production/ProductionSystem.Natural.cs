@@ -130,9 +130,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The site a natural id describes, whether or not a rock stands there yet: a BUILDING with <c>is foliage</c> whose machine is an operable mine
-    /// of a <c>world resource mining</c>. Owned by no faction (-1: the original's <c>nofac</c> of its town NO_TOWN) until a player character works
-    /// it; complete. Null for an id naming no such BUILDING.
+    /// The site a natural id describes, whether or not a rock stands there yet: a BUILDING whose machine is operable, whatever its <c>world
+    /// resource mining</c> (0: yield 1). The placer makes the rock building natural (+0xc0) whether or not it has <c>is foliage</c> (<b>Verified</b>,
+    /// <c>FUN_1406d2410</c> passes the factory <c>FUN_14057cc70</c> the flag that sets it). Owned by no faction (-1: the original's <c>nofac</c> of
+    /// its town NO_TOWN) until a player character works it; complete. Null for an id naming no such BUILDING.
     /// </summary>
     BuildSite? ParseNatural(string id)
     {
@@ -144,8 +145,8 @@ public sealed partial class ProductionSystem
             return null;
 
         string record = id[NaturalPrefix.Length..at];
-        if (_db.Find(record) is not { Type: FcsRecordType.Building } building || !building.GetBool("is foliage")) return null;
-        if (Data(record) is not { Operable: true, Resource: not 0 }) return null;
+        if (_db.Find(record) is not { Type: FcsRecordType.Building } building) return null;
+        if (Data(record) is not { Operable: true }) return null;
 
         return new BuildSite { Id = id, Record = record, Name = building.Name, Position = new Vector3(x, y, z), Owner = -1, Materials = [],
             Complete = true };

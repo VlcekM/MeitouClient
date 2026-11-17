@@ -75,7 +75,7 @@ Y=max(Y,100) → random scale → vertical-offset*scale → road perimeter rejec
 add if accepted. Scale and yaw are kept in 8 bits (TreeLoader3D), as in Meitou. Spawn children even
 for rejected parents, recursively, then stamp grass-spot disc into G (<=96). Slope-align rotates
 up after yaw; otherwise keep-upright yaw only, or CRT random axis seeded by positional noise.
-Resource rocks create/find their building after ordinary placement.
+Resource rocks create/find their building after ordinary placement, only with a `collision` file ([resources](../game/buildings-production.md#resources)).
 Position snap (**Verified**, decompile and disassembly): the instance's point goes through TreeLoader3D's add (`FUN_140a46970`) before
 its transform: per axis, 16 bits across a page of half a zone (2304, `FUN_1406d3e30` 0x1406d4bae) from the zone's edge, then floored. The
 orientation hash reads the snapped point, so a fraction just above a whole unit moves the seed: Tower of Abuse's boulder cluster at

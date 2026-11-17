@@ -1,17 +1,31 @@
 using System.Numerics;
+using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 namespace Meitou.Data.Gameplay.Construction;
 
 /// <summary>
-/// A mineable rock (docs/game/buildings-production.md "Resources"): where it stands, its <c>world resource mining</c>, its radius and its BUILDING
-/// record; with its mesh's <paramref name="Shape"/>, placed by <paramref name="Transform"/>, a click hits the rock as drawn.
+/// A rock, the building the foliage placer makes (docs/game/buildings-production.md "Resources"): where it stands, its <c>world resource
+/// mining</c> (0: none), its radius and its BUILDING record; with its mesh's <paramref name="Shape"/>, placed by <paramref name="Transform"/>, a
+/// click hits the rock as drawn.
 /// </summary>
 public readonly record struct ResourceNode(
     Vector3 Position, int Resource, float Radius, string Record = "", Vector3? Centre = null, RockShape? Shape = null,
     Matrix4x4 Transform = default)
 {
+    /// <summary>
+    /// The <c>function</c> of the BUILDING's first functionality (-1: none): the pointer over the rock is <c>mine</c> for 1 and 27, else <c>use</c>
+    /// (docs/game/ui-input.md, the machine classes' slot 130).
+    /// </summary>
+    public int Function { get; init; } = -1;
+
+    /// <summary>
+    /// Whether characters can operate the BUILDING (<see cref="MachineData.Operable"/>). Every rock BUILDING of the base game and Genesis is a mine
+    /// (<b>Observed</b>, probe <c>record</c>); engine choice: a rock of another class is not picked, its own pointer and order not modelled.
+    /// </summary>
+    public bool Operable { get; init; }
+
     /// <summary>
     /// The ray distance to the rock (a unit <paramref name="direction"/>): its mesh's triangles, or without them a sphere of its radius round its
     /// centre; null: missed.
@@ -152,7 +166,7 @@ public interface IResourceNodes
 }
 
 /// <summary>
-/// The rocks the foliage system places (docs/formats/foliage.md, "building type"): instances whose FOLIAGE_MESH names a BUILDING, the rock's resource
+/// The rocks the foliage system places (docs/formats/foliage.md, "building type"): instances whose FOLIAGE_MESH gets a BUILDING, the rock's resource
 /// being that building's functionality <c>world resource mining</c>. Zones are placed once and kept (through the foliage world's layout cache when it
 /// has one). Thread-safe.
 /// </summary>
@@ -175,9 +189,9 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
     readonly Dictionary<ZoneCoordinate, List<ResourceNode>> _zones = [];
 
     /// <summary>
-    /// The <c>world resource mining</c> of each rock BUILDING by string id (0: none), cached.
+    /// Each rock BUILDING's resource, function and operability by string id (<see cref="What"/>), cached.
     /// </summary>
-    readonly Dictionary<string, int> _resourceOf = new(StringComparer.Ordinal);
+    readonly Dictionary<string, (int Resource, int Function, bool Operable)> _machines = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The lock <see cref="Near"/> takes; the caches are read and filled under it.
@@ -229,40 +243,64 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
     }
 
     /// <summary>
-    /// The rocks of <paramref name="zone"/>, placing them on the first ask: each foliage instance whose mesh names a rock BUILDING, sized by its
-    /// mesh's bounds (at least <see cref="NodeRadius"/>).
+    /// The rocks of <paramref name="zone"/>, placing them on the first ask: each placed foliage instance that gets a building (<see cref="RockBuilding"/>).
     /// </summary>
     List<ResourceNode> Zone(ZoneCoordinate zone)
     {
         if (_zones.TryGetValue(zone, out var list)) return list;
+
         list = [];
         if (zone.IsInsideGrid)
+        {
             foreach (var instance in world.Zone(zone).Instances)
-                if (instance.Mesh.BuildingType is { } building && ResourceOf(building) is > 0 and var resource)
-                {
-                    // The rock's size is its mesh's bounds scaled by the instance (at least NodeRadius), centred on the bounds' middle, not on the
-                    // origin the mesh sits on; it is picked by the mesh's triangles where the instance places them.
-                    var bounds = Bounds(instance.Mesh.MeshPath);
-                    float radius = bounds is { } b ? Math.Max(NodeRadius, b.Radius * instance.Scale) : NodeRadius;
-                    list.Add(bounds is { } c
-                        ? new ResourceNode(instance.Position, resource, radius, building.StringId,
-                            Vector3.Transform(c.Centre, instance.Transform), c.Shape, instance.Transform)
-                        : new ResourceNode(instance.Position, resource, radius, building.StringId));
-                }
+                if (RockBuilding(instance.Mesh) is { } building) list.Add(Rock(instance, building));
+        }
+
         _zones[zone] = list;
         return list;
     }
 
     /// <summary>
-    /// The <c>world resource mining</c> of <paramref name="building"/>'s first functionality (0 for none), cached.
+    /// The BUILDING the placer makes for a copy of <paramref name="mesh"/> (<b>Verified</b>, <c>FUN_1406d2410</c>): the first entry of its
+    /// <c>building type</c> list, only when the mesh has a <c>collision</c> file (without one the original logs "has no physics file" and makes
+    /// none). Neither the placer nor the factory (<c>FUN_14057cc70</c>) reads the functionality, so a rock whose mine needs no resource (Godsend's
+    /// Resources sets <c>Ore mine</c> and <c>copper mine</c> to 0, #852) is still a rock, of yield 1.
     /// </summary>
-    int ResourceOf(GameRecord building)
+    GameRecord? RockBuilding(FoliageMesh mesh)
     {
-        if (_resourceOf.TryGetValue(building.StringId, out int r)) return r;
-        r = building.GetReferences("functionality") is [var link, ..] && db.Find(link.TargetStringId) is { } function
-            ? function.GetInt("world resource mining")
-            : 0;
-        return _resourceOf[building.StringId] = r;
+        if (mesh.Record.GetReferences("building type") is not [var first, ..] || mesh.Record.GetPath("collision").Length == 0) return null;
+
+        return db.Find(first.TargetStringId) is { Type: FcsRecordType.Building } building ? building : null;
+    }
+
+    /// <summary>
+    /// The rock of <paramref name="instance"/>, sized by its mesh's bounds scaled by the instance (at least <see cref="NodeRadius"/>), centred on the
+    /// bounds' middle, not on the origin the mesh sits on; it is picked by the mesh's triangles where the instance places them.
+    /// </summary>
+    ResourceNode Rock(FoliageInstance instance, GameRecord building)
+    {
+        var (resource, function, operable) = What(building);
+        var bounds = Bounds(instance.Mesh.MeshPath);
+        float radius = bounds is { } b ? Math.Max(NodeRadius, b.Radius * instance.Scale) : NodeRadius;
+        var rock = bounds is { } c
+            ? new ResourceNode(instance.Position, resource, radius, building.StringId, Vector3.Transform(c.Centre, instance.Transform), c.Shape,
+                instance.Transform)
+            : new ResourceNode(instance.Position, resource, radius, building.StringId);
+
+        return rock with { Function = function, Operable = operable };
+    }
+
+    /// <summary>
+    /// <paramref name="building"/>'s machine as a rock needs it, cached: its first functionality's <c>world resource mining</c> (0: none) and
+    /// <c>function</c> (-1: none), and whether characters can operate it.
+    /// </summary>
+    (int Resource, int Function, bool Operable) What(GameRecord building)
+    {
+        if (_machines.TryGetValue(building.StringId, out var known)) return known;
+
+        var data = MachineData.From(db, building);
+        var what = (data?.Resource ?? 0, data?.Function ?? -1, data is { Operable: true });
+        return _machines[building.StringId] = what;
     }
 
     /// <summary>

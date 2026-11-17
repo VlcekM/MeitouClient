@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ui;
 using Meitou.Game.Building;
 using Meitou.Game.Rendering.Overlays;
@@ -192,9 +193,11 @@ sealed class PointerView(PlayerInterface player)
             case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat
                 or WorldPicking.Picked.TownTurret:
                 return ("use", null);
-            // a resource rock a right click would mine (the original's `mine` pointer)
+            // a rock a right click would operate: the machine classes' `mine` for function 1 or 27, else `use`
             case WorldPicking.Picked.Rock:
-                return ("mine", null);
+                return (player.Furniture.PickRock(player.Mouse) is { Function: not (MachineData.MineFunction or MachineData.NaturalMineFunction) }
+                    ? "use"
+                    : "mine", null);
             case WorldPicking.Picked.Site when player.Build.SitePointer(player.Mouse) is { } siteMode:
                 return (siteMode, null);
             case WorldPicking.Picked.TownMachine when player.TownMachines.Pointer(player.Mouse) is { } machineMode:

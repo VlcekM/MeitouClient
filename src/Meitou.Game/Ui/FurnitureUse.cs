@@ -784,7 +784,8 @@ sealed class FurnitureUse(PlayerInterface player)
 
         foreach (var rock in rocks.Near(0, ground.X, ground.Z, RockSearch))
         {
-            if (rock.Record.Length == 0) continue;
+            // Only a rock characters can operate is picked (ResourceNode.Operable: every known rock is a mine).
+            if (rock.Record.Length == 0 || !rock.Operable) continue;
             if (rock.RayHit(ray.Origin, ray.Direction) is { } t && t < bestT) (bestT, best) = (t, rock);
         }
 

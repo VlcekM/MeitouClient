@@ -7,8 +7,8 @@ using Meitou.Data.World;
 
 /// <summary>
 /// <c>meitou-tools objects &lt;x&gt; &lt;z&gt; &lt;radius&gt;</c>: what stands near a world point under the install's or a report's load order: the towns that keep
-/// foliage away (with their <c>no-foliage range</c>), the foliage meshes the placer puts in the point's zone, the level's building list entries and
-/// the map features.
+/// foliage away (with their <c>no-foliage range</c>), the foliage meshes the placer puts in the point's zone, the mineable rocks among them, the
+/// level's building list entries and the map features.
 /// Tells a foliage rock from a level-placed one when a report shows something in the way.
 /// </summary>
 static class PlaceProbe
@@ -38,6 +38,7 @@ static class PlaceProbe
         var world = WorldLevelData.Load(install, order, includeInteriors: false);
         PrintTowns(db, world, at);
         PrintFoliage(install, db, world, at, radius);
+        PrintRocks(install, db, world, at, radius);
         PrintBuildings(db, world, at, radius);
         PrintFeatures(install, db, at, radius);
         return 0;
@@ -76,8 +77,24 @@ static class PlaceProbe
             float reach = MeshBounds(install, i.Mesh.MeshPath, bounds) is { } b ? BoxDistance(WorldBox(b, i.Transform), at) : distance;
             if (Math.Min(distance, reach) >= radius) continue;
 
+            string building = i.Mesh.BuildingType is { } type ? $" building={type.StringId}" : "";
             Console.WriteLine($"foliage {i.Mesh.StringId} '{i.Mesh.Name}' avoidTowns={i.Mesh.AvoidTowns} at {i.Position:F0} scale={i.Scale:F2} "
-                + $"distance={distance:F0} reach={reach:F0}");
+                + $"distance={distance:F0} reach={reach:F0}{building}");
+        }
+    }
+
+    /// <summary>
+    /// The mineable rocks within <paramref name="radius"/> as the game's boot gives them to the right click and the mine pointer
+    /// (<see cref="Meitou.Data.Gameplay.Construction.FoliageResourceNodes"/>): record, resource, radius and whether its mesh shape was read.
+    /// </summary>
+    static void PrintRocks(GameInstall install, GameDatabase db, WorldLevelData world, Vector2 at, float radius)
+    {
+        var assets = new AssetLocator(install);
+        using var rocks = new Meitou.Data.Gameplay.Construction.FoliageResourceNodes(new FoliageWorld(install, db, world), db, assets.Find);
+        foreach (var r in rocks.Near(0, at.X, at.Y, radius))
+        {
+            Console.WriteLine($"rock '{r.Record}' '{db.Find(r.Record)?.Name}' resource={r.Resource} at {r.Position:F0} radius={r.Radius:F0} "
+                + $"shape={r.Shape is not null} distance={Vector2.Distance(new(r.Position.X, r.Position.Z), at):F0}");
         }
     }
 

@@ -146,11 +146,12 @@ static class CharacterSurvey
 static class RecordDump
 {
     /// <summary>
-    /// Dumps the records whose name or id is one of <paramref name="name"/>'s, separated by <c>|</c>.
+    /// Dumps the records whose name or id is one of <paramref name="name"/>'s, separated by <c>|</c>, under the install's load order or the one
+    /// <paramref name="args"/> give (<see cref="ProbeLoadOrder"/>).
     /// </summary>
-    public static int Run(GameInstall install, string name)
+    public static int Run(GameInstall install, string name, string[] args)
     {
-        var db = GameDatabase.Load(LoadOrder.FromInstall(install));
+        var db = GameDatabase.Load(ProbeLoadOrder.Take(install, [.. args]));
         var names = name.Split('|');
         foreach (var r in db.Records.Values.Where(r => names.Contains(r.Name) || names.Contains(r.StringId)))
         {
