@@ -1183,8 +1183,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
 
-        // A growing crop with water is tended: the operator plays the farm's clip (engine reading of task 87's start conditions,
-        // docs/game/buildings-production.md "Farming").
+        // A growing crop the operator has just watered is tended: he plays the farm's clip until his next job check finds it no work
+        // (HasWork, docs/game/buildings-production.md "Farming").
         return HarvestStep(world, m, skill, s, dt) || Tended(m);
     }
 
