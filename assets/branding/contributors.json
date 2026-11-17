@@ -36,8 +36,8 @@
     "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
-    "commits": 16,
-    "areas": "Blood footprints, ragdolls, combat hits"
+    "commits": 17,
+    "areas": "Blood prints, Ragdolls, Crossbow bolts"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,16 +48,16 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 54,
-    "areas": "Inventory, Animals, Medical, Bandits, Dialogue"
+    "commits": 82,
+    "areas": "Mods, Launcher, Squads, Inventory, Animals"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 22,
-    "areas": "Metal, debug menu, mod settings"
+    "commits": 26,
+    "areas": "Debug menu, Metal rendering"
   },
   "mattresspad": {
     "commits": 3,
