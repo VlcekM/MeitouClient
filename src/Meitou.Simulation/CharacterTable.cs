@@ -1054,7 +1054,8 @@ public sealed class CharacterCold
 
     /// <summary>
     /// The prison sentence as the original stores it (docs/game/economy.md 11.5): the start in <see cref="World.GameHours"/> and the length in game
-    /// hours (save keys <c>sentence</c>, <c>psts</c>); served when start + length is not after now. Length 0: none (served).
+    /// hours (save keys <c>sentence</c>, <c>psts</c>); served when start + length is not after now. Start and length 0: no sentence (served); a start
+    /// with length 0: a sentence under an hour, served.
     /// </summary>
     public double SentenceStart { get; set; }
     /// <summary>
@@ -1965,7 +1966,7 @@ public sealed class CharacterTable
             hasher.Add(k.InWhat is { } w ? Rng.StableHash(w) : 0UL);
         }
 
-        if (k.SentenceLength > 0)
+        if (k.SentenceStart > 0 || k.SentenceLength > 0)
         {
             hasher.Add(k.SentenceStart);
             hasher.Add(k.SentenceLength);
