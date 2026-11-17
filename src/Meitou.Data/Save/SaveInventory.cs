@@ -273,6 +273,51 @@ public static class SaveInventory
     /// </summary>
     internal static FcsRecord ItemRecord(SaveItem item)
     {
+        var r = RecordOf(item);
+        item.WrittenAs(r);
+        return r;
+    }
+
+    /// <summary>
+    /// Whether two item lists are written as the same records (<see cref="RecordOf"/>, the contents of containers too), in the same order.
+    /// </summary>
+    public static bool SameRecords(IReadOnlyList<SaveItem> a, IReadOnlyList<SaveItem> b)
+    {
+        if (a.Count != b.Count) return false;
+
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (!SameKeys(RecordOf(a[i]), RecordOf(b[i]))) return false;
+            if (a[i].Contents is null != b[i].Contents is null) return false;
+            if (a[i].Contents is { } x && !SameRecords(x, b[i].Contents!)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether two records hold the same keys with the same values.
+    /// </summary>
+    static bool SameKeys(FcsRecord a, FcsRecord b) =>
+        Same(a.Strings, b.Strings) && Same(a.Ints, b.Ints) && Same(a.Floats, b.Floats) && Same(a.Bools, b.Bools) && Same(a.Vector3S, b.Vector3S);
+
+    /// <summary>
+    /// Whether two key maps hold the same keys with equal values, in any order.
+    /// </summary>
+    static bool Same<T>(OrderedDictionary<string, T> a, OrderedDictionary<string, T> b)
+    {
+        if (a.Count != b.Count) return false;
+
+        foreach (var (k, v) in a)
+            if (!b.TryGetValue(k, out var w) || !EqualityComparer<T>.Default.Equals(v, w)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// The INVENTORY_ITEM_STATE keys of an item (<see cref="ItemRecord"/>), not linked to it.
+    /// </summary>
+    static FcsRecord RecordOf(SaveItem item)
+    {
         var r = new FcsRecord { Type = (int)FcsRecordType.InventoryItemState, Name = "0" };
         if (item.Source is { } s)
         {
@@ -325,7 +370,6 @@ public static class SaveInventory
         if (item.ModTag.Length > 0) r.Strings[SaveItem.ModTagKey] = item.ModTag;
         else r.Strings.Remove(SaveItem.ModTagKey);
         r.Bools["in inventory"] = true;
-        item.WrittenAs(r);
         return r;
     }
 

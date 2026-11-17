@@ -498,7 +498,7 @@ public static class BuildingSave
     /// <summary>
     /// Removes the player-built buildings of the save that the world no longer has, with their state records (the building's and, listed before it,
     /// the inventory's: <b>Observed</b>, docs/formats/save.md "Zone files") and their slots, and a live site's entry in a zone other than the one it
-    /// is written in (<paramref name="live"/> maps each site to that zone, null for a level house's).
+    /// is written in (<paramref name="live"/> maps each site to that zone, null for a level house's). The inventory's items go with it.
     /// </summary>
     static void RemoveDismantled(SaveGame game, string playerFactionId, Dictionary<string, ZoneCoordinate?> live)
     {
@@ -518,6 +518,7 @@ public static class BuildingSave
                 if (!IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;
 
                 list.Instances.Remove(instance);
+                MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, []);
                 foreach (string id in instance.States)
                 {
                     if (byId.GetValueOrDefault(id) is { } owned) zone.File.Records.Remove(owned);
@@ -607,12 +608,20 @@ public static class BuildingSave
         // Outdoor height above terrain; the parent pass supplies indoor height (docs/formats/save.md).
         instance.Position = at with { Y = at.Y - walkability.TerrainHeight(at.X, at.Z) };
         instance.Rotation = site.Rotation;
-        instance.States.Clear();
+        KeepInventoryStates(file, instance);
         instance.States.Add(stateId);
 
         var hand = WriteSlot(file, zone, state, site, seed);
         WriteSiteKeys(state, site, playerFactionId, hand, town, fixtures);
     }
+
+    /// <summary>
+    /// Leaves only the INVENTORY_STATE records among an instance's states (the original lists its inventory first, under any id: <b>Observed</b>,
+    /// Beep Fan Club 1's <c>425867-zone28.29-INGAME</c> of a Shop Counter), so the machine writer finds it (<see cref="MachineSave"/>) and the
+    /// record is not left in the file unlisted.
+    /// </summary>
+    static void KeepInventoryStates(SaveFile file, FcsInstance instance) =>
+        instance.States.RemoveAll(id => !file.Records.Any(r => r.StringId == id && r.RecordType == FcsRecordType.InventoryState));
 
     /// <summary>
     /// The handle of a site's state: kept while the state has one in this zone, else the next free one of the zone's slot list. The slot is recorded

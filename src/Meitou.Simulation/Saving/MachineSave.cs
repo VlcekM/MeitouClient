@@ -71,16 +71,33 @@ public static class MachineSave
             if (state is null || instance is null) continue;
 
             WriteKeys(state, m, world.GameHours);
-            WriteInventory(file, site, instance, Items(m));
+            if (ChangedItems(m) is { } items) WriteInventory(file, site, instance, items);
         }
     }
 
     /// <summary>
-    /// Replaces the building's inventory record with its items, marked as holding the original's sections, or removes the record when it holds none.
+    /// The machine's items as saved (<see cref="Items"/>), or null when they are as its saved inventory loaded them (<see cref="Loaded"/>): that
+    /// record stays as it was, the original's own entries with it, also those the load could not place (a grid or stack a missing mod made larger).
+    /// </summary>
+    internal static List<SaveItem>? ChangedItems(Machine m)
+    {
+        var items = Items(m);
+        return m.LoadedItems is { } loaded && SaveInventory.SameRecords(loaded, items) ? null : items;
+    }
+
+    /// <summary>
+    /// Notes the machine's items once its saved inventory is read (<see cref="ChangedItems"/>).
+    /// </summary>
+    internal static void Loaded(Machine m) => m.LoadedItems = Items(m);
+
+    /// <summary>
+    /// Replaces the building's inventory record with its items, or removes the record when it holds none: the record its instance lists (the
+    /// original's own, whatever its id), else <c>&lt;id&gt;-inventory</c>, marked as holding the original's sections.
     /// </summary>
     static void WriteInventory(SaveFile file, BuildSite site, FcsInstance instance, List<SaveItem> saveItems)
     {
-        if (WriteInventory(file, site.Zone, instance, site.Id + InventorySuffix, saveItems) is { } inventory)
+        string? id = ListedInventory(file, instance) is null ? site.Id + InventorySuffix : null;
+        if (WriteInventory(file, site.Zone, instance, id, saveItems) is { } inventory && inventory.StringId == site.Id + InventorySuffix)
             inventory.Bools[OriginalSectionsKey] = true;
     }
 
@@ -304,6 +321,7 @@ public static class MachineSave
 
         bool fromZero = inventory.StringId == site.Id + InventorySuffix && !inventory.Bools.GetValueOrDefault(OriginalSectionsKey);
         PutItems(m, SaveInventory.Read(zone.File, inventory), factory, fromZero);
+        Loaded(m);
     }
 
     /// <summary>
@@ -345,11 +363,13 @@ public static class MachineSave
                 // A furnace's in1 and any other building's backpack_content are Meitou's storage grid main.
                 if (m.Data.IsFurnace || item.Section == StorageSection) item.Section = "main";
 
-                // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cell, as the
-                // original's loader does.
+                // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cells, and
+                // loses what finds no room, as the original's loader (FUN_14074c0e0, docs/game/ui-screens.md "Loading a saved inventory"). Kept
+                // overlapping, it moved and split again at every load.
                 bool fits = item.X >= 0 && item.Y >= 0 && item.X + item.Width <= grid.Width && item.Y + item.Height <= grid.Height
                     && grid.IsFree(item.Section, item.X, item.Y, item.Width, item.Height);
-                if (fits || grid.Add(item) is false && item.Quantity > 0) grid.Items.Add(item);
+                if (fits) grid.Items.Add(item);
+                else grid.Add(item);
             }
         }
     }

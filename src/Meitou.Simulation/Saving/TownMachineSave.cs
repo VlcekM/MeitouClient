@@ -82,7 +82,7 @@ public static class TownMachineSave
         MachineSave.WriteProduction(state, m, gameHours);
         if (m.Data.IsBattery) state.Floats["batterycharge"] = m.Charge;
 
-        MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, MachineSave.Items(m));
+        if (MachineSave.ChangedItems(m) is { } items) MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, items);
     }
 
     /// <summary>
@@ -147,8 +147,10 @@ public static class TownMachineSave
     static void Restore(Machine m, (SaveZone Zone, FcsInstance Instance, FcsRecord? State) placed, ItemFactory factory)
     {
         if (placed.State is { } state) MachineSave.ReadProduction(state, m);
-        if (MachineSave.ListedInventory(placed.Zone.File, placed.Instance) is { } inventory)
-            MachineSave.PutItems(m, SaveInventory.Read(placed.Zone.File, inventory), factory);
+        if (MachineSave.ListedInventory(placed.Zone.File, placed.Instance) is not { } inventory) return;
+
+        MachineSave.PutItems(m, SaveInventory.Read(placed.Zone.File, inventory), factory);
+        MachineSave.Loaded(m);
     }
 
     /// <summary>

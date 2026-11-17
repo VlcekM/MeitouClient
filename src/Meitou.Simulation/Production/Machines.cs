@@ -214,6 +214,11 @@ public sealed class Machine : IPowerDraw
     /// </summary>
     public System.Numerics.Vector3 Position { get; init; }
     /// <summary>
+    /// The items the machine held as saved once its saved inventory was read (null: none read); a save that finds them unchanged leaves that
+    /// record as it was (<c>Saving/MachineSave</c>).
+    /// </summary>
+    public IReadOnlyList<Meitou.Data.Save.SaveItem>? LoadedItems { get; set; }
+    /// <summary>
     /// The recipe inputs, by section.
     /// </summary>
     public InputSlot[] Inputs { get; init; } = [];
