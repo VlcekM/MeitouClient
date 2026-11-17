@@ -53,7 +53,7 @@ internal sealed class NavContentHash
         foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath })
             Stamp(Path.Combine(install.DataDirectory, rel));
         Stamp(TerrainMaps.BiomeMapPath(install));
-        Stamp(Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath));
+        Stamp(MapFeatureFile.PathOf(install));
 
         // The tiles the gather reads (a mod's copy where one is enabled).
         for (int x = 0; x < TerrainMaps.OverlayTiles; x++)

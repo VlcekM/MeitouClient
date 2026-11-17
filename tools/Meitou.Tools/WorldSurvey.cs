@@ -278,7 +278,7 @@ static class WorldSurvey
         var all = file.All().ToList();
         int inZone = all.Count(a => WorldLayout.ZoneOf(a.Feature.Position.X, a.Feature.Position.Z) == a.Zone);
         int yaw = all.Count(a => a.Feature.Rotation.X == 0 && a.Feature.Rotation.Z == 0);
-        Console.WriteLine($"Map features {MapFeatureFile.RelativePath}: {file.Zones.Count} zone slots, "
+        Console.WriteLine($"Map features {MapFeatureFile.PathOf(install)}: {file.Zones.Count} zone slots, "
             + $"{file.Zones.Count(z => z.Count > 0)} used, {all.Count} features");
         Console.WriteLine($"  inside their slot's zone {inZone}; pure yaw rotations (read w first) {yaw}; "
             + $"unit quaternions {all.Count(a => Math.Abs(a.Feature.Rotation.Length() - 1) < 1e-3)}");

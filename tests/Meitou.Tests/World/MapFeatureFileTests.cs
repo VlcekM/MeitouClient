@@ -15,7 +15,7 @@ public class MapFeatureFileTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
 
-        var file = MapFeatureFile.Open(install!); // throws unless the blocks tile the file exactly
+        var file = MapFeatureFile.Open(install!); // each zone's block read at its offset
         Assert.Equal(WorldLayout.ZoneCount * WorldLayout.ZoneCount, file.Zones.Count);
         var all = file.All().ToList();
         Assert.Equal(1821, all.Count);

@@ -151,30 +151,48 @@ public static class FogFeatures
     public const string RelativePath = "newland/land/fogfeatures.dat";
 
     /// <summary>
-    /// The install's file, or an empty list when it has none.
+    /// The file the game reads (an enabled mod's copy in a folder of the Landscape group, else the install's), or an empty list when there is none.
     /// </summary>
     public static IReadOnlyList<FogFeature> Load(GameInstall install)
     {
-        string path = GameFiles.Resolve(Path.Combine(install.DataDirectory, RelativePath));
+        string path = Ogre.GameResources.Resolve(install, "fogfeatures.dat", "Landscape", RelativePath);
         return File.Exists(path) ? Read(File.ReadAllBytes(path)) : [];
     }
 
     /// <summary>
-    /// Parses the file: magic <c>FF01</c> or <c>FF02</c>, an int32 count, then per volume (FF02 only) a byte-length name, a type byte, RGBA
-    /// colour floats, the density distance, and the type's own fields. Little-endian throughout. Throws on an unknown type (the game would
-    /// lose its place in the file too).
+    /// Parses the file: magic <c>FF01</c> or <c>FF02</c> (any other is version 0, read as version 1, as the game does), an int32 count, then per
+    /// volume (FF02 only) a byte-length name, a type byte, RGBA colour floats, the density distance, and the type's own fields. Little-endian
+    /// throughout. A file the game would misread (an unknown type, an early end: a broken mod's copy) keeps the volumes before the fault
+    /// (Meitou's choice).
     /// </summary>
     public static IReadOnlyList<FogFeature> Read(ReadOnlySpan<byte> data)
+    {
+        var list = new List<FogFeature>();
+        try
+        {
+            ReadVolumes(data, list);
+        }
+        catch (FormatException)
+        {
+            // The volumes read so far stay.
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Reads the header and the volumes into <paramref name="list"/> (<see cref="Read"/>); throws at an unknown type or an early end.
+    /// </summary>
+    static void ReadVolumes(ReadOnlySpan<byte> data, List<FogFeature> list)
     {
         int at = 0;
         int version = Encoding.ASCII.GetString(Take(data, ref at, 4)) switch
         {
             "FF01" => 1,
             "FF02" => 2,
-            var m => throw new FormatException($"fogfeatures: magic '{m}' is neither FF01 nor FF02"),
+            _ => 0,
         };
         int count = BitConverter.ToInt32(Take(data, ref at, 4));
-        var list = new List<FogFeature>(Math.Max(count, 0));
         for (int i = 0; i < count; i++)
         {
             string name = "";
@@ -222,7 +240,6 @@ public static class FogFeatures
                     throw new FormatException($"fogfeatures: volume {i} ('{name}') has unknown type {(byte)type}");
             }
         }
-        return list;
     }
 
     /// <summary>

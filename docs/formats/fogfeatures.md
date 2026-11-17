@@ -40,8 +40,8 @@ have special cases. Original weather particles are not automatically fogged like
 
 Meitou ray-clips and blends placed/effect volumes in matching order, with near/far depth and
 world coordinates. Fog hide distances used for culling/shadows must be conservative in all view
-directions and include colour/additive cases. Effect ground movement, exact inside-beam behaviour,
-mod registration and uncertain visibility flags remain scoped in source evidence/unknowns.
+directions and include colour/additive cases. Effect ground movement, exact inside-beam behaviour
+and uncertain visibility flags remain scoped in source evidence/unknowns.
 
 ### File layout (Verified: FUN_14010f060, and a scratch parser that consumes the install's file exactly, 2026-10-08)
 

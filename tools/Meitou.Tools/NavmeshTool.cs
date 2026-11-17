@@ -769,7 +769,8 @@ static class NavmeshTool
         var file = MapFeatureFile.Open(install);
         int index = g.Zone.Y * WorldLayout.ZoneCount + g.Zone.X;
         float cos = MathF.Cos(40 * MathF.PI / 180);
-        foreach (var f in file.Zones[index])
+        var placed = index < file.Zones.Count ? file.Zones[index] : [];   // a file with another magic or zone count has no features
+        foreach (var f in placed)
         {
             if (db.Find(f.StringId) is not { } record || record.GetPath("collision") is not { Length: > 0 } path
                     || collision.Get(path) is not { } prepared) continue;
