@@ -41,6 +41,11 @@ public sealed partial class ArrestSystem
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, gc);
                 if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HuntBounties) ? 1 : 0;
                 if (listed[role] == 0 || !FreeCageExists(world, g) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
+
+                // A downed target the guard cannot strip any further must be carried next, which a guard whose left arm cannot carry can't plan
+                // (#906, StepTargetDown).
+                bool leftToLift = table.Cold(t) is { Medical.Incapacitated: true } tc && !CanStripFurther(gc, tc);
+                if (leftToLift && !CanLift(gc)) continue;
                 Start(world, g, t, force: true, leashed: false);   // goal 204 lifts with row 68, which has no town needs
             }
         }
@@ -53,24 +58,28 @@ public sealed partial class ArrestSystem
     bool FreeCageExists(World world, int g) => GuardCage(world, g, null) is not null;
 
     /// <summary>
-    /// The target finder of goal 204 (<c>FUN_14099bfc0</c>, <b>Verified</b>): the first sensed character (the nearest in sight here) that is not
-    /// carried, of no <c>not real</c> faction, no animal and not imprisoned, and that carries a perceived bounty with the guard
-    /// (<see cref="PerceivedBounty"/>) or is regarded as an enemy by it (the squad's flag 7 mark is not modelled). -1: none.
+    /// The target finder of goal 204 (<c>FUN_14099bfc0</c>, <b>Verified</b>): the first sensed character (the nearest the guard sees here: the
+    /// witnesses' sight test, <see cref="SeesSuspect"/>; #897: a guard arrested a sneaking player through a floor)
+    /// that is not carried, of no <c>not real</c> faction, no animal, not imprisoned and no slave (the finder's mask leaves out slave state 1), and
+    /// that carries a perceived bounty with the guard (<see cref="PerceivedBounty"/>) or is regarded as an enemy by it (the squad's flag 7 mark is
+    /// not modelled). -1: none.
     /// </summary>
     int BountyTarget(World world, int g, CharacterCold gc)
     {
         var table = world.Characters;
-        var scan = new TargetScan { System = this, World = world, Self = g, Guard = gc, Best = -1, BestD2 = float.MaxValue };
+        float range = AggroSystem.RangeOf(gc, AggroSystem.OutdoorSight);
+        var scan = new TargetScan { System = this, World = world, Self = g, Guard = gc, Range = range, Best = -1, BestD2 = float.MaxValue };
         var p = table.Next[g].Position;
-        world.Grid.Query(p.X, p.Z, AggroSystem.RangeOf(gc, AggroSystem.OutdoorSight), ref scan, static (int v, ref TargetScan st) =>
+        world.Grid.Query(p.X, p.Z, range, ref scan, static (int v, ref TargetScan st) =>
         {
             var tc = st.World.Characters.Cold(v);
             if (v == st.Self || !st.World.Characters.Next[v].Alive || tc is not { Medical.Dead: false } || !tc.CarriedBy.IsNone || tc.IsImprisoned
-                || SquadRegistry.IsAnimal(tc)
+                || tc.SlaveState == 1 || SquadRegistry.IsAnimal(tc)
                 || st.System.Crimes.Factions.NotReal(tc.Faction) || st.System.Busy(st.World.Characters.IdOf(v))
                     || !st.System.WantedBy(st.Guard, tc)) return;
             float d2 = Vector3.DistanceSquared(st.World.Characters.Next[st.Self].Position, st.World.Characters.Next[v].Position);
-            if (d2 < st.BestD2 || d2 == st.BestD2 && v < st.Best) (st.Best, st.BestD2) = (v, d2);
+            if (d2 > st.BestD2 || d2 == st.BestD2 && v > st.Best) return;
+            if (st.System.SeesSuspect(st.World, st.Self, v, tc, st.Range)) (st.Best, st.BestD2) = (v, d2);
         });
         return scan.Best;
     }
@@ -96,6 +105,10 @@ public sealed partial class ArrestSystem
         /// The guard.
         /// </summary>
         public CharacterCold Guard;
+        /// <summary>
+        /// The guard's sight range.
+        /// </summary>
+        public float Range;
         /// <summary>
         /// The nearest target's slot so far, -1: none.
         /// </summary>

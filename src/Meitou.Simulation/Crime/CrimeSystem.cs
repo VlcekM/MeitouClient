@@ -744,7 +744,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// and clears the alarm when it runs out; on the way there it keeps the count at <see cref="LookAboutSeconds"/>, and every character it sees that
     /// is not down, not of its faction or an ally, and has a pending crime against its faction or an ally, its squad tags TEMP_ENEMY (all of them)
     /// and it goes for the last (<c>Character::attackTarget</c>, which only stores the target: the last in slot order is attacked, <b>Verified</b>;
-    /// the task tests no capability to fight). Engine: "sees" is the witnesses' sight test, the original's sense list (seen or heard) is not.
+    /// the task tests no capability to fight). Engine: "sees" is the witnesses' sight test (<see cref="SuspectView"/>), standing for the original's
+    /// sense list (seen or heard).
     /// </summary>
     void Investigate(World world, float seconds)
     {
@@ -779,11 +780,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 {
                     continue;
                 }
-                if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range
-                    || world.Sight.Sees(i, c, next[i].Position, next[c].Position, range) <= 0)
-                {
+                if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range || SuspectView(world, i, c, cc, range) <= 0)
                     continue;
-                }
                 world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
                 last = c;
             }
@@ -795,6 +793,20 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// How well the looker in <paramref name="looker"/> sees the suspect in <paramref name="suspect"/> as a witness does (<see cref="SightRay.Sees"/>'s
+    /// view factor: the sight test, with the ray where it applies, and for a sneaker a full spot meter); 0 when it does not. Read by the alarm's
+    /// investigators (#897: one went after a sneaking criminal through a floor) and the arrest system's bounty spotting.
+    /// </summary>
+    internal float SuspectView(World world, int looker, int suspect, CharacterCold c, float range)
+    {
+        var next = world.Characters.Next;
+        bool sneaking = (c.Orders & CharacterOrders.Sneak) != 0;
+        if (sneaking && !Spotted(world, looker, world.Characters.IdOf(suspect))) return 0;
+
+        return SightRay.Sees(world, looker, suspect, next[looker].Position, next[suspect].Position, range, sneaking ? Orders.Stealth(c) : -1);
     }
 
     /// <summary>
