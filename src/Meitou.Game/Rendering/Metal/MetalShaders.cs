@@ -423,8 +423,8 @@ public sealed class MetalShaders : IGpuShaders
         if (BiasFreeSource(fragmentGlsl) is { } biasFree)
         {
             var b = Compiler.Compile(vertexGlsl, biasFree);
-            byte[] bf = SpirvPatch.RemapBindings(b.Fragment.DefaultBlock is null ? b.FragmentSpirv : SpirvPatch.MoveDefaultBlock(b.FragmentSpirv, 1), 0,
-                0, SetStride);
+            var spirv = b.Fragment.DefaultBlock is null ? b.FragmentSpirv : SpirvPatch.MoveDefaultBlock(b.FragmentSpirv, 1);
+            byte[] bf = SpirvPatch.RemapBindings(spirv, 0, 0, SetStride);
             program.BiasFreeFragment = BiasFreeStage(bf, fragmentMsl, null, name);
         }
         _programs.Add(program);

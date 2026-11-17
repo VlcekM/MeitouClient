@@ -340,8 +340,8 @@ static class LightShaftShaders
 
     /// <summary>
     /// <see cref="Scan"/> with no sampler: the injected atlas read as an image, and the sky's ambient radiance (the scatter pass's
-    /// <c>atmoIrradiance(up) × uAtmoLight.w</c>) read from a 1 × 1 image <see cref="ScanSky"/> wrote. spirv-cross cannot put a combined image sampler
-    /// into a compute argument buffer, so this is the Metal form.
+    /// <c>atmoIrradiance(up) × uAtmoLight.w</c>) read from a 1 × 1 image <see cref="ScanSky"/> wrote. spirv-cross cannot put a combined image
+    /// sampler into a compute argument buffer, so this is the Metal form.
     /// </summary>
     public static readonly string ScanImages = ScanSource(images: true);
 

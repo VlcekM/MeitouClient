@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Sky;
@@ -518,7 +517,6 @@ sealed unsafe class LightShafts(PostProcess post)
     /// Whether the device can write the atlases as storage images (the scan kernel can run).
     /// </summary>
     public bool ScanSupported => post.SupportsStorage(InternalFormat.R32F) && post.SupportsStorage(InternalFormat.Rgba16F);
-
 
     /// <summary>
     /// Integrate and scatter in one dispatch: the light atlas and, with the air layer on, the scatter atlas, from the injected atlas.
