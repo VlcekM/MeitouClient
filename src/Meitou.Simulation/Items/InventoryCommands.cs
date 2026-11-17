@@ -1,3 +1,4 @@
+using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
@@ -73,12 +74,12 @@ public static class InventoryCommands
 
     /// <summary>
     /// Wears a bag in a free <c>backpack_attach</c> (Meitou: a picked-up bag that no grid takes, as worn gear that does not fit is;
-    /// <see cref="TryEquip"/> leaves bags to the trade): a CONTAINER the wearer may wear, while it wears none. False: nothing changed.
+    /// <see cref="TryEquip"/> leaves bags to the trade): an item of the Backpack attach slot the wearer may wear, while it wears none. False:
+    /// nothing changed.
     /// </summary>
     public static bool TryWearBag(Inventory root, ItemInstance item, CharacterCold? wearer)
     {
-        if (item.Type != FcsRecordType.Container || item.Contents is null || item.Quantity != 1 || root.Backpack is not null
-                || !WearableBy(item, wearer))
+        if (item.AttachSlot != (int)AttachSlot.Backpack || item.Quantity != 1 || root.Backpack is not null || !WearableBy(item, wearer))
             return false;
         item.Section = "backpack_attach";
         item.X = 0;
@@ -193,9 +194,8 @@ public static class InventoryCommands
     {
         if (!WearableBy(item, wearer) || w <= 0 || h <= 0) return null;
 
-        string[] sections = item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow ? ["back", "hip"]
-            : item.Type is FcsRecordType.Armour or FcsRecordType.Item && IsEquipmentSection(item.EquipmentSection)
-                    && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
+        string[] sections = item.AttachSlot == (int)AttachSlot.Weapon ? ["back", "hip"]
+            : SlotSection(item.AttachSlot) is { } worn && worn != "backpack_attach" ? [worn] : [];
         foreach (string section in sections)
         {
             if (SectionClosed(wearer, section)) continue;
@@ -326,13 +326,7 @@ public static class InventoryCommands
         if (SectionClosed(wearer, section) || section == "main" && MainClosed(wearer)) return false;
         if (IsEquipmentSection(section))
         {
-            bool allowed = section switch
-            {
-                "back" or "hip" => item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow,
-                "backpack_attach" => item.Type == FcsRecordType.Container && item.Contents is not null,
-                _ => item.Type is FcsRecordType.Armour or FcsRecordType.Item && item.EquipmentSection == section,
-            };
-            if (!allowed || item.Quantity != 1) return false;
+            if (SectionSlot(section) != item.AttachSlot || item.Quantity != 1) return false;
             if (section is not ("back" or "hip") && (x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section)))
                 return false;
         }
@@ -506,33 +500,61 @@ public static class InventoryCommands
 
     /// <summary>
     /// Whether a section takes an item, the section half of <c>FUN_14074bc30</c>: the grids (<c>main</c>, <c>backpack_content</c>) anything, but a
-    /// bag only empty into a bag; a weapon slot (<c>back</c>, <c>hip</c>) a WEAPON or CROSSBOW; <c>backpack_attach</c> a CONTAINER; a prosthetic slot
-    /// a LIMB_REPLACEMENT; a clothing slot the ARMOUR or belt ITEM of that slot. Before the slot type, a section other than the grids checks the
-    /// wearer's race (<paramref name="wearable"/> false: "Can't wear that item."; <c>RaceLimiter</c>). Null: taken; otherwise the refusal (""
-    /// silent).
+    /// bag only empty into a bag; a prosthetic slot a LIMB_REPLACEMENT; an equipment section an item whose attach slot is the section's type
+    /// (<see cref="SectionSlot"/>, <see cref="ItemInstance.AttachSlot"/>), whatever its record type (a bag's inner inventory is never looked at).
+    /// Before the slot type, a section other than the grids checks the wearer's race (<paramref name="wearable"/> false: "Can't wear that item.";
+    /// <c>RaceLimiter</c>). Null: taken; otherwise the refusal ("" silent).
     /// </summary>
-    public static string? SlotRefusal(string section, FcsRecordType type, string equipmentSection, Inventory? contents, bool wearable = true) =>
-        SlotRefusal(section, type, equipmentSection, contents?.Items.Count ?? -1, wearable);
+    public static string? SlotRefusal(string section, ItemInstance item, bool wearable = true) =>
+        SlotRefusal(section, item.Type, item.AttachSlot, item.Contents?.Items.Count ?? -1, wearable);
 
     /// <summary>
-    /// As <see cref="SlotRefusal(string, FcsRecordType, string, Inventory?, bool)"/> with the number of items in a bag (-1: the item is not a bag).
+    /// As <see cref="SlotRefusal(string, ItemInstance, bool)"/> for an item of <paramref name="type"/> and <paramref name="attachSlot"/> holding
+    /// <paramref name="bagItems"/> items (-1: the item is not a bag).
     /// </summary>
-    public static string? SlotRefusal(string section, FcsRecordType type, string equipmentSection, int bagItems, bool wearable = true)
+    public static string? SlotRefusal(string section, FcsRecordType type, int attachSlot, int bagItems, bool wearable = true)
     {
         if (section == "backpack_content")
             return bagItems > 0 ? "Container cannot be placed here unless it is empty." : null;
         if (section == "main") return null;
         if (!wearable) return "Can't wear that item.";
-        bool takes = section switch
-        {
-            "back" or "hip" => type is FcsRecordType.Weapon or FcsRecordType.Crossbow,
-            "backpack_attach" => type == FcsRecordType.Container && bagItems >= 0,
-            _ when IsLimbSection(section) => type == FcsRecordType.LimbReplacement,
-            _ when IsEquipmentSection(section) => type is FcsRecordType.Armour or FcsRecordType.Item && equipmentSection == section,
-            _ => false,
-        };
+        bool takes = IsLimbSection(section) ? type == FcsRecordType.LimbReplacement : SectionSlot(section) == attachSlot;
         return takes ? null : "Invalid container type.";
     }
+
+    /// <summary>
+    /// An equipment section's type, the attach slot its items must have (<c>CharacterHuman::setupInventorySections</c> <c>FUN_14062c4e0</c>,
+    /// <b>Verified</b> by disassembly): <c>hip</c> and <c>back</c> 0 (Weapon), <c>head</c> 3, <c>armour</c> 5, <c>legs</c> 6, <c>shirt</c> 8,
+    /// <c>boots</c> 9, <c>backpack_attach</c> 12, <c>belt</c> 14, a mod's its <see cref="ModSlot.FcsSlot"/>; null for any other section.
+    /// </summary>
+    public static int? SectionSlot(string section) => section switch
+    {
+        "back" or "hip" => (int)AttachSlot.Weapon,
+        "head" => (int)AttachSlot.Hat,
+        "armour" => (int)AttachSlot.Body,
+        "legs" => (int)AttachSlot.Legs,
+        "shirt" => (int)AttachSlot.Shirt,
+        "boots" => (int)AttachSlot.Boots,
+        "backpack_attach" => (int)AttachSlot.Backpack,
+        "belt" => (int)AttachSlot.Belt,
+        _ => ModSlots.Of(section)?.FcsSlot,
+    };
+
+    /// <summary>
+    /// The single equipment section whose type is <paramref name="slot"/> (<see cref="SectionSlot"/>); null for the Weapon slot (two sections)
+    /// and a slot no section has.
+    /// </summary>
+    static string? SlotSection(int slot) => (AttachSlot)slot switch
+    {
+        AttachSlot.Hat => "head",
+        AttachSlot.Body => "armour",
+        AttachSlot.Legs => "legs",
+        AttachSlot.Shirt => "shirt",
+        AttachSlot.Boots => "boots",
+        AttachSlot.Backpack => "backpack_attach",
+        AttachSlot.Belt => "belt",
+        _ => ModSlots.SectionOf(slot),
+    };
 
     /// <summary>
     /// A section holding one item whatever its footprint (clothing, the bag slot, the prosthetic slots); the others are grids.

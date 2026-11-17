@@ -31,6 +31,12 @@ public sealed class ItemInstance
     /// </summary>
     public string EquipmentSection { get; init; } = "";
     /// <summary>
+    /// The item's attach slot (<c>Item+0x110</c>, an <see cref="Data.Characters.AttachSlot"/> value), which an equipment section's type must equal
+    /// (<see cref="InventoryCommands.SlotRefusal(string, ItemInstance, bool)"/>): the record's <c>slot</c> (0 when it has none), a crossbow's
+    /// always 0 (Weapon). An item not made from a record has none (7).
+    /// </summary>
+    public int AttachSlot { get; init; } = (int)Data.Characters.AttachSlot.None;
+    /// <summary>
     /// ARMOUR <c>is locked</c> (the original makes it a <c>LockedArmour</c>: shackles); worn, it shows the portrait's <c>Slave</c> overlay
     /// (docs/game/ui-screens.md "Portrait cells").
     /// </summary>
@@ -296,7 +302,8 @@ public sealed class ItemInstance
     /// </summary>
     public bool Unique { get; set; }
     /// <summary>
-    /// A worn backpack's contents (null for other items).
+    /// A bag's inner inventory (null for other items). Every CONTAINER has one, as in the original, whose bag constructor always makes it
+    /// (<c>FUN_140763810</c>): <see cref="ItemFactory"/> sizes it from the record and the copies keep one.
     /// </summary>
     public Inventory? Contents { get; init; }
     /// <summary>
@@ -339,6 +346,7 @@ public sealed class ItemInstance
         Name = Name,
         Type = Type,
         EquipmentSection = EquipmentSection,
+        AttachSlot = AttachSlot,
         IsLocked = IsLocked,
         WornOnlyBy = WornOnlyBy,
         WornNeverBy = WornNeverBy,

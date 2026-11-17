@@ -287,6 +287,7 @@ public class TradeTests
         r.Ints["inventory footprint height"] = 4;
         r.Ints["storage size width"] = 6;
         r.Ints["storage size height"] = 8;
+        r.Ints["slot"] = 12;   // ATTACH_BACKPACK, as every base-game bag
     });
 
     [Theory]

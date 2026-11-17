@@ -93,7 +93,10 @@ public class AiTests(ITestOutputHelper output)
                 Relations = Data.Gameplay.FactionRelations.Build([]) });
         using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
         world.Player.Faction = 1;
-        ItemInstance Weapon(string record, FcsRecordType type) => new() { Record = record, Type = type, Section = "main", Width = 1, Height = 2 };
+        ItemInstance Weapon(string record, FcsRecordType type) => new()
+        {
+            Record = record, Type = type, AttachSlot = type == FcsRecordType.Item ? 7 : 0, Section = "main", Width = 1, Height = 2,
+        };
         CharacterCold Make(int faction, params ItemInstance[] items)
         {
             var cold = new Combat.Combatant { Name = "c" }.MakeCold();

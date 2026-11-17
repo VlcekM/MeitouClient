@@ -292,7 +292,7 @@ sealed class HeldItems(PopulationData? data)
 
     /// <summary>
     /// Places the held item (<c>FUN_140715560</c>, <b>Observed</b>): the section must take it
-    /// (<see cref="InventoryCommands.SlotRefusal(string, Data.Fcs.FcsRecordType, string, Inventory?, bool)"/>, a worn slot only what the owner's
+    /// (<see cref="InventoryCommands.SlotRefusal(string, ItemInstance, bool)"/>, a worn slot only what the owner's
     /// race may wear, a limited storage its items, a prosthetic slot a stump of its side); the cell is the drop's, moved inside the section (a
     /// footprint larger than the section is refused); two or more items under it refuse it; one locked on refuses it ("Item is locked in place.");
     /// one of the same kind takes what its stack has room for (the rest stays on the mouse; a full stack takes nothing); any other is swapped.
@@ -447,7 +447,7 @@ sealed class HeldItems(PopulationData? data)
     /// </summary>
     string? Refusal(Target target, ItemInstance item)
     {
-        string? refusal = InventoryCommands.SlotRefusal(target.Section, item.Type, item.EquipmentSection, item.Contents,
+        string? refusal = InventoryCommands.SlotRefusal(target.Section, item,
                 item.WearableBy(target.Owner?.Race?.StringId, target.Owner is { } wearer && SquadRegistry.IsAnimal(wearer)));
         if (refusal is null && InventoryCommands.SectionClosed(target.Owner, target.Section))
             refusal = "Can't wear that item.";

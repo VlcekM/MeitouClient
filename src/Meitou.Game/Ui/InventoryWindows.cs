@@ -699,7 +699,7 @@ sealed class InventoryWindows(PlayerInterface player)
         var look = window.Holder == ItemHolder.Character
             ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance
             : null;
-        bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.EquipmentSection, h.BagItems,
+        bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.AttachSlot, h.BagItems,
             h.WearableBy(look?.Race.StringId, look?.Animal is not null)) is null;
 
         if (section is "in1" or "in2" or "out")

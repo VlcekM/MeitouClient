@@ -99,7 +99,10 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     public static HeldItemView Of(HeldItem held)
             => new(held.Item.Record, held.Item.Name, held.Item.MaterialId, held.Item.Type, held.Item.EquipmentSection, held.Item.Quantity,
         held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1)
-    { WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId, Rotated = held.Item.Rotated };
+    {
+        WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId, Rotated = held.Item.Rotated,
+        AttachSlot = held.Item.AttachSlot,
+    };
 
     /// <summary>
     /// The item lies turned a quarter (<see cref="ItemInstance.Rotated"/>): <see cref="Width"/> and <see cref="Height"/> are the turned footprint's,
@@ -116,6 +119,10 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     /// The COLOR_DATA it is dyed with (<see cref="ItemInstance.ColourId"/>).
     /// </summary>
     public string Colour { get; init; } = "";
+    /// <summary>
+    /// The held item's attach slot (<see cref="ItemInstance.AttachSlot"/>): the equipment sections of that type take it.
+    /// </summary>
+    public int AttachSlot { get; init; }
     /// <summary>
     /// The held item's race limits (<see cref="ItemInstance.WornOnlyBy"/>, <see cref="ItemInstance.WornNeverBy"/>).
     /// </summary>

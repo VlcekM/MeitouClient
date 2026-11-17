@@ -11,7 +11,8 @@ namespace Meitou.Simulation.Trading;
 /// containers (the section callbacks <c>FUN_140952c70</c>, <c>FUN_140952cf0</c>, <c>FUN_140952da0</c>): units taken out leave the containers'
 /// matching items (<c>FUN_140952a70</c>), units put in go to the first container that takes them (<c>FUN_1409529e0</c>), and what none takes is
 /// destroyed (<c>FUN_140799af0</c>) while its copy stays in the grid. <b>Engine choice</b>: the write-back compares the grid with what it last
-/// mirrored (<see cref="Write"/>), and units match by stack (<see cref="Inventory.SameStack"/>) where the original matches the record alone.
+/// mirrored (<see cref="Write"/>) where the original reacts to each change; the units that left are taken from the containers' items alike to
+/// them (<see cref="Alike"/>), as the original takes them.
 /// </summary>
 sealed class ShopView
 {
@@ -160,13 +161,14 @@ sealed class ShopView
     }
 
     /// <summary>
-    /// Takes <paramref name="units"/> of <paramref name="kind"/> out of the containers, the first ones first.
+    /// Takes <paramref name="units"/> of <paramref name="kind"/> out of the containers, the first ones first, from any item alike to its sample
+    /// (<see cref="Alike"/>), as the original's removal callback does (<c>FUN_140952a70</c>).
     /// </summary>
     static void Remove(IReadOnlyList<StockBox> boxes, Kind kind, int units)
     {
         foreach (var box in boxes)
         {
-            foreach (var item in box.Grid.Items.Where(i => kind.Is(i, i.Contents is not null)).ToList())
+            foreach (var item in box.Grid.Items.Where(i => Alike(i, kind.Sample)).ToList())
             {
                 int take = Math.Min(units, item.Quantity);
 
@@ -178,6 +180,12 @@ sealed class ShopView
             }
         }
     }
+
+    /// <summary>
+    /// Whether the original's item likeness (<c>FUN_14075d510</c>, <b>Verified</b> by decompile) holds: the same record, company (<c>Item+0xc0</c>,
+    /// the save's <c>company sid</c>) and material (<c>+0xc8</c>, <c>material sid</c>); quality, condition and marks are not compared.
+    /// </summary>
+    static bool Alike(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.CompanyId == b.CompanyId && a.MaterialId == b.MaterialId;
 
     /// <summary>
     /// Puts <paramref name="units"/> of <paramref name="kind"/> (a sample of the grid's own items) into the first containers that take them, a bag

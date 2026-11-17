@@ -205,6 +205,8 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             ColourId = ItemColours.Of(Db, Db.Find(info.Id))?.StringId ?? "",
             Type = type,
             EquipmentSection = info.Type is FcsRecordType.Armour or FcsRecordType.Item && Db.Find(info.Id) is { } worn ? SectionOf(worn) : "",
+            // Item::Item (FUN_14075faf0) stores the record's slot, a missing one read as 0; the Crossbow constructor (FUN_140898c90) then sets 0.
+            AttachSlot = info.Type == FcsRecordType.Crossbow ? 0 : Db.Find(info.Id)?.GetInt("slot") ?? 0,
             WornOnlyBy = info.WornOnlyBy,
             WornNeverBy = info.WornNeverBy,
             IsLocked = info.Type == FcsRecordType.Armour && Db.Find(info.Id) is { } locked && locked.GetBool("is locked"),

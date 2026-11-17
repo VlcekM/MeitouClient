@@ -142,13 +142,7 @@ sealed class QuickMoves(PopulationData? data)
                 || unit.Contents != bag && InventoryCommands.FitsInBag(unit) && (bag?.AddTo("backpack_content", unit) ?? false);
         }
         if (InventoryCommands.TryEquip(root, unit, cold)) return true;
-        if (unit.Type == FcsRecordType.Container && unit.Contents is not null && from == "main"
-                && !root.Items.Exists(i => i.Section == "backpack_attach"))
-        {
-            (unit.Section, unit.X, unit.Y) = ("backpack_attach", 0, 0);
-            root.Items.Add(unit);
-            return true;
-        }
+        if (from == "main" && InventoryCommands.TryWearBag(root, unit, cold)) return true;
         if (unit.Type == FcsRecordType.LimbReplacement && data?.Items.Limb(unit.Record) is { LimbSlot: >= 0 and <= 3 } limb
             && cold.Medical?.LimbPart(limb.LimbSlot) is { Limb: Bodies.LimbState.Stump })
         {
