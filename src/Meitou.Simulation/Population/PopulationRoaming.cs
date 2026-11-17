@@ -198,10 +198,13 @@ public sealed partial class PopulationSystem
     /// (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest, and a code mod's spawn is always kept
     /// (<see cref="Platoon.ModSpawned"/>; engine API).
     /// </summary>
-    bool Kept(Platoon p) => !p.Dead
-        && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p) || p.ModSpawned
-            || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers))
-        || CampaignKept(p);
+    bool Kept(Platoon p) => OriginalKeeps(p) || !p.Dead && (p.ModSpawned || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers));
+
+    /// <summary>
+    /// The original's own keep test (see <see cref="Kept"/>): a platoon that is not declared dead and occupies a town or is persistent, or a
+    /// campaign's force that has not been spent.
+    /// </summary>
+    bool OriginalKeeps(Platoon p) => !p.Dead && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p)) || CampaignKept(p);
 
     /// <summary>
     /// The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a
@@ -571,6 +574,28 @@ public sealed partial class PopulationSystem
     readonly List<CharacterId> _thinStay = [], _thinGo = [];
 
     /// <summary>
+    /// Whether a platoon kept only by a Meitou rule (<see cref="KeepRoamers"/>, <see cref="KeepWild"/>, a code mod's spawn) holds its loaded state
+    /// because a member lies knocked out inside the loaded zones (engine choice, #912). The original keeps no such platoon and thins it member by
+    /// member (<see cref="ThinOutOfZone"/>), so a member it finds inside the zones stays while its leader walks off. A captive (imprisoned, or
+    /// carried away) does not hold it: the unload splits him off (<see cref="SplitCaptives(World, Platoon, Squad)"/>).
+    /// </summary>
+    bool MemberDownInZone(World world, Platoon p, Squad squad)
+    {
+        if (p.Pinned || !Kept(p) || OriginalKeeps(p)) return false;
+
+        var table = world.Characters;
+        foreach (var m in squad.Members)
+        {
+            if (!Living(world, m) || !table.TryResolveNext(m, out int slot)) continue;
+            if (table.Cold(slot) is not { Medical.Incapacitated: true } cold) continue;
+            if (cold.IsImprisoned || CarriedAway(world, cold)) continue;
+            if (!OutOfZone(table.Next[slot].Position)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// A member is carrying a character of the player's faction: the platoon holds its loaded state whatever the zone at its place
     /// (<c>FUN_1404febd0</c>, <b>Verified</b>: a carry flag and a carried hand whose owner faction is a player faction). The original tests it 0.5 s
     /// after the countdown began; here at once.
@@ -622,7 +647,7 @@ public sealed partial class PopulationSystem
         if (!p.Dead && (p.Faction < 0 || p.Faction != PlayerFactionOf(world)) && AllDead(world, squad)) DeclareDead(p);
 
         // Away from every active zone for long enough: only the stand-in goes on.
-        if (Wanted(world, p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
+        if (Wanted(world, p) || SquadCarriesPlayer(world, squad) || MemberDownInZone(world, p, squad)) p.UnloadAtTick = -1;
         // A town's own squad keeps the town's grace (it leaves with its town), a hired one the original's timer, a roaming one the roaming grace.
         else if (p.UnloadAtTick < 0)
         {

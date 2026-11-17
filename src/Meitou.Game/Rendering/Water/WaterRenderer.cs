@@ -1881,7 +1881,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     public static Source Prepare(GameInstall install, GameDatabase db, AssetLocator assets, ushort[]? coarseHeights = null)
     {
-        var s = new Source { Colour = Load(install, WorldWater.ColourMap), Flow = Load(install, WorldWater.FlowMap) };
+        var s = new Source { Colour = LoadFile(BiomeWater.ColourMapPath(install)), Flow = Load(install, WorldWater.FlowMap) };
         var normalPath = assets.Find("water.png");
         s.Normal = normalPath is not null ? TextureLoader.LoadFile(normalPath, allMips: false).Levels[0] : null;
         var rainPath = assets.Find("rain-ripples.png");
@@ -1892,7 +1892,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         // Biome water parameters blended per blend-map pixel.
         var info = BlendInfoFile.Open(install);
         var water = BiomeWater.ByIndex(db);
-        var blend = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BlendMap)));
+        var blend = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.BlendMapPath(install)));
         var fallback = BiomeWater.FromRecord(db.OfType(Data.Fcs.FcsRecordType.Biomes).First());
         Vector4 A(BiomeWater w) => new(w.Scale.X, w.Scale.Y, w.InvStrength, w.InvOpacity);
         Vector4 B(BiomeWater w) => new(w.Gloss, w.Glow, w.Distortion.X, 0);
@@ -1977,11 +1977,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// <summary>
     /// An image of the install's data directory, or null when the file is missing.
     /// </summary>
-    static RgbaImage? Load(GameInstall install, string relative)
-    {
-        var path = GameFiles.Resolve(Path.Combine(install.DataDirectory, relative));
-        return File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
-    }
+    static RgbaImage? Load(GameInstall install, string relative) => LoadFile(GameFiles.Resolve(Path.Combine(install.DataDirectory, relative)));
+
+    /// <summary>
+    /// The image at <paramref name="path"/>; null when there is none.
+    /// </summary>
+    static RgbaImage? LoadFile(string path) => File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
 
     #endregion
 

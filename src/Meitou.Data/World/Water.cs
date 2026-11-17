@@ -148,7 +148,7 @@ public sealed record BiomeWater
     }
 
     /// <summary>
-    /// The install's <see cref="WorldWater.ColourMap"/>.
+    /// The install's <see cref="WorldWater.ColourMap"/>, or an enabled mod's copy (<see cref="TerrainMaps.Overlaymap"/>).
     /// </summary>
-    public static string ColourMapPath(GameInstall install) => Path.Combine(install.DataDirectory, WorldWater.ColourMap);
+    public static string ColourMapPath(GameInstall install) => TerrainMaps.Overlaymap(install, "watercolourmap.png", WorldWater.ColourMap);
 }

@@ -380,7 +380,8 @@ holds refuses the second mod.
 - **World hooks** (engine API, not in the original; serial phases): `PopulationSystem.RequestCampaign` queues a
   FACTION_CAMPAIGN against a town as a dialogue trigger does (the request pass then applies the game's gates); `PopulationSystem.SpawnPlatoon`
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
-  kept off screen whatever the keep switches say, is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
+  kept off screen whatever the keep switches say (and stays loaded while a member lies knocked out in the loaded zones,
+  [roaming](simulation.md#off-screen-tier)), is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
   added when no walkable point is found); `Platoon.ModTag` is a free string, saved when set, that finds a mod's platoon again after a load,
   when platoon ids are given anew; for the player's own squads and outposts, whose ids and town numbers are also given anew at every load,
   `Squad.ModTags[context.Id]` and `PlayerTown.ModTags[context.Id]` hold one tag per mod (keyed by the mod's id, so several mods tag the same

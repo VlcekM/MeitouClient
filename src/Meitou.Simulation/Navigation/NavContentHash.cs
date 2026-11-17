@@ -50,15 +50,15 @@ internal sealed class NavContentHash
     /// </summary>
     void AddMapFiles(GameInstall install)
     {
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap,
-            MapFeatureFile.RelativePath })
+        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath })
             Stamp(Path.Combine(install.DataDirectory, rel));
+        Stamp(TerrainMaps.BiomeMapPath(install));
+        Stamp(MapFeatureFile.PathOf(install));
 
-        if (Path.GetDirectoryName(TerrainMaps.OverlayTile(install, "new_overlay", 0, 0)) is not { } overlays || !Directory.Exists(overlays))
-            return;
-
-        foreach (var tile in Directory.GetFiles(overlays, "new_overlay.*").Order(StringComparer.OrdinalIgnoreCase))
-            Stamp(tile);
+        // The tiles the gather reads (a mod's copy where one is enabled).
+        for (int x = 0; x < TerrainMaps.OverlayTiles; x++)
+            for (int z = 0; z < TerrainMaps.OverlayTiles; z++)
+                Stamp(TerrainMaps.OverlayTile(install, TerrainMaps.OverlayKind, x, z));
     }
 
     /// <summary>

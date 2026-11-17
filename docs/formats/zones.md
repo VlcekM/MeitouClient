@@ -234,6 +234,10 @@ block:  int32 count, count ×
           float32 qw, qx, qy, qz                 rotation, w first
 ```
 
+**Verified** (decompiled, `FUN_14039a4d0` and `FUN_14039a820`): the game reads the magic, the count and the table once (another magic or a count
+other than 4096: no map features at all), then each zone's block when the zone loads, by seeking to its offset (0: none). The size is never
+read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored.
+
 ## Town membership
 
 **Observed** (building import `FUN_14057cc70`, position lookup `FUN_140928890`, `Town::vfunc_78` / `vfunc_84`; Meitou `TownBuildings.MemberOf`):

@@ -561,8 +561,8 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A machine an operator can work (the original's start conditions of task 87: output not full, inputs not empty, power; docs/game/ai-tasks.md):
-    /// it has power, and a bench a queued research or craft; a farm a dead crop to clear, a ripe one to harvest or a growing one with water (tended);
-    /// inputs that hold something or that the operator can fill (it carries the item or, with <see cref="ProductionSettings.AutoHaul"/>,
+    /// it has power, and a bench a queued research or craft; a farm a dead crop to clear, a ripe one to harvest or a growing one with an empty input
+    /// to fill; inputs that hold something or that the operator can fill (it carries the item or, with <see cref="ProductionSettings.AutoHaul"/>,
     /// <see cref="NearestSource"/> finds it); and room in the output or, with AutoHaul, a storage that takes it.
     /// </summary>
     bool HasWork(World world, BuildSite site, Machine m, CharacterCold cold)
@@ -575,7 +575,11 @@ public sealed partial class ProductionSystem
         {
             if (f.Death >= m.Data.Farm!.DeathThreshold) return true;
             if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m);
-            return Supplied(world, site, m, cold);
+
+            // A growing crop is no work while it holds water: the original's operate row needs a free operator place, false while the farm's
+            // status is 3 (growing), so a farmer goes on to his next job (#913). Its status is 0 once an input runs empty (state 62), and he
+            // fills it.
+            return m.HasEmptyInputs && Supplied(world, site, m, cold);
         }
 
         if (m.Craft is not { } craft) return Supplied(world, site, m, cold) && Room(world, site, m);

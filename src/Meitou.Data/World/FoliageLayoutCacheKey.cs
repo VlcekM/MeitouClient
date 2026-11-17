@@ -90,11 +90,15 @@ public static class FoliageLayoutCacheKey
     {
         AppendFile(text, Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath), "heightmap");
         AppendFile(text, Path.Combine(install.DataDirectory, BlendInfoFile.RelativePath), "blend");
-        AppendFile(text, Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap), "biomemap");
-        var overlays = Path.Combine(install.DataDirectory, TerrainMaps.LandDirectory, "overlaymaps");
-        if (!Directory.Exists(overlays)) return;
-        foreach (var f in Directory.EnumerateFiles(overlays, "new_overlay.*.png").OrderBy(f => f, StringComparer.Ordinal))
-            AppendFile(text, f, Path.GetFileName(f));
+        AppendFile(text, TerrainMaps.BiomeMapPath(install), "biomemap");
+
+        // The tiles the placer reads (a mod's copy where one is enabled), so a mod's map does not reuse a plain map's layout.
+        for (int x = 0; x < TerrainMaps.OverlayTiles; x++)
+            for (int z = 0; z < TerrainMaps.OverlayTiles; z++)
+            {
+                var tile = TerrainMaps.OverlayTile(install, TerrainMaps.OverlayKind, x, z);
+                AppendFile(text, tile, Path.GetFileName(tile));
+            }
     }
 
     /// <summary>

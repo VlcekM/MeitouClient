@@ -598,7 +598,7 @@ sound on that clip ([audio](../audio.md#characters-footsteps-combat-voices) "Mac
 farming clip exists: cactus, cotton, potato, rice and veg farms use `stonemine` (the mining swing, with the Hoe); `farming
 wheat` and `farming hemp` have none (Meitou falls back to `stonemine`). Whether
 the original plays it while the crop grows is moot (**Observed**): row 87 needs state 73 `machineHasFreeOperatorSlot`, whose evaluator `FUN_140598de0` is **Verified** false while the machine's
-status `+0x468` is 3 (a growing farm; a bench with an empty queue too), so the planner finds no way to operate a growing farm. Meitou lets an operator tend it with water and plays the clip (engine choice).
+status `+0x468` is 3 (a growing farm; a bench with an empty queue too), so the planner finds no way to operate a growing farm. **Observed** (plain game, a long save's base with a growing Cotton Farm XL): a character whose jobs list that farm ahead of a mine sits around for two minutes and never works the farm. Meitou: a growing farm is work only while an input is empty (status 0, state 62), so a farmer fills it and goes on to his next job (#913).
 
 | function | examples (production mult) |
 |---|---|

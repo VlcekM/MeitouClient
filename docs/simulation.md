@@ -423,6 +423,10 @@ Six Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns b
   `persistent` false). Faithful (the original): a platoon that is not a town's own is despawned as it leaves, and a stand-in out of range for
   60 s is despawned (the orphan timer); a save's despawned platoon leaves the save; loaded towns refill their pools. **Observed** (headless):
   Meitou brings back the same characters; Faithful replaces them from the pool, and save 2 loses 15 of its 15 travelling platoons in six minutes.
+  A platoon kept only by this switch, the wild one or a code mod's spawn stays loaded while a member lies knocked out inside the loaded zones
+  (not one the unload splits off as a captive), where the original's member-by-member thinning keeps such a member unless he lies out of view
+  within 600 of the departed leader ([off-screen world](game/factions-squads-towns.md#off-screen-world)). **Observed** (headless, a reporter's
+  save): with the leader sent 20000 away, his two knocked-out squad mates beside the player stay; before, both vanished.
 - **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's) met
   by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order; strength per member able to fight is 10 + the
   mean of melee attack, melee defence and toughness (25 for a squad never made); A wins with S_A² / (S_A² + S_B²); the loser is despawned and the
@@ -1678,8 +1682,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - 234 Turret guard (Shift + quick right click on a turret: 146 becomes 234): mans the turret as an operator; blocked while someone else mans it, and while a melee attacker is within
     40 (146's `!158`). Urgent (step 3, before Self preservation) while the character senses an enemy.
   - 87 Operating machine: blocked while others hold every operator place or the machine has no work (no power; no queued research or craft; a
-    farm growing with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
-    a full output (a bench's first craft at its store) no storage takes). A farmer at a growing farm with water tends it: it plays the farm's clip (engine reading of task 87, [farming](game/buildings-production.md#farming)).
+    farm growing with water, or with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
+    a full output (a bench's first craft at its store) no storage takes). A farmer goes to a growing farm only to fill an empty input; he plays the farm's clip after the fill until his next job check, then goes on to his next job ([farming](game/buildings-production.md#farming)).
   - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within `HaulRange` of the storage whose output (a bench's: its finished items) the storage takes is
     emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes or crafts go first. Blocked with neither.
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).

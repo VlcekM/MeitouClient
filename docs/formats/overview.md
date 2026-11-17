@@ -93,7 +93,8 @@ How the game opens its other files decides whether a mod can replace them (**Ver
 | `.material`, `.program`, `*.pu` scripts | Ogre script parse of every location, mods' too | material: first definition wins (mods cannot redefine); PU system: last wins (`createParticleSystemTemplate` deletes the old template) |
 | `names*.txt`, `tips.txt` | `resourceExists`/`openResource`, group General (`FUN_140641d80`, `FUN_14091a280`) | yes |
 | `areasmap.tga` | `Image::load`, group Overlaymaps (`FUN_140408fa0`, `FUN_140408970`) | yes; mods may ship it RLE-compressed (TGA type 10) |
-| `fogfeatures.dat` | `openResource`, group Landscape (`FUN_14010f060`) | only from a folder mapped to Landscape |
+| `biomemap.png`, `blendMap.png`, `new_overlay.X.Y.png`, `watercolourmap.png` | the same image loader, group Overlaymaps (biome and blend maps `FUN_140408fa0`; overlay tiles `FUN_140a145b0`; water colour map `FUN_1409d70f0`) | yes (**Observed**: a mod's `newland/land/overlaymaps/watercolourmap.png` recolours the water); Meitou reads all four through the same lookup (`TerrainMaps.Overlaymap`), the install's files when no mod ships one |
+| `fogfeatures.dat`, `features.dat` | `openResource`, group Landscape only (fog volumes `FUN_14010f060`; map features `FUN_14039a4d0`, after `resourceExists`) | only from a folder mapped to Landscape (**Observed**: a mod's `newland/land/textures` copies add their fog sphere and map features; copies in `newland/land`, a folder of Overlaymaps, change nothing); Meitou reads both through the same lookup (`GameResources.Resolve`), the install's files when no mod ships one |
 | `newland/land/fullmap.tif` | terrain plugin `fopen` of a fixed path (`FUN_140874930`) | no |
 | `*.bnk` | Wwise low-level IO, base path `data/audio/` (`FUN_140259620`) | no |
 

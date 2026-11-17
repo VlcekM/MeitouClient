@@ -67,10 +67,10 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// The map feature file of the install, opened once; an empty file when the install has none.
+    /// The map feature file the game reads (<see cref="MapFeatureFile.PathOf"/>), opened once; an empty file when there is none.
     /// </summary>
     MapFeatureFile Features() =>
-        _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath))
+        _features ??= File.Exists(MapFeatureFile.PathOf(_install))
             ? MapFeatureFile.Open(_install) : new MapFeatureFile();
 
     /// <summary>

@@ -176,7 +176,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         try
         {
-            s.Blend = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BlendMap)));
+            s.Blend = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.BlendMapPath(install)));
         }
         catch (Exception e) when (e is IOException or InvalidDataException)
         {
