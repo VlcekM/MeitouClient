@@ -196,6 +196,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             && world.Fixtures.Find(id) is { } cage && cage.Lock is not { EffectivelyLocked: true } ? cage : null;
 
     /// <summary>
+    /// Whether the character sits in a cage whose lock holds (<see cref="Locks.LockState.EffectivelyLocked"/>): it cannot be lifted out.
+    /// </summary>
+    static bool InLockedCage(World world, CharacterCold cold) =>
+        cold is { IsImprisoned: true, InWhat: { } id } && world.Fixtures.Find(id)?.Lock is { EffectivelyLocked: true };
+
+    /// <summary>
     /// How near a carrier must come to lift a body: <see cref="CarrySettings.Reach"/>, or for a caged one the cage's <c>use range</c> +
     /// <see cref="Locks.LockSystem.Reach"/> (the cage is in the way).
     /// </summary>
@@ -286,22 +292,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     static float FloorUnder(World world, Vector3 body) => world.Walkability.GroundHeight(body.X, body.Z, body.Y);
 
     /// <summary>
-    /// Where a carrier walks to reach a body at <paramref name="body"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within
-    /// <see cref="MovementSystem.FloorSlack"/> of the body's height, asked at the body's height and then lower. A body lying on furniture (a counter,
-    /// a table) is over the hole the furniture cuts in the floor, where a walker's height snaps to the storey above (<b>Observed</b>: a body 16 over
-    /// the Hub bar's floor, under its upper floor 38 over it, was walked to upstairs and never reached). The body's own point when no floor is found.
-    /// </summary>
-    static Vector3 Approach(World world, Vector3 body)
-    {
-        const float slack = MovementSystem.FloorSlack;
-        for (float drop = 0; drop <= slack; drop += slack / 2)
-        {
-            if (world.Walkability.FloorNear(body.X, body.Z, body.Y - drop, slack) is { } floor && MathF.Abs(floor.Y - body.Y) <= slack) return floor;
-        }
-        return body;
-    }
-
-    /// <summary>
     /// The characters an order names, or the player's selection when it names none.
     /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
@@ -358,7 +348,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// <see cref="PickUpOrder"/>: the order's lift (225 Lifting/Snatching Order) may take a body another carries; a kidnap (246) may not. The
-    /// nearest of the characters that can lift it gets it.
+    /// nearest of the characters that can lift it gets it. A prisoner in a locked cage is not lifted, and the message says why (engine choice: the
+    /// original's menu offers no pick-up then, docs/game/ui-input.md "Context menu verbs", but Meitou's Ctrl + right click does).
     /// </summary>
     void GivePickUp(World world, PickUpOrder order)
     {
@@ -367,7 +358,15 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             Target = order.Target
         };
-        if (table.TryResolveNext(order.Target, out int body) && LiftOf(world, lift, body)
+        if (!table.TryResolveNext(order.Target, out int body)) return;
+
+        if (InLockedCage(world, table.Cold(body)!))
+        {
+            world.Post(Loc.Tr("The cage is locked."));
+            return;
+        }
+
+        if (LiftOf(world, lift, body)
             && Nearest(table, Who(world, order.Carriers), body, s => PlayerOrders.CanRun(world, s, lift).CanRun) is int carrier)
         {
             PlayerOrders.Give(world, carrier, lift, order.Queued);
@@ -776,7 +775,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (asking || n.TaskTime > 0) continue;
 
             // The body's floor: one downstairs is walked to down the stairs, not to the floor above it; one on furniture from the floor beside it.
-            var spot = Approach(world, next[t].Position);
+            var spot = MovementSystem.FloorApproach(world, next[t].Position);
             var goal = new Vector2(spot.X, spot.Z);
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0
                 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;

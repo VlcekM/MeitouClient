@@ -48,7 +48,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             walker.Shackles = null;
             (walker.PickingUpItem, walker.FetchingFood) = (item, false);
             if (request.Task == CharacterTask.GoTo)
-                MovementSystem.GoToFloor(world, slot, request.Point, walker.RunSpeed);
+                MovementSystem.GoToFloor(world, slot, MovementSystem.FloorApproach(world, request.Point), walker.RunSpeed);
             return;
         }
         var player = world.Player;
@@ -86,9 +86,21 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     }
 
     /// <summary>
-    /// A walker takes the item within this distance of it (an engine choice).
+    /// A walker takes the item within this distance of it on the ground plane (an engine choice).
     /// </summary>
     public const float PickUpReach = 15;
+
+    /// <summary>
+    /// And within this height of it: the original's <c>isAtLocation</c> height (<c>DAT_141683188</c> 20, docs/game/ai-tasks.md "isAtLocation for a
+    /// point target"), so an item on the storey above or below is not taken through the floor.
+    /// </summary>
+    public const float PickUpHeight = 20;
+
+    /// <summary>
+    /// Whether a walker at <paramref name="walker"/> can reach an item at <paramref name="item"/> (<see cref="PickUpReach"/>, <see cref="PickUpHeight"/>).
+    /// </summary>
+    public static bool InReach(Vector3 walker, Vector3 item) =>
+        Vector2.Distance(Flat(walker), Flat(item)) <= PickUpReach && MathF.Abs(walker.Y - item.Y) < PickUpHeight;
 
     /// <summary>
     /// The player's animals take a pick-up order on a loose item into their bags (the Advanced setting "Animals pick up items", off by default).
@@ -163,7 +175,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             ContainerAccess.StartContainer(world, slot, order);
             return;
         }
-        bool far = Vector2.Distance(Flat(world.Characters.Next[slot].Position), Flat(order.Point)) > PickUpReach;
+        bool far = !InReach(world.Characters.Next[slot].Position, order.Point);
         TaskStart.Start(world, slot,
                 new TaskRequest(far ? CharacterTask.GoTo : CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Pickup,
                         TaskSource.Order) { Point = order.Point, Detail = pick.Id });
@@ -193,10 +205,9 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                 c.PickingUpItem = null;
                 continue;
             }
-            var at = Flat(item.Position);
-            if (Vector2.Distance(Flat(next[s].Position), at) > PickUpReach)
+            if (!InReach(next[s].Position, item.Position))
             {
-                if (next[s].Task != (byte)CharacterTask.GoTo || Vector2.Distance(next[s].Goal, at) > PickUpReach)
+                if (next[s].Task != (byte)CharacterTask.GoTo || Vector2.Distance(next[s].Goal, Flat(item.Position)) > PickUpReach)
                     c.PickingUpItem = null;
                 continue;
             }

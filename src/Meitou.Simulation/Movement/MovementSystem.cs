@@ -200,6 +200,24 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
+    /// Where a walker goes to reach a body or an item at <paramref name="at"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within
+    /// <see cref="FloorSlack"/> of its height, asked at its height and then lower. One lying on furniture (a counter, a table, a shelf) is over the
+    /// hole the furniture cuts in the floor, where a walker's height snaps to the storey above or below (<b>Observed</b>: a body 16 over the Hub
+    /// bar's floor, under its upper floor 38 over it, was walked to upstairs and never reached; an item on a Vault shelf 11 over its floor was
+    /// walked to on the storey below, #901). Its own point when no floor is found.
+    /// </summary>
+    public static Vector3 FloorApproach(World world, Vector3 at)
+    {
+        const float slack = FloorSlack;
+        for (float drop = 0; drop <= slack; drop += slack / 2)
+        {
+            if (world.Walkability.FloorNear(at.X, at.Z, at.Y - drop, slack) is { } floor && MathF.Abs(floor.Y - at.Y) <= slack) return floor;
+        }
+
+        return at;
+    }
+
+    /// <summary>
     /// Sends a character to a point at a speed mode (serial phases only). A path it is following is kept until the new one
     /// arrives, so a new order given on the move (holding the right button) does not stop it for the ticks the path takes.
     /// </summary>
