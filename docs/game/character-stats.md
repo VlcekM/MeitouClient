@@ -148,6 +148,9 @@ rate mult` x its rate comes off w (down to 0) and goes into b, held to at most M
 treats untreated damage too (**Observed**: a skeleton's limbs with wear only, damage only and both each gained HP at the same rate in a
 Skeleton Repair Bed, the last keeping its untreated gap until its wear was gone).
 Rig is held under 50 - (h - s); s falls 0.05 dt `stun recovery rate` `heal rate mult` R.
+In practice (**Observed**, original 1.0.65 via the harness, #904: a Re_Dev `vagrant bandits` squad beaten down by a `Slaver caravan`, untreated,
+camera on the caravan): the worst part's stun fell about 1.5 a game hour (90 to 77 in 8.6 h), so captives woke one by one over hours; Meitou's
+probe of the same fight gives 1.4 a game hour.
 
 ### Beds (`FUN_140652000`, **Verified** decompile)
 
