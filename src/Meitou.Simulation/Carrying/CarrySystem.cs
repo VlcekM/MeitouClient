@@ -169,13 +169,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Whether the lift of the carrier in <paramref name="carrier"/> may still take the body in <paramref name="body"/>:
-    /// <see cref="CanBeLifted(World, CharacterCold)"/>, or a snatch from another carrier.
+    /// <see cref="CanBeLifted(World, CharacterCold)"/> (a standing squad mate only for one of the player's own carriers, carry-loot.md), or a snatch
+    /// from another carrier.
     /// </summary>
     static bool Liftable(World world, int carrier, int body)
     {
         var table = world.Characters;
         var b = table.Cold(body)!;
-        return CanBeLifted(world, b) || table.Cold(carrier)!.Snatching && Snatchable(b) && b.CarriedBy != table.IdOf(carrier);
+        var c = table.Cold(carrier)!;
+        bool liftable = c.IsPlayer ? CanBeLifted(world, b) : CanBeLifted(b) || InOpenCage(world, b) is not null;
+        return liftable || c.Snatching && Snatchable(b) && b.CarriedBy != table.IdOf(carrier);
     }
 
     /// <summary>
