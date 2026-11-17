@@ -29,7 +29,9 @@ sealed class TalkFollowers(DialogueSystem system)
     }
 
     /// <summary>
-    /// The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following and stands.
+    /// The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following, and stands if it
+    /// still is. The follow target goes whatever the speaker is doing then (#883: one whose task had changed kept it, and its next follow of its
+    /// leader followed the talk's target instead).
     /// </summary>
     public void StepFollowers(World world)
     {
@@ -40,12 +42,18 @@ sealed class TalkFollowers(DialogueSystem system)
             bool talking = system.LeadsTalk(who);
             if (talking && table.TryResolveNext(who, out _) && DialogueSystem.Position(world, whom) is not null) continue;
             _followers.Remove(who);
-            if (table.TryResolveNext(who, out int s) && table.Cold(s) is { } cold && cold.FollowOrder == whom
-                && table.Next[s].Task == (byte)CharacterTask.Follow)
+            if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { } cold || cold.FollowOrder != whom)
+                continue;
+
+            // a follow of the same character an order or a job gave since is not the talk's
+            if (cold.Running is { Source: TaskSource.Order or TaskSource.Job } run && run.Target == whom
+                && (Production.PermaJobs.Follows(run.Row) || run.Row == TaskType.FollowSlavemaster))
             {
-                cold.FollowOrder = CharacterId.None;
-                TaskStart.Stand(table, s);
+                continue;
             }
+
+            cold.FollowOrder = CharacterId.None;
+            if (table.Next[s].Task == (byte)CharacterTask.Follow) TaskStart.Stand(table, s);
         }
     }
 
