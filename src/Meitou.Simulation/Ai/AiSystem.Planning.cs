@@ -599,10 +599,10 @@ public sealed partial class AiSystem
                 case TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
                     if (_world.Characters.Cold(_slot) is { InSomething: Locks.HeldState.Bed })
-                        return Spot(Targets.Bed, (Flat(Me.Position), true, Me.Position.Y, null));
+                        return Spot(Targets.Bed, (Flat(Me.Position), true, Me.Position.Y, null, false));
 
                     if (_system.SpareBed(_world, _board, _mind, _slot) is { } spare)
-                        return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null));
+                        return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null, false));
 
                     if (!_system.HasBed(_world, _board, _mind, _slot)) return default;
                     return Spot(Targets.Bed, _system.SpotFor(_world, _mind, _board, AiBehaviour.Sleep, type));
@@ -658,7 +658,7 @@ public sealed partial class AiSystem
         /// <summary>
         /// A spot as the act-out walks to it: one on a floor over a hole furniture cuts is at the nearest floor point (<see cref="GoToSpot"/>).
         /// </summary>
-        PlanTarget Spot(byte kind, (Vector2 Target, bool Home, float? Floor, float? Yaw) s)
+        PlanTarget Spot(byte kind, (Vector2 Target, bool Home, float? Floor, float? Yaw, bool Watch) s)
         {
             if (s.Floor is { } y && _world.Walkability.FloorNear(s.Target.X, s.Target.Y, y, FloorSlack) is { } floor) return new(kind, floor);
             return new(kind, new Vector3(s.Target.X, s.Floor ?? float.NaN, s.Target.Y));

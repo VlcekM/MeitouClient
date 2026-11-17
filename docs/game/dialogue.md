@@ -378,7 +378,10 @@ arrest and crime systems keep engine fallbacks: the escapee's arrest, slave catc
 event is refused while its 1.0 cooldown runs ([firing an event](#firing-an-event)). No start-of-game delay was found. **Observed** (user, vanilla): a new
 game in the Hub, the barman greets the player character only after it walks into the bar. Meitou (`SightSystem` quiet pairs): the pairs an NPC senses
 at the world's first look (one aggro look round after a new game or a load) get no sight line until the NPC no longer senses that player
-character.
+character. **Observed** (Kenshi harness on #930's save, the Hub bar): the barman's `shop welcome customer` (event 3, repetition limit 1) greets
+NPC customers in the bar as well as the player's characters, at most once per 2 game hours across all targets: Yosuke greeted on walking in at
+10:05, the next line at 12:06, then two more after Yosuke's conversation with him had made him "met" (16:10, 18:06, as patrons walked in).
+Whom he can see depends on where he faces ([watching from a node](ai-tasks.md#town-goals)).
 
 **Camera range** (`FUN_140684990` routes event 1 to `FUN_140684320`, **Verified**): a player conversation starts only when the talking player character is within 9216 of the camera object's scene node (constant at 0x141700514); other events take the bubble path with no such test. Meitou: `DialogueSystem.TooFarFromCamera`, distance to the camera focus (`FocusCommand`), no test without one.
 **Censorship** (settings.cfg `censorship`, bool, default off: `DAT_142133575`, written `FUN_1403eca90`; **Verified**, decompile and the exe's data): `FUN_14067e8b0` (run after `FUN_14067e660`, called from the line builders `FUN_14062b210`, `FUN_14067fd80`, `FUN_140680130`, `FUN_1406839a0`) replaces every occurrence, case-sensitively and in this order: shitting to crapping, Shitting to Crapping, shitty to crappy, Shitty to Crappy, shit/Shit/SHIT to crap/Crap/CRAP, fuck/FUCK/Fuck to bugger/BUGGER/Bugger, Bollocks/bollocks/BOLLOCKS to Damn/damn/DAMN, asshole/Asshole/ASSHOLE to idiot/Idiot/IDIOT, asswipe to idiot (no UPPER entries for shitting, shitty, asswipe). Meitou: `Censorship.Apply` on every dialogue line, choice and bubble text built by `DialogueSystem` (Interface setting; other text paths, journal and log lines, are not routed through it).

@@ -7,6 +7,7 @@ using Meitou.Data.World;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 
@@ -1916,8 +1917,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // Going to bed without a bed spot at home: an occupier's bed of the town it holds, else the NPC bed search.
         var spare = behaviour == AiBehaviour.Sleep && type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure
             ? SpareBed(world, board, mind, slot) : null;
-        var (target, home, floor, facing) = spare is not null
-            ? (Flat(spare.Position), true, spare.Position.Y, (float?)null)
+        var (target, home, floor, facing, watch) = spare is not null
+            ? (Flat(spare.Position), true, spare.Position.Y, (float?)null, false)
             : SpotFor(world, mind, board, behaviour, type);
         var speed = type is TaskType.RunAwayHometown or TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
         if (!GoToSpot(world, slot, mind, target, home ? GiveUp.Home : GiveUp.Post, speed, height: floor)) return;
@@ -1935,7 +1936,64 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // looking out
         if (home && board.Gate is { } gate && GateSpot(board, mind, type) is not null)
             table.Next[slot].Yaw = MathF.Atan2(gate.Out.X, gate.Out.Y);
-        else if (facing is { } yaw) table.Next[slot].Yaw = yaw;   // at a node, facing its way (the barman over his counter)
+        else if (watch && mind.Step == TaskType.StandAtNode) Watch(world, slot, facing);
+        else if (facing is { } yaw) table.Next[slot].Yaw = yaw;   // at a node, facing its way
+    }
+
+    /// <summary>
+    /// Whether a character standing at the spot watches who it senses: a shopkeeper node or a guard post (node types 0 and 2, <c>FUN_14034d7c0</c>).
+    /// </summary>
+    static bool Watches(HomeSpot spot) => spot.Kind is HomeSpotKind.Shopkeeper or HomeSpotKind.Guard;
+
+    /// <summary>
+    /// <c>Task_StandAtNode</c>'s update at a shopkeeper node or a guard post (<c>FUN_140354b90</c> -> <c>FUN_14034d7c0</c>, <b>Verified</b>): it looks
+    /// at the first sensed character it watches (<see cref="Watched"/>), else faces the node's way (the barman over his counter). The look
+    /// (Character vfunc <c>0x3b0</c>, <c>FUN_1405c9e70</c>) turns a human's head while the place is within 90 degrees of its heading
+    /// (<c>AnimationClassHuman</c> vfunc <c>0xb8</c>, <c>FUN_1405b8430</c>, the <c>head turning</c> clip), else its body (<c>CharMovement</c> vfunc
+    /// <c>0x38</c>), and an animal's not at all (the base <c>AnimationClass</c> slot returns 1). The head turn is not simulated: the body keeps its
+    /// heading.
+    /// </summary>
+    static void Watch(World world, int slot, float? nodeYaw)
+    {
+        var table = world.Characters;
+        ref var self = ref table.Next[slot];
+
+        if (Watched(world, slot) is not { } at)
+        {
+            if (nodeYaw is { } yaw) self.Yaw = yaw;
+            return;
+        }
+        if (SquadRegistry.IsAnimal(table.Cold(slot)!)) return;
+
+        var gap = at - self.Position;
+        if (gap.X * gap.X + gap.Z * gap.Z < 1e-4f) return;
+
+        float toward = MathF.Atan2(gap.X, gap.Z);
+        if (MathF.Abs(Session.Interp.WrapAngle(toward - self.Yaw)) > MathF.PI / 2) self.Yaw = toward;
+    }
+
+    /// <summary>
+    /// Where the first sensed character a node watcher looks at stands (<c>FUN_140853960</c> with masks 6 and 0x688, <b>Verified</b>): tagged neutral
+    /// or enemy, not down (bit 3), not of NPC class law enforcement or military (bit 7), not imprisoned (bit 9) and not of the watcher's faction
+    /// (bit 10); its place now when heard at the last look (entry <c>+0x39</c>), else where it was last sensed. The entries are taken in slot order
+    /// (the original's list is a hash container's); null for none.
+    /// </summary>
+    static Vector3? Watched(World world, int slot)
+    {
+        if (world.SystemOf<AggroSystem>()?.SensesOf(slot) is not { } senses) return null;
+
+        var table = world.Characters;
+        int faction = table.Cold(slot)!.Faction;
+        foreach (var e in senses.Entries)
+        {
+            if ((e.Tags & (SenseTag.Neutral | SenseTag.Enemy)) == 0 || (e.Tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0) continue;
+            if (!table.TryResolveNext(new CharacterId(e.Target, e.Generation), out int t) || table.Cold(t) is not { } tc) continue;
+            if (tc.Faction == faction || tc.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Military) continue;
+
+            return e.Heard ? table.Previous[t].Position : e.Place;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -2151,32 +2209,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Where a goal is acted out: a node of the home building by goal (shopkeeper, guard, throne, general; any node when the home has none of that
     /// kind), a bed for sleep (the home itself when it has no bed), the home or the town for going home; else (no home, or its spots kept failing)
     /// the character's post. True in <c>Home</c> when the spot is the home's; <c>Floor</c> is the height of a node or bed (so the walk ends on the
-    /// floor it is on, not on the ground below); <c>Yaw</c> the way a node faces, which the character turns to on arriving.
+    /// floor it is on, not on the ground below); <c>Yaw</c> the way a node faces, which the character turns to on arriving; <c>Watch</c> when the
+    /// spot is a shopkeeper node or a guard post, where the character watches who it senses (<see cref="Watch"/>).
     /// </summary>
-    (Vector2 Target, bool Home, float? Floor, float? Yaw) SpotFor(World world, AiMind mind, Blackboard board, AiBehaviour behaviour, TaskType type)
+    (Vector2 Target, bool Home, float? Floor, float? Yaw, bool Watch) SpotFor(World world, AiMind mind, Blackboard board, AiBehaviour behaviour, TaskType type)
     {
         if (behaviour == AiBehaviour.GoHome)
         {
             // Retreating (128) and Retreating fast (127) walk to the home town's waypoint outside its gates (FUN_14033dd70 -> Town vfunc 0x38), never
             // to a building.
             if (type is TaskType.RetreatHometown or TaskType.RunAwayHometown && RetreatPoint(mind.Squad) is { } waypoint)
-                return (waypoint, true, null, null);
+                return (waypoint, true, null, null, false);
 
-            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null);
-            if (HomePlace(world, board) is { } town) return (town.Centre, true, null, null);
-            return (mind.Squad.HomeCentre, true, null, null);
+            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null, false);
+            if (HomePlace(world, board) is { } town) return (town.Centre, true, null, null, false);
+            return (mind.Squad.HomeCentre, true, null, null, false);
         }
 
         // 157 Static town guard: the post of its town it holds (ClaimTownPosts).
         if (type == TaskType.StandAtGuardNodeHometownOutside && !mind.HomeUnreachable && mind.TownPost is { Spot: var post })
-            return (Flat(post.Position), true, post.Position.Y, post.Yaw);
+            return (Flat(post.Position), true, post.Position.Y, post.Yaw, true);
 
-        if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null);
+        if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null, false);
 
         // Staying home is in the squad's own home, whatever building a bar package made its home (FUN_1408cbc00 lists the home building's furniture).
         var at = type == TaskType.StayInHome ? board.OwnHome : board.Home;
         if (at is not { } home || mind.HomeUnreachable || type is TaskType.HoldPosition or TaskType.ManTheGate)
-            return (mind.Post, false, null, null);
+            return (mind.Post, false, null, null, false);
 
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
         {
@@ -2187,24 +2246,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         };
         ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
         if (kind == HomeSpotKind.Guard && mind.GuardVisitorAt is { } visitor && Nearest(home, kind, visitor) is { } beside)
-            return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw);
+            return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw, true);
 
-        if (Pick(home, kind, mind.MemberIndex, roll) is { } spot) return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null);
+        if (Pick(home, kind, mind.MemberIndex, roll) is { } spot)
+            return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null, Watches(spot));
 
         // Guard posts fall back to general nodes (docs/game/ai-tasks.md "Town goals"); the counter is the shopkeeper's, so only its goal falls back
         // onto it.
         if (kind == HomeSpotKind.Guard && Pick(home, HomeSpotKind.General, mind.MemberIndex, roll) is { } general)
-            return (Flat(general.Position), true, general.Position.Y, general.Yaw);
+            return (Flat(general.Position), true, general.Position.Y, general.Yaw, false);
 
         // The node goals (shopkeeper, guard, general) find a node of their own type and nothing else (FUN_14099ec70, FUN_14099f280: an empty hand,
         // see NodeGoalFindsNothing); the others stand at any node.
         if (kind != HomeSpotKind.Bed && !IsNodeGoal(type)
             && Pick(home, null, mind.MemberIndex, roll, kind != HomeSpotKind.Shopkeeper) is { } any)
-            return (Flat(any.Position), true, any.Position.Y, any.Yaw);
+            return (Flat(any.Position), true, any.Position.Y, any.Yaw, Watches(any));
 
         // No bed: it sleeps in the house; a node goal without nodes stays at its own post, except staying home.
-        if (kind == HomeSpotKind.Bed || type == TaskType.StayInHome) return (Flat(home.Position), true, null, null);
-        return (mind.Post, false, null, null);
+        if (kind == HomeSpotKind.Bed || type == TaskType.StayInHome) return (Flat(home.Position), true, null, null, false);
+        return (mind.Post, false, null, null, false);
     }
 
     /// <summary>
