@@ -216,6 +216,10 @@ blackboard the member is destroyed ("_putTheSpecialCharactersInNewSquads"). So a
 character whose faction is the player's (+0x250) out of its platoon (vfunc 0x18) into the faction's `__DEAD_SQUAD__` platoon (vfunc 0x10); NPC platoons keep their
 dead. `FUN_1407f4960` makes that platoon the first time through the squad factory `FUN_1407f4420` with no template, sets its record name to `__DEAD_SQUAD__` and keeps its
 handle in the game state (+0x2d0); the CAMERA loader (`FUN_1407f3fb0`) finds it again by that name. It is no squad tab, and import skips it ([save](../formats/save.md)).
+For the same characters only, it posts one message, picked by the body as it died (**Verified** by disassembly of `FUN_1407a6200`): blood at or below minus
+its capacity "{1} has died from blood loss.", else hunger at or below 0 "{1} has died from starvation.", else "{1} is dead.". **Observed** (1.0.68): "Alpha is
+dead." showed in the lower-centre message strip above the squad bar, as other world messages do, and the dead character left the squad bar at once.
+Meitou: `SquadManagement.DeathMessage`, posted as `BuryDead` moves the character.
 The handler's `FUN_140797090` call when the dead is the
 platoon's `+0xa0` member does not fit the `declareDead` reading above; unresolved.
 

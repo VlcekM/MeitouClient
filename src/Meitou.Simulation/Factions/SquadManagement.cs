@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
@@ -224,7 +225,7 @@ public static class SquadManagement
     /// <summary>
     /// The death handler's player rule (<c>FUN_1407a6200</c>): a character of the player's faction that has died leaves its squad (the next member
     /// leads) for the faction's squad of the dead, made the first time (<c>FUN_1407f4960</c>: the factory with no template, record name
-    /// <see cref="DeadSquadName"/>). NPC squads keep their dead. Serial.
+    /// <see cref="DeadSquadName"/>), and its death is posted (<see cref="DeathMessage"/>). NPC squads keep their dead. Serial.
     /// </summary>
     internal static void BuryDead(World world, GameDatabase? db)
     {
@@ -244,9 +245,25 @@ public static class SquadManagement
                 dead.Members.Add(id);
                 cold.SquadId = dead.Id;
                 moved = true;
+                world.Post(DeathMessage(cold));
             }
             if (moved) Relead(table, squad);
         }
+    }
+
+    /// <summary>
+    /// The death handler's message for a character of the player's faction (<c>FUN_1407a6200</c>, docs/game/factions-squads-towns.md "The
+    /// player's dead"), chosen by the body as it died: blood loss, else starvation, else plain death.
+    /// </summary>
+    static string DeathMessage(CharacterCold cold)
+    {
+        if (cold is { Medical: { } medical, Race: { } race })
+        {
+            float capacity = MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50, medical.HasStatsObject, medical.ScaleK, medical.ScaleZ);
+            if (medical.Blood <= -capacity) return Loc.Tr("{1} has died from blood loss.", cold.Name);
+            if (medical.Hunger <= 0) return Loc.Tr("{1} has died from starvation.", cold.Name);
+        }
+        return Loc.Tr("{1} is dead.", cold.Name);
     }
 
     /// <summary>
