@@ -1,4 +1,5 @@
 using Meitou.Data.Ui;
+using Meitou.Data.World;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Cameras;
@@ -586,7 +587,28 @@ sealed class GamePages(SettingsMenu menu)
             "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. "
             + "In the game the head stays turned until the next thing it looks at.",
             Toggle: new("Head turns back", () => menu.Config.FixHeadTurnBack, v => menu.Config.FixHeadTurnBack = v, Remaster: true, OnOff: true)));
+        result.Add(GroundRow());
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
+    }
+
+    /// <summary>
+    /// The Fixes page's ground row (<see cref="UserConfig.FixGround"/>): read when the game starts, so tagged for a restart once changed; greyed
+    /// without a tag, naming the mod, while a mod's heightmap stands in for the game's.
+    /// </summary>
+    SettingsMenu.Entry GroundRow()
+    {
+        const string label = "Holes and needles in the ground";
+        var toggle = new Toggle(label, () => menu.Config.FixGround, v => menu.Config.FixGround = v, Remaster: true, OnOff: true);
+        if (HeightmapRepair.Replaced)
+        {
+            string by = HeightmapRepair.ReplacedBy is { } mod ? $"The mod {mod}" : "A mod";
+            return new(label, $"{by} replaces the ground, so its map is used as it is and this fix does nothing.", Toggle: toggle, Locked: true);
+        }
+
+        string hint = "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near "
+            + "the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it.";
+        bool pending = menu.Config.FixGround != HeightmapRepair.IsOn;
+        return new(label, hint, Toggle: toggle, Tag: pending ? "Restart to apply" : "Needs restart", TagHot: pending);
     }
 
     /// <summary>

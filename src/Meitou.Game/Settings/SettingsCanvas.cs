@@ -440,7 +440,8 @@ sealed class SettingsCanvas(SettingsMenu menu)
             bool meitou = remaster.Get();
             if (remaster.OnOff)
             {
-                Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), "Faithful (off)", "Meitou (on)");
+                string[] sides = ["Faithful (off)", "Meitou (on)"];
+                Segmented(R(860, y + (row - 22) / 2, 240, 22), meitou ? 1 : 0, i => remaster.Set(i == 1), sides, entry.Locked);
             }
             else
             {
@@ -611,7 +612,12 @@ sealed class SettingsCanvas(SettingsMenu menu)
     /// The same switch with any number of parts (Off | Faithful | Meitou, a technique's choices): the game's sides (Off, Faithful) in the Faithful
     /// colour, the others in Meitou's.
     /// </summary>
-    internal void Segmented(UiRect at, int selected, Action<int> choose, string[] names)
+    internal void Segmented(UiRect at, int selected, Action<int> choose, string[] names) => Segmented(at, selected, choose, names, false);
+
+    /// <summary>
+    /// The same switch, greyed and taking no clicks while <paramref name="locked"/> (a fix a mod's file stands in for).
+    /// </summary>
+    internal void Segmented(UiRect at, int selected, Action<int> choose, string[] names, bool locked)
     {
         float line = MathF.Max(1, MathF.Round(menu.Scale));
         Rect(at, new(0.07f, 0.06f, 0.05f, 0.9f), menu.Viewport);
@@ -620,7 +626,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
         for (int i = 0; i < names.Length; i++)
         {
             var part = new UiRect(at.X + i * half, at.Y, i < names.Length - 1 ? half : at.Width - half * i, at.Height);
-            DrawSegmentPart(part, names[i], inks[i], selected == i, line, choose, i);
+            DrawSegmentPart(part, names[i], locked ? MutedInk : inks[i], selected == i, line, locked ? null : choose, i);
         }
 
         // The frame and the dividers.
@@ -629,19 +635,21 @@ sealed class SettingsCanvas(SettingsMenu menu)
 
     /// <summary>
     /// One part of a <see cref="Segmented"/> switch: filled in <paramref name="inkOn"/> when <paramref name="chosen"/>, lit while hovered, its
-    /// name, and the click that chooses <paramref name="index"/>.
+    /// name, and the click that chooses <paramref name="index"/> (none, and no hover, without <paramref name="choose"/>).
     /// </summary>
-    void DrawSegmentPart(UiRect part, string name, Vector4 inkOn, bool chosen, float line, Action<int> choose, int index)
+    void DrawSegmentPart(UiRect part, string name, Vector4 inkOn, bool chosen, float line, Action<int>? choose, int index)
     {
-        bool hovered = part.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
+        bool pointed = part.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
+        bool hovered = choose is not null && pointed;
         float hover = menu.Motion.Hover(name, hovered);
         if (chosen) Rect(part, inkOn with { W = 0.28f }, menu.Viewport);
         else if (hover > 0) Rect(part, MainInk with { W = 0.08f * hover }, menu.Viewport);
 
         if (chosen) Rect(part with { Y = part.Y + part.Height - 2 * line, Height = 2 * line }, inkOn with { W = 0.9f }, menu.Viewport);
 
-        var ink = chosen ? LightInk : Vector4.Lerp(MutedInk, MainInk, hover);
+        var ink = chosen && choose is not null ? LightInk : Vector4.Lerp(MutedInk, MainInk, hover);
         Text(name, part, 12, ink, "Center", menu.Viewport);
+        if (choose is null) return;
         if (part.Intersect(menu.Viewport).Height >= part.Height - 1) menu.Hits.Add(new(part, () => choose(index), Label: name));
     }
 

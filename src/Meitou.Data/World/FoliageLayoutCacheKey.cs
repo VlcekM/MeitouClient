@@ -84,11 +84,16 @@ public static class FoliageLayoutCacheKey
     }
 
     /// <summary>
-    /// The files the layout reads, by size and write time.
+    /// The files the layout reads, by size and write time, and the heightmap fix's repairs.
     /// </summary>
     static void AppendFiles(StringBuilder text, GameInstall install)
     {
         AppendFile(text, TerrainHeightmap.PathOf(install), "heightmap");
+
+        // The heightmap fix changes the ground the placer reads.
+        string repair = HeightmapRepair.StampFor(TerrainHeightmap.PathOf(install));
+        if (repair.Length > 0) text.Append("repair|").Append(repair).Append('\n');
+
         AppendFile(text, BlendInfoFile.PathOf(install), "blend");
         AppendFile(text, TerrainMaps.BiomeMapPath(install), "biomemap");
 

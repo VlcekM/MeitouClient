@@ -13,6 +13,26 @@ Orientation verified by road residuals; scale by building/road/town fits and Lev
 Bilinear is our interpolation; exact original interpolation remains unknown. Downsample/window
 reads stream rows/samples rather than allocating the entire537MB. Unit evidence: [pathfinding](../game/pathfinding.md).
 
+### Holes and needles
+
+**Observed** (the 1.0.68 fullmap.tif, read sample by sample): one patch of about 1,600 samples at 0 (a few at 1-2 on its edge) sits in
+ground at 1,600-3,580 raw, about 720 units across at x 123,700 z 67,600; six patches of one or two samples at or near 0 sit beside higher
+ground (four in raised ground at 1,900-2,700 raw, two on shores near 200 raw); and lone needles of 1-26 samples stand 7,800-22,200 raw above
+smooth ground in the Crater (x 96,000-112,000, z 117,000-130,000), among many more spikes in rough ground there. Heightmap Fix (workshop
+3426253797) lowers nine of the ten lone needles to within about 70 raw of the ground the rule below gives.
+
+**Engine choice** (Fixes page "Holes and needles in the ground", on by default, read at start; `HeightmapRepair`, Meitou.Data): only the
+install's own file is repaired, never a mod's rebind ([RE_Kenshi data entries](rekenshi.md#data-entries); the row is then greyed and names the
+mod). Holes: 4-connected patches at or below 64 raw, at most 2,000 samples, clear of the map's edge, with more than half their rim above 200
+raw, relaxed to a smooth surface spanning the rim. Needles: samples more than 4,000 above their 9 x 9 median (the map's edge repeated outward),
+grouped within 2 samples. The samples within 2 of any needle's tip are its flanks, and those more than 2,000 above their median are needle. A
+group is lowered only when, within 8 samples of the box around its tips, every sample that is not needle lies at least 2,000 below its lowest
+tip (cliff corners and blocks of high ground stay) and every sample outside the flanks lies within 300 of its own median (rock and ridges in
+rough ground stay; a lone wall at most 4 samples wide counts as needle). Other needles nearby count as needle, so a line of them is lowered
+whole. Each needle sample within 2 of the group's tips takes its 9 x 9 median without the needle samples. Found once per file version,
+streamed, and kept in the load caches (`HeightmapRepairCache`, its rules' version in the header); the navigation and foliage cache keys stamp
+the result. The 1.0.68 file gives 7 holes and 10 needles.
+
 ## Material maps
 
 Blendinfo slot masks/quadtrees select biome layers per cell, distinct from biomemap and region

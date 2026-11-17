@@ -1118,11 +1118,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }));
 
     /// <summary>
-    /// The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode) and
-    /// sliders with both marks.
+    /// The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode, nor
+    /// greyed ones) and sliders with both marks.
     /// </summary>
     internal Entry PageSidesEntry(List<Entry> entries, string label, string hint, string what) => SidesEntry(label, hint, what,
-        entries.Select(e => e.Toggle).OfType<Toggle>().Where(t => t.Remaster).ToList(),
+        entries.Where(e => !e.Locked).Select(e => e.Toggle).OfType<Toggle>().Where(t => t.Remaster).ToList(),
         entries.Select(e => e.Slider).OfType<Slider>().Where(s => s.Faithful is not null && s.Meitou is not null).ToList());
 
     #endregion
@@ -1521,6 +1521,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.FixBagSearch = true;
         BagSearchChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
+        Config.FixGround = true;
         OffscreenChanged?.Invoke();
         Config.Audio = new();
         AudioChanged?.Invoke();

@@ -485,6 +485,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixHeadTurnBack { get; set; }
     /// <summary>
+    /// The game's own heightmap has its holes filled and its needles lowered (Fixes settings; off: read as the file holds it, as the game does;
+    /// read at start; <c>HeightmapRepair</c>, docs/formats/terrain.md "Holes and needles").
+    /// </summary>
+    public bool FixGround { get; set; } = true;
+    /// <summary>
     /// The strategy camera's turn and tilt rate in degrees per second per unit of input (Controls settings): the original's <c>mouse speed pan</c> /
     /// <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.
     /// </summary>
