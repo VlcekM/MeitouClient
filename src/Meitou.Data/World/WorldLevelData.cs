@@ -148,7 +148,7 @@ public sealed class WorldLevelData
     {
         string directory = Path.Combine(install.DataDirectory, RelativeDirectory);
         var world = Load(directory, order.Entries, includeInteriors);
-        return OnGround(world, install);
+        return OnGround(world, TerrainHeightmap.PathOf(install));
     }
 
     /// <summary>
@@ -158,16 +158,15 @@ public sealed class WorldLevelData
     {
         string directory = Path.Combine(install.DataDirectory, RelativeDirectory);
         var world = Load(directory, LoadOrder.BaseGame(install).Entries, includeInteriors);
-        return OnGround(world, install);
+        return OnGround(world, GameFiles.Resolve(Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath)));
     }
 
     /// <summary>
-    /// <paramref name="world"/> with its buildings stood on the install's heightmap (<see cref="PlaceOnGround"/>); unchanged when the heightmap
-    /// is missing.
+    /// <paramref name="world"/> with its buildings stood on the heightmap at <paramref name="path"/> (<see cref="PlaceOnGround"/>): the one the
+    /// game reads, or for the base game the install's own; unchanged when the heightmap is missing.
     /// </summary>
-    static WorldLevelData OnGround(WorldLevelData world, GameInstall install)
+    static WorldLevelData OnGround(WorldLevelData world, string path)
     {
-        string path = GameFiles.Resolve(Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath));
         if (!File.Exists(path)) return world;
 
         using var map = TerrainHeightmap.Open(path);

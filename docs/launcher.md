@@ -288,8 +288,9 @@ interpolated string, which no translation could match.
   restates another's record with most of its paths cleared, which may be meant (**Observed**: two armour records of one overhaul among
   363 workshop files). The data files are scanned once per list load, off the UI thread (363 files, 131 MB: 0.14 s from a warm file
   cache; a cold start with a long list is not measured), and the list is walked again on every change.
-- A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
-  also has `meitou.json`: then only the code-mod note shows.
+- A mod whose `RE_Kenshi.json` names DLLs (`Plugins`, `PreloadPlugins`) is marked as a plugin mod whose DLLs Meitou ignores
+  ([RE_Kenshi](formats/rekenshi.md)), unless it also has `meitou.json`: then only the code-mod note shows. One with `FileRebinds` says
+  they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became, instead of the plugin or code-mod note; a covered code mod adds that it is not run.
 - An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or

@@ -1975,9 +1975,9 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <summary>
-    /// An image of the install's data directory, or null when the file is missing.
+    /// An image of the install's data directory (or an enabled mod's rebind of it, <see cref="ReKenshiRebinds"/>), or null when the file is missing.
     /// </summary>
-    static RgbaImage? Load(GameInstall install, string relative) => LoadFile(GameFiles.Resolve(Path.Combine(install.DataDirectory, relative)));
+    static RgbaImage? Load(GameInstall install, string relative) => LoadFile(ReKenshiRebinds.DataFile(install, relative));
 
     /// <summary>
     /// The image at <paramref name="path"/>; null when there is none.

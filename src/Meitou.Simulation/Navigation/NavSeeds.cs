@@ -15,12 +15,16 @@ internal static class NavSeeds
     public const string RelativePath = "newland/land/navtiles/seeds.def";
 
     /// <summary>
-    /// The seeds by zone (index z x <see cref="WorldLayout.ZoneCount"/> + x), points outside the zone grid dropped; null when the file is not in
-    /// the install.
+    /// The seeds file the game reads: <see cref="RelativePath"/>, or an enabled mod's rebind of it (<see cref="ReKenshiRebinds"/>).
+    /// </summary>
+    public static string PathOf(GameInstall install) => ReKenshiRebinds.DataFile(install, RelativePath);
+
+    /// <summary>
+    /// The seeds by zone (index z x <see cref="WorldLayout.ZoneCount"/> + x), points outside the zone grid dropped; null when the file is missing.
     /// </summary>
     public static List<Vector3>[]? Load(GameInstall install)
     {
-        var path = Path.Combine(install.DataDirectory, RelativePath);
+        var path = PathOf(install);
         if (!File.Exists(path)) return null;
 
         var bytes = File.ReadAllBytes(path);

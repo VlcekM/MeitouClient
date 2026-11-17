@@ -12,7 +12,8 @@ KenshiLib facade. The public wishlist of RE_Kenshi mods decides which plugins ge
 
 A mod's ordinary data and assets load through the normal readers either way.
 
-**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)). Covered mods are one table,
+**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)); the `FileRebinds` and `SoundBanks` data
+entries are applied ([data entries](#data-entries)). Covered mods are one table,
 `CoveredMods` (Meitou.Core), read by the game and by the launcher's Mods page. Built-in mods (`BuiltInMods`,
 Meitou.Game): at start, each enabled mod the table names, by `.mod` name or code-mod id, that was not taken in before
 (`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. A covered code mod is not run (counted as
@@ -32,6 +33,31 @@ same (one option; other ports may exist). Nothing is taken in.
 
 The date each entry was matched against is Steam's `timeupdated` of that workshop item when it was compared; what the launcher shows
 for a newer installed copy, and for other plugins, is in [launcher](../launcher.md).
+
+## Data entries
+
+Besides plugins, `RE_Kenshi.json` holds data that needs no DLL: `FileRebinds` (an object, path the game opens to path to open instead)
+and `SoundBanks` (an array of `.bnk` files to load).
+
+**Observed** in RE_Kenshi's source (`Settings.cpp` `LoadModOverrides`, `ParsePath`, `ResolvePath`; `FSHook.cpp`): the file of each active
+mod is read in load order. Each string member of `FileRebinds` is stored under its key, so a later mod's entry for the same path
+replaces an earlier one; other members are skipped. A target's `$(modroot "Name")` becomes the folder of the active mod of that name (a
+name no active mod has stays as written); `HIDE` makes the file read as missing. The hooks on `_fsopen` and `FindFirstFileW` match the
+exact path string the game passes (letter case and separators count; the two older spellings `data/newland/land/fullmap.tif` and `.cif`
+are rewritten to the game's `data\newland/land\fullmap.tif` and `.cif`). A file that does not parse is logged and gives nothing.
+
+Meitou (`ReKenshiFile`, `ReKenshiRebinds`, Meitou.Core) reads the enabled mods' files the same way, with the same order, targets and
+`HIDE` (a hidden file is looked for in a folder where nothing is). It does not open files by the game's strings, so a key matches the
+file it names: relative to the install root, `\` and `/` alike, a leading `./` and doubled slashes dropped, letter case ignored
+(`data\newland/land\fullmap.tif`, `./data/newland//land/blendinfo.dat` and `./data/newland/land/blendMap.png` each name one file). So
+of two mods' keys that spell one file differently the later wins, where RE_Kenshi honours only the spelling the game opens. A target's
+`\` is a separator on every system. A file that is not UTF-8 is read in the game's code page (RE_Kenshi hands its bytes to the game's
+file calls), and a target that is no path loses only that rebind. A rebind applies to the map files: the heightmap, `blendinfo.dat` and
+`navtiles/seeds.def` (the files the game opens by a fixed path, [overview](overview.md)), the colour tiles and flow map, and every file
+found through a resource group (`GameResources.Find`); rebinds of other files are not applied. The navigation and foliage caches stamp
+the file read. **Observed:** Heightmap Fix (workshop 3426253797) rebinds `data\newland/land\fullmap.tif` to
+`$(modroot "Heightmap Fix")/fullmap.tif`; enabled, Meitou reads that file (the ground at x -97830, z 85590 stands at about 504 instead of
+2463). `SoundBanks` load before the game's banks ([audio](../audio.md#mod-sound-banks)); the launcher notes both entries.
 
 The research behind not loading the DLLs (2026-10-11) follows. External findings are **Observed** in
 upstream source or documentation, not Verified by running plugins. Links track upstream branches and may

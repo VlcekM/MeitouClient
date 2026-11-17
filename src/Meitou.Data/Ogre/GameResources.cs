@@ -27,21 +27,25 @@ public static class GameResources
 
     /// <summary>
     /// The file the game opens for <paramref name="name"/> in <paramref name="group"/> (<c>resourceExists</c> then <c>openResource</c>: the location
-    /// registered last wins, so a mod's file replaces the base game's), or null when the group has no such file.
+    /// registered last wins, so a mod's file replaces the base game's), or the file an enabled mod rebinds that one to
+    /// (<see cref="ReKenshiRebinds"/>); null when the group has no such file.
     /// </summary>
     public static string? Find(GameInstall install, string name, string group)
     {
         var resources = For(install);
-        return resources.Contains(name, group) ? resources.Find(name, group) : null;
+        if (!resources.Contains(name, group)) return null;
+
+        return resources.Find(name, group) is { } found ? ReKenshiRebinds.For(install).Redirect(found) : null;
     }
 
     /// <summary>
     /// The file the game opens for <paramref name="name"/> in <paramref name="group"/> (<see cref="Find"/>), else the install's own
-    /// <paramref name="installed"/> (a path under the data folder). An install without <c>resources.cfg</c> (a test install) reads its own file.
+    /// <paramref name="installed"/> (a path under the data folder; <see cref="ReKenshiRebinds.DataFile"/>). An install without <c>resources.cfg</c>
+    /// (a test install) reads its own file.
     /// </summary>
     public static string Resolve(GameInstall install, string name, string group, string installed)
     {
         bool indexed = File.Exists(Path.Combine(install.Root, "resources.cfg"));
-        return (indexed ? Find(install, name, group) : null) ?? GameFiles.Resolve(Path.Combine(install.DataDirectory, installed));
+        return (indexed ? Find(install, name, group) : null) ?? ReKenshiRebinds.DataFile(install, installed);
     }
 }

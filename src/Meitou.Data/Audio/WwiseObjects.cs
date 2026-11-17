@@ -291,9 +291,14 @@ public sealed record WwiseSource(uint PluginId, byte StreamType, uint SourceId, 
         byte[] PluginParameters)
 {
     /// <summary>
-    /// The codec or source plugin: 0x00040001 Wwise Vorbis, 0x00650002 the silence source.
+    /// The codec or source plugin: 0x00040001 Wwise Vorbis, 0x00010001 PCM (mods' banks), 0x00650002 the silence source.
     /// </summary>
     public bool IsVorbis => PluginId == 0x00040001;
+
+    /// <summary>
+    /// A recording of a codec the player decodes: Wwise Vorbis or PCM (<see cref="WwisePcm"/>).
+    /// </summary>
+    public bool IsRecording => PluginId is 0x00040001 or 0x00010001;
 }
 
 /// <summary>

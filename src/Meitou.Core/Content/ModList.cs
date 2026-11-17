@@ -14,7 +14,8 @@ public static class ModList
     public static readonly IReadOnlyList<string> CoreModNames = ["Newwworld", "Dialogue", "rebirth"];
 
     /// <summary>
-    /// The file in a mod's folder that makes it an RE_Kenshi plugin mod (docs/formats/rekenshi.md); Meitou ignores its DLLs.
+    /// The RE_Kenshi file in a mod's folder (docs/formats/rekenshi.md, <see cref="ReKenshiFile"/>): Meitou applies its file rebinds and ignores
+    /// its DLLs.
     /// </summary>
     public const string NativePluginFile = "RE_Kenshi.json";
 
@@ -266,9 +267,13 @@ public sealed class ModInfo(string name, string path, ModSource source)
     /// </summary>
     bool _headerRead;
     /// <summary>
-    /// <see cref="HasNativePlugin"/> once checked; null before the first use.
+    /// <see cref="ReKenshi"/> once read; null before that or when the mod has none.
     /// </summary>
-    bool? _nativePlugin;
+    ReKenshiFile? _rekenshi;
+    /// <summary>
+    /// Whether <see cref="ReKenshi"/> has tried to read the file yet.
+    /// </summary>
+    bool _rekenshiRead;
     /// <summary>
     /// <see cref="HasCode"/> once checked; null before the first use.
     /// </summary>
@@ -292,9 +297,25 @@ public sealed class ModInfo(string name, string path, ModSource source)
     public string Folder => System.IO.Path.GetDirectoryName(Path)!;
 
     /// <summary>
-    /// An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.
+    /// An RE_Kenshi plugin mod: its <see cref="ReKenshi"/> file names DLLs, which Meitou does not load (its data does).
     /// </summary>
-    public bool HasNativePlugin => _nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
+    public bool HasNativePlugin => ReKenshi is { HasPlugins: true };
+
+    /// <summary>
+    /// The mod's <see cref="ModList.NativePluginFile"/>, read on first use; null when it has none or it cannot be read.
+    /// </summary>
+    public ReKenshiFile? ReKenshi
+    {
+        get
+        {
+            if (!_rekenshiRead)
+            {
+                _rekenshi = ReKenshiFile.TryRead(Folder);
+                _rekenshiRead = true;
+            }
+            return _rekenshi;
+        }
+    }
 
     /// <summary>
     /// A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.

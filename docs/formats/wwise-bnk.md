@@ -309,6 +309,15 @@ A WEM is RIFF/WAVE. **Verified** for the ambience banks (every WEM decodes in `E
 ones in `SFX_Amb_Indoors_Bank` (`12C0F32E`, `0888326E`, `34EC0D31`, 461 to 1625 bytes) are encoded silence of 1, 5 and 10 s, the
 gaps of the interior random containers (**Verified**: they decode to exact zeros).
 
+### PCM
+
+Kenshi's banks hold only Wwise Vorbis, but banks made for mods with Wwise's PCM setting hold PCM WEMs. **Observed** in the Workshop
+mod FSE-ShoddyMuskets (3090308700, `ShoddyMusketSounds.bnk`, version 112): all 9 WEMs have a 24-byte `fmt ` with codec tag `0xFFFE`, 2
+channels, 44100 Hz, 176400 bytes per second, block align 4, 16 bits, an extension of 6 bytes (channel mask 3), then a 4-byte `JUNK` and
+the `data` chunk of interleaved little-endian 16-bit samples. `Meitou.Data.Audio.WwisePcm` reads a WEM whose codec is `0x0001` or
+`0xFFFE` with 16 bits, a block align of 2 per channel and a matching data rate as samples; the player keeps them decoded
+([audio](../audio.md#mod-sound-banks)).
+
 ## Wwise Vorbis
 
 Reader: `Meitou.Data.Audio.WwiseVorbis` (WEM → standard Ogg Vorbis, which NVorbis, MIT, decodes). `meitou-tools audio <bank> --decode`

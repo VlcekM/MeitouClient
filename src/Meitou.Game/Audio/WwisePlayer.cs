@@ -46,10 +46,15 @@ public sealed partial class WwisePlayer : IDisposable
     readonly ConcurrentDictionary<string, bool> _loadedBanks = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <paramref name="bankDirectory"/>: the install's <c>data/audio</c>. Reads <c>Init.bnk</c> at once for the game parameter defaults and
-    /// state transition times.
+    /// The mods' sound banks (<see cref="LoadModBanks"/>): done once each has been handed over or has failed; never faults.
     /// </summary>
-    public WwisePlayer(WwiseCodebookLibrary library, string bankDirectory, int outputRate)
+    readonly Task _modBanks;
+
+    /// <summary>
+    /// <paramref name="bankDirectory"/>: the install's <c>data/audio</c>. Reads <c>Init.bnk</c> at once for the game parameter defaults and
+    /// state transition times, then starts on <paramref name="modBanks"/> (the enabled mods' <c>RE_Kenshi.json</c> sound banks, in order).
+    /// </summary>
+    public WwisePlayer(WwiseCodebookLibrary library, string bankDirectory, int outputRate, IReadOnlyList<string>? modBanks = null)
     {
         this._library = library;
         this._bankDirectory = bankDirectory;
@@ -61,6 +66,35 @@ public sealed partial class WwisePlayer : IDisposable
             foreach (var (id, value) in bank.GameParameterDefaults) _parameters[id] = value;
             foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
         }
+
+        _modBanks = modBanks is { Count: > 0 } ? LoadModBanks(modBanks) : Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Loads the mods' sound banks as RE_Kenshi does (docs/audio.md "Mod sound banks"): after <c>Init.bnk</c> and before every game bank, in
+    /// order, so an object or recording a mod bank shares with a game bank is the mod's (the first one of an id is kept). Each is read on its own
+    /// worker; the hand-overs are queued in order. A bank that cannot be read or decoded is logged and left out; mod banks are never unloaded.
+    /// </summary>
+    Task LoadModBanks(IReadOnlyList<string> paths)
+    {
+        var reads = paths.Select(path => Task.Run(() => Decode(path, mod: true))).ToArray();
+        return Task.Run(async () =>
+        {
+            for (int i = 0; i < paths.Count; i++)
+            {
+                try
+                {
+                    var (bank, clips) = await reads[i];
+                    string name = "mod:" + paths[i];
+                    _commands.Enqueue(() => HandOver(name, bank, clips));
+                }
+                catch (Exception e)
+                {
+                    // A mod's file is not the game's: whatever it holds, the game's sound goes on without it.
+                    Console.Error.WriteLine($"audio     mod bank {paths[i]}: {e.Message}; left out");
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -87,26 +121,76 @@ public sealed partial class WwisePlayer : IDisposable
     }
 
     /// <summary>
-    /// The worker task of <see cref="LoadBank"/>: reads the bank <paramref name="n"/>, converts its WEMs and queues the hand-over.
+    /// The worker task of <see cref="LoadBank"/>: reads the bank <paramref name="n"/>, converts its WEMs and queues the hand-over once the mods'
+    /// banks have queued theirs.
     /// </summary>
-    Task ReadBank(string n) => Task.Run(() =>
+    Task ReadBank(string n) => Task.Run(async () =>
     {
-        var bank = WwiseBank.ReadFile(Path.Combine(_bankDirectory, n + ".bnk"));
+        var (bank, clips) = Decode(Path.Combine(_bankDirectory, n + ".bnk"));
+        await _modBanks;
+        _commands.Enqueue(() =>
+        {
+            HandOver(n, bank, clips);
+            _loadedBanks[n] = true;
+        });
+    });
+
+    /// <summary>
+    /// Reads the bank at <paramref name="path"/> and converts its WEMs (<see cref="Clip"/>). In a mod's bank (<paramref name="mod"/>) a recording
+    /// that cannot be decoded is logged and left out, the rest of the bank kept; in a game bank it fails the load.
+    /// </summary>
+    (WwiseBank Bank, MediaClip[] Clips) Decode(string path, bool mod = false)
+    {
+        var bank = WwiseBank.ReadFile(path);
         var clips = new ConcurrentBag<MediaClip>();
         Parallel.ForEach(bank.Media, m =>
         {
-            var wem = WwiseVorbis.Read(bank.MediaBytes(m));
-            clips.Add(new MediaClip(m.Id, wem.ToOgg(_library), wem.Channels, wem.SampleRate, wem.SampleCount));
+            if (!mod)
+            {
+                clips.Add(Clip(m.Id, bank.MediaBytes(m)));
+                return;
+            }
+
+            try
+            {
+                clips.Add(Clip(m.Id, bank.MediaBytes(m)));
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"audio     mod bank {path}: recording {m.Id:X8} not decoded ({e.Message}); left out");
+            }
         });
-        _commands.Enqueue(() =>
+        return (bank, [.. clips]);
+    }
+
+    /// <summary>
+    /// A WEM ready to play: a 16-bit PCM one (<see cref="WwisePcm"/>, in mods' banks) as its samples, else Wwise Vorbis converted to Ogg.
+    /// </summary>
+    MediaClip Clip(uint id, ReadOnlyMemory<byte> bytes)
+    {
+        if (WwisePcm.TryRead(bytes) is { } pcm)
         {
-            foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
-            foreach (var c in clips) _media.TryAdd(c.Id, c);
-            _bankContents[n] = ([.. bank.Objects], [.. clips.Select(c => c.Id)]);
-            _loadedBanks[n] = true;
-            RetryPending();
-        });
-    });
+            // A clip with no frame would loop without end on the audio thread.
+            if (pcm.Frames == 0) throw new InvalidDataException("PCM recording without a sample frame");
+
+            return new MediaClip(id, [], pcm.Channels, pcm.SampleRate, pcm.Frames, pcm.Samples);
+        }
+
+        var wem = WwiseVorbis.Read(bytes);
+        return new MediaClip(id, wem.ToOgg(_library), wem.Channels, wem.SampleRate, wem.SampleCount);
+    }
+
+    /// <summary>
+    /// On the audio thread: adds a read bank's objects and recordings (an id already held keeps its first), files them under
+    /// <paramref name="n"/> and retries the events that waited on them.
+    /// </summary>
+    void HandOver(string n, WwiseBank bank, MediaClip[] clips)
+    {
+        foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
+        foreach (var c in clips) _media.TryAdd(c.Id, c);
+        _bankContents[n] = ([.. bank.Objects], [.. clips.Select(c => c.Id)]);
+        RetryPending();
+    }
 
     /// <summary>
     /// Unloads a loaded bank (nothing for one that is not loaded or still loading): what is playing from it is cut, its recordings are
@@ -978,7 +1062,7 @@ public sealed partial class WwisePlayer : IDisposable
             var sender = _chain.Select(n => NodeOf(n)!).FirstOrDefault(n => (n.AuxBits & 0x0C) != 0);
             if (sender is not null)
                 _sends = [.. sender.AuxBuses.Where(b => b != 0).Take(Voice.MaxSends).Select(b => player.AuxBus(b)).OfType<AuxBusState>()];
-            if (source.IsVorbis && player._media.TryGetValue(source.SourceId, out var clip))
+            if (source.IsRecording && player._media.TryGetValue(source.SourceId, out var clip))
             {
                 // Plays: 0 = forever, n = n times; absent = once. A music clip plays from its begin trim to its end trim.
                 long skip = 0, limit = -1;

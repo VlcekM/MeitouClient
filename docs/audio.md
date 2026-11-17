@@ -597,6 +597,22 @@ and `Game_Speed_*` events) and 6 of the 14 in `VO_Bank` (`VO_Creature_*`, `VO_Ge
 `Emitters` (`2488FB4C`; values such as `Furnace`, `Stone_Processor`, `Generator`, `Research_Bench`); game parameters `Movement_Speed` (`5A988332`) and others.
 Open for the next wave: which event each game action posts and on which object, and the footstep switches. Interiors and emitters: [Interiors](#interiors), [Point emitters](#point-emitters).
 
+### Mod sound banks
+
+**Observed** in RE_Kenshi's source (`Sound.cpp` `LoadQueuedBanks`, `Settings.cpp`): the banks the enabled mods' `RE_Kenshi.json` list
+under `SoundBanks` ([data entries](formats/rekenshi.md#data-entries)) load after `Init.bnk` and before every game bank, mod by mod in load
+order; each is looked for under `data/audio/` and, when not there, at the path as written (`$(modroot "Name")` expanded). Its source
+says the order is so that mods' sounds override the game's. Mod banks are never unloaded.
+
+Meitou (`ReKenshiFile.ModSoundBanks`, `WwisePlayer`) does the same: mod banks are read on workers at start and handed to the audio thread in
+order, and every game bank waits for them before its own hand-over; the player keeps the first object and recording of an id, so a mod
+bank's event, node or recording with a game bank's id replaces the game's. Their recordings may be Wwise Vorbis or 16-bit PCM (codec
+`0x00010001`, [PCM](formats/wwise-bnk.md#pcm)); a recording of another codec, or one without a sample frame, is logged and left out with
+the rest of its bank kept, a bank that cannot be read is left out whole, an entry that is no path loses that bank alone, and the game's
+sound goes on. **Observed** with FSE-ShoddyMuskets (Workshop 3090308700): its bank is found through `$(modroot)`,
+its 9 PCM recordings decode, and the 9 events it adds are the names its ANIMATION_EVENT records post (`Musket1` to `Musket5`,
+`MusketDouble`, `MusketFinish1` to `3`), which [animation events](#characters-footsteps-combat-voices) play.
+
 ### Not done
 
 The callers that post effects, the game's Wwise voice limits (Meitou has its own [cap](#voice-cap)), obstruction and occlusion (the game uses none), serial effect slots and the cone as Wwise draws it.

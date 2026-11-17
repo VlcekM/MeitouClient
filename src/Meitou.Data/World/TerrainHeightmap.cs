@@ -29,9 +29,14 @@ public sealed class TerrainHeightmap : IDisposable
     public int Size => Image.Width;
 
     /// <summary>
-    /// Opens the install's heightmap (<see cref="RelativePath"/>).
+    /// Opens the install's heightmap (<see cref="RelativePath"/>), or the file an enabled mod rebinds it to (<see cref="PathOf"/>).
     /// </summary>
-    public static TerrainHeightmap Open(GameInstall install) => Open(Path.Combine(install.DataDirectory, RelativePath));
+    public static TerrainHeightmap Open(GameInstall install) => Open(PathOf(install));
+
+    /// <summary>
+    /// The heightmap file the game reads: <see cref="RelativePath"/>, or an enabled mod's rebind of it (<see cref="ReKenshiRebinds"/>).
+    /// </summary>
+    public static string PathOf(GameInstall install) => ReKenshiRebinds.DataFile(install, RelativePath);
 
     /// <summary>
     /// Opens the heightmap at <paramref name="path"/>.
