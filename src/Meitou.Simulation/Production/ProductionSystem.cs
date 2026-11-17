@@ -464,7 +464,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float bestGap = float.MaxValue;
         foreach (var id in Who(world, order.Characters))
         {
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && Able(cold)
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && AbleToMan(cold)
                 && TaskStart.Eligible(world, cold, TaskType.UseTurret) && Gap(table.Next[slot].Position, spot) is var gap && gap < bestGap)
                 (best, bestGap) = (slot, gap);
         }
@@ -482,8 +482,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150): a player character's
     /// (else the order leaves the queue) on a complete site that has its machine (or a turret's post); one already working that machine needs nothing
-    /// more; the character must be able to work (<see cref="Able"/>), the machine have a free operator place ("is already in use", posted) and, to
-    /// operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs electricity." said); a prospector must not swim.
+    /// more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
+    /// ("is already in use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs
+    /// electricity." said); a prospector must not swim.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -494,7 +495,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             || order.Row == TaskType.UseTurret && TurretPostOf(site) is null) return OrderCheck.Gone;
         if (order.Row == TaskType.OperateStorage) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
-        if (!Able(cold)) return OrderCheck.Blocked();
+        if (order.Row == TaskType.UseTurret ? !AbleToMan(cold) : !Able(cold)) return OrderCheck.Blocked();
         if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
         if (OperatorsOf(world, id) >= m.Data.MaxOperators) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
         return Unpowered(world, order, site, m) ? OrderCheck.Blocked(Loc.Tr("It needs electricity.")) : OrderCheck.Run;
@@ -584,22 +585,27 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// A character that can work: awake, not carrying or carried. A fight is no gate: an order's new task ends it
-    /// (<see cref="TaskStart.Start"/>; docs/game/combat.md "Fight lifecycle and orders"), and a fight that starts ends the work the same way.
-    /// Nor is a cage: no production row registers the imprisoned or chained repertoire (<see cref="TaskStart.Eligible"/>), and a caging ends the
-    /// task (<see cref="Locks.FixtureRegistry.Imprison"/>).
+    /// A character that can work: awake, not carried. Carrying someone is no gate: no production row but 146 Turret gunner has
+    /// IS_CARRYING_SOMETHING 47 in list B, and <c>Task_OperateMachine</c> reads no carrying (docs/game/carry-loot.md "A carrier in a fight"; #915).
+    /// A fight is no gate: an order's new task ends it (<see cref="TaskStart.Start"/>; docs/game/combat.md "Fight lifecycle and orders"), and a
+    /// fight that starts ends the work the same way. Nor is a cage: no production row registers the imprisoned or chained repertoire
+    /// (<see cref="TaskStart.Eligible"/>), and a caging ends the task (<see cref="Locks.FixtureRegistry.Imprison"/>).
     /// </summary>
     static bool Able(CharacterCold cold) =>
-        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone && cold.Carrying.IsNone;
+        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone;
 
     /// <summary>
-    /// <see cref="Able"/> for a list job of <paramref name="type"/>, except that a carrier standing idle with nothing under way (no provenance of
-    /// its task, no errand; e.g. after a pick-up order, or a move order's walk ended, whose provenance stays, #711) takes up a follow row (31, 45,
-    /// 289; their list B has no IS_CARRYING_SOMETHING 47, docs/game/ai-tasks.md).
+    /// <see cref="Able"/> for a turret: 146 Turret gunner's list B has !47, so a carrier mans none.
+    /// </summary>
+    static bool AbleToMan(CharacterCold cold) => Able(cold) && cold.Carrying.IsNone;
+
+    /// <summary>
+    /// <see cref="Able"/> for a list job of <paramref name="type"/>: a carrier takes up none while its lift or put-down plays on past the order
+    /// (the lift order leaves the queue at the attach) or while it delivers on an errand, nor 234 Turret guard (planned through 146).
     /// </summary>
     static bool AbleFor(CharacterCold cold, TaskType type, CharacterTask task, bool onErrand) =>
-        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone
-        && (cold.Carrying.IsNone || PermaJobs.Follows(type) && task == CharacterTask.Idle && cold.Running?.Runs(task) != true && !onErrand);
+        Able(cold) && (cold.Carrying.IsNone || !onErrand && task is not (CharacterTask.PickUp or CharacterTask.PutDown)
+            && type != TaskType.ManATurretPlayerJob);
 
     /// <summary>
     /// The characters operating the site.

@@ -165,9 +165,9 @@ public sealed partial class ProductionSystem
                     return FollowedBy(world, slot, cold, k) is not null ? DecisionCheck.Run : DecisionCheck.No("its character is gone");
             }
 
-            // An operator carrying or carried looks at no job (and keeps the one it is on); an idle carrier still takes up a follow job.
+            // One carried or down looks at no job (and keeps the one it is on); a carrier looks at most (AbleFor).
             bool onErrand = owner._errands.ContainsKey(table.IdOf(slot));
-            if (!AbleFor(cold, type, task, onErrand)) return runs ? DecisionCheck.Runs : DecisionCheck.No("carrying, carried or down");
+            if (!AbleFor(cold, type, task, onErrand)) return runs ? DecisionCheck.Runs : DecisionCheck.No("carried, down, or carrying for it");
 
             // 234's effect (using the turret) is planned through 146, whose list B has !158: not while a melee attacker is within 40
             // (docs/game/ai-tasks.md "Precedence").
@@ -244,7 +244,7 @@ public sealed partial class ProductionSystem
             var job = PermaJobs.ListJob(cold, task);
             if (task == CharacterTask.Attack || cold.InCombat) return DecisionCheck.No("fighting");
             if (job is null && task is not (CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) return DecisionCheck.No("busy");
-            if (!Able(cold)) return job is { Implicit: true } ? DecisionCheck.Runs : DecisionCheck.No("carrying, carried or down");
+            if (!Able(cold)) return job is { Implicit: true } ? DecisionCheck.Runs : DecisionCheck.No("carried or down");
             if (owner.ImplicitPick(world, slot) is not { } chosen) return DecisionCheck.No("none holds");
             string? current = chosen.Type == TaskType.DitchAllResources ? cold.HaulTo : cold.OperateSite;
             if (job is { Implicit: true } && chosen.Type == job.Row && chosen.Site == current) return DecisionCheck.Runs;
@@ -317,8 +317,8 @@ public sealed partial class ProductionSystem
                 return (TaskType.DitchAllResources, store);
         }
 
-        // Sleep and Sit not while holding position (FUN_1402b2b90).
-        if (Orders.Holding(cold)) return null;
+        // Sleep and Sit not while holding position (FUN_1402b2b90) or carrying someone (+0x348; FUN_14050e5b0).
+        if (Orders.Holding(cold) || !cold.Carrying.IsNone) return null;
         if ((options & SquadAi.Sleep) != 0 && Injured(cold) && Beds is not null)
         {
             if (on == TaskType.GoHomeAndGoToBed && cold.OperateSite is { } bed && world.Fixtures.Find(bed) is { } kept

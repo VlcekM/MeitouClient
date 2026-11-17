@@ -91,6 +91,15 @@ exe: squad-level "someone carries" tests (`FUN_140288630`, `FUN_14028fdf0`, a cr
 put-down tasks, the FIND_BED desire and the Watching-slaves desire. **Verified** records: `carrying left arm only` (overlay, `override L arm`, every other bone deleted), `stand carrying left` (overlay, `override L arm`),
 `walk/jog carrying left` (upper, `override L arm`), `sword ready (carry)` (upper idle, carrying left, one weapon in hand).
 
+### A carrier at work
+
+**Verified** in `kenshi_x64.exe` (decompile and disassembly): a carrier keeps its jobs. The job pass `FUN_14050e5b0` reads `+0x348` only after the
+ditch entry, to skip the implicit sleep and sit jobs ([implicit jobs](ai-tasks.md)); 87 Operating machine's list B has no `!47`, its desire stub
+`LAB_1400215ee` jumps to `FUN_140318320`, AI vtable `+0x98` (slot 19, constant 1), and `Task_OperateMachine` (`FUN_14035b430`, `FUN_14035bc90`) reads
+neither `+0x348` nor the state-47 evaluator. No production or construction row but 146 Turret gunner has `!47` (234 Turret guard plans through 146).
+Meitou: `ProductionSystem.Able` (#915), `ConstructionSystem.Able` (#361); a carrier takes no job while its lift or put-down clip plays on past the
+order, or while it delivers on an errand (engine choice).
+
 ## Dropped item placement
 
 **Verified** (decompile, `Item::createItemEntityCallback` `FUN_1407626e0`, run when an item's entity is made; an item put in the world with the pose-kept flag `+0x1d9` false, as every drop: the character's drop calls `FUN_1405ca4a0` / `FUN_1405ca740` pass the identity orientation and flag 0, whatever the caller's pose): the item's position and orientation are **set again there** by its record type (`+0x13c`), the dropper's orientation is not used. The position is raised 25, a ray goes down 99 (`FUN_1409b6a90`) and the hit height is the ground; no hit uses the terrain height (`FUN_1409b1f80`), else the unraised point. The up-to-ground-normal turn `Q` is `Vector3.UnitY.getRotationTo(normal)` (no yaw).
