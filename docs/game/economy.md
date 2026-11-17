@@ -147,7 +147,9 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   The stolen x0.5 of `FUN_14079e6d0` (stolen from the player's faction) applies in any case; not modelled.
 - **Money** (**Verified**): the buyer's purse is `Character` slot 55 `FUN_140791660` (player's faction: the player's purse; else the squad's `Ownerships` at platoon `+0x88`, no squad: 0); it must be at least
   the price ("I can't afford that.", nothing moves). Spending is slot 54 `FUN_1407965f0` -> `Ownerships` slot 0 `FUN_1407cbaa0`. The seller's is the building's (`FUN_14054e560`: the squad registered on the
-  building, else the owner faction's); the price is added there. Meitou: `Squad.Money` of the buyer's squad, of the squad living in the building (none: lost).
+  building, else the owner faction's); the price is added there. Meitou: `Squad.Money` of the buyer's squad, of the squad living in the building (none: lost). **Observed** (disassembly): the building that
+  takes the money is the shop counter itself (a UseableStuff, whose `FUN_14054e560` pays the target of its own handle, else its owner faction), so a counter the player built pays the player; Meitou:
+  `PlayerState.Money`.
 - **The item** (**Verified** flow, **Observed** names): the stack of 2+ is split (a clone of quantity 1, the original -1), a single item is removed from its section. When the seller inventory's owner is not of
   the player's faction **and** `rand()/32768 > 0.2` (`DAT_1416885d8`), the add-to-buyer call is skipped: the unit is paid for and gone, the buyer gets nothing (80 %). Otherwise `Character` slot 45 `FUN_1405cb400`
   puts it into the buyer's inventory; it is never equipped or used here; without room: "No room for that item.", the unit goes back to the stock and nothing is paid.

@@ -95,7 +95,8 @@ Tick order: Inputs → Schedule → Think → Move → Act → ordered Apply →
 Inputs/Schedule/Apply/SlowWorld are serial; each implemented parallel phase has a system barrier. Publish makes the character snapshots on the
 workers in 256-slot chunks (each reads only the tick's state), listed in slot order.
 Engine choice, to keep the publish small with ~1,400 characters: the context menu's figures (kidnap and stealth KO chances, shackles) and the AI goal text
-go only to the selected, inspected and pointed character (`PlayerState.Pointed`, set by the host as the mouse moves) and the player's (goal text);
+go only to the selected, inspected and pointed character (`PlayerState.Pointed`, set by the host as the mouse moves; while paused, a move onto another
+character publishes again) and the player's (goal text);
 `CanStealthKo` tells the quick order and highlight for everyone. A body's part figures (aggregates, worst part, blood shown) are kept until a part's
 `HealthPart.Version` moves. The research view refreshes at once when the finished, queued or paid lists or the bench level change, else at most once a
 second (progress, bench stock, the focus zone). Cages and shown doors are new lists only when one changed.

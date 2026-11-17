@@ -632,13 +632,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             return;
         }
 
-        // Ordinary kits first; a robotic part is treated once the organic ones are done. Treatment runs until the last bit is bandaged (the start
-        // threshold is MedicalState.FirstAidThreshold).
-        bool robot = body.BandageRoom(race, false) <= Done;
+        // The first aid kit phase while an organic part has room and a first aid kit is found, else the robot repair kit phase (Task_FirstAid
+        // FUN_1403563a0: a search that finds no first aid kit goes on to the robot phase, #884). Treatment runs until the last bit is bandaged (the
+        // start threshold is MedicalState.FirstAidThreshold).
+        bool organic = body.BandageRoom(race, false) > Done;
+        bool robot = !organic || KitOf(world, m, medicCold, FunctionOf(false)) is null;
         if (robot && body.BandageRoom(race, true) <= Done)
         {
-            Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
-            End(world, m);   // nothing left to bandage
+            if (organic) Say(world, m, medicCold.TreatTarget, KitEmpty);   // organic parts left, no first aid kit
+            else Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
+
+            End(world, m);
             return;
         }
 

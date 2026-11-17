@@ -1351,9 +1351,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     member a flank spot; branch nearestPlayer and the factors are not modelled.
 - **118 Shopping** (`FUN_1409997f0`, **Verified**): a shop of the town selling an item on the character's shopping list (`FUN_1409fc070`), else, only when the faction of the
   shopper's town has no player flag (`+0x250` clear; the list loop runs first and a hit skips this test), a random building (`FUN_1409fc1b0`): a town of the player's faction gets
-  no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. Both finders scan the zone's
+  no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. Both finders scan every loaded zone's
   BF_SHELL_WITH_INTERIOR buildings; the random one keeps those of the character's town that are public (Building vfunc 82, the `public day`
-  flag), the list one those that are shops (vfunc 87, `Building::isAShop`: BF_SHOP furniture inside, residents, and public) and stock the item.
+  flag), the list one those that are shops (vfunc 87, `Building::isAShop`) and stock the item. `isAShop` (`FUN_1409986e0`, **Observed**, disassembly) is true for
+  a shell with an interior designated a shop by its residents and public; for a building whose own function is 9 (BF_SHOP); and for a building with an interior
+  owned by a faction with the player flag, holding a function 9 piece, and public, no residents needed. So a house the player owns in a town, set public with a
+  Shop Counter built inside, draws the town's shoppers (**Verified** in 1.0.68: a Squin townsperson bought from such a counter in a bought house).
   No faction, membership or hostility test (**Observed**, decompile), so a guild's public home with a counter (the Hub's Thieves Guild
   Watchtower, `public day` true) draws the town's shoppers.
   - **Shopping list** (**Verified**, `FUN_1409a05b0`, made with the AI by `FUN_1409a1010`; not saved): from the CHARACTER record's `shopping` list (73 base
@@ -1367,7 +1370,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     second reset at every desire evaluation: both the list's last town (`+0x30`) and the AI status town (`+0x88`) set and different resets the done counts and records the day, as the day's reset does (**Verified**, `FUN_140998e40`; Meitou `ShoppingList.Pending` with the board's town), so a shopper that finished in one town wants to shop in the next the same day.
     counter (1 at a new game, `FUN_14036cb80`) is **Observed**.
   - **Finder**: the entries in order, skipping those done; the first with a shop of the town stocking that function wins (a random one of them), else the
-    random public building. A shop stocks a function when a type 9 object (a container) in it holds an item with that `item function` (`FUN_14054add0`).
+    random public building. A shop stocks a function when a function 9 piece (a shop counter) in it holds an item with that `item function` (`FUN_14054add0`).
   - **Buying** (`FUN_1409a14b0`, from `Task_Shopping` 119; **Verified**): `Task_Shopping` (start `FUN_14033a4c0`, update `FUN_140337d00`; the planner gives 119 the precondition `isAtLocation`, so
     it starts on arrival) holds a timer of 1.0 s, counts it down each update and calls the buy step when it is at or below 0; a sale resets it to 1.0. So the first unit is bought a second after
     arrival, then one a second. The step takes the first open entry whose function some seller in the building has an item of (a function with none is set aside for the call), a random such item, and adds 1 to
@@ -1378,7 +1381,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   - Meitou (`ShoppingList`, `AiSystem.ShopFor`, `AiSystem.BuyForShoppers`, `NpcTrade`): the list, the desire, the daily and town resets and the stock-based pick (stock read from the containers of a building shop and of
     a house's stock containers, by item function; a trader's carried stock is not looked at, as `FUN_14054add0` does not). Arrival starts the timer (`AiMind.NextBuyTick`, hashed, not saved); a serial step in slot
     order buys one unit per second with the rules above (`AiSystem.BuyOnce`), moving the cats between the squads' purses and taking the unit out of the stock. A call that buys nothing ends the visit (target and shop
-    forgotten, so the next think picks a shop again). The fallback is a random public building of the town with an interior that is not a wall or ruin (`TownPlaces.Public`; the original's set, the buildings of class SHELL_WITH_INTERIOR with function id 19, is not read from data: **Observed**), not in a town of the player's faction (`AiSystem.RandomShopping`). The desire is the finder's factor (**Verified**): 1 when the pick is a shop (Meitou's shop set stands for BF_SHOP furniture), 0.4 (`ShopNoCounterFactor`) for any other building, 0 when none is found or nothing is left on the list. A shop is walked to as before (a node in it); another building within 30 of its origin on any floor, where the buy step finds no seller and the visit ends.
+    forgotten, so the next think picks a shop again). A public town building the player owns, with an interior and a complete shop counter the player built in
+    it, is a shop of its town; that counter's goods are on sale and the cats go to the player's purse (`PlayerShops`). The fallback is a random public building of the town with an interior that is not a wall or ruin (`TownPlaces.Public`; the original's set, the buildings of class SHELL_WITH_INTERIOR with function id 19, is not read from data: **Observed**), not in a town of the player's faction (`AiSystem.RandomShopping`). The desire is the finder's factor (**Verified**): 1 when the pick is a shop (Meitou's shop set: trading residents, the layout's shop flag and the player's counter buildings), 0.4 (`ShopNoCounterFactor`) for any other building, 0 when none is found or nothing is left on the list. A shop is walked to as before (a node in it); another building within 30 of its origin on any floor, where the buy step finds no seller and the visit ends.
 - **214 Relaxing** (`FUN_140998d10`): the current package's own target (package vfunc 1); none: 0. Effect `IS_WORKING`, acted out by 87 Operating
   machine, i.e. using furniture there; with no free one the plan fails and another goal wins.
 - **Hang-around-bar package** (`Package_HangAroundBar`, start vfunc 6; **Observed** unless marked): its town (`FUN_1402916b0`, **Verified**) is the town

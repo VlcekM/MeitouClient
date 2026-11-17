@@ -138,7 +138,7 @@ public sealed partial class World
         var state = table.Previous;
         var (koSlot, leadSlot) = SelectionSlots();
 
-        var pointed = Player.Pointed;
+        var pointed = _publishedPointed = Player.Pointed;
         var aggro = koSlot >= 0 ? _systems.OfType<AggroSystem>().FirstOrDefault() : null;
         var talk = _systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
         var combat = _systems.OfType<Combat.CombatSystem>().FirstOrDefault();

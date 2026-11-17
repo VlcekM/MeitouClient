@@ -130,7 +130,7 @@ public class CoreTests
         a.Characters.Cold(own.Id.Slot)!.Name = "renamed";
         for (int k = 0; k < 2; k++)
         {
-            a.Commands.Enqueue(new InspectCommand(CharacterId.None) { Tick = a.Tick });   // a paused publish needs a command due
+            a.Commands.Enqueue(new InspectCommand(CharacterId.None) { Tick = a.Tick });   // a paused publish needs a command due or a pointer move
             a.ApplyPausedInterfaceCommands();
         }
 
