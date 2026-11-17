@@ -986,6 +986,7 @@ sealed partial class GameHost(
             // The frame clock DrawWorld gives the foliage sway: a recorded flight poses the same every take.
             PoseClock = () => AnimClock ? AnimSeconds : RealTime.Elapsed.TotalSeconds,
             SoakClock = () => Session.Clock.GameSeconds,
+            MotionClock = () => Session.Clock.GameSeconds + Session.SimulationAlpha * Session.Simulation.TickSeconds,
             RainWetness = () => Gpu.Surfaces?.Wetness ?? 0,
         };
     }

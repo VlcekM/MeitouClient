@@ -105,6 +105,7 @@ c help                                # one usage line per command; `c help <nam
 | `weather-sim` | `weather-sim <none|dust|acid|off>` (the weather the simulation reads everywhere; the sky keeps its own) |
 | `flies` | `flies` (each dead character: flies, effect shown, the weather there) |
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
+| `look` | `look <x> <z> \| look off [--id <c:slot.gen>] \| look talk <c:slot.gen> \| look list` (debug head turning: a forced look point, not hashed; `talk` gives the selected character the Talk order; `list` the published look points) |
 | `layouts` | `layouts <building record id or name> [exterior]` |
 | `loot` | `loot <id>` |
 | `machines-power` | `machines-power [town number\|name]` |

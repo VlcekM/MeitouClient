@@ -429,6 +429,13 @@ public static class Enhancements
                 + "lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away "
                 + "in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does "
                 + "(docs/game/blood-decals.md \"On weapons and gear\")"),
+        new("sway", "Gear sway", "glued", "swings",
+            () => Characters.GearSway.Enabled, v => Characters.GearSway.Enabled = v,
+            "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as "
+                + "one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging "
+                + "point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose "
+                + "straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")",
+            optional: true),
         new("grazesun", "Soft grazing sun", "off", "bumps fade",
             () => Sky.GrazingSun.Enabled, v => Sky.GrazingSun.Enabled = v,
             "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break "

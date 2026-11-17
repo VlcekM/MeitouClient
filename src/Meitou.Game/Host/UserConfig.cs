@@ -480,6 +480,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixPartsInBuildings { get; set; } = true;
     /// <summary>
+    /// A head a task turned toward something turns back to the front once nothing is looked at (Fixes settings; off by default: it stays turned
+    /// until the next look, as the game does; docs/animation.md "Head turning").
+    /// </summary>
+    public bool FixHeadTurnBack { get; set; }
+    /// <summary>
     /// The strategy camera's turn and tilt rate in degrees per second per unit of input (Controls settings): the original's <c>mouse speed pan</c> /
     /// <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.
     /// </summary>

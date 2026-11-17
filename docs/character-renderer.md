@@ -193,6 +193,44 @@ no shadow, motion or reflection pass sees it either; the simulation, the host's 
 
 `CharacterInstance.BoneMeshes` (a code mod's `BoneMesh`, issue #740) uses the same placement for a rigid mesh: `CollectBolts` puts the mesh's origin at the node the bone, offset and rotation give on the character's drawn palette (after `PlaceAnchored`, so a rider's mesh follows the rider) and sizes the mesh with the character. It is a loose debris mesh like a stuck bolt or a held limb: the mesh's own material, a stable debris id for motion vectors, no shadow, no hover outline or picking. Left out while the character is not posed in the world or lacks the bone.
 
+### Gear sway (Meitou `sway` switch, optional, off by default)
+
+The original's hanging gear is rigid (**Verified**, decompile: the three callers of `Entity::attachObjectToBone`, `FUN_14052bfa0`, `FUN_14052d480`, `FUN_1400f8e10`, attach at
+the `.phs` point's fixed offset and discard the returned TagPoint; the exe has no other TagPoint import; **Observed**: no sway, jiggle or dangle strings, and the rigs have no gear
+bones), and a backpack is a worn mesh skinned to the spine (**Verified**, the CONTAINER meshes of `data/items`: 83 to 100 % of their weight on `Bip01 Spine1` / `Spine2`, the
+rest on the clavicles, upper arms and neck along the straps).
+
+Meitou (`GearSway`, `CharacterRenderer.Sway`), common to both: a hanging mass is a point on a damped spring toward where the pose holds it (damped against the posed tip's own
+speed, so a steady walk leaves no lag), kept at its lever's length and within a largest angle of the posed direction, stepped at 120 Hz or finer in game time (`MotionClock`:
+the game clock plus the tick fraction). The lever stepped is the equivalent pendulum's, `(k² + l²) / l` with `l` from the pivot to the mass's centre and `k` 0.58 of its radius
+(`GearSway.Pendulum`): a long thing held near its middle hardly swings. At rest again after a first pose, a snap back on screen, a gap over 0.25 s or a pivot jump over 6 lever
+lengths; off for animals, portraits, ragdolls and characters under 40 px tall.
+
+- **Weapons** (1.6 Hz, damping ratio 0.3, 22° at most along the body, never past the posed place towards the wearer and 6° at most away from it; towards the wearer is from the hanging mass to the bone, across the lever, so it follows the trunk's lean; swinging both ways a long weapon on the back went through the back and the legs, **Observed** by the user): each weapon point other than `hands` (`hip`, `back`, `back2`) is a sway group (`CharacterAsset.Sways`). Its pivot is where
+  the gear lies against the wearer (`HangSways`, in the binding pose): the place on the gear's long axis (through the point and the centre of the group's largest part, over that
+  part's length) nearest the bone the point is on (the belt, for a hip point) or, for gear that passes a shoulder joint within 2.5 units (a weapon across the back), nearest that
+  shoulder: hung from the middle of the back, a blade the hips pushed out turned its upper end into the shoulder (**Observed** by the user).
+  Before the swing the gear is turned out of the wearer (`GearSway.PushAngle`): the pelvis, thighs and calves are capsules from the body's own boxes by bone
+  (`AddSwayColliders`, `SwayCollider`), the gear its span along its axis with half its box's least side; it turns about its pivot, away from the bone it hangs from, by the
+  least angle up to 40° that gives it the clearance it has in the binding pose (at most 0: gear placed touching a limb stays so), and the swing hangs from there. The pose
+  fixes the gear to one bone and the others move into it: a long blade on the back went through the hips and the legs in a stance that pushes them back, in the original
+  too (**Observed**, the user's save `leviathan bug`, four views, sway off against on: through the trousers off, along the buttock and thigh on, the guard in place at the
+  shoulder). The point itself is the weapon's grip, which a hip point holds out in front of the hip: turned about it the sheath left the belt. The swing turns every part of
+  the group about the pivot. **Observed** (sandbox, a staff at the hip, run and turn, sway on against off on the same paused frames): the difference is a wedge with its tip at
+  the hip.
+- **Backpacks** (2.2 Hz, damping ratio 0.45, 7° at most, never past the posed place towards the wearer's back): a person's worn mesh in the backpack slot is baked when it is
+  read (`GearSway.BakeMesh`, a mesh cache key of its own). Each vertex gets a hanging share from its place in the binding pose: 0 in front of the shoulders' line (the clavicles' Z
+  plus 0.2 units), 1 behind the back (that line minus 0.9; the human bodies' backs are 0.75 to 1.2 behind it at the shoulder blades, **Verified** on `human_male.mesh` and
+  `human_female.mesh`), smooth between, and 1 above the neck's base plus 1.2 (a frame's canopy). Its bones are split by that share between the rig's and their copies (the same
+  handles plus the bone count; a vertex on three bones or more takes all or nothing: it has four slots). The asset's palette then holds every bone twice
+  (`CharacterAsset.SwayPalette`, `PaletteCount`), the copies being the bones after a turn of the mesh about the pack's pivot (on the back plane, at the height the straps go
+  over the shoulders), so at rest, in a portrait, a ragdoll or with the switch off the copies equal the bones and the mesh is skinned as the file has it. The straps on the chest
+  stay; over the shoulders they stretch. Not baked: a mesh with under half its vertices hanging or whose hanging weight is not 75 % on two bones (a coat in the backpack slot),
+  a lever under 1 unit, a rig over 128 bones or without the clavicle and neck bones, animals' bags. **Observed** (sandbox, Wooden Backpack, same method): the frame shifts a few
+  pixels on a turn and a stop, whole; sway on and off at rest differ by no more than two captures of one frame do.
+
+Not built: cloth, hair, shields on the back as separate groups.
+
 ## Animals and portraits
 
 Animal race/body/mesh/fur/clips/size use shared assembly with animal inputs, not human fallback.

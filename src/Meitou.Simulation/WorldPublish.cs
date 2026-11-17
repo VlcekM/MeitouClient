@@ -38,6 +38,17 @@ public sealed partial class World
     const int PublishChunk = 256;
 
     /// <summary>
+    /// The points the characters look at this publish, by slot (<see cref="Movement.LookTargets"/>; read by the fills, not hashed).
+    /// </summary>
+    readonly Dictionary<int, Vector3> _looks = [];
+
+    /// <summary>
+    /// Points the control channel's <c>look</c> command has characters look at, over their tasks' (a debug aid for head turning captures; not hashed
+    /// or saved).
+    /// </summary>
+    public System.Collections.Concurrent.ConcurrentDictionary<CharacterId, Vector3> DebugLooks { get; } = new();
+
+    /// <summary>
     /// A set of character snapshots the publish fills in place: one object per slot, reused tick after tick. Four of them: the shown pair
     /// (<see cref="Snapshot"/> and <see cref="PreviousSnapshot"/>) stays untouched while the next ticks, run ahead, publish twice into the other two
     /// (docs/simulation.md "Snapshots").
@@ -157,6 +168,7 @@ public sealed partial class World
 
         var slots = buffer.Slots;
         var facts = new PublishFacts(koSlot, leadSlot, pointed, aggro, talk, combat, bodyConstants, population, extraBloodLoss);
+        Movement.LookTargets.Gather(this, _looks);
 
         // A character the far cadence skipped this tick has not changed: the last publish's object stands for it again (docs/simulation.md "Far
         // cadence").
@@ -526,6 +538,7 @@ public sealed partial class World
         s.MouthTone = cold?.MouthTone ?? default;
         s.WorkEvents = WorkEventsOf(state[i].Task, cold);
         s.Task = (CharacterTask)state[i].Task;
+        s.LookAt = _looks.TryGetValue(i, out var lookAt) ? lookAt : null;
         s.PickingLock = cold?.PickingLock is not null;
         s.WorkingShackles = cold?.Shackles is { Work: Locks.ShackleWork.Pick or Locks.ShackleWork.Cut };
         s.InBed = cold is { InSomething: Locks.HeldState.Bed };

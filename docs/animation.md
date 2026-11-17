@@ -99,6 +99,32 @@ in order and plays the first record `FUN_14051fe60` accepts: a record that uses 
 or technique. Animals have no pain animations (`FUN_140646bb0` returns none when the slot `0x248` is set; the hit stores the part's name at character `+0x288`).
 Meitou: `AnimationSystem.PainHold`, `BodyPartTemplate.PainAnim/PainThreshold`, `AnimationDefinition.UsesLeftArm/UsesRightArm`.
 
+### Head turning
+
+**Verified** (decompile of `kenshi_x64.exe` 1.0.68). `Character::lookatPosition(point, fullBody)` (`@ 1405c9e70`, Character vtable `+0x3b0`) calls `AnimationClassHuman`
+slot 23 (`+0xb8`, `@ 1405b8430`): it looks the record named **`head turning`** up by name (vtable `+0x18`) and takes the horizontal angle a between the body's facing and the way
+to the point (Ogre `angleBetween`, negated when `(facing × way).y > 0`). Within ±90° (inclusive) it plays the record on its own layer (`FUN_1405b7ac0`, play rate 0, target
+weight 1.0) and sets the layer's time to **(a + π/2) / π × 0.07** (`DAT_1416c0efc` = 0.07) and returns true; outside it removes the layer (`FUN_1405b3910`: to the fading list)
+and returns false. With `fullBody`, a character that is not moving (`CharMovement +0x24` `currentlyMoving`) turns its body to the point (movement vtable `+0x38`) and then turns
+its head; without, the body turns only when the head returned false. Animals: no `head turning` clip, so only the body turns.
+- Data (**Verified**, probe): ANIMATION `head turning` (`12610-animation.mod`) is `layer` overlay in rebirth.mod (upper in gamedata.base), `play speed` 1, not looping, deletes
+  below waist, both arms, root, tail and weapons, no override bones. Its clip (male and female skeletons) is 0.0667 s, 3 keys: 0 s Neck ~29° + Head ~33° to one side, 0.0333 s
+  neutral, 0.0667 s Neck ~27° + Head ~43° to the other; posed on the female rig the head yaws +61.5° at 0 s and -69.2° at the end (**Verified**, `SkeletonRig` probe).
+  So the head follows the angle continuously through ±90°; past 81° on the far side the time passes the clip's end (0.07 > 0.0667) and holds its last key.
+- Blend (layer manager rules above): overlay manager, rate CONSTANTS `animation blend rate` (3 in gamedata.base) × 1; the held layer rises at × 0.5 (play rate 0 clamped to
+  0.5), a removed one falls at × 1, its time held. The frame-end cleanup (`FUN_1405b3ae0`) drops a requested one-shot only once its progress reaches 1, so with no further call
+  **the head stays turned** until a later look moves or removes it (**Verified**: the layer's time advances by dt × its own play rate, `FUN_1405b1700`, 0 for this layer, so its progress never reaches 1 below about 81°; **Observed** by the owner in play as a head "stuck" to one side, which the Fixes option `Head turns back` ends).
+- Callers (**Verified**, every `call [reg+0x3b0]` site resolved to its task's vtable): `Task_TalktoPlayer` update `FUN_14034c7c0` (fullBody, every update: the walk-up to talk,
+  shoos, a slaver's shout; `Task_PlayerTalkto` shares it), `Task_FollowAndTalk` `FUN_14034c240` and `Task_TownStalker` `FUN_14034c430` (→ `FUN_14033bd60` / `FUN_140340360`)
+  only while not moving, `Task_InvestigateAlarms` `FUN_140354260` within 100 of the alarm (squared 10000, `DAT_14168dae4`), `Task_StandAtNode` `FUN_14034d7c0` (a node's
+  look-at object), and the ranged target finder `FUN_1404374d0` (an unseen chosen target). **Observed**: no other caller of slot 23 than `@ 1405c9e70` among the `call [reg+0xb8]`
+  sites; `hkbLookAtModifier` is only Havok Behavior class data, not used for this.
+
+Meitou: the simulation publishes the point (`CharacterSnapshot.LookAt`, `LookTargets`: the Talk order's walk, NPC approaches, talk followers and stalkers standing, Shout and
+Shoo jobs, investigators within 100; not hashed); the host adds the `head turning` pose per frame from the drawn place and facing (`HeadTurning`, `GameHost.HeadPose`), so the
+angle follows between ticks (the original sets it per task update). Engine choices: released (fading) while down, carried or in a ragdoll; not built: `Task_StandAtNode` (Meitou
+has no node look objects) and the ranged finder's unseen target. Fixes option **Head turns back** (`FixHeadTurnBack`, off by default) fades the head out once nothing is looked at.
+
 ### Combat upper body
 
 **Verified** (`AnimationClassHuman` slot 28, `FUN_14051d660`): in the combat stance the upper body plays no movement clip; it holds one guard,

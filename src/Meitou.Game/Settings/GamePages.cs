@@ -582,6 +582,10 @@ sealed class GamePages(SettingsMenu menu)
             + "In the game they enslave them too. Arrests that end in slavery are not affected.",
             Toggle: new("Guards spare their own", () => menu.Config.CagesSpareOwn,
                 v => { menu.Config.CagesSpareOwn = v; menu.GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+        result.Add(new("Head turns back",
+            "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. "
+            + "In the game the head stays turned until the next thing it looks at.",
+            Toggle: new("Head turns back", () => menu.Config.FixHeadTurnBack, v => menu.Config.FixHeadTurnBack = v, Remaster: true, OnOff: true)));
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
     }
 
