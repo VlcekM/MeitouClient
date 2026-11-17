@@ -1059,7 +1059,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!Resolve(world, out int c, out int t, out var shop)) return 0;
 
         var squad = world.Squads.Find(world.Characters.Cold(t)!.SquadId)!;
-        int n = Affordable(Market(world), item, Math.Clamp(units, 0, item.Quantity), sell, shop!.Terms,
+        int n = Affordable(world, Market(world), item, Math.Clamp(units, 0, item.Quantity), sell, shop!.Terms,
             sell ? world.Characters.Cold(c)!.Faction : squad.Faction,
             sell ? squad.Money : world.Player.Money);
         if (n == 0) world.Post(sell ? "The shopkeeper can't afford that." : "You can't afford that.");
@@ -1126,8 +1126,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         var squad = world.Squads.Find(world.Characters.Cold(t)!.SquadId)!;
         var m = Market(world);
         int holder = sell ? cold.Faction : squad.Faction;
-        var receipt = Receipt(m, item, units, sell, shop!.Terms, holder);
-        long price = Price(m, item, units, sell, shop.Terms, holder);
+        var receipt = Receipt(world, m, item, units, sell, shop!.Terms, holder);
+        long price = Price(world, m, item, units, sell, shop.Terms, holder);
 
         if (sell)
         {
@@ -1171,7 +1171,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         var m = Market(world);
-        int units = Affordable(m, item, Math.Clamp(buy.Quantity, 1, item.Quantity), false, shop.Terms, squad.Faction, world.Player.Money);
+        int units = Affordable(world, m, item, Math.Clamp(buy.Quantity, 1, item.Quantity), false, shop.Terms, squad.Faction, world.Player.Money);
 
         if (units == 0)
         {
@@ -1179,10 +1179,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return;
         }
 
-        var receipt = Receipt(m, item, units, false, shop.Terms, squad.Faction);
+        var receipt = Receipt(world, m, item, units, false, shop.Terms, squad.Faction);
         var bought = item.WithQuantity(units);
         bought.Buyback = receipt;
-        long price = Price(m, item, units, false, shop.Terms, squad.Faction);
+        long price = Price(world, m, item, units, false, shop.Terms, squad.Faction);
         int placed = PutBought(buy, shop.Stock, item, bought, units, receipt, cold);
 
         if (placed == 0)
@@ -1191,7 +1191,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return;
         }
 
-        if (placed < units) price = Price(m, item, placed, false, shop.Terms, squad.Faction);
+        if (placed < units) price = Price(world, m, item, placed, false, shop.Terms, squad.Faction);
         if (item.Contents is null) Take(shop.Stock, item, placed);
 
         world.Player.Money -= price;
@@ -1258,7 +1258,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         var m = Market(world);
-        int units = Affordable(m, item, Math.Clamp(sell.Quantity, 1, item.Quantity), true, shop!.Terms, cold.Faction, squad.Money);
+        int units = Affordable(world, m, item, Math.Clamp(sell.Quantity, 1, item.Quantity), true, shop!.Terms, cold.Faction, squad.Money);
 
         if (units == 0)
         {
@@ -1281,10 +1281,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (Smuggling(world, c, item, shop.Terms)) return;
 
-        var receipt = Receipt(m, item, units, true, shop.Terms, cold.Faction);
+        var receipt = Receipt(world, m, item, units, true, shop.Terms, cold.Faction);
         var sold = item.WithQuantity(units);
         sold.Buyback = receipt;
-        long price = Price(m, item, units, true, shop.Terms, cold.Faction);
+        long price = Price(world, m, item, units, true, shop.Terms, cold.Faction);
         bool equipped = InventoryCommands.IsEquipmentSection(item.Section);
         int placed = item.Contents is not null
             ? TransferContainer(cold.Inventory!, sell.Item, shop.Stock, sell.X is not null ? "main" : null, sell.X ?? 0, sell.Y, false, null)
@@ -1297,7 +1297,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         if (item.Contents is not null) item.Buyback = receipt;
-        if (placed < units) price = Price(m, item, placed, true, shop.Terms, cold.Faction);
+        if (placed < units) price = Price(world, m, item, placed, true, shop.Terms, cold.Faction);
         if (item.Contents is null) Take(cold.Inventory!, item, placed);
         if (equipped) _assembly.RefreshEquipment(cold);
 
@@ -1403,10 +1403,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// How many of <paramref name="wanted"/> units the payer's <paramref name="money"/> covers (the trade window splits the stack to what is
     /// affordable).
     /// </summary>
-    int Affordable(Market m, ItemInstance item, int wanted, bool sell, Trader terms, int holderFaction, long money)
+    int Affordable(World world, Market m, ItemInstance item, int wanted, bool sell, Trader terms, int holderFaction, long money)
     {
         for (int n = wanted; n > 0; n--)
-            if (Price(m, item, n, sell, terms, holderFaction) <= money) return n;
+            if (Price(world, m, item, n, sell, terms, holderFaction) <= money) return n;
 
         return 0;
     }
@@ -1436,15 +1436,32 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     bool IsBuyback(ItemInstance item, bool sell) => item.Buyback is { } r && ReferenceEquals(r.Session, _session) && r.Sell == sell;
 
     /// <summary>
-    /// The price of <paramref name="units"/> units: a buy-back's coins, else the market's stack price.
+    /// The price of <paramref name="units"/> units: a buy-back's coins, else the market's stack price as the price filters leave it
+    /// (<see cref="ITradePriceFilter"/>).
     /// </summary>
-    long Price(Market market, ItemInstance item, int units, bool sell, Trader terms, int holder) => IsBuyback(item, sell)
-        ? item.Buyback!.Price(units) : market.StackPrice(item.WithQuantity(units), sell, terms, holder);
+    long Price(World world, Market market, ItemInstance item, int units, bool sell, Trader terms, int holder)
+    {
+        if (IsBuyback(item, sell)) return item.Buyback!.Price(units);
+
+        return Filtered(world, item, units, sell, market.StackPrice(item.WithQuantity(units), sell, terms, holder));
+    }
+
+    /// <summary>
+    /// <paramref name="price"/> for <paramref name="units"/> units of <paramref name="item"/> after the price filters, as the open window's
+    /// customer and the trader's squad trade it; the price itself without a filter.
+    /// </summary>
+    long Filtered(World world, ItemInstance item, int units, bool sell, long price)
+    {
+        if (!world.TradePriceFilters.Active) return price;
+
+        int shopSquad = world.Characters.TryResolveNext(_trader, out int t) ? world.Characters.Cold(t)?.SquadId ?? -1 : -1;
+        return world.TradePriceFilters.Pass(world, new TradeDeal(world.Tick, item.Record, units, sell, _customer, shopSquad), price);
+    }
 
     /// <summary>
     /// The receipt of the units' coins, each unit's share of the stack price; null for a buy-back.
     /// </summary>
-    TradeReceipt? Receipt(Market market, ItemInstance item, int units, bool sell, Trader terms, int holder)
+    TradeReceipt? Receipt(World world, Market market, ItemInstance item, int units, bool sell, Trader terms, int holder)
     {
         if (IsBuyback(item, sell)) return null;
 
@@ -1453,7 +1470,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         for (int n = 1; n <= units; n++)
         {
-            long total = Price(market, item, n, sell, terms, holder);
+            long total = Price(world, market, item, n, sell, terms, holder);
             coins[n - 1] = total - previous;
             previous = total;
         }
@@ -1525,13 +1542,14 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         TradeItemView View(ItemInstance item, int index, bool sell, int seller)
         {
             int holder = sell ? world.Characters.Cold(seller)!.Faction : squad.Faction;
-            long value = m.UnitPrice(item, false, shop.Terms, holder), sellValue = m.UnitPrice(item, true, shop.Terms, holder);
+            long value = Filtered(world, item, 1, false, m.UnitPrice(item, false, shop.Terms, holder));
+            long sellValue = Filtered(world, item, 1, true, m.UnitPrice(item, true, shop.Terms, holder));
             bool buyback = IsBuyback(item, sell);
 
             if (buyback)
             {
-                if (sell) sellValue = Price(m, item, 1, true, shop.Terms, holder);
-                else value = Price(m, item, 1, false, shop.Terms, holder);
+                if (sell) sellValue = Price(world, m, item, 1, true, shop.Terms, holder);
+                else value = Price(world, m, item, 1, false, shop.Terms, holder);
             }
 
             bool stolen = item.IsStolenFor(holder, _data);
@@ -1540,7 +1558,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             float thievery = world.Characters.Cold(seller)!.Stats?[StatsEnumerated.Thieving] ?? 0;
             float? odds = sell && stolen && Fences(item, squad, shop.Terms) ? FenceOdds(world, thievery, item, seller, t, squad, shop.Terms) : null;
             return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity,
-                item.Quality, Price(m, item, item.Quantity, sell, shop.Terms, holder), Price(m, item, 1, sell, shop.Terms, holder), stolen)
+                item.Quality, Price(world, m, item, item.Quantity, sell, shop.Terms, holder), Price(world, m, item, 1, sell, shop.Terms, holder), stolen)
             {
                 Buyback = buyback,
                 Container = item.Contents is not null,

@@ -243,6 +243,7 @@ public sealed partial class World : IDisposable
         {
             RegisterCombatHitObserver(this._systems[k], k);
             CombatHitFilters.Register(this._systems[k], k);
+            TradePriceFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
         }
@@ -413,6 +414,10 @@ public sealed partial class World : IDisposable
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
     internal Combat.CombatHitFilters CombatHitFilters { get; } = new();
+    /// <summary>
+    /// The systems adjusting trade prices (<see cref="Trading.ITradePriceFilter"/>).
+    /// </summary>
+    internal Trading.TradePriceFilters TradePriceFilters { get; } = new();
     /// <summary>
     /// The systems observing changed faction relations (<see cref="IRelationChangeObserver"/>).
     /// </summary>
@@ -606,6 +611,7 @@ public sealed partial class World : IDisposable
         _ragdolls ??= system as Ragdolls.IRagdollSource;
         RegisterCombatHitObserver(system, _systems.Count - 1);
         CombatHitFilters.Register(system, _systems.Count - 1);
+        TradePriceFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
@@ -1098,6 +1104,7 @@ public sealed partial class World : IDisposable
 
         HashCombatHitObserverFaults(ref h);
         CombatHitFilters.HashFaults(ref h);
+        TradePriceFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         return h.Value;

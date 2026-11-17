@@ -139,6 +139,14 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
+  `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
+  and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
+  the customer (the player's character in the window, or the NPC shopper) and the shop's squad (-1 none); the filter returns the price to
+  ask, so a mod gives a town's own faction a discount or marks prices up. Filters run in system order (mods in load order), each seeing the
+  price the earlier ones left. A buy-back (undoing a trade of the open window) keeps its coins and is not asked. A filter must be a pure
+  read, since the same price is asked again for the window and the payment; one that throws or answers a negative price is undone for that
+  price and disabled for that world, and the fault enters the state hash. Without a filter nothing is built. Engine API, not in the original.
 - **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the
   first: after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a
   new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change

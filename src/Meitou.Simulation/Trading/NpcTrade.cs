@@ -81,6 +81,8 @@ public static class NpcTrade
             var purse = player ? null : world.Squads.Find(cold.SquadId);
             var unit = chosen.WithQuantity(1);
             long price = market.StackPrice(unit, player, Trader.None, owner?.Faction ?? -1);
+            if (world.TradePriceFilters.Active)
+                price = world.TradePriceFilters.Pass(world, new TradeDeal(world.Tick, unit.Record, 1, false, table.IdOf(buyer), owner?.Id ?? -1), price);
             if ((player ? world.Player.Money : purse?.Money ?? 0) < price) return NpcSale.Failed;
 
             bool toBuyer = owner is { } own && playerFaction >= 0 && own.Faction == playerFaction || Rng.Float(Rng.Mix(roll)) <= KeepChance;
