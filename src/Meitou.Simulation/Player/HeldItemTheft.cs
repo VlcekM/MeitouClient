@@ -91,6 +91,16 @@ static class HeldItemTheft
     /// </summary>
     internal static bool Caught(World world, HeldItem held, Crime.CrimeSystem.TakeKind kind)
     {
+        bool caught = Rolled(world, held, kind);
+        if (caught) ReportTake(world, held, held.Item.Quantity, caught: true);
+        return caught;
+    }
+
+    /// <summary>
+    /// The crime and steal roll of <see cref="Caught"/>: true when the thief was caught.
+    /// </summary>
+    static bool Rolled(World world, HeldItem held, Crime.CrimeSystem.TakeKind kind)
+    {
         var table = world.Characters;
         if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !table.TryResolveNext(held.Actor, out int thief))
             return false;
@@ -101,6 +111,29 @@ static class HeldItemTheft
         return held.From.Holder == ItemHolder.Character && table.TryResolveNext(held.From.Character,
                 out int owner) && table.Cold(owner) is { IsPlayer: false }
             && crimes.Pickpocket(world, thief, owner, held.Item, kind);
+    }
+
+    /// <summary>
+    /// Tells the goods-taken observers of <paramref name="units"/> of the held item leaving an owned container or another character, once placed
+    /// (or caught) (<see cref="Crime.GoodsTakenObservers"/>).
+    /// </summary>
+    internal static void ReportTake(World world, HeldItem held, int units, bool caught)
+    {
+        if (!world.GoodsTakenObservers.Active) return;
+
+        var item = held.Item;
+        if (held.From.Holder == ItemHolder.Site)
+        {
+            if (Goods(world, held.From.Site) is { Owner: >= 0 } box)
+                Crime.GoodsTakenObservers.Report(world, held.Actor, box.Owner, CharacterId.None, held.From.Site, item.Record, units, caught);
+            return;
+        }
+
+        var table = world.Characters;
+        if (held.From.Holder != ItemHolder.Character || !table.TryResolveNext(held.From.Character, out int v) || table.Cold(v) is not { } owner)
+            return;
+
+        Crime.GoodsTakenObservers.Report(world, held.Actor, owner.Faction, held.From.Character, "", item.Record, units, caught);
     }
 
     /// <summary>

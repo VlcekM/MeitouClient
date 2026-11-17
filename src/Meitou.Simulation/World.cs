@@ -243,7 +243,9 @@ public sealed partial class World : IDisposable
         {
             RegisterCombatHitObserver(this._systems[k], k);
             CombatHitFilters.Register(this._systems[k], k);
+            TradePriceFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
+            GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
@@ -312,6 +314,31 @@ public sealed partial class World : IDisposable
         if (Tick != 0) throw new InvalidOperationException("The seed is restored before the world's first tick.");
 
         Settings = Settings with { Seed = seed };
+    }
+
+    /// <summary>
+    /// Tells every <see cref="IWorldReady"/> system, in system order, that the world is ready to run (<paramref name="fromSave"/>: loaded from a
+    /// save, else a new game); one that throws is logged and the rest are still told. Between ticks, before the first.
+    /// </summary>
+    public void TellReady(bool fromSave)
+    {
+        foreach (var system in _systems)
+        {
+            if (system is not IWorldReady ready) continue;
+
+            try
+            {
+                ready.Ready(this, fromSave);
+            }
+            catch (Exception e)
+            {
+                string fault = $"{e.GetType().Name}: {e.Message}";
+                if (SimulationExtensions.FactoryOf(ready) is { } factory)
+                    Console.Error.WriteLine($"mod       {factory.Owner}: world ready of '{factory.Name}' failed: {fault}");
+                else
+                    Console.Error.WriteLine($"world ready of '{ready.GetType().FullName}' failed: {fault}");
+            }
+        }
     }
 
     /// <summary>
@@ -385,9 +412,17 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Items.ItemUseObservers ItemUseObservers { get; } = new();
     /// <summary>
+    /// The systems hearing of goods taken (<see cref="Crime.IGoodsTakenObserver"/>).
+    /// </summary>
+    internal Crime.GoodsTakenObservers GoodsTakenObservers { get; } = new();
+    /// <summary>
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
     internal Combat.CombatHitFilters CombatHitFilters { get; } = new();
+    /// <summary>
+    /// The systems adjusting trade prices (<see cref="Trading.ITradePriceFilter"/>).
+    /// </summary>
+    internal Trading.TradePriceFilters TradePriceFilters { get; } = new();
     /// <summary>
     /// The systems observing changed faction relations (<see cref="IRelationChangeObserver"/>).
     /// </summary>
@@ -585,7 +620,9 @@ public sealed partial class World : IDisposable
         _ragdolls ??= system as Ragdolls.IRagdollSource;
         RegisterCombatHitObserver(system, _systems.Count - 1);
         CombatHitFilters.Register(system, _systems.Count - 1);
+        TradePriceFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
+        GoodsTakenObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
@@ -986,10 +1023,12 @@ public sealed partial class World : IDisposable
             return;
         }
 
+        // Only the characters the player leads keep themselves and their neighbours at full rate; a squad the player does not lead or a code mod
+        // put to sleep is stepped as NPCs are (Squad.Independent, Squad.Dormant).
         var prev = table.Previous;
         _playerSpots.Clear();
         for (int i = 0; i < n; i++)
-            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true }) _playerSpots.Add(prev[i].Position);
+            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true } led && Led(led)) _playerSpots.Add(prev[i].Position);
 
         float near2 = NearRadius * NearRadius;
         int skipped = 0;
@@ -1003,9 +1042,12 @@ public sealed partial class World : IDisposable
                 continue;
             }
 
+            // A sleeping squad's member gets no far tick: it stands still away from the camera and the led characters.
             var at = prev[i].Position;
-            bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2
-                || table.Cold(i) is { IsPlayer: true } || NearPlayer(at);
+            var cold = table.Cold(i);
+            bool farTick = (Tick + i) % period == 0 && !(cold is { IsPlayer: true } && Squads.IsDormant(cold.SquadId));
+            bool led = cold is { IsPlayer: true } && Led(cold);
+            bool near = farTick || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || led || NearPlayer(at);
 
             if (!near)
             {
@@ -1022,7 +1064,12 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character.
+    /// Whether a player character is one the player leads for the cadence: not in a squad the player does not lead or one put to sleep.
+    /// </summary>
+    bool Led(CharacterCold cold) => Squads.Find(cold.SquadId) is not ({ Independent: true } or { Dormant: true });
+
+    /// <summary>
+    /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character the player leads.
     /// </summary>
     bool NearPlayer(System.Numerics.Vector3 at)
     {
@@ -1077,7 +1124,9 @@ public sealed partial class World : IDisposable
 
         HashCombatHitObserverFaults(ref h);
         CombatHitFilters.HashFaults(ref h);
+        TradePriceFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
+        GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         return h.Value;
     }

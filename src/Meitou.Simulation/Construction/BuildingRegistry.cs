@@ -273,6 +273,13 @@ public sealed class PlayerTown
     public Data.Save.Hand? SaveHandle { get; set; }
 
     /// <summary>
+    /// The code mods' tags on the town, by mod manifest id: a mod sets its own entry to find the town again after a load, when <see cref="Number"/>
+    /// is given anew in load order; one mod's tag never replaces another's. Saved on its town state (<see cref="Saving.ModTagSave"/>), hashed
+    /// while any.
+    /// </summary>
+    public SortedDictionary<string, string> ModTags { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Adds the town's state to the world's state hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
@@ -283,6 +290,11 @@ public sealed class PlayerTown
         h.Add(Owner);
         if (Override != 0) h.Add(Override);
         if (Public) h.Add(1);
+        foreach (var (mod, tag) in ModTags)
+        {
+            h.Add(Rng.StableHash(mod));
+            h.Add(Rng.StableHash(tag));
+        }
     }
 }
 

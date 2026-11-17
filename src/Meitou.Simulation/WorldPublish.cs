@@ -247,6 +247,8 @@ public sealed partial class World
             SquadAi = Player.SquadAi,
             PlayerSquads = PublishSquads(),
             IndependentSquads = PublishIndependentSquads(),
+            FactionHeads = SquadManagement.FactionHeads(this),
+            CappedHeads = SquadManagement.CappedHeads(this),
             ActiveSquad = Player.Squad,
             OpenLoot = Player.OpenLoot,
             LootOpener = Player.LootOpener,

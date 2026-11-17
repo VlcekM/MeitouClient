@@ -474,6 +474,7 @@ sealed class GameSaves(GameHost host)
                 loaded = SaveLoader.Load(world, read.Result, data, loadOptions ?? new SaveLoadOptions { Appearances = data.Appearances });
                 host.Modding.RestoreModData(world, read.Result);
                 host.Modding.DropUnownedAutonomy(world);
+                world.TellReady(fromSave: true);
                 if (world.Squads.Find(world.Player.Squad) is { Members.Count: > 0 } squad)
                 {
                     world.Player.Selection.Clear();

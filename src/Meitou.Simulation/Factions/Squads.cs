@@ -183,6 +183,44 @@ public sealed class Squad
     /// </summary>
     public string? AutonomyOwner { get; set; }
     /// <summary>
+    /// A player squad a code mod keeps out of the faction size count (<see cref="SetSquadUncounted"/>, <see cref="SquadManagement.CappedHeads"/>):
+    /// its members never fill <c>max faction size</c>, for townspeople, staff or followers a mod adds beside the player's own characters. They
+    /// still count as the faction's for everything else, the dismiss rule included. Meitou only; saved, hashed while set.
+    /// </summary>
+    public bool Uncounted { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="Uncounted"/> (its manifest id); null: none named. A load without that mod running counts the squad again
+    /// (<see cref="SquadManagement.DropUnownedUncounted"/>). Saved, hashed while set.
+    /// </summary>
+    public string? UncountedOwner { get; set; }
+    /// <summary>
+    /// The code mods' tags on the squad, by mod manifest id: a mod sets its own entry to find the squad again after a load, when squad ids are
+    /// given anew; one mod's tag never replaces another's. Saved for the player's squads (<see cref="Saving.ModTagSave"/>), hashed while any.
+    /// </summary>
+    public SortedDictionary<string, string> ModTags { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// A player squad a code mod gave its own purse (<see cref="SetSquadPurse"/>): its members pay an NPC-style purchase from <see cref="Money"/>
+    /// instead of the player's money, and what a shop it owns earns stays in it (a shopkeeper keeping its takings). Meitou only; saved with its
+    /// money, hashed while set.
+    /// </summary>
+    public bool OwnPurse { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="OwnPurse"/> (its manifest id); null: none named. A load without that mod running pours the purse into the
+    /// player's money and ends it (<see cref="SquadManagement.DropUnownedPurses"/>). Saved, hashed while set.
+    /// </summary>
+    public string? PurseOwner { get; set; }
+    /// <summary>
+    /// A player squad a code mod put to sleep (<see cref="SetSquadDormant"/>): its members ask for no zones round them, so their place unloads when
+    /// no led character or the camera is near, and while the far-tick cadence runs they are stepped only near the camera or a led player
+    /// character, standing still otherwise (a town that sleeps while the player is away). Meitou only; saved, hashed while set.
+    /// </summary>
+    public bool Dormant { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="Dormant"/> (its manifest id); null: none named. A load without that mod running wakes the squad
+    /// (<see cref="SquadManagement.DropUnownedDormant"/>). Saved, hashed while set.
+    /// </summary>
+    public string? DormantOwner { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -270,6 +308,11 @@ public sealed class SquadRegistry
     /// Whether squad <paramref name="id"/> is one the player does not lead (<see cref="Squad.Independent"/>).
     /// </summary>
     public bool IsIndependent(int id) => Find(id) is { Independent: true };
+
+    /// <summary>
+    /// Whether squad <paramref name="id"/> is one a code mod put to sleep (<see cref="Squad.Dormant"/>).
+    /// </summary>
+    public bool IsDormant(int id) => Find(id) is { Dormant: true };
 
     /// <summary>
     /// Takes the next id.
@@ -367,6 +410,17 @@ public sealed class SquadRegistry
                 hasher.Add(0x4F776E72);
                 hasher.Add(Rng.StableHash(owner));
             }
+            if (s.Uncounted) hasher.Add(0x556E636E);
+            if (s.UncountedOwner is { } uncountedOwner) hasher.Add(Rng.StableHash(uncountedOwner));
+            foreach (var (mod, tag) in s.ModTags)
+            {
+                hasher.Add(Rng.StableHash(mod));
+                hasher.Add(Rng.StableHash(tag));
+            }
+            if (s.OwnPurse) hasher.Add(0x50757273);
+            if (s.PurseOwner is { } purseOwner) hasher.Add(Rng.StableHash(purseOwner));
+            if (s.Dormant) hasher.Add(0x446F726D);
+            if (s.DormantOwner is { } dormantOwner) hasher.Add(Rng.StableHash(dormantOwner));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

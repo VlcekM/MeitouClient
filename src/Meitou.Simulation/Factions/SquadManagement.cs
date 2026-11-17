@@ -50,6 +50,26 @@ public sealed record ActiveSquadCommand(int Squad) : SquadCommand;
 public sealed record DismissCommand(CharacterId Character) : SquadCommand;
 
 /// <summary>
+/// A code mod keeps a squad of the player's faction out of the faction size count (<paramref name="On"/>) or counts it again
+/// (<see cref="Squad.Uncounted"/>). <paramref name="Owner"/>: the mod's manifest id, so a load without the mod counts the squad again (one that
+/// names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadUncounted(int Squad, bool On, string? Owner = null) : SquadCommand;
+
+/// <summary>
+/// A code mod gives a squad of the player's faction its own purse (<paramref name="Own"/>, <see cref="Squad.OwnPurse"/>) or ends it, pouring what
+/// is left into the player's money. <paramref name="Owner"/>: the mod's manifest id, so a load without the mod ends it the same way (one that
+/// names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadPurse(int Squad, bool Own, string? Owner = null) : SquadCommand;
+
+/// <summary>
+/// A code mod puts a squad of the player's faction to sleep (<paramref name="On"/>, <see cref="Squad.Dormant"/>) or wakes it.
+/// <paramref name="Owner"/>: the mod's manifest id, so a load without the mod wakes it (one that names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadDormant(int Squad, bool On, string? Owner = null) : SquadCommand;
+
+/// <summary>
 /// The player's squads (docs/game/ui-screens.md "Squads tab", from the original's <c>SquadManagementScreen</c>): their order, the active squad, and
 /// the squad screen's commands with the original's limits and refusals (CONSTANTS <c>max squads</c>, <c>max squad size</c>, <c>max faction size</c>).
 /// A player squad's first member leads it.
@@ -96,7 +116,7 @@ public static class SquadManagement
     }
 
     /// <summary>
-    /// The player's characters alive (what CONSTANTS <c>max faction size</c> counts).
+    /// The player's characters alive, every one (the dismiss rule's count).
     /// </summary>
     public static int FactionHeads(World world)
     {
@@ -104,6 +124,23 @@ public static class SquadManagement
         int heads = 0;
         for (int i = 0; i < table.Next.Length; i++)
             if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true, DiedTick: < 0 }) heads++;
+        return heads;
+    }
+
+    /// <summary>
+    /// The player's characters alive that CONSTANTS <c>max faction size</c> counts: <see cref="FactionHeads"/> without the members of squads a code
+    /// mod keeps out of it (<see cref="Squad.Uncounted"/>; with none, the two are the same).
+    /// </summary>
+    public static int CappedHeads(World world)
+    {
+        var table = world.Characters;
+        int heads = 0;
+        for (int i = 0; i < table.Next.Length; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: true, DiedTick: < 0 } cold) continue;
+            if (world.Squads.Find(cold.SquadId) is not { Uncounted: true }) heads++;
+        }
+
         return heads;
     }
 
@@ -186,6 +223,7 @@ public static class SquadManagement
                     world.Post("You must have at least one squad.");
                     return;
                 }
+                EndPurse(world, doomed);   // a purse a code mod gave it goes back to the player's money
                 world.Squads.Remove(doomed.Id);
                 world.SystemOf<PopulationSystem>()?.ForgetSquad(doomed.Id);
                 Renumber(PlayerSquads(world));
@@ -208,7 +246,137 @@ public static class SquadManagement
             case DismissCommand dismiss:
                 if (data is not null) Dismiss(world, data, dismiss.Character);
                 break;
+            case SetSquadUncounted uncounted:
+                SetUncounted(world, uncounted);
+                break;
+            case SetSquadPurse purse:
+                SetPurse(world, purse);
+                break;
+            case SetSquadDormant dormant:
+                SetDormant(world, dormant);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Whether a command naming the mod <paramref name="named"/> may change a squad setting <paramref name="owner"/> holds: one no mod holds, a
+    /// command naming no mod, or the holder itself. Another mod's setting is left alone, so mods marking the same squad never undo each other's.
+    /// </summary>
+    static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
+
+    /// <summary>
+    /// Sets or clears <see cref="Squad.Uncounted"/> on a squad of the player's faction, noting the mod that set it.
+    /// </summary>
+    static void SetUncounted(World world, SetSquadUncounted command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.UncountedOwner, command.Owner)) return;
+
+        squad.Uncounted = command.On;
+        if (!command.On) squad.UncountedOwner = null;
+        else if (command.Owner is { Length: > 0 } owner) squad.UncountedOwner = owner;
+    }
+
+    /// <summary>
+    /// Gives a squad of the player's faction its own purse or ends it (its money into the player's), noting the mod that set it.
+    /// </summary>
+    static void SetPurse(World world, SetSquadPurse command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.PurseOwner, command.Owner)) return;
+
+        if (!command.Own)
+        {
+            EndPurse(world, squad);
+            return;
+        }
+
+        squad.OwnPurse = true;
+        if (command.Owner is { Length: > 0 } owner) squad.PurseOwner = owner;
+    }
+
+    /// <summary>
+    /// Ends a squad's own purse: what is left goes into the player's money.
+    /// </summary>
+    static void EndPurse(World world, Squad squad)
+    {
+        if (squad.OwnPurse)
+        {
+            world.Player.Money += squad.Money;
+            squad.Money = 0;
+        }
+
+        squad.OwnPurse = false;
+        squad.PurseOwner = null;
+    }
+
+    /// <summary>
+    /// Ends every squad purse a code mod gave whose mod is not running now (<paramref name="running"/>: whether a mod id runs), pouring each into
+    /// the player's money. Between ticks after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedPurses(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.PurseOwner is not { } owner || running(owner)) continue;
+
+            EndPurse(world, squad);
+            dropped++;
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
+    /// Puts a squad of the player's faction to sleep or wakes it, noting the mod that set it.
+    /// </summary>
+    static void SetDormant(World world, SetSquadDormant command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.DormantOwner, command.Owner)) return;
+
+        squad.Dormant = command.On;
+        if (!command.On) squad.DormantOwner = null;
+        else if (command.Owner is { Length: > 0 } owner) squad.DormantOwner = owner;
+    }
+
+    /// <summary>
+    /// Wakes every squad a code mod put to sleep whose mod is not running now (<paramref name="running"/>: whether a mod id runs). Between ticks
+    /// after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedDormant(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.DormantOwner is not { } owner || running(owner)) continue;
+
+            squad.Dormant = false;
+            squad.DormantOwner = null;
+            dropped++;
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
+    /// Counts again every squad a code mod kept out of the faction size count whose mod is not running now (<paramref name="running"/>: whether a
+    /// mod id runs). Between ticks after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedUncounted(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.UncountedOwner is not { } owner || running(owner)) continue;
+
+            squad.Uncounted = false;
+            squad.UncountedOwner = null;
+            dropped++;
+        }
+
+        return dropped;
     }
 
     /// <summary>

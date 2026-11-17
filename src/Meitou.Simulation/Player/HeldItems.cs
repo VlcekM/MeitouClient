@@ -547,6 +547,7 @@ sealed class HeldItems(PopulationData? data)
         else
             Undo(in p, item);
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
+        if (p.Changes) HeldItemTheft.ReportTake(world, held, n, caught: false);
         Touched(world, held, target);
     }
 
@@ -580,6 +581,7 @@ sealed class HeldItems(PopulationData? data)
             Actor = held.Actor,
         };
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
+        if (p.Changes) HeldItemTheft.ReportTake(world, held, item.Quantity, caught: false);
         Touched(world, held, target);
     }
 
@@ -605,6 +607,7 @@ sealed class HeldItems(PopulationData? data)
         else
             Undo(in p, item);
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
+        if (p.Changes) HeldItemTheft.ReportTake(world, held, n, caught: false);
         Touched(world, held, target);
     }
 
@@ -728,6 +731,7 @@ sealed class HeldItems(PopulationData? data)
             (item.Death, item.Mark) = (death, mark);
         if (worn) _assembly?.RefreshEquipment(taker);
         HeldItemTheft.LeftLoot(world, held, death);
+        HeldItemTheft.ReportTake(world, held, all ? before : before - item.Quantity, caught: false);
         if (held.From.Holder == ItemHolder.Site) world.Machines.Touch();
     }
 

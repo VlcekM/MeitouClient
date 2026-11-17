@@ -506,6 +506,8 @@ public static class SaveLoader
             HomeRadius = 100,
         };
         AutonomySave.Read(platoon.Record, squad);
+        ModSquadSave.Read(platoon.Record, squad);
+        ModTagSave.Read(platoon.Record, squad.ModTags);
 
         foreach (var sc in platoon.Characters)
         {

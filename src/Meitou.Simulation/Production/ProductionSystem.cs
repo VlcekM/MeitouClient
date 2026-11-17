@@ -1993,14 +1993,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             item.Mark = Crime.CrimeSystem.OwnerMark(world, container.Building, container.Owner);
 
         bool bagFirst = take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack;
+        int wanted = InventoryCommands.ClickCount(item, take.Count);
         if (Caught(world, container, take.Character, InventoryCommands.HasRoomFor(cold.Inventory!, item, bagFirst, cold)))
         {
             item.Mark = mark;
+            Crime.GoodsTakenObservers.Report(world, take.Character, container.Owner, CharacterId.None, take.Site, item.Record, wanted, caught: true);
             return;
         }
 
-        int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, bagFirst,
-            out bool worn, cold);
+        string record = item.Record;
+        int moved = InventoryCommands.MoveInto(storage, item, wanted, cold.Inventory!, bagFirst, out bool worn, cold);
+        Crime.GoodsTakenObservers.Report(world, take.Character, container.Owner, CharacterId.None, take.Site, record, moved, caught: false);
         if (storage.Items.Contains(item)) item.Mark = mark;   // what stayed keeps its mark
         if (worn) Assembly?.RefreshEquipment(cold);
         if (moved > 0) world.Machines.Touch();
@@ -2110,8 +2113,61 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Site(world, take.Site) is not { Complete: true } site || world.Machines.Find(take.Site) is not { } m
             || !Near(world, take.Character, site, out var cold))
             return;
-        if (CaughtTaking(world, TownGoods(take.Site), take.Character, cold, with => RoomFor(world, m, cold, take, with), out var mark)) return;
+        var goods = TownGoods(take.Site);
+        var (record, wanted) = world.GoodsTakenObservers.Active && goods is { Owner: >= 0 } ? Wanted(m, take) : ("", 0);
+        if (CaughtTaking(world, goods, take.Character, cold, with => RoomFor(world, m, cold, take, with), out var mark))
+        {
+            if (wanted > 0)
+                Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, wanted, true);
+            return;
+        }
 
+        int before = wanted > 0 ? Units(cold.Inventory!, record) : 0;
+        TakeOut(world, m, cold, take, mark);
+        if (wanted > 0)
+        {
+            int moved = Units(cold.Inventory!, record) - before;
+            Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, moved, caught: false);
+        }
+    }
+
+    /// <summary>
+    /// What a take out of machine <paramref name="m"/> asks for: the item record and the units (a stored item's click count, a crafted item, the
+    /// output's or an input's units); none for a bad slot or index.
+    /// </summary>
+    static (string Record, int Units) Wanted(Machine m, TakeFromMachine take)
+    {
+        int Clamp(int count) => take.Count > 0 ? Math.Min(count, take.Count) : count;
+
+        if (take.Slot == -1)
+        {
+            return m.Storage is { } storage && take.Index >= 0 && take.Index < storage.Items.Count
+                ? (storage.Items[take.Index].Record, InventoryCommands.ClickCount(storage.Items[take.Index], take.Count))
+                : ("", 0);
+        }
+
+        if (take.Slot == -2 && m.Craft is { } craft)
+        {
+            if (take.Index < 0 || take.Index >= craft.Done.Count) return ("", 0);
+
+            var made = craft.Done[take.Index];
+            return (made.Record, Clamp(made.Quantity));
+        }
+        if (take.Slot == -2) return m.Output is { } output ? (output.Recipe.Item, Clamp(output.Count)) : ("", 0);
+
+        return take.Slot >= 0 && take.Slot < m.Inputs.Length ? (m.Inputs[take.Slot].Item, Clamp(m.Inputs[take.Slot].Count)) : ("", 0);
+    }
+
+    /// <summary>
+    /// The units of <paramref name="record"/> an inventory holds, bags included.
+    /// </summary>
+    static int Units(Inventory inventory, string record) => inventory.All().Where(i => i.Record == record).Sum(i => i.Quantity);
+
+    /// <summary>
+    /// The take itself, once it is not caught: a stored item, a crafted one, or units of the output or an input.
+    /// </summary>
+    void TakeOut(World world, Machine m, CharacterCold cold, TakeFromMachine take, StolenMark mark)
+    {
         var root = cold.Inventory!;
         if (take.Slot == -1)
         {

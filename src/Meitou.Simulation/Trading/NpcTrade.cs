@@ -78,17 +78,26 @@ public static class NpcTrade
             if (chosen is null) continue;
 
             bool player = playerFaction >= 0 && cold.Faction == playerFaction;
-            var purse = player ? null : world.Squads.Find(cold.SquadId);
+
+            // A player squad a code mod gave its own purse pays from it, as an NPC squad does (Squad.OwnPurse).
+            var squad = world.Squads.Find(cold.SquadId);
+            bool shared = player && squad is not { OwnPurse: true };
+            var purse = shared ? null : squad;
             var unit = chosen.WithQuantity(1);
             long price = market.StackPrice(unit, player, Trader.None, owner?.Faction ?? -1);
-            if ((player ? world.Player.Money : purse?.Money ?? 0) < price) return NpcSale.Failed;
+            if (world.TradePriceFilters.Active)
+            {
+                var deal = new TradeDeal(world.Tick, unit.Record, 1, false, table.IdOf(buyer), owner?.Id ?? -1);
+                price = world.TradePriceFilters.Pass(world, deal, price);
+            }
+            if ((shared ? world.Player.Money : purse?.Money ?? 0) < price) return NpcSale.Failed;
 
             bool toBuyer = owner is { } own && playerFaction >= 0 && own.Faction == playerFaction || Rng.Float(Rng.Mix(roll)) <= KeepChance;
             if (toBuyer && (cold.Inventory is null || TradeSystem.Place(cold.Inventory, unit, 1) == 0))
                 return NpcSale.Failed;
 
             TradeSystem.Take(stock, chosen, 1);
-            if (player) world.Player.Money -= price;
+            if (shared) world.Player.Money -= price;
             else if (purse is not null) purse.Money -= price;
             if (owner is not null) owner.Money += price;
 
