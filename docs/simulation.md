@@ -402,6 +402,10 @@ Six Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns b
   `persistent` false). Faithful (the original): a platoon that is not a town's own is despawned as it leaves, and a stand-in out of range for
   60 s is despawned (the orphan timer); a save's despawned platoon leaves the save; loaded towns refill their pools. **Observed** (headless):
   Meitou brings back the same characters; Faithful replaces them from the pool, and save 2 loses 15 of its 15 travelling platoons in six minutes.
+  A platoon kept only by this switch, the wild one or a code mod's spawn stays loaded while a member lies knocked out inside the loaded zones
+  (not one the unload splits off as a captive), where the original's member-by-member thinning keeps such a member unless he lies out of view
+  within 600 of the departed leader ([off-screen world](game/factions-squads-towns.md#off-screen-world)). **Observed** (headless, a reporter's
+  save): with the leader sent 20000 away, his two knocked-out squad mates beside the player stay; before, both vanished.
 - **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's) met
   by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order; strength per member able to fight is 10 + the
   mean of melee attack, melee defence and toughness (25 for a squad never made); A wins with S_A² / (S_A² + S_B²); the loser is despawned and the
