@@ -2736,13 +2736,27 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.ScreenshotScenes.PrepareStill(_ctx, finish: false);
             _stillPrepared = true;
         }
-        if (_settleAfterWorldLoad)
+        // The world swaps in the load's last stage, with the load still active: its destination is the streamers' arrival point and the camera is
+        // still the sky's, and the settle would wait for objects the frames that end the load have to bring. It waits for the load to end.
+        if (_settleAfterWorldLoad && host.ActiveSceneLoad is null)
         {
             _settleAfterWorldLoad = false;
             Console.WriteLine($"metal     settling objects and foliage at the loaded view");
+            ShareViewPoints();
             _objects?.Settle(host.Camera.Eye);
             _foliage?.Settle(host.Camera.Eye);
         }
+    }
+
+    /// <summary>
+    /// Gives the object and foliage streamers this frame's arrival point and kept points, which the draw would only hand them after the settle (they
+    /// would settle with the last frame's: while an arrival point is set a mesh is requested only near it).
+    /// </summary>
+    void ShareViewPoints()
+    {
+        var kept = ObjectStreamer.MergeKept(host.Gpu.Kept, host.Camera.Eye);
+        if (_objects is not null) (_objects.Ahead, _objects.Kept) = (host.Gpu.Ahead, kept);
+        if (_foliage is not null) (_foliage.Ahead, _foliage.Kept) = (host.Gpu.Ahead, kept);
     }
 
     /// <summary>
