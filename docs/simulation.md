@@ -71,8 +71,8 @@ rendering is camera-relative.
 
 **Engine choice** (`WorldSettings.FarTickPeriod`, the game 4; 1 in tests, goldens and headless worlds without a `World.ViewPosition`, where nothing changes).
 Each tick, after the grid (serial, from the last tick's positions), every character is near or far: near when within `World.NearRadius` of the camera eye (the host sets
-it to the character renderer's draw distance plus its reach margin, 8000, so every drawn character steps every tick), a player character, or within
-`World.PlayerNearRadius` (1500) of one. A far character steps once in `FarTickPeriod` ticks, on its slot's turn (`(Tick + slot) % period`), and its step covers the
+it to the character renderer's draw distance plus its reach margin, 8000, so every drawn character steps every tick), a player character the player leads, or
+within `World.PlayerNearRadius` (1500) of one. A player squad the player does not lead (`Squad.Independent`) counts as NPCs do. A far character steps once in `FarTickPeriod` ticks, on its slot's turn (`(Tick + slot) % period`), and its step covers the
 ticks since its last (`World.StepTicks`, at most the period), so one that crosses the boundary loses no time. `World.Steps(slot)` is honoured by the parallel
 per-character loops (AI think, movement think and move, combat body step, act and approach, first aid, body, animation), the ragdoll setup loop (a moving ragdoll steps
 every tick: its pins follow the animation), the sight map's place probes and the decisions pass; their `dt` for a far character is `World.StepSeconds` where it

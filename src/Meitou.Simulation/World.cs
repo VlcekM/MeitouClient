@@ -1019,10 +1019,12 @@ public sealed partial class World : IDisposable
             return;
         }
 
+        // Only the characters the player leads keep themselves and their neighbours at full rate; a squad the player does not lead is stepped as
+        // NPCs are (Squad.Independent).
         var prev = table.Previous;
         _playerSpots.Clear();
         for (int i = 0; i < n; i++)
-            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true }) _playerSpots.Add(prev[i].Position);
+            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true } led && Led(led)) _playerSpots.Add(prev[i].Position);
 
         float near2 = NearRadius * NearRadius;
         int skipped = 0;
@@ -1037,8 +1039,9 @@ public sealed partial class World : IDisposable
             }
 
             var at = prev[i].Position;
-            bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2
-                || table.Cold(i) is { IsPlayer: true } || NearPlayer(at);
+            var cold = table.Cold(i);
+            bool led = cold is { IsPlayer: true } && Led(cold);
+            bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || led || NearPlayer(at);
 
             if (!near)
             {
@@ -1055,7 +1058,12 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character.
+    /// Whether a player character is one the player leads for the cadence: not in a squad the player does not lead.
+    /// </summary>
+    bool Led(CharacterCold cold) => !Squads.IsIndependent(cold.SquadId);
+
+    /// <summary>
+    /// Whether <paramref name="at"/> is within <see cref="PlayerNearRadius"/> of a player character the player leads.
     /// </summary>
     bool NearPlayer(System.Numerics.Vector3 at)
     {
