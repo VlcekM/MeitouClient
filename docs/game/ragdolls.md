@@ -187,7 +187,7 @@ runs each tick while WHOLE). Safe: the character's `SensoryData::numEnemies` (`+
 state is 1 (a slave), or `numConsciousAllies` (`+0x4c`) is above 0 (sensed allies in posture 0, not unconscious or dead). A
 player order gets it up (1 when sneaking), as does a thief's watcher noticing. It is awake to its AI (**Verified**, `FUN_1405d00b0`: posture 3
 is reached only while `FUN_140598c20` holds, medical `+0x161` knocked out and `+0x164` dead clear, and the AI update then runs as an awake
-one's), so its Medic job treats it where it lies ([medic jobs](ai-tasks.md#medic-jobs)).
+one's); that its Medic job then treats it where it lies is **Observed** (#870, the original's behaviour as reported) ([medic jobs](ai-tasks.md#medic-jobs)).
 - Counts (`FUN_1408593d0`, per sensed character): `numEnemies` (`+0x94`) and `numNeutrals` (`+0x98`) skip the unconscious
   (vfunc 0x30), the dead (`+0x5bc`) and the carried (`+0x3d4`), so downed enemies do not count; allies count in
   `FUN_1408580d0` (above).
