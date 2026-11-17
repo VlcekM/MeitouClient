@@ -1354,6 +1354,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     public const int MaxSeparationContributions = 26;
 
     /// <summary>
+    /// The turns in degrees a refused footwork step is tried at, smallest first (<see cref="SlideStep"/>; engine choice).
+    /// </summary>
+    static readonly float[] SlideTurns = [30, 60];
+
+    /// <summary>
     /// The share of the footprint radius a body is solid over (engine choice: 2.4 units for a human, about half the shoulders' width).
     /// </summary>
     public const float BodyShare = 0.6f;
@@ -2042,13 +2047,47 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         bool stands = false;
 
         // Pushed by its neighbours where it cannot stand (over a hole furniture cuts in a floor): its own step alone.
+        var pushed = step;
         if ((push.Sum != Vector2.Zero || shove != Vector2.Zero) && !(stands = walk.TryStand(x, z, p.Position.Y, out y)))
         {
             step = s.Dir * s.Speed * dt;
             (x, z) = (p.Position.X + step.X, p.Position.Z + step.Y);
         }
 
+        // In its footwork, a step that cannot be stood on is turned along what refuses it (#923).
+        if (s.Steering && step != Vector2.Zero && !stands && !walk.TryStand(x, z, p.Position.Y, out _)
+            && (SlideStep(walk, p.Position, pushed) ?? SlideStep(walk, p.Position, step)) is { } slid)
+        {
+            step = slid;
+            (x, z) = (p.Position.X + step.X, p.Position.Z + step.Y);
+            stands = walk.TryStand(x, z, p.Position.Y, out y);
+        }
+
         if (step != Vector2.Zero) Place(world, i, p, ref n, cold, ref s, x, y, z, stands);
+    }
+
+    /// <summary>
+    /// A refused step from <paramref name="from"/> turned along what refuses it, as the original's agent turns the rest of a step along the wall it
+    /// meets (docs/game/pathfinding.md "Walls"): the step turned by each of <see cref="SlideTurns"/> (degrees) to the left and then the right,
+    /// shortened by the turn's cosine, the first whose end point can be stood on; null when none can. Off the mesh (bare terrain too steep for it)
+    /// there are no wall edges to slide along, only end points that cannot be stood on, so the turns stand in for the wall's direction (engine choice).
+    /// </summary>
+    static Vector2? SlideStep(IWalkability walk, Vector3 from, Vector2 step)
+    {
+        if (step == Vector2.Zero) return null;
+
+        foreach (float turn in SlideTurns)
+        {
+            float angle = turn * (MathF.PI / 180);
+            float cos = MathF.Cos(angle), sin = MathF.Sin(angle);
+            var left = new Vector2(step.X * cos - step.Y * sin, step.X * sin + step.Y * cos) * cos;
+            if (walk.TryStand(from.X + left.X, from.Z + left.Y, from.Y, out _)) return left;
+
+            var right = new Vector2(step.X * cos + step.Y * sin, -step.X * sin + step.Y * cos) * cos;
+            if (walk.TryStand(from.X + right.X, from.Z + right.Y, from.Y, out _)) return right;
+        }
+
+        return null;
     }
 
     /// <summary>

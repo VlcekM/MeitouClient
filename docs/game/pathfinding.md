@@ -130,6 +130,12 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   farthest walkable part of the step (bisection) instead of dropping all of it; when no part has one but the ground is within `StandRise`, the step is made (the sweep saw no wall, and the original has no such test), and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
   overlapping characters apart, which `MovementSystem` separation does.
+- Meitou fight footwork (`MovementSystem.SlideStep`): a steering fighter's step (with the separation push, else alone) whose end cannot be stood on is
+  turned 30° and then 60° either way, shortened by the turn's cosine, and the first that can be stood on is made (engine choice: off the mesh, on bare
+  terrain too steep for it, there are no wall edges to slide along). Before, such a fighter stood still, every tick: in #923's save (a Reaver on a
+  cliff face off the mesh, `--nav`) the circling guards backed off into the rise and stayed piled up under 1 unit apart, so none had the
+  room to ask for a swing (`CombatSystem.BodyRoom`) and the Reaver took no hit in 1,000 ticks; with the turn none stood for the whole run and it was
+  knocked out at tick ~1,260 (**Observed**).
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead
   nowhere (no neighbour or tile link, not a zone-border edge the next zone links or that borders an unloaded zone, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
   the radius is RACE `pathfind footprint radius`. Before, only the end point was tested, and with the 2-unit edge tolerance a step could cross a thin wall (Observed: on the Hub's
