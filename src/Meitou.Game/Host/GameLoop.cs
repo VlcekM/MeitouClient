@@ -114,6 +114,12 @@ sealed class GameLoop(GameHost host)
     /// The cinema (or the tour) holds the drawn camera: the rig's state is not applied until a camera input takes it back.
     /// </summary>
     bool _cinemaHolds;
+
+    /// <summary>
+    /// Last frame the lens keys were live (the free camera or one the cinema holds): leaving them for the strategy camera puts the lens back.
+    /// </summary>
+    bool _lensWasLive;
+
     /// <summary>
     /// Photo mode (docs/viewer.md "Photo mode"): while it is on it owns the camera, the interface's visibility and the pause.
     /// </summary>
@@ -1489,6 +1495,7 @@ sealed class GameLoop(GameHost host)
         host.AgentWorld.ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
         if (_photo.Active && (host.Covered || host.TitleScreen.TitleVisible)) _photo.Abandon();   // its world is gone
         if (!_cinemaHolds) host.ApplyCamera(host.Session.CameraAt());
+        ResetLensOnLeavingFree();
         _cinema.Advance(_cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
         // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
         host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible
@@ -1505,6 +1512,17 @@ sealed class GameLoop(GameHost host)
         // A load's destination is a kept point too: the grass walk follows the eye and the kept points only, and its pages can be made during the climb.
         if (host.LoadAhead is { } destination) host.Gpu.Kept = [.. host.Gpu.Kept, destination];
         host.ViewAspect = FramebufferSizeNow().X / (float)Math.Max(FramebufferSizeNow().Y, 1);   // headless: no window, the size asked for
+    }
+
+    /// <summary>
+    /// Back in the strategy camera from the free camera or one the cinema held, the lens they zoomed returns to its default; photo mode puts back
+    /// its own.
+    /// </summary>
+    void ResetLensOnLeavingFree()
+    {
+        bool live = host.Session.Camera.IsFree || _cinemaHolds;
+        if (_lensWasLive && !live && !_photo.Active) _cinema.ResetLens();
+        _lensWasLive = live;
     }
 
     /// <summary>

@@ -153,6 +153,11 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     public bool LensZoomLive => lensKeysAlways || LensKeys?.Invoke() == true;
 
     /// <summary>
+    /// Puts the lens back to its default (Home's 50 degrees), silently.
+    /// </summary>
+    public void ResetLens() => camera().FieldOfView = DefaultFov;
+
+    /// <summary>
     /// The viewer's keys file.
     /// </summary>
     public static string ViewerFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
