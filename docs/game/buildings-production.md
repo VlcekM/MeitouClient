@@ -1139,8 +1139,12 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   house; any other workstation gets one when a resident pretends at it. A layout's generators add to `NpcOutput` (switch and progress from their own
   saved entry, else complete and on), its battery banks join the frame of the house's town (`TownBatteryGrid`), so the town's frame runs in the
   rotation (below, [power](#power)) and they charge from its surplus and drain on its shortfall. A ruin holds no layout objects
-  ([ruins](#ruined-by-residents)): a house set destroyed after its town registered loses its objects' machines with their items, its generators
-  and draws leave the frame, and when it stands again its objects get new machines (`DropGonePieces`; so does a house laid out anew). An interior
+  ([ruins](#ruined-by-residents)): a house set destroyed after its town registered loses its objects' machines, their items destroyed with them
+  and none dropped, as the original's ([ruins](#ruined-by-residents)), its generators and draws leave the frame, and when it stands again its
+  objects get new machines (`DropGonePieces`; so does a house laid out anew). A save writes no entry inside a ruin, so a reloaded ruin's objects
+  start new when it stands (`Saving/RuinSave`, [save](../formats/save.md#zone-files)); **Observed** (headless, METARU): the Stack's Power
+  Station shack set destroyed, saved, reloaded and set standing in the registry's ruins gets a Battery Bank starting empty, where the save's old
+  entry held 60 (and, without `RuinSave`, still loads 60). An interior
   hydroponic farm's plants are drawn as a town farm's ([farm plants](#farm-plants)), with the house's furniture. **Observed** (headless, METARU and
   the base data): setting the Stack's Power Station shack destroyed drops its Battery Bank's machine, standing it up again makes a new one; a Secret
   Drug Farm house's 7 object machines likewise.
@@ -1227,6 +1231,17 @@ intact and name no template. Its houses are ruins in the original (issue #145).
 (0 of 56, 56, 23, 23, 62), while 283 of 284 standing buildings with an interior name hold furniture; every saved ruin names no interior layout (its template
 names none). Meitou: no reader lays out a ruin's layouts (drawing, lamps, effects, emitters, navmesh, and `TownBuildings`: no beds, nodes,
 fixtures or item slots).
+
+**A ruin's objects take their items with them.** **Verified** (decompile): `FUN_140548580` hands each furniture object to the destroy routine
+`FUN_140799af0`, whose building branch unregisters it (zone, power, doors, sound, physical parts) and queues it for deletion after 5 seconds,
+moving none of its items; the deletion runs its destructor, whose chain (production, storage, farm, generator, research and crafting classes)
+ends in the UseableStuff one (`FUN_140562fd0`), which deletes the inventory (`+0x430`, `getInventory` slot 44 `FUN_1400f6cf0`), whose destructor
+`FUN_14074b660` destroys every item ("clearAllItems"). So the items are neither dropped nor kept. **Observed** (the saves above): no
+building-list entry has a ruin as its `isInsideBuilding` (0 of 15089 inside a building in METARU); a ruin's state keeps `serialised interior` 1, and
+some keep `internalbuildings-<k>` handles naming no saved building (10 of METARU's 56 ruins, 6 of autosave 2's 22), whose slots stay in the zone's
+slot list (58 of 58 in METARU's 20.32). **Verified** (decompile): with `serialised interior` 1 the load makes no interior, and the saved
+`destroyed` is set without `setDestroyed` (`FUN_140552b70`), so a loaded ruin holds no objects and the save keeps no state for any: objects it
+gets when it stands again start new. Meitou: [layout objects](#npc-town-machines).
 
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,

@@ -15,7 +15,8 @@ namespace Meitou.Simulation.Saving;
 /// <c>out</c>); a machine is read back from them when its town registers and the machine is made (<see cref="Restore"/>). The machine of a
 /// building's layout object (a refinery, hydroponic farm or battery bank inside a house) uses its own entry the same way, matched by record and
 /// position (<see cref="SavedPieces"/>), a battery bank's <c>batterycharge</c> with it. An object with no entry saves nothing: the original makes
-/// that interior again from its layout (its zone has no file, or the house's interior was not serialised), so its objects start new, a battery
+/// that interior again from its layout (its zone has no file, the house's interior was not serialised, or it is a ruin, <see cref="RuinSave"/>),
+/// so its objects start new, a battery
 /// bank empty. A machine whose building has no state record in the save keeps Meitou-only keys on CAMERA, which older Meitou
 /// saves wrote for every town machine: <c>meitou tm&lt;i&gt;</c> (the building's run-time key), <c>meitou tm&lt;i&gt; out</c>
 /// (progress, float),
