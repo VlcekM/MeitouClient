@@ -1371,9 +1371,9 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Keeps the navmesh on the zones the population has active (built on the nav thread, cached), drops the ones idle too long, and has the
-    /// characters whose way leads through a zone whose mesh arrived ask for their paths again (their first path may have crossed a building), at most
-    /// every <see cref="RepathCoalesceSeconds"/>.
+    /// Keeps the navmesh on the zones the population has active (built on the nav thread in the order the player's characters reach them, cached),
+    /// drops the ones idle too long, and has the characters whose way leads through a zone whose mesh arrived ask for their paths again (their first
+    /// path may have crossed a building), at most every <see cref="RepathCoalesceSeconds"/>.
     /// </summary>
     internal void UpdateNav(bool wait = false)
     {
@@ -1391,6 +1391,8 @@ sealed partial class GameHost(
         }
         if (wait) FinishNavUnload();
 
+        Nav.Favour(Session.World);
+        Nav.Walkability.GameSpeed = Session.World.PhysicsSpeed;
         var pending = LoadWantedZones(Nav, Population, now);
         DropStaleZones(Nav, now);
         if (wait) Task.WaitAll([.. pending]);

@@ -467,10 +467,17 @@ public sealed partial class NavmeshWalkability : IWalkability
         w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
 
     /// <summary>
-    /// How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>), so the walker finds rocks, walls and
-    /// cliffs the terrain grid does not know before it gets there (engine choice: about a zone).
+    /// How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>) at 1x, so the walker finds rocks,
+    /// walls and cliffs the terrain grid does not know before it gets there (engine choice: about a zone), times <see cref="GameSpeed"/>.
     /// </summary>
     public const float Lookahead = 4000;
+
+    /// <summary>
+    /// The game speed the host runs at (1, 2, 5; set between ticks): the zones along a route are asked for <see cref="Lookahead"/> times it ahead,
+    /// the same real time of walking at every speed. At 5x one zone of lead was asked for only as the zone before went live, and a fast walker
+    /// reached it still building (#824).
+    /// </summary>
+    public float GameSpeed { get; set; } = 1;
 
     /// <summary>
     /// When each zone without a mesh was last passed by a provisional route (a <see cref="System.Diagnostics.Stopwatch"/> timestamp),
@@ -493,12 +500,12 @@ public sealed partial class NavmeshWalkability : IWalkability
 
     /// <summary>
     /// Records in <see cref="_routeZones"/> the unloaded zones the route's points from <paramref name="exact"/> on pass through, every
-    /// <see cref="HandoverStep"/> units for <see cref="Lookahead"/> units.
+    /// <see cref="HandoverStep"/> units for <see cref="Lookahead"/> times <see cref="GameSpeed"/> units.
     /// </summary>
     void Ahead(NavWorld w, List<Vector3> points, int exact)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        float left = Lookahead;
+        float left = Lookahead * Math.Max(GameSpeed, 1);
         for (int i = Math.Max(exact, 1); i < points.Count && left > 0; i++)
         {
             var a = points[i - 1];

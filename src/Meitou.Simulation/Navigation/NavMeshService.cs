@@ -32,7 +32,7 @@ public sealed record NavZoneReady(ZoneCoordinate Zone, NavMeshOrigin Origin, dou
 /// navmesh building run on their own threads). A finished mesh goes live at once, whenever that is: the walkability's world is swapped atomically, so
 /// a query sees the old world or the new one, and the simulation can see a zone appear in the middle of a tick. <see cref="Request"/> queues a zone;
 /// a worker takes it from the cache (keyed by the zone's building hash and the settings) or gathers, builds, prunes and caches it. Several zones
-/// queued together are built one after another, each using all cores.
+/// queued together are built one after another, each using all cores, in the order the player's characters reach them (<see cref="NavBuildQueue"/>).
 /// </summary>
 internal sealed class NavMeshService : IDisposable
 {
@@ -62,9 +62,9 @@ internal sealed class NavMeshService : IDisposable
     /// </summary>
     readonly ConcurrentDictionary<ZoneCoordinate, int> _rebuilds = new();
     /// <summary>
-    /// The zones waiting for the worker, in request order; a zone is added once while it is pending.
+    /// The zones waiting for the worker; a zone is added once while it is pending.
     /// </summary>
-    readonly BlockingCollection<ZoneCoordinate> _queue = [];
+    readonly NavBuildQueue _queue = new();
     /// <summary>
     /// The task of each requested zone until it is published, unloaded or fails; a zone not in it is not wanted any more.
     /// </summary>
@@ -177,6 +177,11 @@ internal sealed class NavMeshService : IDisposable
     }
 
     /// <summary>
+    /// Ranks the queued zones by where <paramref name="world"/>'s player characters stand and walk (<see cref="NavBuildQueue.Favour"/>).
+    /// </summary>
+    public void Favour(World world) => _queue.Favour(world);
+
+    /// <summary>
     /// Builds a zone again although its mesh is loaded (the buildings round it changed, <see cref="NavRuntimeBuildings"/>): the new mesh replaces the
     /// old one when it is published, which is when the task completes. A zone not loaded is not built (it is built with the overlay when it is asked
     /// for).
@@ -284,7 +289,7 @@ internal sealed class NavMeshService : IDisposable
     {
         using var gatherer = new ZoneGeometryGatherer(_install, _db, _levels, _collisions, _runtime);
         uint settingsHash = NavMeshCache.SettingsHash(Settings) * 16777619 ^ NavMeshCache.ContentHash(_install, _db, _levels);
-        foreach (var zone in _queue.GetConsumingEnumerable())
+        while (_queue.Take() is { } zone)
         {
             if (_disposed) break;
 
@@ -352,7 +357,7 @@ internal sealed class NavMeshService : IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _queue.CompleteAdding();
+        _queue.Close();
         _worker.Join(TimeSpan.FromSeconds(30));
         foreach (var tcs in _pending.Values)
             tcs.TrySetCanceled();

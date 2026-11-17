@@ -28,7 +28,7 @@ static class SaveProbe
     const int SettleTicks = 300;
 
     /// <summary>
-    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--stream] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
+    /// The command line: <c>&lt;save folder&gt; &lt;mode&gt; [mode arguments] [--ticks n] [--nav] [--stream] [--speed s] [--at x,z] [--seed n] [--load-order file] [--mod-dir folder]...</c>. Returns 0, 1 for a save without a player character, or 2 for a bad command line.
     /// </summary>
     public static int Run(GameInstall install, string[] args)
     {
@@ -39,11 +39,13 @@ static class SaveProbe
         int ticks = ProbeLoadOrder.TakeOption(rest, "--ticks") is { } t ? int.Parse(t) : SettleTicks;
         Vector2? at = ProbeLoadOrder.TakeOption(rest, "--at") is { } spot ? Spot(spot) : null;
         ulong seed = ProbeLoadOrder.TakeOption(rest, "--seed") is { } s ? ulong.Parse(s) : 1;
+        float speed = ProbeLoadOrder.TakeOption(rest, "--speed") is { } v ? float.Parse(v) : 1;
         var order = ProbeLoadOrder.Take(install, rest);
         if (rest.Count < 2) return Usage();
 
         if (ProbeWorld.Load(install, order, rest[0], nav, at, seed, stream) is not { } loaded) return 1;
         using var probe = loaded;
+        probe.World.PhysicsSpeed = speed;
         probe.Tick(ticks);
         if (rest[1] == "wars")
         {
@@ -1761,7 +1763,7 @@ static class SaveProbe
     static int Usage()
     {
         Console.Error.WriteLine("""
-            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
+            meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--speed s (default 1)] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, water state, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
@@ -1812,6 +1814,7 @@ static class SaveProbe
                                        objects and the camp round it; buy: the player buys it and the camp is listed again; a save folder: its
                                        rebuild finished, the world is saved there (needs --nav)
             --stream: build only the player's box first and stream the other zones in as the game does, ticks at game speed (implies --nav)
+            --speed: the game speed (1, 2, 5): the world runs as the game's at that speed, and --stream ticks that many times faster
             """);
         return 2;
     }
