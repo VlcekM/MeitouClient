@@ -205,7 +205,7 @@ owner or in its platoon (`14033b160`); otherwise the aim is target + normalise(m
 moves, H += (dir − H) × 0.5 × dt (`GameLoop_DtScaled`), aim = leader position + H × leader speed + slot rotated from −X onto H, so
 followers aim one second ahead of the leader. When the leader is inside a building the follower cannot enter, aim = A + (A − B) × 1.1 +
 rotated slot × 0.2 (A, B: the door's two points, its leaf centre ± 15, [ai-tasks](ai-tasks.md) gate guards; 200 LEAVE_BUILDING walks to the same A + (A − B) × 1.1, so A is
-the outer one, **Observed**: the aim is 33 past the doorway outside).
+the outer one, **Observed**: the aim is 33 past the doorway outside). The door is the building's first (`Building::getDoor`, vfunc 0x3e0 `FUN_1400f7080`; A from its `doorClosedPositionOut` +0x3bc), and the branch runs only while `FUN_140547500` (the building's `+0x1f0` object, byte `+0xe0`) is false. "Cannot enter" is the follower's Character slot 101 (`0x328`): 1 for every person (`FUN_1405e5960`, Character and CharacterHuman), so the branch is an animal's; `CharacterAnimal`'s `FUN_1405c81d0` allows a building when its race lacks `cant enter buildings` (RACE `+0x9c`) and its radius (footprint `+0x364` × scale) is under 4.5 or the BUILDING is `cavernous` (`+0xc2`) (**Verified**, decompile; names KenshiLib 1ce4a16). Meitou's `ShutOutAim` (people too, nearest door, every door locked and whole) is an engine choice; Meitou does not model the animal branch.
 
 Each update, with d the XZ distance to the aim: under 1 the desired speed (movement +0xbc) is 0. While the leader moves it is
 d × max(0.1, 0.5 + 0.5 × dot(leader direction, own direction)): a follower that lags runs to catch up, one facing away slows. With the

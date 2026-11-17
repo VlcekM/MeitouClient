@@ -974,8 +974,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             return;
         }
 
-        if (table.Cold(leader.Slot)?.CarriedBy == table.IdOf(i))
-            return;   // it carries its leader: the squad follows it, it does not follow itself
+        // It carries its leader: the squad follows it, it does not follow itself. Nor does the original's: a carried character is down (isDown), the
+        // follow rows need it standing (state 7), so no Task_Follow runs and no hold point is written.
+        if (table.Cold(leader.Slot)?.CarriedBy == table.IdOf(i)) return;
 
         var lead = prev[leader.Slot];
         var self = table.IdOf(i);
@@ -985,11 +986,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         bool moving = leadSpeed > StandingSpeed;
         var here = new Vector2(n.Position.X, n.Position.Z);
         Vector2 slotPos;
-        bool shutOut = false;
+        Vector2? door = null;
 
         if (squad is not null && squad.FormationSlots.TryGetValue(self, out var slot) && squad.Members.Contains(leader))
         {
-            (slotPos, shutOut) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed, moving);
+            (slotPos, door) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed, moving);
         }
         else
         {
@@ -998,6 +999,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             off = off.LengthSquared() > 1e-6f ? Vector2.Normalize(off) : -leadDir;
             slotPos = leadAt + off * PlainDistance(world.Seed, self, leader);
         }
+
+        // The hold point takes the formation aim, not the wait outside a locked building: that wait is Meitou's (see ShutOutAim).
+        CarryHoldPoint(cold, slotPos, lead.Position.Y);
+        bool shutOut = door is not null;
+        if (door is { } outside) slotPos = outside;
 
         // A leader on another storey (the Hub Storm House's roof above it): the follower's own floor under its slot would be "there", so it
         // takes a path to the leader itself, on the leader's floor, and the climb counts in its distance (engine choice; the original's
@@ -1024,10 +1030,24 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// A squad mate's aim: its slot turned onto its eased heading, one second of the leader's travel ahead of the leader; outside the door when the
-    /// leader is shut in from it (<see cref="ShutOutAim"/>, the second value true).
+    /// A follower's aim becomes its hold point on every step (<c>Task_Follow</c>'s update <c>FUN_14033b350</c> writes it whether holding or not,
+    /// sneaking too, <b>Verified</b>): a bodyguard on Hold takes its post along. A person's aim is the followed character's position plus a flat
+    /// offset (the formation slot, <c>FUN_1403335c0</c>, or the drawn distance, <c>FUN_140333500</c>), so at its height; the door aim of that
+    /// formation branch is an animal's only (the follower's slot 101 is 1 for every person). Turning Hold on resets the point to where the
+    /// character stands, so it is written only while the Hold toggle is on. The update's early returns write nothing; none reaches a holder here:
+    /// Meitou follows only characters, a removed one ends the follow first as the unresolved handle does, and the lost-target end needs a follower
+    /// outside the player's faction (<c>FUN_14033a700</c>), while Hold is the player's.
     /// </summary>
-    static (Vector2 Aim, bool ShutOut) FormationAim(World world, int i, float dt, Vector3 at, CharacterCold cold, Vector2 slot, int leader,
+    static void CarryHoldPoint(CharacterCold cold, Vector2 aim, float y)
+    {
+        if ((cold.Orders & CharacterOrders.Hold) != 0) cold.HoldPoint = new Vector3(aim.X, y, aim.Y);
+    }
+
+    /// <summary>
+    /// A squad mate's aim: its slot turned onto its eased heading, one second of the leader's travel ahead of the leader; and, when the leader is
+    /// shut in from it, where it waits outside the door instead (<see cref="ShutOutAim"/>), else null.
+    /// </summary>
+    static (Vector2 Aim, Vector2? ShutOut) FormationAim(World world, int i, float dt, Vector3 at, CharacterCold cold, Vector2 slot, int leader,
         Vector3 leaderAt, Vector2 leadAt, Vector2 leadDir, float leadSpeed, bool moving)
     {
         var heading = cold.FollowHeading;
@@ -1045,9 +1065,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         cold.FollowHeading = heading;
         var slotPos = leadAt + heading * leadSpeed + Formation.ToWorld(slot, heading);
         if (ShutOutAim(world, leader, i, leaderAt, at) is { } outside)
-            return (outside + Formation.ToWorld(slot, heading) * DoorSlotScale, true);
+            return (slotPos, outside + Formation.ToWorld(slot, heading) * DoorSlotScale);
 
-        return (slotPos, false);
+        return (slotPos, null);
     }
 
     /// <summary>
@@ -1172,9 +1192,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         20 + 20 * Rng.Float(Rng.Hash(seed, Rng.Key(self), RngPurpose.Formation, Rng.Key(target)));
 
     /// <summary>
-    /// Where a squad mate waits while its leader is inside a building it cannot enter (<c>1403335c0</c>; engine reading of "cannot enter": every door
-    /// of the building locked and whole): outside the door nearest to it, A + (A − B) × 1.1 with A the door's outer point and B its inner. Null when
-    /// the leader is not shut in from it.
+    /// Where a squad mate waits while its leader is inside a building it cannot enter (engine choice: every door of the building locked and whole;
+    /// the original's door aim in <c>1403335c0</c> is an animal's that may not enter, docs/game/pathfinding.md "Following"): outside the door
+    /// nearest to it, A + (A − B) × 1.1 with A the door's outer point and B its inner. Null when the leader is not shut in from it.
     /// </summary>
     static Vector2? ShutOutAim(World world, int leader, int self, Vector3 leaderAt, Vector3 at)
     {
