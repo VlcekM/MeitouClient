@@ -22,8 +22,9 @@ internal static class NavTileRaster
         var cut = field();
         RasterizeWhere(ctx, verts, indices, areas, tris, walk, climb, walkable: true);
         RasterizeWhere(ctx, verts, indices, areas, tris, cut, climb, walkable: false);
+        var tops = new List<(int Top, int Area)>();
         for (int c = 0; c < walk.spans.Length; c++)
-            walk.spans[c] = MergeColumn(walk.spans[c], cut.spans[c], climb);
+            walk.spans[c] = MergeColumn(walk.spans[c], cut.spans[c], climb, tops);
 
         return walk;
     }
@@ -63,16 +64,17 @@ internal static class NavTileRaster
     /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest
     /// walkable area whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on
     /// the cutting part over it: the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no
-    /// stair of cutting tops onto the dome it carries (docs/game/pathfinding.md, "Own builder", rasterization).
+    /// stair of cutting tops onto the dome it carries (docs/game/pathfinding.md, "Own builder", rasterization). <paramref name="tops"/> is scratch
+    /// for the walkable spans of one merged span.
     /// </summary>
-    static RcSpan? MergeColumn(RcSpan? walk, RcSpan? cut, int climb)
+    static RcSpan? MergeColumn(RcSpan? walk, RcSpan? cut, int climb, List<(int Top, int Area)> tops)
     {
         RcSpan? head = null, tail = null;
         while (walk is not null || cut is not null)
         {
             RcSpan? span = null;
             int walkTop = int.MinValue;
-            int walkArea = NavArea.Null;
+            tops.Clear();
             while (true)
             {
                 bool fromWalk = walk is not null && (cut is null || walk.smin <= cut.smin);
@@ -83,7 +85,7 @@ internal static class NavTileRaster
                 {
                     walk = walk!.next;
                     walkTop = Math.Max(walkTop, next.smax);
-                    walkArea = Math.Max(walkArea, next.area);
+                    tops.Add((next.smax, next.area));
                 }
                 else
                 {
@@ -102,7 +104,7 @@ internal static class NavTileRaster
             }
 
             span!.next = null;
-            span.area = walkTop >= span.smax - climb ? walkArea : NavArea.Null;
+            span.area = walkTop >= span.smax - climb ? TopArea(tops, walkTop, climb) : NavArea.Null;
             if (span.area != NavArea.Null) span.smax = walkTop;
 
             if (tail is null)
@@ -114,5 +116,20 @@ internal static class NavTileRaster
         }
 
         return head;
+    }
+
+    /// <summary>
+    /// The area a merged span's walkable top takes: the highest of the walkable spans whose own top is within <paramref name="climb"/> of it, as
+    /// Recast's merge flags. A surface lower down in the same merged span gives none: through a deck's steep side to the water under it, the water's
+    /// area went onto the deck's edge cells, which split from the deck as regions of their own and left a hole between two decks (Swamp Store
+    /// <c>21.42:323-</c>, docs/game/pathfinding.md, "Own builder", rasterization).
+    /// </summary>
+    static int TopArea(List<(int Top, int Area)> tops, int walkTop, int climb)
+    {
+        int area = NavArea.Null;
+        foreach (var (top, a) in tops)
+            if (top >= walkTop - climb) area = Math.Max(area, a);
+
+        return area;
     }
 }

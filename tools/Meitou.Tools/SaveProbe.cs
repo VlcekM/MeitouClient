@@ -120,6 +120,8 @@ static class SaveProbe
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("path", >= 3) when probe.Nav is not null: PathTo(probe, a); return true;
+            case ("walk", >= 1) when probe.Nav is not null: Walk(probe, a); return true;
             case ("ray", >= 6) when probe.Nav is not null: Ray(probe, Point(a, 0), Point(a, 3)); return true;
             case ("sees", >= 1) when probe.Nav is not null: SeesLeader(probe, float.Parse(a[0])); return true;
             case ("sightlines", >= 4) when probe.Nav is not null:
@@ -1360,6 +1362,57 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// <c>path [x y z] x y z</c>: the path a human walker gets, as the game asks it, from the leader (or the first point when six numbers are given)
+    /// to a point: whether one was found, where its provisional part starts, its points and how far its end is from the goal. Needs <c>--nav</c>.
+    /// </summary>
+    static void PathTo(ProbeWorld probe, List<string> a)
+    {
+        bool fromPoint = a.Count >= 6;
+        var from = fromPoint ? Point(a, 0) : probe.LeaderPosition;
+        var to = Point(a, fromPoint ? 3 : 0);
+        var path = probe.Nav!.Walkability.FindPath(from, to);
+        string exact = path.IsProvisional ? path.Exact.ToString() : "all";
+        Console.WriteLine($"path {from:F1} -> {to:F1}: found={path.Found} exact={exact} points={path.Points.Count}");
+        foreach (var p in path.Points) Console.WriteLine($"  {p:F1}");
+        if (path.Points.Count > 0) Console.WriteLine($"  end {Vector3.Distance(path.Points[^1], to):F1} from the goal");
+    }
+
+    /// <summary>
+    /// <c>walk name [x y z] [rounds]</c>: the walk of the character named like the first argument. With a point it is first ordered to walk there,
+    /// at that height (a click's); then every 40 ticks, <c>rounds</c> times (10 by default), its position, task, goal, goal height, how the walk ended
+    /// and its path's last point; last, the navmesh heights under the goal. Without a point it plays out the walk the save holds. Needs <c>--nav</c>.
+    /// </summary>
+    static void Walk(ProbeWorld probe, List<string> a)
+    {
+        var t = probe.Characters;
+        int slot = probe.Named(a[0])[0];
+        bool ordered = a.Count >= 4;
+        if (ordered) probe.World.Commands.Enqueue(new MoveOrder([t.IdOf(slot)], Point(a, 1)) { Tick = probe.World.Tick });
+
+        int rounds = a.Count == (ordered ? 5 : 2) ? int.Parse(a[^1]) : 10;
+        for (int round = 0; round < rounds; round++)
+        {
+            probe.Tick(round == 0 ? 1 : 40);
+            PrintWalk(probe, slot);
+        }
+
+        var goal = t.Next[slot].Goal;
+        Heights(probe, goal.X, goal.Y);
+    }
+
+    /// <summary>
+    /// One line of <see cref="Walk"/>.
+    /// </summary>
+    static void PrintWalk(ProbeWorld probe, int slot)
+    {
+        ref readonly var n = ref probe.Characters.Next[slot];
+        var c = probe.Characters.Cold(slot)!;
+        string end = c.Path.Length > 0 ? $"{c.Path[^1]:F1}" : "none";
+        Console.WriteLine($"tick {probe.World.Tick} at {n.Position:F1} task={(CharacterTask)n.Task} goal={n.Goal:F1} goalY={c.GoalHeight:F1} "
+            + $"walk={c.WalkEnd} path end {end}");
+    }
+
+    /// <summary>
     /// The point given as three numbers from <paramref name="first"/> on.
     /// </summary>
     static Vector3 Point(List<string> a, int first) => new(float.Parse(a[first]), float.Parse(a[first + 1]), float.Parse(a[first + 2]));
@@ -1597,6 +1650,8 @@ static class SaveProbe
               hire <name|-|#platoon> <jump|walk> <dx> [rounds] [interval] [save folder]
                                        a squad near the leader hired as bodyguards, the player sent dx along X: the hired platoon each round
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
+              path [x y z] <x y z>     the path a walker gets from the leader (or a point) to a point (needs --nav): points, end, provisional part
+              walk <name> [x y z] [rounds]  a character walks (to a point, at its height): position, goal, goal height, walk end (needs --nav)
               ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
               sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places
               sees <radius>            NPCs near the leader: place, sight range, the plain sight test and with the sight ray (needs --nav)

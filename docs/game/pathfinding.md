@@ -423,6 +423,7 @@ from the tiles). **Observed** (`--compare`): in 18.39 (Swamp Village; 371 of 383
 foliage domes (e.g. -60348,34444: water 100 under a face at 205) are ours only; with the test ours-only falls 6.6 → 5.0 %, floors under floors 395 → 286,
 original-only unchanged; 21.42 within 0.1 %. Obstacle foliage meshes are canopies open below: in 18.35 (Squin) the test removed ground the tile keeps
 (original-only 0.3 → 1.2 %, e.g. -60300,15908, terrain 421 under a face at 472), and closed obstacle meshes changed nothing in 18.39, 18.35, 21.42, 23.22.
+**No path** (`meitou-tools navmesh --path ... --verbose`): with no path the tool lists the chain of polygons a search without clearance takes to the goal, each step with whether a radius-4 agent passes it under the query's rule and the widest radius that does, so the narrow portal shows.
 **Compare** (`meitou-tools navmesh --compare x,z ...`): samples each zone every 8 units against `tileX.Y.hkt`: points on both, only ours, only the
 original's, ours-only points in a building footprint, and points where ours has more layers than the original with one 10+ under our top (floors under
 floors). Interiors are not read from the tiles, so our interior floors count as ours-only; the original's big polygons float up to ~20 over hollows, so
@@ -467,7 +468,15 @@ the original has neither. Walkable and cutting triangles are now rasterized into
 walkable surface in it reaches within the climb (5 cells) of its top, and then stands at that walkable top, not on the cutting part over it (cutting material
 removes the original's faces, it never makes walkable ones). **Observed** (`--survey-interiors`): lifted to the cutting top, the cells at the foot of a steep
 collar became a stair onto the dome it carries (Y-House `39.16:16-`: roof 1069, collar tops 1074, dome 1079..1096; the original has no dome); a stricter
-threshold (1..3 cells) instead drops floor cells along tilted walls, whose faces enter them (Outpost s-I `9.51:2-`: its upper storey was lost at 3).
+threshold (1..3 cells) instead drops floor cells along tilted walls, whose faces enter them (Outpost s-I `9.51:2-`: its upper storey was lost at 3). The merged span's area is that of the walkable surfaces whose own top is within the climb of its walkable top, as Recast's
+merge flags; a surface lower in the same merged span gives none. **Observed** (#854, Swamp Store `21.42:323-Newwworld-INGAME`, `--path`, `--probe`, scratch polygon
+dump): a deck's steep side reaching down to the water joined the water's span (area deep water) to the deck's edge cells, which took that area, split from
+the deck as regions of their own and left a 2-unit wedge between the north and west decks: their only portal was 6 wide between wall ends, so radius-4
+walkers stopped at the corner and never reached the door; the original's tile joins the two decks over a 16-unit edge. Now the corner is one surface and
+(-47158,48455) → (-47300,48410) `--from-y 100 --to-y 125` walks in (423). `--compare` over the 16 zones of "Narrow portals": unchanged but 21.42 (kept
+4791 → 4582, both +6, ours only −11, original only −6), 10.31 (original only −1) and 18.39 (Swamp Village: both +65, original only −65, decks the original
+has; ours only +19 and extra layers +13, single samples along those decks' edges and the water under them); `--compare-interiors` 18.35, 19.29, 50.33,
+47.16, 20.32, 43.11, 26.13, 48.45, 21.42 unchanged.
 **Interior survey**: `meitou-tools navmesh --survey-interiors zones|towns|x,z ... [--name text] [--png dir] [--section x,z]` samples over each intact interior's
 hull every 2 units the zone's kept polygons against the original's interior faces plus its exterior polygons (the original carves its exterior with the hull's
 convex volume, so a ledge round the walls is its exterior's and our interior's) and sums, per building type, the area both have, only ours (and how much 20+

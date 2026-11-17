@@ -373,15 +373,60 @@ static class NavmeshTool
         var seen = ReachableWithoutClearance(world, sref);
         Console.WriteLine($"  {seen.Count} polygons reachable from the start without clearance; "
             + $"goal reachable: {okGoal && seen.ContainsKey(gref.Key)}");
-        // --verbose: the chain of polygon centres the clearance-free search took to the goal.
+        // --verbose: the chain of polygon centres the clearance-free search took to the goal, each with the widest agent that enters it from the
+        // polygon before it (the one below it in the list).
         if (s_verbose && okGoal && seen.ContainsKey(gref.Key))
         {
+            var query = new NavQuery(world);
             for (NavRef? c = gref; c is { } r; c = seen[r.Key])
             {
                 var cc = world.Mesh(r.Zone).Centre(r.Polygon);
-                Console.WriteLine($"    chain polygon {r.Polygon} at {cc.X:0},{cc.Y:0},{cc.Z:0}");
+                string step = seen[r.Key] is { } previous ? $", {ChainStep(world, query, previous, r)}" : "";
+                Console.WriteLine($"    chain polygon {r.Polygon} at {cc.X:0},{cc.Y:0},{cc.Z:0}{step}");
             }
         }
+    }
+
+    /// <summary>
+    /// How the default agent passes from <paramref name="from"/> into <paramref name="to"/> under the path search's clearance rule: whether it
+    /// fits, the widest radius that does (in steps of 0.25) and the edge crossed.
+    /// </summary>
+    static string ChainStep(NavWorld world, NavQuery query, NavRef from, NavRef to)
+    {
+        if (EdgeTo(world, from, to) is not { } edge) return "no edge";
+
+        float radius = new NavAgent().Radius;
+        float widest = radius;
+        while (widest > 0 && !query.Fits(from, edge, to, widest)) widest -= 0.25f;
+
+        var mesh = world.Mesh(from.Zone);
+        var poly = mesh.Polygons[from.Polygon];
+        var a = mesh.Vertices[poly[edge]];
+        var b = mesh.Vertices[poly[(edge + 1) % poly.Length]];
+        return $"fits {widest >= radius}, widest radius {widest:0.00}, edge {a.X:0.0},{a.Z:0.0} - {b.X:0.0},{b.Z:0.0}";
+    }
+
+    /// <summary>
+    /// The edge of <paramref name="from"/> that leads into <paramref name="to"/>: a neighbour edge, a tile link or a world link; null for none.
+    /// </summary>
+    static int? EdgeTo(NavWorld world, NavRef from, NavRef to)
+    {
+        var mesh = world.Mesh(from.Zone);
+        if (from.Zone == to.Zone)
+        {
+            var neighbours = mesh.Neighbours[from.Polygon];
+            for (int e = 0; e < neighbours.Length; e++)
+                if (neighbours[e] == to.Polygon) return e;
+
+            var links = mesh.LinksOf(from.Polygon);
+            for (int i = 0; i < links.Length; i += 2)
+                if (links[i + 1] == to.Polygon) return links[i];
+        }
+
+        foreach (var link in world.LinksOf(from))
+            if (link.To.Key == to.Key) return link.Edge;
+
+        return null;
     }
 
     /// <summary>
