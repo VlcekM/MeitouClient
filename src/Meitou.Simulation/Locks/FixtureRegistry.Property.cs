@@ -193,8 +193,8 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Buys a town house at its quoted price (docs/simulation.md "Town house purchases"): it becomes the player's and private, its furniture and
-    /// loose items go (<see cref="EmptyInterior"/>, <see cref="Meitou.Simulation.Items.ItemSlots.EmptyBuilding"/>) and the squads living in it move
-    /// out (<see cref="Meitou.Simulation.Ai.AiSystem.Evict"/>).
+    /// loose items go (<see cref="EmptyInterior"/>, <see cref="Meitou.Simulation.Items.ItemSlots.EmptyBuilding"/>), so does its residents' camp
+    /// (<see cref="ClearCamp"/>), and the squads living in it move out (<see cref="Meitou.Simulation.Ai.AiSystem.Evict"/>).
     /// </summary>
     public void Buy(World world, BuyBuilding order)
     {
@@ -206,11 +206,27 @@ public sealed partial class FixtureRegistry
         }
 
         var p = _properties[order.Building];
+        bool ruin = IsDestroyed(p.Building);
         world.Player.Money -= price;
         TakeOver(world, p);
         world.ItemSlots.EmptyBuilding(world, p.Building);
         EmptyInterior(world, order.Building, spill: false);
+        ClearCamp(world, p, ruin);
         world.SystemOf<Ai.AiSystem>()?.Evict(world, order.Building);
+    }
+
+    /// <summary>
+    /// The bought house's share of its town's camp goes, as the original's purchase (<c>FUN_1407ad6c0</c>, <c>FUN_140928ee0</c>,
+    /// <c>FUN_1408146f0</c>; docs/formats/zones.md "Nest debris and loot"): when its residents' nest stands, the pieces standing on the house
+    /// (its interior objects there), sleepers let out first, and the camp's debris meshes within the radius of the house's bounding box, as it
+    /// was when bought (<paramref name="ruin"/>), of its position. The pieces on the ground beside it stay.
+    /// </summary>
+    void ClearCamp(World world, Property p, bool ruin)
+    {
+        var b = p.Building;
+        float radius = p.Data.Sight?.BoundsRadius(b, ruin) ?? 0;
+        var gone = world.NestBuildings.ClearHome(b.Key, new Vector2(b.Position.X, b.Position.Z), radius);
+        if (gone.Count > 0) UnregisterNestBuildings(world, gone);
     }
 
     /// <summary>

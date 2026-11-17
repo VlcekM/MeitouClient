@@ -128,7 +128,9 @@ static class SaveProbe
                 Sightlines(probe, Point(a, 0), float.Parse(a[3]), a.Count > 4 ? float.Parse(a[4]) : 4, a.Count > 5 ? float.Parse(a[5]) : 0);
                 return true;
             case ("places", >= 1) when probe.Nav is not null: Places(probe, float.Parse(a[0]), a.Count > 1 ? float.Parse(a[1]) : 4); return true;
-            case ("layout", >= 1) when probe.Nav is not null: Layout(probe, a[0]); return true;
+            case ("layout", >= 1) when probe.Nav is not null:
+                Layout(probe, a[0], a.Count > 1 && a[1] == "buy", a.Count > 2 ? a[2] : null);
+                return true;
             default: return false;
         }
     }
@@ -1577,10 +1579,122 @@ static class SaveProbe
         odd[what] = odd.TryGetValue(what, out var seen) ? (seen.Count + 1, seen.Sample) : (1, at);
 
     /// <summary>
-    /// A town building's layout names now (a town override or the save may have relaid it) and each object of its interior layout as placed: record,
-    /// floor, path mode, world position. Needs <c>--nav</c>, which hands the population its layouts.
+    /// A town building's layout names now (a town override or the save may have relaid it), each object of its interior layout as placed (record,
+    /// floor, path mode, world position) and the camp pieces and debris meshes round it (its residents' nest). With <paramref name="buy"/> the player
+    /// then buys it and the camp round it is listed again (#857); with <paramref name="saveTo"/> its rebuild is then finished and the world saved
+    /// there, for a second probe to load. Needs <c>--nav</c>, which hands the population its layouts.
     /// </summary>
-    static void Layout(ProbeWorld probe, string key)
+    static void Layout(ProbeWorld probe, string key, bool buy, string? saveTo)
+    {
+        var b = probe.Data.Sites.SelectMany(s => s.Buildings).FirstOrDefault(t => t.Key == key);
+        LayoutOf(probe, key);
+        if (b is null) return;
+
+        CampRound(probe, b);
+        RebuiltHeights(probe, b);
+        if (!buy) return;
+
+        if (probe.World.Fixtures.SalePrice(key, probe.World.Player.Faction) is not { } price)
+        {
+            Console.WriteLine($"{key} is not for sale to the player");
+            return;
+        }
+
+        probe.World.Player.Money += price;
+        probe.World.Commands.Enqueue(new BuyBuilding(key, price) { Tick = probe.World.Tick });
+        probe.Tick(2);
+        Console.WriteLine($"bought for {price}: owner {probe.Faction(probe.World.Fixtures.OwnerOf(key))}");
+        CampRound(probe, b);
+        if (saveTo is not null) SaveRepaired(probe, key, saveTo);
+    }
+
+    /// <summary>
+    /// Finishes the rebuild of the bought house <paramref name="key"/> at once and writes the world as a save into <paramref name="folder"/>.
+    /// </summary>
+    static void SaveRepaired(ProbeWorld probe, string key, string folder)
+    {
+        if (probe.World.Buildings.Find(key) is { } site)
+        {
+            site.Destroyed = false;
+            site.Complete = true;
+            site.Progress = site.Target;
+        }
+
+        probe.Tick(2);
+        var game = SaveCapture.Capture(probe.World, probe.Data, new SaveClock(1, 12, 0), probe.Loaded);
+        game.Write(folder);
+        Console.WriteLine($"saved with {key} rebuilt to {folder}");
+    }
+
+    /// <summary>
+    /// The camp pieces whose home is <paramref name="b"/> (their ids name it), with the ground height under each and its tilt in degrees, and the
+    /// debris meshes within 100 of it.
+    /// </summary>
+    static void CampRound(ProbeWorld probe, TownBuilding b)
+    {
+        var pieces = probe.World.NestBuildings.Published()
+            .Where(p => p.Id.Contains($":{b.Key}:", StringComparison.Ordinal))
+            .ToList();
+        var camp = probe.World.NestBuildings.Of(NestBuildings.TownCamp(SiteOf(probe, b))).ToDictionary(p => p.Id);
+        Console.WriteLine($"  camp pieces of {b.Key}: {pieces.Count}");
+        foreach (var p in pieces)
+        {
+            float ground = probe.World.Walkability.GroundHeight(p.Position.X, p.Position.Z);
+            string on = camp.TryGetValue(p.Id, out var piece) && piece.OnHome ? "on the house" : "on the ground";
+            float tilt = piece is null ? 0 : MathF.Acos(Math.Clamp(Vector3.Transform(Vector3.UnitY, piece.Rotation).Y, -1, 1)) * 180 / MathF.PI;
+            Console.WriteLine($"    {p.Id} '{probe.Data.Db.Find(p.Record)?.Name}' at {p.Position:F0} ground {ground:F0}, {on}, tilt {tilt:F1}");
+        }
+
+        var at = new Vector2(b.Position.X, b.Position.Z);
+        int meshes = probe.World.NestBuildings.Meshes().Count(m => Vector2.Distance(new Vector2(m.Position.X, m.Position.Z), at) < 100);
+        float radius = probe.Data.Sight?.BoundsRadius(b, probe.World.Fixtures.IsDestroyed(b)) ?? 0;
+        Console.WriteLine($"  debris meshes within 100: {meshes}; all camps: {probe.World.NestBuildings.Published().Count} pieces, "
+            + $"{probe.World.NestBuildings.Meshes().Count} meshes; bounds radius {radius:F0}");
+    }
+
+    /// <summary>
+    /// The index of the town site <paramref name="b"/> belongs to.
+    /// </summary>
+    static int SiteOf(ProbeWorld probe, TownBuilding b) => probe.Data.Sites.First(s => s.Buildings.Contains(b)).Index;
+
+    /// <summary>
+    /// A rebuilt house the save holds as the player's finished site goes into the navmesh as the host puts it there (its level placement standing,
+    /// <c>BuildingSync.AddToNavmesh</c>); then the heights at its position: the terrain, every navmesh floor, and the top one, which a camp laid round
+    /// it takes its height from (<c>NestFurniture.Buildings</c>).
+    /// </summary>
+    static void RebuiltHeights(ProbeWorld probe, TownBuilding b)
+    {
+        var site = probe.World.Buildings.Find(b.Key);
+        if (probe.Nav is not { } nav) return;
+        if (site is not { Complete: true, Destroyed: false, LevelPlacement: { } level }) return;
+
+        var zones = NavRuntimeBuildings.ZonesReached(b.Position).Where(zone => nav.Walkability.World.Find(zone) is not null).ToHashSet();
+        using var built = new CountdownEvent(zones.Count);
+        void Ready(NavZoneReady r)
+        {
+            lock (zones)
+            {
+                if (zones.Remove(r.Zone)) built.Signal();
+            }
+        }
+
+        nav.ZoneReady += Ready;
+        nav.AddRuntimeBuilding(level with { Key = b.Key, WorldY = b.Position.Y, DestroyedOverride = false, PlayerOwned = true });
+        bool done = built.Wait(TimeSpan.FromMinutes(5));
+        nav.ZoneReady -= Ready;
+
+        var (x, z) = (b.Position.X, b.Position.Z);
+        var heights = new List<float>();
+        nav.Walkability.World.HeightsAt(x, z, heights);
+        string floors = string.Join(" ", heights.Select(h => h.ToString("F0")));
+        Console.WriteLine($"  rebuilt in the navmesh{(done ? "" : " (not all zones rebuilt)")}: terrain {nav.Walkability.TerrainHeight(x, z):F0}, "
+            + $"floors [{floors}], top {nav.Walkability.GroundHeight(x, z):F0}");
+    }
+
+    /// <summary>
+    /// <see cref="Layout"/>'s listing of the building's layout names, ruin state and interior layout as it is now.
+    /// </summary>
+    static void LayoutOf(ProbeWorld probe, string key)
     {
         var b = probe.Data.Sites.SelectMany(s => s.Buildings).FirstOrDefault(t => t.Key == key);
         if (b?.Resolved is not { } resolved || probe.Data.Layouts is not { } layouts)
@@ -1665,7 +1779,9 @@ static class SaveProbe
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
               heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
-              layout <building key>    a town building (zone:instance id): layout names now, ruin state and its interior layout's objects (needs --nav)
+              layout <building key> [buy [save folder]]  a town building (zone:instance id): layout names now, ruin state, its interior layout's
+                                       objects and the camp round it; buy: the player buys it and the camp is listed again; a save folder: its
+                                       rebuild finished, the world is saved there (needs --nav)
             --stream: build only the player's box first and stream the other zones in as the game does, ticks at game speed (implies --nav)
             """);
         return 2;

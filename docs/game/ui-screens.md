@@ -651,8 +651,10 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     null; each door (+0x1c0) goes to the player's faction and `FUN_140297040` runs on its lock; each furniture piece of the interior
     holding an occupant (slot 0x300) lets it out (`FUN_14032e2f0`, `FUN_140330600`); the interior's furniture and item groups are destroyed
     (every `BuildingItemGroup` of +0x128 goes, and a group going destroys the item
-    it still holds, `FUN_14054a600`); the interior's list +0x88 goes to the player's faction; the building's town (one made for it when it has
-    none) is flagged (+0x3d0) and takes it (`FUN_140928ee0`); a call on interior +0x30 with 0; each evicted platoon gets a new home (`FUN_14099e6e0`): a random
+    it still holds, `FUN_14054a600`; the residents' nest pieces standing on it are interior objects too, [nest debris](../formats/zones.md#nest-debris-and-loot)); the interior's list +0x88 goes to the player's faction; the building's town (one made for it when it has
+    none) is flagged (+0x3d0) and drops the nest spots that name the building (`FUN_140928ee0`, list +0x500, added by `FUN_140929340`); when one went,
+    the town's instanced debris meshes whose X/Z lies within the building's bounding-box radius (`Ogre::Aabb::getRadius`) of its position are removed
+    (`FUN_1408146f0`); a call on interior +0x30 with 0; each evicted platoon gets a new home (`FUN_14099e6e0`): a random
     building of its town that passes slot 88 (for sale, above) and a test of the platoon against it (`FUN_140621230`), found
     through `FUN_1409fc2e0` with BuildingFunction bit mask 0x13 (BF_ANY, MINE, REFINERY: read as the worker finder's 0x41a, so the house
     function 19 is not among them); its members are ordered GO_HOMEBUILDING (19), or with no home found PATROL (22) and a write to the platoon's

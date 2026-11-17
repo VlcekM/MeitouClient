@@ -9,7 +9,25 @@ namespace Meitou.Simulation.Population;
 /// <summary>
 /// A building a nest stood up round itself (a TOWN's <c>debris building</c>): its id, BUILDING record and where it stands.
 /// </summary>
-public sealed record NestPiece(string Id, string Record, Vector3 Position, Quaternion Rotation);
+public sealed record NestPiece(string Id, string Record, Vector3 Position, Quaternion Rotation)
+{
+    /// <summary>
+    /// The key of the town building whose residents' nest stood it up (null: a wild nest's or a town centre's).
+    /// </summary>
+    public string? Home { get; init; }
+
+    /// <summary>
+    /// Whether it stands on <see cref="Home"/>: the ray the original casts straight down onto its spot meets the home first, which makes it one of the
+    /// home's interior objects (<c>FUN_140930120</c>, <c>FUN_14054f3d0</c>); buying the home destroys it.
+    /// </summary>
+    public bool OnHome { get; init; }
+}
+
+/// <summary>
+/// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over a piece's spot, mask <c>0x204</c>) meets of a resident
+/// nest's home over <paramref name="spot"/> (X, Z), given the pieces laid before it: the hit when the home is what it meets first, else null.
+/// </summary>
+public delegate GroundHit? HomeRay(Vector2 spot, IReadOnlyList<NestPiece> earlier);
 
 /// <summary>
 /// What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c>
@@ -69,15 +87,17 @@ public static partial class NestFurniture
 
     /// <summary>
     /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are
-    /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>.
+    /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>. <paramref name="homeRay"/>: a resident nest's home, on which a piece stands
+    /// where the placement ray meets it first (null: a nest of no home).
     /// </summary>
-    public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix)
+    public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix,
+        HomeRay? homeRay = null)
     {
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)at.X ^ (ulong)(uint)(int)at.Y << 32);
         var rolls = new RandomStream(seed, key, RngPurpose.Spawn);
         var layout = new NestLayout([], [], []);
         Debris(db, nest, at, walk, ref rolls, layout);
-        Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces);
+        Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces, homeRay);
         Loot(nest, at, walk, ref rolls, layout.Drops);
         return layout;
     }
@@ -86,7 +106,7 @@ public static partial class NestFurniture
     /// Lays out the <c>debris building</c> pieces: <c>num centrepoints</c> centres, and each entry's buildings round each centre.
     /// </summary>
     static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix,
-        List<NestPiece> pieces)
+        List<NestPiece> pieces, HomeRay? homeRay)
     {
         if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return;
 
@@ -101,7 +121,10 @@ public static partial class NestFurniture
             foreach (var entry in nest.DebrisBuilding)
             {
                 if (db.Find(entry.Id) is { } record)
-                    Place(record, new Vector3(centre.X, centreY, centre.Y), entry, Count(ref rolls, entry.V0), walk, ref rolls, idPrefix, pieces);
+                {
+                    var start = new Vector3(centre.X, centreY, centre.Y);
+                    Place(record, start, entry, Count(ref rolls, entry.V0), walk, ref rolls, idPrefix, pieces, homeRay);
+                }
             }
         }
     }
@@ -117,7 +140,8 @@ public static partial class NestFurniture
         IWalkability walk,
         ref RandomStream rolls,
         string idPrefix,
-        List<NestPiece> pieces)
+        List<NestPiece> pieces,
+        HomeRay? homeRay)
     {
         var batch = new List<Vector2>();
         float maxSlope = record.GetFloat("max slope");
@@ -131,9 +155,22 @@ public static partial class NestFurniture
             if (batch.Exists(b => Vector2.DistanceSquared(b, p) < PieceGap * PieceGap)) continue;
 
             batch.Add(p);
-            var position = new Vector3(p.X, y, p.Y);
-            pieces.Add(new NestPiece($"{idPrefix}{pieces.Count}", record.StringId, position, Stand(walk, position, yaw, maxSlope)));
+            pieces.Add(Piece($"{idPrefix}{pieces.Count}", record, new Vector3(p.X, y, p.Y), yaw, maxSlope, walk, pieces, homeRay));
         }
+    }
+
+    /// <summary>
+    /// A piece at <paramref name="position"/>: on the home at the height and tilted to the slope of the surface the placement ray meets there when
+    /// that is the home (<paramref name="homeRay"/>, given the <paramref name="earlier"/> pieces), else on the ground tilted to it.
+    /// </summary>
+    static NestPiece Piece(string id, GameRecord record, Vector3 position, float yaw, float maxSlope, IWalkability walk,
+        IReadOnlyList<NestPiece> earlier, HomeRay? homeRay)
+    {
+        if (homeRay?.Invoke(new Vector2(position.X, position.Z), earlier) is not { } hit)
+            return new NestPiece(id, record.StringId, position, Tilt(GroundNormal(walk, position), yaw, maxSlope));
+
+        var onHome = position with { Y = hit.Y };
+        return new NestPiece(id, record.StringId, onHome, Tilt(hit.Normal, yaw, maxSlope)) { OnHome = true };
     }
 
     /// <summary>
@@ -188,13 +225,12 @@ public static partial class NestFurniture
     static float Between(ref RandomStream rolls, float min, float max) => min + rolls.NextFloat() * (max - min);
 
     /// <summary>
-    /// A turn of <paramref name="yaw"/> about up, tilted to the ground's slope; a tilt past <paramref name="maxSlope"/> degrees is brought back to it
-    /// (the original's slerp).
+    /// A turn of <paramref name="yaw"/> about up, tilted to a surface of <paramref name="normal"/>; a tilt past <paramref name="maxSlope"/> degrees
+    /// is brought back to it (the original's slerp).
     /// </summary>
-    static Quaternion Stand(IWalkability walk, Vector3 p, float yaw, float maxSlope)
+    static Quaternion Tilt(Vector3 normal, float yaw, float maxSlope)
     {
         var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw);
-        var normal = GroundNormal(walk, p);
         float tilt = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (180 / MathF.PI);
         if (tilt < 1e-3f) return turn;
 
@@ -304,6 +340,58 @@ public sealed class NestBuildings
         Changed();
         return true;
     }
+
+    /// <summary>
+    /// The player bought <paramref name="home"/> (<c>FUN_1407ad6c0</c>, docs/formats/zones.md "Nest debris and loot"): in each camp that stood a
+    /// nest round it, the pieces that nest stood on the home go (<see cref="NestPiece.OnHome"/>; those on the ground beside it stay), and so does
+    /// every debris mesh within <paramref name="radius"/> (X/Z) of <paramref name="centre"/>; the furniture the nest gave the home goes too. Returns
+    /// the pieces taken, whose fixtures the caller unregisters.
+    /// </summary>
+    public List<NestPiece> ClearHome(string home, Vector2 centre, float radius)
+    {
+        var gone = new List<NestPiece>();
+        var camps = _camps.Values.Where(c => c.Furniture.ContainsKey(home)).ToList();
+        if (camps.Count == 0) return gone;
+
+        foreach (var camp in camps)
+        {
+            gone.AddRange(camp.Layout.Pieces.Where(p => p.OnHome && p.Home == home));
+            camp.Layout.Pieces.RemoveAll(p => p.OnHome && p.Home == home);
+            camp.Layout.Meshes.RemoveAll(m => Vector2.DistanceSquared(new Vector2(m.Position.X, m.Position.Z), centre) < radius * radius);
+        }
+
+        _furniture.Remove(home);
+        Changed();
+        return gone;
+    }
+
+    /// <summary>
+    /// The pieces standing in every camp but <paramref name="camp"/> (what a new layout of that camp's placement ray may meet besides its own).
+    /// </summary>
+    public IEnumerable<NestPiece> PiecesBesides(int camp) => _camps
+        .Where(c => c.Key != camp)
+        .SelectMany(c => c.Value.Layout.Pieces);
+
+    /// <summary>
+    /// The town of camp <paramref name="camp"/> unloads: the pieces and meshes its nests laid round <paramref name="homes"/> (the houses the player
+    /// bought) go, as the original's town takes them down with it and lays no nest round such a house again. Returns the pieces taken, whose
+    /// fixtures the caller unregisters.
+    /// </summary>
+    public List<NestPiece> DropHomes(int camp, IReadOnlySet<string> homes)
+    {
+        if (!_camps.TryGetValue(camp, out var c)) return [];
+
+        var gone = c.Layout.Pieces.Where(p => Bought(p.Home, homes)).ToList();
+        int meshes = c.Layout.Meshes.RemoveAll(m => Bought(m.Home, homes));
+        c.Layout.Pieces.RemoveAll(p => Bought(p.Home, homes));
+        if (gone.Count > 0 || meshes > 0) Changed();
+        return gone;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="home"/> is one of <paramref name="homes"/>.
+    /// </summary>
+    static bool Bought(string? home, IReadOnlySet<string> homes) => home is not null && homes.Contains(home);
 
     /// <summary>
     /// True the first time a camp asks in this world (it lays its items now; the caller asks only for a zone the loaded save has no file of).

@@ -683,6 +683,27 @@ public sealed class InteriorCollisions(GameInstall install)
     }
 
     /// <summary>
+    /// The render meshes' stored bounds boxes in their own space, by record path (null for a missing or unreadable one).
+    /// </summary>
+    readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> _renderBounds = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The bounds box a part's render mesh stores, in its own space; null when the path is empty or the file is missing or unreadable.
+    /// </summary>
+    public (Vector3 Min, Vector3 Max)? RenderBounds(string recordPath) =>
+        string.IsNullOrWhiteSpace(recordPath) ? null : _renderBounds.GetOrAdd(recordPath, LoadBounds);
+
+    /// <summary>
+    /// Reads a render mesh's stored bounds; null when it does not resolve or read.
+    /// </summary>
+    (Vector3 Min, Vector3 Max)? LoadBounds(string recordPath)
+    {
+        if (CollisionPaths.Resolve(install, recordPath) is not { } path) return null;
+
+        return Ogre.OgreMeshReader.TryReadBounds(path, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : null;
+    }
+
+    /// <summary>
     /// Every triangulated vertex of the file's shapes, or null when the path is empty or the file is missing or unreadable.
     /// </summary>
     public Vector3[]? Vertices(string recordPath) => Mesh(recordPath)?.Vertices;

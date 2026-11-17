@@ -273,22 +273,12 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// The navmesh collision group of a building part (<c>FUN_14055f6e0</c>, docs/formats/collision.md; later tests win): 9 + floor for floors 0..3
-    /// (else 9), unwalkable roof 27, stairs 15 + floor for floors 0..3 (else unchanged), then a passable part or an IGNORE owner 23 + object floor,
-    /// else furniture 19 + object floor (the object floor 0..3, else 0). A furniture owner's base and stairs groups use the placed object's floor
-    /// (<paramref name="objectFloor"/>, its state's <c>floornum</c>), any other part its own <c>building floor</c>, unclamped.
+    /// The navmesh collision group of a building part (<see cref="BuildingShape.CollisionGroup"/>; <paramref name="mode"/> is the owner's
+    /// <c>path mode</c>).
     /// </summary>
-    static int CollisionGroup(GameRecord owner, GameRecord part, PathMode mode, int objectFloor)
-    {
-        bool furniture = owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture");
-        int floor = furniture ? objectFloor : part.GetInt("building floor");
-        bool inRange = floor is >= 0 and <= 3, objectInRange = objectFloor is >= 0 and <= 3;
-        int group = inRange ? 9 + floor : 9;
-        if (part.GetBool("is unwalkable roof")) group = 27;
-        if (part.GetBool("is stairs") && inRange) group = 15 + floor;
-        if (mode == PathMode.Ignore || part.GetBool("passable")) return 23 + (objectInRange ? objectFloor : 0);
-        return furniture ? 19 + (objectInRange ? objectFloor : 0) : group;
-    }
+    static int CollisionGroup(GameRecord owner, GameRecord part, PathMode mode, int objectFloor) =>
+        BuildingShape.CollisionGroup(part, mode == PathMode.Ignore, owner.GetBool("is exterior furniture") || owner.GetBool("is interior furniture"),
+            objectFloor);
 
     /// <summary>
     /// Adds one part's collision: an interior's shapes through the interior rules, an interior mask's as carvers, a door's as door painters with door

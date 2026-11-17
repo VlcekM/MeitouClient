@@ -261,6 +261,19 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
   at the point plus a random direction times v1..v2 (**Observed**: the data reads as a distance range), kept off earlier ones by a spacing, on valid ground, laid to the ground's
   slope up to the record's `max slope`, at a random yaw, made by the building factory (`FUN_140930120`, `FUN_14057cc70`) with their +0x241 flag set. **Not modelled**: a nest's
   Prisoner Poles (cages) are what the Fog Islands' fogmen carry their victims to ([#132](https://github.com/VlcekM/MeitouClient/issues/132)).
+  - Standing on the home (**Observed**, decompile): a resident nest's spot names its home (`FUN_14057f1f0` hands the town the nest, the home's position and the home,
+    `FUN_140929340`, list +0x500). Each piece's height comes from a ray cast straight down from 10000 above it (mask 0x204: the terrain and group 9, a building's
+    ordinary floor-0 parts, [collision groups](collision.md#collision-groups-observed-fun_14055f6e0-and-the-loaders)); when it first hits that
+    home, the piece is made as the home's child at the hit's height, tilted to the hit's normal up to its `max slope`, and goes into the home's
+    interior objects (`FUN_14054f3d0`); else it stands on its own. **Observed** (1.0.65 through KenshiHarness, the Wanderer save at The Hub,
+    2026-11-17): the Stationhouse ruin's campfire and its squatters stand on its floor-0 base at 1627, under the upper storey's collision at 1705,
+    which the ray does not meet. Repairing a ruin removes none of them: its first build step restores it through `FUN_140557280` with 0, which
+    empties the interior only when ruining, and the completion (`FUN_140562340`) destroys nothing. Buying the home destroys them with its interior
+    (`FUN_14054f4d0` with 1 keeps only buildings whose slot 135 handle is set, `LightBuilding`'s) and drops the town's nest spots naming the home
+    (a handle compare) and its debris meshes round it ([purchase](../game/ui-screens.md#selected-building)); the home's pieces on the ground
+    beside it stay. **Observed** (1.0.65 through KenshiHarness, the same save, 2026-11-17, bought paused with Re_Dev's money): the Stationhouse's
+    campfire, stools and camp bed and the debris round it vanish at the purchase, its squatters stay. The building's bounding box there is the
+    merge of its part entities' world boxes (`FUN_140549480`); a part placed for its collision only (`FUN_14055f6e0` mode 2) makes no entity.
 - Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
 - A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
   Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
@@ -274,8 +287,18 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
 Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
 items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town stands its residents' nests round each home whose template
 names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
-no file of. The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
-the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre.
+no file of. A building of the player's gets none (housing passes it over, [town residents](../game/factions-squads-towns.md#town-residents), so nothing hands its nest to the town). The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
+the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre. A home's piece stands on the home when the
+placement ray meets the home first (`PopulationSystem.HomeHit`): the home's highest group-9 surface over the spot (as a ruin or standing, `GroundShapes`) is not below the
+terrain, and no other town building, finished player building (or one built past its visual threshold) or camp piece laid before has a group-9 surface above it there. It then
+stands at that height, tilted to that surface's slope up to its `max slope` (`NestPiece.OnHome`). Buying a home whose nest stands takes the pieces on it, its furniture and
+its camp's debris meshes within its bounding box's radius (`BuildingShape.BoundsRadius`: its drawn parts' render-mesh bounds, as it was when bought) of its position away
+(`FixtureRegistry.ClearCamp`, `NestBuildings.ClearHome`); the pieces and meshes its nest laid beside it go when the town unloads (`PopulationSystem.FoldBoughtCamp`,
+`NestBuildings.DropHomes`): the original's pieces are not saved, its purchase drops the home's nest spots and its housing passes a player's
+building over. **Verified** headless on issue #857 (probe
+`layout 20.32:4-Newwworld-INGAME buy <folder>`, The Hub's Stationhouse under `hub squatters`, bounds radius 347): its 9 pieces, all on its base at 1626 and tilted 0.8
+degrees with it, and 68 meshes go with the purchase while the town's 35 other pieces stay, and a save written with it rebuilt lays none round it on load. With that house
+rebuilt in the navmesh the top surface at its position is the upper storey, 1705 over its ground floor's 1627: a camp laid round it would take its height from that surface.
 
 ## Expression reference
 

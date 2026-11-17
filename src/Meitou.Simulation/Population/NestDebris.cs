@@ -7,7 +7,13 @@ namespace Meitou.Simulation.Population;
 /// <summary>
 /// A <c>debris</c> mesh a nest lays round itself (drawn only, no item): its NEST_ITEM, the mesh, where it lies, its turn and scale.
 /// </summary>
-public sealed record NestMesh(string Record, string Mesh, Vector3 Position, float Yaw, float Scale);
+public sealed record NestMesh(string Record, string Mesh, Vector3 Position, float Yaw, float Scale)
+{
+    /// <summary>
+    /// The town building whose nest laid the mesh; null for a camp's own nest.
+    /// </summary>
+    public string? Home { get; init; }
+}
 
 /// <summary>
 /// An item a nest lays down in a fresh zone: a <c>debris</c> item with a <c>physics file</c> (<paramref name="List"/> false), or a roll of a <c>loot

@@ -2098,7 +2098,8 @@ indoor build permission become the player's, every door is opened (`FUN_14029704
 ([what it does](game/ui-screens.md#selected-building)) the house is emptied: its interior layout's fixtures (cages, containers with
 their contents, beds, dummies) and seats go, occupants let out first; its loose-item slots go with the items lying in them; the
 renderer, navmesh and lamps lay it out without its interior layout (`BuildingPlacement.WithoutInterior`: `FixtureRegistry.PublishedEmptied`,
-or a bought ruin's site placement). Every squad living in it (engine reading: the original takes the owner faction's, whose town
+or a bought ruin's site placement). The pieces of its residents' camp standing on it (as a Hub squatters' ruin's campfire and camp beds) and
+the camp's debris round it go too, the camp's pieces beside it when the town unloads, and a town never lays one round the player's buildings ([nest debris](formats/zones.md#nest-debris-and-loot), #857). Every squad living in it (engine reading: the original takes the owner faction's, whose town
 housed them) moves to a random other house of its town that is for sale (by the original's finder), else has none; its members plan
 again. Their town never houses residents in a building the player owns (`ResidentHomes.Assign`, `AiSystem.AssignHome`), so nobody
 lives there to call the buyer a trespasser. Saved as `owner faction ID` with

@@ -876,6 +876,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             });
         }
 
+        FoldBoughtCamp(world, site);
         Reset(state);
     }
 

@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Economy;
 using Meitou.Data.World;
+using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Population;
 
@@ -64,25 +65,30 @@ public sealed partial class PopulationSystem
     /// <paramref name="layout"/> (docs/formats/zones.md "Nest debris and loot"): its buildings and meshes every time (<b>Observed</b>: the Hub
     /// squatters' ruins hold a campfire, stools and a camp bed in the original after a load), its items (<c>loot spawn</c>, <c>debris</c> with
     /// physics) only round a home in a zone the save has no file of (<b>Observed</b> in original saves: within the nest's <c>size radius</c> of a
-    /// home of the template, not round the town's centre). Returns the furniture the pieces give each home (staying home takes it).
+    /// home of the template, not round the town's centre). A building of the player's lays none: the original lays a home's nest when housing sets
+    /// the home up (<c>FUN_14057f1f0</c> hands the town the nest with the home), and housing passes over the player's buildings. Returns the
+    /// furniture the pieces give each home (staying home takes it).
     /// </summary>
     Dictionary<string, List<HomeSpot>> ResidentNests(World world, TownSite site, NestLayout layout)
     {
         var furniture = new Dictionary<string, List<HomeSpot>>(StringComparer.Ordinal);
         var housed = new HashSet<string>(StringComparer.Ordinal);
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
+        var players = player >= 0 ? world.Fixtures.PlayerOwnedIn(_data, site.Index, player) : [];
         foreach (var home in site.Buildings)
         {
             string templateId = world.Fixtures.ResidentsTemplate(home);
             housed.Add(templateId);
             housed.Add(home.ResidentsTemplate);
-            if (_data.Db.Find(templateId) is not { } template) continue;
+            if (players.Contains(home.Key) || _data.Db.Find(templateId) is not { } template) continue;
 
             var at = new Vector2(home.Position.X, home.Position.Z);
             bool fresh = !world.SavedZones.Contains(home.Zone);
+            var ray = HomeRayOf(world, site, home, layout);
             foreach (var link in template.GetReferences("nest"))
             {
-                var nest = NestAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:");
-                if (nest is not null) Merge(layout, nest, fresh, HomeFurniture(furniture, home.Key));
+                var nest = NestAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:", ray);
+                if (nest is not null) Merge(layout, nest, fresh, home, HomeFurniture(furniture, home.Key));
             }
         }
 
@@ -100,13 +106,13 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Adds a home's nest scatter to the town's camp: its pieces and meshes, its items when <paramref name="fresh"/>, and each piece that is a seat
-    /// or a workstation to the home's <paramref name="furniture"/>.
+    /// Adds a home's nest scatter to the town's camp: its pieces (marked as <paramref name="home"/>'s) and meshes, its items when
+    /// <paramref name="fresh"/>, and each piece that is a seat or a workstation to the home's <paramref name="furniture"/>.
     /// </summary>
-    void Merge(NestLayout layout, NestLayout nest, bool fresh, List<HomeSpot> furniture)
+    void Merge(NestLayout layout, NestLayout nest, bool fresh, TownBuilding home, List<HomeSpot> furniture)
     {
-        layout.Pieces.AddRange(nest.Pieces);
-        layout.Meshes.AddRange(nest.Meshes);
+        layout.Pieces.AddRange(nest.Pieces.Select(p => p with { Home = home.Key }));
+        layout.Meshes.AddRange(nest.Meshes.Select(m => m with { Home = home.Key }));
         if (fresh) layout.Drops.AddRange(nest.Drops);
 
         foreach (var piece in nest.Pieces)
@@ -115,6 +121,110 @@ public sealed partial class PopulationSystem
             if (TownBuildings.FurnitureSpot(_data.Db, record, piece.Position, TownBuildings.YawOf(piece.Rotation)) is { } spot) furniture.Add(spot);
         }
     }
+
+    #region Placement ray
+
+    /// <summary>
+    /// How far from its placement a building's collision can reach (2003 in the base game, Large Dock Wreck02; docs/formats/camera.md): buildings
+    /// placed further from a spot cannot lie over it.
+    /// </summary>
+    const float RayReach = 2100;
+
+    /// <summary>
+    /// The placement ray of the pieces of <paramref name="home"/>'s nest (<see cref="HomeRay"/>): besides the home it may meet the town's other
+    /// buildings, the player's, the pieces laid before (this town's camp so far, <paramref name="town"/>, and the other camps standing).
+    /// </summary>
+    HomeRay HomeRayOf(World world, TownSite site, TownBuilding home, NestLayout town)
+    {
+        var others = world.NestBuildings.PiecesBesides(NestBuildings.TownCamp(site.Index)).ToList();
+        return (spot, earlier) => HomeHit(world, home, spot, town.Pieces.Concat(others).Concat(earlier));
+    }
+
+    /// <summary>
+    /// Where the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over the spot, mask <c>0x204</c>, the terrain and group 9)
+    /// meets <paramref name="home"/>, as a ruin or standing as it is now, when the home is what it meets first; null when it meets the terrain or
+    /// another building or piece first, or misses the home.
+    /// </summary>
+    GroundHit? HomeHit(World world, TownBuilding home, Vector2 spot, IEnumerable<NestPiece> pieces)
+    {
+        if (_data.Sight is not { } sight) return null;
+        if (sight.TopAt(home, world.Fixtures.IsDestroyed(home), spot) is not { } hit) return null;
+        if (hit.Y < world.Walkability.TerrainHeight(spot.X, spot.Y)) return null;
+
+        bool covered = TownAbove(world, sight, home, spot, hit.Y)
+            || SitesAbove(world, sight, spot, hit.Y)
+            || PiecesAbove(sight, spot, hit.Y, pieces);
+        return covered ? null : hit;
+    }
+
+    /// <summary>
+    /// Whether a town building other than <paramref name="home"/> (any town's) has a group-9 surface over <paramref name="spot"/> above
+    /// <paramref name="y"/>.
+    /// </summary>
+    bool TownAbove(World world, ISightSource sight, TownBuilding home, Vector2 spot, float y)
+    {
+        foreach (var site in _data.Sites)
+        {
+            foreach (var b in site.Buildings)
+            {
+                if (b.Key == home.Key || !Near(b.Position, spot)) continue;
+                if (sight.TopAt(b, world.Fixtures.IsDestroyed(b), spot) is { } other && other.Y > y) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a player building of its own (not a town house's rebuild) has a group-9 surface over <paramref name="spot"/> above
+    /// <paramref name="y"/>: one under construction joins group 9 once its progress reaches its target times its visual threshold
+    /// (<c>FUN_14055f6e0</c> adds 14 to the group below it; clamp(<c>build threshold</c> / 100, 0, 0.95), docs/game/buildings-production.md).
+    /// </summary>
+    bool SitesAbove(World world, ISightSource sight, Vector2 spot, float y)
+    {
+        foreach (var s in world.Buildings.All)
+        {
+            if (s.LevelPlacement is not null || !Near(s.Position, spot) || !Solid(s)) continue;
+            var other = sight.TopAt(s.Record, s.Id, s.Position, s.Rotation, s.Destroyed, spot);
+            if (other?.Y > y) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a site's parts are in their ground groups: complete, or built past its visual threshold.
+    /// </summary>
+    bool Solid(Construction.BuildSite s)
+    {
+        if (s.Complete) return true;
+        if (_data.Db.Find(s.Record) is not { } record) return false;
+
+        float threshold = Math.Clamp(Meitou.Data.Gameplay.Construction.BuildingBuildData.From(record).BuildThreshold / 100, 0, 0.95f);
+        return s.Progress >= s.Target * threshold;
+    }
+
+    /// <summary>
+    /// Whether one of <paramref name="pieces"/> has a group-9 surface over <paramref name="spot"/> above <paramref name="y"/>.
+    /// </summary>
+    static bool PiecesAbove(ISightSource sight, Vector2 spot, float y, IEnumerable<NestPiece> pieces)
+    {
+        foreach (var p in pieces)
+        {
+            if (!Near(p.Position, spot)) continue;
+            var other = sight.TopAt(p.Record, p.Id, p.Position, p.Rotation, false, spot);
+            if (other?.Y > y) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a building placed at <paramref name="position"/> may lie over <paramref name="spot"/> (within <see cref="RayReach"/>, X/Z).
+    /// </summary>
+    static bool Near(Vector3 position, Vector2 spot) => Vector2.DistanceSquared(new Vector2(position.X, position.Z), spot) < RayReach * RayReach;
+
+    #endregion
 
     /// <summary>
     /// The nests of the town's resident templates that none of its buildings houses (<paramref name="housed"/>: the templates housed), rolled
@@ -139,14 +249,28 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>; null when it is no TOWN.
+    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>, its pieces placed by <paramref name="homeRay"/> when it is a
+    /// home's; null when it is no TOWN.
     /// </summary>
-    NestLayout? NestAt(World world, Vector2 at, string nestId, string idPrefix)
+    NestLayout? NestAt(World world, Vector2 at, string nestId, string idPrefix, HomeRay? homeRay = null)
     {
         if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) return null;
 
         ulong seed = world.Seed ^ Rng.StableHash(nestId);
-        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix);
+        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix, homeRay);
+    }
+
+    /// <summary>
+    /// The town leaves the world (<see cref="Unload"/>): the camp pieces round the houses the player bought there go, as the original's town takes
+    /// its nest buildings down with it and lays none round such a house again (the pieces standing on one went at its purchase).
+    /// </summary>
+    void FoldBoughtCamp(World world, int site)
+    {
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
+        if (player < 0) return;
+
+        var gone = world.NestBuildings.DropHomes(NestBuildings.TownCamp(site), world.Fixtures.PlayerOwnedIn(_data, site, player));
+        if (gone.Count > 0) world.Fixtures.UnregisterNestBuildings(world, gone);
     }
 
     /// <summary>

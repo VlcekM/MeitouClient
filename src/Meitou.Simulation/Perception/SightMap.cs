@@ -29,6 +29,21 @@ public interface ISightSource
     /// <b>Verified</b>).
     /// </summary>
     bool EnforcesCeiling(TownBuilding building) => false;
+    /// <summary>
+    /// Where a ground ray cast straight down over <paramref name="at"/> (X, Z) meets the building's group-9 surfaces first, as it stands or as a ruin
+    /// (<see cref="BuildingShape.GroundTriangles"/>); null when none lies over it (and by default).
+    /// </summary>
+    GroundHit? TopAt(TownBuilding building, bool destroyed, System.Numerics.Vector2 at) => null;
+    /// <summary>
+    /// As <see cref="TopAt(TownBuilding, bool, System.Numerics.Vector2)"/> for any placed BUILDING <paramref name="record"/> (a player's site, a
+    /// camp piece), cached by <paramref name="id"/>; null by default.
+    /// </summary>
+    GroundHit? TopAt(string record, string id, System.Numerics.Vector3 position, System.Numerics.Quaternion rotation, bool destroyed,
+        System.Numerics.Vector2 at) => null;
+    /// <summary>
+    /// The radius of the building's bounding box, as it stands or as a ruin (<see cref="BuildingShape.BoundsRadius"/>); 0 by default.
+    /// </summary>
+    float BoundsRadius(TownBuilding building, bool destroyed) => 0;
 }
 
 /// <summary>
