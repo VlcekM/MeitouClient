@@ -797,6 +797,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
             (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) &&
             (fog is null || !fog.Hidden(min, max, FogVolumes.CullKind.Terrain)), _nodes);
 
+        if (defer && !secondary)
+        {
+            _lateNear = NearRect(eye, viewProjection);
+        }
         SortNearestFirst(eye);
         PreparePatches(_current);
         SplitInteriorCut(secondary ? null : InteriorCut);
@@ -834,6 +838,105 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     /// <summary>
+    /// How much wider than the march's distance the near side's boxes are taken (units), and each box on every side: the displaced ground, the
+    /// heights' rounding, the near side's extra unit.
+    /// </summary>
+    const float NearMargin = 8;
+
+    /// <summary>
+    /// The rectangle of the picture (NDC: x0, y0, x1, y1) that holds every patch pixel the ground march can reach, for the resolve's near side
+    /// (<see cref="TerrainShaders.ResolvePart"/>); null when it reaches none. From the selected nodes' boxes (their square, their heights'
+    /// range, <see cref="NearMargin"/> wider) that come within the march's distance of the eye: the whole picture when one of them crosses
+    /// the eye's plane. Then only the rows whose rays go down steeply enough (<see cref="NearRows"/>): the box under a high eye crosses its
+    /// plane, yet only the bottom of the picture looks at ground that near.
+    /// </summary>
+    Vector4? NearRect(Vector3 eye, in Matrix4x4 viewProjection)
+    {
+        float reach = GroundRelief.ParallaxDistance + NearMargin;
+
+        // The eye's height over the highest ground within reach: a ray going down by angle a meets no ground nearer than that height / sin a.
+        float over = eye.Y - (_bounds.Range(eye.X - reach, eye.Z - reach, 2 * reach).Max + NearMargin);
+        if (over >= reach) return null;
+
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        bool any = false, whole = false;
+        foreach (var node in _nodes)
+        {
+            if (whole) break;
+            var (low, high) = _bounds.Range(node.X0, node.Z0, node.Size);
+            var min = new Vector3((float)node.X0 - NearMargin, low - NearMargin, (float)node.Z0 - NearMargin);
+            var max = new Vector3((float)(node.X0 + node.Size) + NearMargin, high + NearMargin, (float)(node.Z0 + node.Size) + NearMargin);
+            if (Vector3.DistanceSquared(Vector3.Clamp(eye, min, max), eye) >= reach * reach) continue;
+
+            any = true;
+            for (int k = 0; k < 8; k++)
+            {
+                var corner = new Vector3((k & 1) == 0 ? min.X : max.X, (k & 2) == 0 ? min.Y : max.Y, (k & 4) == 0 ? min.Z : max.Z);
+                var clip = Vector4.Transform(new Vector4(corner, 1), viewProjection);
+                if (!(clip.W > 1e-3f))
+                {
+                    // Across the eye's plane: no rectangle of its own, the rows below still bound it.
+                    whole = true;
+                    break;
+                }
+                float x = clip.X / clip.W, y = clip.Y / clip.W;
+                (x0, y0, x1, y1) = (MathF.Min(x0, x), MathF.Min(y0, y), MathF.Max(x1, x), MathF.Max(y1, y));
+            }
+        }
+        if (!any) return null;
+        (x0, y0, x1, y1) = whole ? (-1, -1, 1, 1) : (MathF.Max(x0, -1), MathF.Max(y0, -1), MathF.Min(x1, 1), MathF.Min(y1, 1));
+        if (over > 0 && NearRows(eye, viewProjection, over / reach) is var (bottom, top))
+        {
+            if (top < bottom) return null;
+            (y0, y1) = (MathF.Max(y0, bottom), MathF.Min(y1, top));
+        }
+        return x1 > x0 && y1 > y0 ? new Vector4(x0, y0, x1, y1) : null;
+    }
+
+    /// <summary>
+    /// The rows of the picture (NDC y, low to high; high under low: none) with a ray going down by at least the angle of sine
+    /// <paramref name="sine"/>, a row and 2 % of the sine wider; null when the rows cannot be told (the matrix does not invert, or the camera
+    /// rolls: then a row's steepest ray is not its middle one). Each row's ray from two points of its line, so what the matrix holds of the eye's
+    /// place cancels.
+    /// </summary>
+    static (float Low, float High)? NearRows(Vector3 eye, in Matrix4x4 viewProjection, float sine)
+    {
+        if (!Matrix4x4.Invert(Matrix4x4.CreateTranslation(eye) * viewProjection, out var inverse)) return null;
+
+        bool Ray(float x, float y, out Vector3 ray)
+        {
+            ray = default;
+            var a = Vector4.Transform(new Vector4(x, y, 0.25f, 1), inverse);
+            var b = Vector4.Transform(new Vector4(x, y, 0.75f, 1), inverse);
+            if (!(MathF.Abs(a.W) > 1e-20f) || !(MathF.Abs(b.W) > 1e-20f)) return false;
+            Vector3 pa = new Vector3(a.X, a.Y, a.Z) / a.W, pb = new Vector3(b.X, b.Y, b.Z) / b.W, along = pb - pa;
+            float length = along.Length();
+            if (!(length > 1e-9f) || !float.IsFinite(length)) return false;
+            ray = Vector3.Dot(along, pa + pb) < 0 ? -along / length : along / length;
+            return true;
+        }
+
+        // No roll: the rays at a row's two ends go down alike, so its middle one, the shortest, goes down the most.
+        if (!Ray(-1, 0, out var left) || !Ray(1, 0, out var right) || MathF.Abs(left.Y - right.Y) > 1e-3f) return null;
+
+        const int rows = 256;
+        float low = float.MaxValue, high = float.MinValue, step = 2f / rows;
+        for (int i = 0; i <= rows; i++)
+        {
+            float y = -1 + i * step;
+            if (!Ray(0, y, out var ray)) return null;
+            if (-ray.Y < sine * 0.98f) continue;
+            (low, high) = (MathF.Min(low, y - step), MathF.Max(high, y + step));
+        }
+        return (low, high);
+    }
+
+    /// <summary>
+    /// <see cref="NearRect"/> of the deferred <see cref="Draw"/> the resolve finishes.
+    /// </summary>
+    Vector4? _lateNear;
+
+    /// <summary>
     /// The terrain colour of a deferred <see cref="Draw"/> that wrote the resolve's inputs (<see cref="ResolveInputs"/>), over the picture: one
     /// triangle into <paramref name="targets"/> (the scene's colour targets, no depth), outside any pass. Each pixel that still shows a patch (its
     /// depth is the prepass's) is shaded once: the patches' triangles are not drawn again, and no pixel is shaded for a neighbour's derivatives
@@ -847,29 +950,49 @@ public sealed unsafe class TerrainRenderer : IDisposable
         _frame = _lateFrame;
         PrepareConstants(material: true, patches: true);
 
-        var p = _programs.ResolveProgram(NormalMapsOn);
+        // With the march in the program, the pixels it cannot reach are shaded by a program without it (ResolvePart), first; then the others by
+        // the full one, within the picture's rectangle that holds them (none: not drawn).
+        // Not where the near side's rectangle is most of the picture: the far side's pass would mostly find pixels to leave (measured: 0.06 to
+        // 0.08 ms more than the one program in close views).
+        bool split = TerrainResolveSplit.Enabled && _programs.ColourKey.March
+            && !(_lateNear is { } most && (most.Z - most.X) * (most.W - most.Y) > 0.6f * 4);
         var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
-        if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
-        {
-            var desc = state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, targets.Formats, "terrain resolve");
-            _resolvePipelines[(p.P, targets.Formats)] = pipeline = _gpu.Pipelines.Get(desc);
-        }
 
         var cmd = _gpu.BeginNative("terrain resolve");
         cmd.Order();   // the scene's passes wrote the depth and the targets
         cmd.BeginRendering(targets.Rendering);
         state.Record(cmd, targets);
-        cmd.BindPipeline(pipeline);
-
         var view = View();
         var binding = _nativeFrame.Prepare(in view);
-        NativeFrame.Record(cmd, p.P, in binding);
         var (set, offset) = PrepareConstantsBinding();
-        cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
         cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
         cmd.SetScissor(new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
-
-        cmd.Draw(3, 1);
+        ReadOnlySpan<TerrainShaders.ResolvePart> parts = !split ? [TerrainShaders.ResolvePart.Whole]
+            : _lateNear is null ? [TerrainShaders.ResolvePart.Far]
+            : [TerrainShaders.ResolvePart.Far, TerrainShaders.ResolvePart.Near];
+        foreach (var part in parts)
+        {
+            if (part == TerrainShaders.ResolvePart.Near && _lateNear is { } near)
+            {
+                // NDC to pixels as the picture's passes take them (LampShadowPass.PlanAreas), four pixels wider.
+                int x0 = Math.Max((int)MathF.Floor((near.X + 1) * 0.5f * targets.Width) - 4, 0);
+                int y0 = Math.Max((int)MathF.Floor((near.Y + 1) * 0.5f * targets.Height) - 4, 0);
+                int x1 = Math.Min((int)MathF.Ceiling((near.Z + 1) * 0.5f * targets.Width) + 4, targets.Width);
+                int y1 = Math.Min((int)MathF.Ceiling((near.W + 1) * 0.5f * targets.Height) + 4, targets.Height);
+                if (x1 <= x0 || y1 <= y0) continue;
+                cmd.SetScissor(new PixelRect(x0, y0, (uint)(x1 - x0), (uint)(y1 - y0)));
+            }
+            var p = _programs.ResolveProgram(NormalMapsOn, part);
+            if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
+            {
+                var desc = state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, targets.Formats, "terrain resolve");
+                _resolvePipelines[(p.P, targets.Formats)] = pipeline = _gpu.Pipelines.Get(desc);
+            }
+            cmd.BindPipeline(pipeline);
+            NativeFrame.Record(cmd, p.P, in binding);
+            cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
+            cmd.Draw(3, 1);
+        }
         cmd.EndRendering();
         cmd.Order();
         _gpu.EndNative(cmd);

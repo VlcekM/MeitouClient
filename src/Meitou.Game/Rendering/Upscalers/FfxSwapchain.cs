@@ -319,12 +319,18 @@ public sealed unsafe class FfxSwapchain : IDisposable
     /// <summary>
     /// One line on the queues handed over, for the log.
     /// </summary>
+    /// <summary>
+    /// The first of the device's extra queues the layer took (those before are Streamline's), for <see cref="QueueLayout"/>.
+    /// </summary>
+    static int s_firstQueue;
+
     public string QueueLayout
     {
         get
         {
-            string async = s_computeQueue.Handle == s_presentQueue.Handle ? "the present queue" : "queue 3";
-            return $"game = graphics queue 0, present = queue 1, image acquire = queue 2, async compute = {async} (family {_device.GraphicsFamily})";
+            int first = s_firstQueue + 1;
+            string async = s_computeQueue.Handle == s_presentQueue.Handle ? "the present queue" : $"queue {first + 2}";
+            return $"game = graphics queue 0, present = queue {first}, image acquire = queue {first + 1}, async compute = {async} (family {_device.GraphicsFamily})";
         }
     }
 
@@ -359,15 +365,17 @@ public sealed unsafe class FfxSwapchain : IDisposable
     }
 
     /// <summary>
-    /// The layer for <paramref name="device"/>, or null with the reason (library missing, too few queues).
+    /// The layer for <paramref name="device"/>, its queues the device's extra ones from <paramref name="firstQueue"/> on (those before are
+    /// Streamline's), or null with the reason (library missing, too few queues).
     /// </summary>
-    public static FfxSwapchain? TryCreate(VulkanDevice device, out string? reason)
+    public static FfxSwapchain? TryCreate(VulkanDevice device, int firstQueue, out string? reason)
     {
         if (!LibraryLoads(out var library, out reason)) return null;
 
-        if (device.ExtraQueues.Length < MinimumExtraQueues)
+        int offered = Math.Max(device.ExtraQueues.Length - firstQueue, 0);
+        if (offered < MinimumExtraQueues)
         {
-            reason = $"the graphics queue family offers {device.ExtraQueues.Length + 1} queues, the layer needs {MinimumExtraQueues + 1}";
+            reason = $"the graphics queue family leaves {offered} queues for the layer, it needs {MinimumExtraQueues}";
             return null;
         }
 
@@ -382,7 +390,8 @@ public sealed unsafe class FfxSwapchain : IDisposable
             s_submitDevice = device;
         }
 
-        var extra = device.ExtraQueues;
+        var extra = device.ExtraQueues.AsSpan(firstQueue);
+        s_firstQueue = firstQueue;
         s_gameQueue = device.GraphicsQueue;
         s_presentQueue = extra[0];
         s_acquireQueue = extra[1];

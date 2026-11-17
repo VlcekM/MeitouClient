@@ -6,6 +6,7 @@ using Meitou.Data.Ogre;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
@@ -348,6 +349,85 @@ internal sealed unsafe partial class CharacterRenderer
     #endregion
 
     /// <summary>
+    /// The main view's colour through the visibility buffer (<see cref="CharacterVisibility"/>) when the device has it; off: the colour pass draws
+    /// it. The picture is the same either way to the eye, not to the bit (docs/character-renderer.md "Visibility buffer").
+    /// </summary>
+    public static bool VisibilityBuffer => VisibilityMode == 1 || VisibilityMode == 2 && s_visibilityCrowd;
+
+    /// <summary>
+    /// The visibility buffer's choice: 0 never, 1 always, 2 by the main view's triangles (<see cref="MainViewDrawn"/>). The environment's
+    /// <c>MEITOU_CHARACTER_VISIBILITY</c> sets 0 or 1.
+    /// </summary>
+    public static int VisibilityMode { get; set; } = Environment.GetEnvironmentVariable("MEITOU_CHARACTER_VISIBILITY") switch { "0" => 0, "1" => 1, _ => 2 };
+
+    /// <summary>
+    /// Past this many triangles in the main view the visibility buffer draws it. **Observed** (RTX 4090, 2560x1440, the colour pass against the
+    /// visibility buffer): 1.7 million in a crowded bar 6.5 against 2.1 ms, 1.6 million in a town street 1.75 against 1.43 ms; 69 thousand in a
+    /// close-up 0.53 against 0.65 ms, 53 thousand in the desert 0.10 against 0.17 ms.
+    /// </summary>
+    const int VisibilityAbove = 400_000;
+
+    /// <summary>
+    /// Under this many triangles in the main view the colour pass draws it again: apart from <see cref="VisibilityAbove"/>, since a change of way
+    /// builds the materials' table anew.
+    /// </summary>
+    const int VisibilityBelow = 250_000;
+
+    /// <summary>
+    /// The main view held a crowd's triangles when last drawn (<see cref="MainViewDrawn"/>).
+    /// </summary>
+    static bool s_visibilityCrowd;
+
+    /// <summary>
+    /// The main view's draw is done: its triangles say which way draws the next one (<see cref="VisibilityMode"/> 2).
+    /// </summary>
+    public void MainViewDrawn()
+    {
+        if (DrawnTriangles > VisibilityAbove) s_visibilityCrowd = true;
+        else if (DrawnTriangles < VisibilityBelow) s_visibilityCrowd = false;
+    }
+
+    /// <summary>
+    /// The visibility buffer (made when first used).
+    /// </summary>
+    CharacterVisibility? _visibility;
+
+    /// <summary>
+    /// The pass being drawn is the visibility buffer's id pass.
+    /// </summary>
+    bool _visibilityPass;
+
+    /// <summary>
+    /// Whether the main view's characters go through the visibility buffer this frame (<see cref="DrawVisible"/>): it is on, the device has it and
+    /// <paramref name="post"/> is the Vulkan chain.
+    /// </summary>
+    public bool VisibilityWanted(IWorldPostChain post) => VisibilityBuffer && post is PostProcess && _portraitLive < 0 && CharacterVisibility.Supported(Gpu);
+
+    /// <summary>
+    /// <see cref="Draw"/> for the main view through the visibility buffer, outside the scene's pass (the caller closes it): the id pass over
+    /// <paramref name="post"/>'s depth, then the resolve into its colour targets. <paramref name="stage"/>: the profiler stage the id pass counts
+    /// towards.
+    /// </summary>
+    public void DrawVisible(IWorldPostChain post, int stage, Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, Vector3 light,
+        Vector3 fogColour, float fogDistance, Matrix4x4 relative)
+    {
+        _visibility ??= new CharacterVisibility((GpuContext)Gpu, _nativeFrame);
+        _visibility.Open(post, stage);
+        _visibilityPass = true;
+        try
+        {
+            Draw(viewProjection, eye, frustum, light, fogColour, fogDistance, relative);
+        }
+        finally
+        {
+            _visibilityPass = false;
+            _visibility.Close();
+        }
+
+        _visibility.Resolve(post.SceneTargets);
+    }
+
+    /// <summary>
     /// Draws the characters' depth for a shadow cascade (<see cref="CharacterShaders.DepthFragment"/>); levels chosen from <paramref name="lodEye"/>,
     /// never finer than <paramref name="lodFloor"/> (<see cref="ShadowLod.ObjectLodFloor"/> of a far cascade's texel; 0: the distance rule alone), as
     /// the objects. A part whose bounding radius is under <paramref name="minRadius"/> (a far cascade: half a texel, so it would cover less than one;
@@ -447,12 +527,13 @@ internal sealed unsafe partial class CharacterRenderer
     {
         var active = vb.Active;
         var instances = vb.Instances;
-        var prog = _motionPass ? _motionProg : _depthPass ? _depthProg : _colourProg;
-        string label = _motionPass ? "characters motion" : _depthPass ? "characters depth" : "characters";
         var targets = Gpu.CurrentTargets();
+        var prog = _motionPass ? _motionProg : _depthPass ? _depthProg : _visibilityPass ? _visibility!.Ids(targets.Formats.ShadingRate) : _colourProg;
+        string label = _motionPass ? "characters motion" : _depthPass ? "characters depth" : _visibilityPass ? "characters ids" : "characters";
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
 
-        // The colour pass writes alpha 1 (the scene host masks it off for everything else): the SSAO character mask (PostProcess).
+        // The colour pass writes alpha 1 (the scene host masks it off for everything else): the SSAO character mask (PostProcess). The id pass
+        // writes all four channels of its targets.
         if (!_depthPass && !_motionPass) state = state with { ColourMask = DrawState.Rgba };
 
         var job = _drawJobs.Rent();
@@ -464,6 +545,7 @@ internal sealed unsafe partial class CharacterRenderer
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
             SkinLut = SkinShading ? _skinScattering.Index : 0, SeeThrough = _seeThroughMode };
+        if (_visibilityPass) _visibility!.Keep(in view, in job.Push, storage, instances, active);
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
 
@@ -566,7 +648,7 @@ internal sealed unsafe partial class CharacterRenderer
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
-            if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
+            if (!part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2)) continue;
             var model = part.Shared ? world : _attach[l.AttachBase + part.AttachIndex] * world;
             float modelScale = part.Shared ? worldScale : model.ScaleLength();
             if (_depthPass && part.BoundsRadius * modelScale < minRadius) continue;
@@ -727,7 +809,7 @@ internal sealed unsafe partial class CharacterRenderer
         {
             var part = parts[p];
             ref var f = ref _partFrames[l.PartBase + p];
-            f.Shows = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
+            f.Shows = part.ShowsWith(l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0, l.RangedDrawn, l.Shots, l.BackDrawn || PreviewStudio.DrawnWeapon == 2);
             // Decapitation: a part on a head bone leaves the body with the head; the cut-off head keeps only those (skinned parts: their head
             // vertices, by the shader).
             if (f.Shows && !part.Shared && !part.IsBody && l.Asset.Appearance is { } look

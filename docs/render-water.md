@@ -144,6 +144,15 @@ transmission is zero and swash faded. Higher clarity restores the copy. Do not i
 from terrain/reflection visibility. `--ab water-lean` isolates shader/copy skips; geometry quality
 is independent. A scene with no nearby water can skip water work, with conservative bounds.
 
+Grid rings in view (`WaterRenderer.GridRange`, switch `RingsInView`): the grid's indices run ring by ring from the farthest in, so one
+index run draws the rings between the nearest and the farthest ground distance at which the picture's rays (5 % wider) cross the slab the
+surface stays in (water level ± 200 units: the waves at the strongest wind, breakers, ripples, twice over). The steepest ray gives the
+nearest distance, the flattest the farthest (no cut when it does not go down); nothing is cut sideways; the whole grid when the eye is
+within 200 units above the level or under it. Same triangles in the same order, so the picture is the same. **Verified** (2026-11-16,
+siwa-test6, paused, 5 views from 20° to 88° pitch with water in view, rings on against off: differences at the same-state noise floor).
+**Observed** (RTX 4090, 2560x1440): the whole grid (1.46 M vertices) cost 0.33 ms whatever the view; a town view with no water in
+sight draws 25 to 33 % of the indices, 0.14 to 0.16 ms; about 0.1 ms of the pass is not the grid.
+
 ## Verification and limitations
 
 **Verified** MeitouWaterTests.Refraction_slice_keeps_transparent_floor_and_shore_runup checks

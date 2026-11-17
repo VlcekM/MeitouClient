@@ -419,7 +419,8 @@ holds refuses the second mod.
 ## Harmony
 
 - With code mods enabled the JIT warm-up (`JitWarmup`) starts only after `Initialize` returns. Tiered compilation is off, so a caller
-  compiled before a patch keeps any inlined copy of its target.
+  compiled before a patch keeps any inlined copy of its target. Started that late, it compiles the game's code (its renderers first) before the
+  simulation's: the title's first frames are near. **Observed** (one code mod, 655 mods): the title's first warm-up frame went from 1.8 to 1.0 s.
 - **Observed** ([Harmony docs](https://harmony.pardeike.net/articles/patching-edgecases.html)): an inlined method cannot be patched; the
   patch silently does nothing. Patch methods large enough not to be inlined, or their callers. `Rng` helpers are `AggressiveInlining`.
 - **Observed** (2026-11-04, scratch run): Harmony finds a patch method again by module identity, so the same DLL file loaded by two mods

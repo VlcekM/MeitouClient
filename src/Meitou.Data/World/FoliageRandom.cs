@@ -186,15 +186,91 @@ public static class FoliageNoise
     }
 
     /// <summary>
+    /// <see cref="Smooth"/> at an integer point given as integers: the same sums in the same order (exact while the float coordinates are, below
+    /// 2^24).
+    /// </summary>
+    static float SmoothAt(int ix, int iz)
+    {
+        double sides = Value(ix + 1, iz) + Value(ix - 1, iz) + Value(ix, iz - 1) + Value(ix, iz + 1);
+        double corners = Value(ix + 1, iz - 1) + Value(ix - 1, iz - 1) + Value(ix - 1, iz + 1) + Value(ix + 1, iz + 1);
+        float s = (float)(sides * 0.125);
+        s += (float)(corners * 0.0625);
+        s += (float)(Value(ix, iz) * 0.25);
+        return s;
+    }
+
+    /// <summary>
+    /// Entries of a thread's <see cref="NoiseCache"/>: lattice cells and cosine weights, each a power of two.
+    /// </summary>
+    const int CellSlots = 1024, WeightSlots = 4096;
+
+    /// <summary>
+    /// A thread's last lattice cells (the four smoothed corners of each, a function of the cell alone) and cosine weights (a function of the
+    /// fraction alone), direct-mapped. A zone's grass coverage samples each cell and each pixel column's fraction many times over: computed once,
+    /// the smoothing was three quarters of a zone's foliage placement.
+    /// </summary>
+    sealed class NoiseCache
+    {
+        public readonly long[] Cells = new long[CellSlots];
+        public readonly float[] Corners = new float[CellSlots * 4];
+        public readonly uint[] Fractions = new uint[WeightSlots];
+        public readonly double[] Weights = new double[WeightSlots];
+
+        public NoiseCache()
+        {
+            Array.Fill(Cells, long.MinValue);   // no cell: a cached one's coordinates are below 2^23
+            Array.Fill(Fractions, uint.MaxValue);   // a NaN's bits: no fraction in [0, 1) has them
+        }
+    }
+
+    [ThreadStatic]
+    static NoiseCache? s_threadCache;
+
+    /// <summary>
+    /// The cosine weight <c>(1 − cos(f π)) / 2</c> of fraction <paramref name="f"/>, from the thread's cache.
+    /// </summary>
+    static double Weight(NoiseCache cache, float f)
+    {
+        uint bits = BitConverter.SingleToUInt32Bits(f);
+        int slot = (int)((bits ^ (bits >> 12)) & (WeightSlots - 1));
+        if (cache.Fractions[slot] == bits) return cache.Weights[slot];
+        double w = (1.0 - Math.Cos(f * Pi)) * 0.5;
+        (cache.Fractions[slot], cache.Weights[slot]) = (bits, w);
+        return w;
+    }
+
+    /// <summary>
     /// Smoothed values at the four surrounding integer points, cosine interpolated.
     /// </summary>
     public static float Interpolated(float x, float z)
     {
         float fx0 = MathF.Floor(x), fz0 = MathF.Floor(z);
-        double wx = (1.0 - Math.Cos((x - fx0) * Pi)) * 0.5;
-        double wz = (1.0 - Math.Cos((z - fz0) * Pi)) * 0.5;
-        float fx1 = fx0 + 1, fz1 = fz0 + 1;
-        float n00 = Smooth(fx0, fz0), n10 = Smooth(fx1, fz0), n01 = Smooth(fx0, fz1), n11 = Smooth(fx1, fz1);
+        float n00, n10, n01, n11;
+        double wx, wz;
+        if (MathF.Abs(fx0) < 8388608f && MathF.Abs(fz0) < 8388608f)
+        {
+            // Integers exact as floats, x ± 1 too: the cached path computes what Smooth would.
+            var cache = s_threadCache ??= new NoiseCache();
+            wx = Weight(cache, x - fx0);
+            wz = Weight(cache, z - fz0);
+            int ix = (int)fx0, iz = (int)fz0;
+            long key = ((long)ix << 32) | (uint)iz;
+            int slot = (int)(Hash(ix, iz) & (CellSlots - 1));
+            var c = cache.Corners.AsSpan(slot * 4, 4);
+            if (cache.Cells[slot] != key)
+            {
+                (c[0], c[1], c[2], c[3]) = (SmoothAt(ix, iz), SmoothAt(ix + 1, iz), SmoothAt(ix, iz + 1), SmoothAt(ix + 1, iz + 1));
+                cache.Cells[slot] = key;
+            }
+            (n00, n10, n01, n11) = (c[0], c[1], c[2], c[3]);
+        }
+        else
+        {
+            wx = (1.0 - Math.Cos((x - fx0) * Pi)) * 0.5;
+            wz = (1.0 - Math.Cos((z - fz0) * Pi)) * 0.5;
+            float fx1 = fx0 + 1, fz1 = fz0 + 1;
+            (n00, n10, n01, n11) = (Smooth(fx0, fz0), Smooth(fx1, fz0), Smooth(fx0, fz1), Smooth(fx1, fz1));
+        }
         float top = (float)(n00 * (1.0 - wx) + n10 * wx);
         float bottom = (float)(n01 * (1.0 - wx) + n11 * wx);
         return (float)(top * (1.0 - wz) + bottom * wz);

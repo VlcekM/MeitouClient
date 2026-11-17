@@ -554,6 +554,25 @@ public sealed unsafe class VulkanPresenter : IDisposable
     #region Lifetime
 
     /// <summary>
+    /// Between two frames: waits for the device to go idle and destroys the swapchain through what made it (AMD's layer goes with the one it
+    /// made). The next frame makes a new one, through the layer set by then (<see cref="FrameGeneration"/>), Streamline or the driver: how
+    /// frame generation is turned on and off, or changes vendor, while the game runs (<c>VulkanDisplay.ApplyFrameGeneration</c>).
+    /// </summary>
+    public void DropSwapchain()
+    {
+        _device.WaitIdle();
+        if (FrameGeneration is { } fg)
+        {
+            fg.Dispose();   // destroys the swapchain it made
+            FrameGeneration = null;
+        }
+        else if (_swapchain.Handle != 0 && StreamlineHooks is { } sl) sl.Destroy(_device.Device, _swapchain, null);
+        else if (_swapchain.Handle != 0) _khr.DestroySwapchain(_device.Device, _swapchain, null);
+        _swapchain = default;
+        _stale = true;
+    }
+
+    /// <summary>
     /// Waits for the device to go idle, then releases the backbuffer, the semaphores and the swapchain (through frame generation or Streamline when
     /// they made it).
     /// </summary>

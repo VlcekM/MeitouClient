@@ -45,6 +45,11 @@ public sealed class FoliageWorld : IDisposable
     /// </summary>
     List<FoliageTown>? _towns;
     /// <summary>
+    /// The <see cref="PlayerTowns"/> snapshot <see cref="_towns"/> was read with: a load that changes the player's towns makes a pooled world read
+    /// them again (it kept the first snapshot's for good, and placed a save's zones with the title's ownership).
+    /// </summary>
+    IReadOnlySet<(int X, int Z)>? _townsOwned;
+    /// <summary>
     /// The overlay tiles read, by tile (at most four kept) when no shared cache is given.
     /// </summary>
     readonly Dictionary<(int, int), byte[]> _tiles = [];
@@ -101,7 +106,12 @@ public sealed class FoliageWorld : IDisposable
     /// <summary>
     /// The towns that keep foliage away (not nest markers): X/Z and <c>no-foliage range</c>.
     /// </summary>
-    public static List<FoliageTown> ReadTowns(GameDatabase db, WorldLevelData world)
+    public static List<FoliageTown> ReadTowns(GameDatabase db, WorldLevelData world) => ReadTowns(db, world, PlayerTowns);
+
+    /// <summary>
+    /// <see cref="ReadTowns(GameDatabase, WorldLevelData)"/> with <paramref name="owned"/> as the player's towns.
+    /// </summary>
+    static List<FoliageTown> ReadTowns(GameDatabase db, WorldLevelData world, IReadOnlySet<(int X, int Z)> owned)
     {
         var list = new List<FoliageTown>();
         foreach (var t in world.Towns())
@@ -109,7 +119,7 @@ public sealed class FoliageWorld : IDisposable
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != BuildingTowns.NestMarkerType)
             {
                 list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000),
-                    PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
+                    owned.Contains(TownKey(t.Position.X, t.Position.Z))));
             }
         }
         return list;
@@ -121,10 +131,19 @@ public sealed class FoliageWorld : IDisposable
     void Open()
     {
         if (_map is not null) return;
-        _towns = ReadTowns(_db, _world);
+        UseTowns(PlayerTowns);
         _blend = BlendInfoFile.Open(_install);
         _biomes = FoliageBiomeMap.Open(_install);
         _map = TerrainHeightmap.Open(_install);
+    }
+
+    /// <summary>
+    /// Reads the towns again when <paramref name="owned"/> is another snapshot of the player's than the one they were read with.
+    /// </summary>
+    void UseTowns(IReadOnlySet<(int X, int Z)> owned)
+    {
+        if (ReferenceEquals(owned, _townsOwned)) return;
+        (_towns, _townsOwned) = (ReadTowns(_db, _world, owned), owned);
     }
 
     /// <summary>
@@ -178,9 +197,12 @@ public sealed class FoliageWorld : IDisposable
     public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return (new FoliageZone { Zone = zone }, null);
+        var owned = PlayerTowns;
+        Open();
+        UseTowns(owned);
         bool cached = !ExtraTownsReach(zone);
-        if (cached && _cache?.TryLoad(zone, farOnly) is { } hit) return (hit.Zone, hit.Ground);
-        return Place(zone, farOnly, cached);
+        if (cached && _cache?.TryLoad(zone, farOnly, owned) is { } hit) return (hit.Zone, hit.Ground);
+        return Place(zone, farOnly, cached, owned);
     }
 
     /// <summary>
@@ -190,9 +212,12 @@ public sealed class FoliageWorld : IDisposable
     public GroupedFoliageZone LoadGrouped(ZoneCoordinate zone, bool farOnly = false)
     {
         if (!zone.IsInsideGrid) return FoliageGrouping.Group(new FoliageZone { Zone = zone }, null);
+        var owned = PlayerTowns;
+        Open();
+        UseTowns(owned);
         bool cached = !ExtraTownsReach(zone);
-        if (cached && _cache?.TryLoadGrouped(zone, farOnly) is { } hit) return hit;
-        var (laid, ground) = Place(zone, farOnly, cached);
+        if (cached && _cache?.TryLoadGrouped(zone, farOnly, owned) is { } hit) return hit;
+        var (laid, ground) = Place(zone, farOnly, cached, owned);
         var grouped = FoliageGrouping.Group(laid, ground);
         laid.Instances.Clear();
         laid.Instances.TrimExcess();
@@ -225,7 +250,7 @@ public sealed class FoliageWorld : IDisposable
     /// <summary>
     /// Places one zone's foliage from the maps (and saves it to the layout cache when there is one and <paramref name="save"/> is set).
     /// </summary>
-    (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly, bool save = true)
+    (FoliageZone Zone, FoliageGround? Ground) Place(ZoneCoordinate zone, bool farOnly, bool save = true, IReadOnlySet<(int X, int Z)>? owned = null)
     {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         Open();
@@ -249,7 +274,7 @@ public sealed class FoliageWorld : IDisposable
             NearestTown = NearestTown,
         };
         var laid = FoliageLayout.Place(input, Catalog, farOnly);
-        if (save) _cache?.Save(zone, farOnly, laid, ground, System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        if (save) _cache?.Save(zone, farOnly, laid, ground, System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, owned ?? _townsOwned!);
         return (laid, ground);
     }
 

@@ -41,6 +41,7 @@ static class FoliageShaders
             layout(location = 9) in vec4 aInstance2;
             layout(location = 10) in vec4 aInstance3;
             out float vFade;
+            out vec3 vWetPos;
             uniform vec3 uEye;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """, required: true);
@@ -56,6 +57,9 @@ static class FoliageShaders
         // position at tens of thousands of units steps by 0.004 and a swaying leaf near the camera shook with it.
         v = Replace(v, @"gl_Position\s*=\s*uViewProjection\s*\*\s*p\s*;", """
                 vec4 local = skin * vec4(aPosition, 1.0);
+                // The vertex less the instance's origin, in the world's axes, moved by a few units the origin picks: where the wet world's drops sit
+                // (AtmosphereShaders wetFoliage), the same place on the leaf wherever it sways.
+                vWetPos = mat3(uModel) * local.xyz + fract(aInstance3.xyz * 0.371) * 7.0;
                 gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """, required: true);
         return v;
@@ -126,6 +130,7 @@ static class FoliageShaders
             // Foliage reads the probes without the visibility test (docs/render-gi.md "Cheaper reads"): half the fetches, over its overdraw.
             #define GI_NO_VISIBILITY
             in float vFade;
+            in vec3 vWetPos;
             uniform bool uCoverage;      // alpha to coverage (multisampled target): the cut-out edge becomes the coverage
             float foliageDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             """, required: true);
@@ -138,7 +143,8 @@ static class FoliageShaders
         // The wet world (Meitou): the drops' glints on the leaves, over the game's wetness as it is.
         f = Replace(f, @"glossLit\s*=\s*wetSurface\.a\s*;", """
             glossLit = wetSurface.a;
-            if (uWetWorld > 0.5 && uFogDistance > 0.0) wetFoliage(uv, max(length(dFdx(uv)), length(dFdy(uv))) * 40.0, uWeatherWet.x, uWeatherWet.y, n, glossLit);
+            if (uWetWorld > 0.5 && uFogDistance > 0.0)
+                wetFoliage(vWetPos, max(length(dFdx(vWetPos)), length(dFdy(vWetPos))), n, uWeatherWet.x, uWeatherWet.y, normalize(uLightDir), n, albedo, glossLit);
             """, required: true);
         // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
         // no cut-out.)
@@ -183,6 +189,7 @@ static class FoliageShaders
         out vec3 vHazeAdd;
         out vec3 vWorld;
         out vec2 vUv;
+        out vec3 vWetPos;
         out float vFade;
         void main()
         {
@@ -198,6 +205,7 @@ static class FoliageShaders
             float u = float(cu[corner]), v = float(cv[corner]);
             // The blade's own offsets, then its root less the eye (exact): projected relative to the eye (docs/renderer-native.md "Render origin").
             vec3 o = side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            vWetPos = o + fract(aBlade.xyz * 0.371) * 7.0;   // the blade's own place before it sways: where its drops sit (wetFoliage)
             if (v == 0.0) o.x += uSway * sin(uTime + aBlade.x * uFrequency);
             float dist = distance(uEye.xz, aBlade.xz);
             o.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
@@ -219,6 +227,7 @@ static class FoliageShaders
     public static readonly string GrassFragment = "#version 330 core\n#define GI_NO_VISIBILITY\n" + AtmosphereShaders.Functions + """
         in vec3 vWorld;
         in vec2 vUv;
+        in vec3 vWetPos;
         in float vFade;
         in vec3 vHazeMul;
         in vec3 vHazeAdd;
@@ -266,7 +275,11 @@ static class FoliageShaders
             }
             // The wet world (Meitou, the "Rain drops and puddles" row): the drops' glints on the blades, over the game's wetness as it is.
             if (uWetWorld > 0.5 && uFogDistance > 0.0)
-                wetFoliage(vUv, max(length(dFdx(vUv)), length(dFdy(vUv))) * 40.0, uWeatherWet.x, uWeatherWet.y, grassNormal, grassGloss);
+            {
+                vec3 face = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                if (dot(face, uEye - vWorld) < 0.0) face = -face;
+                wetFoliage(vWetPos, max(length(dFdx(vWetPos)), length(dFdy(vWetPos))), face, uWeatherWet.x, uWeatherWet.y, normalize(uLightDir), grassNormal, albedo, grassGloss);
+            }
             // Lit as the shared mesh shader lights a surface facing straight up (foliage.hlsl writes the normal (0, 1, 0)).
             vec3 l = normalize(uLightDir);
             float diff = max(l.y, 0.0);

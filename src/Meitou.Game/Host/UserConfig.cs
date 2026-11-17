@@ -153,7 +153,8 @@ sealed class UserConfig
     /// <summary>
     /// Frame generation: a generated frame between each two rendered ones, by <see cref="FrameGenerationVendor"/>: FSR 3's frame-interpolation
     /// swapchain (Windows, Proton and Linux, needs <c>amd_fidelityfx_vk.dll</c> / <c>libamd_fidelityfx_vk.so</c>) or DLSS's through Streamline
-    /// (<c>FrameGeneration</c>). Off by default; read at start-up, so a change takes effect after a restart.
+    /// (<c>FrameGeneration</c>). Off by default; followed while the game runs, on, off and from one vendor to the other, without a restart
+    /// (<c>GameLoop.FollowFrameGeneration</c>).
     /// </summary>
     public bool FrameGeneration { get; set; }
 
@@ -185,8 +186,7 @@ sealed class UserConfig
     public float HdrPeakNits { get; set; } = 1000;
 
     /// <summary>
-    /// Whose frame generation <see cref="FrameGeneration"/> turns on: FSR 3 (the default) or DLSS (Windows, RTX 40 or later, through Streamline; read
-    /// at start-up).
+    /// Whose frame generation <see cref="FrameGeneration"/> turns on: FSR 3 (the default) or DLSS (Windows, RTX 40 or later, through Streamline).
     /// </summary>
     public FrameGenerationVendor FrameGenerationVendor { get; set; }
 

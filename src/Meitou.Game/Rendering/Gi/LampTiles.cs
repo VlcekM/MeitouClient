@@ -477,6 +477,20 @@ sealed unsafe class LampTiles : IDisposable
     const float FixtureSources = 8;
 
     /// <summary>
+    /// A lamp whose housing the rays pass by name (its emitter, an interior building's lamps) leaves out this many of the source's radii alone:
+    /// 2 to 5 units. With <see cref="NearSkip"/> a barrel a metre from a lamp post cast no shadow from its near part, and the lit floor ran under
+    /// it up to where its far part began to cast: a shadow that did not touch its caster.
+    /// </summary>
+    public const float EmitterSources = 2;
+
+    /// <summary>
+    /// What a ray from <paramref name="l"/> leaves out at its start (world units): see <see cref="NearSkip"/> and <see cref="EmitterSources"/>.
+    /// The traced rays to the lamp end as short of it (<c>LampShadowShaders</c>' <c>lampSkipOf</c>).
+    /// </summary>
+    static float SkipOf(WorldLight l, uint emitter) =>
+        emitter != 0 ? EmitterSources * SourceRadius(l) : MathF.Max(NearSkip, FixtureSources * SourceRadius(l));
+
+    /// <summary>
     /// The fill kernel's program.
     /// </summary>
     readonly GpuProgram _program;
@@ -613,7 +627,7 @@ sealed unsafe class LampTiles : IDisposable
             Position = new Vector4(l.Position - scene.Origin, l.Radius),
             Axis = new Vector4(l.Direction, MathF.Cos(outer * 0.5f)),
             Tile = new Vector4(x, y, side, sphere ? 1 : 0),
-            More = new Vector4(emitter, groups, side / 8, MathF.Max(NearSkip, FixtureSources * SourceRadius(l))),
+            More = new Vector4(emitter, groups, side / 8, SkipOf(l, emitter)),
         };
         groups += (uint)(side / 8 * (side / 8));
 

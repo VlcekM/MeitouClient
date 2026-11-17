@@ -689,7 +689,7 @@ internal sealed class CharacterContent : IDisposable
             }
 
             // Not an icon's: its colour is the mesh's own vertex colour (CharacterShaders.VertexColoured), and icons take no skin.
-            if (!icon) MarkCurvature(model);
+            if (!icon) MarkCurvatureCached(path, model);
             foreach (var w in model.Warnings) messages.Add($"{Path.GetFileName(path)}: {w}");
             var centre = mesh.Bounds is { } b ? (b.Min + b.Max) / 2 : model.Center;
             float radius = mesh.Bounds is { } bb ? bb.Radius : model.Radius, fileRadius = radius;
@@ -1252,6 +1252,127 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>
+    /// Bumped when what <see cref="MarkCurvature"/> writes changes (its formula, <see cref="MaxThickness"/>, <see cref="ThicknessCell"/>): the key of
+    /// <see cref="MarkCurvatureCached"/>'s files.
+    /// </summary>
+    const int CurvatureVersion = 1;
+
+    /// <summary>
+    /// The first four bytes of a curvature cache file, "MCRV".
+    /// </summary>
+    const uint CurvatureMagic = 0x5652434D;
+
+    /// <summary>
+    /// <see cref="MarkCurvature"/> through a disk cache beside the levels' (<see cref="LodRoot"/>'s <c>curvature</c>), keyed by everything it reads:
+    /// each part's vertices and indices, and <see cref="CurvatureVersion"/>. The thickness rays cost 11 CPU-seconds of a large save's load (a mod's
+    /// dense hair alone 0.6 s on every core), every load.
+    /// </summary>
+    static void MarkCurvatureCached(string path, Model model)
+    {
+        if (Data.World.LoadCaches.Disabled)
+        {
+            MarkCurvature(model);
+            return;
+        }
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var part in model.Parts)
+        {
+            hash.AppendData(BitConverter.GetBytes(part.Vertices.Length));
+            hash.AppendData(MemoryMarshal.AsBytes(part.Vertices.AsSpan()));
+            hash.AppendData(BitConverter.GetBytes(part.Indices.Length));
+            hash.AppendData(MemoryMarshal.AsBytes(part.Indices.AsSpan()));
+        }
+        var key = Convert.ToHexString(hash.GetHashAndReset())[..32].ToLowerInvariant();
+        var safe = new string(Path.GetFileNameWithoutExtension(path).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
+        if (safe.Length > 40) safe = safe[..40];
+        var file = Path.Combine(LodRoot, "curvature", $"{safe}_{key}_v{CurvatureVersion}.mcrv");
+        if (TryLoadCurvature(file, model)) return;
+        MarkCurvature(model);
+        SaveCurvature(file, model);
+    }
+
+    /// <summary>
+    /// Sets every vertex's curvature and thickness (colour Z and W) from <paramref name="file"/>; false (nothing set) when it is missing, unreadable
+    /// or for other parts.
+    /// </summary>
+    static bool TryLoadCurvature(string file, Model model)
+    {
+        try
+        {
+            if (!File.Exists(file)) return false;
+            var bytes = File.ReadAllBytes(file);
+            var span = bytes.AsSpan();
+            if (span.Length < 12 || System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(span) != CurvatureMagic
+                || System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(span[4..]) != CurvatureVersion
+                || System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(span[8..]) != model.Parts.Count)
+                return false;
+            int at = 12;
+            foreach (var part in model.Parts)
+            {
+                if (span.Length < at + 4 || System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(span[at..]) != part.Vertices.Length) return false;
+                at += 4;
+                if (span.Length < at + part.Vertices.Length * 8) return false;
+                at += part.Vertices.Length * 8;
+            }
+            if (at != span.Length) return false;
+
+            // Verified whole before anything is written.
+            at = 12;
+            foreach (var part in model.Parts)
+            {
+                at += 4;
+                var v = part.Vertices;
+                for (int i = 0; i < v.Length; i++, at += 8)
+                {
+                    v[i].Colour.Z = System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(span[at..]);
+                    v[i].Colour.W = System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(span[(at + 4)..]);
+                }
+            }
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes every vertex's curvature and thickness to a temporary file and moves it into place; failures are ignored (it is only a cache).
+    /// </summary>
+    static void SaveCurvature(string file, Model model)
+    {
+        try
+        {
+            int length = 12 + model.Parts.Sum(p => 4 + p.Vertices.Length * 8);
+            var bytes = new byte[length];
+            var span = bytes.AsSpan();
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(span, CurvatureMagic);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(span[4..], CurvatureVersion);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(span[8..], model.Parts.Count);
+            int at = 12;
+            foreach (var part in model.Parts)
+            {
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(span[at..], part.Vertices.Length);
+                at += 4;
+                foreach (var v in part.Vertices)
+                {
+                    System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(span[at..], v.Colour.Z);
+                    System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(span[(at + 4)..], v.Colour.W);
+                    at += 8;
+                }
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var temporary = file + "." + Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "."
+                + Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture) + ".tmp";
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, file, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
     /// Writes each tightly curved vertex's thickness (world units) into its colour's W: how far a ray straight in from it goes before leaving the
     /// mesh by the back of a surface. An ear or a finger is thin; a nose or an eyelid over the head behind it is not, whatever its curvature.
     /// <see cref="MaxThickness"/> for the rest.
@@ -1261,13 +1382,30 @@ internal sealed class CharacterContent : IDisposable
         var v = part.Vertices;
         var idx = part.Indices;
         var grid = ThicknessGrid(v, idx);
-        var tested = new HashSet<int>();
-        for (int i = 0; i < v.Length; i++)
+        // Each vertex's ray is its own (it reads positions and normals, writes only its own thickness): the vertices are dealt over the cores. On
+        // one thread a mod's 60k-triangle hair, its cards dense and curved, took 9 s, and the loading screen waited for it.
+        Parallel.For(0, v.Length, () => new ThicknessScratch(idx.Length / 3), (i, _, scratch) =>
         {
             v[i].Colour.W = MaxThickness;
-            if (v[i].Colour.Z < 2 || v[i].Normal.LengthSquared() < 1e-8f) continue;
-            v[i].Colour.W = ThicknessAt(v, idx, grid, tested, i);
-        }
+            if (v[i].Colour.Z >= 2 && v[i].Normal.LengthSquared() >= 1e-8f) v[i].Colour.W = ThicknessAt(v, idx, grid, scratch, i);
+            return scratch;
+        }, _ => { });
+    }
+
+    /// <summary>
+    /// A <see cref="MarkThickness"/> worker's record of the triangles one ray has tested: a triangle is tested when its stamp is the ray's. A new
+    /// ray takes the next stamp, where emptying a set cleared its whole grown table each time (a mod's dense hair: 11 of its 26 CPU-s).
+    /// </summary>
+    sealed class ThicknessScratch(int triangles)
+    {
+        /// <summary>
+        /// Each triangle's last stamp.
+        /// </summary>
+        public readonly int[] Stamps = new int[triangles];
+        /// <summary>
+        /// The current ray's stamp.
+        /// </summary>
+        public int Stamp;
     }
 
     /// <summary>
@@ -1303,18 +1441,19 @@ internal sealed class CharacterContent : IDisposable
     /// Vertex <paramref name="i"/>'s thickness: the nearest back face a ray straight in from it meets, walking the grid cells along it,
     /// <see cref="MaxThickness"/> when none is nearer.
     /// </summary>
-    static float ThicknessAt(Vertex[] v, uint[] idx, Dictionary<(int, int, int), List<int>> grid, HashSet<int> tested, int i)
+    static float ThicknessAt(Vertex[] v, uint[] idx, Dictionary<(int, int, int), List<int>> grid, ThicknessScratch tested, int i)
     {
         var dir = -Vector3.Normalize(v[i].Normal);
         var from = v[i].Position + dir * 0.01f;
         float best = MaxThickness;
-        tested.Clear();
+        int stamp = ++tested.Stamp;
         for (float along = 0; along < best + ThicknessCell; along += ThicknessCell * 0.5f)
         {
             if (!grid.TryGetValue(ThicknessCellOf(from + dir * MathF.Min(along, best)), out var list)) continue;
             foreach (int t in list)
             {
-                if (!tested.Add(t)) continue;
+                if (tested.Stamps[t / 3] == stamp) continue;
+                tested.Stamps[t / 3] = stamp;
                 float hit = ThicknessRayHit(v, idx, t, from, dir);
                 if (hit > 0 && hit < best) best = hit;
             }

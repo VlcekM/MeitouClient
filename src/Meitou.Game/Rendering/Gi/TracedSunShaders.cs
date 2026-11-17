@@ -69,6 +69,33 @@ static class TracedSunShaders
     public const byte LampMovers = Characters | Moving;
 
     /// <summary>
+    /// Whether a point is walled in: at least seven of eight level rays of 300 units from 2 units over it meet an object (shown or hidden). A face of
+    /// a viewed building's shell that is turned up is the street's (a plinth, a ledge, the top of a cut wall) unless it lies inside the walls (a
+    /// skirting, a step, a dais), where the room's roof shades it and the room's exposure is its own.
+    /// </summary>
+    public const string Enclosed = """
+        bool enclosed(vec3 o)
+        {
+            // The top of a wall the view cuts has the hidden wall standing on it: no room's, though its level rays start inside that wall and meet it.
+            rayQueryEXT up;
+            rayQueryInitializeEXT(up, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, 2u, o, 0.02, vec3(0.0, 1.0, 0.0), 8.0);
+            while (rayQueryProceedEXT(up)) { }
+            if (rayQueryGetIntersectionTypeEXT(up, true) != gl_RayQueryCommittedIntersectionNoneEXT) return false;
+            int met = 0;
+            for (int k = 0; k < 8; k++)
+            {
+                float a = 0.3927 + 0.7853982 * float(k);
+                rayQueryEXT q;
+                rayQueryInitializeEXT(q, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, 2u, o + vec3(0.0, 2.0, 0.0), 0.5, vec3(cos(a), 0.0, sin(a)), 300.0);
+                while (rayQueryProceedEXT(q)) { }
+                if (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT) met++;
+            }
+            return met >= 7;
+        }
+
+        """;
+
+    /// <summary>
     /// What a lamp's cached tile holds (LampTiles): what stands still and does not follow the eye.
     /// </summary>
     public const byte LampTileObjects = Objects | Foliage | SmallFoliage;
@@ -234,12 +261,35 @@ static class TracedSunShaders
 
         // Each query returns how far along the ray its blocker is (the penumbra filter's width), 0 when nothing blocks.
         #define HIT_T(q) (BLOCKED(q) ? rayQueryGetIntersectionTEXT(q, true) : 0.0)
-        float solidBlocks(vec3 o, vec3 dir, float tMin)
+        #define RECORD_HIDDEN(r) ((geometries[r].interior & 2u) != 0u)
+""" + "\n" + Enclosed + "\n" + $$"""
+        // open: the receiver is no interior's and no character. What the floor view hides (GeometryRecord.Interior bit 1) does not shade it when its ray
+        // starts in or right under such a part (one within 12 units): the ground where a hidden wall stands, the foot of a wall under hidden eaves, which
+        // were a dark band round a viewed building's floor. Asked only of a ray a hidden part blocks.
+        // street: a face of a viewed building's shell turned to the outside (surface bit 30): every hidden part is passed.
+        float solidBlocks(vec3 o, vec3 dir, float tMin, bool open, bool street)
         {
             rayQueryEXT q;
+            if (street)
+            {
+                rayQueryInitializeEXT(q, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Solids}}, o, tMin, dir, p.sun.w);
+                while (rayQueryProceedEXT(q)) if (!RECORD_HIDDEN(CANDIDATE_RECORD(q)) && CANDIDATE_KEPT(q)) rayQueryConfirmIntersectionEXT(q);
+                return HIT_T(q);
+            }
             rayQueryInitializeEXT(q, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Solids}}, o, tMin, dir, p.sun.w);
             while (rayQueryProceedEXT(q)) if (CANDIDATE_KEPT(q)) rayQueryConfirmIntersectionEXT(q);
-            return HIT_T(q);
+            if (!open || !BLOCKED(q)
+                || !RECORD_HIDDEN(rayQueryGetIntersectionInstanceCustomIndexEXT(q, true) + rayQueryGetIntersectionGeometryIndexEXT(q, true))) return HIT_T(q);
+
+            rayQueryEXT under;
+            rayQueryInitializeEXT(under, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Solids}}, o, 0.0, dir, 12.0);
+            while (rayQueryProceedEXT(under)) if (RECORD_HIDDEN(CANDIDATE_RECORD(under)) && CANDIDATE_KEPT(under)) rayQueryConfirmIntersectionEXT(under);
+            if (!BLOCKED(under)) return HIT_T(q);
+
+            rayQueryEXT shown;
+            rayQueryInitializeEXT(shown, uScene, gl_RayFlagsTerminateOnFirstHitEXT, {{(int)Solids}}, o, tMin, dir, p.sun.w);
+            while (rayQueryProceedEXT(shown)) if (!RECORD_HIDDEN(CANDIDATE_RECORD(shown)) && CANDIDATE_KEPT(shown)) rayQueryConfirmIntersectionEXT(shown);
+            return HIT_T(shown);
         }
 
         // From under a character's facet that is turned from the sun: the ray crosses the body and leaves it by the back of its far side, which must not block (a dark
@@ -251,7 +301,7 @@ static class TracedSunShaders
             rayQueryInitializeEXT(q, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsCullFrontFacingTrianglesEXT, {{(int)Solids}}, o, 0.0, dir, {{F(BodyChord)}});
             while (rayQueryProceedEXT(q)) { }
             float leaves = HIT_T(q);
-            return solidBlocks(o, dir, leaves > 0.0 ? leaves + 0.002 : 0.0);
+            return solidBlocks(o, dir, leaves > 0.0 ? leaves + 0.002 : 0.0, false, false);
         }
 
         // The ground's height fields. Their back faces are skipped as the probes' rays skip them (the drawn ground lies under the grid in a hollow), but an interior's are not: a room
@@ -317,7 +367,12 @@ static class TracedSunShaders
             // A character's facet turned from the sun while its shading still takes it (the smooth normal's terminator lies past the facets', skin's light further still).
             // Its facets that face the sun skip what lies within BodyContact: a crease between two facets (a brow on a nose, an eyelid) drew a hair-thin dark line.
             if (receiver == 3u) tMin = max(tMin, {{F(BodyContact)}});
-            float t = receiver == 3u && dot(side, dir) < 0.0 ? bodyBlocks(p.eye.xyz + at - side * (0.002 + pixel * 0.25), dir) : solidBlocks(o, dir, tMin);
+            // What is worn (bit 20 of a character's pixel that is no skin) has no body to cross: a cloth turned from the sun is in its own shadow (the lamps' rule,
+            // LampShadowShaders.lampBlocker).
+            bool worn = receiver == 3u && (surface.w >> 28) == 0u && (surface.w & 1048576u) != 0u;
+            bool street = receiver != 3u && (surface.w & 1073741824u) != 0u;
+            bool inside = street && side.y > 0.5 && enclosed(p.eye.xyz + at);
+            float t = receiver == 3u && dot(side, dir) < 0.0 ? (worn ? 1e-3 : bodyBlocks(p.eye.xyz + at - side * (0.002 + pixel * 0.25), dir)) : solidBlocks(o, dir, tMin, !interior && receiver != 3u && !inside, street && !inside);
             if (t <= 0.0)
             {
                 vec3 ground = terrainOrigin(o, dist);

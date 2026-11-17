@@ -68,17 +68,35 @@ static partial class TerrainShaders
             float hz = terrainHeight(p - vec2(0.0, e)) - terrainHeight(p + vec2(0.0, e));
             return normalize(vec3(hx, 2.0 * e, hz));
         }
+        // gridHeight with the four heights fetched and blended here: the sampler blends with 8 bits of a cell (256 places across it), so a height cut
+        // at a level (the water's edge, a puddle's outline) ran in steps a 256th of a cell wide, teeth from close up, and the steps of the points
+        // round it drew the outline again beside it.
+        float gridHeightExact(sampler2D s, vec2 p, vec4 rect, vec2 cells)
+        {
+            vec2 t = clamp((p - rect.xy) / (rect.zw - rect.xy), 0.0, 1.0) * cells, cell = min(floor(t), cells - 1.0), f = t - cell;
+            ivec2 q = ivec2(cell);
+            float h00 = texelFetch(s, q, 0).r, h10 = texelFetch(s, q + ivec2(1, 0), 0).r;
+            float h01 = texelFetch(s, q + ivec2(0, 1), 0).r, h11 = texelFetch(s, q + ivec2(1, 1), 0).r;
+            return mix(mix(h00, h10, f.x), mix(h01, h11, f.x), f.y) * 9800.0;
+        }
+        float terrainHeightExact(vec2 p)
+        {
+            float w = fineWeight(p);
+            if (w >= 1.0) return gridHeightExact(uHeightFine, p, uFineRect, uFineCells);
+            float c = gridHeightExact(uHeightCoarse, p, uCoarseRect, uCoarseCells);
+            return w <= 0.0 ? c : mix(c, gridHeightExact(uHeightFine, p, uFineRect, uFineCells), w);
+        }
         // How far the ground at p lies under the ground round it, for the wet world's puddles (AtmosphereShaders wetGround; WetPuddles.Hollow is this on
         // the CPU): the mean height of six points 1.2 m away and of six 4 m away, less the height here; 12 cm under the near ring or 40 cm under the far
         // one count as full (0.25 each), a rise as much the other way. An even slope gives 0.
         float wetHollow(vec2 p)
         {
-            float h = terrainHeight(p), near = 0.0, far = 0.0;
+            float h = terrainHeightExact(p), near = 0.0, far = 0.0;
             for (int i = 0; i < 6; i++)
             {
                 vec2 d = vec2(cos(float(i) * 1.0471976), sin(float(i) * 1.0471976));
-                near += terrainHeight(p + d * 12.0);
-                far += terrainHeight(p + d * 40.0);
+                near += terrainHeightExact(p + d * 12.0);
+                far += terrainHeightExact(p + d * 40.0);
             }
             return 0.25 * clamp((near / 6.0 - h) / 1.2, -1.0, 1.0) + 0.25 * clamp((far / 6.0 - h) / 4.0, -1.0, 1.0);
         }
@@ -780,6 +798,7 @@ static partial class TerrainShaders
         uniform float uFarLod;         // the near level from which a sample reads the far arrays (the same texels; TerrainTextures.FarShift less the bias)
         uniform sampler2DArray uHeight;   // the layers' heights (GroundRelief): R from their normal maps, G from their diffuse; 1 the top, flat 1 without one
         uniform float uParallax;       // ground parallax: the depth of the height range in world units (1 unit = 10 cm); 0 off
+        uniform float uBroadCut;       // GroundRelief.BroadCut: the relief's shapes wider than this are not hollows for the puddles (world units; 0 keeps all)
         uniform float uDisplace;       // ground displacement (tessellated patches near the eye) in world units; 0 off. The parallax gives way to it there.
         uniform float uDisplaceEnd;    // GroundRelief.DisplaceDistance: displaced in full to 60% of it
         uniform float uParallaxEnd;    // GroundRelief.ParallaxDistance: the parallax in full to half of it, none from it
@@ -996,6 +1015,64 @@ static partial class TerrainShaders
             return h;
         }
 
+        // How far the ground the pixel shows lies under its broad level, by the layers' weights (positive in a trough): the height less its level at
+        // uBroadCut, as the displacement takes it (ReliefFunctions reliefLayer). For the wet world's puddles (wetGround): read from the height texture
+        // at the pixel, the water's outline is the relief's own; the displaced mesh's height, linear over each triangle, gave it straight edges and
+        // corners.
+        float wetUnder = 0.0;
+        bool wetKnown = false;   // wetUnder was read (the puddles are on, or the fragment is near the water line)
+
+        // A layer's height at c (xy the coordinate, z the layer) at a whole level of its texture: a quadratic B-spline over that level's texels,
+        // fetched one by one and weighted here. The sampler's own blend has 256 places across a texel (a height cut at a level then runs in
+        // steps a 256th of a texel wide: with texels of 10 to 50 cm, teeth from close up), a crease along every texel's edge, and a level bias
+        // that an exact level cannot be asked through.
+        float reliefSmooth(vec3 c, int level)
+        {
+            ivec2 size = textureSize(uHeight, level).xy;
+            vec2 s = c.xy * vec2(size) - 0.5, mid = floor(s + 0.5), t = s - mid;
+            vec2 wa = 0.5 * (0.5 - t) * (0.5 - t), wb = 0.75 - t * t, wc = 0.5 * (0.5 + t) * (0.5 + t);
+            ivec2 q = ivec2(mid);
+            float sum = 0.0;
+            for (int j = -1; j <= 1; j++)
+            {
+                float wy = j < 0 ? wa.y : j == 0 ? wb.y : wc.y;
+                for (int i = -1; i <= 1; i++)
+                {
+                    ivec2 at = q + ivec2(i, j);
+                    at -= size * ivec2(floor(vec2(at) / vec2(size)));   // the texture repeats
+                    sum += (i < 0 ? wa.x : i == 0 ? wb.x : wc.x) * wy * texelFetch(uHeight, ivec3(at, int(c.z + 0.5)), level).r;
+                }
+            }
+            return sum;
+        }
+
+        // A layer's height for an outline cut at a level (the water's edge), with the footprint's derivatives: from close up, where a pixel is
+        // under a texel of level 2, that level read smoothly (reliefSmooth), eased in from the footprint's own. The stored height has 256 steps:
+        // cut at a level, level 0 gave islands a texel square; level 2 is a mean of 16 texels.
+        float reliefLevelled(vec3 c, vec2 gx, vec2 gy)
+        {
+            vec2 size0 = vec2(textureSize(uHeight, 0).xy);
+            float foot = max(dot(gx * size0, gx * size0), dot(gy * size0, gy * size0));   // the pixel's long axis in level 0's texels, squared
+            float plain = textureGrad(uHeight, c, gx, gy).r;
+            return foot >= 16.0 ? plain : mix(reliefSmooth(c, 2), plain, smoothstep(4.0, 16.0, foot));
+        }
+
+        float reliefUnder(Relief r, vec2 o)
+        {
+            float under = 0.0;
+            float texels = float(textureSize(uHeight, 0).x);
+            int top = int(log2(texels) + 0.5);
+            for (int i = 0; i < r.n; i++)
+            {
+                vec4 l = r.layer[i];
+                vec3 c = vec3((r.base.p + o) * l.xy, l.z);
+                // The broad level, at the whole level nearest its spacing, read smoothly: its texels are metres wide.
+                float broad = uBroadCut > 0.0 ? reliefSmooth(c, min(int(max(0.0, log2(0.25 * uBroadCut * (l.x + l.y) * texels / 5000.0)) + 0.5), top)) : 0.5;
+                under += l.w * (broad - reliefLevelled(c, r.base.dx * l.xy, r.base.dy * l.xy));
+            }
+            return under;
+        }
+
         // The relief march (GroundRelief, docs/render-terrain.md): the offset along the view ray to where it meets the height (viewSpan: the ray's move
         // over the full depth), then a march toward the sun (sunSpan, likewise; lit: the sun is above the surface) for a soft self-shadow. Flat layers
         // (height 1) stop at once. Returns the shadow on the sun (1 none), as much as strength. finer: the view ray marches only what the displaced mesh
@@ -1172,6 +1249,16 @@ static partial class TerrainShaders
                 trailSpan = 0.0;
                 #endif
                 res.ground = o;
+                // The wet world's puddles: the trough the pixel shows, in world units (the relief's depth, the displacement's where it is on).
+                // Near the water line too: the game's wet edge there follows the same height.
+                if ((uWetWorld > 0.5 && uWeatherWet.x > 0.2) || vWorld.y < uWaterHeight + 6.0)
+                {
+                    // Where the mesh is displaced the height is read at the fragment's own place, the march's move left out as far as the mesh
+                    // carries the relief: that move is taken from the mesh's flat triangles, creased along their edges, and the water's edge
+                    // drew those edges as straight lines across a puddle.
+                    wetUnder = reliefUnder(g.ground, o * reliefWhole) / g.share * (uDisplace > 0.0 ? uDisplace : uParallax) * strength;
+                    wetKnown = true;
+                }
             }
             if (g.cliffBiome >= 0)
             {
@@ -1623,11 +1710,14 @@ static partial class TerrainShaders
             // The game's wetness (common/wet.hlsl, terrainfp4.hlsl): the rain's wetness plus the water line (a 2-unit edge) on an absorbance of 1 - gloss plus
             // the layers'. A rock bake (uWaterHeight far below the world) is without weather, so its impostor does not keep a rain.
             float wetAmount = uWaterHeight > -1.0e5 ? uWeatherWet.x : 0.0;
-            makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - vWorld.y, 2.0);
+            // The ground's height for the water line: the relief's own at the pixel where it was read (reliefUnder), not the displaced mesh's, whose
+            // triangles drew the wet edge along the shore in straight steps.
+            float shoreY = wetKnown ? terrainHeightExact(vWorld.xz) - wetUnder : vWorld.y;
+            makeWet(albedo, wetAmount, 1.0 - albedo.a + absorbance, uWaterHeight - shoreY, 2.0);
             // The wet world's puddles (Meitou, the "Rain drops and puddles" row), above the water line only.
-            if (uWetWorld > 0.5 && wetAmount > 0.2 && vWorld.y > uWaterHeight + 2.0)
+            if (uWetWorld > 0.5 && wetAmount > 0.2 && shoreY > uWaterHeight + 2.0)
                 wetGround(vWorld, n, absorbance, wetAmount, uWeatherWet.y, max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))),
-                    wetHollow(vWorld.xz) + clamp((terrainHeight(vWorld.xz) - vWorld.y) / 1.5, -0.3, 0.3), shadingNormal, albedo);
+                    wetHollow(vWorld.xz) + clamp(wetUnder / 1.5, -0.3, 0.3), 1.0 - smoothstep(1200.0, 3000.0, distance), shadingNormal, albedo);
 
             atmoSelfShadow = reliefShade;
             atmoSurfaceNormal = n;
@@ -2122,6 +2212,7 @@ static partial class TerrainShaders
             vWorld = uEye + resolveAt;
             vNormal = vWorld + resolveShift;
             texWorld = vNormal;
+            // RESOLVE_PART
             resolveStep(resolvePixel, ivec2(1, 0), resolveAt, resolveShift, resolveDepth, resolveWorldDx, resolveShiftDx);
             resolveStep(resolvePixel, ivec2(0, 1), resolveAt, resolveShift, resolveDepth, resolveWorldDy, resolveShiftDy);
         """;
@@ -2132,12 +2223,41 @@ static partial class TerrainShaders
     /// Nothing here takes a derivative from the rasteriser (a neighbour may be discarded): the steps to the next pixels come from the neighbours'
     /// points, and every lookup names its level or its gradients.
     /// </summary>
-    public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false)
+    public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false,
+        ResolvePart part = ResolvePart.Whole)
     {
         string f = ResolvedPointPatches(Fragment);
         f = ResolvedLookupPatches(f);
-        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(Marched(f, march)), trails)), normalMaps, reliefQuality));
+        bool far = part == ResolvePart.Far;
+        if (part != ResolvePart.Whole) f = ResolvePatch(f, "// RESOLVE_PART", ResolvePartTest(far));
+        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(Marched(f, march && !far)), trails)), normalMaps, reliefQuality));
     }
+
+    /// <summary>
+    /// Which pixels a resolve program shades (<see cref="ResolveFragmentNative"/>, docs/render-terrain.md "Resolved colour"): all of them, or one
+    /// side of the split at the ground march's distance, the far side's program built without the march. The march's registers are the whole
+    /// shader's (<see cref="Marched"/>), so a pixel it cannot reach paid for it: 0.5 ms at a town seen from 170 m, none of whose ground it reaches.
+    /// </summary>
+    public enum ResolvePart
+    {
+        /// <summary>Every pixel.</summary>
+        Whole,
+
+        /// <summary>The pixels within the march's distance and a unit more.</summary>
+        Near,
+
+        /// <summary>The pixels at the march's distance and beyond.</summary>
+        Far,
+    }
+
+    /// <summary>
+    /// The split's test in the resolve's prelude (<see cref="ResolvePart"/>): the far side leaves a pixel out exactly where the march's own test
+    /// (<c>uParallax > 0.0 &amp;&amp; distance &lt; uParallaxEnd</c>) holds; the near side keeps a unit more, so the two programs' rounding leaves
+    /// no pixel to neither. The near side is drawn last: where both shade a pixel, the full program's colour stays.
+    /// </summary>
+    static string ResolvePartTest(bool far) =>
+        $"bool resolveNear = uParallax > 0.0 && length(vWorld - uEye) < uParallaxEnd + {(far ? "0.0" : "1.0")};\n"
+        + $"            if ({(far ? "resolveNear" : "!resolveNear")}) discard;";
 
     /// <summary>
     /// <paramref name="f"/> with its point, normal and steps rebuilt from the prepass and the scene's depth instead of the rasteriser's.

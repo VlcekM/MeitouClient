@@ -83,7 +83,8 @@ sealed class GameSaves(GameHost host)
             BeginImport(import.Folder, import.Options);
         }
 
-        if (PreparedBase is null && SavesAvailable(out _) && host.Session.World.Player.Exists)
+        // Once the loading screen is gone: a large save's copy is seconds of a worker, which the warm-up wants (nothing saves under the screen).
+        if (PreparedBase is null && !host.Warming && host.ActiveSceneLoad is null && SavesAvailable(out _) && host.Session.World.Player.Exists)
         {
             var (data, from, options) = (host.PopData!, LoadedSave, CaptureOptions());
             (PreparedBase, _preparedFor) = (Task.Run(() => SaveCapture.PrepareBase(data, from, options)), from);
@@ -428,7 +429,11 @@ sealed class GameSaves(GameHost host)
     /// <summary>
     /// The worker's hand-off of the save's hour to the sky arrival (GameHost.Transition.cs).
     /// </summary>
-    void ReadArrivalHour(SaveCamera saved) => Volatile.Write(ref host.ReadHour, saved.Hour + saved.Minute / 60f);
+    void ReadArrivalHour(SaveCamera saved)
+    {
+        Volatile.Write(ref host.ReadHour, saved.Hour + saved.Minute / 60f);
+        if (saved.HasView) Volatile.Write(ref host.ReadView, new System.Runtime.CompilerServices.StrongBox<Vector3>(saved.Position));
+    }
 
     /// <summary>
     /// The systems of the world the save will be loaded into, with its difficulty: made apart from the swap, so a load builds them while the old

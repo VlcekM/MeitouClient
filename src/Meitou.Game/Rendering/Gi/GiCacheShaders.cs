@@ -22,7 +22,7 @@ static class GiCacheShaders
             vec4 vPlanes;   // xy the scene depth's near and far, zw tan(fov/2) * aspect, tan(fov/2) of the drawn window
             vec4 vSize;     // xy the low target, zw the render size
             vec4 vCells;    // x the finest cell, y cell size per unit of eye distance, z the eye distance the cache ends at, w where in a level the next one starts to blend in
-            uvec4 vFrame;   // x the frame (from 1), y the age a cell is evicted at, z this frame's subset of the ring
+            uvec4 vFrame;   // x the frame (from 1), y the age a cell is evicted at, z this frame's subset of the ring, w the frames between a cell's traces (GiCache.Stride)
 
         """;
 
@@ -379,12 +379,26 @@ static class GiCacheShaders
         }
         // One ray's light: a hit lit as a probe ray's, on either side (the underside of a tent's canvas is a surface: it is drawn one-sided and the probes where the ray
         // started moved from frame to frame, docs/render-gi.md "Radiance cache"); a miss, the probes at its end. Clamped per channel (KenshiNative's firefly clamp).
-        vec3 rayLight(vec3 world, vec3 dir)
+        // open: the cell is no interior's. Its ray passes what the floor view hides (GeometryRecord.Interior bit 1; up to 4 parts): the ground where
+        // a hidden wall stands, the foot of a wall under hidden eaves. Blocked there, every ray of the cell was, and the ground round a viewed
+        // building's floor was a black band. (Passing only parts within 12 units of the start left a dark strip: the wall above a plinth starts higher.)
+        vec3 rayLight(vec3 world, vec3 dir, bool open)
         {
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, cacheReach.x);
-            TRACE(rq)
-            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) return min(cached(world + dir * cacheReach.x, dir), vec3(cacheReach.y));
+            vec3 start = world;
+            float reach = cacheReach.x;
+            for (int pass = 0; ; pass++)
+            {
+                rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, reach);
+                TRACE(rq)
+                if (!open || pass >= 4 || rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) break;
+                float through = rayQueryGetIntersectionTEXT(rq, true);
+                int hidden = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+                if ((geometries[hidden].interior & 2u) == 0u) break;
+                world += dir * (through + 0.05);
+                reach = max(reach - through - 0.05, 0.01);
+            }
+            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT) return min(cached(start + dir * cacheReach.x, dir), vec3(cacheReach.y));
             float t = rayQueryGetIntersectionTEXT(rq, true);
             int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
             Geometry g = geometries[record];
@@ -440,12 +454,17 @@ static class GiCacheShaders
             uint seed = cacheMix(uint(cell.coord.x) * 73856093u ^ uint(cell.coord.y) * 19349663u ^ uint(cell.coord.z) * 83492791u ^ uint(cell.coord.w));
             vec2 shift = vec2(cacheMix(seed), cacheMix(seed ^ 0x68bc21ebu)) / 4294967296.0;
             uint mask = uint(cell.normal.w);
-            // A new (or just changed) cell traces its first subsets at once (the ones before this frame's, which the frames after do not repeat).
-            int subsets = bitCount(mask) < {{GiCache.FirstSubsets}} ? {{GiCache.FirstSubsets}} : 1;
+            // A cell traces every vFrame.w frames, its turn by its seed, and its subsets in the ring's order over its own turns: the ring is as long in time at any
+            // frame rate (GiCache.RingSeconds). A still scene's rays give the same light again, so tracing each cell every frame only shortens how fast a change of
+            // light is followed.
+            uint stride = max(vFrame.w, 1u), turn = (vFrame.x + seed % stride) / stride;
+            bool due = (vFrame.x + seed % stride) % stride == 0u;
+            // A new (or just changed) cell traces its first subsets at once (the ones before this turn's, which the turns after do not repeat).
+            int subsets = bitCount(mask) < {{GiCache.FirstSubsets}} ? {{GiCache.FirstSubsets}} : due ? 1 : 0;
             for (int j = 0; j < subsets; j++)
             {
-                uint k = (vFrame.z + RING - uint(j)) % RING;
-                partial[i] = rayLight(world, cosineDirection(n, rayPoint(i, k, shift)));
+                uint k = ((stride == 1u ? vFrame.z : turn % RING) + RING - uint(j)) % RING;
+                partial[i] = rayLight(world, cosineDirection(n, rayPoint(i, k, shift)), axis < 6);
                 barrier();
                 for (uint stride = gl_WorkGroupSize.x / 2u; stride > 0u; stride >>= 1u)
                 {

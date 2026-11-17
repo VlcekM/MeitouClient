@@ -52,6 +52,11 @@ internal sealed partial class CharacterRenderer
         public uint BoneBase;
 
         /// <summary>
+        /// In a building's interior (<see cref="Live.Interior"/>): a ray's hit on it takes the probes' light in full, none of the sky's.
+        /// </summary>
+        public bool Interior;
+
+        /// <summary>
         /// How far the character's sphere is from the eye.
         /// </summary>
         public float Distance;
@@ -130,6 +135,7 @@ internal sealed partial class CharacterRenderer
     {
         (c.Key, c.Anchor, c.BoneBase, c.Distance, c.Centre, c.Radius) = (l.Key, l.World.Translation, (uint)l.BoneBase, distance, l.Centre, l.Radius);
         c.Pose = l.State.Posed;
+        c.Interior = l.Interior;
         c.Parts.Clear();
 
         // The parts are placed relative to the update's eye; relative to the anchor here, so the character's structure keeps its precision and its
@@ -182,14 +188,18 @@ internal sealed partial class CharacterRenderer
     }
 
     /// <summary>
-    /// The colour a reflection multiplies a part's maps by, packed as RGBA bytes: hair its own colour darkened, anything else darker by its kind;
-    /// the alpha byte 255 for all but hair.
+    /// The colour a ray's hit multiplies a part's maps by, packed as RGBA bytes: hair its own colour darkened, anything else darker by its kind,
+    /// a body by its skin tone too; the alpha byte 255 for all but hair.
     /// </summary>
     static uint RayTint(in CharacterMaterialRecord record, bool hair)
     {
+        // A body's maps darken by its skin tone where its tone masks say (CharacterShaders.Fragment: 1 - tone x mask). The masks are taken as 1, skin
+        // being most of a body: without the tone a dark skin sent back several times its light, onto itself and into every reflection.
+        bool toned = record.Shading != 0 && (record.Flags & (CharacterShaders.HasBodyMask | CharacterShaders.HasHeadMask)) != 0;
+        var tone = toned ? Vector3.One - new Vector3(record.SkinTone.X, record.SkinTone.Y, record.SkinTone.Z) : Vector3.One;
         var shade = hair
             ? new Vector3(record.HairColour.X, record.HairColour.Y, record.HairColour.Z) * 0.7f
-            : new Vector3(record.Shading != 0 ? 0.7f
+            : tone * (record.Shading != 0 ? 0.7f
                 : (record.Flags & CharacterShaders.Worn) != 0 ? 0.8f
                 : 1f);
         return (uint)(Math.Clamp(shade.X, 0, 1) * 255) | (uint)(Math.Clamp(shade.Y, 0, 1) * 255) << 8 | (uint)(Math.Clamp(shade.Z, 0, 1) * 255) << 16

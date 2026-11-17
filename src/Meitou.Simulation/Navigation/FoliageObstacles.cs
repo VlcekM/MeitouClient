@@ -57,6 +57,12 @@ internal sealed class FoliageObstacles : IDisposable
     FoliageCatalog? _foliageCatalog;
 
     /// <summary>
+    /// The foliage layout cache the placements read and write (the renderer's files: the same key), made with the catalog; null without one.
+    /// The navmesh placed every zone it gathered again on every load (some 3 CPU-s of a save's warm-up).
+    /// </summary>
+    FoliageLayoutCache? _layoutCache;
+
+    /// <summary>
     /// The player's towns the placement shares; null: none are ever added.
     /// </summary>
     readonly NavRuntimeBuildings? _runtime;
@@ -110,7 +116,18 @@ internal sealed class FoliageObstacles : IDisposable
         {
             if (_foliageZones.Count + missing.Count > MaxCachedFoliageZones) _foliageZones.Clear();
 
-            _foliageCatalog ??= FoliageCatalog.Load(_db);
+            if (_foliageCatalog is null)
+            {
+                _foliageCatalog = FoliageCatalog.Load(_db);
+                try
+                {
+                    _layoutCache = new FoliageLayoutCache(_install, _foliageCatalog, FoliageWorld.ReadTowns(_db, _levels));
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    _layoutCache = null;
+                }
+            }
             if (_overlayTiles.Count > 6) _overlayTiles.Clear();
 
             var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(missing.Count, Environment.ProcessorCount - 1)) };
@@ -135,7 +152,7 @@ internal sealed class FoliageObstacles : IDisposable
     void PlaceFoliageZone(ZoneCoordinate z)
     {
         if (!_foliagePool.TryTake(out var world))
-            world = new FoliageWorld(_install, _db, _levels, _foliageCatalog, _overlayTiles);
+            world = new FoliageWorld(_install, _db, _levels, _foliageCatalog, _overlayTiles, _layoutCache);
 
         world.ExtraTowns = _placedWith.Towns;
 

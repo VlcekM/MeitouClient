@@ -234,6 +234,270 @@ sealed unsafe class TracedGrass : IDisposable
         """;
 
     /// <summary>
+    /// The traced blades' map (<see cref="Map"/>): the finest level's cells across, their side in world units, how far the map's centre is
+    /// snapped (its corner moves by this much), the offset added to a height before it is stored (so every stored height is a positive float, whose
+    /// bits order as the heights do), and its levels (each a quarter of the one before, down to one cell).
+    /// </summary>
+    public const int MapSide = 512, MapLevels = 10;
+
+    /// <summary>
+    /// See <see cref="MapSide"/>.
+    /// </summary>
+    public const float MapCell = 16, MapSnap = 512, MapOffset = 100000;
+
+    /// <summary>
+    /// The map's cells over all its levels.
+    /// </summary>
+    static int MapTexels
+    {
+        get
+        {
+            int n = 0;
+            for (int l = 0; l < MapLevels; l++) n += (MapSide >> l) * (MapSide >> l);
+            return n;
+        }
+    }
+
+    /// <summary>
+    /// The traced blades' map as the lamps' cell classification reads it (<see cref="Map"/>): the buffer, its corner (x, z) in the world, the finest
+    /// cell, the side in cells and the height offset.
+    /// </summary>
+    public readonly record struct MapView(GpuBuffer Buffer, Vector2 Origin, float Cell, int Side, float Offset);
+
+    /// <summary>
+    /// The traced blades' map, world-anchored round the eye (<see cref="MapSide"/> cells of <see cref="MapCell"/>, its corner snapped to
+    /// <see cref="MapSnap"/>): per cell the highest top of a traced card over it, as the card stands in its structure (a swaying patch's widened
+    /// by twice its sway, the sway it may take before the next rebuild), then the coarser levels each the largest of four. A card collapsed by an
+    /// interior mask leaves nothing. Made again when the frame's traced patches or their structures change (<see cref="UpdateMap"/>). The lamps'
+    /// pass asks it whether a blade can stand between a lamp and what a screen cell shows (docs/render-lights.md "Lamps among grass"); null while
+    /// there is none.
+    /// </summary>
+    public MapView? Map => _mapReady && _map is not null ? new(_map.Handle, _mapOrigin, MapCell, MapSide, MapOffset) : null;
+
+    /// <summary>
+    /// The map (device memory, <see cref="MapTexels"/> uints), and per frame slot the list of the patches it is made from (upload memory).
+    /// </summary>
+    DeviceBuffer? _map;
+
+    /// <summary>
+    /// See <see cref="_map"/>.
+    /// </summary>
+    BufferAllocation[]? _mapPatches;
+
+    /// <summary>
+    /// The map's kernels: the cards into the finest level, a coarser level from the one before.
+    /// </summary>
+    readonly GpuProgram _markProgram, _mipProgram;
+
+    /// <summary>
+    /// See <see cref="_markProgram"/>.
+    /// </summary>
+    readonly GpuComputePipeline _markPipeline, _mipPipeline;
+
+    /// <summary>
+    /// What the map was last made from (<see cref="UpdateMap"/>), whether it holds the frame's patches, and its corner.
+    /// </summary>
+    int _mapKey;
+
+    /// <summary>
+    /// See <see cref="_mapKey"/>.
+    /// </summary>
+    bool _mapReady;
+
+    /// <summary>
+    /// See <see cref="_mapKey"/>.
+    /// </summary>
+    Vector2 _mapOrigin;
+
+    /// <summary>
+    /// The largest sway of the frame's swaying patches.
+    /// </summary>
+    float _maxSway;
+
+    /// <summary>
+    /// A traced patch for the map's kernel: its vertices' address, its cards and its corner (std430: 32 bytes).
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    struct MapPatch
+    {
+        public ulong Vertices;
+        public uint Cards, Pad;
+        public Vector4 Corner;
+    }
+
+    /// <summary>
+    /// The map's kernels' constants: the map's corner (x, z), cell and side; the cards' widening and the height offset; a level's offsets and side.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    struct MapParams
+    {
+        public Vector4 Grid, Extra;
+        public uint FineAt, At, Side, Pad;
+    }
+
+    /// <summary>
+    /// The cards of the map's patches into its finest level (<see cref="Map"/>), a thread a card, a row of groups a patch.
+    /// </summary>
+    const string MarkSource = """
+        #version 460
+        #extension GL_EXT_buffer_reference : require
+        #extension GL_EXT_buffer_reference_uvec2 : require
+        #extension GL_EXT_scalar_block_layout : require
+        layout(local_size_x = 64) in;
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Corners { vec3 v[]; };
+        struct MapPatch { uvec2 vertices; uint cards; uint pad; vec4 corner; };
+        layout(set = 0, binding = 0, std430) readonly buffer Patches { MapPatch patches[]; };
+        layout(set = 0, binding = 1, std430) buffer Map { uint map[]; };
+        layout(set = 0, binding = 2, std140) uniform Params
+        {
+            vec4 grid;    // the map's corner x, z, its cell, its side
+            vec4 extra;   // x: the cards' widening, y: the height offset
+            uvec4 level;
+        } p;
+
+        void main()
+        {
+            MapPatch page = patches[gl_WorkGroupID.y];
+            uint card = gl_GlobalInvocationID.x;
+            if (card >= page.cards) return;
+            Corners corners = Corners(page.vertices);
+            vec3 lo = corners.v[card * 4u], hi = lo;
+            for (uint k = 1u; k < 4u; k++)
+            {
+                vec3 q = corners.v[card * 4u + k];
+                lo = min(lo, q);
+                hi = max(hi, q);
+            }
+            // A card in an interior mask is collapsed to its blade's foot (TracedGrass.Expand): it blocks nothing.
+            if (all(lessThan(hi - lo, vec3(1e-4)))) return;
+            lo += page.corner.xyz;
+            hi += page.corner.xyz;
+            int side = int(p.grid.w);
+            ivec2 a = max(ivec2(floor((lo.xz - p.extra.x - p.grid.xy) / p.grid.z)), ivec2(0));
+            ivec2 b = min(ivec2(floor((hi.xz + p.extra.x - p.grid.xy) / p.grid.z)), ivec2(side - 1));
+            uint top = floatBitsToUint(max(hi.y + p.extra.y, 1e-30));
+            for (int z = a.y; z <= b.y; z++)
+                for (int x = a.x; x <= b.x; x++)
+                    atomicMax(map[uint(z * side + x)], top);
+        }
+        """;
+
+    /// <summary>
+    /// A coarser level of the map: each cell the largest of the four under it.
+    /// </summary>
+    const string MipSource = """
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0, std430) buffer Map { uint map[]; };
+        layout(set = 0, binding = 1, std140) uniform Params
+        {
+            vec4 grid;
+            vec4 extra;
+            uvec4 level;   // x: the finer level's first cell, y: this level's, z: this level's side
+        } p;
+
+        void main()
+        {
+            uvec2 q = gl_GlobalInvocationID.xy;
+            uint side = p.level.z;
+            if (q.x >= side || q.y >= side) return;
+            uint fine = side * 2u, at = p.level.x + q.y * 2u * fine + q.x * 2u;
+            map[p.level.y + q.y * side + q.x] = max(max(map[at], map[at + 1u]), max(map[at + fine], map[at + fine + 1u]));
+        }
+        """;
+
+    /// <summary>
+    /// Makes the map (<see cref="Map"/>) again when what it holds changed: the frame's traced patches, a structure built again, the snapped corner
+    /// or the widening; nothing to do on most frames. Recorded after the frame's expansions, before the lamps' pass reads it.
+    /// </summary>
+    void UpdateMap(Func<IGpuCommandList> open)
+    {
+        if (_shown.Count == 0)
+        {
+            _mapReady = false;
+            return;
+        }
+
+        float half = MapSide * MapCell / 2;
+        var origin = new Vector2(MathF.Floor(_eye.X / MapSnap) * MapSnap + MapSnap / 2 - half, MathF.Floor(_eye.Z / MapSnap) * MapSnap + MapSnap / 2 - half);
+        float widen = 2 * _maxSway + 1;
+        var key = new HashCode();
+        key.Add(origin);
+        key.Add(widen);
+        foreach (var (entry, _) in _shown)
+        {
+            key.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(entry));
+            key.Add(entry.Built);
+        }
+        int made = key.ToHashCode();
+        if (_mapReady && made == _mapKey) return;
+
+        _map ??= DeviceBuffer.Create(_ctx, (ulong)MapTexels * 4, BufferUse.Storage | BufferUse.TransferDst, "traced grass map");
+        if (_mapPatches is null)
+        {
+            _mapPatches = new BufferAllocation[_ctx.Device.Frames.Count];
+            for (int i = 0; i < _mapPatches.Length; i++)
+            {
+                _mapPatches[i] = _ctx.Device.Allocator.CreateBuffer((ulong)(MaxInstances * sizeof(MapPatch)), BufferUsageFlags.StorageBufferBit,
+                    MemoryKind.Upload, "traced grass map patches");
+            }
+        }
+
+        var upload = _mapPatches[_ctx.Frame.Slot];
+        var patches = new Span<MapPatch>(upload.Mapped, MaxInstances);
+        int count = 0, most = 0;
+        foreach (var (entry, _) in _shown)
+        {
+            int cards = (int)(entry.Vertices.Size / (VerticesPerQuad * 12));
+            if (cards == 0 || count >= MaxInstances) continue;
+            patches[count++] = new MapPatch { Vertices = _ctx.Device.Address(entry.Vertices.Handle), Cards = (uint)cards, Corner = new Vector4(entry.Corner, 0) };
+            most = Math.Max(most, cards);
+        }
+
+        var cmd = (CommandList)open();
+        cmd.Barrier(BarrierBatch.Full);   // the cards expanded this frame
+        cmd.FillBuffer(_map.Handle, 0, _map.Size, 0);
+        cmd.Barrier(BarrierBatch.Full);
+        var parameters = new MapParams { Grid = new Vector4(origin, MapCell, MapSide), Extra = new Vector4(widen, MapOffset, 0, 0) };
+        var mapInfo = new DescriptorBufferInfo(_ctx.Device.BufferAt(_map.Handle.Index), 0, _map.Size);
+        var writes = stackalloc WriteDescriptorSet[3];
+        if (count > 0)
+        {
+            var constants = _ctx.Frame.Constants.Write<MapParams>(new ReadOnlySpan<MapParams>(&parameters, 1), 256);
+            var list = new DescriptorBufferInfo(_ctx.Device.BufferAt(upload.Index), 0, (ulong)(count * sizeof(MapPatch)));
+            var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(MapParams));
+            writes[0] = Buffer(0, DescriptorType.StorageBuffer, &list);
+            writes[1] = Buffer(1, DescriptorType.StorageBuffer, &mapInfo);
+            writes[2] = Buffer(2, DescriptorType.UniformBuffer, &uniform);
+            cmd.BindPipeline(_markPipeline);
+            cmd.PushDescriptors(_markProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
+            cmd.Dispatch((uint)((most + 63) / 64), (uint)count);
+        }
+
+        uint fineAt = 0;
+        for (int l = 1; l < MapLevels; l++)
+        {
+            int fineSide = MapSide >> (l - 1), side = MapSide >> l;
+            uint at = fineAt + (uint)(fineSide * fineSide);
+            cmd.Barrier(BarrierBatch.Full);
+            parameters.FineAt = fineAt;
+            parameters.At = at;
+            parameters.Side = (uint)side;
+            var constants = _ctx.Frame.Constants.Write<MapParams>(new ReadOnlySpan<MapParams>(&parameters, 1), 256);
+            var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(MapParams));
+            writes[0] = Buffer(0, DescriptorType.StorageBuffer, &mapInfo);
+            writes[1] = Buffer(1, DescriptorType.UniformBuffer, &uniform);
+            cmd.BindPipeline(_mipPipeline);
+            cmd.PushDescriptors(_mipProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 2), GpuBindPoint.Compute);
+            cmd.Dispatch((uint)((side + 7) / 8), (uint)((side + 7) / 8));
+            fineAt = at;
+        }
+        cmd.Barrier(BarrierBatch.Full);
+
+        (_mapKey, _mapReady, _mapOrigin) = (made, true, origin);
+    }
+
+    /// <summary>
     /// A patch's structure and the vertices it is built over.
     /// </summary>
     sealed class Entry
@@ -349,6 +613,32 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// The expansion kernel and the shared index buffer.
     /// </summary>
+    /// <summary>
+    /// The widest card of the frame's patches (world units).
+    /// </summary>
+    float _widest;
+
+    /// <summary>
+    /// The corners (x, z) of the frame's traced pages that hold blades.
+    /// </summary>
+    readonly List<Vector2> _pages = [];
+
+    /// <summary>
+    /// Whether a traced page with blades comes within <paramref name="radius"/> of <paramref name="centre"/> across the ground, a blade's reach
+    /// from its foot more: false says no traced blade stands in that sphere.
+    /// </summary>
+    public bool Within(Vector3 centre, float radius)
+    {
+        float reach = radius + _widest + 2 * BlindRange, size = FoliageRenderer.RayGrassPageSize;
+        foreach (var corner in _pages)
+        {
+            float dx = MathF.Max(MathF.Max(corner.X - centre.X, centre.X - corner.X - size), 0);
+            float dz = MathF.Max(MathF.Max(corner.Y - centre.Z, centre.Z - corner.Y - size), 0);
+            if (dx * dx + dz * dz <= reach * reach) return true;
+        }
+        return false;
+    }
+
     public TracedGrass(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -357,6 +647,11 @@ sealed unsafe class TracedGrass : IDisposable
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced grass"));
         _indices = DeviceBuffer.Create(ctx, MaxQuads * IndicesPerQuad * 4ul, BufferUse.Index | BufferUse.RayInput, "traced grass indices");
         ctx.Uploads.Write(_indices, 0, MemoryMarshal.AsBytes(CardIndices()));
+        _markProgram = ctx.Shaders.Compute(MarkSource, "traced grass map",
+            [(0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer)]);
+        _markPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_markProgram, "traced grass map"));
+        _mipProgram = ctx.Shaders.Compute(MipSource, "traced grass map level", [(0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer)]);
+        _mipPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_mipProgram, "traced grass map level"));
     }
 
     /// <summary>
@@ -382,7 +677,10 @@ sealed unsafe class TracedGrass : IDisposable
         foliage.RayGrass(eye, _range, _patches);
         _shown.Clear();
         _swayed.Clear();
+        _pages.Clear();
         _tallest = 0;
+        _widest = 0;
+        _maxSway = 0;
 
         CommandList? list = null;
         int swayTriangles = ShowPatches(open, foliage, frame, cuts, ref list);
@@ -392,6 +690,7 @@ sealed unsafe class TracedGrass : IDisposable
             foreach (var entry in _swayed) entry.Blas.RefitBottom(list, [entry.Geometry]);
         }
 
+        UpdateMap(open);
         SwayedTriangles = swayTriangles;
         Evict(frame);
     }
@@ -418,6 +717,8 @@ sealed unsafe class TracedGrass : IDisposable
     /// </summary>
     public void Release()
     {
+        _mapReady = false;
+        _pages.Clear();
         _shown.Clear();
         foreach (var key in _entries.Keys.ToArray()) Drop(key, _entries[key]);
     }
@@ -446,7 +747,11 @@ sealed unsafe class TracedGrass : IDisposable
 
         _entries.Clear();
         _indices.Dispose();
+        _map?.Dispose();
+        foreach (var upload in _mapPatches ?? []) _ctx.Device.Allocator.Free(upload);
         _ctx.Shaders.Dispose(_program);
+        _ctx.Shaders.Dispose(_markProgram);
+        _ctx.Shaders.Dispose(_mipProgram);
     }
 
     /// <summary>
@@ -486,7 +791,11 @@ sealed unsafe class TracedGrass : IDisposable
 
             entry.LastUsed = frame;
             _shown.Add((entry, patch.Sprite));
+            if (patch.Blades > 0) _pages.Add(new Vector2(patch.Corner.X, patch.Corner.Z));
             _tallest = MathF.Max(_tallest, patch.Size.W);
+            _widest = MathF.Max(_widest, patch.Size.Y);
+
+            if (Sways(patch)) _maxSway = MathF.Max(_maxSway, MathF.Abs(patch.Sway));
 
             // Current left this patch's masks in pageCuts. A structure built this frame stands as built; a held one of another blade count does not
             // match the arena any more.

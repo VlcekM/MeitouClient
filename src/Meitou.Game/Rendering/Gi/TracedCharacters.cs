@@ -600,6 +600,7 @@ sealed unsafe class TracedCharacters : IDisposable
             // The cut-out as the shadow draws make it; the channel rides in the record's diffuse index, which no probe ray reads for a character.
             (record.AlphaTexture, record.AlphaThreshold, record.Texture) = (part.AlphaMap, part.AlphaCut, part.Channel);
             (record.CharacterDiffuse, record.CharacterHead, record.CharacterTint) = (part.Diffuse, part.Head, part.Tint);
+            record.Interior = c.Interior ? 1u : 0u;
         }
     }
 

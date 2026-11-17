@@ -82,47 +82,102 @@ public sealed unsafe class VulkanDisplay : IDisposable
             RayTracing = RayTracing,
         };
 
-        // DLSS frame generation goes through Streamline (Windows, a window); FSR 3's needs AMD's library, checked first, so DLSS leaves Streamline
-        // for NGX only when the layer can be used.
-        bool dlssFrameGeneration = frameGeneration == FrameGenerationMethod.Dlss && options is not null && OperatingSystem.IsWindows();
-        if (frameGeneration == FrameGenerationMethod.Dlss && options is not null && !dlssFrameGeneration)
-            Console.WriteLine("frame generation  DLSS unavailable: it needs Streamline, which is Windows only");
-        dlss |= dlssFrameGeneration;
-        bool fsrFrameGeneration = frameGeneration == FrameGenerationMethod.Fsr;
+        // Both vendors' frame generation are made ready where they can be, whatever the setting says now, so that it is followed without a
+        // restart (ApplyFrameGeneration). DLSS's goes through Streamline (Windows, a window): its feature is loaded with DLSS, and unloaded until
+        // asked for. FSR 3's needs AMD's library and queues of its own, after Streamline's; its swapchain is made when asked for. Not with HDR
+        // output, which keeps the plain swapchain.
+        bool ready = options is not null && !hdr;
         string? layerWhy = OperatingSystem.IsMacOS() ? "the FFX library is not available for Metal" : null;
-        bool layerLoads = fsrFrameGeneration && options is not null && layerWhy is null && FfxSwapchain.LibraryLoads(out _, out layerWhy);
-        (Ngx, Streamline) = LoadDlss(dlss, dlssFrameGeneration, layerLoads, deviceOptions);
-        bool wantLayer = fsrFrameGeneration && options is not null && WantLayer(layerLoads, layerWhy, deviceOptions);
+        _layerLoads = ready && layerWhy is null && FfxSwapchain.LibraryLoads(out _, out layerWhy);
+        _layerWhy = layerWhy;
+        (Ngx, Streamline) = LoadDlss(dlss, dlss && ready && OperatingSystem.IsWindows(), deviceOptions);
+        _layerFirstQueue = deviceOptions.ExtraGraphicsQueues;
+        if (_layerLoads) deviceOptions.ExtraGraphicsQueues += FfxSwapchain.WantedExtraQueues;
         if (options is not null) Window = OpenWindow(options.Value, deviceOptions, hdr);
         Device = VulkanDevice.Create(deviceOptions);
         ReportDevice();
 
         Context = new GpuContext(Device);
-        if (options is not null) _presenter = CreatePresenter(vsync, wantLayer, hdr);
+        if (options is not null)
+        {
+            _presenter = CreatePresenter(vsync, hdr);
+            ApplyFrameGeneration(hdr ? FrameGenerationMethod.Off : frameGeneration);
+        }
+    }
+
+    /// <summary>
+    /// Whether AMD's library loaded (and why not), and the first of the device's extra queues that is the layer's (those before are
+    /// Streamline's).
+    /// </summary>
+    readonly bool _layerLoads;
+
+    /// <summary>
+    /// See <see cref="_layerLoads"/>.
+    /// </summary>
+    readonly string? _layerWhy;
+
+    /// <summary>
+    /// See <see cref="_layerLoads"/>.
+    /// </summary>
+    readonly int _layerFirstQueue;
+
+    /// <summary>
+    /// Sets the window's swapchain up for <paramref name="method"/>'s frame generation, between two frames (also the first): AMD's layer made
+    /// or destroyed, DLSS's feature loaded or unloaded, and the swapchain dropped for the next frame to make it anew through the right one
+    /// (<see cref="VulkanPresenter.DropSwapchain"/>). Nothing when it is set up so already. False when the method cannot be had here (logged):
+    /// the plain swapchain is in use then.
+    /// </summary>
+    public bool ApplyFrameGeneration(FrameGenerationMethod method)
+    {
+        if (_presenter is null) return method == FrameGenerationMethod.Off;
+
+        bool wantLayer = method == FrameGenerationMethod.Fsr, wantDlss = method == FrameGenerationMethod.Dlss;
+        var sl = Streamline is { FrameGenerationSupported: true } ? Streamline : null;
+        bool hasLayer = _presenter.FrameGeneration is not null, hasDlss = sl is { FrameGenerationOn: true };
+        if (wantLayer != hasLayer || (sl is not null && wantDlss != hasDlss))
+        {
+            _presenter.DropSwapchain();
+            sl?.SetFrameGenerationLoaded(wantDlss);
+            if (wantLayer)
+            {
+                string? why = _layerWhy;
+                var layer = _layerLoads ? FfxSwapchain.TryCreate(Device, _layerFirstQueue, out why) : null;
+                if (layer is null) Console.WriteLine($"frame generation  FSR 3 unavailable: {why}");
+                else _presenter.FrameGeneration = layer;
+            }
+        }
+
+        if (wantDlss && sl is null)
+        {
+            Console.WriteLine("frame generation  DLSS unavailable: "
+                + (OperatingSystem.IsWindows() ? "see the frame generation and upscaler lines above" : "it needs Streamline, which is Windows only"));
+        }
+        return method switch
+        {
+            FrameGenerationMethod.Fsr => _presenter.FrameGeneration is not null,
+            FrameGenerationMethod.Dlss => sl is { FrameGenerationOn: true },
+            _ => true,
+        };
     }
 
     /// <summary>
     /// DLSS's library, loaded before the instance (each adds what it needs to the device): NGX, or Streamline on Windows when NGX is not taken.
     /// </summary>
-    static (Ngx? Ngx, Streamline? Streamline) LoadDlss(bool dlss, bool dlssFrameGeneration, bool layerLoads, VulkanDeviceOptions deviceOptions)
+    static (Ngx? Ngx, Streamline? Streamline) LoadDlss(bool dlss, bool dlssFrameGeneration, VulkanDeviceOptions deviceOptions)
     {
         Ngx? ngx = null;
         Streamline? streamline = null;
-        if (dlss && OperatingSystem.IsWindows() && layerLoads)
+        if (dlss && OperatingSystem.IsWindows())
         {
-            // Frame generation: the FFX swapchain owns the present, which Streamline's interposer must see, so DLSS goes through NGX directly
-            // (meitou_ngx.dll) and Streamline is not loaded. Without NGX, Streamline stays and frame generation is off (below).
-            ngx = Ngx.TryInit(out var ngxWhy);
-            if (ngx is not null) ngx.Apply(deviceOptions);
-            else Console.WriteLine($"upscaler  {ngxWhy}");
-        }
-
-        if (dlss && OperatingSystem.IsWindows() && ngx is null)
-        {
-            // Streamline goes in before the instance and adds what it needs to the device.
+            // Streamline goes in before the instance and adds what it needs to the device. Without it NGX directly (meitou_ngx.dll), when there.
             streamline = Streamline.TryInit(dlssFrameGeneration, out var why);
-            if (streamline is null) Console.WriteLine($"upscaler  {why}");
-            else streamline.Apply(deviceOptions);
+            if (streamline is not null) streamline.Apply(deviceOptions);
+            else
+            {
+                Console.WriteLine($"upscaler  {why}");
+                ngx = Ngx.TryInit(out _);
+                ngx?.Apply(deviceOptions);
+            }
         }
         else if (dlss && OperatingSystem.IsLinux())
         {
@@ -133,23 +188,6 @@ public sealed unsafe class VulkanDisplay : IDisposable
         }
 
         return (ngx, streamline);
-    }
-
-    /// <summary>
-    /// Frame generation (FSR 3): the swapchain goes through AMD's layer, which needs more graphics queues (FfxSwapchain). Windows, Proton and
-    /// Linux. False (with the reason) when the layer did not load or Streamline owns the present.
-    /// </summary>
-    bool WantLayer(bool layerLoads, string? layerWhy, VulkanDeviceOptions deviceOptions)
-    {
-        bool wantLayer = false;
-        string? why = layerWhy;
-        if (!layerLoads) { }
-        else if (Streamline is { DlssSupported: true })
-            why = "Streamline (DLSS) owns the present (NGX did not load, see the upscaler line above)";
-        else wantLayer = true;
-        if (!wantLayer) Console.WriteLine($"frame generation  unavailable: {why}");
-        else deviceOptions.ExtraGraphicsQueues = FfxSwapchain.WantedExtraQueues;
-        return wantLayer;
     }
 
     /// <summary>
@@ -209,23 +247,12 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>
     /// The window's presenter, through Streamline's present and swapchain hooks where DLSS loaded, and AMD's layer when frame generation wants it.
     /// </summary>
-    VulkanPresenter CreatePresenter(bool vsync, bool wantLayer, bool hdr)
+    VulkanPresenter CreatePresenter(bool vsync, bool hdr) => new(Context, vsync)
     {
-        var presenter = new VulkanPresenter(Context, vsync)
-        {
-            PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
-            StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
-            WantHdr = hdr,
-        };
-        if (wantLayer)
-        {
-            var layer = FfxSwapchain.TryCreate(Device, out var why);
-            if (layer is null) Console.WriteLine($"frame generation  unavailable: {why}");
-            else presenter.FrameGeneration = layer;
-        }
-
-        return presenter;
-    }
+        PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
+        StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
+        WantHdr = hdr,
+    };
 
     /// <summary>
     /// The two moons as the window's icon (the embedded 256 x 256 RGBA); a window system that refuses it keeps the default.
@@ -355,7 +382,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <summary>
     /// True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).
     /// </summary>
-    public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
+    public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationOn: true };
 
     /// <summary>
     /// Opens a rendered frame for Reflex (DLSS frame generation): its frame token, Reflex's sleep, the simulation start marker. Call before the world

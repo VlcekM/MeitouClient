@@ -238,6 +238,17 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public bool ParkedStand;
 
         /// <summary>
+        /// While the streamer's travel (<c>ObjectStreamer._travel</c>) is under this and its epoch is <see cref="ParkedEpoch"/>, no parked
+        /// instance can have come into range: the last walk found the nearest of them this far out.
+        /// </summary>
+        public double ParkedQuietUntil;
+
+        /// <summary>
+        /// The travel epoch <see cref="ParkedQuietUntil"/> was measured in (-1: the parked instances must be walked).
+        /// </summary>
+        public int ParkedEpoch = -1;
+
+        /// <summary>
         /// The indoor volumes of the zone's buildings (<see cref="ZoneObjects.Interiors"/>). An array, so the per-frame interior walks (camera,
         /// audio, lamps, GI) enumerate without allocating.
         /// </summary>
@@ -812,15 +823,88 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         bool due = zone.Parked.Count > 0 && NearZone(zone.X0, zone.Z0, eye) - RequestMargin - ParkedSlack <= parkedRange;
         if (!due) return;
 
+        // Nothing the distances are measured from has moved as far as the nearest parked instance was out of range at the last walk: none can be
+        // in range now. A town's zones hold thousands of parked parts, and walking them every frame was 0.5 ms of the render thread.
+        if (zone.ParkedEpoch == _travelEpoch && _travel < zone.ParkedQuietUntil) return;
+
+        float quiet = float.PositiveInfinity;
         for (int i = zone.Parked.Count - 1; i >= 0; i--)
         {
             var inst = zone.Parked[i];
-            if (Near(eye, inst.Centre) - RequestMargin > (inst.Stand ? distantRange : Math.Min(objectRange, inst.Limit))) continue;
+            float over = Near(eye, inst.Centre) - RequestMargin - (inst.Stand ? distantRange : Math.Min(objectRange, inst.Limit));
+            if (over > 0)
+            {
+                quiet = MathF.Min(quiet, over);
+                continue;
+            }
 
             zone.Unresolved.Add(inst);
             zone.Parked[i] = zone.Parked[^1];
             zone.Parked.RemoveAt(zone.Parked.Count - 1);
         }
+
+        (zone.ParkedEpoch, zone.ParkedQuietUntil) = (_travelEpoch, _travel + quiet);
+    }
+
+    /// <summary>
+    /// How far the points the distances are measured from (the eye, the kept points, the arrival) have moved since the streamer was made: each
+    /// scan adds the farthest any of them moved, so a distance to any of them has shrunk by no more than the sum's growth.
+    /// </summary>
+    double _travel;
+
+    /// <summary>
+    /// Changes when the travel cannot say what moved: the ranges, the number of kept points or the arrival's presence changed.
+    /// </summary>
+    int _travelEpoch;
+
+    /// <summary>
+    /// What the last scan measured from, for <see cref="_travel"/>.
+    /// </summary>
+    Vector3 _travelEye;
+
+    /// <summary>
+    /// See <see cref="_travelEye"/>.
+    /// </summary>
+    Vector3? _travelAhead;
+
+    /// <summary>
+    /// See <see cref="_travelEye"/>.
+    /// </summary>
+    Vector3[] _travelKept = [];
+
+    /// <summary>
+    /// The kept points in <see cref="_travelKept"/>, and the last scan's ranges.
+    /// </summary>
+    int _travelKeptCount = -1;
+
+    /// <summary>
+    /// See <see cref="_travelKeptCount"/>.
+    /// </summary>
+    (float Object, float Distant, bool NoDistant) _travelRanges;
+
+    /// <summary>
+    /// Adds this scan's movement to <see cref="_travel"/>, or starts a new epoch.
+    /// </summary>
+    void NoteTravel(Vector3 eye, float objectRange, float distantRange, bool noDistant)
+    {
+        var kept = Kept;
+        var ranges = (objectRange, distantRange, noDistant);
+        if (ranges != _travelRanges || kept.Count != _travelKeptCount || Ahead.HasValue != _travelAhead.HasValue)
+        {
+            _travelEpoch++;
+            (_travelRanges, _travelKeptCount) = (ranges, kept.Count);
+            if (_travelKept.Length < kept.Count) _travelKept = new Vector3[kept.Count];
+        }
+        else
+        {
+            float moved = Vector3.Distance(eye, _travelEye);
+            if (Ahead is { } ahead && _travelAhead is { } before) moved = MathF.Max(moved, Vector3.Distance(ahead, before));
+            for (int i = 0; i < kept.Count; i++) moved = MathF.Max(moved, Vector3.Distance(kept[i], _travelKept[i]));
+            _travel += moved;
+        }
+
+        (_travelEye, _travelAhead) = (eye, Ahead);
+        for (int i = 0; i < kept.Count; i++) _travelKept[i] = kept[i];
     }
 
     /// <summary>
@@ -831,6 +915,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     {
         var inst = list[i];
         zone.Parked.Add(inst);
+        zone.ParkedEpoch = -1;   // the newcomer may be nearer than the last walk's nearest
         if (inst.Stand) zone.ParkedStand = true;
         else zone.ParkedLimit = Math.Max(zone.ParkedLimit, inst.Limit);
         list[i] = list[^1];
@@ -844,6 +929,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     public int Scan(Vector3 eye, float objectRange, float distantRange, bool noDistant, Func<Instance, bool> resolve, int maxResolve = int.MaxValue)
     {
         int waiting = 0, resolved = 0;
+        NoteTravel(eye, objectRange, distantRange, noDistant);
 
         // During a flight the arrival's zones take the resolve budget first.
         IEnumerable<Zone> zones = Ahead is null

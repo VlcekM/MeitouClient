@@ -927,13 +927,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             }
         }
 
-        // Under the loading screen (Covered) eight times the zones and resolves a frame.
-        int scale = Covered ? 8 : 1;
+        // Under the loading screen (Covered) eight times the zones a frame, and 64 times the resolves: a save's first covered frames take up to a
+        // second each, and at eight times its 11 000 instances took 3 s more.
+        int scale = Covered ? 8 : 1, resolves = Covered ? 64 * 40 : 40;
         _streamer.Update(eye, streamRange, unlimited ? 64 : scale, Covered);
         ResolveTowns(eye);
-        _unresolvedInRange = _streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : 40 * scale);
+        _unresolvedInRange = _streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : resolves);
         _unresolvedInRange += _streamer.ScanLandmarks(eye, LandmarkReach, Resolve, unlimited ? int.MaxValue : 10 * scale);
         _unresolvedInRange += _streamer.ScanLoose(_streamer.Loose, eye, RealRange, Resolve, unlimited ? int.MaxValue : 10 * scale);
+        _meshes.Covered = Covered;
         _meshes.Pump();
         MarkInRange(eye, force: unlimited);
         _meshes.Trim();
@@ -1281,7 +1283,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>
     /// The instances the GI traces (what the global illumination's acceleration structures hold, docs/render-gi.md): the resolved real instances of
-    /// the zones and landmarks, not the distant stand-ins, whose bounds come within <paramref name="range"/> of <paramref name="eye"/>, without the
+    /// the zones, the landmarks and the loose ones, not the distant stand-ins, whose bounds come within <paramref name="range"/> of <paramref name="eye"/>, without the
     /// construction sites, whose parts are drawn clipped at the scaffold (the rays would meet the whole building, the roof of a half-built or ruined
     /// one included, and light the open site as a closed room).
     /// </summary>
@@ -1299,6 +1301,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             foreach (var inst in landmarks.Real)
                 if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre,
                         eye) - inst.Radius <= range && !LeftOutOfRays(inst.Placed) && !ClosedAround(inst)) yield return inst;
+
+        // The loose instances (the farms' plants, FarmPlants): left out, the crops cast no shadow where the sun's shadows are traced.
+        foreach (var inst in _streamer.Loose.Real)
+            if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range
+                && !LeftOutOfRays(inst.Placed)) yield return inst;
     }
 
     /// <summary>
@@ -1617,6 +1624,33 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// place change: every view (the camera's, each shadow cascade's, the reflection's) asks it of each piece of furniture.
     /// </summary>
     bool InInterior(ObjectStreamer.Instance inst) => InteriorOf(inst).Inside;
+
+    /// <summary>
+    /// Whether a ray's hit on the instance is lit as an interior (<see cref="IndoorFurniture"/>), for the traced scene's records.
+    /// </summary>
+    internal bool RayInterior(ObjectStreamer.Instance inst) => IndoorFurniture(inst);
+
+    /// <summary>
+    /// Whether the eye stands inside a building of the interior view, under its cover (<see cref="InteriorVolume.Covered"/>): it then sees
+    /// the rooms from inside, with no floor hidden between it and them (the character editor's bar, a camera brought down into a room).
+    /// </summary>
+    internal bool EyeIndoors(Vector3 eye) =>
+        InteriorView.Count > 0 && InteriorAt(eye) is { } room && InteriorView.ContainsKey(room.PlacementId) && room.Covered(eye);
+
+    /// <summary>
+    /// Whether the floor view leaves the instance out of the picture while the rays still hold it (<see cref="LeftOutOfRays"/>): a part or an
+    /// object above the viewed floor of a building in the interior view. What lies under one is a room seen through the cut
+    /// (<c>Gi.RoomMaskPass</c>).
+    /// </summary>
+    internal bool RayHidden(ObjectStreamer.Instance inst) => InteriorHidden(inst.Placed) || StandsAbove(inst);
+
+    /// <summary>
+    /// An outer part (walls, roof, walkways, doors) of a building in the interior view that the view shows: lit as the room is
+    /// (<see cref="IndoorFurniture"/>), though most of it is seen from the street.
+    /// </summary>
+    bool ViewedShell(PlacedMesh p) =>
+        p.Kind == PlacedKind.BuildingPart && !p.Interior && p.ParentPlacementId is null
+        && InteriorView.TryGetValue(p.PlacementId, out int shown) && (p.Floor <= shown || p.DoorIndex >= 0);
 
     /// <summary>
     /// Whether the instance takes the indoor GI (docs/render-gi.md): a building's interior part, its layout furniture inside a hull, or a building of
@@ -2107,8 +2141,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
         // Spare instance-matrix component: room GI gain without splitting shared furniture batches (1), plus 2 when its building's lights are off,
         // which darkens its EMISSIVE materials (BuildingLodShaders).
+        // Plus a half for the own shell of a building whose inside is viewed (ViewedShell): its walls turned to the street are no room's
+        // pixels (BuildingLodShaders atmoStreet).
         m.M34 = (IndoorFurniture(inst) ? 1 : 0)
-            + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
+            + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0)
+            + (!_depthPass && ViewedShell(inst.Placed) ? 0.5f : 0);
 
         // Another spare component, M44: 1, or for a construction site BuildingLodShaders.ScaffoldBase + its look's f, or a negative packed tint
         // (FarmPlants.PackTint). A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
@@ -2122,6 +2159,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             site = true;
         }
         else if (inst.Tint < 0) m.M44 = inst.Tint;
+
+        // A viewed shell's part carries its mesh top as a site does (BuildingLodShaders vTopGap: the top of a wall the view cuts).
+        if (!site && !_depthPass && ViewedShell(inst.Placed)) m.M34 += BuildingLodShaders.PackSite(gpu.Top, 1);
 
         // A map feature (CLIP_INTERIOR, docs/render-interior-cut.md) over a building's interior mask takes the cut, and so does another building's
         // part over the mask of a building in the interior view (CutsIntoViewed); the rest keep the programs without it. In a shadow pass such a part

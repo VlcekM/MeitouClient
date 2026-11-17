@@ -360,6 +360,13 @@ static partial class WorldFrame
     public const string GiRaysSwitch = "GI 64 probe rays";
 
     /// <summary>
+    /// The characters' traced indirect light (<see cref="PostOptions.CharacterOcclusion"/>, docs/render-gi.md "Characters"): rays gather each
+    /// character pixel's bounced light in place of the probes'. It needs GTAO and the indirect light; it had no switch of its own, and turning
+    /// ambient occlusion off was the only way to its cost.
+    /// </summary>
+    public const string GiCharactersSwitch = "GI traced on characters";
+
+    /// <summary>
     /// The weather particle sliders' labels: the particles' resolution and their density.
     /// </summary>
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
@@ -1107,6 +1114,7 @@ static partial class WorldFrame
         toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
         toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
         toggles.Add(new Toggle(GiRaysSwitch, () => post.Options.GiMoreRays, v => post.Options.GiMoreRays = v));
+        toggles.Add(new Toggle(GiCharactersSwitch, () => post.Options.CharacterOcclusion, v => post.Options.CharacterOcclusion = v));
 
         // The traced sun shadows' grass, a plain on / off row, and their far cascades (the sun shadows' choice); they act while the sun is traced.
         toggles.Add(new Toggle(TracedGrassSwitch, () => post.Options.TracedGrass, v => post.Options.TracedGrass = v));

@@ -62,9 +62,10 @@ sealed class GameLoop(GameHost host)
     bool _savedVSync, _savedFullScreen;
 
     /// <summary>
-    /// Read at start-up only: a change in the settings waits for a restart.
+    /// The frame generation the setting last asked for, and the one the display is set up for (that one, or off where it cannot be had):
+    /// <see cref="FollowFrameGeneration"/>.
     /// </summary>
-    FrameGenerationMethod _frameGenerationAtStart;
+    FrameGenerationMethod _frameGenerationAsked, _frameGenerationLoaded;
     /// <summary>
     /// Whether the run draws in HDR (read at start-up only).
     /// </summary>
@@ -339,10 +340,12 @@ sealed class GameLoop(GameHost host)
         if (!host.GameOptions.NoPrecompile) host.Modding.StartWarmup();
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         _sceneRead = host.LoadScene is { } readScene ? Task.Run(readScene) : null;
+        // The title's character comes from the save Continue loads: read on a worker from the start too, it was 1 to 3 s of the title's boot.
+        if (host.GameOptions.BootsToTitle && host.StartSave is null) Title.TitleScreen.PrefetchTitleSave(host.Install);
         host.Sound.BeginAudio();
         _hdrAtStart = host.GameOptions.Hdr ?? host.Config.Hdr;   // read at start-up only
-        // Read at start-up only; HDR output keeps the plain swapchain.
-        _frameGenerationAtStart = _hdrAtStart ? FrameGenerationMethod.Off : host.Config.FrameGenerationMethod;
+        // HDR output keeps the plain swapchain.
+        _frameGenerationAsked = _hdrAtStart || _headless ? FrameGenerationMethod.Off : host.Config.FrameGenerationMethod;
 
         // Load before the device so the settings panel can switch to DLSS without restarting.
         _display = new VulkanDisplay(_headless ? null : WindowOptions.Default with
@@ -353,7 +356,8 @@ sealed class GameLoop(GameHost host)
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, _vsync, dlss: true, frameGeneration: _headless ? FrameGenerationMethod.Off : _frameGenerationAtStart, hdr: _hdrAtStart);
+        }, _vsync, dlss: true, frameGeneration: _frameGenerationAsked, hdr: _hdrAtStart);
+        _frameGenerationLoaded = FrameGenerationSetup.Available(_display, _frameGenerationAsked) ? _frameGenerationAsked : FrameGenerationMethod.Off;
         host.Streamline = _display.Streamline;
         host.Ngx = _display.Ngx;
         _window = _headless ? null : _display.Window!;
@@ -486,8 +490,8 @@ sealed class GameLoop(GameHost host)
         {
             UpscalerStatus = () => host.Gpu.Post?.ActiveUpscaler ?? "Off",
             // The loaded frame generation's state; a change it cannot follow shows as pending until the restart.
-            FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(_display, _frameGenerationAtStart,
-                host.Config.FrameGenerationMethod),
+            FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(_display, _frameGenerationLoaded,
+                host.Config.FrameGenerationMethod, _hdrAtStart),
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
             AudioChanged = host.Sound.AudioSettingsChanged,
             GameplayChanged = host.Saves.ApplyGameplay,
@@ -1347,6 +1351,7 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     bool Frame()
     {
+        Rendering.Frame.FrameTick.Advance();
         host.PlayBench.BenchLap(PlayBench.BenchTail);
         _display.BeginLatencyFrame();   // DLSS frame generation's Reflex: before the input is read
         _window?.DoEvents();
@@ -1377,6 +1382,7 @@ sealed class GameLoop(GameHost host)
         if (host.Gpu.Reflection is { } reflection) reflection.Warm = warmPasses;
         host.Gpu.Sky.Clouds.Warm = warmPasses;
         host.UpdateView(size.X, size.Y);
+        FollowFrameGeneration();
         var pointer = PreparePointer(takeFile);
         host.PlayBench.BenchLap(5);
         if (_display.BeginFrame(size.X, size.Y)) DrawFrame(size, pointer, takeFile);
@@ -1489,13 +1495,15 @@ sealed class GameLoop(GameHost host)
             && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
         _photo.Apply();
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
-        host.Gpu.Ahead = _tour.ArrivalEye(TourPosition);   // the streaming loads the landing view during the flight
+        host.Gpu.Ahead = _tour.ArrivalEye(TourPosition) ?? host.LoadAhead;   // the streaming loads the landing view during the flight or the load
         host.Session.ViewEye = _cinemaHolds ? host.Camera.Eye : null;   // the simulation's far cadence follows the flying camera, not the rig it left
         host.Gpu.CameraFlying = _tour.Moving;   // the far shadow cascades wait for the landing (docs/render-shadows.md "Flights")
         host.Gpu.Kept = !host.Config.KeepTexturesAtCharacters ? []
             : host.Config.KeepTexturesAtAllSquads
                 ? [.. host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
             : [.. host.Player.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
+        // A load's destination is a kept point too: the grass walk follows the eye and the kept points only, and its pages can be made during the climb.
+        if (host.LoadAhead is { } destination) host.Gpu.Kept = [.. host.Gpu.Kept, destination];
         host.ViewAspect = FramebufferSizeNow().X / (float)Math.Max(FramebufferSizeNow().Y, 1);   // headless: no window, the size asked for
     }
 
@@ -1693,6 +1701,25 @@ sealed class GameLoop(GameHost host)
     }
 
     /// <summary>
+    /// Follows the Frame generation setting between two frames, without a restart: when it changes, the generator goes (before the swapchain
+    /// it configures), the display sets its swapchain up for the method asked (<see cref="VulkanDisplay.ApplyFrameGeneration"/>: AMD's layer,
+    /// DLSS's feature, or neither), and the next frame makes the generator for it. Where the method cannot be had the plain swapchain stays.
+    /// </summary>
+    void FollowFrameGeneration()
+    {
+        var wanted = _hdrAtStart || _headless ? FrameGenerationMethod.Off : host.Config.FrameGenerationMethod;
+        if (wanted == _frameGenerationAsked) return;
+
+        _frameGenerationAsked = wanted;
+        _frameGen?.Dispose();
+        (_frameGen, _frameGenTried) = (null, false);
+        if (host.Gpu.Post is { } post) post.FrameGen = null;
+        _frameGenerationLoaded = _display.ApplyFrameGeneration(wanted) ? wanted : FrameGenerationMethod.Off;
+        Console.WriteLine($"frame generation  setting {FrameGenerationSetup.FrameGenerationName(wanted)}: "
+            + (_frameGenerationLoaded == wanted ? "set up" : "not available, off"));
+    }
+
+    /// <summary>
     /// The backbuffer the chain draws into (headless: one of its own), frame generation for this frame, and the interface's cleared layer.
     /// </summary>
     GpuTexture PrepareTargets(Vector2D<int> size, string? takeFile, out GpuTexture uiTarget)
@@ -1703,7 +1730,8 @@ sealed class GameLoop(GameHost host)
             Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
         host.Gpu.Post!.Target = backbuffer;
         host.Gpu.Post.Options.HdrPeak = _display.HdrActive ? PostOptions.HdrPeakFor(host.Config.HdrPeakNits, host.Config.HdrPaperNitsNow) : 0;
-        // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
+        // Frame generation (the one the display is set up for, FollowFrameGeneration): made on its first frame; wanted except under the loading
+        // screen and for saved pictures.
         if (_frameGen is FrameGeneration && _display.FrameGenerationLayer is null)
                 {
                     // the layer fell back to the plain swapchain
@@ -1715,7 +1743,8 @@ sealed class GameLoop(GameHost host)
             _frameGenTried = true;
             _frameGen = FrameGenerationSetup.CreateFrameGenerator(_display);
         }
-        bool frameGenWanted = !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
+        bool frameGenWanted = _frameGenerationLoaded != FrameGenerationMethod.Off
+            && !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
         _frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
         host.Gpu.Post!.FrameGen = _frameGen;
         // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
@@ -2003,6 +2032,7 @@ sealed class GameLoop(GameHost host)
             SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
         else if (shot) SaveScreenshot(_display.Context, picture, size.X, size.Y, topDown: topDown);
         if (shot) host.Player.EndScreenshot();
+        host.CharacterEditor.SaveStudioShot(_display.Context);
         if (feedbackShot)
         {
             host.Player.FeedbackPanel.ShotWithoutMenus = false;

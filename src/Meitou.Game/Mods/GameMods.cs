@@ -58,7 +58,7 @@ sealed class GameMods(GameHost host)
     {
         if (!_warmupAfterMods) return;
         _warmupAfterMods = false;
-        JitWarmup.Start();
+        JitWarmup.Start(late: true);
     }
 
     /// <summary>

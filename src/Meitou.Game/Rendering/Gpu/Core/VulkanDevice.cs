@@ -602,9 +602,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public bool HasPipelineStatistics { get; private set; }
     /// <summary>
-    /// VK_KHR_fragment_shader_barycentric is on (<see cref="VulkanDeviceOptions.TriangleMeasurements"/> and the device has it).
+    /// VK_KHR_fragment_shader_barycentric is on (the device has it): the bench's triangle sizes and the characters' visibility buffer.
     /// </summary>
     public bool HasFragmentBarycentric { get; private set; }
+    /// <summary>
+    /// The geometry shader feature is on (the device has it): a fragment program may read <c>gl_PrimitiveID</c> (the characters' visibility buffer).
+    /// </summary>
+    public bool HasGeometryShader { get; private set; }
     /// <summary>
     /// Buffer device address was asked for by <see cref="VulkanDeviceOptions.TriangleMeasurements"/> or <see cref="VulkanDeviceOptions.RayTracing"/>
     /// and the device has it.
@@ -1429,7 +1433,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
-        bool extBary = _options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
+        bool extBary = have.Contains("VK_KHR_fragment_shader_barycentric");
         bool extRay = _options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query")
             && have.Contains("VK_KHR_deferred_host_operations");
         bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
@@ -1578,6 +1582,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         DepthClamp = core.DepthClamp;
         SamplerAnisotropy = core.SamplerAnisotropy;
         HasTessellation = core.TessellationShader;
+        HasGeometryShader = core.GeometryShader;
         TextureCompressionBc = core.TextureCompressionBC;
         IndependentBlend = core.IndependentBlend;
         ImageCubeArray = core.ImageCubeArray;
@@ -1765,6 +1770,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         DepthClamp = DepthClamp,
         SamplerAnisotropy = SamplerAnisotropy,
         TessellationShader = HasTessellation,
+        GeometryShader = HasGeometryShader,
         TextureCompressionBC = TextureCompressionBc,
         IndependentBlend = IndependentBlend,
         ImageCubeArray = ImageCubeArray,

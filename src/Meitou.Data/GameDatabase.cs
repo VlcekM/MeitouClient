@@ -285,6 +285,10 @@ public sealed class GameDatabase
     /// </summary>
     static void CopyFields(GameRecord from, GameRecord to)
     {
+        to.BoolTable.EnsureCapacity(to.BoolTable.Count + from.BoolTable.Count);
+        to.FloatTable.EnsureCapacity(to.FloatTable.Count + from.FloatTable.Count);
+        to.IntTable.EnsureCapacity(to.IntTable.Count + from.IntTable.Count);
+        to.StringTable.EnsureCapacity(to.StringTable.Count + from.StringTable.Count);
         foreach (var (k, v) in from.BoolTable) to.BoolTable[k] = v;
         foreach (var (k, v) in from.FloatTable) to.FloatTable[k] = v;
         foreach (var (k, v) in from.IntTable) to.IntTable[k] = v;
@@ -374,6 +378,7 @@ public sealed class GameDatabase
         foreach (var (list, refs) in source.References)
         {
             var target = record.ReferenceList(list);
+            target.EnsureCapacity(target.Count + refs.Count);   // grown once (fewer needed when some repeat or go)
             foreach (var r in refs)
             {
                 if (r.IsRemoved) target.Remove(r.TargetStringId);
@@ -415,6 +420,9 @@ public sealed class GameDatabase
     /// </summary>
     static void Merge<T>(Dictionary<string, T> into, OrderedDictionary<string, T> from)
     {
+        // Grown once to hold them all (fewer when keys repeat): set one by one, a record's tables grew by doubling, a quarter of a heavy mod
+        // list's load.
+        if (from.Count > 0) into.EnsureCapacity(into.Count + from.Count);
         foreach (var (k, v) in from) into[k] = v;
     }
 

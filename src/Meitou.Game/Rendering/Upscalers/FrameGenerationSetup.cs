@@ -27,15 +27,25 @@ static class FrameGenerationSetup
     }
 
     /// <summary>
-    /// The settings' line on frame generation: the loaded one's state, or the setting's change that waits for a restart.
+    /// Whether <paramref name="method"/>'s frame generation is what the display is set up for now (<see cref="VulkanDisplay.ApplyFrameGeneration"/>).
     /// </summary>
-    internal static string FrameGenerationState(VulkanDisplay display, FrameGenerationMethod loaded, FrameGenerationMethod now)
+    internal static bool Available(VulkanDisplay display, FrameGenerationMethod method) => method switch
     {
-        bool available = loaded == FrameGenerationMethod.Dlss ? display.DlssFrameGeneration : display.FrameGeneration;
-        if (now != loaded) return $"{FrameGenerationName(now)} after a restart";
-        if (loaded == FrameGenerationMethod.Off) return "off";
+        FrameGenerationMethod.Dlss => display.DlssFrameGeneration,
+        FrameGenerationMethod.Fsr => display.FrameGeneration,
+        _ => false,
+    };
 
-        return available ? "active" : "unavailable (see the log), plain swapchain in use";
+    /// <summary>
+    /// The settings' line on frame generation: the setting is followed at once, any way round, so the line says whether the one asked for
+    /// runs (<paramref name="loaded"/>: what the display is set up for), cannot be had here, or is kept off by the HDR output.
+    /// </summary>
+    internal static string FrameGenerationState(VulkanDisplay display, FrameGenerationMethod loaded, FrameGenerationMethod now, bool hdr)
+    {
+        if (now == FrameGenerationMethod.Off) return "off";
+        if (hdr) return "off while the HDR output is on";
+
+        return now == loaded && Available(display, loaded) ? "active" : "unavailable (see the log), plain swapchain in use";
     }
 
     /// <summary>

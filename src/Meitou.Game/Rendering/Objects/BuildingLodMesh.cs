@@ -421,6 +421,12 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public int MaxJobs { get; set; } = 4;
 
     /// <summary>
+    /// Under the loading screen: as many decodes run at once as the workers (as the zones' layouts do, ObjectStreamer); the loading screen waited
+    /// for thousands of instances behind four decodes.
+    /// </summary>
+    public bool Covered { get; set; }
+
+    /// <summary>
     /// Warnings for the log (missing or unreadable meshes); the renderer writes and clears them.
     /// </summary>
     public List<string> Messages { get; } = [];
@@ -672,7 +678,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         _wanted.Clear();
         foreach (var m in order)
         {
-            if (_running.Count >= MaxJobs) break;
+            if (_running.Count >= (Covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs)) break;
             if (m.Status != ObjectMesh.State.None || nearOnly && m.WantedNear - WantedSlack > VramGuard.NearReach) continue;
             m.Status = ObjectMesh.State.Loading;
             string key = m.Key;

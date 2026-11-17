@@ -64,6 +64,44 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly GpuComputePipeline _onePipeline, _sumPipeline, _classifyPipeline;
 
     /// <summary>
+    /// The per-lamp rays over one pixel in four and the light kernel that reads their half-size flags (<see cref="LampShadowShaders.TraceOneHalf"/>,
+    /// <see cref="LampShadowShaders.TraceLightHalf"/>).
+    /// </summary>
+    readonly GpuProgram _oneHalfProgram, _sumHalfProgram;
+
+    /// <summary>
+    /// The pipelines of <see cref="_oneHalfProgram"/> and <see cref="_sumHalfProgram"/>.
+    /// </summary>
+    readonly GpuComputePipeline _oneHalfPipeline, _sumHalfPipeline;
+
+    /// <summary>
+    /// The rays of the pixels the half-size rays listed for a ray of their own (<see cref="LampShadowShaders.TraceOwn"/>), and its pipeline.
+    /// </summary>
+    readonly GpuProgram _ownProgram;
+
+    /// <summary>
+    /// See <see cref="_ownProgram"/>.
+    /// </summary>
+    readonly GpuComputePipeline _ownPipeline;
+
+    /// <summary>
+    /// The per-lamp rays' flags, the filter's scratch and its result: arrays of slices (RG16F), a slice a layer of a round. At the render size
+    /// one slice, at half of it (rounded up) <see cref="LampShadowShaders.MaxSlices"/>.
+    /// </summary>
+    GpuTexture? _sliceLost, _sliceScratch, _sliceFiltered;
+
+    /// <summary>
+    /// With the half-size slices: per pixel of them, the pixels of its 2 x 2 traced on their own (R32UI, <see cref="LampShadowShaders.TraceOwn"/>).
+    /// </summary>
+    GpuTexture? _sliceExact;
+
+    /// <summary>
+    /// How the per-lamp rays run: 0 a ray a pixel; 1 a ray for one pixel in four, always the same one; 2 the pixel of the four changes each frame
+    /// under a temporal resolve (four frames cover them all, and it averages them; the nearest to a ray a pixel in the pictures compared).
+    /// </summary>
+    const int HalfMode = 2;
+
+    /// <summary>
     /// The trace's constants (<see cref="LampShadowShaders"/>' Params block).
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
@@ -110,11 +148,39 @@ sealed unsafe class LampShadowPass : IDisposable
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
             (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler),
-            (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.StorageBuffer),
+            (9, DescriptorType.StorageImage), (10, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
+            (12, DescriptorType.StorageBuffer),
         ], GpuSetLayout.Bindless);
         _sumPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumProgram, "lamp shadow light"));
+        _oneHalfProgram = ctx.Shaders.Compute(LampShadowShaders.TraceOneHalf, "lamp shadow one half",
+        [
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
+            (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler),
+            (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.StorageBuffer),
+            (13, DescriptorType.StorageImage),
+        ], GpuSetLayout.Bindless);
+        _oneHalfPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_oneHalfProgram, "lamp shadow one half"));
+        _ownProgram = ctx.Shaders.Compute(LampShadowShaders.TraceOwn, "lamp shadow own rays",
+        [
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
+            (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler),
+            (9, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.StorageBuffer),
+            (13, DescriptorType.StorageImage),
+        ], GpuSetLayout.Bindless);
+        _ownPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_ownProgram, "lamp shadow own rays"));
+        _sumHalfProgram = ctx.Shaders.Compute(LampShadowShaders.TraceLightHalf, "lamp shadow light half",
+        [
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
+            (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler),
+            (9, DescriptorType.StorageImage), (10, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
+            (12, DescriptorType.StorageBuffer), (13, DescriptorType.StorageImage),
+        ], GpuSetLayout.Bindless);
+        _sumHalfPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_sumHalfProgram, "lamp shadow light half"));
         _classifyProgram = ctx.Shaders.Compute(LampShadowShaders.Classify, "lamp shadow cells",
-            [(0, DescriptorType.UniformBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer)]);
+            [(0, DescriptorType.UniformBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.StorageBuffer)]);
         _classifyPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_classifyProgram, "lamp shadow cells"));
         _sampler = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
     }
@@ -166,7 +232,7 @@ sealed unsafe class LampShadowPass : IDisposable
     /// <paramref name="one"/>: a per-lamp program, which reads the tiles at 10 and the cell lists at 11.
     /// </summary>
     void Push(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total,
-        GpuTexture total1, Transient constants, GpuProgram to, bool one)
+        GpuTexture total1, Transient constants, GpuProgram to, bool one, GpuTexture? plain = null, GpuTexture? exact = null)
     {
         var (cells, index, data) = lamps.Current;
         var images = stackalloc DescriptorImageInfo[6];
@@ -184,7 +250,7 @@ sealed unsafe class LampShadowPass : IDisposable
         var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
         var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
 
-        var writes = stackalloc WriteDescriptorSet[Bindings];
+        var writes = stackalloc WriteDescriptorSet[Bindings + 2];
         writes[0] = Sampled(0, &images[0]);
         writes[1] = Sampled(1, &images[1]);
         writes[2] = Acceleration(2, &asWrite);
@@ -201,7 +267,14 @@ sealed unsafe class LampShadowPass : IDisposable
             var listed = new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);
             writes[10] = Sampled(11, &images[5]);
             writes[11] = Buffer(12, DescriptorType.StorageBuffer, &listed);
-            cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
+            // The light kernel's second sum (binding 10, the characters' lamps' specular).
+            var storagePlain = plain is { } second ? StorageImage(second) : default;
+            int count = Bindings;
+            if (plain is not null) writes[count++] = Storage(10, &storagePlain);
+            // The half-size kernels' own rays (binding 13).
+            var storageExact = exact is { } own ? StorageImage(own) : default;
+            if (exact is not null) writes[count++] = Storage(13, &storageExact);
+            cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, count), GpuBindPoint.Compute);
             return;
         }
 
@@ -209,12 +282,13 @@ sealed unsafe class LampShadowPass : IDisposable
     }
 
     /// <summary>
-    /// Clears <paramref name="target"/> (in the general layout) to <paramref name="red"/> in its first channel.
+    /// Clears every layer of <paramref name="target"/> (in the general layout) to <paramref name="red"/>, <paramref name="green"/>, 0 and
+    /// <paramref name="alpha"/>.
     /// </summary>
-    void Clear(CommandList cmd, GpuTexture target, float red)
+    void Clear(CommandList cmd, GpuTexture target, float red, float green = 0, float alpha = 0)
     {
-        var clear = new ClearColorValue(red, 0f, 0f, 0f);
-        var range = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
+        var clear = new ClearColorValue(red, green, 0f, alpha);
+        var range = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, (uint)Math.Max(target.Desc.Layers, 1));
         _ctx.Device.Vk.CmdClearColorImage(cmd.Handle, _ctx.Device.NativeImage(target), ImageLayout.General, &clear, 1, &range);
     }
 
@@ -282,7 +356,14 @@ sealed unsafe class LampShadowPass : IDisposable
         _ctx.Shaders.Dispose(_oneProgram);
         if (_referenceProgram is not null) _ctx.Shaders.Dispose(_referenceProgram.Value);
         _ctx.Shaders.Dispose(_sumProgram);
+        _ctx.Shaders.Dispose(_oneHalfProgram);
+        _ctx.Shaders.Dispose(_ownProgram);
+        _ctx.Shaders.Dispose(_sumHalfProgram);
         _ctx.Shaders.Dispose(_classifyProgram);
+        _sliceLost?.Dispose();
+        _sliceScratch?.Dispose();
+        _sliceFiltered?.Dispose();
+        _sliceExact?.Dispose();
         _lists?.Dispose();
         _penumbra.Dispose();
     }
@@ -376,12 +457,12 @@ sealed unsafe class LampShadowPass : IDisposable
     /// <summary>
     /// The movers the classification tests one by one; with more of them the cells alone decide.
     /// </summary>
-    const int ClassifyMovers = 64;
+    const int ClassifyMovers = 256;
 
     /// <summary>
     /// The side in pixels of the cells a lamp's pass works on; a mask holds 2048, a screen wider than that takes all its cells.
     /// </summary>
-    const int CellSize = 64, MaxCells = 2048;
+    const int CellSize = 64, MaxCells = LampShadowShaders.MaxCells;
 
     /// <summary>
     /// How far under a mover's sphere the ground is taken to be, for how far its shadow reaches.
@@ -389,20 +470,87 @@ sealed unsafe class LampShadowPass : IDisposable
     const float GroundMargin = 60;
 
     /// <summary>
-    /// The lamps' lists of cells (<see cref="LampShadowShaders.Classify"/>): the indirect dispatches' arguments, 16 bytes a list, then
-    /// <see cref="MaxCells"/> cells a list.
+    /// The rounds' dispatch arguments, maps and lists (<see cref="LampShadowShaders.Classify"/>, laid out by <see cref="ListLayout"/>).
     /// </summary>
     DeviceBuffer? _lists;
 
     /// <summary>
-    /// The lists <see cref="_lists"/> has room for.
+    /// Where <see cref="_lists"/> holds what, in uints (<see cref="LampShadowShaders.Classify"/>), for <paramref name="Rounds"/> rounds of
+    /// <paramref name="Slices"/> slices over <paramref name="Cells"/> cells a screen.
     /// </summary>
-    int _listCapacity;
+    readonly record struct ListLayout(int Rounds, int Slices, int Cells)
+    {
+        /// <summary>
+        /// The cells a round has listed, a uint a cell.
+        /// </summary>
+        public int Seen => 16 * Rounds;
+
+        /// <summary>
+        /// The maps: per round, slice and cell the lamp's row plus one.
+        /// </summary>
+        public int Map => Seen + Rounds * Cells;
+
+        /// <summary>
+        /// The rounds' lists of rays; what comes before is zeroed each frame.
+        /// </summary>
+        public int Rays => Map + Rounds * Slices * Cells;
+
+        /// <summary>
+        /// The rounds' lists of cells.
+        /// </summary>
+        public int CellLists => Rays + Rounds * Slices * Cells;
+
+        /// <summary>
+        /// The list of the pixels the round at work traces on their own (<see cref="LampShadowShaders.OwnCap"/>).
+        /// </summary>
+        public int Own => CellLists + Rounds * Cells;
+
+        /// <summary>
+        /// The uints in all.
+        /// </summary>
+        public int Total => Own + LampShadowShaders.OwnCap;
+    }
 
     /// <summary>
     /// This frame's lamps with a mover in reach: the lamp's row, its area in pixels, the cells its movers' shadows cover and those grown by one.
     /// </summary>
-    readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide)> _areas = [];
+    readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide, uint[]? Movers, uint[]? Grass)> _areas = [];
+
+    /// <summary>
+    /// For each of <see cref="_areas"/>: the lamp stands among traced grass, so every cell in its reach is traced (<see cref="_grass"/>).
+    /// </summary>
+    readonly List<bool> _areaGrass = [];
+
+    /// <summary>
+    /// For each of <see cref="_areas"/>: its layer (<see cref="PlanLayers"/>).
+    /// </summary>
+    readonly List<int> _areaLayer = [];
+
+    /// <summary>
+    /// Per layer: the cells its lamps' passes can list, and those with their neighbours.
+    /// </summary>
+    readonly List<(uint[] Cells, uint[] Near)> _layers = [];
+
+    /// <summary>
+    /// The layers of the last frame, and the rounds they were worked in.
+    /// </summary>
+    public int LayersLast { get; private set; }
+
+    /// <summary>
+    /// See <see cref="LayersLast"/>.
+    /// </summary>
+    public int RoundsLast { get; private set; }
+
+    /// <summary>
+    /// The lamps' rays see the grass (the scene's traced grass, <c>PostOptions.TracedGrass</c>), as far from the eye as it is traced.
+    /// </summary>
+    bool _grass;
+
+    /// <summary>
+    /// How far from the eye a lamp still traces the grass in its reach.
+    /// </summary>
+    const float GrassLampRange = 500;
+    float _grassReach;
 
     /// <summary>
     /// The cell masks handed out to <see cref="_areas"/>, reused from frame to frame.
@@ -413,6 +561,11 @@ sealed unsafe class LampShadowPass : IDisposable
     /// The masks of <see cref="_cellPool"/> handed out this frame.
     /// </summary>
     int _cellsUsed;
+
+    /// <summary>
+    /// The words of a mask this frame's screen uses (all of them past <see cref="MaxCells"/> cells, where every bit is set).
+    /// </summary>
+    int _cellWords = MaxCells / 32;
 
     /// <summary>
     /// This frame's movers (spheres), from <see cref="GiScene.CollectMovers"/>.
@@ -461,58 +614,82 @@ sealed unsafe class LampShadowPass : IDisposable
         public fixed int Info[4];
 
         /// <summary>
-        /// Where the lists start, in uints.
+        /// The lamp's slice in its round, 1 among traced grass, the rounds, the lamp's row.
         /// </summary>
         public fixed int Base[4];
 
         /// <summary>
+        /// The slices a round.
+        /// </summary>
+        public fixed int Lay[4];
+
+        /// <summary>
         /// The cells the lamp's movers' shadows cover, one bit each.
         /// </summary>
-        public fixed uint Cells[64];
+        public fixed uint Cells[MaxCells / 32];
 
         /// <summary>
         /// The cells grown by one, one bit each.
         /// </summary>
-        public fixed uint Wide[64];
+        public fixed uint Wide[MaxCells / 32];
 
         /// <summary>
         /// The movers in the lamp's reach: centre relative to the eye, radius.
         /// </summary>
         public fixed float Movers[ClassifyMovers * 4];
+
+        public Vector4 GrassMap, GrassLift;
+
+        public fixed uint GrassCells[MaxCells / 32];
     }
 
     /// <summary>
-    /// The rays of what moves, one lamp at a time over the part of the screen its shadows can reach: traced, filtered and added to
+    /// The rays of what moves, each lamp over the part of the screen its shadows can reach: traced, filtered and added to
     /// <paramref name="sum"/>, the light lost per unit of albedo, whatever the number of lamps. <paramref name="filtered"/> ends as 1 everywhere,
-    /// the factor the drawing pass reads. False: nothing to do, <paramref name="sum"/> is untouched.
+    /// the factor the drawing pass reads. False: nothing to do, <paramref name="sum"/> is untouched. <paramref name="light"/> takes a character's
+    /// lamps' specular (rgb what is lost of it, a the luminance of all of it): the apply takes that back.
+    /// The lamps are dealt into layers (<see cref="PlanLayers"/>) and the layers into rounds: a round's rays, filter and light are one dispatch
+    /// each for all its lamps, a layer a slice. A lamp at a time cost its passes' start, wait and end a lamp (4 dispatches, each waited for):
+    /// 3 ms for a town's 50 to 70 lamps, whose cells together cover a few screens.
     /// </summary>
-    public bool RunPerLamp(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture light, GpuTexture sum,
-        GpuTexture scratch, GpuTexture filtered, in LampShadowView view, in Matrix4x4 inverse,
-        in Meitou.Game.Rendering.Frame.OcclusionView pyramid = default)
+    public bool RunPerLamp(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture light, GpuTexture sum,
+        GpuTexture filtered, in LampShadowView view, in Matrix4x4 inverse, in Meitou.Game.Rendering.Frame.OcclusionView pyramid = default)
     {
+        (_grass, _grassReach) = (scene.GrassShadows, scene.GrassReach);
+        _grassScene = scene;
+        _grassMap = scene.GrassMap;
         PlanAreas(scene, lamps, view, inverse);
+        PlanLayers(view.Size);
         CountAreas();
         if (_areas.Count == 0) return false;
 
         int w = (int)view.Size.X, h = (int)view.Size.Y;
-        EnsureLists();
-        int listBase = _listCapacity * 4;   // in uints: the lists come after the arguments
+        // Which pixel of each 2 x 2 the half-size rays take: the same, or each in turn over four frames while a temporal resolve averages them
+        // (the view's phase moves only then).
+        int half = HalfMode, turn = half == 2 && view.Phase > 0 ? (int)(_ctx.Frame.Number & 3) : 0;
+        var sub = new Vector2(turn & 1, (turn >> 1) ^ (turn & 1));
+        int slices = half != 0 ? LampShadowShaders.MaxSlices : 1;
+        var layout = new ListLayout((_layers.Count + slices - 1) / slices, slices, ((w + CellSize - 1) / CellSize) * ((h + CellSize - 1) / CellSize));
+        RoundsLast = layout.Rounds;
+        EnsureLists(layout);
+        EnsureSlices(w, h, half != 0);
         ulong listsSize = _lists.Size;
         var cmd = (CommandList)_ctx.BeginNative("lamp shadows");
         cmd.BeginLabel("lamp shadows");
         cmd.Barrier(BarrierBatch.Full);
         Clear(cmd, sum, 0);
-        cmd.FillBuffer(_lists.Handle, 0, (ulong)_listCapacity * 16, 0);
+        Clear(cmd, light, 0);
+        cmd.FillBuffer(_lists.Handle, 0, (ulong)layout.Rays * 4, 0);
         cmd.Barrier(BarrierBatch.Full);
 
         // Each lamp's cells: those its movers' shadow boxes cover, less what this frame's depth shows out of the lamp's reach or of every mover's
-        // shadow.
-        Classify(cmd, lamps, view, pyramid, listBase);
+        // shadow; into its round's lists and map.
+        Classify(cmd, lamps, view, pyramid, layout);
         cmd.Barrier(BarrierBatch.Full);
 
-        var targets = new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h);
-        for (int slot = 0; slot < _areas.Count; slot++)
-            TraceLamp(cmd, scene, lamps, depth, surface, lost, light, sum, filtered, targets, view, inverse, slot, listBase, listsSize);
+        var targets = new PenumbraTargets(depth, surface, _sliceLost!, _sliceScratch!, _sliceFiltered!, w, h);
+        for (int round = 0; round < layout.Rounds; round++)
+            TraceRound(cmd, scene, lamps, depth, surface, light, sum, targets, view, inverse, round, layout, listsSize, half != 0, sub);
 
         Clear(cmd, filtered, 1);
         cmd.Barrier(BarrierBatch.Full);
@@ -536,52 +713,137 @@ sealed unsafe class LampShadowPass : IDisposable
     }
 
     /// <summary>
-    /// Grows <see cref="_lists"/> to hold every area's list (twice as many, 32 at least) when it is missing or too small.
+    /// Makes <see cref="_lists"/> again, twice as large as <paramref name="layout"/> asks, when it is missing or too small.
     /// </summary>
     [MemberNotNull(nameof(_lists))]
-    void EnsureLists()
+    void EnsureLists(in ListLayout layout)
     {
-        if (_lists is not null && _listCapacity >= _areas.Count) return;
+        ulong bytes = (ulong)layout.Total * 4;
+        if (_lists is not null && _lists.Size >= bytes) return;
 
         _lists?.Dispose();   // released after the frames in flight
-        _listCapacity = Math.Max(_areas.Count * 2, 32);
         var use = BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferDst;
-        _lists = DeviceBuffer.Create(_ctx, (ulong)_listCapacity * (16 + MaxCells * 4), use, "lamp shadow cell lists");
+        _lists = DeviceBuffer.Create(_ctx, bytes * 2, use, "lamp shadow cell lists");
     }
 
     /// <summary>
-    /// The lamp of <paramref name="slot"/>: its rays over its listed cells, the filter on its flags, then its light into <paramref name="sum"/>
-    /// where its filtered flag is.
+    /// Makes the rays' slices for a render size of <paramref name="w"/> x <paramref name="h"/> when they are missing or of another size:
+    /// <see cref="LampShadowShaders.MaxSlices"/> of half the size when <paramref name="half"/>, else one of the size.
     /// </summary>
-    void TraceLamp(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture light,
-        GpuTexture sum, GpuTexture filtered, in PenumbraTargets targets, in LampShadowView view, in Matrix4x4 inverse, int slot, int listBase,
-        ulong listsSize)
+    void EnsureSlices(int w, int h, bool half)
     {
-        int row = _areas[slot].Row;
-        var size = new Vector4(view.Size, TracedSunShaders.LampMovers, row);
-        var parameters = TraceParams(lamps, view, new Vector4(scene.Origin, scene.SkinTable), size);
-        parameters.Rect = new Vector4(slot, listBase, 0, 0);
-        var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
-        ulong args = (ulong)slot * 16;
+        int sw = half ? (w + 1) / 2 : w, sh = half ? (h + 1) / 2 : h, layers = half ? LampShadowShaders.MaxSlices : 1;
+        if (_sliceLost is not null && _sliceLost.Desc.Width == sw && _sliceLost.Desc.Height == sh && _sliceLost.Desc.Layers == layers) return;
 
-        // The rays over the listed cells, the filter on this lamp's flags, then the lamp's light where its filtered flag is.
-        Push(cmd, scene, lamps, depth, surface, lost, light, light, constants, _oneProgram, true);
-        cmd.BindPipeline(_onePipeline);
-        cmd.BindBindlessTable(_oneProgram, 1, GpuBindPoint.Compute);
-        cmd.DispatchIndirect(_lists!.Handle, args);
+        _sliceLost?.Dispose();   // released after the frames in flight
+        _sliceScratch?.Dispose();
+        _sliceFiltered?.Dispose();
+        _sliceExact?.Dispose();
+        _sliceExact = null;
+        var use = TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst;
+        GpuTexture Make(string name) =>
+            _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, sw, sh, Layers: layers, Kind: TextureKind.Texture2DArray, Use: use, Name: name));
+        (_sliceLost, _sliceScratch, _sliceFiltered) = (Make("lamp shadows flags"), Make("lamp shadows scratch"), Make("lamp shadows filtered"));
+        if (half)
+            _sliceExact = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32Ui, sw, sh, Layers: layers, Kind: TextureKind.Texture2DArray, Use: use,
+                Name: "lamp shadows own rays"));
+    }
+
+    /// <summary>
+    /// The lamps of <paramref name="round"/> at once, each over its own cells in its layer's slice: their rays, the filter on their flags, then,
+    /// a pixel a thread, their light into <paramref name="sum"/> where the filtered flags are. <paramref name="half"/>: the rays and the filter
+    /// at half the size (<paramref name="targets"/>' slices, with the render size), a quarter of the rays and of the filter's pixels; the light
+    /// kernel, at the render size, takes each pixel's flag from those round it on its own surface.
+    /// </summary>
+    void TraceRound(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture light, GpuTexture sum,
+        in PenumbraTargets targets, in LampShadowView view, in Matrix4x4 inverse, int round, in ListLayout layout, ulong listsSize, bool half,
+        Vector2 sub)
+    {
+        int rays = layout.Rays + round * layout.Slices * layout.Cells, cells = layout.CellLists + round * layout.Cells;
+        int map = layout.Map + round * layout.Slices * layout.Cells;
+        var size = new Vector4(view.Size, TracedSunShaders.LampMovers | (_grass ? TracedSunShaders.Grass : 0), 0);
+        var parameters = TraceParams(lamps, view, new Vector4(scene.Origin, scene.SkinTable), size);
+        (parameters.Cells[0], parameters.Cells[1]) = ((uint)layout.Slices, (uint)layout.Cells);
+        (parameters.Cells[2], parameters.Cells[3]) = ((uint)(12 * layout.Rounds + 4 * round), (uint)layout.Own);
+        parameters.Rect = new Vector4(rays, map, sub.X, sub.Y);
+        var raysConstants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+        parameters.Rect = new Vector4(cells, map, sub.X, sub.Y);
+        var lightConstants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+        ulong raysArgs = (ulong)((half ? 4 * layout.Rounds : 0) + 4 * round) * 4, cellsArgs = (ulong)(8 * layout.Rounds + 4 * round) * 4;
+
+        // Outside a lamp's cells its slice holds no receiver (green -1), not what the last round left there: the filter reads round a pixel, and
+        // took another lamp's shadow in at a cell's edge (darker 64-pixel blocks beside a shadow). At half the size the result too: the light
+        // kernel reads the flags round a pixel, past its cell's edge.
+        Clear(cmd, targets.Raw, 0, -1);
+        Clear(cmd, targets.Scratch, 0, -1);
+        if (half) Clear(cmd, targets.Filtered, 0, -1);
         cmd.Barrier(BarrierBatch.Full);
-        _penumbra.RunList(cmd, targets, inverse, view.Footprint, _lists.Handle, listsSize, args, slot, listBase);
-        Push(cmd, scene, lamps, depth, surface, filtered, sum, sum, constants, _sumProgram, true);
-        cmd.BindPipeline(_sumPipeline);
-        cmd.BindBindlessTable(_sumProgram, 1, GpuBindPoint.Compute);
-        cmd.DispatchIndirect(_lists.Handle, args);
+
+        // The rays over the round's list, the filter on their flags, then the lamps' light where the filtered flags are.
+        var (raysProgram, raysPipeline) = half ? (_oneHalfProgram, _oneHalfPipeline) : (_oneProgram, _onePipeline);
+        Push(cmd, scene, lamps, depth, surface, targets.Raw, light, light, raysConstants, raysProgram, true, exact: half ? _sliceExact : null);
+        cmd.BindPipeline(raysPipeline);
+        cmd.BindBindlessTable(raysProgram, 1, GpuBindPoint.Compute);
+        cmd.DispatchIndirect(_lists!.Handle, raysArgs);
+        cmd.Barrier(BarrierBatch.Full);
+        if (half)
+        {
+            // The pixels the rays listed for a ray of their own, a thread each.
+            Push(cmd, scene, lamps, depth, surface, targets.Raw, light, light, raysConstants, _ownProgram, true, exact: _sliceExact);
+            cmd.BindPipeline(_ownPipeline);
+            cmd.BindBindlessTable(_ownProgram, 1, GpuBindPoint.Compute);
+            cmd.DispatchIndirect(_lists!.Handle, (ulong)(12 * layout.Rounds + 4 * round) * 4);
+            cmd.Barrier(BarrierBatch.Full);
+        }
+        _penumbra.RunList(cmd, targets, inverse, view.Footprint, _lists!.Handle, listsSize, raysArgs, rays, half, sub);
+        var (lightProgram, lightPipeline) = half ? (_sumHalfProgram, _sumHalfPipeline) : (_sumProgram, _sumPipeline);
+        Push(cmd, scene, lamps, depth, surface, targets.Filtered, sum, sum, lightConstants, lightProgram, true, light, half ? _sliceExact : null);
+        cmd.BindPipeline(lightPipeline);
+        cmd.BindBindlessTable(lightProgram, 1, GpuBindPoint.Compute);
+        cmd.DispatchIndirect(_lists!.Handle, cellsArgs);
         cmd.Barrier(BarrierBatch.Full);
     }
 
     /// <summary>
-    /// The cells of every lamp's list (<see cref="LampShadowShaders.Classify"/>), a dispatch a lamp over its area's cells.
+    /// Deals <see cref="_areas"/> into layers (<see cref="_areaLayer"/>, <see cref="_layers"/>): a lamp joins the first layer none of whose
+    /// lamps' cells is one of its own or next to one, so the passes of a layer never read one lamp's flags for another (the filter reads within
+    /// a cell's width of a pixel).
     /// </summary>
-    void Classify(CommandList cmd, WorldLamps lamps, in LampShadowView view, in Meitou.Game.Rendering.Frame.OcclusionView pyramid, int listBase)
+    void PlanLayers(Vector2 size)
+    {
+        _areaLayer.Clear();
+        _layers.Clear();
+        int words = Math.Min(((((int)size.X + CellSize - 1) / CellSize) * (((int)size.Y + CellSize - 1) / CellSize) + 31) / 32, MaxCells / 32);
+        foreach (var area in _areas)
+        {
+            uint[] wide = area.Wide, near = Grown(wide, size);
+            int layer = 0;
+            for (; layer < _layers.Count; layer++)
+            {
+                uint[] taken = _layers[layer].Near;
+                bool free = true;
+                for (int i = 0; i < words && free; i++) free = (wide[i] & taken[i]) == 0;
+                if (free) break;
+            }
+
+            if (layer == _layers.Count) _layers.Add((NextCells(), NextCells()));
+            var (cells, around) = _layers[layer];
+            for (int i = 0; i < words; i++)
+            {
+                cells[i] |= wide[i];
+                around[i] |= near[i];
+            }
+
+            _areaLayer.Add(layer);
+        }
+
+        LayersLast = _layers.Count;
+    }
+
+    /// <summary>
+    /// The cells of every lamp into its round's lists and map (<see cref="LampShadowShaders.Classify"/>), a dispatch a lamp over its area's cells.
+    /// </summary>
+    void Classify(CommandList cmd, WorldLamps lamps, in LampShadowView view, in Meitou.Game.Rendering.Frame.OcclusionView pyramid, in ListLayout layout)
     {
         // The pyramid's level of 64-pixel blocks (level 0 holds 4 x 4 pixels): its vectors as HizPyramid.Vectors lays them out.
         bool has = !pyramid.IsEmpty && pyramid.Vectors[5].Y > 4.5f;
@@ -590,19 +852,23 @@ sealed unsafe class LampShadowPass : IDisposable
             ? new DescriptorBufferInfo(_ctx.Device.BufferAt(pyramid.Buffer.Buffer.Index), pyramid.Buffer.Offset, pyramid.Buffer.Size)
             : new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);   // a stand-in, not read
         var listed = new DescriptorBufferInfo(_ctx.Device.BufferAt(_lists!.Handle.Index), 0, _lists.Size);
+        var grassMap = _grassMap is { } map
+            ? new DescriptorBufferInfo(_ctx.Device.BufferAt(map.Buffer.Index), 0, map.Buffer.Size)
+            : listed;   // a stand-in, not read
         int wide = ((int)view.Size.X + CellSize - 1) / CellSize, high = ((int)view.Size.Y + CellSize - 1) / CellSize;
         cmd.BindPipeline(_classifyPipeline);
-        var writes = stackalloc WriteDescriptorSet[3];
+        var writes = stackalloc WriteDescriptorSet[4];
         for (int slot = 0; slot < _areas.Count; slot++)
         {
             ClassifyParams parameters;
-            FillClassifyParams(out parameters, slot, lamps, view, pyramid, has, eye, wide, high, listBase);
+            FillClassifyParams(out parameters, slot, lamps, view, pyramid, has, eye, wide, high, layout);
             var constants = _ctx.Frame.Constants.Write<ClassifyParams>(new ReadOnlySpan<ClassifyParams>(&parameters, 1), 256);
             var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(ClassifyParams));
             writes[0] = Buffer(0, DescriptorType.UniformBuffer, &uniform);
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &hiz);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &listed);
-            cmd.PushDescriptors(_classifyProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
+            writes[3] = Buffer(3, DescriptorType.StorageBuffer, &grassMap);
+            cmd.PushDescriptors(_classifyProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), GpuBindPoint.Compute);
             int x0 = parameters.CellRect[0], y0 = parameters.CellRect[1], x1 = parameters.CellRect[2], y1 = parameters.CellRect[3];
             cmd.Dispatch((uint)((x1 - x0 + 7) / 8), (uint)((y1 - y0 + 7) / 8));
         }
@@ -613,9 +879,9 @@ sealed unsafe class LampShadowPass : IDisposable
     /// widened by the filter's margins, and the movers in the lamp's reach.
     /// </summary>
     void FillClassifyParams(out ClassifyParams parameters, int slot, WorldLamps lamps, in LampShadowView view,
-        in Meitou.Game.Rendering.Frame.OcclusionView pyramid, bool has, Vector3 eye, int wide, int high, int listBase)
+        in Meitou.Game.Rendering.Frame.OcclusionView pyramid, bool has, Vector3 eye, int wide, int high, in ListLayout layout)
     {
-        var (row, area, cells, grown) = _areas[slot];
+        var (row, area, _, grown, movers, grass) = _areas[slot];
         var l = lamps.RowLamp(row);
         int margin = PenumbraFilter.RowMargin + PenumbraFilter.ColumnMargin;
         int x0 = Math.Max((int)(area.X - margin) / CellSize, 0), y0 = Math.Max((int)(area.Y - margin) / CellSize, 0);
@@ -629,15 +895,42 @@ sealed unsafe class LampShadowPass : IDisposable
             TanSize = has ? pyramid.Vectors[4] : new Vector4(0, 0, view.Size.X, view.Size.Y),
         };
         (parameters.CellRect[0], parameters.CellRect[1], parameters.CellRect[2], parameters.CellRect[3]) = (x0, y0, x1, y1);
-        parameters.Info[0] = slot;
+        parameters.Info[0] = _areaLayer[slot] / layout.Slices;
 
         int near = GatherNearMovers(ref parameters, l, eye);
         parameters.Info[1] = near <= ClassifyMovers ? near : -1;
         parameters.Info[2] = has ? (int)BitConverter.SingleToUInt32Bits(pyramid.Vectors[7].X) : 0;
         parameters.Info[3] = has ? ((int)pyramid.Vectors[5].Z + 15) >> 4 : 0;
-        parameters.Base[0] = listBase;
-        for (int i = 0; i < 64; i++) (parameters.Cells[i], parameters.Wide[i]) = (cells[i], grown[i]);
+        parameters.Base[0] = _areaLayer[slot] % layout.Slices;
+        parameters.Base[1] = _areaGrass[slot] ? 1 : 0;
+        if (_areaGrass[slot] && _grassMap is { } map)
+        {
+            parameters.GrassMap = new Vector4(map.Origin.X - eye.X, map.Origin.Y - eye.Z, map.Cell, map.Side);
+            parameters.GrassLift = new Vector4(eye.Y, map.Offset, GrassMargin, TracedGrass.MapLevels);
+        }
+        parameters.Base[2] = layout.Rounds;
+        parameters.Base[3] = row;
+        parameters.Lay[0] = layout.Slices;
+        for (int i = 0; i < MaxCells / 32; i++)
+            (parameters.Cells[i], parameters.Wide[i], parameters.GrassCells[i]) = (movers?[i] ?? 0, grown[i], grass?[i] ?? 0);
     }
+
+    /// <summary>
+    /// The frame's traced scene, asked where its grass is (<see cref="GiScene.GrassWithin"/>).
+    /// </summary>
+    GiScene? _grassScene;
+
+    /// <summary>
+    /// The frame's traced blades' map (<see cref="TracedGrass.Map"/>): a lamp among grass asks only the cells where a blade can stand between it
+    /// and what they show (<c>grassMayShade</c> in <see cref="LampShadowShaders.Classify"/>); null: every cell in its reach.
+    /// </summary>
+    TracedGrass.MapView? _grassMap;
+
+    /// <summary>
+    /// World units round the receivers the map is asked over beyond each cell's sphere: where a lamp's ray leaves from (off the receiver's plane by
+    /// a pixel or two, a strand of hair a little further).
+    /// </summary>
+    const float GrassMargin = 2;
 
     /// <summary>
     /// The movers within <paramref name="l"/>'s reach, the only ones whose shadow it casts, into <paramref name="parameters"/> up to
@@ -669,10 +962,13 @@ sealed unsafe class LampShadowPass : IDisposable
     void PlanAreas(GiScene scene, WorldLamps lamps, in LampShadowView view, in Matrix4x4 inverse)
     {
         _areas.Clear();
+        _areaGrass.Clear();
         _movers.Clear();
         _cellsUsed = 0;
+        int screenCells = (((int)view.Size.X + CellSize - 1) / CellSize) * (((int)view.Size.Y + CellSize - 1) / CellSize);
+        _cellWords = screenCells > MaxCells ? MaxCells / 32 : (screenCells + 31) / 32;
         scene.CollectMovers(_movers);
-        if (_movers.Count == 0 || !Matrix4x4.Invert(inverse, out var toClip)) return;
+        if ((_movers.Count == 0 && !_grass) || !Matrix4x4.Invert(inverse, out var toClip)) return;
 
         for (int row = 0; row < lamps.InGrid; row++)
             PlanLampArea(row, lamps.RowLamp(row), view, toClip);
@@ -684,23 +980,53 @@ sealed unsafe class LampShadowPass : IDisposable
     void PlanLampArea(int row, WorldLight l, in LampShadowView view, in Matrix4x4 toClip)
     {
         Vector4 box = new(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
-        bool any = false;
-        uint[] cells = NextCells();
+        // The mask is taken with the first mover in reach: most lamps of a town have none, and a mask a lamp of the grid was 0.25 ms a frame.
+        // The movers' cells and the grass's are kept apart: the classification asks the movers only in theirs (the shadow boxes Cover finds) and the
+        // grass only in its own; asked over the grass's whole reach, the movers' test kept 2.5 times the cells in a lit hall.
+        uint[]? cells = null, grass = null;
         foreach (var (centre, radius) in _movers)
         {
+            // Cover's own first test, before its call: hundreds of lamps by a hundred movers.
+            float reach = l.Radius + radius;
+            if (Vector3.DistanceSquared(centre, l.Position) > reach * reach) continue;
+
             // Each mover apart: one whose shadow stays off the screen must not stretch the lamp's area across it.
             Vector4 own = new(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
             if (!Cover(l, centre, radius, view, toClip, ref own) || OffScreen(own, view.Size)) continue;
 
             box = new Vector4(MathF.Min(box.X, own.X), MathF.Min(box.Y, own.Y), MathF.Max(box.Z, own.Z), MathF.Max(box.W, own.W));
-            MarkCells(cells, own, view.Size);
-            any = true;
+            MarkCells(cells ??= NextCells(), own, view.Size);
         }
 
-        if (!any)
+        // Among traced grass the lamp's whole reach is asked: a blade anywhere in it can shade the ground.
+        bool grassLamp = false;
+        // Only near the eye: a blade's shadow from a lamp is under a pixel wide past GrassLampRange, and every such lamp costs its own passes.
+        // And only with a traced page that holds blades in the lamp's reach: with no grass about, every lamp round the eye asked every pixel it
+        // reaches for nothing.
+        if (_grass && Vector3.Distance(l.Position, view.Eye) < MathF.Min(_grassReach, GrassLampRange) + l.Radius
+            && (_grassScene is not { } traced || traced.GrassWithin(l.Position, l.Radius)))
         {
-            _cellsUsed--;
-            return;
+            Vector4 own = new(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+            Grow(l.Position, l.Radius, view, toClip, ref own);
+            if (!OffScreen(own, view.Size))
+            {
+                box = new Vector4(MathF.Min(box.X, own.X), MathF.Min(box.Y, own.Y), MathF.Max(box.Z, own.Z), MathF.Max(box.W, own.W));
+                MarkCells(grass = NextCells(), own, view.Size);
+                grassLamp = true;
+            }
+        }
+
+        if (cells is null && grass is null) return;
+        var movers = cells;
+        if (grass is not null)
+        {
+            // Both: the cells the area plans with are their union.
+            if (movers is null) cells = grass;
+            else
+            {
+                cells = NextCells();
+                for (int i = 0; i < _cellWords; i++) cells[i] = movers[i] | grass[i];
+            }
         }
 
         var area = new Vector4(
@@ -708,13 +1034,10 @@ sealed unsafe class LampShadowPass : IDisposable
             MathF.Floor(MathF.Max(box.Y, 0)),
             MathF.Ceiling(MathF.Min(box.Z, view.Size.X)),
             MathF.Ceiling(MathF.Min(box.W, view.Size.Y)));
-        if (area.Z <= area.X || area.W <= area.Y)
-        {
-            _cellsUsed--;
-            return;
-        }
+        if (area.Z <= area.X || area.W <= area.Y) return;   // the masks taken stay unused until the next frame
 
-        _areas.Add((row, area, cells, Grown(cells, view.Size)));
+        _areas.Add((row, area, cells!, Grown(cells!, view.Size), movers, grass));
+        _areaGrass.Add(grassLamp);
     }
 
     /// <summary>
@@ -727,10 +1050,10 @@ sealed unsafe class LampShadowPass : IDisposable
     /// </summary>
     uint[] NextCells()
     {
-        if (_cellsUsed == _cellPool.Count) _cellPool.Add(new uint[64]);
+        if (_cellsUsed == _cellPool.Count) _cellPool.Add(new uint[MaxCells / 32]);
 
         var cells = _cellPool[_cellsUsed++];
-        Array.Clear(cells);
+        Array.Clear(cells, 0, _cellWords);   // the screen's cells alone: the rest is never read
         return cells;
     }
 

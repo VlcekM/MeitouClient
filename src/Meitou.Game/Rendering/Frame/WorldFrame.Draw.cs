@@ -462,6 +462,12 @@ static partial class WorldFrame
 
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light.
         post.AutoExposure = (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance);
+        // A room lit by its probes (Indoor GI) is as dark as its lamps leave it: the exposure follows it under the game's minimum.
+        if (post is PostProcess exposed)
+        {
+            exposed.IndoorExposure = gpu.GiActive && gpu.Probes is { InteriorEnabled: true } && gpu.Objects is { InteriorView.Count: > 0 } ? PostProcess.IndoorExposureScale : 0;
+            exposed.IndoorExposureMin = KenshiLighting.MinLuminance(-1, gpu.Sky.Exposure.Min, gpu.Sky.Exposure.NightDarkness) * PostProcess.IndoorExposureFloor;
+        }
         post.WaterHeight = render.Water && gpu.Water is not null ? WorldWater.Height : null;
         UpdateHeatHaze(gpu, post, sun.Y);
 
@@ -1259,9 +1265,19 @@ static partial class WorldFrame
         if (gpu.Characters is not { } characters) return;
         f.Host.Stage(StageClock.Characters);
         characters.BlendSeeThrough = true;
-        characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, f.RelativeRotation * s.Jittered);
+        var relative = f.RelativeRotation * s.Jittered;
+        if (characters.VisibilityWanted(f.Post))
+        {
+            // The visibility buffer (CharacterVisibility): its id pass and resolve run outside the scene's pass, which opens again after them.
+            f.Host.Close();
+            characters.DrawVisible(f.Post, StageClock.Characters, s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour,
+                light.FogDistance, relative);
+            f.Host.Open(StageClock.Characters, f.Post.WithShadingRate(f.Post.SceneTargets));
+        }
+        else characters.Draw(s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour, light.FogDistance, relative);
         characters.BlendSeeThrough = false;
         f.Post.CharactersDrawn = characters.DrawnCharacters > 0;
+        characters.MainViewDrawn();
         StageClock.Lap(StageClock.Characters);   // the colour draw; the motion draw (post chain, upscalers only) laps itself in
     }
 
@@ -1366,7 +1382,8 @@ static partial class WorldFrame
         StageClock.Lap(14, "gi resolve");
 
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
-        gpu.Post?.RunCharacterOcclusion(gpu.GiActive ? gpu.Gi : null);
+        gpu.Post?.RunCharacterOcclusion(gpu.Probes, gpu.GiActive ? gpu.Gi : null);
+        gpu.Post?.RunRoomMask(gpu.GiActive ? gpu.Gi : null, gpu.Objects?.EyeIndoors(f.Eye) == true);
         StageClock.Lap(StageClock.LampShadows);
 
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);

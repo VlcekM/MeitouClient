@@ -38,7 +38,7 @@ static class WetPuddles
     /// </summary>
     public static bool Under(float x, float z, float wetness, float levelY, float hollow)
     {
-        float even = Smooth(0.955f, 0.99f, levelY);
+        float even = Smooth(0.975f, 0.997f, levelY);
         if (even <= 0 || wetness <= 0.2f) return false;
 
         float low = 0.6f * Noise(x / 80f, 0, z / 80f) + 0.4f * Noise(x / 15f, 0, z / 15f) + 0.1f * (Noise(x / 3f, 0, z / 3f) - 0.5f) - hollow;
