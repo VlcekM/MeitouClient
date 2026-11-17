@@ -83,7 +83,8 @@ public sealed record CampaignData
     public required string Name { get; init; }
 
     /// <summary>
-    /// <c>display name</c>, else the record's name: {1} of the campaign messages.
+    /// <c>display name</c> ("" when unset, never the record's name): {1} of the campaign messages and the Upcoming Events line, both read through
+    /// CampaignInstance slot 8 (<c>FUN_1409d4af0</c>, <b>Verified</b>).
     /// </summary>
     public required string DisplayName { get; init; }
 
@@ -274,12 +275,11 @@ public sealed record CampaignData
         Apply(r);
 
         string? First(string list) => r.GetReferences(list) is { Count: > 0 } l ? l[0].TargetStringId : null;
-        string display = r.GetString("display name");
         return new CampaignData
         {
             Id = r.StringId,
             Name = r.Name,
-            DisplayName = display.Length > 0 ? display : r.Name,
+            DisplayName = r.GetString("display name"),
             TerritorialTriggers = r.GetBool("territorial triggers"),
             IsHostile = r.GetBool("is hostile"),
             TargetCharacters = r.GetBool("target characters"),

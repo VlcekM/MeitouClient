@@ -37,9 +37,14 @@ sealed class ProbeWorld : IDisposable
     public required World World { get; init; }
 
     /// <summary>
-    /// What the load made of the save, for a capture of the world (<see cref="SaveCapture.Capture"/>).
+    /// What the load made of the save, which a capture carries on from.
     /// </summary>
     public required LoadedSave Loaded { get; init; }
+
+    /// <summary>
+    /// The level data of the load order.
+    /// </summary>
+    public required WorldLevelData Levels { get; init; }
 
     /// <summary>
     /// The navmesh, when it was asked for.
@@ -115,7 +120,15 @@ sealed class ProbeWorld : IDisposable
         if (nav is not null) GiveGateCodes(world, nav);
         return new ProbeWorld
         {
-            Db = db, Data = data, Save = save, World = world, Loaded = loaded, Nav = nav, Streamer = streamer, Buildings = buildings,
+            Db = db,
+            Data = data,
+            Save = save,
+            World = world,
+            Loaded = loaded,
+            Levels = levels,
+            Nav = nav,
+            Streamer = streamer,
+            Buildings = buildings,
         };
     }
 
@@ -197,8 +210,8 @@ sealed class ProbeWorld : IDisposable
     /// <paramref name="streamer"/> gates its population's zones before the load; <paramref name="buildings"/> is the buildings' collision (null: none).
     /// Returns the world and what the load made of the save.
     /// </summary>
-    static (World World, LoadedSave Loaded) MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed, ProbeZoneStreamer? streamer,
-        Meitou.Simulation.Ragdolls.IRagdollEnvironment? buildings)
+    static (World World, LoadedSave Loaded) MakeWorld(PopulationData data, IWalkability walk, SaveGame save, ulong seed,
+        ProbeZoneStreamer? streamer, Meitou.Simulation.Ragdolls.IRagdollEnvironment? buildings)
     {
         var options = new StandardSystemOptions
         {

@@ -8,7 +8,8 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Upcoming Events (<c>FUN_1407f2ef0</c> per faction's <c>FactionWarMgr</c>, <c>FUN_1407ac9c0</c>): for a faction with running or queued
     /// campaigns a "-{name}-" heading; per running campaign against the player's faction that is not ending, its name, "Target:" with the target's
-    /// faction and name (??? when gone) and a spacer; per queued one (no player filter) its display name and the time until it starts.
+    /// faction and name (??? when gone) and a spacer; per queued one (no player filter) its display name and the time until it starts. Both name a
+    /// campaign by its <c>display name</c> (the running one by CampaignInstance slot 8, <c>FUN_1409d4af0</c>), not its record name.
     /// </summary>
     public List<FactionInfoLine> UpcomingEvents(World world, Func<int, string?> factionName)
     {
@@ -24,7 +25,7 @@ public sealed partial class PopulationSystem
                 // Phase 2 is Meitou's ending phase (the original's RETREATING and VICTORY are left out).
                 if (inst.Phase == 2 || player < 0 || inst.Enemy != player) continue;
 
-                lines.Add(new(FactionInfoKind.Name, CampaignOf(inst.CampaignId)?.Name ?? inst.CampaignId));
+                lines.Add(new(FactionInfoKind.Name, CampaignOf(inst.CampaignId)?.DisplayName ?? inst.CampaignId));
                 string where = Exists(world, inst.Target) ? NameOf(world, inst.Target) : "???";
                 lines.Add(new(FactionInfoKind.Detail, "Target:", (factionName(inst.Enemy) ?? "") + "- " + where));
                 lines.Add(new(FactionInfoKind.Spacer, ""));

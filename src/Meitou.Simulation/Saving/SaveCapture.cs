@@ -228,21 +228,27 @@ public static partial class SaveCapture
     static Dictionary<int, SavePlatoon> WriteNpcPlatoons(SaveBuilder builder, World world, PopulationData data, LoadedSave? loaded,
         SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
     {
-        if (loaded is not null) WriteRoaming(builder.Game, world, loaded);
+        if (loaded is not null) WriteRoaming(builder, world, loaded);
         WriteSavedNpcs(builder, world, data, options, clock, buildings, races);
         var fresh = WriteFreshNpcs(builder, world, data, options, clock, buildings, races, loaded);
-        WriteModMarks(builder.Game, world, loaded, fresh);
+        WriteMarks(builder.Game, world, loaded, fresh);
         return fresh;
     }
 
     /// <summary>
-    /// A code mod's marks on every platoon the save holds (<see cref="ModPlatoonSave"/>).
+    /// On every platoon the save holds: a code mod's marks (<see cref="ModPlatoonSave"/>) and the PLATOON bool <c>campaign</c>, set while a
+    /// campaign holds it, as the original's saver sets it for a platoon its faction's war manager has (<c>FUN_140372ef0</c>); the original's load
+    /// (<c>FUN_1407f85f0</c>) files such a platoon as a kept one without its keep test (<c>FUN_1407ec570</c>: persistent, or held by a campaign
+    /// not ended), which its war manager could not answer yet.
     /// </summary>
-    static void WriteModMarks(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
+    static void WriteMarks(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
     {
         foreach (var (id, platoon) in WrittenPlatoons(game, world, loaded, fresh))
         {
-            if (world.Platoons.Find(id) is { } p) ModPlatoonSave.Write(platoon.Record, p);
+            if (world.Platoons.Find(id) is not { } p) continue;
+
+            ModPlatoonSave.Write(platoon.Record, p);
+            platoon.Record.Bools["campaign"] = p.Campaign is not null;
         }
     }
 
@@ -1356,6 +1362,11 @@ public static partial class SaveCapture
         readonly Dictionary<int, SavePlatoon> _written = [];
 
         /// <summary>
+        /// The save the world was loaded from (null: a new game), whose characterless roaming platoons keep their records once made.
+        /// </summary>
+        LoadedSave? _loaded;
+
+        /// <summary>
         /// A writer for the save being built: the save's factions, town handles and platoons indexed.
         /// </summary>
         public FreshNpcWriter(SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
@@ -1378,6 +1389,7 @@ public static partial class SaveCapture
         /// </summary>
         public Dictionary<int, SavePlatoon> Write(LoadedSave? loaded)
         {
+            _loaded = loaded;
             WriteWorldSquads();
             WriteStoredSquads();
             WriteStandIns(loaded);
@@ -1385,9 +1397,17 @@ public static partial class SaveCapture
         }
 
         /// <summary>
-        /// A save's never-made platoon once made, or one made afresh by regeneration, holds its squad in Stored beside its record (Platoon.Unmade).
+        /// The save's record a made platoon is written into: a save's never-made platoon once made, or one made afresh by regeneration, holds its
+        /// squad in Stored beside its record (Platoon.Unmade); a save's characterless stand-in (a never-activated campaign or mod-spawn platoon) once made has no saved platoon but its
+        /// roaming record, which it keeps as the original's saver keeps the platoon's (<c>FUN_140372ef0</c>).
         /// </summary>
-        SavePlatoon? Into(Platoon? p) => p is { Saved: { } saved, Stored: not null } ? _byName.GetValueOrDefault(saved.Name) : null;
+        SavePlatoon? Into(Platoon? p)
+        {
+            if (p is { Saved: { } saved, Stored: not null }) return _byName.GetValueOrDefault(saved.Name);
+            if (p is { Saved: null } && _loaded?.RoamingPlatoons.TryGetValue(p.Id, out var name) == true) return _byName.GetValueOrDefault(name);
+
+            return null;
+        }
 
         /// <summary>
         /// Whether a squad of the town and faction is written: a known town, a known faction not the player's.
@@ -1545,9 +1565,15 @@ public static partial class SaveCapture
                 // The original's saver drops an unloaded declared-dead platoon (FUN_140372ef0).
                 if (p.Dead || _written.ContainsKey(p.Id) || loaded?.RoamingPlatoons.ContainsKey(p.Id) == true) continue;
 
-                _written[p.Id] = WritePlatoon(
-                    p.Origin, p.Faction, p.TemplateId, p.Money, true, null, p.Package, [], null, Ground(_world, p.Position), imprisoned: p.Imprisoned,
+                // A platoon the game has not made yet, as the original writes one (FUN_140372ef0, Verified on a 1.0.68 save's campaign platoons): no
+                // file, `never been activated`, its size as `char count` (which the load reads back as the men its campaign counts), filed in no
+                // squad list (`squad index` -1) and with no package run yet.
+                var written = _written[p.Id] = WritePlatoon(
+                    p.Origin, p.Faction, p.TemplateId, p.Money, true, null, null, [], null, Ground(_world, p.Position), imprisoned: p.Imprisoned,
                     dead: p.Dead, intact: p.IntactFlag, missionTown: p.Target);
+                written.Record.Bools["never been activated"] = true;
+                written.Record.Ints["squad index"] = -1;
+                written.CharCount = p.Size;
             }
         }
 
@@ -1775,21 +1801,27 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The roaming platoons' positions and AI packages (<c>currentPackage</c>, docs/formats/save.md PLATOON) into their PLATOON records.
+    /// The roaming platoons' positions and AI packages (<c>currentPackage</c>, docs/formats/save.md PLATOON) into their PLATOON records. A
+    /// characterless one (a stand-in the game had not made) that has left the world loses its record, as a despawned save platoon does.
     /// </summary>
-    static void WriteRoaming(SaveGame game, World world, LoadedSave loaded)
+    static void WriteRoaming(SaveBuilder builder, World world, LoadedSave loaded)
     {
         foreach (var (id, name) in loaded.RoamingPlatoons)
         {
-            if (world.Platoons.Find(id) is not { } p) continue;
-
-            var platoon = game.Platoons.FirstOrDefault(x => x.Name == name);
+            var platoon = builder.Game.Platoons.FirstOrDefault(x => x.Name == name);
             if (platoon is null) continue;
+
+            if (world.Platoons.Find(id) is not { } p)
+            {
+                if (!platoon.IsLoaded && platoon.Characters.Count == 0) builder.RemovePlatoon(platoon);
+                continue;
+            }
 
             var at = platoon.Position;
             platoon.Position = new Vector3(p.Position.X, at.Y, p.Position.Y);
-            if (p.Package is { } package) platoon.Record.Strings["currentPackage"] = package;
-
+            // One the game has not made yet has run no package (FUN_140372ef0 writes the active platoon's).
+            bool unmade = platoon.Record.Bools.GetValueOrDefault("never been activated");
+            if (p.Package is { } package && !unmade) platoon.Record.Strings["currentPackage"] = package;
         }
     }
 

@@ -799,6 +799,9 @@ towns, hunts after story kills, visits, ally help; chains via victory/loss trigg
   and again by the record reader (**Observed**). Appended lists (`squads to use`, `special leader`, victory/loss triggers) thus count an
   ancestor's entries twice (double weight); AI packages and `trigger player ally` are inherited (the child wins where set); `world state`
   merges by query. Own-record only: scalars and bools, ranges, chance, `key`, `num forces`, `faction override`, speeds, `dialog announcement`.
+- `display name` names the campaign: {1} of every campaign message below and its Upcoming Events line read it through CampaignInstance slot 8
+  (`FUN_1409d4af0`, called by `FUN_1409c9830` and `FUN_1409c70f0`); unset, it is "" (the string map's lookup inserts an empty value), never the record
+  name (**Verified** by decompile).
 
 **Roll** (`FUN_1409cb310`): each run updates every active campaign, then the requests, then, when the clock passes `updatetime`, sets it
 to now + 6 h and, only if the faction has no active campaign and no pending request, rolls (**Verified** +6; gate **Observed**).
@@ -865,7 +868,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   earlier "an empty outpost falls" reading was this).
 - Redirect (`FUN_1409d62f0`, **Verified** by decompile): when the target town no longer resolves, or its faction is the player's and slot 70 is false (the player has left it),
   a timer (+0xf0, started the first time this is found, restarted after each look) lets the war manager look for a new target every 0.2 h with the campaign's target rule
-  (`CampaignData::vfunc_0`, [above](#campaigns)); a different town found replaces the target ("{1} has redirected to {2}", {1} from `FUN_1409d3fe0` read as the campaign's name (**Observed**), {2} the town) and the home stays. None found keeps the old one. Meitou:
+  (`CampaignData::vfunc_0`, [above](#campaigns)); a different town found replaces the target ("{1} has redirected to {2}", {1} the campaign's `display name`, {2} the town) and the home stays. None found keeps the old one. Meitou:
   `PopulationCampaigns.Redirect` (no look for a campaign with no target faction, an engine choice).
 - Packages: phase 0 `pt1 AI`, 1 `pt2 AI`, 2 `retreat AI`; the leader platoon uses `... leader`, others `... others` (else the leader's).
   Installed (`FUN_140272570`, **Verified**) at the platoon's next AI update: when the phase's package differs from the blackboard's override

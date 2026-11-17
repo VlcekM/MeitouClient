@@ -580,13 +580,7 @@ public static class SaveLoader
 
         var sp = SavedOf(platoon, context, unmade, hasCharacters, travels);
 
-        ulong key = (modSpawn ? ModPlatoonSave.Key(platoon.Record) : null) ?? Rng.Mix(Rng.StableHash(platoon.Name));
-        int size = Math.Max(platoon.CharCount, platoon.Characters.Count);
-
-        // A campaign's or a code mod's stand-in with no characters is made from its template: the plan gives its size (the men its campaign
-        // counts).
-        if (size == 0 && (campaign || modSpawn) && data.Db.Find(platoon.SquadTemplate) is { } sizeRecord && SquadFactory.IsTemplate(sizeRecord))
-            size = SquadFactory.Plan(data.Db, SquadTemplate.From(sizeRecord), 1, world.Seed, key, data.States).TotalMembers;
+        var (key, size) = SquadOf(world, platoon, data, campaign || modSpawn);
 
         var p = new Platoon
         {
@@ -611,6 +605,23 @@ public static class SaveLoader
             ModTag = ModPlatoonSave.Tag(platoon.Record),
         };
         Register(world, platoon, loaded, context, p, sp, unmade, travels);
+    }
+
+    /// <summary>
+    /// A platoon's member key (a mod spawn's saved one, else one of its name) and size: its <c>char count</c> or characters, which for a
+    /// never-activated platoon is the size the save gave it. A campaign's or a code mod's stand-in (<paramref name="standIn"/>) an older Meitou
+    /// save wrote with no count is planned from its template with the live world states, as the population plans it when it loads.
+    /// </summary>
+    static (ulong Key, int Size) SquadOf(World world, SavePlatoon platoon, PopulationData data, bool standIn)
+    {
+        var record = platoon.Record;
+        ulong key = (ModPlatoonSave.Spawned(record) ? ModPlatoonSave.Key(record) : null) ?? Rng.Mix(Rng.StableHash(platoon.Name));
+        int size = Math.Max(platoon.CharCount, platoon.Characters.Count);
+        if (size > 0 || !standIn) return (key, size);
+        if (data.Db.Find(platoon.SquadTemplate) is not { } template || !SquadFactory.IsTemplate(template)) return (key, 0);
+
+        var states = world.SystemOf<PopulationSystem>()?.States ?? data.States;
+        return (key, SquadFactory.Plan(data.Db, SquadTemplate.From(template), 1, world.Seed, key, states).TotalMembers);
     }
 
     /// <summary>

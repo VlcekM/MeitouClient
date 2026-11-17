@@ -403,7 +403,7 @@ AI_PACKAGE id, "" none), `jobhr` (float, the game hours it ends at: the start ti
 "" the template's), read and written by `FUN_140272c20` / `FUN_14026c2d0` (**Observed**). The running package writes and reads its own handles on the same record: `mission target` (whom the contract is aimed at, a bodyguard's employer), `mission town`, `mission employer` (`FUN_140269640` / `FUN_140269790`, package vfuncs +0x20 / +0x28, **Verified**); Meitou keeps `mission target` (a headless capture of a bodyguard contract reads back to the employer, **Observed**) and a bodyguard contract's
 `mission town` (the player town nearest the squad when hired, `Contract_HiredAlly`'s start `FUN_140289490`, **Verified**; written while the
 contract runs, cleared once a contract the record held has ended, else left as read; a headless hire, save and load reads it back,
-**Observed**), not `mission employer`. Code-mod keys (engine keys, each written only when set; the original reads keys by name and ignores them, [modding](../modding.md#registration-surface)): `meitou mod spawn` (bool, `ModPlatoonSave`: a `SpawnPlatoon` platoon, written as a characterless stand-in also before it first loads and loaded as a roaming one whatever its template, its size planned from the template as a campaign stand-in's) with `meitou mod key` (string, its member key in hex, so it is planned again as the same squad), `meitou mod tag` (string, `Platoon.ModTag`) and `meitou any range` (bool, `AiSave`, with a contract: `StartContract.AnyRange`). **Observed** (headless load of saves 1, 2,
+**Observed**), not `mission employer`. Code-mod keys (engine keys, each written only when set; the original reads keys by name and ignores them, [modding](../modding.md#registration-surface)): `meitou mod spawn` (bool, `ModPlatoonSave`: a `SpawnPlatoon` platoon, written as a characterless stand-in also before it first loads and loaded as a roaming one whatever its template, its size kept as a campaign stand-in's) with `meitou mod key` (string, its member key in hex, so it is planned again as the same squad), `meitou mod tag` (string, `Platoon.ModTag`) and `meitou any range` (bool, `AiSave`, with a contract: `StartContract.AnyRange`). **Observed** (headless load of saves 1, 2,
 wade): NPCs within 5 units of their saved positions (save 2: 4 of 107 differ in Y only, flat test ground); a Meitou save → load restores them
 exactly with no fresh squads for save 2 and a new game (with town buildings: 36 NPCs after two save → load cycles for a new game at The Hub; saves 1, 2, 3, wade keep
 86, 116, 18, 114). A pinned platoon is homed in the building its `homebuilding` handle names (state `<id>-S23`
@@ -706,11 +706,23 @@ resolves. Missing keys read as 0 / "" / false (**Observed**).
 every `fwc id` and all 77 `poss time` are 0 (no campaign ever started; no save has a player outpost, which rolls need). Each faction's
 `poss` list is its merged FACTION `campaigns` list in order (103 of 103). `updatetime` lies in (clock, clock + 6], spread over about
 0.6 h (all 40 in the two day-1 saves). Meitou's `SaveBuilder` writes `updatetime` 40 and zero counts, as a new game; a captured
-world writes its war managers over the loaded state (unknown keys kept, numbered keys past the new counts removed), and a campaign squad
-never made is written as a PLATOON with content file `platoon/` (no file) so its `p<i>` handle resolves. Meitou also writes floats
+world writes its war managers over the loaded state (unknown keys kept, numbered keys past the new counts removed). Meitou also writes floats
 `meitou phase start c<i>`, `meitou fight start c<i>`, `meitou arrived c<i>`, `meitou announced c<i>` (absolute game hours; absent:
 not started) and, per campaign platoon, `meitou carry start p<i>` (beside `p<i>`; a cannibal assault's carrier stamp), and reads them back (a missing phase start is the load's hour, as the original; the
 older campaign-wide `meitou carry start c<i>` is read onto each platoon and dropped on the next write). **Observed** (headless, real data): the four campaign floats come back equal.
+
+Campaign platoons the game has not made yet: the original's saver (`FUN_140372ef0`) writes a platoon that was never active with no file (content
+file `platoon/`), `never been activated` and its size as `char count`, and every platoon its faction's war manager holds with bool `campaign` true; its
+platoon load (`FUN_1407f85f0`) files a `campaign` platoon as a kept one without its keep test (`FUN_1407ec570`: persistent, or held by a campaign
+not ended) (**Verified** by code, and in an original 1.0.68 save with 10 running campaigns: all 11 campaign platoons have `campaign` true; the 6 never
+active ones have no file, `never been activated` true, `char count` 5-26, `money` 0, `squad index` -1, `sqt` 2, `persistent` false and an empty
+`currentPackage`). Meitou writes its campaign and code-mod stand-ins (squads not made yet) that way, with their planned size,
+and reads the size back as the men the campaign counts; a stand-in an older Meitou save wrote with `char count` 0 is planned again from its template with
+the live world states. Once made, the squad is written into that same record (its file given, `never been activated` false), as the original keeps
+the platoon; one that has left the world unmade loses its record, as a despawned save platoon does. The squad is made by rolling its template again, as the original makes a never-activated
+platoon: `FUN_1404ffad0` hands the platoon to the squad spawner `FUN_140583a10`, which rolls the template's `squad`, `squad2` and `choosefrom list`
+entries and never reads `char count` (**Verified** by decompile), so the made squad's size can differ from the count (19 then 9 men in the probe). **Observed** (headless `probe wars`, the save above, #861): a Skin Bandits raid started off screen keeps its 19 men through a save and load,
+where before it came back with 0 (its template's world-state gate was tested against no states), and once made and saved again it has one record.
 
 Campaign platoons in a game save need not have a placed `basetown`: in the owner's modded day-397 save, a cannibal raid's platoon has a nest `hometown`
 and no file, and a nomad trader's has an empty `basetown` and one character (**Observed**). Meitou loads every platoon a `p<i>` names as its campaign's travelling
