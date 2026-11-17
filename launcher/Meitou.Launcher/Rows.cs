@@ -129,14 +129,16 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin and a suggested code mod, an update since the cover was matched,
-    /// its dependencies, its game version, why it will not load and the mods it blanks.
+    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin, its file rebinds and sound banks and a suggested code mod, an
+    /// update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
     {
         CoveredNote,
         Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
         Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
+        Mod.ReKenshi is { FileRebinds.Count: > 0 } ? LauncherText.Translate("RE_Kenshi file rebinds: applied to the map files") : null,
+        Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: not loaded in Meitou") : null,
         SuggestionNote,
         UpdatedNote,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
@@ -215,9 +217,14 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     }
 
     /// <summary>
-    /// Whether the row shows its notes (a code mod, a native plugin, a covered mod or a mod that blanks others).
+    /// Whether the row shows its notes (a code mod, RE_Kenshi entries, a covered mod or a mod that blanks others).
     /// </summary>
-    public bool HasNotes => Mod.HasNativePlugin || Mod.HasCode || BuiltIn is not null || Suggestion is not null || Blanks.Count > 0;
+    public bool HasNotes =>
+        Mod.ReKenshi is { HasPlugins: true } or { FileRebinds.Count: > 0 } or { SoundBanks.Count: > 0 }
+        || Mod.HasCode
+        || BuiltIn is not null
+        || Suggestion is not null
+        || Blanks.Count > 0;
 
     /// <summary>
     /// Whether the mod is ticked; a change raises <see cref="PropertyChanged"/>.

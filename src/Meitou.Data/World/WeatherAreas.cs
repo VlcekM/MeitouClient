@@ -71,7 +71,7 @@ public sealed class WeatherAreas
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
         FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps")
-            ?? Path.Combine(install.DataDirectory, RelativePath)));
+            ?? ReKenshiRebinds.DataFile(install, RelativePath)));
 
     /// <summary>
     /// The map of a TGA file's bytes.

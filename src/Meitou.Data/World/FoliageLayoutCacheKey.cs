@@ -88,8 +88,8 @@ public static class FoliageLayoutCacheKey
     /// </summary>
     static void AppendFiles(StringBuilder text, GameInstall install)
     {
-        AppendFile(text, Path.Combine(install.DataDirectory, TerrainHeightmap.RelativePath), "heightmap");
-        AppendFile(text, Path.Combine(install.DataDirectory, BlendInfoFile.RelativePath), "blend");
+        AppendFile(text, TerrainHeightmap.PathOf(install), "heightmap");
+        AppendFile(text, BlendInfoFile.PathOf(install), "blend");
         AppendFile(text, TerrainMaps.BiomeMapPath(install), "biomemap");
 
         // The tiles the placer reads (a mod's copy where one is enabled), so a mod's map does not reuse a plain map's layout.

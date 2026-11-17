@@ -887,11 +887,11 @@ public sealed partial class MainWindow : Window
             {
                 var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
 
-                // The rows show each mod's author, plugin note and code-mod dependencies: read them here too, not on the UI thread.
+                // The rows show each mod's author, RE_Kenshi notes and code-mod dependencies: read them here too, not on the UI thread.
                 foreach (var entry in order)
                 {
                     _ = entry.Mod.Header;
-                    _ = entry.Mod.HasNativePlugin;
+                    _ = entry.Mod.ReKenshi;
                 }
                 return order.Select(e => (e, CodeModDependencies.ReadEntry(e.Mod, e.Enabled))).ToList();
             });

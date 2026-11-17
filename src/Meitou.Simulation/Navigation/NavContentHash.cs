@@ -50,8 +50,8 @@ internal sealed class NavContentHash
     /// </summary>
     void AddMapFiles(GameInstall install)
     {
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath })
-            Stamp(Path.Combine(install.DataDirectory, rel));
+        foreach (var path in new[] { NavSeeds.PathOf(install), TerrainHeightmap.PathOf(install), BlendInfoFile.PathOf(install) })
+            Stamp(path);
         Stamp(TerrainMaps.BiomeMapPath(install));
         Stamp(MapFeatureFile.PathOf(install));
 

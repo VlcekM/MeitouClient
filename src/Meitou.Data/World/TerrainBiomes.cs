@@ -116,9 +116,14 @@ public sealed class BlendInfoFile
     }
 
     /// <summary>
-    /// Reads the install's <see cref="RelativePath"/>.
+    /// Reads the install's <see cref="RelativePath"/>, or the file an enabled mod rebinds it to (<see cref="PathOf"/>).
     /// </summary>
-    public static BlendInfoFile Open(GameInstall install) => Read(File.ReadAllBytes(Path.Combine(install.DataDirectory, RelativePath)));
+    public static BlendInfoFile Open(GameInstall install) => Read(File.ReadAllBytes(PathOf(install)));
+
+    /// <summary>
+    /// The blend file the game reads: <see cref="RelativePath"/>, or an enabled mod's rebind of it (<see cref="ReKenshiRebinds"/>).
+    /// </summary>
+    public static string PathOf(GameInstall install) => ReKenshiRebinds.DataFile(install, RelativePath);
 
     /// <summary>
     /// Parses a blend info file: the magic, the cell count and the quadtree resolution (a power of two), the slot table, then, when present, the
@@ -368,13 +373,14 @@ public static class TerrainMaps
 
     /// <summary>
     /// <c>new_overlay</c>: R and G grass (the shader takes the larger), B dirt, A road. <c>colour</c>: RGB tint, A multiplies gloss. A
-    /// <c>new_overlay</c> tile is an <see cref="Overlaymap"/> (a mod's copy replaces it); a <c>colour</c> tile is read from the install.
+    /// <c>new_overlay</c> tile is an <see cref="Overlaymap"/> (a mod's copy replaces it); a <c>colour</c> tile is read from the install (or an
+    /// enabled mod's rebind of it, <see cref="ReKenshiRebinds"/>).
     /// </summary>
     public static string OverlayTile(GameInstall install, string kind, int x, int z)
     {
         string name = $"{kind}.{x}.{z}.png";
         string installed = Path.Combine(LandDirectory, "overlaymaps", name);
-        return kind == OverlayKind ? Overlaymap(install, name, installed) : GameFiles.Resolve(Path.Combine(install.DataDirectory, installed));
+        return kind == OverlayKind ? Overlaymap(install, name, installed) : ReKenshiRebinds.DataFile(install, installed);
     }
 
     /// <summary>
