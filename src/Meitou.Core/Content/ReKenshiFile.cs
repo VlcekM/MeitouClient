@@ -25,6 +25,76 @@ public sealed class ReKenshiFile
     public IReadOnlyList<string> SoundBanks { get; private init; } = [];
 
     /// <summary>
+    /// The enabled mods found on disk, in load order (RE_Kenshi walks the active mods).
+    /// </summary>
+    public static List<ModInfo> EnabledMods(GameInstall install)
+    {
+        var mods = ModList.Discover(install).ToDictionary(m => m.Name, StringComparer.Ordinal);
+        return
+        [
+            .. ModList.ReadEnabled(install)
+                .Select(n => mods.GetValueOrDefault(n))
+                .OfType<ModInfo>(),
+        ];
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> with its first <c>$(modroot "Name")</c> replaced by the folder of the enabled mod of that name (RE_Kenshi's
+    /// <c>ParsePath</c>); a name no enabled mod has stays as written, and so names no file.
+    /// </summary>
+    public static string ExpandModRoot(string path, IReadOnlyList<ModInfo> enabled)
+    {
+        const string open = "$(modroot \"";
+        int at = path.IndexOf(open, StringComparison.Ordinal);
+        int end = at < 0 ? -1 : path.IndexOf("\")", StringComparison.Ordinal);
+        if (end < at + open.Length) return path;
+
+        string name = path[(at + open.Length)..end];
+        return enabled.FirstOrDefault(m => m.Name == name) is { } mod ? path[..at] + mod.Folder + path[(end + 2)..] : path;
+    }
+
+    /// <summary>
+    /// The enabled mods' sound banks in order (mod by mod in load order, each file's list in its order), as RE_Kenshi finds each: under the
+    /// install's <c>data/audio/</c> when that file exists, else the path as written (after <see cref="ExpandModRoot"/>), from the install root.
+    /// </summary>
+    public static List<string> ModSoundBanks(GameInstall install)
+    {
+        var enabled = EnabledMods(install);
+        var audio = Path.Combine(install.DataDirectory, "audio");
+        var banks = new List<string>();
+        foreach (var mod in enabled)
+        {
+            if (mod.ReKenshi is not { } file) continue;
+
+            foreach (var entry in file.SoundBanks)
+            {
+                if (BankFile(install, audio, ExpandModRoot(entry, enabled)) is { } bank) banks.Add(bank);
+                else Console.Error.WriteLine($"mods      {mod.Name}: RE_Kenshi sound bank {entry} names no file; skipped");
+            }
+        }
+
+        return banks;
+    }
+
+    /// <summary>
+    /// The bank file a <c>SoundBanks</c> entry names (<c>\</c> read as a separator on every system): under <paramref name="audio"/> when that
+    /// file exists, else the path from the install root; null when it is no path (RE_Kenshi then loses that bank alone).
+    /// </summary>
+    static string? BankFile(GameInstall install, string audio, string entry)
+    {
+        string path = entry.Replace('\\', '/');
+        try
+        {
+            string underAudio = Path.Combine(audio, path);
+            return GameFiles.Resolve(File.Exists(underAudio) ? underAudio : Path.GetFullPath(path, install.Root));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The file in <paramref name="modFolder"/>, or null when there is none or it is not a JSON object (RE_Kenshi logs a file it cannot parse
     /// and takes nothing from it; so does this, on the error stream).
     /// </summary>

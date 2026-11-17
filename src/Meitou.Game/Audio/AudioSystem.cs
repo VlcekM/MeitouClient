@@ -138,7 +138,7 @@ public sealed class AudioSystem : IDisposable
             error = $"no Wwise codebook library in {exe} ({WwiseCodebookLibrary.Diagnose(exe)})";
             return null;
         }
-        var player = new WwisePlayer(library, Path.Combine(install.DataDirectory, "audio"), SampleRate);
+        var player = new WwisePlayer(library, Path.Combine(install.DataDirectory, "audio"), SampleRate, ReKenshiFile.ModSoundBanks(install));
         var music = new MusicDirector(player, settings.MusicFrequency, settings.Music);
         var output = AudioOutput.TryOpen(SampleRate, player.Mix, out error);
         if (output is null)

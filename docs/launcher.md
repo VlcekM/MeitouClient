@@ -290,7 +290,7 @@ interpolated string, which no translation could match.
   cache; a cold start with a long list is not measured), and the list is walked again on every change.
 - A mod whose `RE_Kenshi.json` names DLLs (`Plugins`, `PreloadPlugins`) is marked as a plugin mod whose DLLs Meitou ignores
   ([RE_Kenshi](formats/rekenshi.md)), unless it also has `meitou.json`: then only the code-mod note shows. One with `FileRebinds` says
-  they are applied to the map files, one with `SoundBanks` that they are not loaded ([data entries](formats/rekenshi.md#data-entries)).
+  they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became, instead of the plugin or code-mod note; a covered code mod adds that it is not run.
 - An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or

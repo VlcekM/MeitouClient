@@ -72,7 +72,7 @@ public sealed class ReKenshiRebinds
     static ReKenshiRebinds Load(GameInstall install)
     {
         var rebinds = new ReKenshiRebinds(install);
-        var enabled = EnabledMods(install);
+        var enabled = ReKenshiFile.EnabledMods(install);
         foreach (var mod in enabled)
         {
             if (ReKenshiFile.TryRead(mod.Folder) is not { } file) continue;
@@ -89,38 +89,14 @@ public sealed class ReKenshiRebinds
     }
 
     /// <summary>
-    /// The enabled mods found on disk, in load order (RE_Kenshi walks the active mods).
-    /// </summary>
-    static List<ModInfo> EnabledMods(GameInstall install)
-    {
-        var mods = ModList.Discover(install).ToDictionary(m => m.Name, StringComparer.Ordinal);
-        return
-        [
-            .. ModList.ReadEnabled(install)
-                .Select(n => mods.GetValueOrDefault(n))
-                .OfType<ModInfo>(),
-        ];
-    }
-
-    /// <summary>
-    /// The file a rebind's target names: <c>HIDE</c> a path where nothing is; <c>$(modroot "Name")</c> replaced by that enabled mod's folder (a
-    /// name no enabled mod has stays as written, as in RE_Kenshi, and so names no file); a relative path taken from the install root, the
-    /// original's working folder, <c>\</c> read as a separator on every system; null when it is no path.
+    /// The file a rebind's target names: <c>HIDE</c> a path where nothing is; else <see cref="ReKenshiFile.ExpandModRoot"/>, a relative path
+    /// taken from the install root, the original's working folder, <c>\</c> read as a separator on every system; null when it is no path.
     /// </summary>
     string? Target(string to, IReadOnlyList<ModInfo> enabled)
     {
         if (to == Hide) return Path.Combine(_install.Root, HiddenFolder, "file");
 
-        const string open = "$(modroot \"";
-        int at = to.IndexOf(open, StringComparison.Ordinal);
-        int end = at < 0 ? -1 : to.IndexOf("\")", at, StringComparison.Ordinal);
-        if (end >= 0)
-        {
-            string name = to[(at + open.Length)..end];
-            if (enabled.FirstOrDefault(m => m.Name == name) is { } mod) to = to[..at] + mod.Folder + to[(end + 2)..];
-        }
-
-        string path = to.Replace('\\', '/');
+        string path = ReKenshiFile.ExpandModRoot(to, enabled).Replace('\\', '/');
         try
         {
             return GameFiles.Resolve(Path.GetFullPath(path, _install.Root));

@@ -12,8 +12,8 @@ KenshiLib facade. The public wishlist of RE_Kenshi mods decides which plugins ge
 
 A mod's ordinary data and assets load through the normal readers either way.
 
-**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)); the `FileRebinds` data entry is applied
-([data entries](#data-entries)). Covered mods are one table,
+**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)); the `FileRebinds` and `SoundBanks` data
+entries are applied ([data entries](#data-entries)). Covered mods are one table,
 `CoveredMods` (Meitou.Core), read by the game and by the launcher's Mods page. Built-in mods (`BuiltInMods`,
 Meitou.Game): at start, each enabled mod the table names, by `.mod` name or code-mod id, that was not taken in before
 (`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. A covered code mod is not run (counted as
@@ -57,7 +57,7 @@ file calls), and a target that is no path loses only that rebind. A rebind appli
 found through a resource group (`GameResources.Find`); rebinds of other files are not applied. The navigation and foliage caches stamp
 the file read. **Observed:** Heightmap Fix (workshop 3426253797) rebinds `data\newland/land\fullmap.tif` to
 `$(modroot "Heightmap Fix")/fullmap.tif`; enabled, Meitou reads that file (the ground at x -97830, z 85590 stands at about 504 instead of
-2463). `SoundBanks` are not loaded; the launcher notes both entries.
+2463). `SoundBanks` load before the game's banks ([audio](../audio.md#mod-sound-banks)); the launcher notes both entries.
 
 The research behind not loading the DLLs (2026-10-11) follows. External findings are **Observed** in
 upstream source or documentation, not Verified by running plugins. Links track upstream branches and may

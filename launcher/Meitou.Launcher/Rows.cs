@@ -138,7 +138,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
         Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         Mod.ReKenshi is { FileRebinds.Count: > 0 } ? LauncherText.Translate("RE_Kenshi file rebinds: applied to the map files") : null,
-        Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: not loaded in Meitou") : null,
+        Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: loaded before the game's") : null,
         SuggestionNote,
         UpdatedNote,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,

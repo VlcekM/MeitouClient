@@ -100,7 +100,7 @@ sealed class Voice : IDisposable
         _toSkip = skipFrames;
         _limit = limitFrames;
         _position = startPhase;
-        this._pcm = pcm;
+        this._pcm = pcm ??= clip.Pcm;
         if (pcm is not null) _framesPerPlay = pcm.Length / clip.Channels;
         else
         {
@@ -342,9 +342,9 @@ sealed class Voice : IDisposable
 readonly record struct VoiceSend(float[] Buffer, float Left, float Right);
 
 /// <summary>
-/// A WEM converted to Ogg Vorbis, ready to play.
+/// A WEM ready to play: converted to Ogg Vorbis, or, for a PCM WEM (a mod's bank), its samples in <paramref name="Pcm"/> and no Ogg.
 /// </summary>
-sealed record MediaClip(uint Id, byte[] Ogg, int Channels, int SampleRate, int Frames);
+sealed record MediaClip(uint Id, byte[] Ogg, int Channels, int SampleRate, int Frames, float[]? Pcm = null);
 
 /// <summary>
 /// Short clips decoded once, their samples shared by every voice that plays them (docs/audio.md "Voice cap"): opening a Vorbis stream (its codebooks)
@@ -375,6 +375,7 @@ sealed class PcmCache
     /// </summary>
     public float[]? Get(MediaClip clip)
     {
+        if (clip.Pcm is not null) return clip.Pcm;
         if (_clips.TryGetValue(clip.Id, out var known)) return known;
         float[]? pcm = null;
         long estimate = (long)clip.Frames * clip.Channels * sizeof(float);
