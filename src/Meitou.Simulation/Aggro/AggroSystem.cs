@@ -1531,26 +1531,41 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// The tags of a sensed character (<c>FUN_1408580d0</c>, docs/game/perception.md "Sense tags"): KO when down or dead
     /// (<see cref="CharacterFacts.Down"/>), imprisoned, and ENEMY when the looker regards it an enemy (<see cref="Regards"/>; one with diplomatic
-    /// status NEUTRAL instead), else ALLY for its own or an allied faction, else NEUTRAL.
+    /// status NEUTRAL instead; the looker's own slave NEUTRAL too, <see cref="EnemyUnlessOwnSlave"/>), else ALLY for its own or an allied faction,
+    /// else NEUTRAL.
     /// </summary>
     static SenseTag TagOf(ref Scan s, ref SenseEntry e, int slot, CharacterCold c, Vector3 at)
     {
         var tags = SenseTag.None;
         if (CharacterFacts.Down(c) || c.Medical is { Dead: true }) tags |= SenseTag.Ko;
         if (c.IsImprisoned) tags |= SenseTag.Imprisoned;
-        if (Fighting(ref s, slot)) return tags | SenseTag.Enemy;
+        if (Fighting(ref s, slot)) return tags | EnemyUnlessOwnSlave(ref s, slot, c);
 
         // The rest (relations, disguise, squad memory, contracts, campaigns) is worked out again on the looker's full looks only (engine choice, for
-        // the look's cost; FullTags).
-        if (s.FullTags || e.Base == SenseTag.None)
+        // the look's cost; FullTags). An enemy since enslaved by the looker's faction is worked out at once (#904).
+        if (s.FullTags || e.Base == SenseTag.None || e.Base == SenseTag.Enemy && c.SlaveState == 1 && c.SlaveOwner == s.Faction)
         {
-            e.Base = Regards(ref s, slot, c, at, out bool diplomat) ? diplomat ? SenseTag.Neutral : SenseTag.Enemy
+            e.Base = Regards(ref s, slot, c, at, out bool diplomat) ? diplomat ? SenseTag.Neutral : EnemyUnlessOwnSlave(ref s, slot, c)
                 : c.Faction == s.Faction || s.Relations.Contains(c.Faction) && s.Relations.IsAlly(s.Faction, c.Faction)
                     ? SenseTag.Ally
                     : SenseTag.Neutral;
         }
 
         return tags | e.Base;
+    }
+
+    /// <summary>
+    /// The tag of a character the looker regards as an enemy (<c>FUN_1408580d0</c>, <b>Verified</b>): ENEMY, but NEUTRAL for a slave (state 1) its
+    /// faction owns (<c>FUN_14032e2a0</c>), whose TEMP_ENEMY tag the looker's squad then drops (<c>FUN_1406788d0</c>, <see cref="UntagEffect"/>), so
+    /// slavers no longer take the captives they enslaved after a fight for enemies (#904). The fight shortcut (<see cref="Fighting"/>) stands for
+    /// that tag. The original's other arm, an imprisoned enemy sensed NEUTRAL, is not taken: Meitou counts caged enemies (<c>CagedEnemies</c>).
+    /// </summary>
+    static SenseTag EnemyUnlessOwnSlave(ref Scan s, int slot, CharacterCold c)
+    {
+        if (c.SlaveState != 1 || c.SlaveOwner != s.Faction) return SenseTag.Enemy;
+
+        if (s.Squad >= 0) s.Effects?.Emit(s.Self, slot, UntagEffect, Dialogue.MemoryTag.TempEnemy);
+        return SenseTag.Neutral;
     }
 
     /// <summary>
@@ -2472,6 +2487,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public const int AssaultTargetEffect = 6;
 
     /// <summary>
+    /// The <see cref="Effect.Kind"/> of the perception update clearing a short-term tag on a sensed character in the looker's squad memory:
+    /// <c>Target</c> is the character, <c>Amount</c> the tag (<see cref="EnemyUnlessOwnSlave"/>).
+    /// </summary>
+    public const int UntagEffect = 7;
+
+    /// <summary>
     /// The dialogue event a sleeper says when it nearly wakes at a sneaking player (ALMOST_WOKE_UP, docs/game/dialogue.md).
     /// </summary>
     public const int AlmostWokeUpEvent = 47;
@@ -2536,6 +2557,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             case TagEffect:
                 Tag(world, e);
                 break;
+            case UntagEffect:
+                Untag(world, e);
+                break;
             case SightEffect:
                 TakeSighting(world, e);
                 break;
@@ -2580,6 +2604,15 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             memory.Flag(world, looker.SquadId, world.Characters.IdOf(e.Target), (int)e.Amount);
         }
+    }
+
+    /// <summary>
+    /// An <see cref="UntagEffect"/>: the looker's squad memory drops the short-term tag on the sensed character.
+    /// </summary>
+    void Untag(World world, in Effect e)
+    {
+        if (Memory is { } memory && world.Characters.Cold(e.Source) is { SquadId: >= 0 } looker)
+            memory.ClearShort(looker.SquadId, world.Characters.IdOf(e.Target), (int)e.Amount);
     }
 
     /// <summary>
