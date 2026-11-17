@@ -59,6 +59,26 @@ public static class ListTests
     }
 
     /// <summary>
+    /// The start of an order whose list B fails (the orders step's plan, <c>FUN_140510920</c> → <c>FUN_140510650</c>, docs/game/ai-tasks.md
+    /// "Precedence"): the first entry that fails (<see cref="RowStates.FirstUnmet"/>) has no provider in the character's repertoire
+    /// (<see cref="TaskDataTable.Providers"/>; restricted ones count, the orders step's search allows them), so the plan fails and the order stays
+    /// queued with that state's line (<see cref="StateFailureLines"/>, null: none). False when list B holds or a provider plans a step first, which
+    /// the act-out carries out (the walk, getting up, a follow row's fight, <see cref="OrderEntry.RowRuns"/>).
+    /// </summary>
+    public static bool OrderBlocked(World world, int slot, OrderEntry order, out string? line)
+    {
+        line = null;
+        var type = Saving.OrderSave.SavedRow(order.Row);
+        if (TaskDataTable.Of(type) is not { } row || RowStates.FirstUnmet(world, slot, row, Target(order)) is not { } unmet) return false;
+
+        int repertoire = Repertoire.Of(world, world.Characters.Cold(slot)!);
+        if (TaskDataTable.Providers(repertoire, unmet).Count > 0) return false;
+
+        line = StateFailureLines.Of(unmet.State);
+        return true;
+    }
+
+    /// <summary>
     /// The row target of an order.
     /// </summary>
     static RowTarget Target(OrderEntry order) => new(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);

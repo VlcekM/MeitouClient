@@ -284,15 +284,18 @@ public static class PlayerOrders
 
     /// <summary>
     /// Whether the order can start for the character now (a pure read; the M6 <c>World.CanOrder</c> rests on it): the row is in the character's
-    /// repertoire (<see cref="TaskStart.Eligible"/>), its owner's check, and a row needing no melee threat (<see cref="NeedsNoThreat"/>) has none
-    /// (<see cref="Threatened"/>).
+    /// repertoire (<see cref="TaskStart.Eligible"/>), its owner's check, a row needing no melee threat (<see cref="NeedsNoThreat"/>) has none
+    /// (<see cref="Threatened"/>), and no failing list B entry leaves its plan without a step (<see cref="ListTests.OrderBlocked"/>).
     /// </summary>
     public static OrderCheck CanRun(World world, int slot, OrderEntry order)
     {
         var cold = world.Characters.Cold(slot)!;
         if (!TaskStart.Eligible(world, cold, order.Row)) return OrderCheck.Blocked();
         var own = order.Owner.CanRun(world, slot, order);
-        return own.CanRun && Threatened(world, slot, order.Row) ? OrderCheck.Blocked() : own;
+        if (!own.CanRun) return own;
+        if (Threatened(world, slot, order.Row)) return OrderCheck.Blocked();
+
+        return ListTests.OrderBlocked(world, slot, order, out string? line) ? OrderCheck.Blocked(line is null ? null : Loc.Tr(line)) : own;
     }
 
     /// <summary>

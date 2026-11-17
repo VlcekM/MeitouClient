@@ -43,15 +43,21 @@ public static class RowStates
     /// Whether an entry of list B that is evaluated here fails, the walk's <c>isAtLocation</c> left out (the plan step's end of a running row,
     /// <see cref="ListTests.OrderNeedsFail"/>): one Meitou does not evaluate never ends it.
     /// </summary>
-    public static bool NeedFails(World world, int slot, TaskDataRow row, in RowTarget target)
+    public static bool NeedFails(World world, int slot, TaskDataRow row, in RowTarget target) => FirstUnmet(world, slot, row, target) is not null;
+
+    /// <summary>
+    /// The first entry of list B, in list order, that is evaluated here and fails, the walk's <c>isAtLocation</c> left out (the planner follows the
+    /// first unmet entry, <c>FUN_14051bae0</c>); null when none does.
+    /// </summary>
+    public static TaskCondition? FirstUnmet(World world, int slot, TaskDataRow row, in RowTarget target)
     {
         foreach (var c in row.Needs)
         {
             if (c.State == StateType.IsAtLocation) continue;
-            if (Holds(world, slot, c.State, target) is { } value && value != c.Holds) return true;
+            if (Holds(world, slot, c.State, target) is { } value && value != c.Holds) return c;
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>

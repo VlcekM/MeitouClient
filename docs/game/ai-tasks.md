@@ -1070,7 +1070,11 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     11:00 and lay on in bed to the hold's end at 11.6 h.
 - **Sources**, in order; the first whose pick has a plan above 0 runs:
   1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A holds) or its desire x finder is 0 or less; then planned with the search flag
-     ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on.
+     ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on. The text is the
+     line of the row's first list B entry that does not hold (`FUN_140610020`; each state's line is the fourth argument of its registration `FUN_140610170` in
+     `FUN_140610250`, **Verified**: empty for 7 and 16, "It needs electricity." for 93, "My arm is messed up too badly to lift anything." for 80, Meitou
+     `StateFailureLines`). Meitou (`ListTests.OrderBlocked`): an order whose first failing evaluated entry has no provider waits so; one with a provider starts,
+     its act-out doing the step (a follow order whose target is threatened fights the attacker first, then follows).
   2. Committed mode (the update's argument while a committing current goal's commitment runs; off without a current goal) with the running goal's priority (+0x20c) above 2: stop, the goal keeps its plan.
   3. The entries of a second list (+0x70, the one-shot order list, emptied with the queue by `FUN_1405074a0`) become candidates, scored by `FUN_14050df10`. **What fills it** (**Verified**, the writers of the add
      function `FUN_1405086d0`): the entries that are not perma-jobs, i.e. added without the permanent flag or whose TaskData row has kind +4 = 0, from the order giver `FUN_1405c8da0` (Character-side order

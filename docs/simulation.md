@@ -224,7 +224,10 @@ owning `IOrderOwner`, target, site, point, owner detail, and `TaskPoint`: the po
 building's on a quick right click, `OrderCommand.Clicked`, [orders' points](game/ai-tasks.md#slave-work-shout-and-capture)): the front is the order in hand.
 Every order command (`OrderCommand`) goes through `PlayerOrders.Give`: without `Queued`
 (Shift) the queue is cleared first, as `addOrder`; the order is queued; at the front it starts through its owner when `PlayerOrders.CanRun` says so (the row's repertoire, then
-the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, or `Gone` when its target or site no longer fits the verb).
+the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, or `Gone` when its target or site no longer fits the verb; then the plan's
+first step, `ListTests.OrderBlocked`: the first list B entry `RowStates` evaluates that fails (the walk left out) with no provider in the character's
+repertoire blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character waits silently until it is up; one with a provider is a step
+the act-out carries out first, the row's list B tested once it held: `OrderEntry.RowRuns`).
 - A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it.
   A move (29) or follow given to a character out cold is blocked and waits until it wakes (engine choice: the chooser does not run while the character is down).
 - `PlayerOrders.Runs`: the front started and its task's provenance is an order's that runs the task (a move also needs `OrderMove`) and the handler is not `Done`. Lock work and item or
