@@ -835,9 +835,9 @@ public class AggroTests
 
     /// <summary>
     /// Self preservation competes with the other priority-3 goals by its desire (<c>FUN_140599d20</c>: 0.7 with an attacker within 181.7, 1 within 40): a
-    /// member following its leader at weight 1.5 (desire 0.5, x1.25 as the current goal) keeps following while the bandit that attacks it runs in from
-    /// 120, and fights it once the bandit is within 40. Catches a self-defence at any distance whatever the other goals, and one that never outranks a
-    /// goal above 0.7.
+    /// member following its leader at weight 1.2 (desire 0.5, x1.25 as the current goal and x1.25 again as a never-finishing one under 1,
+    /// <c>FUN_14050df10</c>: 0.94) keeps following while the bandit that attacks it runs in from 120, and fights it once the bandit is within 40.
+    /// Catches a self-defence at any distance whatever the other goals, and one that never outranks a goal above 0.7.
     /// </summary>
     [Fact]
     public void A_higher_goal_yields_to_self_preservation_only_once_the_attacker_is_within_40()
@@ -847,7 +847,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 1.5f, target: TaskTargetType.Leader)]);
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 1.2f, target: TaskTargetType.Leader)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
         a.World.RunTicks(15);

@@ -196,7 +196,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   provided by `Task_OpenDoor` 72 / 74, the task that opens it ([ai-tasks](ai-tasks.md)). Nothing closes a door behind a walker: only the lock tasks list a closed door (`!52`), and no
   AI package lists tasks 73/75 (**Observed**: TaskData and package census).
 - **Gate guards open their gate**: row 180 Man the gate (desire AI slot 19 `FUN_140641550`, constant 1; AI_TASK `targeting` 4 HOME_GATE)
-  lists 91 and 52 DOOR_IS_OPEN in list B (**Verified**, `FUN_140319a60`). 52 (`FUN_1405a3ad0`, **Verified**) takes a building target's door
+  lists 91 and 52 DOOR_IS_OPEN in list B (**Verified**, `FUN_140319a60`); its registration also sets the never-finished byte +0x15 ([desire and commitment](ai-tasks.md#desire-and-commitment)). 52 (`FUN_1405a3ad0`, **Verified**) takes a building target's door
   (vfunc `0x3e0`) and holds when it is open (1), or opening (2) with `doa` above 0.8. So the planner gives the guard on that goal 72 Opening door
   and, for a locked gate, 78 Unlocking door first (B 70 isObjectMine, `FUN_1405a3c10`, whose last test is the object's faction against the
   character's) (**Observed**, the planner's chain as for 81): a gate the level data leaves closed and locked (29 town gates, e.g. Mud Town's

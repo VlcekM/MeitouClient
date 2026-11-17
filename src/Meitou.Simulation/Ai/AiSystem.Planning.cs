@@ -177,7 +177,8 @@ public sealed partial class AiSystem
 
             var target = row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) ? Find(row, default) : default;
             if (row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) && target.IsNone) return false;
-            if (row.Done.Length > 0 && Array.TrueForAll(row.Done, c => Holds(c, target))) return false;
+            // A goal whose list A holds is done (FUN_14060f570), unless its task never finishes (TaskData +0x15: slot 4 false, FUN_14050df10).
+            if (!row.Is(TaskDataFlags.NeverDone) && row.Done.Length > 0 && Array.TrueForAll(row.Done, c => Holds(c, target))) return false;
             if (TaskPlanner.Local.Plan(row, desire, target, this, _mind.Plan, _scratch) <= 0) return false;
             if (_scratch[0].Type != type && !Carried(_scratch[0].Type)) return false;
             _mind.Plan.Clear();

@@ -828,9 +828,22 @@ vfunc 5 `FUN_14050caf0`). TaskData fields: +0x108 desire (a member function, nea
 by it when the row has an effect, `FUN_14060fd80`);
 +0x18 / +0x1c commitment minimum / random range in game hours; +0x20 commits; +0x34 crowd factor (default 1); +0x3c is read by the senses
 (`FUN_1408529c0`).
++0x15 never finished (**Verified**, the registration's `*(short *)(row + 0x14) = 0x100` or `0x101`, the latter also setting +0x14): rows 20, 22, 25, 26, 31, 36, 37, 38, 39, 44, 47, 51, 60,
+62, 97, 141, 146, 147, 149, 150, 153, 157, 165, 171, 175, 180, 222, 234, 236, 239, 249, 253, 258, 261, 268, 269, 289. The factory (`FUN_14032ebd0`) acts out 26, 147 and 165 with
+`Task_Loot_Order`, `Task_Stumble` and `Task_TownStalker`, whose slot 4 does not read the byte; the other 34 with classes whose slot 4 is the base one (`Task_Blank` by default)
+(**Verified**, the factory's cases and the vtables; Meitou `TaskDataFlags.NeverDone` on those 34). It is read by the
+base `Tasker`'s slot 4 (`0x20`, `FUN_14032dee0`: true when +0x15 is clear) and the move and door tasks' (`FUN_140332130`, which also needs their byte `+0x94`); 15 other task
+classes override the slot with tests of their own (e.g. `Task_Loot_AI` `+0x78`, `Task_Loot_Order` `+0x7c`) and ignore +0x15 (**Observed**: these two functions are the only
+byte compares at `+0x15` in the exe's code). Slot 4 true gates the list-A tests: the scorer drops a candidate whose list A holds
+(`FUN_14060f570`, `FUN_14050c8e0`), the plan step ends a running task whose list A holds (`FUN_140513f50`), and the job and order passes (`FUN_14050e5b0`, `FUN_140510920`)
+do the same; a row with an empty list A and no effect never holds there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes none of them.
 
 - Score = desire x goal weight x crowd^n; x1.25 for the current task. For a committing current task the
-  score is at least 0.4 until the commitment ends and at most 0.05 after it, so the character moves on.
+  score is at least 0.4 until the commitment ends and at most 0.05 after it, so the character moves on. Then, while the running task (the plan's current step) answers
+  slot 4 false and the score is below 1 (`DAT_14167c308`), x1.25 again (`DAT_14168ba14`; **Verified**, `FUN_14050df10`). Man the gate at its desire 1 and the Gate guard packages'
+  weight 1 (val2 0, **Verified** data) scores 1.25 as the current goal, so this never applies to it in the base data. Meitou (`AiSystem.Score`; `DecisionSystem.PickGoal` for the player's characters): the second x1.25 for a
+  running step of a +0x15 row, and such a row's goal is never dropped as done (`PlanContext`). The job and order passes have no x1.25 at all (their keys are list places,
+  `FUN_14050e5b0`, `FUN_140510920`). The move, door and other classes' own slot 4 tests are not modelled: ours drop a goal whose list A holds and raise no running step of theirs.
 - Commitment: when a committing task becomes current, end = now + min + rand x range. A candidate that is not the current task has its target cleared
   before it is chosen, so a newly chosen goal gets a fresh target from its finder.
 - Desires (`AI` vtable slots): 19 = 1, 39 = 0.1 (Idleness), 40 = 0.25 (Patrolling, Patrolling town), 41 = 0.5 (Stand at node, Shopkeeper, Static guard,

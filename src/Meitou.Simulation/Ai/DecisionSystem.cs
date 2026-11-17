@@ -361,8 +361,8 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Step 4: the score is desire x weight, x1.25 for the goal running now; the best wins and a tie goes to the later-listed (<c>FUN_14050df10</c>'s
-    /// raised keys).
+    /// Step 4: the score is desire x weight, x1.25 for the goal running now and again below 1 while its task never finishes; the best wins and a
+    /// tie goes to the later-listed (<c>FUN_14050df10</c>'s raised keys).
     /// </summary>
     bool PickGoal(World world, int slot, int from, int end, ref string winner)
     {
@@ -381,6 +381,7 @@ public sealed class DecisionSystem
             }
 
             float score = source.Desire(world, slot) * source.Weight * (check.Running ? 1.25f : 1);
+            if (check.Running && score < 1 && NeverFinishes(world, slot)) score *= 1.25f;
             Note(source, score > 0 ? $"score {score:0.###}{(check.Running ? " (running)" : "")}" : "desire 0");
             if (score > 0 && score >= bestScore) (best, bestScore, bestRuns) = (k, score, check.Running);
         }
@@ -390,6 +391,13 @@ public sealed class DecisionSystem
         if (!bestRuns) _sources[best].Start(world, slot);
         return true;
     }
+
+    /// <summary>
+    /// Whether the character's running task never finishes (TaskData +0x15, read by the base Tasker's slot 4): the scorer then raises the running
+    /// goal's score below 1 once more (<c>FUN_14050df10</c>, <b>Verified</b>, docs/game/ai-tasks.md "Desire and commitment").
+    /// </summary>
+    static bool NeverFinishes(World world, int slot) =>
+        world.Characters.Cold(slot)?.Running is { } run && TaskDataTable.Of(run.Row)?.Is(TaskDataFlags.NeverDone) == true;
 
     /// <summary>
     /// Adds a line on a source to the trace while <see cref="Tracing"/> is on.

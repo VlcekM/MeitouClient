@@ -561,7 +561,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A candidate goal's score: its desire times its weight and its crowd factor (<see cref="TaskProfile.Crowd"/> per member already on it), the
-    /// running goal's continuity, and a committed goal's floor or ceiling.
+    /// running goal's continuity, a committed goal's floor or ceiling, and the continuity again below 1 while its running step never finishes.
     /// </summary>
     float Score(World world, AiGoal g, TaskProfile profile, float desire, Squad squad, Blackboard board, AiMind mind, CharacterId id)
     {
@@ -577,6 +577,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A goal it committed to holds at least 0.4 until the commitment runs out, then at most 0.05 (docs/game/ai.md "Packages and
             // goals", Observed).
             if (profile.Commits) score = world.GameHours < mind.CommitUntil ? MathF.Max(score, 0.4f) : MathF.Min(score, 0.05f);
+
+            // A running step that never finishes (TaskData +0x15, read by the base Tasker's slot 4) raises a score below 1 once more
+            // (FUN_14050df10, Verified).
+            if (score < 1 && TaskDataTable.Of(mind.Step)?.Is(TaskDataFlags.NeverDone) == true) score *= Settings.Continuity;
         }
 
         return score;
