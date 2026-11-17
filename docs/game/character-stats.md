@@ -293,9 +293,9 @@ skill x 0.8 when treating oneself and q = min(skill, kit quality):
   as with a kit once the room left is under `Done` (healing turns bandage into flesh, so float dust otherwise reopened a sliver every update and a guard treated a fully
   bandaged prisoner for ever: **Observed**, Rebirth Slave Shop prisoner, original save); chained
   slaves are not modelled.
-- **Skill.** `Task_FirstAid` (`FUN_1403563a0`) runs a first aid kit phase, then (none left) a robot repair kit phase; the skill is
-  CharStats +0x98 (`medic`) in the first, +0xdc (`robotics`) in the second, and the trained stat 9 or 6 likewise; the race's `heal
-  stat` is not read here. The task reads the raw field, no injury/hunger stat multiplier (**Verified**,
+- **Skill.** `Task_FirstAid` (`FUN_1403563a0`) runs a first aid kit phase, then (no organic part left, or no first aid kit found) a
+  robot repair kit phase; the skill is CharStats +0x98 (`medic`) in the first, +0xdc (`robotics`) in the second, and the trained stat 9
+  or 6 likewise; the race's `heal stat` is not read here. The task reads the raw field, no injury/hunger stat multiplier (**Verified**,
   `FUN_14033c5a0`, x0.8 for self; the splint passes the raw field too, `FUN_14034ef20`); Meitou matches (`FirstAidSystem.SkillOf`).
 - **Kit search** (**Verified**): vtable +0x38 of `Task_FirstAid` and `Task_FirstAidRig` is `FUN_14033c740` (the rig task passes
   function 2). It searches the medic's main grid, else its worn backpack's contents (`FUN_1405cb320`: the item with slot id 12 at +0xb8,
