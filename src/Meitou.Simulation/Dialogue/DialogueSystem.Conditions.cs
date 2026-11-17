@@ -253,11 +253,7 @@ public sealed partial class DialogueSystem
         switch (dc.Condition)
         {
             case 11: return Bool(dc, HouseLocked(world, mc));   // the speaker's squad, whatever `who` says
-            case 16:
-                {
-                    var whom = subjectId == me ? other : subjectId;
-                    return Bool(dc, Position(world, whom) is { } p && Position(world, me) is { } q && Vector3.DistanceSquared(p, q) < 67600);
-                }
+            case 16: return Bool(dc, InTalkingRange(world, subjectId == me ? other : subjectId, me));
             case 17: return Bool(dc,
                 mc.SquadId >= 0 && world.Squads.Find(mc.SquadId)?.HomeBuilding is { } home && Position(world, subjectId) is { } inside
                 && InBuilding(home, inside));
@@ -282,11 +278,7 @@ public sealed partial class DialogueSystem
                 return _population is not null && Position(world, me) is { } standing && PlayerTownAt(world, standing) is { } ownTown
                     && Num3(dc, _population.TownLevel(world, ownTown.Number));
             case 74: return Num3(dc, PlayersBestTownLevel(world));
-            case 75:
-                return Bool(dc,
-                    Position(world, subjectId) is { } loc && TownAt(loc) is >= 0 and var ptown && ptown < _data.SiteFactions.Count
-                    && world.Player.Faction >= 0
-                && _data.SiteFactions[ptown] == world.Player.Faction);
+            case 75: return Bool(dc, InPlayerTown(world, subjectId));
             default: return Bool(dc, false);
         }
     }
@@ -377,25 +369,62 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// DC 16 TARGET_IN_TALKING_RANGE (<c>FUN_140676950</c> case 0x10, <b>Verified</b>): both on the same floor (<c>getFloor</c>, vfunc <c>+0x60</c>)
+    /// and nearer than <see cref="TalkingRange"/>.
+    /// </summary>
+    static bool InTalkingRange(World world, CharacterId whom, CharacterId me)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(whom, out int w) || !table.TryResolveNext(me, out int m)) return false;
+        if (world.Sight.FloorOf(w, table.Previous[w].Position) != world.Sight.FloorOf(m, table.Previous[m].Position)) return false;
+
+        return Vector3.DistanceSquared(table.Next[w].Position, table.Next[m].Position) < TalkingRange * TalkingRange;
+    }
+
+    /// <summary>
     /// DC 31 IN_A_NON_PLAYER_TOWN (<c>FUN_140676950</c> case 0x1f): S's status town (<see cref="Ai.AiSystem.StatusTownAt"/>, kept out to 1.5 x
     /// its radius once entered, as S's next status update would write it) is set and not of the player's faction, and is no nest or nest marker;
     /// ruins count only when they are the speaker's squad's home town.
     /// </summary>
     bool InNonPlayerTown(World world, CharacterCold mc, CharacterId subject)
     {
-        var table = world.Characters;
-        if (!table.TryResolveNext(subject, out int s) || table.Cold(s) is not { } sc) return false;
-
-        var town = Ai.AiSystem.StatusTownAt(_data, world, table.Next[s].Position, sc.StatusTown);
-        if (town.IsNone) return false;
-        if (town.Site < 0) return world.Buildings.FindTown(town.PlayerTown) is { } built && built.Owner != world.Player.Faction;
+        var town = StatusTownOf(world, subject);
+        if (town.IsNone || PlayerOwned(world, town)) return false;
+        if (town.Site < 0) return world.Buildings.FindTown(town.PlayerTown) is not null;
 
         var type = _data.Sites[town.Site].Town.Type;
-        bool playerOwned = town.Site < _data.SiteFactions.Count && _data.SiteFactions[town.Site] == world.Player.Faction;
-        if (playerOwned || type is TownType.Nest or TownType.NestMarker) return false;
+        if (type is TownType.Nest or TownType.NestMarker) return false;
         if (type != TownType.Ruins) return true;
 
         return world.Squads.Find(mc.SquadId)?.Ai?.HomeTown == town;
+    }
+
+    /// <summary>
+    /// DC 75 IN_A_PLAYER_TOWN (<c>FUN_140676950</c> case 0x4b, <b>Verified</b>): S's status town is set and of the player's faction (its faction's
+    /// <c>+0x250</c>), whatever its type.
+    /// </summary>
+    bool InPlayerTown(World world, CharacterId subject) => StatusTownOf(world, subject) is { IsNone: false } town && PlayerOwned(world, town);
+
+    /// <summary>
+    /// S's status town (the original's status <c>+0x88</c>, through Character slot 14) as S's next status update would write it
+    /// (<see cref="Ai.AiSystem.StatusTownAt"/>: kept out to 1.5 x its radius once entered); none for a character that does not resolve.
+    /// </summary>
+    CampaignTown StatusTownOf(World world, CharacterId subject)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(subject, out int s) || table.Cold(s) is not { } sc) return CampaignTown.None;
+
+        return Ai.AiSystem.StatusTownAt(_data, world, table.Next[s].Position, sc.StatusTown);
+    }
+
+    /// <summary>
+    /// Whether the town is the player's faction's: a player outpost the player owns, or a placed town whose faction is the player's.
+    /// </summary>
+    bool PlayerOwned(World world, CampaignTown town)
+    {
+        if (town.Site < 0) return world.Buildings.FindTown(town.PlayerTown) is { } built && built.Owner == world.Player.Faction;
+
+        return world.Player.Faction >= 0 && town.Site < _data.SiteFactions.Count && _data.SiteFactions[town.Site] == world.Player.Faction;
     }
 
     /// <summary>

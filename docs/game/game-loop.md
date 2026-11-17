@@ -108,7 +108,8 @@ characters near the head get more (m = 5: three every frame, two every other). A
 The flag (KenshiLib `isVisibleUpdateMode`; **Verified** decompile of the visibility pass `FUN_1405c9f60`): set with `+0xe5` whenever `FUN_1405c79c0` holds: the
 character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0x250` (`_isEngagedWithAPlayer`) is set, or a zone test of `FUN_1409c4b10`.
 Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
-visible-area and frustum tests) and its platoon tests pass. Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
+visible-area and frustum tests) and its platoon tests pass. A turn also runs the character's sight pass on one sensed character
+([dialogue](dialogue.md#ambient-conversations)). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
 ### Update time off screen
 

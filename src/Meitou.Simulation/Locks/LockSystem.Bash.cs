@@ -1,6 +1,8 @@
 using System.Numerics;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Movement;
 
@@ -9,7 +11,8 @@ namespace Meitou.Simulation.Locks;
 /// <summary>
 /// Bashing doors (Task_BashDoor, docs/game/locks.md "Bash door"; docs/simulation.md "Cages, beds and locks"). An NPC attacking a target inside a
 /// building shut by locked doors (<see cref="FixtureRegistry.IsShut"/>), itself outside, bashes the building's main door when the original's planner
-/// does (<see cref="DoorPlan"/>): it walks there and swings. Each swing (<c>FUN_14029d690</c>, <b>Observed</b>) takes 0.015 x clamp(2 x blunt + 0.5 x
+/// does (<see cref="DoorPlan"/>): it walks there and swings. A walker stopped by a locked door unlocks its own or bashes another's on its way
+/// (<see cref="StartDoorWay"/>). Each swing (<c>FUN_14029d690</c>, <b>Observed</b>) takes 0.015 x clamp(2 x blunt + 0.5 x
 /// cut, 20, 60) off the door's construction progress (1 when whole), an animal's damage at a quarter; at 0 the door breaks: broken, unlocked and
 /// opening, so the building opens for paths and the attacker's pursuit carries on.
 /// </summary>
@@ -90,14 +93,14 @@ public sealed partial class LockSystem
     internal CombatConstants? CombatConstants { get; set; }
 
     /// <summary>
-    /// Every basher: the doors it smashes are found every check; each one walks to its door, stops when the door no longer needs it, and swings.
+    /// Every basher: the doors it smashes are found every check (with a combat system); each one walks to its door, stops when the door no longer
+    /// needs it, and swings.
     /// </summary>
     void Bashers(World world)
     {
-        if (Combat is null) return;
         var table = world.Characters;
         var next = table.Next;
-        if (world.Tick % BashCheckTicks == 0)
+        if (Combat is not null && world.Tick % BashCheckTicks == 0)
         {
             _gateGraph = null;
             FindBashers(world);
@@ -105,7 +108,8 @@ public sealed partial class LockSystem
 
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!next[s].Alive || table.Cold(s) is not { Bashing: { } doorId } c) continue;
+            // The bashes follow the fights; a way through a door (StartDoorWay) runs without them too.
+            if (!next[s].Alive || table.Cold(s) is not { Bashing: { } doorId } c || Combat is null && c.DoorWay is null) continue;
             if (c.BashWall)
             {
                 Smash(world, s, c, doorId);
@@ -123,6 +127,11 @@ public sealed partial class LockSystem
     {
         var table = world.Characters;
         var door = world.Fixtures.Find(doorId);
+        if (c.DoorWay is not null)
+        {
+            DoorWayStep(world, next, s, c, door);
+            return;
+        }
 
         // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); a planner NPC's plan is dropped once
         // its door is unlocked and the planner would open it (72) instead (see PlanDropped).
@@ -382,6 +391,220 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// How a walker gets through a locked door (docs/game/locks.md "Locked doors on the way").
+    /// </summary>
+    internal enum DoorWayKind : byte
+    {
+        /// <summary>
+        /// No way: the walk's plan fails.
+        /// </summary>
+        None,
+        /// <summary>
+        /// 80 / 78 Unlocking door (here): its own door, unlocked and opened.
+        /// </summary>
+        Unlock,
+        /// <summary>
+        /// 287 / 81 Bashing door: broken open.
+        /// </summary>
+        Bash,
+    }
+
+    /// <summary>
+    /// <see cref="CharacterCold.BashTime"/> of a walker sent through its door that has not walked to it yet.
+    /// </summary>
+    const float DoorWayFresh = -3;
+
+    /// <summary>
+    /// The row that takes a walker through the building's locked doors (<b>Verified</b>, row table): 80 / 78 when they are its own
+    /// (<see cref="IsMine"/>); else 287 / 81 when the door's faction is no ally of its own (128), it has a weapon (an animal its natural one) and its
+    /// bash desire is above 0 (<see cref="DoorPlan.AggressiveTowards"/>); else none.
+    /// </summary>
+    internal DoorWayKind WayThrough(World world, CharacterCold c, string building, Vector3 at)
+    {
+        if (IsMine(world, c, building)) return DoorWayKind.Unlock;
+        if (c.Fighter is not { } f || !f.IsAnimal && f.Unarmed || AlliedTo(c, world.Fixtures.DoorOwner(building))) return DoorWayKind.None;
+
+        // A gate is bashed by its own rows (123 / 290, GatePlan), not as a house door.
+        if (MainDoor(world, building) is { IsGate: true }) return DoorWayKind.None;
+        return DoorPlan.AggressiveTowards(world, Combat, c, building, at) > 0 ? DoorWayKind.Bash : DoorWayKind.None;
+    }
+
+    /// <summary>
+    /// State 128 <c>isAlly</c> towards a door's faction: a relation at or above the ally threshold.
+    /// </summary>
+    bool AlliedTo(CharacterCold c, int owner) =>
+        Combat?.Relations is { } r && r.Contains(c.Faction) && r.Contains(owner) && r.Get(c.Faction, owner) >= FactionRelations.AllyThreshold;
+
+    /// <summary>
+    /// State 60 LOCATION_IS_ACCESSIBLE with its providers (<c>FUN_1405a2710</c>, <b>Verified</b>): a walk to <paramref name="to"/> can be planned
+    /// unless the character stands in a building shut by locked doors (a closed unlocked door is opened on the way, 74) that does not cover the
+    /// point, and has no way through its doors (<see cref="WayThrough"/>).
+    /// </summary>
+    public bool CanLeave(World world, int s, Vector2 to)
+    {
+        if (world.Sight.BuildingOf(s) is not { } building || !world.Fixtures.IsShut(building) || world.Sight.Covers(building, to.X, to.Y))
+            return true;
+
+        var c = world.Characters.Cold(s)!;
+        return c.IsImprisoned || WayThrough(world, c, building, world.Characters.Next[s].Position) != DoorWayKind.None;
+    }
+
+    /// <summary>
+    /// Sends a walker through <paramref name="door"/> (<see cref="DoorWayStep"/>): it walks to the door on its own side, unlocks or bashes it, then
+    /// takes its walk to <paramref name="goal"/> up again. The AI leaves an NPC alone meanwhile; the walk's task stays on.
+    /// </summary>
+    internal static void StartDoorWay(World world, int s, Fixture door, Vector2 goal, byte mode)
+    {
+        var c = world.Characters.Cold(s)!;
+        (c.Bashing, c.BashErrand, c.BashTime, c.DoorWay) = (door.Id, true, DoorWayFresh, (goal, mode));
+        if (!c.IsPlayer) c.Engaged = true;
+
+        ref var n = ref world.Characters.Next[s];
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
+        n.PathCursor = 0;
+        c.PathRequest = 0;
+    }
+
+    /// <summary>
+    /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): at the door, one no longer locked is opened (74 / 72), its own lock is
+    /// worked for <see cref="LockWorkSeconds"/> and opened (80 / 78), anyone else's is bashed as an attacker bashes (287 / 81); once the door is
+    /// open, broken or gone the walk goes on.
+    /// </summary>
+    void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
+    {
+        var table = world.Characters;
+        if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || world.Fixtures.DoorSpotOf(door) is not { } spot)
+        {
+            WalkOn(table, s, c);
+            return;
+        }
+        if (c.Medical is { Incapacitated: true })
+        {
+            DropDoorWay(c);
+            return;
+        }
+        if (!ReachDoor(table, next, s, c, spot)) return;
+
+        if (door.Lock is not { EffectivelyLocked: true })
+        {
+            FixtureRegistry.OpenDoor(door);
+            WalkOn(table, s, c);
+        }
+        else if (WayThrough(world, c, door.Building, next[s].Position) == DoorWayKind.Unlock) UnlockOnTheWay(world, s, c, door);
+        else BashOnTheWay(world, s, c, door, spot);
+    }
+
+    /// <summary>
+    /// Brings the walker to its door, the stand spot <see cref="BashStandOff"/> out on its own side: true once it stands there (stopped, facing the
+    /// leaf). A walk there that ends elsewhere fails the way; a walk elsewhere (an order, or one it was pushed into) drops it.
+    /// </summary>
+    static bool ReachDoor(CharacterTable table, Span<CharacterHot> next, int s, CharacterCold c, DoorSpot spot)
+    {
+        ref var n = ref next[s];
+        var stand = GateStandSpot(spot, Flat(n.Position));
+        bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
+        bool sent = c.BashTime == -1;
+        if (walking && !(sent && Vector2.DistanceSquared(n.Goal, stand) < DoorWorkReach * DoorWorkReach))
+        {
+            DropDoorWay(c);
+            return false;
+        }
+
+        if (!DoorPlan.AtDoor(n, spot))
+        {
+            if (sent && !walking) FailDoorWay(table, s, c);
+            else if (!walking) (n.Goal, n.Flags, c.BashTime) = (stand, (ushort)(n.Flags | (ushort)MoveFlags.NeedPath), -1);
+            return false;
+        }
+
+        if (walking)
+        {
+            n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
+            n.PathCursor = 0;
+            c.PathRequest = 0;
+        }
+        if (c.BashTime < 0) c.BashTime = 0;
+
+        var face = new Vector2(spot.Centre.X, spot.Centre.Z) - Flat(n.Position);
+        if (face.LengthSquared() > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Y);
+        return true;
+    }
+
+    /// <summary>
+    /// Its own door's lock worked on the way (Task_UnlockDoor, 0.3 per game second): cleared with the unlock sound, the door opened, and the walk
+    /// goes on.
+    /// </summary>
+    void UnlockOnTheWay(World world, int s, CharacterCold c, Fixture door)
+    {
+        c.BashTime += world.TickSeconds;
+        if (c.BashTime < LockWorkSeconds) return;
+
+        world.Fixtures.SetLocked(door, false);
+        FixtureRegistry.OpenDoor(door);
+        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        WalkOn(world.Characters, s, c);
+    }
+
+    /// <summary>
+    /// Another's door bashed on the way (Task_BashDoor, shared with the attackers' 81): a body in the way fails it (the task is impossible); each
+    /// update books Burglary against the door's owner, a blow lands once a clip cycle, and the breaking one sends the walker on.
+    /// </summary>
+    void BashOnTheWay(World world, int s, CharacterCold c, Fixture door, DoorSpot spot)
+    {
+        var table = world.Characters;
+        var face = new Vector2(spot.Centre.X, spot.Centre.Z) - Flat(table.Next[s].Position);
+        if (InTheWay(world, s, face))
+        {
+            FailDoorWay(table, s, c);
+            return;
+        }
+
+        if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction)
+            Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
+        if (!BashBlowLands(c, world.TickSeconds) || !Hit(world, door, c)) return;
+
+        world.Fixtures.Touch(door);
+        WalkOn(table, s, c);
+    }
+
+    /// <summary>
+    /// The door is open: the walker's way ends and its walk to the goal goes on (another task, a pursuit, moves it on its own).
+    /// </summary>
+    static void WalkOn(CharacterTable table, int s, CharacterCold c)
+    {
+        var way = c.DoorWay;
+        DropDoorWay(c);
+        StopBashing(table, s, c);
+        ref var n = ref table.Next[s];
+        if (way is not { } w || n.Task != (byte)CharacterTask.GoTo) return;
+
+        (n.Goal, n.Mode) = (w.Goal, w.Mode);
+        n.Flags |= (ushort)MoveFlags.NeedPath;
+    }
+
+    /// <summary>
+    /// The way through the door fails: the walker stands, its walk failed (as one stopped at a locked door).
+    /// </summary>
+    static void FailDoorWay(CharacterTable table, int s, CharacterCold c)
+    {
+        DropDoorWay(c);
+        StopBashing(table, s, c);
+        TaskStart.Stand(table, s);
+        c.WalkEnd = WalkEnd.Failed;
+    }
+
+    /// <summary>
+    /// Ends a walker's way through its door, leaving its movement as it is (the AI has an NPC again).
+    /// </summary>
+    static void DropDoorWay(CharacterCold c)
+    {
+        if (c.DoorWay is null) return;
+
+        (c.DoorWay, c.Bashing, c.BashErrand, c.BashTime) = (null, null, false, 0);
+        if (!c.IsPlayer) c.Engaged = false;
+    }
+
+    /// <summary>
     /// The shut buildings with their main door (<c>Building::getDoor</c>, one per building; engine reading: the one of lowest door index with a known
     /// leaf).
     /// </summary>
@@ -482,6 +705,7 @@ public sealed partial class LockSystem
     /// </summary>
     static void StopBashing(CharacterTable table, int s, CharacterCold c)
     {
+        DropDoorWay(c);
         c.Bashing = null;
         c.BashWall = false;
         c.BashErrand = false;

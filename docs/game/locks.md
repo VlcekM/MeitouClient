@@ -213,6 +213,27 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Navigation**: the navmesh treats a door as open once `doa >= 0.6` (`FUN_140298d10` -> `FUN_1403a6070`); closed faces are
   blocked for every filter ([pathfinding](pathfinding.md)). A locked lock makes `Task_OpenDoor` fail ("It's locked.") for anyone,
   owner included: the owner must unlock first (**Verified**).
+- **Locked doors on the way** (**Verified**, row table `FUN_140319a60` and the evaluators named): every walk row (1, 29, 67) lists 59
+  `DESTINATION_IS_ACCESSIBLE` and 60 `LOCATION_IS_ACCESSIBLE`. 60 (`FUN_1405a2710`) holds outdoors (location type 0xb), for a destination in
+  the walker's own location (or a prisoner caged in that building), and otherwise only when the building the walker stands in has an open door
+  (`FUN_1405499a0`: none, one open or opening, or broken). Its provider 84 Open current door wants 53, given by 74 Opening door here, whose list B
+  needs !55 (that door not locked) and 58 (at it, walked to by 83). !55 comes only from 80 Unlocking door here (list B 70 `isObjectMine`, 58) or
+  287 Bashing door (list B !70, !128, a weapon, 57; desire `scoreAggressiveAction` `FUN_14079d1a0`, the 81 bash's: 0 for a building of the
+  basher's ownership town, [bash door](#cutting-and-breaking-285--185-cut-286--186-break)); lockpicking (76) gives !54, not !55. The way in is
+  the same through 59, 85, 72, !54 and 78 / 81. `isObjectMine` (`FUN_1405a3c10`): the door's building has the walker's platoon among its
+  resident squads, or the walker's faction owns it (faction `+0x80`), or the door's faction is the walker's (a player cage of the walker's own
+  faction is excluded); no alliance term. So a walker whose door it is unlocks it (0.3 per second) and opens it; anyone else stays in, or out,
+  unless the bash desire is above 0 (not in its home town: a bandit, a hostile, or a non-trader, non-civilian faction); a plan with no row of
+  desire above 0 fails (**Verified**, [planner](ai-tasks.md#planner)). A player's move order (29) lists 60 too, and an order whose plan fails
+  shows the failing state's text ([planner](ai-tasks.md#planner)): 60's is "I can't get out of here." (condition table `FUN_140610250`). Meitou
+  (`LockSystem.WayThrough`, `CanLeave`, `StartDoorWay`): a walk out of a shut building without a way is not started (the AI stands; a player's
+  move order waits with that text); a walker stopped at a locked door, or standing in a shut building with a walk leading out (`LeaveSweep`),
+  walks to the building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s) or bashes another's (Burglary booked, the
+  blows of the attackers' bash; never a gate, which its own rows bash, [gates](#doors)) and walks on once it is open; anyone else stops at the
+  door ("It's locked." for the player). **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
+  out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
+  its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities
+  family's Longhouse 5565 of his own home town, so a bash desire of 0) stands until the family opens up, then walks out.
 - **Owner lock/unlock** (77/79/162/198, 78/80/140; B list `isObjectMine`): progress 0.3 per game second, so 3.3 s; ends with
   `Character_Lock` / `Character_Unlock_Success`. Locking closes the door first. No skill or level involved (**Verified**). Task_LockDoor update `FUN_140337670` (**Verified**): work += dt x 0.3; on reaching 1 it starts the door closing (`FUN_140298c50`,
   only from open), sets the lock's locked byte at once (`wants lock` is not touched), plays `Character_Lock` and sets the squad's house flag. The context menu's own-door verbs are these two orders: Lock 77 on an unlocked own door, Unlock 140 (0x8c) on a locked own door (`FUN_1407a6bc0` door branch, **Verified**); an own cage gets Lock 77 / Unlock 78 (cage branch, **Verified**; the update has no door to close there; Meitou runs the cage's unlock as row 140, same conditions); the panel's buttons are the instant toggle below.
@@ -486,6 +507,4 @@ Shackles: the item's INVENTORY_ITEM_STATE record carries the same four keys (`Lo
 | Which tool cutting consumes when several are carried | the highest-quality one |
 | Exact strength terms of cut/break | settled (**Verified** `FUN_140338090`, `FUN_140641480`): multiplier flags hunger, limbs, limb items, gear (no light, no dust) x strength x CharStats scale `+0x34` (1 for people, the age for animals); Meitou `Lockpicking.Strength` |
 | Whether an awake prisoner can be lifted out of an unlocked cage (`FUN_14034fbe0`'s callers not traced) | allowed; the carry rules then knock out a non-friendly one on the shoulder and set a friendly one down |
-| Whether non-owners path around locked doors | a building whose doors are all effectively locked is closed for every path; closed unlocked doors are passable |
-| Which door states 59/60 open for a walk | a walker whose next path legs cross a closed door's plane opens it; at a locked one it stops ("It's locked.") |
 | What else sets or clears the squad "house locked" flag | the rules above |

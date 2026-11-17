@@ -270,6 +270,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         var walker = table.Cold(slot)!;
         var (at, _) = WorkSpot(world, door, Flat(table.Next[slot].Position));
         ClearWork(walker);
+        DropDoorWay(walker);
         walker.Bashing = null;
         walker.BashOrdered = false;
         if (world.Player.DoorWalker == table.IdOf(slot)) world.Player.DoorTarget = null;
@@ -290,6 +291,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         walker.Shackles = null;
         walker.ForcingLock = null;
         walker.DoorJob = null;
+        DropDoorWay(walker);
         walker.Bashing = null;
         walker.BashOrdered = false;
         if (world.Player.DoorWalker == table.IdOf(slot)) world.Player.DoorTarget = null;

@@ -230,8 +230,8 @@ public class DialogueTests
     }
 
     /// <summary>
-    /// A guard greets a stranger of another squad (event 3; its line refuses player targets) with a crowd trigger: his mate cheers (event 74), and
-    /// the chain passes to the line the stranger says back (speaker T_TARGET).
+    /// A guard greets a stranger of another squad and faction he sees on his sight pass (event 3; its line refuses player targets) with a crowd
+    /// trigger: his mate cheers (event 74), and the chain passes to the line the stranger says back (speaker T_TARGET).
     /// </summary>
     [Fact]
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
@@ -239,6 +239,7 @@ public class DialogueTests
         var data = PopulationData.Create(Db([
             Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
             Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
+            Rec("f-o", FcsRecordType.Faction, r => r.Name = "Drifters"),
             Rec("guard-c", FcsRecordType.Character, r => { r.Name = "Guard"; r.References["dialogue package"] = [Ref("guard-p")]; }),
             Rec("guard-p", FcsRecordType.DialoguePackage, r => r.References["dialogs"] = [Ref("hail-d", 3)]),
             Rec("player-dc", FcsRecordType.DialogAction, r => { r.Ints["condition name"] = 36; r.Ints["who"] = (int)Talker.Target; }),
@@ -256,11 +257,14 @@ public class DialogueTests
         ]), []);
         var dialogue = new DialogueSystem(data, new DialogueSettings { AmbientEvents = true });
         var ground = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [dialogue]);
+        var senses = new Meitou.Simulation.Aggro.AggroSystem(data.Relations);
+        var bodies = new Meitou.Simulation.Bodies.BodySystem(Meitou.Tests.Bodies.BodyFixtures.BaseGame);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [bodies, senses, dialogue]);
         world.Player.Faction = data.PlayerFaction;
+        world.ViewPosition = new Vector3(0, 150, 100);   // NPCs look at NPCs only in view (+0x1a9); all face +Z
         int villagers = data.FactionIndex("f-d");
         Squad? last = null;
-        CharacterId Spawn(string name, float x, int faction, bool player, string record, bool join = false)
+        CharacterId Spawn(string name, float z, int faction, bool player, string record, bool join = false)
         {
             if (!join)
             {
@@ -269,7 +273,7 @@ public class DialogueTests
             }
             var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Faction, cold.IsPlayer, cold.RecordId, cold.Inventory, cold.SquadId) = (faction, player, record, new Inventory(), last!.Id);
-            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(0, 150, z), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
                     Task = (byte)CharacterTask.Idle }, cold, 0);
             last.Members.Add(id);
             if (!join) last.Leader = id;
@@ -277,8 +281,8 @@ public class DialogueTests
         }
         Spawn("hero", 0, data.PlayerFaction, true, "");
         Spawn("Guard", 100, villagers, false, "guard-c");
-        Spawn("Mate", 110, villagers, false, "guard-c", join: true);
-        Spawn("Stranger", 150, villagers, false, "");
+        Spawn("Mate", 200, villagers, false, "guard-c", join: true);   // past the stranger: only the guard faces him
+        Spawn("Stranger", 150, data.FactionIndex("f-o"), false, "");   // of a faction the guards do not regard as friendly
 
         var said = new HashSet<string>();
         for (int i = 0; i < 400; i++)
@@ -287,13 +291,9 @@ public class DialogueTests
             foreach (var s in dialogue.PublishSpeech()) said.Add($"{world.Characters.Cold(s.Speaker.Slot)!.Name}: {s.Text}");
         }
 
-        // Which of the two greets depends on the scan order; the other cheers.
         string[] all = [.. said.Order()];
 
-        Assert.True(all.SequenceEqual(["Guard: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."]) || all.SequenceEqual(["Guard: Hurrah!",
-                "Mate: Hail, Stranger.", "Stranger: Hail yourself."]),
-
-            string.Join(" | ", all));
+        Assert.Equal(["Guard: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."], all);
     }
 
     /// <summary>

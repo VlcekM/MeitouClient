@@ -63,7 +63,8 @@ public sealed class DoorLockJob(string door, bool locking)
 /// <item><b>Engine choice</b>: the original's walk needs its destination and location "accessible" (states 59, 60), which Task_OpenDoor (84, 85)
 /// makes true by opening the door (the walker faces the door, a locked one fails the task); here the walk itself opens it: a walker within
 /// <see cref="OpenReach"/> of a closed door's leaf whose current or next path leg crosses the leaf's plane within its width (plus
-/// <see cref="DoorSlack"/>). At a locked one the walker stops, within <see cref="LockedReach"/> of the leaf on its current leg. Both reaches run from
+/// <see cref="DoorSlack"/>). At a locked one the walker stops, within <see cref="LockedReach"/> of the leaf on its current leg; an NPC whose door
+/// it is then unlocks and opens it (<see cref="UnlockOwnWay"/>). Both reaches run from
 /// the nearest point of the leaf, not its centre: a gate's leaf is 70 wide and more, and a walker crossing it off centre was never stopped (#560).
 /// The walker does not wait for the leaf (the navmesh lets paths through closed unlocked doors).</item>
 /// <item>The original closes no door behind a walker (<b>Observed</b>: only Task_CloseDoor, Task_LockDoor and the door panel start a close, and only
@@ -420,10 +421,15 @@ public sealed partial class LockSystem
         /// The faction of the walker that opened the door (-1: none).
         /// </summary>
         public int OpenerFaction;
+        /// <summary>
+        /// The walkers whose next path leg crosses the door while it is locked (null: none).
+        /// </summary>
+        public List<int>? Stopped;
     }
 
     /// <summary>
-    /// Opens the closed, unlocked doors that walkers' paths run through (a walker at a locked one stops).
+    /// Opens the closed, unlocked doors that walkers' paths run through; a walker at a locked one goes through it its own way or stops
+    /// (<see cref="AtLockedDoor"/>).
     /// </summary>
     void OpenForWalkers(World world)
     {
@@ -447,9 +453,7 @@ public sealed partial class LockSystem
                 {
                     // Task_OpenDoor fails at a locked door for anyone, the owner too (docs/game/locks.md "Doors").
                     if (away > LockedReach || !Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 1)) return;
-                    TaskStart.Stand(table, slot);
-                    c.WalkEnd = WalkEnd.Failed;
-                    if (c.IsPlayer) SayLocked(s.World, c, s.Door, n.Position);
+                    (s.Stopped ??= []).Add(slot);
                     return;
                 }
 
@@ -458,7 +462,48 @@ public sealed partial class LockSystem
                 if (s.Opened) s.OpenerFaction = c.Faction;
             });
             if (scan.Opened) NoteDoorOpened(world, f, scan.OpenerFaction);
+            if (scan.Stopped is { } stopped) AtLockedDoor(world, f, stopped);
         }
+    }
+
+    /// <summary>
+    /// The walkers at a locked door (docs/game/locks.md "Locked doors on the way"): the planner's way through is 78 / 80 Unlocking door (its own door,
+    /// <c>isObjectMine</c>) or 81 / 287 Bashing door, then 72 / 74 opening it (<see cref="WayThrough"/>), so the first with a way goes through
+    /// (<see cref="StartDoorWay"/>) unless someone already works the door; the others stop there, a player's character saying "It's locked.".
+    /// </summary>
+    void AtLockedDoor(World world, Fixture door, List<int> stopped)
+    {
+        var table = world.Characters;
+        bool worked = Worked(world, door.Id);
+        foreach (int slot in stopped)
+        {
+            var c = table.Cold(slot)!;
+            ref var n = ref table.Next[slot];
+            if (c.DoorWay is not null) continue;
+            var way = worked || c.Bashing is not null || Busy(table.IdOf(slot)) ? DoorWayKind.None : WayThrough(world, c, door.Building, n.Position);
+            if (way == DoorWayKind.Unlock || way == DoorWayKind.Bash && !door.IsGate)
+            {
+                StartDoorWay(world, slot, door, n.Goal, n.Mode);
+                worked = true;
+                continue;
+            }
+
+            TaskStart.Stand(table, slot);
+            c.WalkEnd = WalkEnd.Failed;
+            if (c.IsPlayer) SayLocked(world, c, door, n.Position);
+        }
+    }
+
+    /// <summary>
+    /// Someone is on its way through the door (<see cref="StartDoorWay"/>).
+    /// </summary>
+    static bool Worked(World world, string doorId)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && table.Cold(s) is { DoorWay: not null, Bashing: { } id } && id == doorId) return true;
+
+        return false;
     }
 
     /// <summary>

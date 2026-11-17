@@ -86,14 +86,22 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// A move order (29) needs an awake character (one out cold keeps it queued until it wakes); a follow order (31, 45) a target that is there, and
-    /// an awake, free character (not caged or carried).
+    /// A move order (29) needs an awake character (one out cold keeps it queued until it wakes) and, out of a building shut by locked doors, a way
+    /// through them (state 60, <see cref="Locks.LockSystem.CanLeave"/>: "I can't get out of here.", the state's failure text in the condition table
+    /// <c>FUN_140610250</c>); a follow order (31, 45) a target that is there, and an awake, free character (not caged or carried).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
         if (order.IsMove)
-            return table.Cold(slot)!.Medical?.Incapacitated == true ? OrderCheck.Blocked() : OrderCheck.Run;
+        {
+            if (table.Cold(slot)!.Medical?.Incapacitated == true) return OrderCheck.Blocked();
+
+            var to = new Vector2(order.Point.X, order.Point.Z);
+            return world.SystemOf<Locks.LockSystem>() is { } locks && !locks.CanLeave(world, slot, to)
+                ? OrderCheck.Blocked(Loc.Tr("I can't get out of here."))
+                : OrderCheck.Run;
+        }
         if (!table.TryResolveNext(order.Target, out int led) || led == slot) return OrderCheck.Gone;
 
         bool free = table.Cold(slot) is { IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true };

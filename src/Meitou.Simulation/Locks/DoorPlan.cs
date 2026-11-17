@@ -24,7 +24,7 @@ sealed class DoorPlan : IPlanWorld
     /// </summary>
     public const float DoorReach = 25, DoorHeight = 130;
     /// <summary>
-    /// The desire of 81 / 287 for a bandit (<c>scoreAggressiveAction</c>).
+    /// The desire of 81 / 287 for a bandit, and for the player's characters when it holds (<c>scoreAggressiveAction</c>, <c>DAT_14169bb44</c>).
     /// </summary>
     public const float BanditDesire = 1.1f;
 
@@ -138,9 +138,9 @@ sealed class DoorPlan : IPlanWorld
 
     /// <summary>
     /// <c>AI::scoreAggressiveAction</c> for the building (docs/game/locks.md "Bash door", <b>Observed</b>): 0 in the basher's home town; a bandit
-    /// 1.1; else 0 towards an ally, 1 towards a hostile faction (relation at or below the hostile threshold, coexistence not read: FUN_1406b26d0,
-    /// Verified), and towards the rest 0 for a trader, civilian, diplomat or adventurer faction, else 1. Not modelled: the war-campaign case (its
-    /// byte is <b>Unknown</b>).
+    /// 1.1; a character of the player's faction <see cref="PlayerAggression"/>; else 0 towards an ally, 1 towards a hostile faction (relation at or
+    /// below the hostile threshold, coexistence not read: FUN_1406b26d0, Verified), and towards the rest 0 for a trader, civilian, diplomat or
+    /// adventurer faction, else 1. Not modelled: the war-campaign case (its byte is <b>Unknown</b>).
     /// </summary>
     internal static float AggressiveTowards(World world, CombatSystem? combat, CharacterCold cold, string building, Vector3 at)
     {
@@ -149,6 +149,7 @@ sealed class DoorPlan : IPlanWorld
 
         if (cold.NpcClass == FundamentalType.Bandit) return BanditDesire;
         int owner = world.Fixtures.DoorOwner(building);
+        if (world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return PlayerAggression(combat?.Relations, cold, owner);
         if (combat?.Relations is not { } relations || !relations.Contains(cold.Faction))
             return owner == cold.Faction ? 0 : 1;
 
@@ -160,6 +161,19 @@ sealed class DoorPlan : IPlanWorld
 
         return relations.Factions[cold.Faction].FundamentalType is FundamentalType.Trader or FundamentalType.Civilian or FundamentalType.Diplomat
                 or FundamentalType.Adventurer ? 0 : 1;
+    }
+
+    /// <summary>
+    /// <c>scoreAggressiveAction</c>'s branch for the player's faction (<c>FUN_14079d1a0</c>, <b>Verified</b>; constants from the data dump): 1.1 when
+    /// the intended aggression of its goal and of its task sum above 0 (status <c>+0xac</c> + <c>+0xa0</c>, <see cref="Ai.TaskAggression"/>), or when
+    /// the building's faction is <c>not real</c> (faction <c>+0x1d0</c>) or hostile to the player's (<c>FUN_1406b26d0</c>); else 0.
+    /// </summary>
+    static float PlayerAggression(FactionRelations? relations, CharacterCold cold, int owner)
+    {
+        if (Ai.TaskAggression.OfGoal(cold) + Ai.TaskAggression.OfTask(cold) > 0) return BanditDesire;
+        if (relations is null || !relations.Contains(owner)) return 0;
+
+        return relations.Factions[owner].NotReal || relations.Contains(cold.Faction) && relations.IsHostile(cold.Faction, owner) ? BanditDesire : 0;
     }
 
     /// <summary>

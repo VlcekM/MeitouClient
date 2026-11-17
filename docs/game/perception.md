@@ -129,7 +129,8 @@ State on the character's status object (Character `+0x1a0`): level `+0x100`, uni
   tooltip reads.
 - **Cooldown**: the same field crimes set ("recently wanted", 250 from a witnessed or booked crime, [economy](economy.md) 11.2); counted down by dt (`AI::updateStateBroadcast`
   `FUN_1405a4ae0`); saved as `disguiseblown` (`FUN_140626580`, **Verified**).
-- Not traced: `sellingUniformDetectionCheck` (selling a uniform, `CRIME_UNIFORM_THEFT`), event `EV_I_SEE_UNIFORM_IMPOSTER`, the dialogue gates of "regards as enemy".
+- **Imposter line**: the sight pass's event 34 `EV_I_SEE_UNIFORM_IMPOSTER` reads the level against the looker's faction ([sight](dialogue.md#ambient-conversations)).
+- Not traced: `sellingUniformDetectionCheck` (selling a uniform, `CRIME_UNIFORM_THEFT`), the dialogue gates of "regards as enemy".
 
 Meitou (`ArrestSystem.Disguise.cs`, every spot sweep): the level and faction from the worn head, armour and legs; lookers are awake NPCs not of the player's faction within 400 that see
 the character (`SightMap.Sees`), with their own meter per pair (not shared with the sneak meters, engine choice), alertness 0.5; the town tests read the town the point stands in

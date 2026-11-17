@@ -107,28 +107,11 @@ public sealed class DialogueSettings
     /// </summary>
     public float ApproachSeconds { get; init; } = 60;
     /// <summary>
-    /// NPCs react to a player character they see with an ambient line (events 3 neutral, 66 enemy, 67 ally) as a speech bubble. Engine choice for the
-    /// Unknown perception rules (docs/game/dialogue.md "Ambient conversations"): off by default (the pinned scenarios), the game turns it on.
+    /// Characters react to those they sense with an event line (the sight pass: 3 neutral, 66 enemy, 67 ally, 27 animals and the rest) and fire the
+    /// other event lines as speech bubbles (docs/game/dialogue.md "Ambient conversations"): off by default (the pinned scenarios), the game turns it
+    /// on.
     /// </summary>
     public bool AmbientEvents { get; init; }
-    /// <summary>
-    /// How near a player character NPCs must be for their exchanges with each other to be run (a player character is seen by the sight test instead),
-    /// how often (ticks) the NPCs look, how many speak per look and the game hours before a squad reacts to the same character again (engine
-    /// choices).
-    /// </summary>
-    public float AmbientRange { get; init; } = 600;
-    /// <summary>
-    /// Ticks between the NPCs' ambient looks.
-    /// </summary>
-    public int AmbientEveryTicks { get; init; } = 30;
-    /// <summary>
-    /// The most ambient lines said per look.
-    /// </summary>
-    public int AmbientPerScan { get; init; } = 2;
-    /// <summary>
-    /// Game hours before a squad reacts to the same character again.
-    /// </summary>
-    public float AmbientRepeatHours { get; init; } = 0.5f;
     /// <summary>
     /// Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).
     /// </summary>
@@ -385,8 +368,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the ambient looks, the NPC approaches, followers
-    /// and stalkers, then the Talk order's walk (the conversation opens in talk range).
+    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the sight pass and the get-up events, the NPC
+    /// approaches, followers and stalkers, then the Talk order's walk (the conversation opens in talk range).
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -394,7 +377,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _characterTrading.KeepCharacterTrade(world);
         Memory.Age(world);
         if (_bubbles.Count > 0) StepBubbles(world);
-        if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0)
+        if (Settings.AmbientEvents)
         {
             SeeOthers(world);
             SeeGettingUp(world);
@@ -865,13 +848,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     /// <summary>
     /// Adds the dialogue state (rolls, line uses, permanent rolls, counters, memories, followers, stalkers, interrupts, bubbles, cooldowns,
-    /// approaches, downs, quiet pairs, the open conversation and the Talk walk) to the world hash; nothing while all are empty.
+    /// approaches, downs, quiet pairs, sight cursors, the open conversation and the Talk walk) to the world hash; nothing while all are empty.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0
-            && _ambientAt.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0
-            && _stalkers.Count == 0 && _open is null && _talker.IsNone)
+            && _eventCooldown.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _sightCursor.Count == 0
+            && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone)
         {
             return;
         }
@@ -909,11 +892,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             hasher.Add(Rng.StableHash(b.Line.StringId));
             hasher.Add(b.DueTick);
         }
-        foreach (var ((squad, whom), hours) in _ambientAt)
+        foreach (var ((npc, ev), until) in _eventCooldown)
         {
-            hasher.Add(squad);
-            hasher.Add(whom);
-            hasher.Add(hours);
+            hasher.Add(npc);
+            hasher.Add(ev);
+            hasher.Add(until);
         }
         _npcApproaches.Hash(ref hasher);
         foreach (var id in _down) hasher.Add(id);
@@ -921,6 +904,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         {
             hasher.Add(npc);
             hasher.Add(pc);
+        }
+        foreach (var (who, cursor) in _sightCursor)
+        {
+            hasher.Add(who);
+            hasher.Add(cursor);
         }
         hasher.Add(_talker);
         hasher.Add(_target);

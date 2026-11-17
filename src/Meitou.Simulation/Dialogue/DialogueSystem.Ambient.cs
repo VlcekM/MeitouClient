@@ -38,13 +38,14 @@ public sealed partial class DialogueSystem
     readonly SortedDictionary<CharacterId, (string Text, long Until, bool Large, bool Interrupting)> _shown =
         new(Comparer<CharacterId>.Create(CompareIds));
     /// <summary>
-    /// When a squad last reacted to seeing a character (the cooldown of SeeOthers).
+    /// The per-event cooldowns (the original's Dialogue <c>+0xd0</c>): the tick until which a character's event is refused, kept only while it runs.
+    /// Hashed.
     /// </summary>
-    readonly SortedDictionary<(int Squad, CharacterId Target), double> _ambientAt =
-        new(Comparer<(int, CharacterId)>.Create((a, b) => a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : CompareIds(a.Item2, b.Item2)));
+    readonly SortedDictionary<(CharacterId Npc, int Event), long> _eventCooldown =
+        new(Comparer<(CharacterId, int)>.Create((a, b) => CompareIds(a.Item1, b.Item1) is var c and not 0 ? c : a.Item2.CompareTo(b.Item2)));
     /// <summary>
-    /// The NPC / player-character pairs noticed at the world's first look (a new game or a load) and not lost from notice since: no sight line for
-    /// them (engine choice; the original greets a character arriving, not one already beside it at the start, Observed). Hashed.
+    /// The NPC / player-character pairs sensed at the world's first look (a new game or a load) and not lost from the NPC's senses since: no sight
+    /// line for them (engine choice; the original greets a character arriving, not one already beside it at the start, Observed). Hashed.
     /// </summary>
     readonly SortedSet<(CharacterId Npc, CharacterId Player)> _quiet = new(Comparer<(CharacterId, CharacterId)>.Create(
         (a, b) => CompareIds(a.Item1, b.Item1) is var c and not 0 ? c : CompareIds(a.Item2, b.Item2)));
@@ -52,6 +53,14 @@ public sealed partial class DialogueSystem
     /// Whether the first look (<see cref="_quiet"/>'s fill) has run.
     /// </summary>
     bool _looked;
+    /// <summary>
+    /// The tick of the first sight step (-1 before it): the first look waits one aggro look round after it.
+    /// </summary>
+    long _firstTick = -1;
+    /// <summary>
+    /// Each character's sight cursor over its sensed list (<c>FUN_14085a5f0</c>'s <c>+0x100</c>), kept only while past the head. Hashed.
+    /// </summary>
+    readonly SortedDictionary<CharacterId, int> _sightCursor = new(Comparer<CharacterId>.Create(CompareIds));
 
     /// <summary>
     /// The event of a crowd trigger's lines (EV_CROWD_TRIGGERED).
@@ -66,7 +75,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     public const int ContractJobEnded = 30;
     /// <summary>
-    /// The AI-to-AI talking range (DC 16 TARGET_IN_TALKING_RANGE, 260 units): how near another squad's NPC must be to be greeted (engine choice).
+    /// DC 16 TARGET_IN_TALKING_RANGE's range (the squared 67600 of <c>DAT_1416fdfec</c>, 260 units).
     /// </summary>
     const float TalkingRange = 260;
 
@@ -139,13 +148,41 @@ public sealed partial class DialogueSystem
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || !Awake(table, n) || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
+        if (CoolingDown(world, npc, ev)) return false;
+
         var c = new Conversation { Npc = npc, Player = whom, Event = ev };
         if (Pick(world, c, SetOf(world, n).For(ev)) is not { } picked || picked.Speaker.IsNone || picked.Speaker == whom || Busy(picked.Speaker, c))
             return false;
+
         c.Root = picked.Root;
         _bubbles.Add(new Bubble(c, picked.Line, world.Tick, picked.Speaker));
         StepBubbles(world);
+        if (ev is 3 or 4 or SeeAnimalSquad or 66 or 67) _eventCooldown[(npc, ev)] = world.Tick + CooldownTicks(world);
         return true;
+    }
+
+    /// <summary>
+    /// The game seconds an event the sight pass fires (3, 4, 27, 66, 67) is refused for after a line of it was said (<c>FUN_140684990</c> sets the
+    /// timer to 1.0, <c>FUN_140685090</c> takes the update's time off it, <b>Verified</b>).
+    /// </summary>
+    const float EventCooldownSeconds = 1;
+
+    /// <summary>
+    /// <see cref="EventCooldownSeconds"/> in ticks, at least one.
+    /// </summary>
+    static long CooldownTicks(World world) => Math.Max(1, (long)MathF.Ceiling(EventCooldownSeconds / world.TickSeconds));
+
+    /// <summary>
+    /// Whether the character's <paramref name="ev"/> is still refused by its cooldown (<c>FUN_140684990</c>: the event's timer above 0); a run-out
+    /// entry is dropped.
+    /// </summary>
+    bool CoolingDown(World world, CharacterId npc, int ev)
+    {
+        if (!_eventCooldown.TryGetValue((npc, ev), out long until)) return false;
+        if (world.Tick < until) return true;
+
+        _eventCooldown.Remove((npc, ev));
+        return false;
     }
 
     /// <summary>
@@ -192,169 +229,321 @@ public sealed partial class DialogueSystem
         _open is { } o && (o.Npc == who || o.Player == who) || _bubbles.Any(b => b.C != c && (b.Speaker == who || b.C.Npc == who));
 
     /// <summary>
-    /// Whom a loaded NPC reacts to by sight (the perception that fires events 3, 66 and 67, <c>FUN_140859680</c>): the nearest player character it
-    /// sees by the sight test every other sighting uses (<see cref="SightMap.Sees"/>: its race's range, daylight, light, places and view cone; a
-    /// sneaker with its stealth, without the spot meter: engine choice), or that a squad mate sees within twice its range R (the shared sightings of
-    /// <c>FUN_140857b10</c>), 66 hostile, 67 ally, else 3; else the nearest awake NPC of another squad within <see cref="TalkingRange"/> (event 3, as
-    /// the original fires it for a seen character outside the player's faction), only within <see cref="DialogueSettings.AmbientRange"/> of a player
-    /// character, where it can be heard. The nearest to a player look first.
+    /// The sight pass (<c>FUN_14085a5f0</c>, <b>Verified</b>): on each of a character's update turns (<see cref="BodySystem.UpdateTurn"/>, the
+    /// character loop's budgets; <c>FUN_1405c7d40</c> runs it for a living character with a squad) it reacts to the next entry of its sensed list
+    /// (<see cref="AggroSystem.SensesOf"/>, <see cref="React"/>); past the list's end the cursor goes back to the head and that turn reacts to nobody.
+    /// Nothing before the world's first look (<see cref="FirstLook"/>).
     /// </summary>
     void SeeOthers(World world)
     {
+        if (world.SystemOf<BodySystem>() is not { } bodies || world.SystemOf<AggroSystem>() is not { } aggro) return;
+        if (!FirstLook(world, aggro)) return;
+
         var table = world.Characters;
-        var players = new List<int>();
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true, Medical.Dead: false }) players.Add(i);
+            if (table.Next[i].Alive && bodies.UpdateTurn(i) && table.Cold(i) is { SquadId: >= 0 } && aggro.SensesOf(i) is { } senses)
+                SeeNext(world, i, senses);
         }
-        if (players.Count == 0 || !_data.Relations.Contains(world.Player.Faction)) return;
 
-        var near = Lookers(world, players);
-        var noticed = Noticed(world, near, players);
-        if (!_looked)
-        {
-            _looked = true;
-            _quiet.UnionWith(noticed);
-        }
-        else _quiet.RemoveWhere(q => !noticed.Contains(q));
-        int said = Greet(world, near, players, noticed);
-        SeeAnimals(world, near, said);
+        DropGoneCursors(world);
+        DropRunOutCooldowns(world);
     }
 
     /// <summary>
-    /// The NPCs that can look or be greeted: loaded, awake, free, within their sight reach of a player character; by that distance, then slot.
+    /// Whether the world's first look has run: one aggro look round (<see cref="AggroSettings.ScanEveryTicks"/>) after the dialogue's first step
+    /// (a new game or a load), when every character has sensed once, the pairs it finds fill <see cref="_quiet"/>.
     /// </summary>
-    List<(int Slot, float D2)> Lookers(World world, List<int> players)
+    bool FirstLook(World world, AggroSystem aggro)
     {
+        if (_looked) return true;
+        if (_firstTick < 0) _firstTick = world.Tick;
+        if (world.Tick - _firstTick < world.Every(aggro.Settings.ScanEveryTicks)) return false;
+
+        _looked = true;
         var table = world.Characters;
-        var near = new List<(int Slot, float D2)>();
         for (int i = 0; i < table.HighWater; i++)
         {
-            // A slave (state 1) says nothing (FUN_1408529c0).
-            if (!table.Next[i].Alive || table.Next[i].Task == (byte)CharacterTask.Rest
-                || table.Cold(i) is not { IsPlayer: false, SquadId: >= 0, Engaged: false, InCombat: false, Fleeing: false, IsImprisoned: false,
-                    SlaveState: not 1 } nc)
-            {
-                continue;
-            }
-            if (nc.Fighter?.IsAnimal == true || nc.Appearance?.Animal is not null || !_data.Relations.Contains(nc.Faction) || !Awake(table, i))
-                continue;
-            float reach = MathF.Max(world.Sight.MaxRange(i, AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight)), Settings.AmbientRange);
-            float nearest = float.MaxValue;
-            foreach (int p in players) nearest = MathF.Min(nearest, Vector3.DistanceSquared(table.Next[i].Position, table.Next[p].Position));
-            if (nearest <= reach * reach) near.Add((i, nearest));
+            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false } || aggro.SensesOf(i) is not { } senses) continue;
+            foreach (var e in senses.Entries)
+                if (e.Now && SensedPlayer(world, e) is { } pc) _quiet.Add((table.IdOf(i), pc));
         }
-        near.Sort((a, b) => a.D2 != b.D2 ? a.D2.CompareTo(b.D2) : a.Slot.CompareTo(b.Slot));
-        return near;
+        return true;
     }
 
     /// <summary>
-    /// The pairs noticed now: an NPC sees the player character, or a squad mate of it does within 2 R. Those noticed at the first look of the world
-    /// stay quiet until the player character has been out of notice.
+    /// The player character an entry names, if it names one that still lives.
     /// </summary>
-    HashSet<(CharacterId Npc, CharacterId Player)> Noticed(World world, List<(int Slot, float D2)> near, List<int> players)
+    static CharacterId? SensedPlayer(World world, in SenseEntry e)
     {
-        var table = world.Characters;
-
-        // Who sees which player character, and which squads have a member seeing it (the original's squad-shared sightings, GroupSense: a mate's
-        // counts within 2 R).
-        var sees = new HashSet<(int Npc, int Player)>();
-        var squadSees = new HashSet<(int Squad, int Player)>();
-        foreach (var (i, _) in near)
-        {
-            var nc = table.Cold(i)!;
-            float outdoor = AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight);
-            foreach (int p in players)
-            {
-                var pc = table.Cold(p)!;
-                float stealth = (pc.Orders & CharacterOrders.Sneak) != 0 ? Orders.Stealth(pc) : -1;
-                if (world.Sight.Sees(i, p, table.Next[i].Position, table.Next[p].Position, outdoor, stealth) <= 0) continue;
-                sees.Add((i, p));
-                squadSees.Add((nc.SquadId, p));
-            }
-        }
-
-        var noticed = new HashSet<(CharacterId Npc, CharacterId Player)>();
-        foreach (var (i, _) in near)
-        {
-            float shared = 2 * AggroSystem.RangeOf(table.Cold(i)!, AggroSystem.OutdoorSight);
-            foreach (int p in players)
-            {
-                if (sees.Contains((i, p))
-                    || Vector3.DistanceSquared(table.Next[i].Position, table.Next[p].Position) <= shared * shared
-                    && squadSees.Contains((table.Cold(i)!.SquadId, p)))
-                {
-                    noticed.Add((table.IdOf(i), table.IdOf(p)));
-                }
-            }
-        }
-        return noticed;
+        var id = new CharacterId(e.Target, e.Generation);
+        return world.Characters.TryResolveNext(id, out int t) && world.Characters.Cold(t) is { IsPlayer: true } ? id : null;
     }
 
     /// <summary>
-    /// Each looker in turn, up to <see cref="DialogueSettings.AmbientPerScan"/> lines: its sight event at the nearest player character it noticed,
-    /// else event 3 at the nearest NPC of another squad within <see cref="TalkingRange"/>, both only within hearing. Returns the lines said.
+    /// One turn of the looker's cursor over its sensed list (<c>FUN_14085a5f0</c>'s <c>+0x100</c>): the entry under it is reacted to and the cursor
+    /// moves on; at the end it goes back to 0, and the quiet pairs whose player character the looker no longer senses are dropped.
     /// </summary>
-    int Greet(World world, List<(int Slot, float D2)> near, List<int> players, HashSet<(CharacterId Npc, CharacterId Player)> noticed)
+    void SeeNext(World world, int slot, SenseBlock senses)
+    {
+        var id = world.Characters.IdOf(slot);
+        var entries = senses.Entries;
+        int cursor = _sightCursor.GetValueOrDefault(id);
+        if (cursor >= entries.Count)
+        {
+            _sightCursor.Remove(id);
+            if (_quiet.Count > 0) _quiet.RemoveWhere(q => q.Npc == id && !StillSensed(entries, q.Player));
+            return;
+        }
+
+        _sightCursor[id] = cursor + 1;
+        React(world, slot, entries[cursor]);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="who"/> is among the entries, seen or heard at the last look.
+    /// </summary>
+    static bool StillSensed(IReadOnlyList<SenseEntry> entries, CharacterId who)
+    {
+        foreach (var e in entries)
+            if (e.Target == who.Slot && e.Generation == who.Generation && e.Now) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Drops the cursors of characters that are gone (a cursor is kept only while it is past the head).
+    /// </summary>
+    void DropGoneCursors(World world)
+    {
+        if (_sightCursor.Count <= world.Characters.Count) return;
+
+        List<CharacterId>? gone = null;
+        foreach (var id in _sightCursor.Keys)
+            if (!world.Characters.TryResolveNext(id, out _)) (gone ??= []).Add(id);
+        if (gone is null) return;
+
+        foreach (var id in gone) _sightCursor.Remove(id);
+    }
+
+    /// <summary>
+    /// Drops the per-event cooldowns that have run out (<see cref="CoolingDown"/> drops one when it is next asked; this keeps the table to the
+    /// running ones).
+    /// </summary>
+    void DropRunOutCooldowns(World world)
+    {
+        List<(CharacterId, int)>? over = null;
+        foreach (var (key, until) in _eventCooldown)
+            if (world.Tick >= until) (over ??= []).Add(key);
+        if (over is null) return;
+
+        foreach (var key in over) _eventCooldown.Remove(key);
+    }
+
+    /// <summary>
+    /// The looker's reaction to one sensed character (<c>FUN_140859680</c>, <b>Verified</b>), in the original's order: the gates
+    /// (<see cref="Gates"/>); a down target (slot 6) gets nothing; an animal event 27 I_SEE_ANIMAL_SQUAD whether seen now or not; the rest only with
+    /// a sight line (Dialogue <c>+0x28</c>, <see cref="HasSightLines"/>) and an entry seen or heard at the last look: a target the looker regards as
+    /// friendly (slot 126) <see cref="SeeFriend"/>, any other <see cref="SeeOther"/> for a looker free (slave state 0), not an escaped prisoner and
+    /// without a pending crime. A pair held quiet since the first look stays quiet while sensed.
+    /// </summary>
+    void React(World world, int slot, SenseEntry e)
     {
         var table = world.Characters;
-        float audible2 = Settings.AmbientRange * Settings.AmbientRange;
-        int said = 0;
-        foreach (var (i, nearest) in near)
+        var target = new CharacterId(e.Target, e.Generation);
+        if (e.Target == slot || !table.TryResolveNext(target, out int t) || table.Cold(t) is not { } tc) return;
+        if (Quiet(table.IdOf(slot), target, e)) return;
+
+        var lc = table.Cold(slot)!;
+        if (!Gates(world, slot, lc, t, tc) || CharacterFacts.Down(tc)) return;
+        if (SquadRegistry.IsAnimal(tc))
         {
-            if (said >= Settings.AmbientPerScan) break;
-            var nc = table.Cold(i)!;
-            var npc = table.IdOf(i);
-            int best = -1;
-            float best2 = float.MaxValue;
-            foreach (int p in players)
-            {
-                float d2 = Vector3.DistanceSquared(table.Next[i].Position, table.Next[p].Position);
-                if (d2 < best2 && noticed.Contains((npc, table.IdOf(p))) && !_quiet.Contains((npc, table.IdOf(p)))) (best, best2) = (p, d2);
-            }
-            // The squad's cooldown starts only once a line is said: the original asks again on every perception update and rolls `chance temporary`
-            // afresh each time (the Red Sabres' attack root is 20%), so a failed look is tried again on the next scan. A player character it has
-            // nothing to say to leaves the turn to the NPCs. Events 66 and 3 (the non-friend branch) need a looker that is no slave and has not
-            // escaped; 67 (the friend branch) does not (FUN_140859680).
-            int sight = SightEvent(world, i, nc, best >= 0 ? best : -1);
-            bool free = nc is { SlaveState: 0, Escaped: false };
-            if (best >= 0 && (sight == 67 || free) && !Recent(world, nc.SquadId, table.IdOf(best))
-                && TrySay(world, i, nc.SquadId, best, sight))
-            {
-                said++;
-                continue;
-            }
-            if (nearest > audible2) continue;
-            (best, best2) = (-1, TalkingRange * TalkingRange);
-            foreach (var (o, od2) in near)
-            {
-                if (od2 > audible2 || table.Cold(o)!.SquadId == nc.SquadId) continue;
-                float d2 = Vector3.DistanceSquared(table.Next[i].Position, table.Next[o].Position);
-                if (d2 <= best2 && !Recent(world, nc.SquadId, table.IdOf(o))) (best, best2) = (o, d2);
-            }
-            if (best >= 0 && free && TrySay(world, i, nc.SquadId, best, 3)) said++;
+            TrySay(world, slot, t, SeeAnimalSquad);
+            return;
         }
-        return said;
+        if (!e.Now || !HasSightLines(world, slot)) return;
+
+        if (RegardsFriendly(world, slot, t)) SeeFriend(world, slot, lc, t, tc);
+        else if (lc is { SlaveState: 0, Escaped: false, Pending: null }) SeeOther(world, slot, lc, t, tc);
     }
+
+    /// <summary>
+    /// Whether the pair was held quiet at the first look (<see cref="_quiet"/>) and the player character is still sensed; one no longer sensed is
+    /// let go.
+    /// </summary>
+    bool Quiet(CharacterId npc, CharacterId target, in SenseEntry e)
+    {
+        if (_quiet.Count == 0 || !_quiet.Contains((npc, target))) return false;
+        if (e.Now) return true;
+
+        _quiet.Remove((npc, target));
+        return false;
+    }
+
+    /// <summary>
+    /// The sight pass's gates (<c>FUN_140859680</c>, <c>FUN_1408529c0</c>, <b>Verified</b>): an animal looker needs a line for event 3; a target in no
+    /// squad (no platoon, slot 72) is passed over; a looker in a bed or cage (<c>+0x2f8</c>), down (slot 6) or a slave (state 1) reacts to nobody;
+    /// and a looker out of view reacts only to a target in view or of the player's side (<c>+0x1a9</c>, <see cref="MedicalTimeBudget.Flagged"/>;
+    /// <c>FUN_140856bc0</c>, <see cref="AggroSystem.PlayerSide"/>).
+    /// </summary>
+    bool Gates(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        if (SquadRegistry.IsAnimal(lc) && SetOf(world, slot).For(3).Count == 0) return false;
+        if (tc.SquadId < 0) return false;
+        if (lc.InSomething != Locks.HeldState.None || CharacterFacts.Down(lc) || lc.SlaveState == 1) return false;
+
+        var table = world.Characters;
+        return MedicalTimeBudget.Flagged(world, lc, table.Next[slot].Position) || AggroSystem.PlayerSide(world, tc)
+            || MedicalTimeBudget.Flagged(world, tc, table.Next[t].Position);
+    }
+
+    /// <summary>
+    /// Event 67 I_SEE_ALLY_PLAYER, the friend branch (<b>Verified</b>): only while the looker's platoon is in no campaign (<c>FUN_1409c4540</c>) and
+    /// the target is no slave (state 1), of the player's faction and of a faction allied to the looker's (the same counts, <c>FUN_1406b2630</c>).
+    /// </summary>
+    void SeeFriend(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        if (InCampaign(world, lc) || tc.SlaveState == 1 || !OfPlayerFaction(world, tc) || !Allied(lc.Faction, tc.Faction)) return;
+
+        TrySay(world, slot, t, 67);
+    }
+
+    /// <summary>
+    /// The branch for a target not regarded as friendly (<b>Verified</b>; its crime events, 36 / 40 escaping slaves, 17 and 9, and 45 escaped
+    /// prisoners, are the arrest and crime systems'): while neither side is in combat mode and the target has no pending crime, and the looker's
+    /// squad does not love it (<c>FUN_140599590</c>), <see cref="SeePeaceful"/>; otherwise <see cref="TagBandit"/>; then, also in a fight, event 66
+    /// again under its test for a target without a pending crime (the original's tail, which a line just said refuses).
+    /// </summary>
+    void SeeOther(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        var target = world.Characters.IdOf(t);
+        if (!lc.InCombat && !tc.InCombat && tc.Pending is null)
+        {
+            if (!Loves(world, lc, target)) SeePeaceful(world, slot, lc, t, tc);
+        }
+        else TagBandit(world, slot, lc, t, tc);
+
+        if (tc.Pending is null && HostilePlayer(world, lc, tc) && !InCampaign(world, lc)) TrySay(world, slot, t, 66);
+    }
+
+    /// <summary>
+    /// The fight branch's tag (<c>FUN_1406744a0(looker, target, 4)</c>, <b>Verified</b>): with either side in combat mode or a target with a pending
+    /// crime, the looker's squad tags a target in no status town (status <c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>) TEMP_ENEMY when
+    /// either side's NPC class (status <c>+0xdc</c>) is Bandit (8); the wrapper's own skips apply (<see cref="TagEnemy"/>). Engine guard: also only
+    /// outside every town's radius, where the status town is always set (the radius covers one not yet written by the arrest system's pass after a
+    /// load or spawn), and never in a world without town data.
+    /// </summary>
+    void TagBandit(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        if (tc.StatusTown != Population.CampaignTown.None) return;
+        if (tc.NpcClass != Data.Gameplay.FundamentalType.Bandit && lc.NpcClass != Data.Gameplay.FundamentalType.Bandit) return;
+        if (world.SystemOf<AggroSystem>()?.Towns is not { } towns) return;
+        if (!Ai.AiSystem.TownAt(towns, world, world.Characters.Next[t].Position).IsNone) return;
+
+        TagEnemy(world, slot, t);
+    }
+
+    /// <summary>
+    /// EV_I_SEE_UNIFORM_IMPOSTER.
+    /// </summary>
+    const int UniformImposter = 34;
+
+    /// <summary>
+    /// The peaceful branch (<b>Verified</b>): event 34 I_SEE_UNIFORM_IMPOSTER at a disguise the looker sees through (<see cref="Imposter"/>) when
+    /// it has a line for it and senses no enemy; else 59 USING_MY_TRAINING_EQUIPMENT at a target training on a dummy of the looker's faction while
+    /// it senses no enemy; else, with the looker's platoon in no campaign and a target that is no slave (state 1), 66 I_SEE_ENEMY_PLAYER at one of
+    /// the player's faction hostile to the looker's (<c>FUN_1406b26d0</c>), 3 I_SEE_NEUTRAL_SQUAD at any other while the looker senses no enemy.
+    /// </summary>
+    void SeePeaceful(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        int enemies = world.SystemOf<AggroSystem>()?.SensesOf(slot)?.Enemies ?? 0;
+        if (Imposter(world, lc, tc) && enemies == 0 && SetOf(world, slot).For(UniformImposter).Count > 0)
+        {
+            BookImposter(world, slot, lc, t, tc);
+            TrySay(world, slot, t, UniformImposter);
+            return;
+        }
+        if (TrainingDummyOwner(world, t) == lc.Faction && enemies == 0)
+        {
+            TrySay(world, slot, t, UsingMyTrainingEquipment);
+            return;
+        }
+        if (InCampaign(world, lc) || tc.SlaveState == 1) return;
+
+        if (HostilePlayer(world, lc, tc)) TrySay(world, slot, t, 66);
+        else if (enemies == 0) TrySay(world, slot, t, 3);
+    }
+
+    /// <summary>
+    /// The uniform test of the peaceful branch (<b>Verified</b>, constants from the data dump): the target's disguise level (status <c>+0x100</c>,
+    /// <see cref="CharacterCold.DisguiseLevel"/>) above 0.25 when it wears a uniform piece of the looker's faction in any slot but shirt and boots
+    /// (Character vfunc <c>0x408</c>), else above 0.5 when its uniform's faction (<c>+0x108</c>) is allied to the looker's, else never (99).
+    /// </summary>
+    bool Imposter(World world, CharacterCold lc, CharacterCold tc)
+    {
+        if (tc.DisguiseLevel <= 0) return false;
+
+        float over = WearsUniformOf(lc.Faction, tc) ? 0.25f : tc.DisguiseFaction >= 0 && Allied(lc.Faction, tc.DisguiseFaction) ? 0.5f : 99;
+        return tc.DisguiseLevel > over;
+    }
+
+    /// <summary>
+    /// The seen-through impostor's booking before the line (<c>FUN_140852e10</c> with timer 20 and code 16, <b>Verified</b>): unless the looker's
+    /// faction is <c>not real</c>, the target's disguise is blown (status <c>+0x110</c> 250, <see cref="CharacterCold.RecentlyWanted"/>) and a
+    /// pending Uniform theft against the looker's faction is set (<see cref="Crime.CrimeSystem.SetPending"/>, the wrapper's path).
+    /// </summary>
+    void BookImposter(World world, int slot, CharacterCold lc, int t, CharacterCold tc)
+    {
+        if (_data.Relations.Contains(lc.Faction) && _data.Relations.Factions[lc.Faction].NotReal) return;
+
+        tc.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
+        world.SystemOf<Crime.CrimeSystem>()?.SetPending(world, t, Crime.CrimeCode.UniformTheft, lc.Faction, world.Characters.IdOf(slot),
+            Crime.CrimeSystem.WitnessTimer, viaWrapper: true);
+    }
+
+    /// <summary>
+    /// Whether the character wears an item that is a uniform of <paramref name="faction"/> outside the shirt and boots slots.
+    /// </summary>
+    bool WearsUniformOf(int faction, CharacterCold c)
+    {
+        if (c.Inventory is not { } inv || !_data.Relations.Contains(faction)) return false;
+
+        string id = _data.Factions[faction].Id;
+        foreach (var item in inv.Items)
+        {
+            bool worn = item.Section is not ("shirt" or "boots") && Meitou.Simulation.Items.InventoryCommands.IsEquipmentSection(item.Section);
+            if (worn && item.Uniform == id) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The character's platoon is held in a campaign by its faction's war manager (<c>FUN_1409c4540</c>, any phase).
+    /// </summary>
+    static bool InCampaign(World world, CharacterCold c) =>
+        c.SquadId >= 0 && world.Squads.Find(c.SquadId) is { PlatoonId: >= 0 } squad && world.Platoons.Find(squad.PlatoonId)?.Campaign is not null;
+
+    /// <summary>
+    /// Of the player's faction (the faction's <c>+0x250</c>).
+    /// </summary>
+    static bool OfPlayerFaction(World world, CharacterCold c) => world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
+
+    /// <summary>
+    /// The same faction, or allied ones (<c>FUN_1406b2630</c>).
+    /// </summary>
+    bool Allied(int a, int b) => a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b);
+
+    /// <summary>
+    /// A target of the player's faction whose faction the looker's is hostile to (<c>FUN_1406b26d0</c>).
+    /// </summary>
+    bool HostilePlayer(World world, CharacterCold lc, CharacterCold tc) =>
+        OfPlayerFaction(world, tc) && _data.Relations.Contains(lc.Faction) && _data.Relations.Contains(tc.Faction)
+        && _data.Relations.IsHostile(lc.Faction, tc.Faction);
 
     /// <summary>
     /// EV_USING_MY_TRAINING_EQUIPMENT (<c>FUN_140859680</c>).
     /// </summary>
     const int UsingMyTrainingEquipment = 59;
-
-    /// <summary>
-    /// The event an NPC fires at a seen player character (<c>FUN_140859680</c>, <b>Verified</b>): 67 for an ally; else 59 when the target is training
-    /// on a dummy owned by the looker's faction (the target's <c>+0x158</c> holds the faction of the dummy it uses, set by
-    /// <c>Task_UseTrainingDummy</c>'s update and reset every character tick) while the looker senses no enemy, else 66 for an enemy of the player and
-    /// 3 for the rest.
-    /// </summary>
-    int SightEvent(World world, int looker, CharacterCold nc, int target)
-    {
-        if (_data.Relations.IsAlly(nc.Faction, world.Player.Faction)) return 67;
-        if (target >= 0 && TrainingDummyOwner(world, target) == nc.Faction && world.SystemOf<AggroSystem>()?.SensesOf(looker) is not { Enemies: > 0 })
-            return UsingMyTrainingEquipment;
-        return _data.Relations.IsHostile(nc.Faction, world.Player.Faction) ? 66 : 3;
-    }
 
     /// <summary>
     /// The faction owning the training dummy the character is using now (Character <c>+0x158</c>); -1 when it uses none.
@@ -364,52 +553,15 @@ public sealed partial class DialogueSystem
             ? dummy.Owner : -1;
 
     /// <summary>
-    /// I_SEE_ANIMAL_SQUAD: an NPC looker that passes the same filter and sees an awake animal fires it at the animal (<c>FUN_140859680</c> :54-64,
-    /// before the friend/enemy split).
+    /// I_SEE_ANIMAL_SQUAD (<c>FUN_140859680</c>: fired at an animal before the friend / other split).
     /// </summary>
     const int SeeAnimalSquad = 27;
 
     /// <summary>
-    /// I_SEE_ANIMAL_SQUAD: each looker fires it at the first awake animal it sees that its squad has not reacted to lately, while the scan's line
-    /// count (<paramref name="said"/> so far) is below <see cref="DialogueSettings.AmbientPerScan"/>.
+    /// Fires <paramref name="ev"/> at the character in <paramref name="target"/> when the looker has lines for it; whether a line was said.
     /// </summary>
-    void SeeAnimals(World world, List<(int Slot, float D2)> near, int said)
-    {
-        var table = world.Characters;
-        var animals = new List<int>();
-        for (int a = 0; a < table.HighWater; a++)
-            if (table.Next[a].Alive && Awake(table, a) && table.Cold(a) is { } ac
-                && (ac.Fighter?.IsAnimal == true || ac.Appearance?.Animal is not null))
-            {
-                animals.Add(a);
-            }
-        if (animals.Count == 0) return;
-        foreach (var (i, _) in near)
-        {
-            if (said >= Settings.AmbientPerScan) return;
-            var nc = table.Cold(i)!;
-            float outdoor = AggroSystem.RangeOf(nc, AggroSystem.OutdoorSight);
-            foreach (int a in animals)
-                if (world.Sight.Sees(i, a, table.Next[i].Position, table.Next[a].Position, outdoor, -1) > 0
-                    && !Recent(world, nc.SquadId, table.IdOf(a)) && TrySay(world, i, nc.SquadId, a, SeeAnimalSquad))
-                {
-                    said++;
-                    break;
-                }
-        }
-    }
-
-    /// <summary>
-    /// Fires <paramref name="ev"/> at the character in <paramref name="target"/>; when a line is said, the squad does not react to that character
-    /// again for the cooldown.
-    /// </summary>
-    bool TrySay(World world, int slot, int squad, int target, int ev)
-    {
-        var whom = world.Characters.IdOf(target);
-        if (SetOf(world, slot).For(ev).Count == 0 || !Fire(world, world.Characters.IdOf(slot), whom, ev)) return false;
-        _ambientAt[(squad, whom)] = world.GameHours;
-        return true;
-    }
+    bool TrySay(World world, int slot, int target, int ev) =>
+        SetOf(world, slot).For(ev).Count > 0 && Fire(world, world.Characters.IdOf(slot), world.Characters.IdOf(target), ev);
 
     /// <summary>
     /// The characters that were down at the last look (the get-up events); hashed.
@@ -480,12 +632,6 @@ public sealed partial class DialogueSystem
         }
         return false;
     }
-
-    /// <summary>
-    /// Whether the squad reacted to <paramref name="target"/> within <see cref="DialogueSettings.AmbientRepeatHours"/> game hours.
-    /// </summary>
-    bool Recent(World world, int squad, CharacterId target) =>
-        _ambientAt.TryGetValue((squad, target), out double at) && world.GameHours - at < Settings.AmbientRepeatHours;
 
     /// <summary>
     /// Whether talking to <paramref name="npc"/> opens a pending <c>interrupt</c> dialogue (a campaign's negotiation).

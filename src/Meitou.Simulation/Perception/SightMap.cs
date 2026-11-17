@@ -635,6 +635,12 @@ public sealed class SightMap
     public int FloorAt(string building, Vector3 at) => _roomOf.TryGetValue(building, out int r) ? _rooms[r].Volume.FloorAt(at) : 0;
 
     /// <summary>
+    /// Whether the ground point (<paramref name="x"/>, <paramref name="z"/>) lies under or in <paramref name="building"/>'s indoor volume; false for
+    /// a building the map does not hold.
+    /// </summary>
+    public bool Covers(string building, float x, float z) => _roomOf.TryGetValue(building, out int r) && _rooms[r].Volume.ContainsGround(x, z);
+
+    /// <summary>
     /// Whether the map holds an indoor volume for <paramref name="building"/> (the key of a fixture's building): its <c>isIndoors</c> handle is then
     /// that building, else none.
     /// </summary>

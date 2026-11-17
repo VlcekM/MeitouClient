@@ -164,6 +164,8 @@ public sealed class Round
 /// <item><b>Wardens</b> (195): a free member with the goal in its hours locks the occupied, unlocked cages of its faction in its town (not one whose
 /// prisoner is being freed).</item>
 /// <item><b>Gates</b> (180): a free member whose current goal is Man the gate unlocks and opens its shut gate (<see cref="OpenGate"/>).</item>
+/// <item><b>Leaving</b> (state 60, rows 84, 74, 80, 287): a character standing in a shut building whose walk leads out unlocks its own door or
+/// bashes another's when it wants to, then walks on (<see cref="LeaveSweep"/>); one without a way stays in.</item>
 /// <item><b>Keys</b> (<b>engine choice</b>): a worker whose target is in a building shut by its own faction's (or its home's) locked doors unlocks
 /// them before it walks, standing, as the simulation does not know where a door is. An arrest's guard carrying a captive to a cage behind its own
 /// faction's shut doors has them opened at once.</item>
@@ -364,7 +366,71 @@ public sealed partial class LockSystem : IStateHashed
         int started = 0;
         ReleaseSweep(world, ref started);
         LockUpSweep(world, ref started);
+        LeaveSweep(world, ref started);
     }
+
+    /// <summary>
+    /// The way out of a shut building (docs/game/locks.md "Locked doors on the way", <b>Verified</b> rows and evaluators): every walk lists state 60
+    /// LOCATION_IS_ACCESSIBLE (<c>FUN_1405a2710</c>: false in a building with no open door when the destination is elsewhere), whose provider 84
+    /// walks to the door here (83) and opens it through 74, which needs it unlocked (!55); only 80 Unlocking door here (list B 70
+    /// <c>isObjectMine</c>) or 287 Bashing door gives that. A walker inside whose walk leads out (the paths stop at the shut doors) takes the
+    /// building's door its way (<see cref="StartDoorWay"/>); one without a way is not walked out (<see cref="CanLeave"/>).
+    /// </summary>
+    void LeaveSweep(World world, ref int started)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (started >= MaxNewRounds) return;
+            if (ShutIn(world, s) is not { } door) continue;
+
+            ref var n = ref table.Next[s];
+            StartDoorWay(world, s, door, n.Goal, n.Mode);
+            started++;
+        }
+    }
+
+    /// <summary>
+    /// The door of the shut building a walker wants out of (<c>Building::getDoor</c>, the one of lowest index with a known leaf): it stands in it,
+    /// no round works its doors, it has a way through them (<see cref="WayThrough"/>), and its walk (under way or just failed) goes to a point the
+    /// building does not cover. Null for anyone else.
+    /// </summary>
+    Fixture? ShutIn(World world, int s)
+    {
+        var table = world.Characters;
+        ref var n = ref table.Next[s];
+        if (!n.Alive || table.Cold(s) is not { IsImprisoned: false, Engaged: false, Bashing: null, Medical.Incapacitated: false } c) return null;
+        if (!c.CarriedBy.IsNone || Busy(table.IdOf(s)) || world.Sight.BuildingOf(s) is not { } building) return null;
+        if (!world.Fixtures.IsShut(building) || Targeted(building)) return null;
+
+        bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0 || c.WalkEnd == WalkEnd.Failed;
+        if (!walking || world.Sight.Covers(building, n.Goal.X, n.Goal.Y)) return null;
+
+        return WayThrough(world, c, building, n.Position) != DoorWayKind.None ? MainDoor(world, building) : null;
+    }
+
+    /// <summary>
+    /// A building's door of lowest index with a known leaf (null: none).
+    /// </summary>
+    static Fixture? MainDoor(World world, string building)
+    {
+        Fixture? main = null;
+        foreach (var f in world.Fixtures.OfBuilding(building))
+        {
+            if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is not null && (main is null || f.DoorIndex < main.DoorIndex))
+                main = f;
+        }
+
+        return main;
+    }
+
+    /// <summary>
+    /// <c>isObjectMine</c> for a building's door (<c>FUN_1405a3c10</c>, <b>Verified</b>): the character's squad lives in the building, or its faction
+    /// owns it, or the door is of its faction.
+    /// </summary>
+    static bool IsMine(World world, CharacterCold c, string building) =>
+        world.Fixtures.DoorOwner(building) == c.Faction || world.Fixtures.OwnsBuilding(building, c.Faction)
+        || world.Squads.Find(c.SquadId)?.HomeBuilding?.Key == building;
 
     /// <summary>
     /// The release rounds are driven by each goal-211 jailer (the finder <c>FUN_1408cf3c0</c>, <b>Verified</b>): the cages of its town and faction

@@ -755,12 +755,17 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   building's own navmesh section (`FUN_1403a43c0` to the building) stands only when the building has an open door (`Building::hasAnOpenDoor`
   `FUN_1405499a0`: none, or one open, opening or broken) and is public (vfunc `0x290`), or its faction (`+0x10`) is the mover's own or an
   ally (`FUN_1406b2630`), or the player's (`+0x250`). A person passes the last term (Character and CharacterHuman slot 73, `0x248`, return
-  null); a CharacterAnimal returns itself there and is further tested by its slot 101 and the building's interior flag (`FUN_140547500`). A
-  face outside any building stands; a standing face then takes the water test above. A rejected face, or no face, draws again; no face on
+  null); a CharacterAnimal returns itself there and also needs its slot 101 (`FUN_1405c81d0`: its race may enter buildings, race `+0x9c`, the
+  inverse of `cant enter buildings`, and its movement's `pathfind footprint radius` (`+0x364`, read from the race by `FUN_140661f90`) x its
+  size (vfunc `0x390`) is under 4.5 (`DAT_1416e2bc4`), or the building is `cavernous` (`+0xc2`)) and `FUN_140547500` (the building has an
+  interior object, `+0x1f0`, made only for a record with an `interior` list, whose `+0xe0` is the record's `allow animals`, `FUN_140551660`).
+  So an animal strolls only into the 10 base records with `allow animals` (Ancient Citadel, Ancient Lab, Ash Dome, Black Market, Metal
+  Warehouse among them; **Verified**, gamedata dump), and only a small one unless the building is cavernous. A face outside any building stands; a standing face then takes the water test above. A rejected face, or no face, draws again; no face on
   the tenth draw still sends the unmoved point; ten rejections send no move. Meitou (`AiSystem.PatrolPoint`, `MayPatrolInto`): the first of
   10 draws on walkable ground whose nearest navmesh polygon within 300 (X/Z first, the area centre's height as the tie-break; water and
   closed doors left out, `IWalkability.InteriorNear`) is outdoors or in a building passing the person's terms (`FixtureRegistry.HasOpenDoor`,
-  `IsPublic`, `OwnerOf`); the walk goes to the drawn point. **Observed** (headless, #803 save, Sho-Battai): before, a Merchant Nomad on
+  `IsPublic`, `OwnerOf`) and, for an animal, the animal terms (`AdmitsAnimal`: `RaceData.CanEnterBuildings`, `CombatSteering.Radius`); the walk
+  goes to the drawn point. **Observed** (headless, #803 save, Sho-Battai): before, a Merchant Nomad on
   goal 36 walked into Lord Nagata's private Bughouse, the noble's guards shooed it and the noble house fought it as a trespasser; after, no
   patroller enters it.
   A loaded patrol draws again when the task's update finds the move ended (`FUN_1405c6b30` mode 1 returns unless the mover reports

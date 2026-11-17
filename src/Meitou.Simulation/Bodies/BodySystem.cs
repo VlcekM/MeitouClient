@@ -177,6 +177,12 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     const float InsideSight = 500;
 
     /// <summary>
+    /// Whether the character in <paramref name="slot"/> had an update budget's turn this tick (<see cref="MedicalTimeBudget.HadTurn"/>): its sight
+    /// pass takes its next sensed character then.
+    /// </summary>
+    public bool UpdateTurn(int slot) => _medicalBudget.HadTurn(slot);
+
+    /// <summary>
     /// The update budgets' turns of this tick (<see cref="MedicalTimeBudget"/>); then who may not get up this tick: a knocked-out person (not an
     /// animal) whose knockout ends, or who plays dead, when <see cref="SafeToGetUp"/> fails, and who is kept down until it has looked
     /// (<see cref="Unasked"/>). Serial, from the last tick's state.

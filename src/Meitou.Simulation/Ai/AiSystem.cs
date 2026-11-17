@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
@@ -1062,7 +1063,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (!world.Walkability.IsWalkable(x, z)) continue;
 
             var face = new Vector3(x, centre.Y, z);
-            if (world.Walkability.InteriorNear(face, PatrolFaceReach) is { } building && !MayPatrolInto(world, slot, building))
+            if (world.Walkability.InteriorNear(face, PatrolFaceReach) is { } building && !MayPatrolInto(world, slot, building, face))
                 continue;
 
             return new Vector3(x, float.NaN, z);
@@ -1072,13 +1073,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Whether a patrol draw on <paramref name="building"/>'s interior navmesh stands (<c>FUN_14065eaa0</c>, <b>Verified</b>): the building has
-    /// an open door (<see cref="Locks.FixtureRegistry.HasOpenDoor"/>, the original's <c>FUN_1405499a0</c>), and it is public, or its owner faction
-    /// is the walker's own or an ally, or the player's.
+    /// Whether a patrol draw on <paramref name="building"/>'s interior navmesh at <paramref name="at"/> stands (<c>FUN_14065eaa0</c>,
+    /// <b>Verified</b>): the building has an open door (<see cref="Locks.FixtureRegistry.HasOpenDoor"/>, the original's <c>FUN_1405499a0</c>), is
+    /// open to the walker (<see cref="OpenToPatrol"/>), and an animal walker is let in as well (<see cref="AdmitsAnimal"/>).
     /// </summary>
-    bool MayPatrolInto(World world, int slot, string building)
+    bool MayPatrolInto(World world, int slot, string building, Vector3 at)
     {
-        if (!world.Fixtures.HasOpenDoor(building)) return false;
+        if (!world.Fixtures.HasOpenDoor(building) || !OpenToPatrol(world, slot, building)) return false;
+
+        return world.Characters.Cold(slot) is not { } c || !SquadRegistry.IsAnimal(c) || AdmitsAnimal(world, c, building, at);
+    }
+
+    /// <summary>
+    /// The building is public, or its owner faction is the walker's own or an ally, or the player's (<c>FUN_14065eaa0</c>).
+    /// </summary>
+    bool OpenToPatrol(World world, int slot, string building)
+    {
         if (world.Fixtures.IsPublic(building)) return true;
 
         int owner = world.Fixtures.OwnerOf(building);
@@ -1087,6 +1097,52 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         int faction = world.Characters.Cold(slot)?.Faction ?? -1;
         return owner == player || faction >= 0 && Relations.Contains(faction) && Relations.Contains(owner) && Relations.IsAlly(faction, owner);
+    }
+
+    /// <summary>
+    /// The size under which an animal may stroll into a building that is not <c>cavernous</c> (<c>FUN_1405c81d0</c>, <c>DAT_1416e2bc4</c>,
+    /// <b>Verified</b>): its <c>pathfind footprint radius</c> x its size.
+    /// </summary>
+    const float AnimalIndoorRadius = 4.5f;
+
+    /// <summary>
+    /// The animal terms of a patrol draw indoors (<c>FUN_14065eaa0</c>, <b>Verified</b>): CharacterAnimal slot 101 (<c>FUN_1405c81d0</c>: its race
+    /// may enter buildings, and its footprint x size is under <see cref="AnimalIndoorRadius"/> or the building is <c>cavernous</c>) and
+    /// <c>FUN_140547500</c> (the building has an interior, its record's <c>interior</c> list, whose <c>allow animals</c> is set).
+    /// </summary>
+    bool AdmitsAnimal(World world, CharacterCold c, string building, Vector3 at)
+    {
+        if (c.Race is { CanEnterBuildings: false } || BuildingRecordOf(world, building, at) is not { } record) return false;
+        if (record.GetReferences("interior").Count == 0 || !record.GetBool("allow animals")) return false;
+
+        return Combat.CombatSteering.Radius(c) < AnimalIndoorRadius || record.GetBool("cavernous");
+    }
+
+    /// <summary>
+    /// The BUILDING record of the building of key <paramref name="building"/>: a player building's, else the town building's (the town at
+    /// <paramref name="at"/> looked in first); null when none is known.
+    /// </summary>
+    GameRecord? BuildingRecordOf(World world, string building, Vector3 at)
+    {
+        if (world.Buildings.Find(building) is { } site) return data.Db.Find(site.Record);
+
+        int town = TownAt(at);
+        if (town >= 0 && TownBuildingRecord(data.Sites[town], building) is { } near) return near;
+        foreach (var other in data.Sites)
+            if (TownBuildingRecord(other, building) is { } found) return found;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The record of the town building of key <paramref name="building"/> in <paramref name="site"/>; null when the town has none.
+    /// </summary>
+    GameRecord? TownBuildingRecord(TownSite site, string building)
+    {
+        foreach (var b in site.Buildings)
+            if (b.Key == building) return data.Db.Find(b.BuildingId);
+
+        return null;
     }
 
     #endregion
@@ -2332,10 +2388,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Sends it walking (or running) to a point, unless it is going there already (<see cref="TaskStart.StartOwn"/>, as <see cref="Become"/>).
+    /// Sends it walking (or running) to a point, unless it is going there already (<see cref="TaskStart.StartOwn"/>, as <see cref="Become"/>). A
+    /// walk out of a building shut by locked doors it has no way through is not planned (state 60, <see cref="Locks.LockSystem.CanLeave"/>): it
+    /// stands, the walk neither arrived nor failed, so the next act-out asks again.
     /// </summary>
     static void WalkTo(World world, int slot, Vector2 to, byte mode)
     {
+        if (world.SystemOf<Locks.LockSystem>() is { } locks && !locks.CanLeave(world, slot, to))
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
         ref var n = ref world.Characters.Next[slot];
         if (n.Task == (byte)CharacterTask.GoTo && Vector2.DistanceSquared(n.Goal, to) < 1)
         {
