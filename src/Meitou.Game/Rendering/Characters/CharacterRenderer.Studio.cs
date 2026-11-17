@@ -437,7 +437,7 @@ internal static class StudioShaders
         vec3 studioAmbient(vec3 n, float open)
         {
             vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
-            return sky * 2.2 * mix(0.3, 1.0, open);
+            return sky * 2.75 * mix(0.4, 1.0, open);
         }
         float studioOcclusion()
         {

@@ -58,13 +58,19 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
     /// What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.
     /// </summary>
     internal readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather,
-        bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
+        bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections, float InteriorGain);
 
     /// <summary>
     /// The fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): none. A grey light all round on the characters alone made them
     /// brighter than the room, as if they glowed.
     /// </summary>
     static readonly Vector3 EditorBarCharacterFill = Vector3.Zero;
+
+    /// <summary>
+    /// The bar's room fill (<see cref="Rendering.Gi.GiProbes.InteriorGain"/>) while it is drawn: half the game's ambient, where the world's rooms take a
+    /// quarter. At a quarter the characters by the bar's lamps read too dark for a preview.
+    /// </summary>
+    const float EditorBarInteriorGain = 1.5f;
 
     /// <summary>
     /// When the bar's room was first found laid out (real seconds); null before.
@@ -110,9 +116,11 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         host.Player.CharacterEditor.EditorInWorld = EditorBarReady;
         var sky = host.Gpu.Sky;
         var frame = new EditorBarFrame(host.Camera.Target, host.Camera.Yaw, host.Camera.Pitch, host.Camera.Distance, sky.Weather, host.Gpu.Weather,
-            host.Gpu.WeatherParticles, host.Gpu.Characters?.Fill ?? default, host.Render.Water, host.Render.Reflections);
+            host.Gpu.WeatherParticles, host.Gpu.Characters?.Fill ?? default, host.Render.Water, host.Render.Reflections,
+            host.Gpu.Probes?.InteriorGain ?? 0);
         PlaceEditorCamera(bar, width, height);
         if (host.Gpu.Characters is { } lit) lit.Fill = EditorBarCharacterFill;
+        if (host.Gpu.Probes is { } probes) probes.InteriorGain = EditorBarInteriorGain;
         (host.Gpu.ViewCap, host.Render.Water, host.Render.Reflections) = (EditorBarViewCap, false, false);
 
         // Nothing of the world in this frame, drawn or traced: the frame's own pipeline and settings, over the bar alone.
@@ -136,6 +144,7 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         if (host.Gpu.Gi is { } traced) traced.SkipWorld = false;
         if (host.Gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = false;
         if (host.Gpu.Characters is { } lit) lit.Fill = frame.Fill;
+        if (host.Gpu.Probes is { } probes) probes.InteriorGain = frame.InteriorGain;
         (host.Gpu.ViewCap, host.Render.Water, host.Render.Reflections) = (null, frame.Water, frame.Reflections);
         if (EditorBarReady) { if (host.Gpu.Characters is { } characters) characters.StageRequest = null; }
         else editor.DrawEditorStage(width, height, posed: true);
