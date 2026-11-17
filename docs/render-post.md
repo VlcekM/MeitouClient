@@ -250,8 +250,11 @@ The Metal chain has no copy: its sprites stay hard-edged.
 
 Fog shading rate (`FogShadingRate`): build tile rates from completed scene depth/fog; frame N's
 R8_UINT rate image drives frame N+1 opaque scene shading. Requires device fragment-shading-rate
-support; absent support uses normal shading. Excludes reflection, shadow, particles and post.
-Coarse rates can alter fine cut-outs and temporal output; it is a quality/performance tradeoff.
+support; absent support uses normal shading. Excludes reflection, shadow, particles and post, and every
+pipeline whose fragment stage can discard (`VulkanProgram.FragmentDiscards`: OpKill, OpTerminateInvocation or
+OpDemoteToHelperInvocation in its SPIR-V), which keeps its own 1x1 rate: a coarse fragment takes one alpha test
+for its block, so reeds, grass and ruins' windows were cut in steps of 2 and 4 pixels in a heavy fog
+(**Observed**, save fog-pixelated, a mod's green gas weather: blocky against the fogged sky with it, smooth without).
 
 ## Colour, night and particles
 

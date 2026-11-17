@@ -137,7 +137,7 @@ public static unsafe class PipelineFactory
     public static Pipeline CreateGraphics(VulkanDevice device, ShaderModule vertex, ShaderModule fragment, PipelineLayout layout,
         ReadOnlySpan<VertexInput> inputs, PrimitiveType topology, AttachmentFormats targets, BlendState blendState,
         ColorMask colourMask, PolygonKind polygon, bool alphaToCoverage, bool depthClamp, ColorMask extraMask = 0,
-        ShaderModule tessControl = default, ShaderModule tessEvaluation = default, ColorMask extra2Mask = 0)
+        ShaderModule tessControl = default, ShaderModule tessEvaluation = default, ColorMask extra2Mask = 0, bool fullRate = false)
     {
         var entry = "main"u8;
         int n = inputs.Length;
@@ -172,7 +172,7 @@ public static unsafe class PipelineFactory
                 GlConventions.VkFormatOrUndefined(targets.Extra2),
             };
             var rendering = RenderingInfo(targets, colourCount, colourFormats);
-            var rate = ShadingRateState();
+            var rate = ShadingRateState(fullRate);
             if (targets.ShadingRate) rendering.PNext = &rate;
             fixed (byte* name = entry)
             {
@@ -345,18 +345,19 @@ public static unsafe class PipelineFactory
     }
 
     /// <summary>
-    /// The fragment shading rate state for a rendering with a shading rate attachment.
+    /// The fragment shading rate state for a rendering with a shading rate attachment: the attachment's rate, or with <paramref name="fullRate"/> (a
+    /// fragment stage that can discard) the pipeline's own 1x1: a coarse fragment takes one alpha test for its whole block, so a cut-out (grass, a
+    /// reed, a ruin's window) was cut in steps of 2 and 4 pixels where the fog hid most of the surface.
     /// </summary>
-    static PipelineFragmentShadingRateStateCreateInfoKHR ShadingRateState()
+    static PipelineFragmentShadingRateStateCreateInfoKHR ShadingRateState(bool fullRate)
     {
-        // A rendering with a shading rate attachment (Formats.ShadingRate): the pipeline keeps its own rate (1x1) and takes the attachment's.
         var rate = new PipelineFragmentShadingRateStateCreateInfoKHR
         {
             SType = StructureType.PipelineFragmentShadingRateStateCreateInfoKhr,
             FragmentSize = new Extent2D(1, 1),
         };
         rate.CombinerOps[0] = FragmentShadingRateCombinerOpKHR.KeepKhr;
-        rate.CombinerOps[1] = FragmentShadingRateCombinerOpKHR.ReplaceKhr;
+        rate.CombinerOps[1] = fullRate ? FragmentShadingRateCombinerOpKHR.KeepKhr : FragmentShadingRateCombinerOpKHR.ReplaceKhr;
         return rate;
     }
 
@@ -611,7 +612,8 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
         var extraMask = p.FragmentReflection?.Outputs.Any(o => o.Location == 1) == true ? DrawState.Rgba : ColorMask.None;
         var extra2Mask = p.FragmentReflection?.Outputs.Any(o => o.Location == 2) == true ? DrawState.Rgba : ColorMask.None;
         var handle = PipelineFactory.CreateGraphics(_device, p.VertexModule, fragmentModule, p.Layout, d.Vertex.Inputs, d.Topology, d.Targets,
-            d.Blend, d.ColourMask, d.Polygon, d.AlphaToCoverage, d.DepthClamp, extraMask, p.TessControlModule, p.TessEvaluationModule, extra2Mask);
+            d.Blend, d.ColourMask, d.Polygon, d.AlphaToCoverage, d.DepthClamp, extraMask, p.TessControlModule, p.TessEvaluationModule, extra2Mask,
+            fullRate: p.FragmentDiscards);
         if (d.Name.Length > 0) _device.SetName(ObjectType.Pipeline, handle.Handle, d.Name);
         return handle;
     }

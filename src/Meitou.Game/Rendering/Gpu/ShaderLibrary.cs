@@ -167,6 +167,7 @@ internal sealed unsafe class VulkanProgram : IDisposable
         PushConstantStages = pushConstantStages;
         if (info.VertexCode is not null) VertexModule = CreateModule(info.VertexCode);
         if (info.FragmentCode is not null) FragmentModule = CreateModule(info.FragmentCode);
+        FragmentDiscards = info.FragmentCode is { } fragmentCode && SpirvDiscards(fragmentCode);
         if (info.TessControlCode is not null) TessControlModule = CreateModule(info.TessControlCode);
         if (info.TessEvaluationCode is not null) TessEvaluationModule = CreateModule(info.TessEvaluationCode);
         if (info.ComputeCode is not null) ComputeModule = CreateModule(info.ComputeCode);
@@ -214,6 +215,11 @@ internal sealed unsafe class VulkanProgram : IDisposable
     /// The fragment stage's module (0 without the stage).
     /// </summary>
     public ShaderModule FragmentModule { get; }
+    /// <summary>
+    /// Whether the fragment stage can leave a pixel out (<c>discard</c>: a cut-out's alpha test, a dithered fade): its pipelines shade every
+    /// pixel even under the fog shading rate (<see cref="SpirvDiscards"/>).
+    /// </summary>
+    public bool FragmentDiscards { get; }
     /// <summary>
     /// The compute stage's module (0 for a graphics program).
     /// </summary>
@@ -291,6 +297,24 @@ internal sealed unsafe class VulkanProgram : IDisposable
     /// <summary>
     /// A shader module of this device from <paramref name="spirv"/>; the caller destroys it.
     /// </summary>
+    /// <summary>
+    /// Whether SPIR-V <paramref name="spirv"/> has an instruction that leaves the fragment out: <c>OpKill</c> (252), <c>OpTerminateInvocation</c>
+    /// (4416) or <c>OpDemoteToHelperInvocation</c> (5380). The instructions follow the five-word header, each word count in its first word's high half.
+    /// </summary>
+    internal static bool SpirvDiscards(byte[] spirv)
+    {
+        var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(spirv);
+        for (int i = 5; i < words.Length;)
+        {
+            uint opcode = words[i] & 0xFFFF, count = words[i] >> 16;
+            if (opcode is 252 or 4416 or 5380) return true;
+            if (count == 0) return false;
+            i += (int)count;
+        }
+
+        return false;
+    }
+
     internal ShaderModule CreateModule(byte[] spirv)
     {
         fixed (byte* code = spirv)
