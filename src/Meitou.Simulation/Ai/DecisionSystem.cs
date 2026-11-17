@@ -264,13 +264,13 @@ public sealed class DecisionSystem
     /// <summary>
     /// The <b>engine</b> re-ask (design D4: no periodic replan was found in the original, but Meitou's idleness and job tasks do not end where the
     /// original's plans do): a character not fighting whose task is a job's or 14 Idleness's, or that no start runs (idle, a standing task), is
-    /// decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one on an order whose row needs no melee threat (146,
-    /// <see cref="PlayerOrders.NeedsNoThreat"/>), which a threat must take off its turret.
+    /// decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one whose front order runs its task, which the original's
+    /// order step tests on every AI update (its list A, <see cref="ListTests.OrderDone"/>; a row needing no melee threat, 146,
+    /// <see cref="PlayerOrders.NeedsNoThreat"/>, which a threat must take off its turret).
     /// </summary>
     public static bool ReAsked(World world, int slot, CharacterCold cold) =>
         GoalsComeFirst(world.Characters, slot, cold)
-        || !cold.InCombat && cold.Running is { Source: TaskSource.Order } run && run.Runs((CharacterTask)world.Characters.Next[slot].Task)
-            && cold.OrderQueue.Front is { Started: true } front && PlayerOrders.NeedsNoThreat(front.Row);
+        || cold.OrderQueue.Front is { Started: true } front && PlayerOrders.Runs(world, slot, front);
 
     /// <summary>
     /// Whether the character's task is one the step's priority-3 goals (step 4) come before, so a goal that can run takes it over: not a fight, and
@@ -410,8 +410,9 @@ public sealed class DecisionSystem
     /// <summary>
     /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job
     /// but 16, 31, 45, 57, 58 and 250 (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not
-    /// register is skipped; the first job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a
-    /// lower one at the next decision. Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source
+    /// register is skipped, and so is one the general list tests pass over (<see cref="ListTests.JobSkipped"/>: done, or nothing to do); the first
+    /// job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a lower one at the next decision.
+    /// Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source
     /// (<see cref="Production.ProductionSystem"/>).
     /// </summary>
     sealed class JobSource(DecisionSystem owner, bool urgent) : IDecisionSource
@@ -449,6 +450,7 @@ public sealed class DecisionSystem
                 DecisionCheck check;
                 if (!on && !Production.PermaJobs.IgnoresSwitch(type)) check = DecisionCheck.No("jobs switch off");
                 else if (!TaskStart.Eligible(world, cold, type)) check = DecisionCheck.No("not in its repertoire");
+                else if (ListTests.JobSkipped(world, slot, cold.Jobs[k], out var why)) check = DecisionCheck.No(why);
                 else check = source.CanRun(world, slot, k);
                 if (owner.Tracing)
                 {

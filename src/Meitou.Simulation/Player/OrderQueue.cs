@@ -438,6 +438,7 @@ public static class PlayerOrders
     internal static void Prepare(World world, int slot)
     {
         var q = world.Characters.Cold(slot)!.OrderQueue;
+        PopDone(world, slot);
         while (q.Front is { } front)
         {
             if (front.Started)
@@ -464,6 +465,23 @@ public static class PlayerOrders
             if (CanRun(world, slot, front).Verdict != OrderVerdict.Gone) return;
             q.PopFront();
         }
+    }
+
+    /// <summary>
+    /// <c>checkOrders</c>' first pop (<c>FUN_140510920</c>, <b>Verified</b>): the front order leaves when its row is done
+    /// (<see cref="ListTests.OrderDone"/>, slot 4 asked of the task when the front runs it); a running one ends its task with it (the plan step ends
+    /// that task on the same test, <c>FUN_14050d970</c>, and its end pops the order, <c>FUN_14050d7d0</c>). One pop per decision, as the original's.
+    /// </summary>
+    static void PopDone(World world, int slot)
+    {
+        var q = world.Characters.Cold(slot)!.OrderQueue;
+        if (q.Front is not { } front || front.Started && !Runs(world, slot, front)) return;
+
+        bool running = front.Started;
+        if (!ListTests.OrderDone(world, slot, front, running)) return;
+
+        if (running) TaskStart.End(world, slot, TaskEnd.Done);
+        if (q.Front == front) q.PopFront();
     }
 
     /// <summary>

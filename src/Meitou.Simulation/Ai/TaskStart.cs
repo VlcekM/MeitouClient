@@ -95,6 +95,11 @@ public enum StartResult : byte
     /// The character's <see cref="Repertoire"/> does not register the row; nothing changed.
     /// </summary>
     NotEligible,
+    /// <summary>
+    /// An engine walk into a building shut to the walker (<see cref="DestinationAccess.WalkRefused"/>): its plan fails; the walk counts as one that
+    /// ended short.
+    /// </summary>
+    Inaccessible,
 }
 
 /// <summary>
@@ -334,15 +339,36 @@ public static class TaskStart
     /// Starts an engine walk to <paramref name="goal"/> at <paramref name="mode"/> as row <paramref name="row"/> (<see cref="Start"/> of a
     /// <see cref="CharacterTask.GoTo"/> with <see cref="TaskRequest.Goal"/>).
     /// </summary>
-    public static StartResult Walk(World world, int slot, System.Numerics.Vector2 goal, byte mode, TaskType row, TaskSource source) =>
-        Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Goal = goal, Mode = mode });
+    public static StartResult Walk(World world, int slot, System.Numerics.Vector2 goal, byte mode, TaskType row, TaskSource source)
+    {
+        var point = new System.Numerics.Vector3(goal.X, float.NaN, goal.Y);
+        if (DestinationAccess.WalkRefused(world, slot, row, point)) return Refuse(world, slot);
+
+        return Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Goal = goal, Mode = mode });
+    }
 
     /// <summary>
     /// Starts an engine walk onto the floor at <paramref name="at"/> (<see cref="MovementSystem.GoToFloor"/>), as
     /// <see cref="Walk(World, int, System.Numerics.Vector2, byte, TaskType, TaskSource)"/>.
     /// </summary>
-    public static StartResult Walk(World world, int slot, System.Numerics.Vector3 at, byte mode, TaskType row, TaskSource source) =>
-        Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Point = at, Mode = mode });
+    public static StartResult Walk(World world, int slot, System.Numerics.Vector3 at, byte mode, TaskType row, TaskSource source)
+    {
+        if (DestinationAccess.WalkRefused(world, slot, row, at)) return Refuse(world, slot);
+
+        return Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Point = at, Mode = mode });
+    }
+
+    /// <summary>
+    /// An engine walk refused by its destination's doors (docs/game/locks.md "Locked doors on the way"): it counts as a walk that ended short, as one
+    /// stopped at a locked door; a walk under way stops, its provenance kept.
+    /// </summary>
+    static StartResult Refuse(World world, int slot)
+    {
+        var table = world.Characters;
+        if (table.Next[slot].Task == (byte)CharacterTask.GoTo) Stand(table, slot);
+        table.Cold(slot)!.WalkEnd = WalkEnd.Failed;
+        return StartResult.Inaccessible;
+    }
 
     /// <summary>
     /// Starts an engine standing task (<see cref="CharacterTask.Idle"/>, <see cref="CharacterTask.Wander"/>, or a <see cref="CharacterTask.Follow"/>

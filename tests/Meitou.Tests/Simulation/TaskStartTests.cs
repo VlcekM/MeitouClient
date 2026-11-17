@@ -226,7 +226,7 @@ public class TaskStartTests
             "dismantle" => new DismantleOrder([f], rig.WellSite) { Tick = tick },
             "use bed" => new UseBedOrder([f], rig.BedFixture) { Tick = tick },
             "put in bed" => new PutInBedOrder([f], rig.BedFixture) { Tick = tick },
-            "pick lock" => new PickLockOrder([f], CharacterId.None) { Tick = tick, Cage = rig.EmptyCage },
+            "pick lock" => new PickLockOrder([f], CharacterId.None) { Tick = tick, Cage = rig.LockedCage },
             "set free" => new SetFreeOrder([f], rig.Prisoner) { Tick = tick },
             "get in cage" => new GetInCageOrder([f], rig.EmptyCage) { Tick = tick },
             "force lock" => new ForceLockOrder([f], rig.LockedCage, LockForce.Strength) { Tick = tick },

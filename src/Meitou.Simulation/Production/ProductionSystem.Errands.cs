@@ -9,9 +9,9 @@ using Meitou.Simulation.Movement;
 namespace Meitou.Simulation.Production;
 
 /// <summary>
-/// The carrying jobs of the lists (docs/game/ai-tasks.md "Perma-jobs" and "Finders of the jobs"): corpse disposal (137 with its finder 138) and the
-/// removal of intruders (223 / 273 with their companions 224 / 274). A pass every ErrandEveryTicks ticks lets a free character with the job lift what
-/// the job's finder names and walks it to where the companion task takes it; the lift and the put-down are the carry system's.
+/// The carrying jobs of the lists (docs/game/ai-tasks.md "Perma-jobs" and "Finders of the jobs"): corpse disposal (the lift 138 Find corpses and the
+/// delivery 137 Corpse disposal, two jobs) and the removal of intruders (223 / 273 with their companions 224 / 274). A free character with the job
+/// lifts what the job's finder names and walks it to where the delivery takes it; the lift and the put-down are the carry system's.
 /// </summary>
 public sealed partial class ProductionSystem
 {
@@ -49,7 +49,7 @@ public sealed partial class ProductionSystem
     enum ErrandKind : byte
     {
         /// <summary>
-        /// Corpse disposal (137 with its finder 138).
+        /// Corpse disposal: the lift of 138 (or of 137's plan) and the delivery of 137.
         /// </summary>
         Corpse,
         /// <summary>
@@ -92,6 +92,14 @@ public sealed partial class ProductionSystem
         /// </summary>
         public bool Ordered;
         /// <summary>
+        /// A corpse carried to its machine (137's delivery, or the order's); false while a corpse job's lift runs, which ends with the lift.
+        /// </summary>
+        public bool Delivering;
+        /// <summary>
+        /// The list job that started it (<see cref="TaskType.None"/>: the order).
+        /// </summary>
+        public TaskType Job;
+        /// <summary>
         /// The corpse machine the carrier is taking the body to: claimed against its squad mates (the squad blackboard's goal list).
         /// </summary>
         public string? Site;
@@ -111,30 +119,22 @@ public sealed partial class ProductionSystem
     /// </summary>
     static ErrandKind? KindOf(TaskType type) => type switch
     {
-        TaskType.FindADeadGuy => ErrandKind.Corpse,
+        TaskType.FindADeadGuy or TaskType.DeadGuysGoInThePot => ErrandKind.Corpse,
         TaskType.PickupIntruders => ErrandKind.OutOfBuilding,
         TaskType.PickupIntrudersTown => ErrandKind.OutOfTown,
         _ => null,
     };
 
     /// <summary>
-    /// The delivery job that must be in the list for the carrying out.
+    /// The delivery job that must be in the list for an intruder's carrying out.
     /// </summary>
-    static TaskType CompanionOf(ErrandKind kind) => kind switch
-    {
-        ErrandKind.Corpse => TaskType.DeadGuysGoInThePot,
-        ErrandKind.OutOfBuilding => TaskType.TakeIntruderOutside,
-        _ => TaskType.TakeIntruderOutsideTown,
-    };
+    static TaskType CompanionOf(ErrandKind kind) => kind == ErrandKind.OutOfBuilding ? TaskType.TakeIntruderOutside : TaskType.TakeIntruderOutsideTown;
 
     /// <summary>
-    /// Whether the delivery can run (<b>Verified</b>: the lifts 138 / 223 / 273 do not look at the companion job nor at a machine; only the delivery
-    /// jobs 137 / 224 / 274 do): the companion is in the list (or the player ordered the delivery) and, for a corpse, a machine exists. Otherwise the
-    /// carrier keeps the body and the errand waits.
+    /// Whether an intruder's carrying out can run (<b>Verified</b>: the lifts 223 / 273 do not look at the companion job; only the delivery jobs
+    /// 224 / 274 do): the companion is in the list. Otherwise the carrier keeps the body and the errand waits.
     /// </summary>
-    bool DeliveryReady(World world, CharacterId self, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
-        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0)
-            && (kind != ErrandKind.Corpse || NearestIncinerator(world, at, self, cold.SquadId) is not null);
+    static bool DeliveryReady(CharacterCold cold, ErrandKind kind) => PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0;
 
     /// <summary>
     /// The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the
@@ -154,8 +154,9 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The carrying jobs as the decision step's contributor (step 5): a character carrying nothing, able to carry and not fleeing, with a job whose
-    /// finder finds something, lifts it (the lift does not need the delivery job nor a machine). It runs while its lift is under way and while its
-    /// delivery can run (<see cref="DeliveryReady"/>).
+    /// finder finds something, lifts it (the lift does not need the delivery job nor a machine). An intruder job runs while its lift is under way and
+    /// while its carrying out can run (<see cref="DeliveryReady"/>); a corpse job's lift ends with the lift, and 137 delivers a carried corpse as a
+    /// job of its own.
     /// </summary>
     sealed class ErrandJobs(ProductionSystem owner) : IJobSource
     {
@@ -165,44 +166,113 @@ public sealed partial class ProductionSystem
         (long Tick, int Slot, int K, CharacterId Body, Vector2 Goal) _found = (-1, -1, -1, CharacterId.None, default);
 
         /// <summary>
-        /// Whether carrying job <paramref name="k"/> can run: one under way of the same kind runs on; else its finder must find a body to lift.
+        /// Whether carrying job <paramref name="k"/> can run: a corpse job as <see cref="CorpseCanRun"/>; an intruder job under way runs on while its
+        /// carrying out can (<see cref="DeliveryReady"/>), else its finder must find a body to lift.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
-            if (owner.Carry is null || KindOf(cold.Jobs[k].Type) is not { } kind) return DecisionCheck.No(null);
+            var type = cold.Jobs[k].Type;
+            if (owner.Carry is null || KindOf(type) is not { } kind) return DecisionCheck.No(null);
+            if (kind == ErrandKind.Corpse) return CorpseCanRun(world, slot, k, type == TaskType.DeadGuysGoInThePot);
+
             if (owner._errands.TryGetValue(table.IdOf(slot), out var e))
             {
-                bool mine = e.Kind == kind
-                    && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
-                if (!mine) return DecisionCheck.No("another errand");
-                return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered)
-                    ? DecisionCheck.Runs
-                    : DecisionCheck.No("nothing to deliver to");
+                if (e.Kind != kind || !Lifting(table, slot, cold, e) && cold.Carrying != e.Body) return DecisionCheck.No("another errand");
+                return cold.Carrying.IsNone || DeliveryReady(cold, kind) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
             }
 
-            if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) || cold.Fleeing)
-                return DecisionCheck.No("cannot carry");
+            if (!Free(world, cold)) return DecisionCheck.No("cannot carry");
+            return Found(world, slot, k, owner.FindIntruder(world, slot, cold, Lifted(world, cold.SquadId, table.IdOf(slot)), kind));
+        }
 
-            var lifted = Lifted(world, cold.SquadId, table.IdOf(slot));
-            var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
-            if (body is not { } b) return DecisionCheck.No("nothing found");
-            _found = (world.Tick, slot, k, b.Id, b.Goal);
+        /// <summary>
+        /// The corpse jobs (<b>Verified</b>, docs/game/ai-tasks.md "Finders of the jobs"): 138 Find corpses lifts (desire <c>FUN_140599480</c>: 0 on
+        /// Hold or while carrying; its finder a corpse); 137 Corpse disposal (finder <c>FUN_1408d1090</c>: a disposal) delivers a carried dead body
+        /// (its list B 99), and plans 138's lift when nothing is carried. A lift or a delivery under way runs on for the job that started it.
+        /// </summary>
+        DecisionCheck CorpseCanRun(World world, int slot, int k, bool delivery)
+        {
+            var table = world.Characters;
+            var cold = table.Cold(slot)!;
+            var id = table.IdOf(slot);
+            if (owner._errands.TryGetValue(id, out var e) && (Lifting(table, slot, cold, e) || e.Delivering && cold.Carrying == e.Body))
+                return e.Kind == ErrandKind.Corpse && e.Job == cold.Jobs[k].Type ? DecisionCheck.Runs : DecisionCheck.No("another errand");
+
+            if (delivery && owner.NearestIncinerator(world, table.Next[slot].Position, id, cold.SquadId) is null)
+                return DecisionCheck.No("no disposal");
+            if (!cold.Carrying.IsNone) return Deliverable(world, slot, k, cold, delivery);
+
+            if ((cold.Orders & Player.CharacterOrders.Hold) != 0) return DecisionCheck.No("holding");
+            if (!Free(world, cold)) return DecisionCheck.No("cannot carry");
+            return Found(world, slot, k, owner.FindCorpse(world, slot, cold, Lifted(world, cold.SquadId, id)));
+        }
+
+        /// <summary>
+        /// A corpse job of a character carrying a body: 138's desire is 0; 137 delivers a dead one (list B 99, <see cref="CarriesCorpse"/>), and with
+        /// any other body its plan would need 138, whose desire is 0.
+        /// </summary>
+        DecisionCheck Deliverable(World world, int slot, int k, CharacterCold cold, bool delivery)
+        {
+            if (!delivery) return DecisionCheck.No("carrying");
+            if (!CarriesCorpse(world, cold)) return DecisionCheck.No("not carrying a corpse");
+
+            _found = (world.Tick, slot, k, cold.Carrying, default);
             return DecisionCheck.Run;
         }
 
         /// <summary>
-        /// Lifts the body <see cref="CanRun"/> found this tick and starts the errand.
+        /// Lifts the body <see cref="CanRun"/> found this tick and starts the errand, or, for 137 with a corpse carried, starts its delivery.
         /// </summary>
         public void Start(World world, int slot, int k)
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
-            if (_found.Tick != world.Tick || _found.Slot != slot || _found.K != k || KindOf(cold.Jobs[k].Type) is not { } kind) return;
-            if (!owner.Carry!.BeginPickUp(world, slot, _found.Body, source: TaskSource.Job, job: k, row: cold.Jobs[k].Type)) return;
-            owner._errands[table.IdOf(slot)] = new Errand { Kind = kind, Goal = _found.Goal, Body = _found.Body };
+            var type = cold.Jobs[k].Type;
+            if (_found.Tick != world.Tick || _found.Slot != slot || _found.K != k || KindOf(type) is not { } kind) return;
+
+            var id = table.IdOf(slot);
+            if (!cold.Carrying.IsNone)
+            {
+                var delivery = new Errand { Kind = kind, Body = cold.Carrying, Delivering = true, Job = type };
+                owner._errands[id] = delivery;
+                owner.StepErrand(world, slot, cold, delivery);
+                return;
+            }
+
+            if (!owner.Carry!.BeginPickUp(world, slot, _found.Body, source: TaskSource.Job, job: k, row: type)) return;
+            owner._errands[id] = new Errand { Kind = kind, Goal = _found.Goal, Body = _found.Body, Job = type };
         }
+
+        /// <summary>
+        /// The finder's pick, kept for <see cref="Start"/>: the job can run when it found a body.
+        /// </summary>
+        DecisionCheck Found(World world, int slot, int k, (CharacterId Id, Vector2 Goal)? body)
+        {
+            if (body is not { } b) return DecisionCheck.No("nothing found");
+
+            _found = (world.Tick, slot, k, b.Id, b.Goal);
+            return DecisionCheck.Run;
+        }
+
+        /// <summary>
+        /// Whether the lift of errand <paramref name="e"/> runs.
+        /// </summary>
+        static bool Lifting(CharacterTable table, int slot, CharacterCold cold, Errand e) =>
+            table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body;
+
+        /// <summary>
+        /// Whether the character may start a lift: carrying nothing, able to carry and not fleeing.
+        /// </summary>
+        static bool Free(World world, CharacterCold cold) =>
+            cold.Carrying.IsNone && CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) && !cold.Fleeing;
+
+        /// <summary>
+        /// State 99 isCarriedDudeDead (<c>FUN_1405a14e0</c>, <b>Verified</b>): the character carries a body whose dead byte (+0x5bc) is set.
+        /// </summary>
+        static bool CarriesCorpse(World world, CharacterCold cold) =>
+            world.Characters.TryResolveNext(cold.Carrying, out int b) && world.Characters.Cold(b)?.Medical is { Dead: true };
     }
 
     /// <summary>
@@ -215,7 +285,7 @@ public sealed partial class ProductionSystem
         {
             if (!table.TryResolveNext(id, out int i) || table.Cold(i) is not { IsPlayer: true } cold || cold.Carrying.IsNone) continue;
             if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b)?.Medical is not { Dead: true }) continue;
-            _errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true };
+            _errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true, Delivering = true };
         }
     }
 
@@ -286,11 +356,18 @@ public sealed partial class ProductionSystem
         if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, cold, n, e);
         Vector2 goal = e.Goal;
         CorpseMachine? machine = null;
-        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;
+        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(cold, e.Kind)) return;
         if (e.Kind == ErrandKind.Corpse)
         {
-            if (!DeliveryReady(world, id, cold, e.Kind, n.Position, e.Ordered)) return;   // the carrier keeps the body, the errand waits
-            machine = NearestIncinerator(world, n.Position, id, cold.SquadId)!;
+            // A corpse job's lift is over once the body is held; its delivery is 137's (or the order's), decided anew.
+            if (!e.Delivering)
+            {
+                _errands.Remove(id);
+                return;
+            }
+
+            if (NearestIncinerator(world, n.Position, id, cold.SquadId) is not { } found) return;   // the carrier keeps the body, the errand waits
+            machine = found;
             (e.Site, e.Machine) = (machine.Id, machine);
             goal = DisposalGoal(world, machine);
         }

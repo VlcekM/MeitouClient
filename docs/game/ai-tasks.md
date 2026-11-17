@@ -404,6 +404,15 @@ from the decompile and agree with this table, except that the decompile shows no
 20, whose names here come from the disassembly). No registration call was found for ids 8, 9, 10, 11, 14, 19, 21, 30, 34, 35, 44,
 49, 61, 75, 96, 119, 138, 170; ids 33 and 85 are registered with an empty name.
 
+Evaluators of the states the order step and job pass ask (`RowStates`; **Verified**, each id's registry thunk followed in the 1.0.68 exe, then the
+function read): 0 and 135 AI slot 10 `FUN_140641540`, false; 1 AI slot 11 `FUN_1405a2450` (the walk's arrival, [planner](#planner)); 2 `FUN_140596b20`, a
+building target's slot 97 false (a door's broken byte `+0x3b6`) and its complete byte `+0x160`; 7 `FUN_14099a5a0` (`CharacterFacts.TargetDown`); 47
+`FUN_140598d20` (carrying, `+0x348`); 48 `FUN_14059a300` (carrying the target); 77, 81 and 100 `FUN_14060e5c0` (!47); 52 `FUN_1405a3ad0` (the door's
+state 1 open, or 2 opening past 0.8, `DAT_141693ea8`); 54 `FUN_1405a00c0` (locked, not broken, level 1 or more); 56 `FUN_1405a3a10` (broken); 71
+`FUN_140598d60` → `FUN_1400f6b70` (built `+0x164` below the target `+0x188`); 78 `FUN_1405a1cc0` (the target's `+0x2f8` 2, caged); 79 `FUN_140599570` (own
+`+0x2f8` 2); 83 `FUN_140599540` (`+0x2f8` 1 with a bed); 99 `FUN_1405a14e0` (the carried character's dead byte `+0x5bc`); 114 `FUN_1405a1f00` (the worn
+shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-threat flag `+0x2b0`), 39 the same of itself.
+
 | id | name |
 |---|---|
 | 0 | `none` |
@@ -918,14 +927,24 @@ the original's task: a fight (`Attack`) is 4 or 227, or Task_RangedAttack's 262 
 and `CombatSystem.Playing`; Stumble the hit reaction (`StumbleClip` until `StunUntil`); Talk `DialogueSystem.Talking` and `CharacterFacts.ImmediateThreat`; Formation the squad
 leading its platoon's campaign (`CampaignInstance.Leader`) with the character its leader (215's list A, state 131: [StateType ids](#statetype-ids)); a move counts as updated
 once its act-out has had a tick. The fight answer raises a running fight goal below 1 (the `goal-fights` golden scenario). Still different: no goal or plan step Meitou runs is
-of the Announcement, Stumble or Talk classes (147, 164 and 165 are engine systems, 103 and 129 not acted out), so their answers are never asked. The order step and the job
-pass ask no generic list-A test: an order leaves when its act-out ends (`ITaskHandler.Done`, `PlayerOrders.Prepare`), a job by its contributor's rules (152's `!62` in
-`ProductionSystem.Blocked`, a base-class row). The original (**Verified**): the order step (`FUN_140510920`) pops the front order, read as the running task when it is the one
-running (`FUN_140506b10`), when its list A, its effect test and its slot 4 hold, or when its desire x finder is 0 or less; the job pass (`FUN_14050e5b0`) skips a job whose
-task's slot 4, list A and effect test hold, and one whose row can run but neither acts nor has an effect. The effect test (`FUN_14050c8e0`) holds for a row without an effect
-(or with TaskData `+0x120` set), else when it has no finder or its finder scores 0 or less (`FUN_14060f460`). An empty list A never holds, so of the jobs Meitou's contributors offer only 138 (99, the carried body
-dead) and 242 (147) can be skipped by it (87's 123 is always false, 234 never finishes). List A never pops a running order of an own-end class (26, 225, 246) and never skips
-a job of an own-end or move class.
+of the Announcement, Stumble or Talk classes (147, 164 and 165 are engine systems, 103 and 129 not acted out), so their answers are never asked.
+
+The order step and the job pass (**Verified**): the order step (`FUN_140510920`) pops the front order, read as the running task when it is the one running (`FUN_140506b10`),
+when its list A, its effect test and its slot 4 hold, or when its desire x finder is 0 or less; the task's own end and a replan (`FUN_14050d7d0`, `FUN_14050d080`) pop the
+order the running task matches too. The job pass (`FUN_14050e5b0`) skips a job whose task's slot 4, list A and effect test hold, and one whose row can run but neither acts nor
+has an effect, unless TaskData `+0x14` is set (the registrations writing the short 0x101 in `FUN_140319a60`: rows 20, 22, 36, 37, 38, 39, 47, 62, 97, 147, 150, 157, 258, 268).
+The effect test (`FUN_14050c8e0`) holds for a row without an effect (or with TaskData `+0x120` set), else when it has no finder or its finder scores 0 or less
+(`FUN_14060f460`). An empty list A never holds. List A never pops a running order of an own-end class (26, 225, 246) and never skips a job of an own-end or move class.
+Meitou (`ListTests`, `RowStates`): `OrderQueue.Prepare` pops a done front (`ListTests.OrderDone`, once per decision; a running one ends with `TaskEnd.Done`) besides the
+act-out's own end (`ITaskHandler.Done`); the job step's `CanRun` skips a job by `ListTests.JobSkipped`. A list holding a state `RowStates` does not evaluate never holds; the
+evaluated states are marked in [StateType ids](#statetype-ids). Rows this wires: the order rows 2, 5 / 61, 69, 72, 73, 76, 77, 78, 99, 107, 108, 140, 185, 186, 201, 226,
+285, 286 (95, 96, 87, 110 and 221 never pop by it: 0 / 123 in list A); of the jobs, 45 Bodyguard is skipped while its list B (`!16 !39`, nobody threatened) holds, so its
+companion 31 follows (**Observed**, #838's save headless: Miu's 45 skipped, her 31 following; a row with an effect and a finder, as 138, is never
+skipped by it: its finder scoring 0 drops it anyway). Still different: list A of 29 Move,
+98 Sleep and 3 Pick up is not evaluated, so those orders leave by their act-out's end alone: 29's state 1 within 12 or on a finished or failed path would replace the
+movement's arrival (within 10, `MovementSystem.ArriveRadius`) and its failed path clearing the queue; 98's state 72 has a Meitou answer only (not incapacitated), which would
+end a sleep order on lying down; Meitou's row 3 is also the container walk, whose target is no item. An order's desire x finder is not asked (an order whose target is gone
+leaves by its own `Gone`).
 
 ## Planner
 
@@ -1056,11 +1075,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   ([simulation](../simulation.md#order-queue); one that cannot run stays queued with its text and the step goes on; a turret gunner's 146 ends under a melee threat and is taken up again
   once it is gone), step 2 has no source (no player goal Meitou runs commits), step 3 the urgent jobs (234 while an enemy is sensed; 187 Obedient Slave of an enslaved player character: its master squad's Slave goals 171, 189 / 190, 172, 41, 143, 35, 14, [Obedient Slave](#slave-work-shout-and-capture)), step 4
   picks among 32 Self preservation, 243 Getting food, a player animal's priority-3 race goals (277-279), 259 Picking up food, Hold's 16 and 15 Protect allies (joining a mate's or
-  an ally's fight), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goal 233 and
+  an ally's fight; none has a stepped plan: each is acted out by its engine system, fights by the combat system, 243 by `TownDutySystem`, 277-279 by
+  `CaptiveSystem`, 259 by `FeedSystem`, as an NPC's same goal, so the NPC side's plan step has nothing to run for them either), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goal 233 and
   14 Idleness (a player character's routine: it stands; the default task is never reached, as only ROAM_FAR is modelled). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). Followers and bodyguards fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
   within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask every `JobCheckTicks` of a character
-  idle or on a job's task (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
+  idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
   `RetaliationSystem.JoinFight` at step 4 (below).
 - **15 Protect allies for a player character** (**Verified**: desire `FUN_140599b90`, finder `FUN_14099ca10`, falloff `FUN_1409b2380`, constants from the exe): desire 0 when Passive or
   sneaking outside a fight; else the finder's best sensed ally (seen or heard, tagged ally) by its fight threat (`FUN_14099a190`, [combat goals](#combat-goals)) x clamp((1000 - d^2) / 990, 0.1, 1)
@@ -1529,7 +1549,7 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     to the point beyond the home building's first door (`Building` vfunc 0x3e0 `FUN_1400f7080` → the first entry of the door list; `FUN_140296a40`: A + (A - B) x 1.1, **Verified**, the same point as Leave Building's; Meitou `ProductionSystem.OutsideGoal` via `AiSystem.DoorExit`, the lowest door index; no door: the town's exit point); its start (slot 2) ends the task
     without a home building and drops at once when nothing is carried; its update (slot 7, shared with 274) does nothing while the movement controller's moving byte (+0x24) is set (it zeroes the timer); when clear it stamps the clock once, and drops the body (`FUN_1405ce1e0`) when the movement says the walk is over or elapsed clock hours x 60 >= 5 (**Verified**; so the 5 minutes count only time standing still). Meitou `ProductionSystem.CarryOutOver`: GoTo task = moving; the walk the job started having ended = walk over. `Task_TakeIntruderOutsideTown` walks to the town's exit point (`Town` vfunc 0x38 `FUN_140927120`, a cached point refreshed on a timer: 200 beyond a door of one of its
     buildings through vfunc 0x290 `FUN_140929560`, else beyond the door of a building `FUN_1409b2ab0` finds; only partly read, **Observed**) and drops it there.
-  - Lift and delivery are separate (**Verified**: row 138 has list A 99 and no desire, its finder never calls the disposal finder, `FUN_14050e5b0` keeps a job while desire x finder > 0; row 137 has list B 99): a dead body is lifted with or without a machine or the delivery job 137, and 223 / 273 lift without 224 / 274 in the list; only the delivery jobs need their building / companion, else the carrier keeps the body. Meitou `ProductionSystem.DeliveryReady` leaves the errand waiting (the Corpse Disposal order needs no job).
+  - Lift and delivery are separate (**Verified**: row 138 has list A 99 and no desire, its finder never calls the disposal finder, `FUN_14050e5b0` keeps a job while desire x finder > 0; row 137 has list B 99): a dead body is lifted with or without a machine or the delivery job 137, and 223 / 273 lift without 224 / 274 in the list; only the delivery jobs need their building / companion, else the carrier keeps the body. Meitou: 138 and 137 are two jobs (`ErrandJobs.CorpseCanRun`: 137 needs a disposal, `NearestIncinerator`), and `ProductionSystem.DeliveryReady` holds an intruder's carrying out while its companion is missing (the Corpse Disposal order needs no job).
   - Claims (**Verified**, `FUN_1408d0770`, `FUN_1408cfb00`, `FUN_1408ce170`): `FUN_1402690e0` counts the entries of the squad blackboard's goal list (+0x238) whose worker is another character and whose target is the given hand; a count >= 1 skips a candidate machine, cage building or body. The scope is the squad: other squads may target the same body. Carried bodies are skipped globally (the carried byte). Meitou: `SquadGoals` (one list, systems publish their pairs through `IGoalSource`; `Working` = FUN_1402690e0, `IsMine` = FUN_140269190); the carried byte stays a global set (`Lifted`); the machine claim is the errand's `Site`. Callers on it: corpse/intruder errands, captive gathering (217's cage and occupant; 173's finder allows 0x100, i.e. no claim), NPC looting (FUN_14099ae10 counts the squad's entries, **Verified**), the medic and splint finders (FUN_14099f690, FUN_14099e240). A squadless character (test worlds only) shares one list. Entries are keyed by worker with a 3 s timer (`0x40400000`): the writers `FUN_140269ff0` (from the first aid task's update `FUN_14034ef20` and `FUN_1403346d0`) refresh it on every call, `Platoon::update` `FUN_14026a320` subtracts its dt and removes an entry below 0 (**Verified**), so a claim outlives its duty by up to 3 s. Meitou: `GoalClaims` (`World.Claims`) keeps each (worker, target) pair for 3 s after the sources last published it, refreshed once a tick; the original keeps one entry per worker, Meitou one per pair (its cage-and-captive duty adds two).
   - A machine whose path failed (**Verified**): `FUN_1408d0770` skips a building in the AI's ignore map (`FUN_1405b0290`); `FUN_140796ed0` (path-impossible notice, e.g. 'Task impossible: X can't get to Y') stores 20.0 for the hand and tells the squad blackboard, re-armed while the path stays impossible. Meitou `ProductionSystem.NoteWalkEnd`: a walk to the machine that ends short of it skips that machine for 20 s for that carrier, in the same ignore map as the builders' (`CharacterCold.Ignored`, not saved; the combat chase, first aid and the finders of patients, builders and carriers all read it); no walk limit and no body give-up any more (the carrier waits holding the body when no machine remains).
   - 138 Find corpses: `FUN_1408cfb00`: a building of function 8 (cage) of the character's (`FUN_1408cbea0` mask 0x100) holding a dead,

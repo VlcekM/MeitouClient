@@ -187,7 +187,8 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), smell hunts (176), dialogue acts (run away
   280, go home 19, summon 67, follow while talking 164, stalk 165, approach 126, a bought slave's way out 1), a trade's close (wander 24), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming and campaign leaders' walks (53, 215) and mills (24). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
-  `Point` onto the floor, at `Mode`); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
+  `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
+  [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
   Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule or dialogue act (arrest, flight, dialogue, trade) `Npc`.
 - Not serial: the AI's think (parallel, its own slot) starts its goals' walks and standing tasks with `TaskStart.StartOwn`: the provenance (row: the goal's, source `Goal`) and the
   walk or stand are written on the slot only; no fight or task before it is ended and no handler runs (the AI acts out nothing for a fighting character, and its tasks hold nothing). Its repertoire
@@ -232,6 +233,8 @@ the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, o
   queue (`MovementSystem`; a gap: the original keeps a failed order queued with its text, but Meitou only learns of the failure after the path search, and re-asking it would ask for
   the path again every `JobCheckTicks`).
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
+- A done front leaves at each decision before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
+  order step, [finished tests](game/ai-tasks.md#finished-tests)); a running one ends its task (`TaskEnd.Done`). So a pick order on a lock already open leaves at once.
 - `PlayerOrders.Holds` (a pure read): the character holds an order, running, waiting or queued (the original's count `+0x60`; a front whose task ended is not counted). The
   implicit ditch job 242 runs only without one ([perma-jobs](game/ai-tasks.md#perma-jobs)). `PlayerOrders.Wins` (pure): the front runs or can start, so source 1 wins; the
   player animals' race-goal jobs (`CaptiveJob.PlayerSide`) end once one runs or can start (a blocked order does not end them).
@@ -299,8 +302,9 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
   fight (not for a gunner), the melee alert while the fight is off unless the target gets up or is player-side and moving (horizontal speed above 1), a job list change or the jobs switch,
   a load, a sighting for row 16 (engine: the look stands in for the sensed list's update), a mate's or ally's defence offered, a failed kidnap's or knock-out's victim told of its attacker, a fight's end (a follow row then follows again,
   `MovementSystem.FollowAgain`: for an order in `PlayerOrders.Prepare`, for a job as its contributor). Also a front whose task ended, or one not tried yet. **Engine** re-ask (no
-  periodic replan was found): every `ProductionSystem.JobCheckTicks` 10 (slot-staggered) a character not fighting whose task is a job's, 14 Idleness's or no start's, or an order's of a
-  row needing no melee threat (the gunner); jobs and implicit jobs are found on this re-ask and the triggers.
+  periodic replan was found): every `ProductionSystem.JobCheckTicks` 10 (slot-staggered) a character not fighting whose task is a job's, 14 Idleness's or no start's, and one
+  whose front order runs its task (the original's order step tests it on every AI update); jobs and implicit jobs are found on this re-ask and the triggers. The job step passes
+  over a job the general list tests skip (`ListTests.JobSkipped`, [finished tests](game/ai-tasks.md#finished-tests)).
 - **Engine starts outside the step** (a step of a running row, or a reaction to another's act; the step leaves a claimed character alone that tick, `DecisionSystem.Claim`): a follow
   row's defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
 - **Trace** (`DecisionSystem.Tracing`, off by default): each decision fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an
@@ -1646,8 +1650,11 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     again once that fight leaves them idle (`FollowResume`; the fight's end asks the decision step, `MovementSystem.FollowAgain`); any other start in between replaces the row. The jobs run with the switch off (`IgnoresSwitch`). Bodyguard given to an animal adds 289 (animal Staying close) instead of 31 (`PermaJobs.Add`): the same
     follow with the same down test, but it is not exempt, so it runs only with the jobs switch on (the row's destination-accessible-animal state 168 is not modelled).
     Adding a follow job or a one-shot follow removes what would close a circle (`MovementSystem.BreakCircle`: the other side's follow and its 31 / 45 jobs on the chain, [facts](game/animals.md#following)); a job starting does not.
-  - 137 / 138 corpse disposal and 223 / 273 intruders (`ProductionSystem.Errands.cs`, `ErrandJobs`; a carry under way is stepped every `ErrandEveryTicks` 15): a character carrying nothing with 138 lifts the body 138's finder gives
-    (`CorpseDisposal.FindCorpse`, as the NPCs'); with 137 it walks it to the disposal `CorpseDisposal.Find` gives ([Town duties](#town-duties)' rules) and in its reach it lets go and the body is removed (items with it). With 223 and 224 (or 273 and 274) it lifts
+  - 137 / 138 corpse disposal and 223 / 273 intruders (`ProductionSystem.Errands.cs`, `ErrandJobs`; a carry under way is stepped every `ErrandEveryTicks` 15): two corpse jobs, as the
+    original's rows ([lift and delivery](game/ai-tasks.md#perma-jobs)): 138 lifts the body its finder gives (`CorpseDisposal.FindCorpse`, as the NPCs'; not on Hold, not while
+    carrying) and is over with the lift; 137, while a disposal is found, delivers a carried dead body (list B 99) to the disposal `CorpseDisposal.Find` gives ([Town duties](#town-duties)'
+    rules), and with nothing carried lifts first (its plan's 138); in its reach it lets go and the body is removed (items with it). A lift or delivery under way runs on for the job
+    that started it. With 223 and 224 (or 273 and 274) it lifts
     a knocked-out, alive character of another faction in the player's building (with doors) it stands in and puts it down just outside the door (273: past the town's farthest building). Engine
     choices: the building test (a footprint round the origin), the friendly exclusion, the reach, 4 walks that end short before the body is given up, and 223's "home" (the building the carrier is in).
   - 234 Turret guard (Shift + quick right click on a turret: 146 becomes 234): mans the turret as an operator; blocked while someone else mans it, and while a melee attacker is within
@@ -1895,7 +1902,9 @@ tests read, as the original's own goal and job for it would be. The goal's
 act-out does the walk and the goal's own action; steps of their own are getting out of bed, sheathing and drawing a weapon (one think each,
 then dropped from the plan, so a plan a committed goal keeps goes on to its next step instead of repeating it), going home (19, the GoHome walk),
 entering its home building (156, the same walk), leaving it (200, to A + (A − B) × 1.1 of the home's first door,
-the outer point taken as the side away from the building's origin, until outside) and getting near a target (40, a walk to within 10). A plan
+the outer point taken as the side away from the building's origin, until outside), getting near a target (40, a walk to within 10) and the way
+through a locked door the walk meets (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut; `AiSystem.TakeDoorStep`, worked by the lock system, its list A
+on the door, `RowStates` 52 / 54 / 56; [locks](game/locks.md#doors)). A plan
 whose first step is neither the goal nor a step the engine carries out (`AiSystem.Carried`) fails. Engine choices:
 - Each character plans with its `Repertoire.Of` category (4, 0x40 crippled or staying low, 0x10, 1, 0x20 animal; so a crippled NPC has no stand-up row and crawls away under threat). Restricted rows (lockpicking, cutting, opening gates) are open to every character whose faction is not the player's, as in the original ([planner](game/ai-tasks.md#planner); the orders-step flag is not planned here). With the held states below, none is ever needed on the way (their states 90, !54, !114 hold), so this changes no plan today; `IPlanWorld.Squadless` keeps its old name for it. A row without a finder wants its effect for its own target. At most 64 nodes per search.
 - A node is made once per row and target (the original allows four copies), so the ancestor-repeat test never fires; a child already

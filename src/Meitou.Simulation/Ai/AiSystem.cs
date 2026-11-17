@@ -1630,8 +1630,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The steps of the plan before the goal's own act-out: getting out of bed, sheathing and drawing (one think each), the walks home, out of the
-    /// home and near the target, and the ditch request. False when the step took the think (the act-out waits); <paramref name="behaviour"/> may
-    /// become the walk home.
+    /// home and near the target, the ditch request, and a way through a locked door (the lock system's, <see cref="TakeDoorStep"/>). False when the
+    /// step took the think (the act-out waits); <paramref name="behaviour"/> may become the walk home.
     /// </summary>
     bool PlanStep(World world, int slot, AiMind mind, ref AiBehaviour behaviour)
     {
@@ -1673,6 +1673,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 // in, then the AI plans again.
                 mind.DitchRequest = true;
                 Become(world, slot, CharacterTask.Idle);
+                return false;
+            case TaskType.UnlockDoor or TaskType.UnlockDoorHere or TaskType.BashDoor or TaskType.BashDoorHere or TaskType.PickLock
+                or TaskType.CutLock:
+                // A way through a locked door (TakeDoorStep): the lock system works it while the step runs; one it dropped or failed is over.
+                if (table.Cold(slot)!.DoorWay is null) mind.Plan.RemoveAt(0);
                 return false;
             case TaskType.GetNearTo when !mind.Plan[0].Target.IsNone:
                 // 40 Following to within 10 of the plan's target, then the goal's own act-out.

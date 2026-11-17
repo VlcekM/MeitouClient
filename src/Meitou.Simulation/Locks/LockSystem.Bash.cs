@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
@@ -528,13 +529,15 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Sends a walker through <paramref name="door"/> (<see cref="DoorWayStep"/>): it walks to the door on its own side, unlocks or bashes it, then
-    /// takes its walk to <paramref name="goal"/> up again. The AI leaves an NPC alone meanwhile; the walk's task stays on.
+    /// takes its walk to <paramref name="goal"/> up again; the walk's task stays on. An NPC with a kept plan takes the way as its plan's step
+    /// (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and may replace as any running step; the AI leaves any other NPC alone meanwhile.
     /// </summary>
     internal static void StartDoorWay(World world, int s, Fixture door, Vector2 goal, byte mode)
     {
         var c = world.Characters.Cold(s)!;
         (c.Bashing, c.BashErrand, c.BashTime, c.DoorWay) = (door.Id, true, DoorWayFresh, (goal, mode));
-        if (!c.IsPlayer) c.Engaged = true;
+        var leaf = world.Fixtures.DoorSpotOf(door)?.Centre ?? door.Position;
+        if (!c.IsPlayer && !AiSystem.TakeDoorStep(c, DoorStepRow(world, s, door), leaf)) c.Engaged = true;
 
         ref var n = ref world.Characters.Next[s];
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
@@ -543,12 +546,38 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// The row of the way through <paramref name="door"/> its walker takes (<see cref="WayThrough"/>; docs/game/locks.md "Locked doors on the way"):
+    /// out of the building it stands in 80 Unlocking door here or 287 Bashing door; in, 78 Unlocking door, 81 Bashing door, 76 Lockpicking or
+    /// 285 Cutting lock.
+    /// </summary>
+    static TaskType DoorStepRow(World world, int s, Fixture door)
+    {
+        bool inside = world.Sight.BuildingOf(s) == door.Building;
+        return world.SystemOf<LockSystem>()?.WayThrough(world, s, door.Building, door) switch
+        {
+            DoorWayKind.Unlock => inside ? TaskType.UnlockDoorHere : TaskType.UnlockDoor,
+            DoorWayKind.Bash => inside ? TaskType.BashDoorHere : TaskType.BashDoor,
+            DoorWayKind.Pick => TaskType.PickLock,
+            DoorWayKind.Cut => TaskType.CutLock,
+            _ => TaskType.None,
+        };
+    }
+
+    /// <summary>
     /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): a basher draws first (<see cref="DrawForBash"/>); at the door, one no
     /// longer locked is opened (74 / 72); else the way works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
+    /// An NPC whose AI took the way as its plan's step works it only while that step runs (<see cref="AiSystem.RunsDoorStep"/>): a step ended or
+    /// replaced drops the way, the movement left as the AI set it.
     /// </summary>
     void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
     {
         var table = world.Characters;
+        if (!c.IsPlayer && !c.Engaged && !AiSystem.RunsDoorStep(c))
+        {
+            DropDoorWay(c);
+            return;
+        }
+
         if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || world.Fixtures.DoorSpotOf(door) is not { } spot)
         {
             WalkOn(table, s, c);

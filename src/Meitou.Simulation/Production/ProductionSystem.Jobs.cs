@@ -122,7 +122,7 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The production pick's list jobs as the decision step's contributor (<see cref="IJobSource"/>, step 5; 234 also step 3): Operating machine 87,
     /// Operating automatic machine 152, Hauling to 124, Training 97, Turret guard 234, Engineer 125 and the follow jobs 31, 45, 289; and the carrying
-    /// jobs 138, 223, 273 (<see cref="ErrandJobs"/>). A job runs while <see cref="Runnable"/> holds; one that no longer does and that nothing
+    /// jobs 138, 137, 223, 273 (<see cref="ErrandJobs"/>). A job runs while <see cref="Runnable"/> holds; one that no longer does and that nothing
     /// replaces ends (<see cref="End"/>).
     /// </summary>
     public void RegisterSources(DecisionSystem decisions)
@@ -134,7 +134,8 @@ public sealed partial class ProductionSystem
             decisions.RegisterJob(type, jobs);
 
         var errands = new ErrandJobs(this);
-        foreach (var type in (ReadOnlySpan<TaskType>)[TaskType.FindADeadGuy, TaskType.PickupIntruders, TaskType.PickupIntrudersTown])
+        foreach (var type in (ReadOnlySpan<TaskType>)[TaskType.FindADeadGuy, TaskType.DeadGuysGoInThePot, TaskType.PickupIntruders,
+            TaskType.PickupIntrudersTown])
             decisions.RegisterJob(type, errands);
 
         decisions.Register(new ImplicitJobs(this));

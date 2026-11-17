@@ -14,15 +14,43 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     /// <summary>
+    /// Puts the way through a locked door (the lock system's, <see cref="Locks.LockSystem.StartDoorWay"/>) at the front of the NPC's kept plan as the
+    /// step the original's planner adds there (docs/game/locks.md "Locked doors on the way": 78 / 80 unlocking, 81 / 287 bashing, 76 picking, 285
+    /// cutting), on the door at <paramref name="door"/>: the plan step ends it by its finished test and list A and any choice may take over
+    /// (<see cref="PlanSteps"/>). False when the character has no kept plan to put it in (an engine-run mind, a goal that is its own plan): the lock
+    /// system then holds it.
+    /// </summary>
+    internal static bool TakeDoorStep(CharacterCold cold, TaskType row, Vector3 door)
+    {
+        if (row == TaskType.None || cold.Ai is not { Engine: false, Goal: { } goal } mind) return false;
+        if (mind.Plan.Count == 0 || !PlanContext.Stepped(goal)) return false;
+
+        if (!IsDoorStep(mind.Plan[0].Type)) mind.Plan.Insert(0, new PlanStep(row, new PlanTarget(Targets.Door, door)));
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the NPC's kept plan runs a door step now (<see cref="TakeDoorStep"/>): the lock system works the way only while it does.
+    /// </summary>
+    internal static bool RunsDoorStep(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsDoorStep(step.Type);
+
+    /// <summary>
+    /// The rows of a way through a door (<see cref="TakeDoorStep"/>).
+    /// </summary>
+    static bool IsDoorStep(TaskType type) => type is TaskType.UnlockDoor or TaskType.UnlockDoorHere or TaskType.BashDoor or TaskType.BashDoorHere
+        or TaskType.PickLock or TaskType.CutLock;
+
+    /// <summary>
     /// Kinds of <see cref="PlanTarget"/> the finders give.
     /// </summary>
     static class Targets
     {
         /// <summary>
         /// The target kinds: a spot, bed, seat, turret, town, work place, machine and store; the character a follow goal follows (its place is read
-        /// live, <see cref="PlanContext.Followed"/>).
+        /// live, <see cref="PlanContext.Followed"/>); the door a way through works (<see cref="TakeDoorStep"/>, the door read live from
+        /// <see cref="CharacterCold.Bashing"/>).
         /// </summary>
-        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8, Follow = 9;
+        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8, Follow = 9, Door = 10;
     }
 
     /// <summary>
@@ -254,37 +282,11 @@ public sealed partial class AiSystem
         }
 
         /// <summary>
-        /// States 59 DESTINATION_IS_ACCESSIBLE and 168 DESTINATION_IS_ACCESSIBLE_ANIMAL (<c>FUN_140597030</c>, <b>Verified</b>) with their providers
-        /// folded in. The destination's building (<see cref="DestinationBuilding"/>) is accessible when there is none, when it is the one the
-        /// character stands in, or when its doors let the character in: an animal it keeps out (<see cref="Locks.AnimalEntry.KeptOut(CharacterCold,
-        /// Locks.Fixture)"/>) gets the state's default (false for 59, true for 168); else a door open, opening or broken (<c>hasAnOpenDoor</c>),
-        /// or the chain the planner would add (85 Open destination door, 72 Opening door, 78 Unlocking door, 81 Bashing door) when the character's
-        /// repertoire registers it: a closed unlocked door is opened as it passes (72, the movement's), a locked one unlocked or bashed by its way
-        /// through (<see cref="Locks.LockSystem.WayThrough"/>, the lock system's); cut or picked (285, 76) only where the restricted rows are open. So
-        /// a walk into a building shut by another's locked doors does not plan.
+        /// States 59 DESTINATION_IS_ACCESSIBLE and 168 DESTINATION_IS_ACCESSIBLE_ANIMAL for the target's building (<see cref="DestinationBuilding"/>),
+        /// providers folded in (<see cref="DestinationAccess.Accessible"/>): a walk into a building shut by another's locked doors does not plan.
         /// </summary>
-        bool Accessible(in PlanTarget target, bool animalDefault)
-        {
-            if (DestinationBuilding(target) is not { } building || building == _world.Sight.BuildingOf(_slot)) return true;
-
-            var cold = _world.Characters.Cold(_slot)!;
-            if (KeptOut(cold, building)) return animalDefault;
-            if (_world.Fixtures.HasOpenDoor(building)) return true;
-
-            // 85 and 72 are registered 0x41, 78 0x45, 81 0x21, 285 and 76 0x55 (FUN_140319a60).
-            int category = Category;
-            if ((category & 0x41) == 0) return false;
-            if (!_world.Fixtures.IsShut(building)) return true;
-            if (_world.SystemOf<Locks.LockSystem>() is not { } locks) return false;
-
-            return locks.WayThrough(_world, _slot, building) switch
-            {
-                Locks.LockSystem.DoorWayKind.Unlock => (category & 0x45) != 0,
-                Locks.LockSystem.DoorWayKind.Bash => (category & 0x21) != 0,
-                Locks.LockSystem.DoorWayKind.Pick or Locks.LockSystem.DoorWayKind.Cut => _restrictedOpen && (category & 0x55) != 0,
-                _ => false,
-            };
-        }
+        bool Accessible(in PlanTarget target, bool animalDefault) =>
+            DestinationAccess.Accessible(_world, _slot, DestinationBuilding(target), animalDefault, _restrictedOpen);
 
         /// <summary>
         /// The building a target lies in (<c>FUN_140793230</c>): the followed character's; none for a town (a town's own place is outdoors); else the
@@ -297,10 +299,7 @@ public sealed partial class AiSystem
             if (target.Kind == Targets.Follow) return Followed() is >= 0 and var at ? _world.Sight.BuildingOf(at) : null;
             if (target.IsNone || target.Kind == Targets.Town) return null;
 
-            var point = target.Position;
-            if (float.IsNaN(point.Y)) point.Y = _world.Walkability.GroundHeight(point.X, point.Z);
-            int place = _world.Sight.PlaceAt(point);
-            return place >= 0 ? _world.Sight.PlaceKey(place) : null;
+            return DestinationAccess.BuildingAt(_world, target.Position);
         }
 
         /// <summary>
@@ -326,8 +325,8 @@ public sealed partial class AiSystem
         /// <summary>
         /// 131 for a character target: one that no longer resolves is the hand's own point, which the package hands leave at the origin; else (state
         /// 90 held, as <see cref="HeldTrue"/>, so the original's 1.1-radius test behind walls is not reached) at it when the building the target is in
-        /// lets the character in as state 59's own test reads it (<see cref="OpenTo"/>; outdoors, or the same building, holds), else within 100 of
-        /// the point 3 beyond that building's first door (<see cref="DoorFront"/>).
+        /// lets the character in as state 59's own test reads it (<see cref="DestinationAccess.OpenTo"/>; outdoors, or the same building, holds), else
+        /// within 100 of the point 3 beyond that building's first door (<see cref="DoorFront"/>).
         /// </summary>
         bool AtCharacter(CharacterId who)
         {
@@ -335,33 +334,10 @@ public sealed partial class AiSystem
             if (!_world.Characters.TryResolveNext(who, out int at)) return here.LengthSquared() < LostTargetReach * LostTargetReach;
 
             var building = _world.Sight.BuildingOf(at);
-            if (building is null || OpenTo(building)) return true;
+            if (building is null || DestinationAccess.OpenTo(_world, _slot, building)) return true;
 
             var inside = Flat(_world.Characters.Next[at].Position);
             return DoorFront(_world, building, inside, DoorBeyond) is { } front && Vector2.DistanceSquared(here, front) < DoorReach * DoorReach;
-        }
-
-        /// <summary>
-        /// State 59's own test with its default false and no provider folded in (<c>FUN_140597030</c>, as state 131 asks it): the building the
-        /// character stands in, or one that does not keep it out and has a door open.
-        /// </summary>
-        bool OpenTo(string building)
-        {
-            if (building == _world.Sight.BuildingOf(_slot)) return true;
-
-            return !KeptOut(_world.Characters.Cold(_slot)!, building) && _world.Fixtures.HasOpenDoor(building);
-        }
-
-        /// <summary>
-        /// Whether <paramref name="building"/> keeps the character out as an animal (<see cref="Locks.AnimalEntry"/>): by its first door's flags, else by
-        /// its BUILDING record.
-        /// </summary>
-        bool KeptOut(CharacterCold cold, string building)
-        {
-            if (Locks.LockSystem.FirstDoor(_world, building) is { } door) return Locks.AnimalEntry.KeptOut(cold, door);
-
-            return _system.BuildingRecordOf(_world, building, Me.Position) is { } record
-                && Locks.AnimalEntry.KeptOut(cold, Locks.AnimalEntry.Allows(record), record.GetBool("cavernous"));
         }
 
         /// <summary>
@@ -455,6 +431,8 @@ public sealed partial class AiSystem
         public bool Holds(TaskCondition condition, in PlanTarget target)
         {
             var cold = _world.Characters.Cold(_slot)!;
+            if (target.Kind == Targets.Door) return DoorHolds(condition, cold);
+
             bool value = condition.State switch
             {
                 StateType.IsAtLocation or StateType.IsAtLocation46 or StateType.AtNode => At(target),
@@ -492,6 +470,25 @@ public sealed partial class AiSystem
                 _ => BodyOrTownHolds(condition.State, target, cold),
             };
             return value == condition.Holds;
+        }
+
+        /// <summary>
+        /// A state of a door step (<see cref="TakeDoorStep"/>) for the door its way through works: the door's own states (52 open, 53 and 54 / 55
+        /// locked, the door here being that door, 56 broken) as <see cref="RowStates"/> reads them; every other state of the step's list B (at the
+        /// door, the lock skill, tools, a weapon, its owner) is the way the lock system chose and works by (<see cref="Locks.LockSystem.WayThrough"/>,
+        /// asked again each update; with no way left the way fails), held true.
+        /// </summary>
+        bool DoorHolds(TaskCondition condition, CharacterCold cold)
+        {
+            var state = condition.State switch
+            {
+                StateType.DoorIsOpenHere => StateType.DoorIsOpen,
+                StateType.DoorIsLockedHere => StateType.IsDoorLocked,
+                var other => other,
+            };
+            if (state is not (StateType.DoorIsOpen or StateType.IsDoorLocked or StateType.DoorIsBroken)) return true;
+
+            return RowStates.Holds(_world, _slot, state, new RowTarget(CharacterId.None, cold.Bashing)) == condition.Holds;
         }
 
         /// <summary>

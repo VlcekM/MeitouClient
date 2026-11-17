@@ -257,12 +257,22 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose destination is behind
   locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock, a bash, a cut or a pick, as `WayIn` gives; an
   animal a building keeps out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine
-  walk (an arrest's, an errand's) is not tested. **Engine choice**: the AI leaves an NPC on its way through a door alone until the door opens
-  (only Self preservation takes it over), so a long pick or cut holds it.
+  walk (an arrest's, an errand's, `TaskStart.Walk`) is refused the same way when its row's plan has a walk (`DestinationAccess.WalkRefused`: list
+  B or effect 1 / 46 / 59 / 168, directly or through a provider, the door chains not followed; 195 of the 253 rows): the original runs it as
+  that plan's walk step, whose list B 59 fails (**Verified**, row table and `FUN_14051bae0`). A refused walk ends short (`WalkEnd.Failed`). Still
+  different: an engine walk out of a shut building is not tested (the walk's 60, which the AI's own walks test, `CanLeave`). The
+  way through the door is a step of the NPC's plan (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut, the providers of 59 / 60 the planner
+  inserts; `AiSystem.TakeDoorStep`): ended by its list A on the door (52 open, 54 locked, 56 broken) or when the lock system's way ends, and
+  replaced as any running step, which drops the way (**Verified**, the providers in the row table). An NPC without a stepped plan (an engine
+  walk, an engine-run goal) is still left alone until the door opens (`Engaged`, engine).
   **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities
-  family's Longhouse 5565 of his own home town, so a bash desire of 0) stands until the family opens up, then walks out.
+  family's Longhouse 5565 of his own home town, so a bash desire of 0) stands until the family opens up, then walks out. #807's save, tick
+  4017 after the load: a Samurai Gate Guard locked in (46.16:16928) takes 76 as the step of his guard-post goal, fails the level-38 lock (skill 0.6) and picks
+  on until his hours give him the next goal, which drops the way. #803's save: an engine walk (203) of a player character into another's
+  locked building is refused (`Inaccessible`), one into a closed unlocked building or by an untested row (35) is not; NPC walkers there
+  always had a way in (pick, or an animal's bash).
 - **Owner lock/unlock** (77/79/162/198, 78/80/140; B list `isObjectMine`): progress 0.3 per game second, so 3.3 s; ends with
   `Character_Lock` / `Character_Unlock_Success`. Locking closes the door first. No skill or level involved (**Verified**). Task_LockDoor update `FUN_140337670` (**Verified**): work += dt x 0.3; on reaching 1 it starts the door closing (`FUN_140298c50`,
   only from open), sets the lock's locked byte at once (`wants lock` is not touched), plays `Character_Lock` and sets the squad's house flag. The context menu's own-door verbs are these two orders: Lock 77 on an unlocked own door, Unlock 140 (0x8c) on a locked own door (`FUN_1407a6bc0` door branch, **Verified**); an own cage gets Lock 77 / Unlock 78 (cage branch, **Verified**; the update has no door to close there; Meitou runs the cage's unlock as row 140, same conditions); the panel's buttons are the instant toggle below.
