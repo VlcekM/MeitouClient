@@ -173,8 +173,9 @@ sealed class GameMods(GameHost host)
     internal void RestoreModData(World world, Data.Save.SaveGame save) => Mods?.RestoreSaveData(world, save.ModData);
 
     /// <summary>
-    /// The squads of the world just loaded that a code mod made autonomous, when that mod is not running now (not installed, refused or failed to
-    /// start), go back to the player (<see cref="Simulation.Ai.SquadAutonomy.DropUnowned"/>), with a notice; between ticks, before the first.
+    /// The squads of the world just loaded that a code mod made autonomous or kept out of the faction size count, when that mod is not running now
+    /// (not installed, refused or failed to start), go back to the player (<see cref="Simulation.Ai.SquadAutonomy.DropUnowned"/>) and count again
+    /// (<see cref="Simulation.Factions.SquadManagement.DropUnownedUncounted"/>), each with a notice; between ticks, before the first.
     /// </summary>
     internal void DropUnownedAutonomy(World world)
     {
@@ -182,9 +183,17 @@ sealed class GameMods(GameHost host)
             .Select(m => m.Manifest.Id)
             .ToHashSet(StringComparer.Ordinal);
         int dropped = Simulation.Ai.SquadAutonomy.DropUnowned(world, running.Contains);
-        if (dropped == 0) return;
+        if (dropped > 0) Notice($"{dropped} squad(s) run by a mod that is not loaded are yours again.");
 
-        string line = $"{dropped} squad(s) run by a mod that is not loaded are yours again.";
+        int counted = Simulation.Factions.SquadManagement.DropUnownedUncounted(world, running.Contains);
+        if (counted > 0) Notice($"{counted} squad(s) a mod that is not loaded kept out of your faction size count again.");
+    }
+
+    /// <summary>
+    /// Shows a line about the mods to the player and in the console.
+    /// </summary>
+    void Notice(string line)
+    {
         Console.WriteLine($"mods      {line}");
         host.Player.Notice(line, true);
     }

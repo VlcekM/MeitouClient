@@ -695,6 +695,7 @@ public static partial class SaveCapture
         kept.Add(platoon.Name);
         NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
         AutonomySave.Write(platoon.Record, squad);
+        UncountedSave.Write(platoon.Record, squad);
         if (index >= 0)
         {
             // The name the tabs show is the record's name; the string id stays the file's (Observed: rename writes the record's name,

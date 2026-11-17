@@ -327,6 +327,11 @@ holds refuses the second mod.
   minds and the independence. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
+- **Squads outside the faction size count** (`Meitou.Simulation.Factions`): `SetSquadUncounted(squadId, on, Owner: context.Id)` keeps a squad of
+  the player's faction out of the `max faction size` count (`Squad.Uncounted`; recruiting, slave trading, `SpawnIntoPlayerSquad` and the squads
+  screen's count use `SquadManagement.CappedHeads`), for townspeople, staff or followers a mod adds beside the player's own characters; the
+  dismiss rule still counts everyone (`FactionHeads`). Several mods can each mark their own squads. Saved with the squad; a load without the
+  owner mod running counts the squad again, with a notice. Engine API, not in the original.
 - **World hooks** (engine API, not in the original; serial phases): `PopulationSystem.RequestCampaign` queues a
   FACTION_CAMPAIGN against a town as a dialogue trigger does (the request pass then applies the game's gates); `PopulationSystem.SpawnPlatoon`
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is

@@ -503,6 +503,7 @@ public static class SaveLoader
             HomeRadius = 100,
         };
         AutonomySave.Read(platoon.Record, squad);
+        UncountedSave.Read(platoon.Record, squad);
 
         foreach (var sc in platoon.Characters)
         {

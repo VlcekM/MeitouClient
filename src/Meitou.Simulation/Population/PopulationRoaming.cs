@@ -1382,12 +1382,15 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Whether a player squad takes no more members: it holds <c>max squad size</c>, or the player faction has <c>max faction size</c> living
-    /// characters (the recruit's caps, docs/game/dialogue.md "Recruiting").
+    /// characters (the recruit's caps, docs/game/dialogue.md "Recruiting"); a squad a code mod keeps out of that count
+    /// (<see cref="Squad.Uncounted"/>) has only the squad cap.
     /// </summary>
     bool PlayerSquadFull(World world, Squad squad)
     {
         var limits = _data.Bodies.Constants;
-        return squad.Members.Count >= limits.MaxSquadSize || SquadManagement.FactionHeads(world) >= limits.MaxFactionSize;
+        if (squad.Members.Count >= limits.MaxSquadSize) return true;
+
+        return !squad.Uncounted && SquadManagement.CappedHeads(world) >= limits.MaxFactionSize;
     }
 
     /// <summary>

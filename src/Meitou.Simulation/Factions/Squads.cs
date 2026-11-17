@@ -176,6 +176,17 @@ public sealed class Squad
     /// </summary>
     public string? AutonomyOwner { get; set; }
     /// <summary>
+    /// A player squad a code mod keeps out of the faction size count (<see cref="SetSquadUncounted"/>, <see cref="SquadManagement.CappedHeads"/>):
+    /// its members never fill <c>max faction size</c>, for townspeople, staff or followers a mod adds beside the player's own characters. They
+    /// still count as the faction's for everything else, the dismiss rule included. Meitou only; saved, hashed while set.
+    /// </summary>
+    public bool Uncounted { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="Uncounted"/> (its manifest id); null: none named. A load without that mod running counts the squad again
+    /// (<see cref="SquadManagement.DropUnownedUncounted"/>). Saved, hashed while set.
+    /// </summary>
+    public string? UncountedOwner { get; set; }
+    /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
@@ -359,6 +370,8 @@ public sealed class SquadRegistry
                 hasher.Add(0x4F776E72);
                 hasher.Add(Rng.StableHash(owner));
             }
+            if (s.Uncounted) hasher.Add(0x556E636E);
+            if (s.UncountedOwner is { } uncountedOwner) hasher.Add(Rng.StableHash(uncountedOwner));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

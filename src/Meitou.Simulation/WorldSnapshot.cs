@@ -972,6 +972,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public int FactionHeads { get; init; }
     /// <summary>
+    /// The player's characters alive that the faction size cap counts (<see cref="SquadManagement.CappedHeads"/>): the squads screen's faction size.
+    /// </summary>
+    public int CappedHeads { get; init; }
+    /// <summary>
     /// The active squad's id (<see cref="PlayerState.Squad"/>; -1 none): the squad bar shows it.
     /// </summary>
     public int ActiveSquad { get; init; } = -1;

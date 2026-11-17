@@ -29,7 +29,7 @@ public sealed partial class DialogueSystem
         {
             return true;
         }
-        if (SquadManagement.FactionHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
+        if (SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
         {
             world.Post("It looks like your squad is a little full.");
             c.Ended = true;
@@ -67,7 +67,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     static void ExtraSquadAtTheCap(World world, PopulationData data, Squad active, GameConstants limits)
     {
-        if (SquadManagement.FactionHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
+        if (SquadManagement.CappedHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
             || SquadManagement.LedSquads(world).Count < limits.MaxSquads)
         {
             return;
@@ -184,7 +184,7 @@ public sealed partial class DialogueSystem
             if (slave.IsImprisoned) world.Fixtures.Release(world, id);
             if (tc.IsPlayer || tc.Faction == world.Player.Faction)
             {
-                if (SquadManagement.FactionHeads(world) >= _data.Bodies.Constants.MaxFactionSize || !JoinPlayer(world, s, tc)) break;
+                if (SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize || !JoinPlayer(world, s, tc)) break;
             }
             else if (world.Squads.Find(tc.SquadId) is { } theirs)
             {

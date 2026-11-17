@@ -125,7 +125,7 @@ sealed class SquadPanel(PlayerInterface player)
     internal void BindSquadsTab(UiBindings b)
     {
         var limits = SquadLimits?.Invoke();
-        b.Text["FactionSizeText"] = $"{LivingPlayerCharacters()}/{limits?.MaxFactionSize ?? 30}";
+        b.Text["FactionSizeText"] = $"{player.Session.CurrentSnapshot.CappedHeads}/{limits?.MaxFactionSize ?? 30}";
         b.Text["NewSquadButton"] = "ADD SQUAD";
         b.Text["lbSquadsDismiss"] = "DISMISS";
         b.Actions["NewSquadButton"] = "squad-new";
