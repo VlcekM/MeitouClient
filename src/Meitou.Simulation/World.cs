@@ -229,6 +229,7 @@ public sealed partial class World : IDisposable
         GameHours = settings.StartHours;
         Walkability = walkability;
         this._systems = [.. systems ?? []];
+        foreach (var system in this._systems) ModFaults.Add(system);
         for (int k = 0; k < this._systems.Count; k++) _phases.Add(new SystemPhases(this, this._systems[k], k));
 
         _animations = this._systems.OfType<IAnimationSource>().FirstOrDefault();
@@ -497,6 +498,17 @@ public sealed partial class World : IDisposable
     /// The systems in tick order.
     /// </summary>
     public IReadOnlyList<ITickSystem> Systems => _systems;
+
+    /// <summary>
+    /// The mod-made systems and the ones stopped after a fault (<see cref="ModSystemFaults"/>).
+    /// </summary>
+    internal ModSystemFaults ModFaults { get; } = new();
+
+    /// <summary>
+    /// The next notice for the player about a mod's system that stopped after a fault, if any (docs/modding.md "Tick systems"); each is given
+    /// once.
+    /// </summary>
+    public bool TryTakeModFaultNotice(out string notice) => ModFaults.TryTakeNotice(out notice);
     /// <summary>
     /// The number of ticks run; during a tick, the number of the tick being run.
     /// </summary>
@@ -612,6 +624,7 @@ public sealed partial class World : IDisposable
 
         _systems.Add(system);
         _systemsByType.Clear();
+        ModFaults.Add(system);
         _phases.Add(new SystemPhases(this, system, _systems.Count - 1));
         _animations ??= system as IAnimationSource;
         _projectiles ??= system as IProjectileSource;
@@ -698,6 +711,7 @@ public sealed partial class World : IDisposable
         var prof = Profile.Enabled ? Profile : null;
         prof?.Begin(_systems.Count);
         table.BeginTick();
+        ModFaults.Settle();
 
         // 1. Inputs (serial).
         RunInputs(table, prof);
@@ -740,7 +754,11 @@ public sealed partial class World : IDisposable
 
         for (int k = 0; k < _systems.Count; k++)
         {
-            _systems[k].Inputs(this, due);
+            if (ModFaults.IsMod(k))
+                ModFaults.Run(k, "inputs", _systems[k], this, due, static (s, w, d) => s.Inputs(w, d));
+            else
+                _systems[k].Inputs(this, due);
+
             prof?.Lap(TickProfile.Inputs, k);
         }
     }
@@ -762,7 +780,11 @@ public sealed partial class World : IDisposable
 
         for (int k = 0; k < _systems.Count; k++)
         {
-            _systems[k].Schedule(this);
+            if (ModFaults.IsMod(k))
+                ModFaults.Run(k, "schedule", _systems[k], this, 0, static (s, w, _) => s.Schedule(w));
+            else
+                _systems[k].Schedule(this);
+
             prof?.Lap(TickProfile.Schedule, k);
         }
     }
@@ -773,6 +795,7 @@ public sealed partial class World : IDisposable
     void RunThinkMoveAct(CharacterTable table, TickProfile? prof)
     {
         table.Phase = TablePhase.Parallel;
+        ModFaults.Settle();   // a mod system that threw in Inputs or Schedule runs no parallel phase this tick
 
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
         foreach (var p in _phases) if (p.Think is { } think) RunParallel(think, prof, TickProfile.Think, p.Index);
@@ -799,6 +822,7 @@ public sealed partial class World : IDisposable
     void Commit(CharacterTable table, TickProfile? prof)
     {
         table.Phase = TablePhase.Commit;
+        ModFaults.Settle();   // a mod system that threw in a parallel phase stops here, before its effects of the tick are applied
 
         _effects.Clear();
         for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
@@ -808,7 +832,12 @@ public sealed partial class World : IDisposable
 
         foreach (var e in _effects)
         {
-            _systems[e.System].Apply(this, e);
+            var system = _systems[e.System];
+            if (ModFaults.IsMod(e.System))
+                ModFaults.Run(e.System, "apply", system, this, e, static (s, w, effect) => s.Apply(w, effect));
+            else
+                system.Apply(this, e);
+
             prof?.Lap(TickProfile.Commit, e.System);
         }
 
@@ -824,7 +853,11 @@ public sealed partial class World : IDisposable
     {
         for (int k = 0; k < _systems.Count; k++)
         {
-            _systems[k].SlowWorld(this);
+            if (ModFaults.IsMod(k))
+                ModFaults.Run(k, "slow world", _systems[k], this, 0, static (s, w, _) => s.SlowWorld(w));
+            else
+                _systems[k].SlowWorld(this);
+
             prof?.Lap(TickProfile.SlowWorld, k);
             if (k == _decideAfter) RunDecisions(prof);
         }
@@ -1128,6 +1161,7 @@ public sealed partial class World : IDisposable
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
+        ModFaults.HashFaults(ref h);
         return h.Value;
     }
 

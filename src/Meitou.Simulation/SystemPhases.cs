@@ -21,6 +21,14 @@ sealed class SystemPhases
         if (Implements(map, nameof(ITickSystem.Move))) Move = i => system.Move(world, world.PartitionAt(i));
         if (Implements(map, nameof(ITickSystem.BeforeAct))) BeforeAct = i => system.BeforeAct(world, world.PartitionAt(i));
         if (Implements(map, nameof(ITickSystem.Act))) Act = i => system.Act(world, world.PartitionAt(i), world.BufferAt(i));
+        if (!world.ModFaults.IsMod(index)) return;
+
+        // A mod's system: each phase caught, so a fault stops the system rather than the tick (docs/modding.md "Tick systems").
+        var faults = world.ModFaults;
+        if (Think is { } think) Think = faults.Guard(index, "think", think);
+        if (Move is { } move) Move = faults.Guard(index, "move", move);
+        if (BeforeAct is { } beforeAct) BeforeAct = faults.Guard(index, "before act", beforeAct);
+        if (Act is { } act) Act = faults.Guard(index, "act", act);
     }
 
     /// <summary>

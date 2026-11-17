@@ -111,6 +111,16 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
+    /// Once a frame: a notice for each mod system the world stopped after a fault (docs/modding.md "Tick systems").
+    /// </summary>
+    internal void UpdateModFaults()
+    {
+        if (Mods is null || host.Session?.World is not { } world) return;
+
+        while (world.TryTakeModFaultNotice(out var notice)) Notice(notice);
+    }
+
+    /// <summary>
     /// This build's nearest game tag (<c>v*</c>, Meitou.Game.csproj) as a version for <c>gameVersion</c> ranges; null for a build without one (no git
     /// history), which passes every range.
     /// </summary>
