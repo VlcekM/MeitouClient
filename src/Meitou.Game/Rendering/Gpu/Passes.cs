@@ -93,6 +93,13 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     public const ColorMask Rgb = ColorMask.Rgb;
 
     /// <summary>
+    /// The pass's shadow casters draw with no caster bias (the receivers carry it all, the Meitou cascades): their fragment stages' depth write
+    /// (<see cref="Shadows.ShadowShaders.CasterDepthWrite"/>) changes nothing, and a backend may leave it out (Metal: the write turns Apple's early
+    /// depth test and hidden-surface removal off).
+    /// </summary>
+    public bool CasterBiasFree { get; init; }
+
+    /// <summary>
     /// The state for a draw into <paramref name="targets"/>, from the state the host means (GL's counter-clockwise front faces, which are Vulkan's
     /// clockwise with the flipped viewport, by default): VkGl's masking rules applied, so the record equals what VkGl reported for the same GL state.
     /// </summary>

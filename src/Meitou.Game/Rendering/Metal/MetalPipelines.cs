@@ -31,6 +31,11 @@ public sealed class MetalPipelines : IGpuPipelines
     /// The made compute pipeline states, by description.
     /// </summary>
     readonly Dictionary<ComputePipelineDesc, MTLComputePipelineState> _computes = [];
+    /// <summary>
+    /// The render pipeline states with a shadow caster's bias-free fragment stage (<see cref="MetalProgram.BiasFreeFragment"/>), by description;
+    /// made on first use in a bias-free pass.
+    /// </summary>
+    readonly Dictionary<GraphicsPipelineDesc, MTLRenderPipelineState> _biasFree = [];
 
     /// <summary>
     /// The render pipeline states made so far: Metal makes every one on its first use, nothing ahead, as the Vulkan library's
@@ -59,6 +64,21 @@ public sealed class MetalPipelines : IGpuPipelines
     internal MTLRenderPipelineState Backend(in GpuPipeline pipeline) => _graphics[pipeline.Desc];
 
     /// <summary>
+    /// The backend's object of a pipeline handle in a pass whose casters draw with no bias (<paramref name="casterBiasFree"/>,
+    /// <see cref="DrawState.CasterBiasFree"/>): a caster program's state without the bias's depth write, so Apple's early depth test and
+    /// hidden-surface removal stay on; any other program's (and every program's elsewhere) as made.
+    /// </summary>
+    internal MTLRenderPipelineState Backend(in GpuPipeline pipeline, bool casterBiasFree)
+    {
+        if (!casterBiasFree) return _graphics[pipeline.Desc];
+        if (_biasFree.TryGetValue(pipeline.Desc, out var made)) return made;
+
+        var program = _shaders.Backend(pipeline.Desc.Program);
+        var state = program.BiasFreeFragment is null ? _graphics[pipeline.Desc] : Make(pipeline.Desc, program.BiasFreeFragmentFunction);
+        return _biasFree[pipeline.Desc] = state;
+    }
+
+    /// <summary>
     /// The backend's object of a compute pipeline handle.
     /// </summary>
     internal MTLComputePipelineState Backend(in GpuComputePipeline pipeline) => _computes[pipeline.Desc];
@@ -69,11 +89,21 @@ public sealed class MetalPipelines : IGpuPipelines
     /// </summary>
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
     {
-        if (_graphics.TryGetValue(desc, out var made)) return new GpuPipeline(desc);
+        if (_graphics.TryGetValue(desc, out _)) return new GpuPipeline(desc);
+
+        _graphics[desc] = Make(desc, _shaders.Backend(desc.Program).FragmentFunction);
+        return new GpuPipeline(desc);
+    }
+
+    /// <summary>
+    /// A render pipeline state for <paramref name="desc"/> with <paramref name="fragment"/> as its fragment stage; throws when Metal rejects it.
+    /// </summary>
+    MTLRenderPipelineState Make(in GraphicsPipelineDesc desc, MTLFunction fragment)
+    {
         var program = _shaders.Backend(desc.Program);
         var d = new MTLRenderPipelineDescriptor(new ObjectiveCClass(ObjectiveC.objc_getClass("MTLRenderPipelineDescriptor")).AllocInit());
         d.VertexFunction = program.VertexFunction;
-        d.FragmentFunction = program.FragmentFunction;
+        d.FragmentFunction = fragment;
         d.RasterSampleCount = (ulong)Math.Max(1, desc.Targets.Samples);
         d.IsAlphaToCoverageEnabled = desc.AlphaToCoverage;
 
@@ -110,14 +140,13 @@ public sealed class MetalPipelines : IGpuPipelines
         var state = _device.NewRenderPipelineState(d, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{desc.Program.Name}: the pipeline '{desc.Name}' failed: {error.LocalizedDescription}");
-        _graphics[desc] = state;
         LatePipelines++;
         if (Trace)
         {
             Console.WriteLine($"metal     pipeline #{LatePipelines} {desc.Program.Name} '{desc.Name}' built in " +
                 $"{Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.0} ms");
         }
-        return new GpuPipeline(desc);
+        return state;
     }
 
     /// <summary>
@@ -149,6 +178,8 @@ public sealed class MetalPipelines : IGpuPipelines
     {
         foreach (var (desc, _) in _graphics)
             if (desc.Program.Index == program.Index) _graphics.Remove(desc);
+        foreach (var (desc, _) in _biasFree)
+            if (desc.Program.Index == program.Index) _biasFree.Remove(desc);
         foreach (var (desc, _) in _computes)
             if (desc.Program.Index == program.Index) _computes.Remove(desc);
     }

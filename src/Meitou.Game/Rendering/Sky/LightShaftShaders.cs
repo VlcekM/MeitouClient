@@ -336,13 +336,60 @@ static class LightShaftShaders
     /// three exp() per step); this reads each cell once. The arithmetic is theirs, term for term (the atmosphere's values come in a uniform block of
     /// the same names, so <see cref="Alpha"/> and the other functions are the fragment passes' text).
     /// </summary>
-    public static readonly string Scan = $$"""
+    public static readonly string Scan = ScanSource(images: false);
+
+    /// <summary>
+    /// <see cref="Scan"/> with no sampler: the injected atlas read as an image, and the sky's ambient radiance (the scatter pass's
+    /// <c>atmoIrradiance(up) × uAtmoLight.w</c>) read from a 1 × 1 image <see cref="ScanSky"/> wrote. spirv-cross cannot put a combined image sampler
+    /// into a compute argument buffer, so this is the Metal form.
+    /// </summary>
+    public static readonly string ScanImages = ScanSource(images: true);
+
+    /// <summary>
+    /// The sky's ambient radiance from above for <see cref="ScanImages"/>, into a 1 × 1 target: the scatter pass's term, computed once a frame.
+    /// </summary>
+    public static readonly string ScanSky = "#version 330 core\n" + AtmosphereShaders.Functions + """
+
+        out vec4 fragColour;
+
+        void main() { fragColour = vec4(atmoIrradiance(vec3(0.0, 1.0, 0.0)) * uAtmoLight.w, 1.0); }
+        """;
+
+    /// <summary>
+    /// The scan kernel's inputs: as samplers (<see cref="Scan"/>), or as images (<see cref="ScanImages"/>).
+    /// </summary>
+    static string ScanInputs(bool images) => images
+        ? """
+            layout(set = 0, binding = 0, rgba16f) readonly uniform image2D uShaftInjected;
+            layout(set = 0, binding = 3, rgba32f) readonly uniform image2D uShaftSky;
+            vec4 scanInjected(ivec2 at) { return imageLoad(uShaftInjected, at); }
+            """
+        : """
+            layout(set = 0, binding = 0) uniform sampler2D uShaftInjected;
+            layout(set = 0, binding = 3) uniform samplerCube uAtmoIrradiance;
+            vec4 scanInjected(ivec2 at) { return texelFetch(uShaftInjected, at, 0); }
+            """;
+
+    /// <summary>
+    /// The sky's ambient radiance from above in the scan kernel (<see cref="ScanInputs"/>'s form).
+    /// </summary>
+    static string ScanSkyRadiance(bool images) => images
+        ? "sky = imageLoad(uShaftSky, ivec2(0)).rgb;"
+        : $$"""
+            if (uAtmoMaps.x < 0.5) sky = vec3(1.09, 1.2, 1.51);
+                            else { vec4 t = textureLod(uAtmoIrradiance, vec3(0.0, 1.0, 0.0), {{IrradianceLevel}}); sky = t.rgb * t.a * 4.0; }
+                            sky *= uAtmoSunLight.w;
+            """;
+
+    /// <summary>
+    /// The scan kernel's text (<see cref="Scan"/>, <see cref="ScanImages"/>).
+    /// </summary>
+    static string ScanSource(bool images) => $$"""
         #version 450
         layout(local_size_x = 8, local_size_y = 8) in;
-        layout(set = 0, binding = 0) uniform sampler2D uShaftInjected;
+        {{ScanInputs(images)}}
         layout(set = 0, binding = 1, r32f) writeonly uniform image2D uLightOut;
         layout(set = 0, binding = 2, rgba16f) writeonly uniform image2D uScatterOut;
-        layout(set = 0, binding = 3) uniform samplerCube uAtmoIrradiance;
         layout(std140, set = 0, binding = 4) uniform ScanParams
         {
             vec4 uShaftGrid;
@@ -386,9 +433,7 @@ static class LightShaftShaders
             vec3 sky = vec3(0.0);
             if (air)
             {
-                if (uAtmoMaps.x < 0.5) sky = vec3(1.09, 1.2, 1.51);
-                else { vec4 t = textureLod(uAtmoIrradiance, vec3(0.0, 1.0, 0.0), {{IrradianceLevel}}); sky = t.rgb * t.a * 4.0; }
-                sky *= uAtmoSunLight.w;
+                {{ScanSkyRadiance(images)}}
             }
             vec2 sum = vec2(0.0);
             vec3 scattered = vec3(0.0);
@@ -396,7 +441,7 @@ static class LightShaftShaders
             for (int k = 0; k < slices; k++)
             {
                 ivec2 at = ivec2(k % columns, k / columns) * grid + cell;
-                vec4 v = texelFetch(uShaftInjected, at, 0);
+                vec4 v = scanInjected(at);
                 sum += v.rg;
                 imageStore(uLightOut, at, vec4(sum.y > 1e-6 ? clamp(sum.x / sum.y, 0.0, 1.0) : 1.0, 0.0, 0.0, 1.0));
                 if (air)

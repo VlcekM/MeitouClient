@@ -38,11 +38,14 @@ public sealed class HoverOutlineRenderer
     /// <summary>
     /// The fragment shader. Inside the mask: a tint where the character is in front of the scene (both depths made linear; the scene's is jittered
     /// and at the render size, hence the tolerance). Outside it: the outline, strongest next to the silhouette, fading over <c>uRadius</c> pixels.
+    /// Most of the scissor is far from the silhouette: there one bilinear tap at the corner of each 2 x 2 texels of the outline's square reads the
+    /// mask's alpha (never negative), and all of them 0 means no texel in the square is covered (the full search would find none either).
     /// </summary>
     const string Fragment = """
         #version 330 core
         out vec4 fragColour;
         uniform sampler2D uMask;
+        uniform sampler2D uMaskLinear;   // the mask through a linear sampler (the empty test)
         uniform sampler2D uMaskDepth;
         uniform sampler2D uSceneDepth;
         uniform vec2 uDepthScale;
@@ -56,6 +59,15 @@ public sealed class HoverOutlineRenderer
             ivec2 size = textureSize(uMask, 0);
             return texelFetch(uMask, clamp(p, ivec2(0), size - 1), 0).a;
         }
+        bool emptyAround(ivec2 p)
+        {
+            vec2 texel = 1.0 / vec2(textureSize(uMask, 0));
+            float any = 0.0;
+            for (int y = -uRadius; y <= uRadius; y += 2)
+                for (int x = -uRadius; x <= uRadius; x += 2)
+                    any += textureLod(uMaskLinear, vec2(p + ivec2(x, y) + 1) * texel, 0.0).a;
+            return any == 0.0;
+        }
         void main()
         {
             ivec2 p = ivec2(gl_FragCoord.xy);
@@ -68,6 +80,7 @@ public sealed class HoverOutlineRenderer
                 fragColour = vec4(uColour.rgb * a, a);
                 return;
             }
+            if (emptyAround(p)) discard;
             float nearest = 1e9;
             for (int y = -uRadius; y <= uRadius; y++)
                 for (int x = -uRadius; x <= uRadius; x++)
@@ -105,7 +118,7 @@ public sealed class HoverOutlineRenderer
     /// <summary>
     /// The program's slots: the mask's colour and depth, and the scene's depth.
     /// </summary>
-    readonly SamplerSlot _mask, _maskDepth, _sceneDepth;
+    readonly SamplerSlot _mask, _maskLinear, _maskDepth, _sceneDepth;
 
     /// <summary>
     /// Makes the program, its pipelines and its uniform and sampler handles.
@@ -121,6 +134,7 @@ public sealed class HoverOutlineRenderer
         _colour = _program.Uniform("uColour");
         _radius = _program.Uniform("uRadius");
         _mask = _program.Sampler("uMask");
+        _maskLinear = _program.Sampler("uMaskLinear");
         _maskDepth = _program.Sampler("uMaskDepth");
         _sceneDepth = _program.Sampler("uSceneDepth");
     }
@@ -137,6 +151,7 @@ public sealed class HoverOutlineRenderer
     {
         int outline = Math.Clamp((int)MathF.Round(2.5f * height / 1080f), 1, 6);
         var nearest = _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
+        var linear = _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
         foreach (var hover in masks)
         {
@@ -150,6 +165,7 @@ public sealed class HoverOutlineRenderer
                 var over = PassTargets.Of(picture, null).At(viewport, scissor);
                 cmd.BeginRendering(over.Rendering);
                 _program.Bind(_mask, new SampledTexture(nearest, hover.Colour.View()));
+                _program.Bind(_maskLinear, new SampledTexture(linear, hover.Colour.View()));
                 _program.Bind(_maskDepth, new SampledTexture(nearest, hover.Depth.View()));
                 _program.Bind(_sceneDepth, new SampledTexture(nearest, sceneDepthTexture.View()));
                 _program.Set(_depthScale, renderWidth / (float)width, renderHeight / (float)height);

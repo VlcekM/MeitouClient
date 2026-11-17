@@ -519,28 +519,6 @@ sealed unsafe class LightShafts(PostProcess post)
     /// </summary>
     public bool ScanSupported => post.SupportsStorage(InternalFormat.R32F) && post.SupportsStorage(InternalFormat.Rgba16F);
 
-    /// <summary>
-    /// The scan kernel's uniform block (std140: every member takes a 16-byte slot).
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    struct ShaftScanParams
-    {
-        /// <summary>
-        /// The block's members in order, each a vec4.
-        /// </summary>
-        public Vector4 Grid, Range, Eye, Right, Up, Back, Tan, Air, AtmoParams, AtmoSimple, AtmoHaze, AtmoAltitude, AtmoFog, AtmoSun, SunLight,
-            AtmoMaps;
-    }
-
-    /// <summary>
-    /// A frame global's value as <typeparamref name="T"/> (default when it is not set).
-    /// </summary>
-    static T ReadGlobal<T>(FrameGlobals g, string name) where T : unmanaged
-    {
-        T value = default;
-        g.UniformValue(name)?.TryRead(MemoryMarshal.AsBytes(new Span<T>(ref value)));
-        return value;
-    }
 
     /// <summary>
     /// Integrate and scatter in one dispatch: the light atlas and, with the air layer on, the scatter atlas, from the injected atlas.
@@ -579,26 +557,8 @@ sealed unsafe class LightShafts(PostProcess post)
     static ShaftScanParams ScanParams(FrameGlobals g, in GridView view, Vector4 air)
     {
         var r = view.R;
-        var sunLight = ReadGlobal<Vector3>(g, "uAtmoSunLight");
-        return new ShaftScanParams
-        {
-            Grid = view.Grid,
-            Range = view.Range,
-            Eye = new Vector4(view.Eye, 0),
-            Right = new Vector4(r.M11, r.M21, r.M31, 0),
-            Up = new Vector4(r.M12, r.M22, r.M32, 0),
-            Back = new Vector4(r.M13, r.M23, r.M33, 0),
-            Tan = new Vector4(view.TanY * view.Aspect, view.TanY, 0, 0),
-            Air = air,
-            AtmoParams = ReadGlobal<Vector4>(g, "uAtmoParams"),
-            AtmoSimple = ReadGlobal<Vector4>(g, "uAtmoSimple"),
-            AtmoHaze = ReadGlobal<Vector4>(g, "uAtmoHaze"),
-            AtmoAltitude = ReadGlobal<Vector4>(g, "uAtmoAltitude"),
-            AtmoFog = ReadGlobal<Vector4>(g, "uAtmoFog"),
-            AtmoSun = ReadGlobal<Vector4>(g, "uAtmoSun"),
-            SunLight = new Vector4(sunLight, ReadGlobal<Vector4>(g, "uAtmoLight").W),
-            AtmoMaps = ReadGlobal<Vector4>(g, "uAtmoMaps"),
-        };
+        return ShaftScanParams.For(g, view.Grid, view.Range, view.Eye, new Vector3(r.M11, r.M21, r.M31), new Vector3(r.M12, r.M22, r.M32),
+            new Vector3(r.M13, r.M23, r.M33), new Vector2(view.TanY * view.Aspect, view.TanY), air);
     }
 
     #endregion

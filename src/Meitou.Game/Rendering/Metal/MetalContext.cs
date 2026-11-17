@@ -1014,6 +1014,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public DrawState CurrentState() => _passState ?? throw new InvalidOperationException("no pass is open");
 
     /// <summary>
+    /// The open host pass draws shadow casters with no caster bias (<see cref="DrawState.CasterBiasFree"/>): their pipelines bind without the bias's
+    /// depth write (<see cref="MetalPipelines.Backend(in GpuPipeline, bool)"/>).
+    /// </summary>
+    internal bool CasterBiasFree => _passState is { CasterBiasFree: true };
+
+    /// <summary>
     /// Records something that does not disturb a pass (a timestamp, a label) where the frame's commands go now.
     /// </summary>
     public void Interleave(Action<IGpuCommandList> record)

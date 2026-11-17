@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Game.Rendering.Frame;
@@ -79,6 +80,24 @@ sealed class PostComposite : IDisposable
     /// The light shafts' scatter pass.
     /// </summary>
     readonly ShaftScatterPass _shaftScatterP;
+    /// <summary>
+    /// The sky's ambient radiance for the light shafts' scan kernel (<see cref="LightShaftShaders.ScanSky"/>).
+    /// </summary>
+    readonly LegacyProgram _shaftSkyP;
+    /// <summary>
+    /// The shafts' integrate and scatter as one compute kernel (<see cref="LightShaftShaders.ScanImages"/>, as the Vulkan chain's <c>shafts-scan</c>):
+    /// each cell column walks its slices once, where the fragment passes looped from the eye to every slice in every cell (slices squared reads).
+    /// <c>MEITOU_METAL_SHAFT_SCAN=0</c>: the fragment passes.
+    /// </summary>
+    static readonly bool ShaftScan = Environment.GetEnvironmentVariable("MEITOU_METAL_SHAFT_SCAN") != "0";
+    /// <summary>
+    /// The scan kernel's program and pipeline, made the first time it runs.
+    /// </summary>
+    (GpuProgram Program, GpuComputePipeline Pipeline)? _shaftScan;
+    /// <summary>
+    /// The sky's ambient radiance from above for the scan kernel (1 × 1), made with the kernel.
+    /// </summary>
+    GpuTexture? _shaftSky;
     /// <summary>
     /// The merged scene layers at half the render size (fog volumes, and the shafts' apply while fog is in view).
     /// </summary>
@@ -209,6 +228,7 @@ sealed class PostComposite : IDisposable
         _shaftInjectP = new ShaftInjectPass(ctx, vertex);
         _shaftIntegrateP = new ShaftIntegratePass(ctx, vertex);
         _shaftScatterP = new ShaftScatterPass(ctx, vertex);
+        _shaftSkyP = LegacyProgram.Create(ctx, vertex, LightShaftShaders.ScanSky, "post shafts sky");
         _layersHalfP = new LayersHalfPass(ctx, vertex);
         _sceneLayersP = new SceneLayersPass(ctx, vertex);
         _ssaoMaskP = new SsaoMaskPass(ctx, vertex);
@@ -539,6 +559,17 @@ sealed class PostComposite : IDisposable
         inject.P.ApplyGlobals();
         Fullscreen(cmd, inject.P, _shaftInjected!, aw, ah);
 
+        // The apply is the merged scene layers' (ApplyScene); the frame's grid is what the fog's shadow reads.
+        _shaftFrame = (grid, range, tan, Math.Clamp(darkening, 0, 1));
+        _pendingShafts = new PendingShafts(air, new Vector4(Math.Clamp(darkening, 0, 1), PostOptions.ShaftSky, 0f, 0f), aw, ah);
+        if (ShaftScan)
+        {
+            var scan = ShaftScanParams.For(_ctx.Globals, grid, range, i.Eye, new Vector3(r.M11, r.M21, r.M31), UpAxis(r),
+                new Vector3(r.M13, r.M23, r.M33), tan, air.X > 0 ? air : default);
+            RunShaftScan(cmd, in scan, across, down, air.X > 0);
+            return;
+        }
+
         var integrate = _shaftIntegrateP;
         Common(integrate);
         integrate.P.Bind(integrate.Injected, _pointSampler with { View = _shaftInjected!.View() });
@@ -554,10 +585,46 @@ sealed class PostComposite : IDisposable
             scatter.P.ApplyGlobals();
             Fullscreen(cmd, scatter.P, _shaftScatter!, aw, ah);
         }
+    }
 
-        // The apply is the merged scene layers' (ApplyScene); the frame's grid is what the fog's shadow reads.
-        _shaftFrame = (grid, range, tan, Math.Clamp(darkening, 0, 1));
-        _pendingShafts = new PendingShafts(air, new Vector4(Math.Clamp(darkening, 0, 1), PostOptions.ShaftSky, 0f, 0f), aw, ah);
+    /// <summary>
+    /// The light atlas and, with the air layer on (<paramref name="withAir"/>), the scatter atlas from the injected one, in one dispatch over the
+    /// <paramref name="across"/> × <paramref name="down"/> cell columns.
+    /// </summary>
+    void RunShaftScan(IGpuCommandList cmd, in ShaftScanParams scan, int across, int down, bool withAir)
+    {
+        var (program, pipeline) = _shaftScan ??= MakeShaftScan();
+        if (withAir)
+        {
+            _shaftSkyP.ApplyGlobals();   // the sky's irradiance and the environment light's factor
+            Fullscreen(cmd, _shaftSkyP, _shaftSky!, 1, 1);
+        }
+
+        var data = _ctx.Frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<ShaftScanParams>(in scan)), 256);
+        Span<GpuBinding> bindings =
+        [
+            GpuBinding.StorageImage(0, new SampledTexture(default, _shaftInjected!.View())),
+            GpuBinding.StorageImage(1, new SampledTexture(default, _shaftLight!.View())),
+            GpuBinding.StorageImage(2, new SampledTexture(default, _shaftScatter!.View())),
+            GpuBinding.StorageImage(3, new SampledTexture(default, _shaftSky!.View())),
+            GpuBinding.Uniform(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)Marshal.SizeOf<ShaftScanParams>())),
+        ];
+        cmd.Order();
+        cmd.BindPipeline(pipeline);
+        cmd.BindProgramResources(program, 0, bindings);
+        cmd.Dispatch((uint)((across + 7) / 8), (uint)((down + 7) / 8));
+        cmd.Order();
+    }
+
+    /// <summary>
+    /// The scan kernel's program and pipeline, and its sky target.
+    /// </summary>
+    (GpuProgram, GpuComputePipeline) MakeShaftScan()
+    {
+        _shaftSky = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32F, 1, 1, Use: TextureUse.ColourTarget | TextureUse.Sampled,
+            Name: "post shafts sky"));
+        var program = _ctx.Shaders.Compute(LightShaftShaders.ScanImages, "post shafts scan");
+        return (program, _ctx.Pipelines.Get(new ComputePipelineDesc(program, "post shafts scan")));
     }
 
     /// <summary>
@@ -571,10 +638,9 @@ sealed class PostComposite : IDisposable
         _shaftScatter?.Dispose();
         _shaftInjected = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
             Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts injected"));
-        _shaftLight = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, aw, ah,
-            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts light"));
-        _shaftScatter = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
-            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts scatter"));
+        var written = TextureUse.ColourTarget | TextureUse.Sampled | (ShaftScan ? TextureUse.Storage : 0);
+        _shaftLight = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, aw, ah, Use: written, Name: "post shafts light"));
+        _shaftScatter = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah, Use: written, Name: "post shafts scatter"));
     }
 
     /// <summary>
@@ -1015,6 +1081,9 @@ sealed class PostComposite : IDisposable
         _shaftInjected?.Dispose();
         _shaftLight?.Dispose();
         _shaftScatter?.Dispose();
+        _shaftSky?.Dispose();
+        if (_shaftScan is { } scan) _ctx.Shaders.Dispose(scan.Program);
+        _shaftSkyP.Dispose();
         _flowTexture?.Dispose();
         _perturbationTexture?.Dispose();
         _composite.Dispose();

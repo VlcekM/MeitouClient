@@ -175,9 +175,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// <summary>
     /// Opens a rendering of one cascade's layer (or of <paramref name="target"/>, the landmark map) as a native host (docs/renderer-native.md 4.5):
     /// the guests (terrain, objects, foliage, all native) record into the returned list's rendering instance through <c>BeginNativeInPass</c>, which
-    /// finds the host. <paramref name="clear"/>: the layer is cleared by the load op (else it is loaded).
+    /// finds the host. <paramref name="clear"/>: the layer is cleared by the load op (else it is loaded). <paramref name="biasFree"/>: the casters
+    /// draw with no bias (<see cref="DrawState.CasterBiasFree"/>).
     /// </summary>
-    IGpuCommandList BeginHost(string label, bool clear, GpuTexture? target = null, int layer = 0)
+    IGpuCommandList BeginHost(string label, bool clear, GpuTexture? target = null, int layer = 0, bool biasFree = false)
     {
         var cmd = Gpu.BeginNative(label);
         var map = target ?? _atlas!;
@@ -188,7 +189,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         // Wave 4 (docs/renderer-native.md 6): the cascades' segments are secondaries, recorded on the job threads when the host ends.
         bool secondaries = Gpu.RecordsSecondaries;
         cmd.BeginRendering(new RenderingDesc(default, depth, t.Width, t.Height), secondaries);
-        Gpu.BeginHostPass(cmd, t, CasterState(t.Formats));
+        Gpu.BeginHostPass(cmd, t, CasterState(t.Formats, biasFree));
         if (secondaries && Gpu is GpuContext parallel && cmd is CommandList vkCmd)
             parallel.Frame.Parallel.Begin(vkCmd, t.Formats, ShadowStage);
         return cmd;
@@ -198,8 +199,13 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// What the casters draw with (what VkGl made of the GL state the GL code set for them): depth only, tested with less and written, clamped
     /// (casters between the box and the sun are flattened onto its near side, not clipped), no culling (each caster sets its own), no colour.
     /// </summary>
-    DrawState CasterState(in AttachmentFormats formats) =>
-        DrawState.For(formats, Gpu.DepthClamp, depthTest: true, depthWrite: true, compare: DepthFunction.Less, mask: 0, depthClamp: true);
+    DrawState CasterState(in AttachmentFormats formats, bool biasFree = false)
+    {
+        var state = DrawState.For(formats, Gpu.DepthClamp, depthTest: true, depthWrite: true, compare: DepthFunction.Less, mask: 0, depthClamp: true);
+
+        // With no bias the casters' depth write is the clamped rasterised depth, which the clamp gives as well.
+        return state with { CasterBiasFree = biasFree && state.DepthClamp };
+    }
 
     /// <summary>
     /// The viewport and scissor the casters draw with (a whole layer, or the landmark map).

@@ -152,6 +152,17 @@ internal sealed class MetalProgram : IDisposable
     public bool IsCompute => _compute is not null;
 
     /// <summary>
+    /// A shadow caster's fragment stage without its bias's depth write (<see cref="Shadows.ShadowShaders.CasterDepthWrite"/>), for a pass that draws
+    /// with no caster bias (<see cref="DrawState.CasterBiasFree"/>); null for every other program. Set once, after the program is made.
+    /// </summary>
+    public MetalStage? BiasFreeFragment { get; set; }
+
+    /// <summary>
+    /// <see cref="BiasFreeFragment"/>'s entry point (waits for its compile; throws its error).
+    /// </summary>
+    public MTLFunction BiasFreeFragmentFunction => BiasFreeFragment?.Function ?? default;
+
+    /// <summary>
     /// Releases the libraries and functions the program has.
     /// </summary>
     public void Dispose()
@@ -159,6 +170,7 @@ internal sealed class MetalProgram : IDisposable
         _vertex?.Dispose();
         _fragment?.Dispose();
         _compute?.Dispose();
+        BiasFreeFragment?.Dispose();
     }
 }
 
@@ -406,10 +418,51 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.vert.msl"), vertexMsl);
             File.WriteAllText(Path.Combine(dump, $"{name}.frag.msl"), fragmentMsl);
         }
-        _programs.Add(new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
-            fragmentMsl, false));
+        var program = new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
+            fragmentMsl, false);
+        if (BiasFreeSource(fragmentGlsl) is { } biasFree)
+        {
+            var b = Compiler.Compile(vertexGlsl, biasFree);
+            byte[] bf = SpirvPatch.RemapBindings(b.Fragment.DefaultBlock is null ? b.FragmentSpirv : SpirvPatch.MoveDefaultBlock(b.FragmentSpirv, 1), 0,
+                0, SetStride);
+            program.BiasFreeFragment = BiasFreeStage(bf, fragmentMsl, null, name);
+        }
+        _programs.Add(program);
         return new GpuProgram(info.Index, info);
     }
+
+    /// <summary>
+    /// <paramref name="fragmentGlsl"/> without the shadow casters' bias write (<see cref="Shadows.ShadowShaders.CasterDepthWrite"/>), keeping its
+    /// block in use so the stage's resources (its argument buffers' members) stay those of the stage with the write; null when it has none.
+    /// </summary>
+    static string? BiasFreeSource(string fragmentGlsl) =>
+        fragmentGlsl.Contains(Shadows.ShadowShaders.CasterDepthWrite, StringComparison.Ordinal)
+            ? fragmentGlsl.Replace(Shadows.ShadowShaders.CasterDepthWrite, "if (uShadowBias.w > 1e30) return;", StringComparison.Ordinal)
+            : null;
+
+    /// <summary>
+    /// The bias-free fragment stage of <paramref name="name"/> from its SPIR-V (<see cref="BiasFreeSource"/>); null (the program keeps its depth
+    /// write in every pass) when its resources differ from <paramref name="fragmentMsl"/>'s, which the runtime binds by.
+    /// </summary>
+    MetalStage? BiasFreeStage(byte[] spirv, string fragmentMsl, uint? tableSet, string name)
+    {
+        var msl = MslTranslator.Translate(spirv, "fragment_main", ExecutionModel.Fragment, argumentBufferSet: tableSet);
+        bool same = MetalSetLayout.Parse(msl).ToString() == MetalSetLayout.Parse(fragmentMsl).ToString()
+            && MetalTableLayout.Parse(msl).ToString() == MetalTableLayout.Parse(fragmentMsl).ToString()
+            && ResourceIndices(msl) == ResourceIndices(fragmentMsl);
+        if (!same)
+        {
+            Console.WriteLine($"metal     {name}: the caster stage without its bias write binds other resources; it keeps the write");
+            return null;
+        }
+        return Stage(msl, "fragment_main", name + " bias-free");
+    }
+
+    /// <summary>
+    /// A stage's MSL entry point's bound resource indices (<c>[[buffer(n)]]</c>, <c>[[texture(n)]]</c>, <c>[[sampler(n)]]</c>), in order.
+    /// </summary>
+    static string ResourceIndices(string msl) =>
+        string.Join(",", Regex.Matches(msl, @"\[\[(buffer|texture|sampler)\(\d+\)\]\]").Select(m => m.Value));
 
     /// <summary>
     /// A compute program: the engine's compiler makes the SPIR-V, spirv-cross the MSL (with every set an argument buffer, as the
@@ -494,8 +547,15 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.vert.msl"), vertexMsl);
             File.WriteAllText(Path.Combine(dump, $"{name}.frag.msl"), fragmentMsl);
         }
-        _programs.Add(new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
-            fragmentMsl, bindless));
+        var program = new MetalProgram(info, Stage(vertexMsl, "vertex_main", name), vertexMsl, Stage(fragmentMsl, "fragment_main", name),
+            fragmentMsl, bindless);
+        if (BiasFreeSource(fs) is { } biasFree)
+        {
+            var bf = SpirvPatch.RemapBindings(Compiler.CompileNative(biasFree, fragment: true), 0, 0, SetStride);
+            if (bindless) bf = SpirvPatch.BindlessFetchImages(bf, Frame.NativeShaders.BindlessSet, TableTotal);
+            program.BiasFreeFragment = BiasFreeStage(bf, fragmentMsl, tableSet, name);
+        }
+        _programs.Add(program);
         return new GpuProgram(info.Index, info);
     }
 
