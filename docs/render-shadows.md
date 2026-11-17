@@ -28,6 +28,11 @@ dunes, a town from afar under a low sun. Texel grids are anchored at the
 camera's focus point, moved only while the sun turns and the point is 200+ units away (anchored at
 the eye, the first cascade's grid slid boom x sun turn under the squad). Least filter radius 1.5
 texels: a 0.06° sun turn changed 0.36 % of a Hub view by more than 8 levels, 0.56 % at 1 texel.
+With no caster bias the casters' `gl_FragDepth` write is the clamped rasterised depth the depth clamp gives anyway, so the Meitou
+cascades' pass is `DrawState.CasterBiasFree` and Metal binds each caster program's fragment stage without the write
+(`MetalProgram.BiasFreeFragment`; landmarks and the faithful atlas keep it): a shader depth write turns Apple's early depth test and
+hidden-surface removal off. **Verified** (save 111 offscreen, M6): bit-identical picture; **Observed** (Metal System Trace, orbit):
+the cascade encoder 1.88 -> 1.23 ms. Vulkan still writes it.
 
 Receiver plane (`msTileV`; **Code reading**, not compared on a GPU): the filter's taps and the blocker search shift their reference depth by the receiver plane's tilt along
 the offset, `dot(o, slope)` in tile UV. `ReceiverTile` flips v on Metal, so light-space y runs against v there and the plane's y tilt flips with it; `msTileV` takes the sign from the

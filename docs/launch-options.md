@@ -358,6 +358,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_NO_COMPRESSION` | `src/Meitou.Game/Rendering/Metal/MetalContext.cs` | `1`: no lossless target compression (A/B). |
 | `MEITOU_METAL_SLOT_WAIT` | `src/Meitou.Game/Rendering/Metal/MetalContext.cs` | Unset or `1`: wait for the reused slot's fence (default). `0`/`false`: frame-number only. `serial`: one frame in flight. |
 | `MEITOU_METAL_NO_STATE_CACHE` | `src/Meitou.Game/Rendering/Metal/MetalCommandList.cs` | `1`: reissue every encoder state (A/B). |
+| `MEITOU_METAL_SHAFT_SCAN` | `src/Meitou.Game/Rendering/Post/PostComposite.cs` | `0`: the light shafts' integrate and scatter as the two fragment passes instead of the compute scan (A/B). |
 | `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Game/Rendering/Terrain/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
 
 Names starting `MEITOU_` are also recorded in the benchmark JSON (`BenchSession.cs`).

@@ -332,7 +332,7 @@ public sealed class MetalCommandList : IGpuCommandList
         if (pipeline.Desc == _lastPipeline.Desc) return;
         if (_render.NativePtr == IntPtr.Zero) throw new InvalidOperationException("BindPipeline outside a rendering");
 
-        _render.SetRenderPipelineState(_ctx.Pipelines.Backend(pipeline));
+        _render.SetRenderPipelineState(_ctx.Pipelines.Backend(pipeline, _ctx.CasterBiasFree));
         _ctx.Pipelines.BindDepthClipMode(_render, pipeline.Desc.DepthClamp);
         _topology = pipeline.Desc.Topology;
         _lastPipeline = pipeline;

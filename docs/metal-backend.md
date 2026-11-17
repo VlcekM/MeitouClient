@@ -647,8 +647,9 @@ Keep `RecordsSecondaries` false: Metal records inline into one list.
    attachment).
 2. **Fog volumes and light shafts.** The **fog volumes are now drawn on Metal** by `PostComposite` over the scene
    (`uFogVolumeData`, `uFogVolumeEye` and `uFogVolumeInfo` are published by `FogVolumes`). SSAO, FXAA, the heat haze
-   and the light shafts (`LightShaftShaders` inject/integrate/scatter/apply) run there too. The shafts use the
-   fragment integrate/scatter path; the compute scan is Vulkan-only. Still to do: the fog-rate target
+   and the light shafts (`LightShaftShaders` inject/integrate/scatter/apply) run there too. The shafts' integrate and
+   scatter run as the compute scan (`ScanImages`: no samplers, which spirv-cross cannot put in a compute argument buffer; the
+   sky's ambient term from a 1 x 1 fragment pass, `ScanSky`). Still to do: the fog-rate target
    (`FogRateImage`), which the shafts and the volumetric fog read. Metal has no fragment-shading-rate
    attachment, so the FogRate path stays Vulkan-only unless a non-VRS fallback is added.
 3. **The HiZ pyramid and the GPU culls** (`HizPyramid`, `FoliageGpuCull`, `FoliageGrassGpu`): `FoliageGpuCull`

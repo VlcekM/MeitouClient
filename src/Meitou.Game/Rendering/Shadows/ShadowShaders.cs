@@ -164,10 +164,17 @@ static class ShadowShaders
         {
             float z = gl_FragCoord.z;
             float g = length(vec2(dFdx(z), dFdy(z)));
-            gl_FragDepth = clamp(z + min(uShadowBias.z, uShadowBias.y * g) + uShadowBias.x, 0.0, 1.0);
+            {{CasterDepthWrite}}
         }
 
         """;
+
+    /// <summary>
+    /// The caster bias's depth write (<see cref="CasterDepth"/>). With no bias it writes the rasterised depth clamped to 0..1, which the casters' depth
+    /// clamp (<c>ShadowPass.CasterState</c>) gives as well: a backend may leave it out of such a pass (<see cref="DrawState.CasterBiasFree"/>).
+    /// </summary>
+    public const string CasterDepthWrite =
+        "gl_FragDepth = clamp(z + min(uShadowBias.z, uShadowBias.y * g) + uShadowBias.x, 0.0, 1.0);   // the caster bias (gl_FragCoord.z)";
 
     /// <summary>
     /// Depth-only fragment stage for geometry without a cut-out (the terrain).
