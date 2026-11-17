@@ -1375,7 +1375,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var arriving = Crime.CrimeSystem.MarksTheft(world, cold, victim) && item.Mark == StolenMark.None
             ? StolenMark.Of(victim, table.IdOf(t))
             : item.Mark;
-        if (RefusedTake(world, i, t, item, LootRoom(world, cold, item, arriving, bagFirst))) return;
+        int units = InventoryCommands.ClickCount(item, take.Count);
+        if (RefusedTake(world, i, t, item, units, LootRoom(world, cold, item, arriving, bagFirst))) return;
         int fitted = InventoryCommands.LimbSlotOf(item.Section);
         if (fitted >= 0 && (victim.Medical?.LimbPart(fitted) is not { Limb: LimbState.Replaced } limb || limb.ReplacementItem != item))
             return;
@@ -1388,14 +1389,15 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
         if (TakeLootMoney(world, i, t, owner, item, mark, death)) return;
 
-        int moved = InventoryCommands.MoveInto(owner, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!, bagFirst,
-            out bool wear, cold);
+        string record = item.Record;
+        int moved = InventoryCommands.MoveInto(owner, item, units, cold.Inventory!, bagFirst, out bool wear, cold);
         if (owner.Items.Contains(item)) item.Mark = mark;   // what stays keeps its mark
         if (moved == 0)
         {
             if (cold.IsPlayer) world.Post($"{cold.Name} has no room for {item.Name}.");
             return;
         }
+        Crime.GoodsTakenObservers.Report(world, table.IdOf(i), victim.Faction, table.IdOf(t), "", record, moved, caught: false);
         if (fitted >= 0) victim.Medical!.RemoveReplacement(fitted);
 
         Butcher(world, i, t, death);
@@ -1409,13 +1411,19 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// when the looter has no <paramref name="room"/>, the crime alone and "no room" (no roll, no thievery XP: the original asks for room first,
     /// <see cref="InventoryCommands.HasRoomFor(Inventory, ItemInstance, bool, CharacterCold?)"/>, #796). True: caught or no room, the item stays.
     /// </summary>
-    bool RefusedTake(World world, int looter, int body, ItemInstance item, bool room)
+    bool RefusedTake(World world, int looter, int body, ItemInstance item, int units, bool room)
     {
         var table = world.Characters;
         var cold = table.Cold(looter)!;
-        bool npcOwner = !table.Cold(body)!.IsPlayer;
+        var owner = table.Cold(body)!;
+        bool npcOwner = !owner.IsPlayer;
         const Crime.CrimeSystem.TakeKind kind = Crime.CrimeSystem.TakeKind.RightClick;
-        if (room) return npcOwner && Crimes?.Pickpocket(world, looter, body, item, kind) == true;
+        if (room)
+        {
+            bool caught = npcOwner && Crimes?.Pickpocket(world, looter, body, item, kind) == true;
+            if (caught) Crime.GoodsTakenObservers.Report(world, table.IdOf(looter), owner.Faction, table.IdOf(body), "", item.Record, units, true);
+            return caught;
+        }
 
         if (npcOwner) Crimes?.PendPickpocket(world, looter, body, kind);
         if (cold.IsPlayer) world.Post($"{cold.Name} has no room for {item.Name}.");

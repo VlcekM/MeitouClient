@@ -152,6 +152,17 @@ holds refuses the second mod.
   new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change
   the world as a serial phase does, so a mod sets its unsaved runtime settings (a held platoon, a sleeping town) back on here, also for a
   save made without its own saved state. One that throws is logged and the others are still told. Engine API, not in the original.
+- **Goods taken:** a registered system implementing `IGoodsTakenObserver` (`Meitou.Simulation.Crime`) receives
+  `GoodsTaken(World, in GoodsTaken)` when one of the player's characters takes goods that are not its own by hand: a held item dragged or
+  given out of an owned container or another character, a click take out of an owned container or a town machine, a right-click loot take off
+  a body (not the take-all loot, NPCs' own looting or money). The report names the tick,
+  the taker, the owning faction (-1 none), the character taken from (none for a container or machine), the site ("" for a character), the
+  item record, the units and whether the taker was caught (the goods stayed). It includes takes the game makes no crime of, such as the
+  player's own characters taking from a container of the player's faction, so a mod can judge them by its own law. Observers are called in
+  system order once the goods have moved (the units that moved) or the taker was caught; they may read the world and change their own state,
+  and gameplay changes go through commands.
+  One that throws is disabled for that world and the fault enters the state hash. Without an observer nothing is built. Engine API, not in
+  the original.
 - **Items used up:** a registered system implementing `IItemUseObserver` receives `ItemUsedUp(World, in ItemUsed)` inside the step that
   used an item, once the item has changed: the tick, the `ItemUseKind`, the item record's string id, the user (none for a machine, a
   research order or an upgrade pulling from the building's own stock), the building it went into or came from (a construction, machine or

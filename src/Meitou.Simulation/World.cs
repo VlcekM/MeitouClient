@@ -245,6 +245,7 @@ public sealed partial class World : IDisposable
             CombatHitFilters.Register(this._systems[k], k);
             TradePriceFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
+            GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
@@ -410,6 +411,10 @@ public sealed partial class World : IDisposable
     /// The systems observing items used up (<see cref="Items.IItemUseObserver"/>).
     /// </summary>
     internal Items.ItemUseObservers ItemUseObservers { get; } = new();
+    /// <summary>
+    /// The systems hearing of goods taken (<see cref="Crime.IGoodsTakenObserver"/>).
+    /// </summary>
+    internal Crime.GoodsTakenObservers GoodsTakenObservers { get; } = new();
     /// <summary>
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
@@ -613,6 +618,7 @@ public sealed partial class World : IDisposable
         CombatHitFilters.Register(system, _systems.Count - 1);
         TradePriceFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
+        GoodsTakenObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
@@ -1106,6 +1112,7 @@ public sealed partial class World : IDisposable
         CombatHitFilters.HashFaults(ref h);
         TradePriceFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
+        GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         return h.Value;
     }
