@@ -186,11 +186,13 @@ public sealed class ItemSlots
     }
 
     /// <summary>
-    /// Adds the slots of building <paramref name="b"/> of <paramref name="site"/> once (none for an emptied house), owned by the building's owner.
+    /// Adds the slots of building <paramref name="b"/> of <paramref name="site"/> once (none for an emptied house or a ruin), owned by the
+    /// building's owner.
     /// </summary>
     void AddBuilding(World world, PopulationData data, int site, TownBuilding b)
     {
         if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)   // a bought house has none (EmptyBuilding)
+            || world.Fixtures.IsDestroyed(b)   // nor a ruin, whose interior's item groups went with it
             || _all.Any(s => s.Id.StartsWith(b.Key + "/item", StringComparison.Ordinal))) return;
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         int owner = data.LevelOwnerOf(b, townFaction);

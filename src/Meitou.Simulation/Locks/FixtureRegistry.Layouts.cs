@@ -76,11 +76,12 @@ public sealed partial class FixtureRegistry
     static bool Relaid(TownBuilding b) => b.Resolved?.Placement.InteriorLayout is not null;
 
     /// <summary>
-    /// Writes a building's layout names into its saved record when it was laid out afresh.
+    /// Writes a building's layout names into its saved record when it was laid out afresh and has an interior: the original's state save writes
+    /// them from the interior object, ruin or not, and a building without one has none (<c>FUN_1405547f0</c>).
     /// </summary>
     static void WriteLayouts(TownBuilding b, Data.Fcs.FcsRecord state)
     {
-        if (b.Resolved?.Placement is not { InteriorLayout: { } interior } placement) return;
+        if (!b.HasInterior || b.Resolved?.Placement is not { InteriorLayout: { } interior } placement) return;
         state.Strings[ResidentRuins.InteriorKey] = interior;
         state.Strings[ResidentRuins.ExteriorKey] = placement.ExteriorLayout ?? "";
     }

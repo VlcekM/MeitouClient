@@ -76,17 +76,12 @@ public sealed partial class FixtureRegistry
         string? playerId = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         var homes = ResidentRuins.HomeTemplates(data.Db, town.Town, faction, town.Buildings, playerId, PlayerOwnedIn(data, site, player));
-        foreach (var b in town.Buildings)
+        foreach (var b in town.Buildings.ToList())
         {
             bool home = homes.TryGetValue(b.Key, out var template);
             bool ruined = home && ResidentRuins.Ruins(data.Db, template!, b);
-            if (reset.Contains(b.Key))
-                SetRuin(world, data, site, b, home ? ruined : b.LevelDestroyed);
-            else if (ruined && !IsPlayers(data, site, b, player))
-            {
-                SetRuin(world, data, site, b, true);
-                RemoveShell(b.Key);
-            }
+            if (reset.Contains(b.Key)) SetRuin(world, data, site, b, home ? ruined : b.LevelDestroyed);
+            else if (ruined && !IsPlayers(data, site, b, player)) SetRuin(world, data, site, b, true);
         }
     }
 
@@ -124,16 +119,23 @@ public sealed partial class FixtureRegistry
         && db.Find(template) is { } record && !record.GetBool("building ruined");
 
     /// <summary>
-    /// A registered building that became a ruin outside a reset zone loses its doors and its own lock (a ruin has none, docs/game/locks.md "Doors");
-    /// its interior's stay.
+    /// A registered building that became a ruin loses what a ruin has none of (<see cref="FixturesOf"/>): its doors and own lock, its interior's
+    /// objects with their contents and its seats, and its item slots with the items lying in them (setting a house destroyed destroys its
+    /// interior's objects and item groups with their items, docs/game/buildings-production.md "A ruin's objects take their items with them").
+    /// Whoever lies or is held in one is let out first, as when a bought house is emptied.
     /// </summary>
-    void RemoveShell(string building)
+    void Ruin(World world, TownBuilding b)
     {
-        if (!_byBuilding.TryGetValue(building, out var list)) return;
-        var shell = list.Where(f => f.Kind == FixtureKind.Door || f.Id == building).ToList();
-        if (shell.Count == 0) return;
-        foreach (var f in shell)
+        RemoveSeats(b.Key);
+        world.ItemSlots.EmptyBuilding(world, b);
+        if (!_byBuilding.TryGetValue(b.Key, out var list)) return;
+
+        var kept = new List<Fixture>();
+        AddDummies(-1, b, -1, kept, layoutObjects: false);
+        var keep = kept.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var f in list.Where(f => !keep.Contains(f.Id)).ToArray())
         {
+            LetOut(world, f);
             list.Remove(f);
             _all.Remove(f);
             _byId.Remove(f.Id);
@@ -142,8 +144,13 @@ public sealed partial class FixtureRegistry
         _containerSpots = null;
         _doorPicks = null;
         _doorsByBuilding = null;
+        _bedSpots = null;
+        _bedList = null;
+        _cageList = null;
         _doorList = null;
-        _doors?.SetDoorsBlocked(building, false);
+        _publishedCages = null;
+        _dummySpots = null;
+        _doors?.SetDoorsBlocked(b.Key, false);
     }
 
     /// <summary>
@@ -161,19 +168,33 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Sets a town building's ruin state, keeping it listed while it differs from the level data's or was laid out afresh.
+    /// Sets a town building's ruin state. One laid out as a ruin that stands now is laid out standing from the layout names it has (housing
+    /// furnishes it from them: docs/game/factions-squads-towns.md "Town residents"); in a registered town its fixtures and item slots come when the
+    /// town registers it again (<see cref="TownReplaced"/>). A registered one that became a ruin loses them (<see cref="Ruin"/>).
     /// </summary>
     void SetRuin(World world, PopulationData data, int site, TownBuilding b, bool destroyed)
     {
         bool was = IsDestroyed(b);
+        if (!destroyed) b = data.Stand(site, b);
+        ListRuin(b, destroyed);
+        if (was == destroyed || !_sites.Contains(site)) return;
+
+        if (destroyed) Ruin(world, b);
+        if (data.Sight is not { } sight) return;
+        if (destroyed) world.Sight.Remove(b.Key);
+        else world.Sight.Restore(sight, b);
+    }
+
+    /// <summary>
+    /// Keeps a town building in <see cref="Ruins"/> while its ruin state differs from the level data's or it was laid out afresh.
+    /// </summary>
+    void ListRuin(TownBuilding b, bool destroyed)
+    {
         bool listed = destroyed != b.Destroyed || Relaid(b);
         bool changed = !listed ? _ruins.Remove(b.Key) : !_ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed
                 || !ReferenceEquals(old.Building, b);
         if (listed) _ruins[b.Key] = new RuinedBuilding(b, destroyed);
         if (changed) RuinsRevision++;
-        if (was == destroyed || !_sites.Contains(site) || data.Sight is not { } sight) return;
-        if (destroyed) world.Sight.Remove(b.Key);
-        else world.Sight.Restore(sight, b);
     }
 
     /// <summary>

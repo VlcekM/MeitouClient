@@ -286,6 +286,7 @@ public sealed partial class FixtureRegistry
                 Unregister(b.Key);
                 _properties.Remove(b.Key);
                 RegisterBuilding(world, data, site, b, townFaction);
+                world.ItemSlots.PlaceBuilding(world, data, site, b);   // a house stood up again has its slots back
             }
             else if (Players(b)) continue;
             int owner = LevelOwner(b);
@@ -309,6 +310,11 @@ public sealed partial class FixtureRegistry
     /// bring the old state back. A building the player buys afterwards leaves it.
     /// </summary>
     readonly Dictionary<string, (TownBuilding Building, PopulationData Data, int Owner)> _resetBuildings = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether a town override reset the building to the level (<see cref="TownReplaced"/>) and the player has not bought it since.
+    /// </summary>
+    public bool IsReset(string building) => _resetBuildings.ContainsKey(building);
 
     /// <summary>
     /// A reset building's keys the live writers do not touch: its owner (its fixtures', else the one it was reset to) and its level <c>destroyed</c>.

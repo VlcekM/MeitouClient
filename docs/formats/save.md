@@ -528,7 +528,13 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   world holds as a ruin, writes `destroyed` and is not the player's, with its GAMESTATE_BUILDING and listed INVENTORY_STATE and items; the
   handles and slots stay. **Observed** (headless): an unchanged capture of METARU, redev or the Meitou-written fb796, issue730, issue774 and
   issue780 removes none; the Stack's Power Station shack set destroyed removes its 7 entries,
-  Battery Bank `10406-zone20.28-INGAME` among them, the Stationhouse its 170 with 46 inventory and item records.
+  Battery Bank `10406-zone20.28-INGAME` among them, the Stationhouse its 170 with 46 inventory and item records. Every saved ruin state
+  without `serialised interior` (a zone file Meitou made) gets it as 1, as the original's ruins all have it: without it the factory would
+  make a ruin's interior from its layout name. A house a town override reset that stands with an interior layout placing objects, and has no
+  saved entry inside it (a ruin stood up again: the original's override makes its objects anew), loses the key, so the original makes its
+  interior from its names; with it the house would load empty. **Observed** (headless, METARU): an unchanged capture writes every zone file
+  as it does without `RuinSave`; Free Settlement saved into a zone file Meitou made gives its 8 ruins the key and a second save keeps it;
+  after Stoat's Yabuta override stands 3 of half destroyed's ruins up (`39.16:12`, `:24`, `:30-Newwworld-INGAME`) those 3 states lose it.
 - Slot list: the last level layer's list (a layer without one empties it), plus slots allocated in play (the lists Meitou makes this way are within the saved ones in 181 of 183 files, the other two lack
   one slot each). `nextId` can be above the highest record id.
 - Nest buildings are not saved (no type-85 `town` handle in save 2's 133 files); nest debris are `1-itemlist` ITEMs whose `persist` handle is the nest (222 in save 2).
@@ -553,7 +559,7 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 **Meitou** (`Saving/ZoneSave`, `Data/Save/SaveZoneBuilder`): every zone the population had active, and every zone of a town it made but another town's centre zone (engine choice:
 a town is made and saved whole; three such zones, e.g. Black Desert City's buildings in Scraphouse's 34.28), is visited (`World.VisitedZones`, not hashed). A save keeps the loaded save's zone files (locks, doors and player buildings are written into them) and makes
 the missing ones from the level data as above, with `town` set to the save's town state `hand` and a new save's town states taking their level `hand`; it writes no
-`serialised interior`, no furniture and no inventories but its town machines' (Town machines, above), so the original makes each interior as for a fresh zone from its `interior layout name` (only the residents differ: the
+`serialised interior` but on a ruin's state ([above](#zone-files)), no furniture and no inventories but its town machines' (Town machines, above), so the original makes each interior as for a fresh zone from its `interior layout name` (only the residents differ: the
 saved platoons). A load lays each town building whose saved state names an interior layout out with the saved interior and exterior names (the original generated
 the saved furniture from them; **Observed** headless, METARU: 972 such buildings, 117 named otherwise than Meitou's housing, all laid out with the saved names), and a
 save writes them back. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles

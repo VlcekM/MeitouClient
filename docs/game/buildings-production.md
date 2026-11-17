@@ -1141,7 +1141,9 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   rotation (below, [power](#power)) and they charge from its surplus and drain on its shortfall. A ruin holds no layout objects
   ([ruins](#ruined-by-residents)): a house set destroyed after its town registered loses its objects' machines, their items destroyed with them
   and none dropped, as the original's ([ruins](#ruined-by-residents)), its generators and draws leave the frame, and when it stands again its
-  objects get new machines (`DropGonePieces`; so does a house laid out anew). A save writes no entry inside a ruin, so a reloaded ruin's objects
+  objects get new machines (`DropGonePieces`; so does a house laid out anew or stood up again, either of which moves
+  `PopulationData.BuildingsRevision`: **Observed** headless, METARU, The Free City override on a registered Free Settlement: the stood-up Bar
+  `44.39:2-rebirth-INGAME` gets its object's machine, the relaid Power Station `:10` its 3, the Hydroponic `:16` its 5). A save writes no entry inside a ruin, so a reloaded ruin's objects
   start new when it stands (`Saving/RuinSave`, [save](../formats/save.md#zone-files)); **Observed** (headless, METARU): the Stack's Power
   Station shack set destroyed, saved, reloaded and set standing in the registry's ruins gets a Battery Bank starting empty, where the save's old
   entry held 60 (and, without `RuinSave`, still loads 60). An interior
@@ -1230,7 +1232,9 @@ intact and name no template. Its houses are ruins in the original (issue #145).
 ([layouts](factions-squads-towns.md#town-residents)). **Observed** (saves METARU, autosaves 1 and 2, redev, Beep Fan Club 1): no saved building lies inside any ruin
 (0 of 56, 56, 23, 23, 62), while 283 of 284 standing buildings with an interior name hold furniture; every saved ruin names no interior layout (its template
 names none). Meitou: no reader lays out a ruin's layouts (drawing, lamps, effects, emitters, navmesh, and `TownBuildings`: no beds, nodes,
-fixtures or item slots).
+fixtures or item slots). A ruin a later housing stands (a town override's, or `FixtureRegistry.SavedStanding`) is laid out standing from the
+names it has then (`TownBuildings.Stand`), as the original's squad setup loads those names' layout before it sets the home standing
+([layouts](factions-squads-towns.md#town-residents)).
 
 **A ruin's objects take their items with them.** **Verified** (decompile): `FUN_140548580` hands each furniture object to the destroy routine
 `FUN_140799af0`, whose building branch unregisters it (zone, power, doors, sound, physical parts) and queues it for deletion after 5 seconds,
@@ -1241,7 +1245,16 @@ building-list entry has a ruin as its `isInsideBuilding` (0 of 15089 inside a bu
 some keep `internalbuildings-<k>` handles naming no saved building (10 of METARU's 56 ruins, 6 of autosave 2's 22), whose slots stay in the zone's
 slot list (58 of 58 in METARU's 20.32). **Verified** (decompile): with `serialised interior` 1 the load makes no interior, and the saved
 `destroyed` is set without `setDestroyed` (`FUN_140552b70`), so a loaded ruin holds no objects and the save keeps no state for any: objects it
-gets when it stands again start new. Meitou: [layout objects](#npc-town-machines).
+gets when it stands again start new. Meitou (`FixtureRegistry.Ruin`): a registered house set destroyed loses its doors and own lock, every
+fixture of its interior with what it holds (containers, cages, beds, training dummies), its seats, and its item slots with the items lying in
+them; whoever lies or is held in one is let out first, as when a bought house is emptied. A ruin registers none (`FixturesOf`,
+`ItemSlots.AddBuilding`; a dummy standing alone in the town is a building of its own); its machines: [layout objects](#npc-town-machines).
+**Observed** (headless, METARU, each town registered before its override): Stoat's half-destroyed override (Lord Inaba dead) leaves its new
+ruins with no fixture and no item slot and lets a character held in a cage of `39.16:24-Newwworld-INGAME` out; after a save and a reload the
+Yabuta one (Tengu dead, Yabuta alive) does the same to 5 more houses (`39.16:586` had 27 containers, 6 beds and 25 slots) and stands 3 of the
+earlier ruins up with their new layouts' fixtures and slots (`39.16:24`: Barracks, 19 containers, 2 cages, 9 beds, 17 slots); Free
+Settlement's The Free City override (Tengu and Longen dead) stands its zone's ruins, 5 of them furnished (`44.39:14`: Mechanical Shop, 21
+containers, 4 beds, 19 slots). A reload of either save (its zone files written) has the same.
 
 Meitou (`ResidentRuins`): before anything reads the level data's `destroyed`, every town is housed by the population's rule ([town residents](factions-squads-towns.md#town-residents))
 and each home of a ruined template that has a destroyed mesh is set destroyed in its level state; 71 base-game buildings (Old Village 10 of 10, Abandoned Town 9 of 9,

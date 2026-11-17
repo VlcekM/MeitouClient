@@ -5,24 +5,46 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The furniture of town ruins in a save (docs/formats/save.md "Zone files"). Setting a house destroyed destroys its layout objects with their
-/// inventories (docs/game/buildings-production.md "A ruin holds no furniture"), so the original saves no building inside a ruin; a save keeps the
-/// loaded zone files, which still list the objects of a house that stood when they were written. Each such entry goes with its state and its
-/// inventory; the house's <c>internalbuildings-&lt;k&gt;</c> handles and the entries' slots stay, as the original leaves them. So a ruin that
-/// stands again after the load has no saved state for its objects, which start new.
+/// Town ruins in a save, and the houses a town override stood up again (docs/formats/save.md "Zone files"). Setting a house destroyed destroys its
+/// layout objects with their inventories (docs/game/buildings-production.md "A ruin's objects take their items with them"), so the original saves
+/// no building inside a ruin; a save keeps the loaded zone files, which still list the objects of a house that stood when they were written. Each
+/// such entry goes with its state and its inventory; the house's <c>internalbuildings-&lt;k&gt;</c> handles and the entries' slots stay, as the
+/// original leaves them. So a ruin that stands again after the load has no saved state for its objects, which start new.
 /// </summary>
 public static class RuinSave
 {
     /// <summary>
-    /// Removes every building-list entry that stands inside a town building the world holds as a ruin, the save writes as one (<c>destroyed</c>
-    /// true in <paramref name="states"/>, the zones' building states by key) and is not the player's.
+    /// The building state key that keeps the original's building factory from making the interior again (docs/formats/save.md "Zone files").
+    /// </summary>
+    const string SerialisedKey = "serialised interior";
+
+    /// <summary>
+    /// Marks every saved ruin's interior as serialised, removes every building-list entry that stands inside a town building the world holds as a
+    /// ruin, the save writes as one (<c>destroyed</c> true in <paramref name="states"/>, the zones' building states by key) and is not the player's,
+    /// and lets the original furnish the houses an override stood up again that hold no saved object.
     /// </summary>
     public static void Write(SaveGame game, World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
     {
-        var ruins = Ruins(world, data, states);
-        if (ruins.Count == 0) return;
+        foreach (var zone in game.Zones.Values) MarkRuins(zone);
 
-        foreach (var zone in game.Zones.Values) DropFurniture(zone, ruins);
+        var ruins = Ruins(world, data, states);
+        if (ruins.Count > 0)
+        {
+            foreach (var zone in game.Zones.Values) DropFurniture(zone, ruins);
+        }
+
+        UnmarkStood(game, world, data, states);
+    }
+
+    /// <summary>
+    /// Gives each ruin's state of the zone <c>serialised interior</c> 1 when it has none (a zone file Meitou made from the level data): the
+    /// original's own saved ruins all have it, and without it its building factory makes the interior from the state's layout name, a ruin's too
+    /// (docs/game/buildings-production.md "A ruin's objects take their items with them").
+    /// </summary>
+    static void MarkRuins(SaveZone zone)
+    {
+        foreach (var state in zone.BuildingStates)
+            if (state.Bools.GetValueOrDefault("destroyed") && !state.Ints.ContainsKey(SerialisedKey)) state.Ints[SerialisedKey] = 1;
     }
 
     /// <summary>
@@ -79,4 +101,42 @@ public static class RuinSave
     static bool InsideRuin(FcsRecord state, HashSet<(int C, int I)> ruins) =>
         state.Bools.GetValueOrDefault("is inside building") && Hand.Read(state, "isInsideBuilding") is { IsNull: false } parent
         && ruins.Contains((parent.C, parent.I));
+
+    /// <summary>
+    /// Takes <c>serialised interior</c> off each house a town override reset that stands with its interior layout placing objects, when no saved
+    /// object stands inside it (a ruin stood up again: the original's override makes its objects anew, which Meitou does not write), so the
+    /// original makes its interior from its layout names on load as for a fresh zone; with the key it would load the house empty.
+    /// </summary>
+    static void UnmarkStood(SaveGame game, World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
+    {
+        var parents = Parents(game);
+        foreach (var site in data.Sites)
+        {
+            foreach (var b in site.Buildings)
+            {
+                if (!b.Furnished || !world.Fixtures.IsReset(b.Key) || world.Fixtures.IsDestroyed(b)) continue;
+                if (states.GetValueOrDefault(b.Key) is not { } state || Hand.Read(state, "handle") is not { IsNull: false } hand) continue;
+
+                if (!parents.Contains((hand.C, hand.I))) state.Ints.Remove(SerialisedKey);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The handles (container, slot) of the buildings some saved building stands inside.
+    /// </summary>
+    static HashSet<(int C, int I)> Parents(SaveGame game)
+    {
+        var parents = new HashSet<(int C, int I)>();
+        foreach (var zone in game.Zones.Values)
+        {
+            foreach (var state in zone.BuildingStates)
+            {
+                if (state.Bools.GetValueOrDefault("is inside building") && Hand.Read(state, "isInsideBuilding") is { IsNull: false } parent)
+                    parents.Add((parent.C, parent.I));
+            }
+        }
+
+        return parents;
+    }
 }

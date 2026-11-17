@@ -311,8 +311,8 @@ public sealed class PopulationData
     int _buildingsRevision;
 
     /// <summary>
-    /// Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>); the host's caches of them are rebuilt when
-    /// it moves.
+    /// Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>, a building laid out afresh); the host's and
+    /// the systems' caches of them are rebuilt when it moves.
     /// </summary>
     public int BuildingsRevision => Volatile.Read(ref _buildingsRevision);
 
@@ -429,11 +429,32 @@ public sealed class PopulationData
         if (Layouts is null || sameLayouts && (naming is null || naming == b.Naming)) return b;
 
         var relaid = TownBuildings.Relay(Db, Layouts, b, interior, exterior, naming);
-        if (ReferenceEquals(relaid, b)) return b;
-
-        Sites[site].Relay(b, relaid);
-        lock (_turrets) _turrets.Remove(site);
+        if (!ReferenceEquals(relaid, b)) Replace(site, b, relaid);
         return relaid;
+    }
+
+    /// <summary>
+    /// Lays building <paramref name="b"/> of town <paramref name="site"/>, laid out as a ruin, out standing (<see cref="TownBuildings.Stand"/>): the
+    /// new building takes its place in <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when it is laid out standing or
+    /// there are no layouts.
+    /// </summary>
+    public TownBuilding Stand(int site, TownBuilding b)
+    {
+        if (Layouts is null) return b;
+
+        var stood = TownBuildings.Stand(Db, Layouts, b);
+        if (!ReferenceEquals(stood, b)) Replace(site, b, stood);
+        return stood;
+    }
+
+    /// <summary>
+    /// Puts <paramref name="relaid"/> in <paramref name="old"/>'s place in town <paramref name="site"/>'s list; the caches of the lists follow.
+    /// </summary>
+    void Replace(int site, TownBuilding old, TownBuilding relaid)
+    {
+        Sites[site].Relay(old, relaid);
+        lock (_turrets) _turrets.Remove(site);
+        Interlocked.Increment(ref _buildingsRevision);
     }
 
     /// <summary>

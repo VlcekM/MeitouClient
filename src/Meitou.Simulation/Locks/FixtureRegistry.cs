@@ -544,18 +544,24 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// A building's fixtures: its doors and own lock (none while destroyed), its lockable or storage furniture, its beds and training dummies; its
-    /// seats are registered on the way.
+    /// A building's fixtures: its doors and own lock, its lockable or storage furniture, its beds and training dummies; its seats are registered on
+    /// the way. A ruin has none of its own or of its interior, only a training dummy that is no layout object (it may be a ruin itself).
     /// </summary>
     List<Fixture> FixturesOf(World world, PopulationData data, int site, TownBuilding b, int owner)
     {
+        var list = new List<Fixture>();
+
+        // A destroyed building has no doors and no lock of its own (docs/game/locks.md "Doors"), and setting it destroyed destroys its interior's
+        // objects with their items (docs/game/buildings-production.md "A ruin's objects take their items with them").
+        if (IsDestroyed(b))
+        {
+            AddDummies(site, b, owner, list, layoutObjects: false);
+            return list;
+        }
+
         var db = data.Db;
         var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
-        var list = new List<Fixture>();
-        var record = db.Find(b.BuildingId);
-
-        // A destroyed building has no doors and no lock of its own (docs/game/locks.md "Doors"); its interior's fixtures stay.
-        if (record is not null && !IsDestroyed(b))
+        if (db.Find(b.BuildingId) is { } record)
         {
             AddDoors(world, db, record, b.Key, site, owner, faction, b.Position, b.Yaw, b.Resolved?.Placement.Rotation, list);
             if (Lockable(db, record) is { } own)
@@ -573,7 +579,7 @@ public sealed partial class FixtureRegistry
 
         RegisterSeats(b, site, owner);
         AddBeds(db, site, b, owner, list);
-        AddDummies(site, b, owner, list);
+        AddDummies(site, b, owner, list, layoutObjects: true);
         return list;
     }
 
@@ -613,14 +619,20 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Adds a fixture for each training dummy among the building's furniture, numbered in furniture order.
+    /// Adds a fixture for each training dummy among the building's furniture, numbered in furniture order; without
+    /// <paramref name="layoutObjects"/> only the building's own (no layout object), keeping its number.
     /// </summary>
-    static void AddDummies(int site, TownBuilding b, int owner, List<Fixture> list)
+    static void AddDummies(int site, TownBuilding b, int owner, List<Fixture> list, bool layoutObjects)
     {
         int dummy = 0;
         foreach (var piece in b.Furniture)
         {
             if (piece.Kind != HomeSpotKind.Training || piece.Record is not { } dummyRecord) continue;
+            if (!layoutObjects && piece.Piece is not null)
+            {
+                dummy++;
+                continue;
+            }
 
             list.Add(new Fixture
             {

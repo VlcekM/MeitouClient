@@ -492,12 +492,35 @@ public static class TownBuildings
     public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior,
         BuildingNaming? naming = null)
     {
-        if (b.Resolved is not { } resolved || b.LevelState is not { } state) return b;
+        if (b.Resolved is not { } resolved || b.LevelState is null) return b;
         if (b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b with { Naming = naming ?? b.Naming };
+
         var placed = resolved with { Placement = resolved.Placement with { InteriorLayout = interior, ExteriorLayout = exterior } };
+        return LayOut(db, layouts, b, placed, interior) with { Naming = naming ?? b.Naming };
+    }
+
+    /// <summary>
+    /// <paramref name="b"/>, laid out as a ruin, laid out standing with the layout names it has now (docs/game/factions-squads-towns.md "Town
+    /// residents"): housing stands a ruin up again and furnishes it from them. Its level <see cref="TownBuilding.Destroyed"/> stays. A building
+    /// laid out standing, or without a level state or placement, stays as it is.
+    /// </summary>
+    public static TownBuilding Stand(GameDatabase db, BuildingLayouts layouts, TownBuilding b)
+    {
+        if (b.Resolved is not { Destroyed: true } resolved || b.LevelState is null) return b;
+
+        return LayOut(db, layouts, b, resolved with { Destroyed = false }, b.InteriorLayout);
+    }
+
+    /// <summary>
+    /// <paramref name="b"/> with its contents laid out from <paramref name="placed"/> (its layout names and whether it stands); <paramref
+    /// name="interior"/> names the interior its spots come from.
+    /// </summary>
+    static TownBuilding LayOut(GameDatabase db, BuildingLayouts layouts, TownBuilding b, ResolvedBuilding placed, string interior)
+    {
+        var state = b.LevelState!;
         var functions = new Dictionary<string, GameRecord?>(StringComparer.Ordinal);
         var c = TownBuildingContents.Lay(db, layouts, placed, state, new(StringComparer.Ordinal), functions);
-        c.AddAlone(db, placed, FunctionOf(db, resolved.Record, functions));
+        c.AddAlone(db, placed, FunctionOf(db, placed.Record, functions));
         return b with
         {
             IsShop = c.Shop,
@@ -513,7 +536,6 @@ public static class TownBuildings
             Furnished = c.Furnished,
             InteriorLayout = interior,
             Resolved = placed,
-            Naming = naming ?? b.Naming,
             Generators = GeneratorCount(layouts, placed, state),
         };
     }

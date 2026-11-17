@@ -524,7 +524,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts, display `name` and `squad template` as above (`ResidentRuins.Apply`, before anything reads the
   levels: renderer, lamps, effects, navmesh and `NavmeshTool`, homes). Later changes lay a
   building out afresh (`TownBuildings.Relay`, `FixtureRegistry.Layouts.cs`): its beds, nodes, fixtures and item slots come from the new names, which its
-  placement carries to the renderer, navmesh overlay, lamps, effects and indoor sight, and a save writes into its state. A town override's own zone
+  placement carries to the renderer, navmesh overlay, lamps, effects and indoor sight, and a save writes into the state of a building with an interior
+  (**Verified**, decompile: the original's state save `FUN_1405547f0` writes them from the interior object, ruin or not; a building without one has none). A ruin that
+  stands again is laid out standing from the names it has then (`TownBuildings.Stand`, [ruins](buildings-production.md#ruined-by-residents)). A town override's own zone
   (not the player's buildings) takes the replacement's housing: a home its template's layouts, `name` and `squad template`, any other building its level files' (as the original reads
   the zone back from them); its other zones keep theirs (**Observed** headless: Stoat's half-destroyed override relays 15 of its zone's 219
   buildings, whose fixtures and item slots then match a fresh registration). A loaded save's building states name the layouts the original furnished them with, so they win
