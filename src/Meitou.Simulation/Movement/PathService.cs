@@ -24,6 +24,11 @@ public readonly record struct PathAnswer(long Id, CharacterId Character, PathRes
 public sealed class PathService : IDisposable
 {
     /// <summary>
+    /// How many failed searches are written to the log (engine choice: a surface that fails every search would fill it).
+    /// </summary>
+    const int ReportedFailures = 8;
+
+    /// <summary>
     /// The surface the paths are found on (its <c>FindPath</c> runs on the path threads).
     /// </summary>
     readonly IWalkability _walkability;
@@ -52,6 +57,10 @@ public sealed class PathService : IDisposable
     /// Requests asked and not answered or dropped yet.
     /// </summary>
     int _pending;
+    /// <summary>
+    /// Searches that threw on a path thread.
+    /// </summary>
+    int _failed;
     /// <summary>
     /// Set by <see cref="Dispose"/>, which runs once.
     /// </summary>
@@ -145,11 +154,30 @@ public sealed class PathService : IDisposable
                 Interlocked.Increment(ref _skipped);
             else
             {
-                _answers.Enqueue(Answer(r));
+                _answers.Enqueue(AnswerOrNone(r));
                 _newest.TryRemove(new KeyValuePair<CharacterId, long>(r.Character, r.Id));
             }
 
             Interlocked.Decrement(ref _pending);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Answer"/> on a path thread, where a search that throws would end the process: it is answered as no path (the walker hears what
+    /// it hears of an unreachable goal) and the first <see cref="ReportedFailures"/> are reported.
+    /// </summary>
+    PathAnswer AnswerOrNone(PathRequest r)
+    {
+        try
+        {
+            return Answer(r);
+        }
+        catch (Exception e)
+        {
+            if (Interlocked.Increment(ref _failed) <= ReportedFailures)
+                Console.Error.WriteLine($"paths     the search from {r.From} to {r.To} failed: {e}");
+
+            return new(r.Id, r.Character, PathResult.NotFound);
         }
     }
 

@@ -671,6 +671,12 @@ public sealed class OgreScriptCompiler
     #region Variables
 
     /// <summary>
+    /// The variables whose values are being expanded: one of them named inside its own value (<c>set $a "$a"</c>, or through others) is undefined
+    /// there, as expanding it again would never end.
+    /// </summary>
+    readonly HashSet<string> _expanding = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Replaces every <c>$variable</c> in <paramref name="nodes"/> by its value (the nearest enclosing object's, else the file's), parsed as script;
     /// abstract objects are left alone.
     /// </summary>
@@ -694,18 +700,10 @@ public sealed class OgreScriptCompiler
                     break;
                 case OgreScriptVariableAccess access:
                     {
-                        var scope = Ancestors(access).OfType<OgreScriptObject>().FirstOrDefault();
-                        string? value = scope?.GetVariable(access.Name);
-                        if (value is null && _env.TryGetValue(access.Name, out var global)) value = global;
-
                         nodes.RemoveAt(i);
-                        if (value is not null)
+                        if (ValueOf(access) is { } value)
                         {
-                            var expanded = new List<OgreScriptNode>();
-                            foreach (var c in OgreScriptParser.ParseChunk(OgreScriptLexer.Tokenize(value, access.File)))
-                                Visit(c, null, expanded);
-                            foreach (var e in expanded) e.Parent = access.Parent;
-                            ProcessVariables(expanded);
+                            var expanded = Expand(access, value);
                             nodes.InsertRange(i, expanded);
                             i += expanded.Count;
                         }
@@ -720,6 +718,37 @@ public sealed class OgreScriptCompiler
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// The value of the variable <paramref name="access"/> names: the nearest enclosing object's, else the file's; null when neither defines it or
+    /// it is being expanded (<see cref="_expanding"/>).
+    /// </summary>
+    string? ValueOf(OgreScriptVariableAccess access)
+    {
+        if (_expanding.Contains(access.Name)) return null;
+
+        var scope = Ancestors(access).OfType<OgreScriptObject>().FirstOrDefault();
+        if (scope?.GetVariable(access.Name) is { } own) return own;
+
+        return _env.TryGetValue(access.Name, out var global) ? global : null;
+    }
+
+    /// <summary>
+    /// The nodes <paramref name="value"/> parses to, in <paramref name="access"/>'s place, with the variables they name replaced in turn.
+    /// </summary>
+    List<OgreScriptNode> Expand(OgreScriptVariableAccess access, string value)
+    {
+        var expanded = new List<OgreScriptNode>();
+        foreach (var c in OgreScriptParser.ParseChunk(OgreScriptLexer.Tokenize(value, access.File)))
+            Visit(c, null, expanded);
+
+        foreach (var e in expanded) e.Parent = access.Parent;
+
+        _expanding.Add(access.Name);
+        ProcessVariables(expanded);
+        _expanding.Remove(access.Name);
+        return expanded;
     }
 
     /// <summary>

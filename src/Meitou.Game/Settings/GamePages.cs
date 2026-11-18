@@ -521,7 +521,8 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Tutorials", "Shows the tutorial hints as you play (the game: on).",
             Toggle: new("Tutorials", () => menu.Config.Tutorials != false, v => { menu.Config.Tutorials = v; menu.TutorialsChanged?.Invoke(v); },
                 OnOff: true)));
-        result.Add(new("Reset Tutorials", "Every tutorial can show again, the ones already seen included.", Run: () => menu.ResetTutorials?.Invoke()));
+        result.Add(new("Reset Tutorials", "Every tutorial can show again, the ones already seen included.", Run: () => menu.ResetTutorials?.Invoke(),
+            RunLabel: "Reset"));
     }
 
     /// <summary>
@@ -907,7 +908,7 @@ sealed class GamePages(SettingsMenu menu)
                 menu.ConfirmTitle = "Clear cached files?";
                 menu.Confirmation = action.Question();
                 menu.Focus = -1;
-            }));
+            }, RunLabel: "Clear cache"));
         }
     }
 }

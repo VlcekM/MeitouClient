@@ -505,7 +505,7 @@ public static class SpirvReflection
         if (m.Types.GetValueOrDefault(t) is Array arr)
         {
             arrayLen = ArrayLength(m, arr);
-            arrayStride = (int)dec.GetValueOrDefault(DecArrayStride);
+            arrayStride = ArrayStride(m, t);
             t = arr.Element;
 
             // Arrays of arrays: reported as one flat run of the innermost element (the outer stride is the inner run's size).
@@ -541,6 +541,12 @@ public static class SpirvReflection
         into.Add(new BlockMember(name, offset, size, kind, cols, rows, arrayLen, arrayStride, matrixStride, rowMajor));
         return offset + size;
     }
+
+    /// <summary>
+    /// The <c>ArrayStride</c> of an array type: SPIR-V decorates the type with it, not the member; 0 when it has none.
+    /// </summary>
+    static int ArrayStride(Module m, uint arrayType) =>
+        m.Decorations.TryGetValue(arrayType, out var decorations) ? (int)decorations.GetValueOrDefault(DecArrayStride) : 0;
 
     /// <summary>
     /// The members of a struct member (every element of an array of structs), and the byte just past them (rounded to 16 for a lone struct).

@@ -192,7 +192,7 @@ public static class ModList
     {
         var text = new StringBuilder();
         foreach (var line in lines) text.Append(line).Append("\r\n");
-        File.WriteAllText(path, text.ToString(), GameNameEncoding.Encoding);
+        AtomicFile.WriteAllText(path, text.ToString(), GameNameEncoding.Encoding);
     }
 
     /// <summary>
@@ -400,6 +400,8 @@ public sealed record ModHeader(int FileType, string Author, string Description, 
         else
         {
             bytes = r.ReadBytes(StringSize);
+            if (bytes.Length < StringSize) throw new EndOfStreamException();
+
             r.BaseStream.Seek((long)(int)length - StringSize, SeekOrigin.Current);
             if (cutLast) bytes = bytes[..(StringSize - 1)];
         }

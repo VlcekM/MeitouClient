@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
 
 namespace Meitou.Localisation;
@@ -294,13 +295,26 @@ public sealed class GettextCatalog
                 _field = keyword;
                 _current.Clear().Append(Unquote(line[(space + 1)..]));
             }
-            else if (keyword.StartsWith("msgstr[", StringComparison.Ordinal) && keyword.EndsWith(']')
-                && int.TryParse(keyword.AsSpan(7, keyword.Length - 8), out int index))
+            else if (PluralIndex(keyword) is { } index)
             {
                 _field = "msgstr[]";
                 _pluralIndex = index;
                 _current.Clear().Append(Unquote(line[(space + 1)..]));
             }
+        }
+
+        /// <summary>
+        /// The form a <c>msgstr[n]</c> keyword names; null for any other keyword, and for a form that is neither one already read nor the next
+        /// (msgfmt refuses such an entry: "plural form has wrong index"), so a file's number never sizes the list.
+        /// </summary>
+        int? PluralIndex(string keyword)
+        {
+            if (!keyword.StartsWith("msgstr[", StringComparison.Ordinal) || !keyword.EndsWith(']')) return null;
+
+            var digits = keyword.AsSpan(7, keyword.Length - 8);
+            if (!int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out int index)) return null;
+
+            return index <= _plural.Count ? index : null;
         }
 
         /// <summary>

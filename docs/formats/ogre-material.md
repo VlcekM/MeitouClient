@@ -90,7 +90,8 @@ Each file is compiled on its own, in three passes:
    by the text of the nearest `set` in the enclosing objects, else a top-level `set` (the **first**
    top-level `set` of a name wins; inside objects the last one does). The text is re-lexed into words, so
    `set $c "1 0 0"` gives three values. A quoted phrase inside a value is an error that stops the file.
-   Undefined variables are reported and dropped. Abstract objects are not expanded (their copies are).
+   Undefined variables are reported and dropped; so is a variable named inside its own value, directly or
+   through others (Meitou: expanding it again would never end). Abstract objects are not expanded (their copies are).
 
 Then each top-level, non-abstract object is created by the translator for its class. Base-game scripts
 use **no** variables and **no** `abstract` (Verified by search); both are implemented for mods.

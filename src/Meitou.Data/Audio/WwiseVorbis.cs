@@ -532,7 +532,9 @@ public sealed class WwiseVorbis
             int left = packet.Length, at = 0;
             do
             {
-                if (_segments.Count == 255) Flush(continued: true);
+                // A full page is written before the next segment. It ends inside this packet only when the packet has bytes on it already; before
+                // its first segment the page ends with the packet before, whole.
+                if (_segments.Count == 255) Flush(continued: at > 0);
                 int n = Math.Min(255, left);
                 _segments.Add((byte)n);
                 _body.Write(packet, at, n);

@@ -349,7 +349,7 @@ sealed partial class VideoAudio : IDisposable
     /// <summary>
     /// <c>alcOpenDevice</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial IntPtr AlcOpenDevice([MarshalAs(UnmanagedType.LPStr)] string? name);
+    [LibraryImport(Al, EntryPoint = "alcOpenDevice")] private static partial IntPtr AlcOpenDevice([MarshalAs(UnmanagedType.LPStr)] string? name);
 
     /// <summary>
     /// <c>alcCreateContext</c>.
@@ -359,7 +359,8 @@ sealed partial class VideoAudio : IDisposable
     /// <summary>
     /// <c>alcMakeContextCurrent</c>.
     /// </summary>
-    [LibraryImport(Al)] [return: MarshalAs(UnmanagedType.U1)] private static partial bool AlcMakeContextCurrent(IntPtr context);
+    [LibraryImport(Al, EntryPoint = "alcMakeContextCurrent")] [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool AlcMakeContextCurrent(IntPtr context);
 
     /// <summary>
     /// <c>alcDestroyContext</c>.
@@ -369,52 +370,55 @@ sealed partial class VideoAudio : IDisposable
     /// <summary>
     /// <c>alcCloseDevice</c>.
     /// </summary>
-    [LibraryImport(Al)] [return: MarshalAs(UnmanagedType.U1)] private static partial bool AlcCloseDevice(IntPtr device);
+    [LibraryImport(Al, EntryPoint = "alcCloseDevice")] [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool AlcCloseDevice(IntPtr device);
 
     /// <summary>
     /// <c>alGenSources</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlGenSources(int count, out uint source);
+    [LibraryImport(Al, EntryPoint = "alGenSources")] private static partial void AlGenSources(int count, out uint source);
 
     /// <summary>
     /// <c>alDeleteSources</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlDeleteSources(int count, uint[] sources);
+    [LibraryImport(Al, EntryPoint = "alDeleteSources")] private static partial void AlDeleteSources(int count, uint[] sources);
 
     /// <summary>
     /// <c>alGenBuffers</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlGenBuffers(int count, [Out] uint[] buffers);
+    [LibraryImport(Al, EntryPoint = "alGenBuffers")] private static partial void AlGenBuffers(int count, [Out] uint[] buffers);
 
     /// <summary>
     /// <c>alDeleteBuffers</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlDeleteBuffers(int count, uint[] buffers);
+    [LibraryImport(Al, EntryPoint = "alDeleteBuffers")] private static partial void AlDeleteBuffers(int count, uint[] buffers);
 
     /// <summary>
     /// <c>alBufferData</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlBufferData(uint buffer, int format, short[] data, int size, int frequency);
+    [LibraryImport(Al, EntryPoint = "alBufferData")]
+    private static partial void AlBufferData(uint buffer, int format, short[] data, int size, int frequency);
 
     /// <summary>
     /// <c>alGetBufferi</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlGetBufferi(uint buffer, int param, out int value);
+    [LibraryImport(Al, EntryPoint = "alGetBufferi")] private static partial void AlGetBufferi(uint buffer, int param, out int value);
 
     /// <summary>
     /// <c>alSourceQueueBuffers</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlSourceQueueBuffers(uint source, int count, uint[] buffers);
+    [LibraryImport(Al, EntryPoint = "alSourceQueueBuffers")] private static partial void AlSourceQueueBuffers(uint source, int count, uint[] buffers);
 
     /// <summary>
     /// <c>alSourceUnqueueBuffers</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlSourceUnqueueBuffers(uint source, int count, [Out] uint[] buffers);
+    [LibraryImport(Al, EntryPoint = "alSourceUnqueueBuffers")]
+    private static partial void AlSourceUnqueueBuffers(uint source, int count, [Out] uint[] buffers);
 
     /// <summary>
     /// <c>alGetSourcei</c>.
     /// </summary>
-    [LibraryImport(Al)] private static partial void AlGetSourcei(uint source, int param, out int value);
+    [LibraryImport(Al, EntryPoint = "alGetSourcei")] private static partial void AlGetSourcei(uint source, int param, out int value);
 
     /// <summary>
     /// <c>alSourcePlay</c>.

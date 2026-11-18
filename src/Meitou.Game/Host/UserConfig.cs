@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Meitou.Content;
 using Meitou.Game.Effects;
 using Meitou.Game.Settings;
 using Meitou.Game.Ui;
@@ -1024,7 +1025,7 @@ sealed class UserConfig
     {
         try
         {
-            File.WriteAllText(Path, JsonSerializer.Serialize(this, Json));
+            AtomicFile.WriteAllText(Path, JsonSerializer.Serialize(this, Json));
         }
         catch (IOException e)
         {

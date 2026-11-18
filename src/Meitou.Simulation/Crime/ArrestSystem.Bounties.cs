@@ -638,7 +638,15 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         float dt = world.TickSeconds;
         if (h.Rest > 0) return (h.Rest -= dt) > 0;
-        if (!table.TryResolveNext(h.Hunter, out int g) || table.Cold(g) is not { Medical.Incapacitated: false } gc) return false;
+        if (!table.TryResolveNext(h.Hunter, out int g) || table.Cold(g) is not { } gc) return false;
+
+        // A hunter knocked out drops the hunt: the AI takes him again once he is up, as after an arrest (End).
+        if (gc.Medical is not { Incapacitated: false })
+        {
+            gc.Engaged = false;
+            return false;
+        }
+
         bool over = !table.TryResolveNext(h.Target, out int t)
             || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true };
         if (!over)

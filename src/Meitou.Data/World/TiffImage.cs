@@ -5,7 +5,8 @@ namespace Meitou.Data.World;
 /// <summary>
 /// Minimal baseline TIFF reader for what the world maps use: one uncompressed greyscale image of 8 or 16
 /// bits per sample, in strips, either byte order. Rows are read on demand, so a 537 MB heightmap never has
-/// to be in memory at once. Layout: TIFF 6.0 (public spec); see docs/formats/terrain.md.
+/// to be in memory at once. Several threads may read one image: each read takes the file in turn. Layout: TIFF 6.0 (public spec); see
+/// docs/formats/terrain.md.
 /// </summary>
 public sealed class TiffImage : IDisposable
 {
@@ -25,6 +26,10 @@ public sealed class TiffImage : IDisposable
     /// Each strip's byte count (StripByteCounts).
     /// </summary>
     readonly long[] _stripByteCounts;
+    /// <summary>
+    /// Held while <see cref="_stream"/> is positioned and read, which is one step for the readers.
+    /// </summary>
+    readonly Lock _gate = new();
 
     /// <summary>
     /// An image read from <paramref name="stream"/> with the first directory's values.
@@ -206,8 +211,12 @@ public sealed class TiffImage : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfNegative(row);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(row, Height);
-        _stream.Position = RowOffset(row);
-        _stream.ReadExactly(destination[..BytesPerRow]);
+
+        lock (_gate)
+        {
+            _stream.Position = RowOffset(row);
+            _stream.ReadExactly(destination[..BytesPerRow]);
+        }
     }
 
     /// <summary>
@@ -230,9 +239,14 @@ public sealed class TiffImage : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(row);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(row, Height);
         int size = BitsPerSample / 8;
-        _stream.Position = RowOffset(row) + (long)column * size;
         Span<byte> b = stackalloc byte[2];
-        _stream.ReadExactly(b[..size]);
+
+        lock (_gate)
+        {
+            _stream.Position = RowOffset(row) + (long)column * size;
+            _stream.ReadExactly(b[..size]);
+        }
+
         return size == 1 ? b[0] : U16(b, LittleEndian);
     }
 

@@ -47,7 +47,7 @@ public static class KenshiSettingsFile
         byte[] result = new byte[preambleLength + body.Length];
         original.AsSpan(0, preambleLength).CopyTo(result);
         body.CopyTo(result, preambleLength);
-        File.WriteAllBytes(path, result);
+        AtomicFile.WriteAllBytes(path, result);
     }
 
     /// <summary>

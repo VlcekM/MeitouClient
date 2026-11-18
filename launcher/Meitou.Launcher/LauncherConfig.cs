@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Meitou.Content;
 
 namespace Meitou.Launcher;
 
@@ -164,7 +165,7 @@ public sealed class LauncherConfig
     public void Save()
     {
         Directory.CreateDirectory(DataDirectory);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, LauncherJson.Default.LauncherConfig));
+        AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(this, LauncherJson.Default.LauncherConfig));
     }
 }
 

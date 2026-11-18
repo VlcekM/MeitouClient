@@ -5,7 +5,8 @@ namespace Meitou.Data.World;
 /// <summary>
 /// The world heightmap, <c>data/newland/land/fullmap.tif</c>: 16385 × 16385 unsigned 16-bit samples, column
 /// along world +X, row along world +Z, <see cref="WorldLayout.RawToHeight"/> to world units
-/// (docs/formats/terrain.md). Reads from the file on demand.
+/// (docs/formats/terrain.md). Reads from the file on demand; threads sharing one heightmap take the file in turn (<see cref="TiffImage"/>), so a
+/// worker that reads much opens its own.
 /// </summary>
 public sealed class TerrainHeightmap : IDisposable
 {
@@ -122,7 +123,7 @@ public sealed class TerrainHeightmap : IDisposable
     /// <summary>
     /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its
     /// heights, every other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16
-    /// units off <see cref="HeightAt"/> on steep ground. Not thread-safe (it reads the file).
+    /// units off <see cref="HeightAt"/> on steep ground.
     /// </summary>
     public float BuildingGroundAt(double x, double z)
     {

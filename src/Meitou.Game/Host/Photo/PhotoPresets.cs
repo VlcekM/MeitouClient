@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Meitou.Content;
 
 namespace Meitou.Game.Host.Photo;
 
@@ -97,9 +98,7 @@ sealed class PhotoPresets
         {
             Directory.CreateDirectory(Path.GetDirectoryName(File)!);
             var json = JsonSerializer.Serialize(new Saved { Last = Last, Presets = Presets }, new JsonSerializerOptions { WriteIndented = true });
-            string written = File + ".new";
-            System.IO.File.WriteAllText(written, json);
-            System.IO.File.Move(written, File, overwrite: true);
+            AtomicFile.WriteAllText(File, json);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
