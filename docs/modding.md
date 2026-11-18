@@ -761,9 +761,10 @@ Some shapes need no code: a race's anatomy of any length, extra or missing parts
 
 ## Fixed record ids
 
-The engine finds these records by string id or name. A data mod that changes the game (a conversion) edits them in place rather than removing
-them. "Original" means the original game uses the same id: **Observed**, each is a literal string in `kenshi_x64.exe` 1.0.68, and the linked
-doc gives its use and how that was established. Where the last column is filled, it is what Meitou does without the record.
+The engine finds these records by string id, or by name (the name before any translation, `GameRecord.BaseName`; marked "by name"). A data
+mod that changes the game (a conversion) edits them in place rather than removing or renaming them. "Original" means the original game uses the
+same id or name: it is a literal string in `kenshi_x64.exe` 1.0.68 (**Observed**), and the linked doc gives its use and how that was
+established. Where the last column is filled, it is what Meitou does without the record.
 
 | Id | Record | Used for | Source | Without it |
 | --- | --- | --- | --- | --- |
@@ -787,6 +788,8 @@ doc gives its use and how that was established. Where the last column is filled,
 | `360-gamedata.base`, `742-gamedata.base` | MATERIAL_SPEC | a building part's and a town's material fallback | original ([runtime-materials](formats/runtime-materials.md)) | |
 | `5370-platform_otto.mod` | BUILDING_PART | the character editor's platform | original ([characters](characters.md)) | no platform |
 | `55393-Newwworld.mod`, `95425-sfx.mod` | EFFECT, AMBIENT_SOUND | corpse flies | original ([character-stats](game/character-stats.md)) | no flies |
+| `GLOBAL CONSTANTS` (by name) | CONSTANTS | every game constant | original ([character-stats](game/character-stats.md)) | the first CONSTANTS record |
+| `blank squad` (by name) | SQUAD_TEMPLATE | a new squad of the player's faction | original ([localisation](formats/localisation.md)) | the squad names the template `blank squad` with no record |
 | `player_town_template` | TOWN | the player's outposts | original ([save](formats/save.md)) | foliage cleared 2000 round an outpost |
 | `blank personality` | PERSONALITY | a character with no personality of its own or its faction's | original ([dialogue](game/dialogue.md)) | none |
 | `4442-Newwworld.mod` | BIOMES ForestLand | its ground relief at a third of the depth | Meitou (render choice) | nothing scaled |
