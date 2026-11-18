@@ -168,7 +168,7 @@ static class SettingHints
         WorldFrame.TracedFarCascadesSwitch => "Ray-traced shadows near the camera only; four soft cascades take over further away, where "
             + "distant trees and buildings keep their shadows.",
         WorldFrame.GrassCoverSwitch => "Thin grass stays visible far away instead of fading out. Off: as the original.",
-        WorldFrame.NearTreeFadeSwitch => "Trees between the camera and what it looks at fade out round the middle of the view (not in the free "
+        WorldFrame.NearTreeFadeSwitch => "Trees close to the camera fade out round the middle of the view (not in the free "
             + "camera). Off: as the original.",
         "Metal on buildings" => "Plate, tanks and machinery read as metal; rust and paint stay matte.",
         "Glass bottles" => "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside.",

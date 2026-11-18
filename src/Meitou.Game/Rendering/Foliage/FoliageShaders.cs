@@ -183,7 +183,7 @@ static class FoliageShaders
                 {
                     vec3 nearRay = vWorld - uEye;
                     float nearDistance = max(length(nearRay), 1e-3);
-                    float nearDepth = smoothstep(uFoliageNear.w - {{F(FoliageNearFade.DepthBand)}}, uFoliageNear.w, nearDistance);
+                    float nearDepth = smoothstep((1.0 - {{F(FoliageNearFade.DepthBand)}}) * uFoliageNear.w, uFoliageNear.w, nearDistance);
                     float nearSide = 1.0 - smoothstep({{F(MathF.Cos(FoliageNearFade.OuterAngle))}}, {{F(MathF.Cos(FoliageNearFade.InnerAngle))}},
                         dot(nearRay, uFoliageNear.xyz) / nearDistance);
                     if (foliageDither() >= max(max(nearDepth, nearSide), {{F(FoliageNearFade.MinOpacity)}})) discard;

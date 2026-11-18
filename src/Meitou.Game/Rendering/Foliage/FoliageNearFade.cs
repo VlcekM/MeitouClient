@@ -6,10 +6,10 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
-/// The near fade (Meitou, the "Near tree fade" row; docs/render-foliage.md "Near fade"): in the gameplay camera, large vegetation between the eye and
-/// the camera's pivot is dithered out round the middle of the view, so what the camera looks at stays visible. The GPU cull of the main view marks
-/// the instances (<see cref="Mark"/>; laid out with the fading ones, so a trunk gets the program with the <c>discard</c>), and the mesh fragment
-/// stages fade a marked instance's fragments by their distance from the eye and their angle off the view's axis (<see cref="FoliageShaders"/>).
+/// The near fade (Meitou, the "Near tree fade" row; docs/render-foliage.md "Near fade"): in the gameplay camera, large vegetation near the eye,
+/// in the nearer part of the way to the camera's pivot, is dithered out round the middle of the view, so what the camera looks at stays visible.
+/// The main view's cull marks the instances (<see cref="Mark"/>; laid out with the fading ones, so a trunk gets the program with the
+/// <c>discard</c>), and the mesh fragment stages fade a marked instance's fragments by their distance from the eye and their angle off the view's axis (<see cref="FoliageShaders"/>).
 /// The original draws every tree whole.
 /// </summary>
 public sealed class FoliageNearFade
@@ -30,14 +30,14 @@ public sealed class FoliageNearFade
     public const float MinRadius = FoliageSizes.LargeFrom;
 
     /// <summary>
-    /// How far short of the pivot the fade ends (units): what stands at the pivot itself stays whole.
+    /// The share of the boom (eye to pivot) the fade reaches from the eye: trees in the nearer 30 % of the way fade.
     /// </summary>
-    public const float PivotMargin = 100;
+    public const float BoomShare = 0.3f;
 
     /// <summary>
-    /// The band before the reach over which the fade comes in towards the eye (units): whole beyond the reach, fully faded nearer than the band.
+    /// The share of the reach over which the fade comes in towards the eye: whole beyond the reach, fully faded nearer than 60 % of it.
     /// </summary>
-    public const float DepthBand = 200;
+    public const float DepthBand = 0.4f;
 
     /// <summary>
     /// The opacity a marked tree keeps at the most faded (the share of its fragments the pattern keeps).
@@ -81,7 +81,7 @@ public sealed class FoliageNearFade
     /// </summary>
     public void BeginView(WorldCamera camera)
     {
-        Reach = Enabled && Gameplay ? MathF.Max(camera.Distance - PivotMargin, 0) : 0;
+        Reach = Enabled && Gameplay ? camera.Distance * BoomShare : 0;
         _uniform = new Vector4(camera.Forward, Reach);
     }
 

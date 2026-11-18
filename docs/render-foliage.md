@@ -81,12 +81,12 @@ apply mesh-card assumptions to grass/impostor frames. Reflections obey water-ref
 range, mirrored frustum and water visibility; shadows use caster-specific LOD/range.
 
 **Near fade** (`FoliageNearFade`, the `Near tree fade` row, on by default; engine choice: the original draws every tree whole). In the
-gameplay camera (not the free camera, a cinema shot, photo mode, the title or the viewer) large trees between the eye and the camera's pivot
+gameplay camera (not the free camera, a cinema shot, photo mode, the title or the viewer) large trees near the eye, on the way to the camera's pivot,
 are dithered out round the middle of the view. The main colour view's GPU cull marks an instance of a vegetation group
 (`FoliageSizes.IsVegetation`, chunk flag 32) whose placed sphere has a radius of at least `FoliageSizes.LargeFrom` and reaches nearer the eye
-than the reach (the boom less 100): packed fade 1.25, drawn whole and laid out with the fading ones, so a trunk gets the program with the
+than the reach (30 % of the boom): packed fade 1.25, drawn whole and laid out with the fading ones, so a trunk gets the program with the
 `discard`, as the interior cut's 1.5 does. The full mesh fragment stages (prepass and colour) then keep a marked fragment where the static
-fade pattern is under the larger of its depth share (whole from the reach on, faded 200 units before it) and its angle share off the view's
+fade pattern is under the larger of its depth share (whole from the reach on, faded nearer than 60 % of it) and its angle share off the view's
 axis (`uFoliageNear`, a frame uniform: 0.14 rad in, whole outside 0.3), never under 20 % (`MinOpacity`). Shadows, reflections and the GI's rays keep the tree.
 The CPU cull (Metal's default) marks the same instances (`FoliageCull.CullGroup`); Metal's own panel has the row and its loop the camera gate.
 **Observed** in the game with on/off screenshots, GPU and CPU cull alike (Vulkan; strategy camera at
