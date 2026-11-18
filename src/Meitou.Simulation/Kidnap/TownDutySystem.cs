@@ -112,7 +112,11 @@ public enum TownDutyKind : byte
     /// <summary>
     /// 137 Corpse disposal: carrying a dead body to a disposal and feeding it in (136).
     /// </summary>
-    Corpse
+    Corpse,
+    /// <summary>
+    /// 106 Find and put in bed: carrying a body to a bed and laying it in (the bed system's put-in walk, <see cref="BedSystem.PutIn"/>).
+    /// </summary>
+    Bed
 }
 
 /// <summary>
@@ -217,6 +221,9 @@ public sealed class TownDuty
 /// <item><b>138 Find corpses</b> and <b>137 Corpse disposal</b> (<see cref="LiftsCorpse"/>): a member listing 138, or 137 with a disposal found
 /// (<see cref="CorpseDisposal.Find"/>), lifts the corpse 138's finder gives; then 137, ranked with the cage and throw-out goals
 /// (<see cref="RankDisposals"/>), carries it to the disposal, which takes it in; without a disposal goal it keeps the body.</item>
+/// <item><b>106 Find and put in bed</b>, ranked with those goals for any carried body (<see cref="RankDisposals"/>): a body the carrier would lay
+/// in a bed (<see cref="BedSystem.PutInDesire"/>, <c>FUN_1405a0d50</c>) is walked to the bed the bed search finds and laid in
+/// (<see cref="BedSystem.PutIn"/>).</item>
 /// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member
 /// holding no food walks to the nearest store with food in the town and takes one item of it (the goal holds while it has food, list A
 /// <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in, else
@@ -262,6 +269,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The lock system (resolved in the serial step), for the ransack's door bashing and the town walls.
     /// </summary>
     LockSystem? _locks;
+
+    /// <summary>
+    /// The bed system (resolved in the serial step), for goal 106's desire and its walk to a bed.
+    /// </summary>
+    BedSystem? _beds;
 
     /// <summary>
     /// The settings (the defaults when none were given).
@@ -987,6 +999,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             {
                 TaskType.TakeIntruderOutsideTown => ThrowOutCarried(world, g, d),
                 TaskType.DeadGuysGoInThePot => DisposeOfCarried(world, g, d),
+                TaskType.FindBedAndPutIn => BedCarried(world, g, d),
                 _ => CageCarried(world, g, d),
             };
             if (started) return true;
@@ -1000,15 +1013,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// disposal for a dead body (list B 99) at <see cref="DisposalDesire"/>, 112 FIND_CAGE_AND_PUT_IN (a living body, its list B <c>!99</c>) and 281
     /// FIND_CAGE_AND_PUT_DEADGUY_IN (any body) at <see cref="CageDesire"/> times the cage finder's factor (<c>FUN_1408d0d30</c>: 1.0,
     /// <c>DAT_14167c308</c>, with a free cage, else 0; tested when the goal starts), 274 at <see cref="ThrowOutDesire"/> (no effect, so no finder
-    /// factor, <c>FUN_14060fd80</c>), each times its package weight. A higher tier first (an urgent cage before 274), then the higher score; of equal
-    /// scores the goal listed later (<see cref="AiSystem"/>'s rank).
+    /// factor, <c>FUN_14060fd80</c>), 106 FIND_BED_AND_PUT_IN at <see cref="BedSystem.PutInDesire"/> (<c>FUN_1405a0d50</c>: no death or power
+    /// test) times the bed search's factor (its finder, <c>FUN_1408cfe00</c>: tested when the goal starts), each times its package weight. A higher
+    /// tier first (an urgent cage before 274), then the higher score; of equal scores the goal listed later (<see cref="AiSystem"/>'s rank).
     /// </summary>
     List<AiGoal> RankDisposals(World world, int g, int b, IReadOnlyList<AiGoal> goals, bool cageable)
     {
         bool dead = world.Characters.Cold(b)!.Medical!.Dead;
         float cage = cageable ? CageDesire(world, g, b) : 0;
         float throwOut = ThrowOutDesire(world, g, b);
-        float? disposal = null;
+        float? disposal = null, bed = null;
         int hour = world.Hour;
         var ranked = new List<(AiGoal Goal, float Score)>();
         for (int k = 0; k < goals.Count; k++)
@@ -1020,6 +1034,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 TaskType.FindCageAndPutIn when !dead => cage,
                 TaskType.TakeIntruderOutsideTown => throwOut,
                 TaskType.DeadGuysGoInThePot when dead => disposal ??= DisposalDesire(world, g),
+                TaskType.FindBedAndPutIn => bed ??= Beds(world)?.PutInDesire(world, g) ?? 0,
                 _ => 0,
             };
             float score = desire * goal.Weight;
@@ -1050,6 +1065,23 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         WalkToCage(world, g, cage);
         return true;
     }
+
+    /// <summary>
+    /// 106 for the carried body of errand <paramref name="d"/>: the member walks it to the bed the bed search finds, where the bed system lays it in
+    /// (<see cref="BedSystem.PutIn"/>); false with no bed found.
+    /// </summary>
+    bool BedCarried(World world, int g, TownDuty d)
+    {
+        if (Beds(world)?.PutIn(world, g) is not { } bed) return false;
+
+        (d.Kind, d.Target, d.Goal, d.Tries) = (TownDutyKind.Bed, bed.Id, Flat(bed.Position), 0);
+        return true;
+    }
+
+    /// <summary>
+    /// The bed system, resolved on first use (null in a world without one).
+    /// </summary>
+    BedSystem? Beds(World world) => _beds ??= world.SystemOf<BedSystem>();
 
     /// <summary>
     /// 274 Throwing out for the carried body of errand <paramref name="d"/> (list B 47 IS_CARRYING_SOMETHING): the member walks it to its town's
@@ -1536,6 +1568,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TownDutyKind.HomeOut => TaskType.TakeIntruderOutside,
         TownDutyKind.CorpseLift => TaskType.FindADeadGuy,
         TownDutyKind.Corpse => TaskType.DeadGuysGoInThePot,
+        TownDutyKind.Bed => TaskType.FindBedAndPutIn,
         _ => TaskType.PutLootInStorage,
     };
 
@@ -1582,6 +1615,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
 
         if (gc.Carrying != d.Body) return End(world, d);
+        if (d.Kind == TownDutyKind.Bed) return StepBed(world, d, g);
         if (d.Kind == TownDutyKind.Cage) return StepCage(world, d, g, b);
         if (d.Kind == TownDutyKind.Corpse) return StepCorpse(world, d, g);
 
@@ -1599,15 +1633,33 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Whether errand <paramref name="d"/> goes on with a body that has died: one carried out (224, 274), one lifted (the disposal goals are ranked
-    /// again, <see cref="Dispose"/>), or one on its way to a cage with 281 listed.
+    /// Whether errand <paramref name="d"/> goes on with a body that has died: one carried out (224, 274) or to a bed (106: its desire and row 99's
+    /// list B have no death test), one lifted (the disposal goals are ranked again, <see cref="Dispose"/>), or one on its way to a cage with 281
+    /// listed.
     /// </summary>
     bool KeepsDead(World world, TownDuty d, CharacterCold gc)
     {
-        if (d.Kind is TownDutyKind.HomeLift or TownDutyKind.HomeOut or TownDutyKind.Out or TownDutyKind.CorpseLift or TownDutyKind.Corpse)
+        if (d.Kind is TownDutyKind.HomeLift or TownDutyKind.HomeOut or TownDutyKind.Out or TownDutyKind.CorpseLift or TownDutyKind.Corpse
+                or TownDutyKind.Bed)
             return true;
 
         return gc.Carrying == d.Body && (d.Kind == TownDutyKind.Lift || d.Kind == TownDutyKind.Cage && ListsDeadCage(world, gc, d.Member));
+    }
+
+    /// <summary>
+    /// 106's errand while the body is on the shoulder: the bed system walks the member to the bed and lays the body in (which ends the errand: it
+    /// carries nothing then). A walk that is over without that (another task or a fight ended it, the bed was taken or could not be reached) starts
+    /// again with a fresh bed search, at most <see cref="TownDutySettings.Walks"/> times; then, or with no bed found, the errand ends and the member
+    /// keeps the body for the next look.
+    /// </summary>
+    bool StepBed(World world, TownDuty d, int g)
+    {
+        if (Beds(world) is not { } beds) return End(world, d);
+        if (beds.PuttingIn(d.Member)) return true;
+        if (++d.Tries > Settings.Walks || beds.PutIn(world, g) is not { } bed) return End(world, d);
+
+        (d.Target, d.Goal) = (bed.Id, Flat(bed.Position));
+        return true;
     }
 
     /// <summary>

@@ -747,24 +747,65 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     }
 
     /// <summary>
-    /// The bed the put-in job takes the character's body to (a pure read): it carries a body that is no animal and not of a faction hostile to its
-    /// own, and the bed search finds one.
+    /// The desire of goal 106 while it holds (<c>FUN_1405a0d50</c> returns <c>DAT_141682ad0</c>, 2.0, <b>Verified</b>, docs/game/carry-loot.md 3.2).
+    /// </summary>
+    const float PutInWant = 2;
+
+    /// <summary>
+    /// The desire of goal 106 "Find and put in bed" for the character in <paramref name="slot"/> (a pure read): <see cref="PutInWant"/> while it
+    /// carries a body it would lay in a bed (<see cref="CarriesForBed"/>), else 0. The NPCs' carried-body goals weigh it
+    /// (<see cref="Kidnap.TownDutySystem"/>).
+    /// </summary>
+    public float PutInDesire(World world, int slot) => CarriesForBed(world, slot) ? PutInWant : 0;
+
+    /// <summary>
+    /// Goal 106's act-out for an NPC carrier (serial phases): the walk to the bed its finder, the bed search, gives, as the goal's own task (row 106,
+    /// <see cref="TaskSource.Goal"/>); at the bed the body is laid in as the player's put-in lays it. The bed, or null when the desire is 0 or no
+    /// bed is found (nothing started).
+    /// </summary>
+    public Fixture? PutIn(World world, int slot)
+    {
+        if (BedFor(world, slot) is not { } bed) return null;
+
+        var request = new TaskRequest(CharacterTask.GoTo, TaskType.FindBedAndPutIn, TaskSource.Goal) { Site = bed.Id };
+        return TaskStart.Start(world, slot, request) == StartResult.Started ? bed : null;
+    }
+
+    /// <summary>
+    /// Whether the character is on its way to lay a carried body in a bed (a put-in walk under way).
+    /// </summary>
+    public bool PuttingIn(CharacterId id) => _trips.Exists(t => t.Character == id && !t.Body.IsNone);
+
+    /// <summary>
+    /// The bed the put-in job takes the character's body to (a pure read): it carries a body it would lay in a bed (<see cref="CarriesForBed"/>), and
+    /// the bed search finds one.
     /// </summary>
     Fixture? BedFor(World world, int slot)
+    {
+        if (!CarriesForBed(world, slot)) return null;
+
+        var id = world.Characters.IdOf(slot);
+        return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, id));
+    }
+
+    /// <summary>
+    /// The tests of goal 106's desire (a pure read): the character can walk, is on no bed walk, and carries a body that is no animal, not of a
+    /// faction hostile to its own, and that it would put in a bed (<see cref="WantsToPutIn"/>).
+    /// </summary>
+    bool CarriesForBed(World world, int slot)
     {
         var table = world.Characters;
         if (Carry is null || table.Cold(slot) is not { Carrying.IsNone: false } c || !CanWalk(c)
                 || _trips.Exists(t => t.Character == table.IdOf(slot)))
-            return null;
+            return false;
 
         if (!table.TryResolveNext(c.Carrying, out int b) || table.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true })
-            return null;
+            return false;
 
         if (data.Relations.Contains(bc.Faction) && data.Relations.Contains(c.Faction) && data.Relations.IsHostile(bc.Faction, c.Faction))
-            return null;
+            return false;
 
-        if (!WantsToPutIn(world, slot, c, b, bc)) return null;
-        return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, table.IdOf(slot)));
+        return WantsToPutIn(world, slot, c, b, bc);
     }
 
     /// <summary>

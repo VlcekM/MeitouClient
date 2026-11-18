@@ -1302,7 +1302,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     No fight goal commits, so a goal of a higher score takes the fighter out: the serial step ends the fight (`AiSystem.LeaveFights`) and the next tick acts the goal out. Engine choice: a
     fighter also thinks on the 15-tick cadence, where the original only replans on triggers and lets the plan step end the goal.
   - **Pre-emption** (`AiSystem.Preempts`): the engine duties stand for goals and jobs of the same chooser below a priority-3 goal, so the combat goals and 32 are weighed for an NPC on one whose
-    system lets a fight interrupt it: treating (`FirstAidSystem` lets the patient go), a town errand's walk (`TownDutySystem` waits for the fight and walks on; one carrying an intruder out
+    system lets a fight interrupt it: treating (`FirstAidSystem` lets the patient go), a town errand's walk (`TownDutySystem` waits for the fight and walks on; one carrying an intruder out or a body to a bed
     fights with the body on its shoulder, x0.5 for 15 / 288), a captive job's walk carrying nothing and its meal at a body or cage (`AiSystem.InterruptibleDuty`; `CaptiveSystem` gives the job up). The other duties (their systems do not survive a fight
     or are law work of their own: arrests, kidnaps, the cage walks, rescues, lifts, looting, dialogue walks, trades) and a fight the AI did not start (a dialogue's, an assault's, a duty's) get
     32 alone: their characters start no combat goal's fight until they are back on an AI task, but defend themselves (a fight's start ends the duty's task; in a fight only 32's run changes
