@@ -568,6 +568,7 @@ public sealed partial class World
         s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);
         s.Shackled = cold?.Inventory is { } worn && WearsLocked(worn);
         s.PortraitSerial = cold?.PortraitSerial ?? 0;
+        s.LastingId = cold?.LastingId ?? LastingId.None;
         s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
         s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
         s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;

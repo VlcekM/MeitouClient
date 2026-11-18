@@ -730,6 +730,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public uint PortraitSerial { get; internal set; }
     /// <summary>
+    /// Its lasting id (<see cref="CharacterCold.LastingId"/>; none until a code mod asked for one), for a mod's interface source, which must not
+    /// touch the world.
+    /// </summary>
+    public LastingId LastingId { get; internal set; }
+    /// <summary>
     /// The character this one carries (none when not carrying).
     /// </summary>
     public CharacterId Carrying { get; internal set; } = CharacterId.None;

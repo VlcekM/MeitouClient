@@ -472,6 +472,7 @@ internal static class SavedCharacters
         int faction = ownerId.Length > 0 && data.FactionIndex(ownerId) is var fi and >= 0 ? fi : fallbackFaction;
         bool player = faction == playerFaction && (playerPlatoon || playerFaction >= 0);
         var cold = NewCold(p, platoonName, squad, faction, player);
+        cold.LastingId = world.LastingIds.ForSaved(sc);
 
         ReadState(world, sc, cold, ref hot, data, context, bounties);
 

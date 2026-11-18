@@ -76,16 +76,18 @@ public sealed class SaveWriter(SaveGame game)
     }
 
     /// <summary>
-    /// The code mods' sidecar files and the mod environment, when the save has any.
+    /// The code mods' sidecar files, the mod environment and the characters' lasting ids, when the save has any.
     /// </summary>
     void WriteModData(string work)
     {
-        if (_game.ModData.Count == 0 && _game.ModEnvironment is null) return;
+        if (_game.ModData.Count == 0 && _game.ModEnvironment is null && _game.LastingIds is null) return;
         Directory.CreateDirectory(Path.Combine(work, SaveFolder.ModDataDirectory));
         foreach (var (id, bytes) in _game.ModData)
             File.WriteAllBytes(Path.Combine(work, SaveFolder.ModDataName(id).Replace('/', Path.DirectorySeparatorChar)), bytes);
         if (_game.ModEnvironment is not null)
             File.WriteAllBytes(Path.Combine(work, SaveFolder.ModEnvironmentName.Replace('/', Path.DirectorySeparatorChar)), _game.ModEnvironment);
+        if (_game.LastingIds is not null)
+            File.WriteAllBytes(Path.Combine(work, SaveFolder.LastingIdsName.Replace('/', Path.DirectorySeparatorChar)), _game.LastingIds);
     }
 
     /// <summary>

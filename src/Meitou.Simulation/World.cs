@@ -228,6 +228,7 @@ public sealed partial class World : IDisposable
         Settings = settings;
         GameHours = settings.StartHours;
         Walkability = walkability;
+        LastingIds = new LastingIds(this);
         this._systems = [.. systems ?? []];
         foreach (var system in this._systems) ModFaults.Add(system);
         for (int k = 0; k < this._systems.Count; k++) _phases.Add(new SystemPhases(this, this._systems[k], k));
@@ -466,6 +467,10 @@ public sealed partial class World : IDisposable
     /// The unique (story) characters made, dead or captured (docs/game/factions-squads-towns.md "Unique characters").
     /// </summary>
     public UniqueCharacters Uniques { get; } = new();
+    /// <summary>
+    /// The characters' lasting ids, which code mods key their data per character by (docs/modding.md "Character ids").
+    /// </summary>
+    public LastingIds LastingIds { get; }
     /// <summary>
     /// The player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
     /// </summary>
@@ -1208,6 +1213,7 @@ public sealed partial class World : IDisposable
         if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
+        if (LastingIds.Any) LastingIds.Hash(ref h);   // only once a mod asked for a character id or a save held some
         foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
 
         HashCombatHitObserverFaults(ref h);

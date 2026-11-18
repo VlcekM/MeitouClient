@@ -140,6 +140,7 @@ public static partial class SaveCapture
         WriteWild(builder, world, data, options, clock, buildings, races, campItems);
 
         options.HandlesWritten?.Invoke(s_memoryPass?.Handles ?? []);
+        game.LastingIds = world.LastingIds.Write(game, s_memoryPass?.ColdHandles ?? []);
         WriteMemories();
         game.UpdateDerived();
         return game;

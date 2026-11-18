@@ -113,6 +113,11 @@ public sealed class CharacterCold
     /// </summary>
     public string Name { get; set; } = "";
     /// <summary>
+    /// The character's lasting id (<see cref="LastingIds"/>); none until a code mod asks for one. Given only by <see cref="LastingIds"/>, so two
+    /// characters never share one.
+    /// </summary>
+    public LastingId LastingId { get; internal set; }
+    /// <summary>
     /// The character's faction, a position in the world's faction list.
     /// </summary>
     public int Faction { get; set; }
@@ -1514,6 +1519,10 @@ public sealed class CharacterTable
     /// Where in a tick the table is (see <see cref="Phase"/>).
     /// </summary>
     TablePhase _phase = TablePhase.Outside;
+    /// <summary>
+    /// The characters in the table that have a lasting id, by that id (<see cref="LastingIds"/>); null until one has.
+    /// </summary>
+    Dictionary<LastingId, CharacterId>? _lasting;
 
     /// <summary>
     /// Limbs cut off in the tick (the character's slot, the limb slot 0 to 3, whether the limb's item drops): the population system rebuilds the
@@ -1600,6 +1609,25 @@ public sealed class CharacterTable
     }
 
     /// <summary>
+    /// The character in the table that has lasting id <paramref name="id"/>; <see cref="CharacterId.None"/> when none has (never given, its squad
+    /// out of the world, or removed).
+    /// </summary>
+    internal CharacterId FindLasting(LastingId id) =>
+        _lasting is not null && _lasting.TryGetValue(id, out var found) && TryResolveNext(found, out int slot) && _cold[slot]?.LastingId == id
+            ? found
+            : CharacterId.None;
+
+    /// <summary>
+    /// Notes that the character <paramref name="character"/> has lasting id <paramref name="id"/> (its cold state holds it).
+    /// </summary>
+    internal void IndexLasting(LastingId id, CharacterId character) => (_lasting ??= [])[id] = character;
+
+    /// <summary>
+    /// How many characters in the table have a lasting id.
+    /// </summary>
+    internal int LastingCount => _lasting?.Count ?? 0;
+
+    /// <summary>
     /// Where in a tick the table is: spawns and removals in the wrong phase throw.
     /// </summary>
     internal TablePhase Phase
@@ -1674,8 +1702,10 @@ public sealed class CharacterTable
         if (!_inTick) _previous[slot] = state;
         this._cold[slot] = cold;
         Spawns++;
-        Watch?.Added(new CharacterId(slot, generation), cold);
-        return new CharacterId(slot, generation);
+        var id = new CharacterId(slot, generation);
+        if (!cold.LastingId.IsNone) IndexLasting(cold.LastingId, id);
+        Watch?.Added(id, cold);
+        return id;
     }
 
     /// <summary>
@@ -1704,6 +1734,7 @@ public sealed class CharacterTable
 
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
+        if (_cold[slot] is { LastingId.IsNone: false } lasting) _lasting?.Remove(lasting.LastingId);
         _cold[slot] = null;
         _free.Push(slot);
         return true;
