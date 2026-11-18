@@ -472,6 +472,14 @@ public sealed partial class World : IDisposable
     /// </summary>
     public LastingIds LastingIds { get; }
     /// <summary>
+    /// The values code mods set on their world states (docs/modding.md "World states"); null until the first, so a world without one is the game's.
+    /// </summary>
+    public ModWorldStates? ModStatesOrNull { get; private set; }
+    /// <summary>
+    /// The code mods' world state values, made on first use (<see cref="ModWorldState.Set"/>).
+    /// </summary>
+    public ModWorldStates ModStates => ModStatesOrNull ??= new();
+    /// <summary>
     /// The player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
     /// </summary>
     public Construction.BuildingRegistry Buildings { get; } = new();
@@ -1214,6 +1222,7 @@ public sealed partial class World : IDisposable
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
         if (LastingIds.Any) LastingIds.Hash(ref h);   // only once a mod asked for a character id or a save held some
+        if (ModStatesOrNull is { Count: > 0 } modStates) modStates.Hash(ref h);   // only while a code mod's world state has a value
         foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
 
         HashCombatHitObserverFaults(ref h);

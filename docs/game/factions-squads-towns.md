@@ -16,6 +16,7 @@ WORLD_EVENT_STATE (`FUN_1409a7e00`, **Observed** by code): holds when every `NPC
 enemy` hostile to it. With `player involvement`, an `NPC is` other than alive or an `NPC is NOT` alive also needs the unique's player
 flag. A unique with no entry counts as alive, so a new game answers by the data alone; nothing is stored. A `world state` list entry
 (`FUN_1409a9a70`: spawn gates, weighted picks, campaigns) passes when the state's answer equals (v0 == 1); a missing record is skipped.
+Meitou only: a code mod may set a state's answer, which then replaces the conditions ([modding](../modding.md), "World states").
 
 ## Squad factory
 

@@ -10,7 +10,8 @@ namespace Meitou.Simulation.Factions;
 /// queries): a state holds when every <c>NPC is</c> unique has its state (and, with <c>player involvement</c>, one other than alive has the player
 /// flag), no <c>NPC is NOT</c> unique has its state (with the player flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c>
 /// faction is or is not the player's ally (relation ≥ 50) / hostile to it (≤ -30) as the entry says. A unique with no entry is alive and the player
-/// not involved, so a new game answers by the data alone. Nothing is saved: the unique table and the relations are.
+/// not involved, so a new game answers by the data alone. Nothing is saved: the unique table and the relations are. A state a code mod set a value on
+/// answers that value instead (<see cref="ModWorldState"/>).
 /// <para>The population refreshes the unique states it reads every tick (<see cref="Refresh"/>, serial; a look's own changes to the table are taken
 /// again at once); a query reads that copy, so the build threads may ask at any time.</para>
 /// </summary>
@@ -28,22 +29,30 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
     /// The <see cref="UniqueCharacters.Version"/> <see cref="_current"/> was taken at (-1: never).
     /// </summary>
     long _version = -1;
+    /// <summary>
+    /// The <see cref="ModWorldStates.Version"/> <see cref="_current"/> was taken at (0: none set).
+    /// </summary>
+    long _modVersion;
 
     /// <summary>
-    /// The unique states (state and player flag by record id) and the player's faction, as taken by <see cref="Refresh"/>.
+    /// The unique states (state and player flag by record id), the player's faction and the code mods' values (null: none), as taken by
+    /// <see cref="Refresh"/>.
     /// </summary>
-    sealed record Snapshot(IReadOnlyDictionary<string, (UniqueState State, bool Player)> Uniques, int Player);
+    sealed record Snapshot(IReadOnlyDictionary<string, (UniqueState State, bool Player)> Uniques, int Player,
+        IReadOnlyDictionary<string, bool>? Mods = null);
 
     /// <summary>
-    /// Takes the unique table's states and the player's faction (serial phase); cheap when nothing changed.
+    /// Takes the unique table's states, the player's faction and the code mods' world state values (serial phase); cheap when nothing changed.
     /// </summary>
-    public void Refresh(UniqueCharacters uniques, int playerFaction)
+    public void Refresh(UniqueCharacters uniques, int playerFaction, ModWorldStates? mods = null)
     {
-        if (uniques.Version == _version && _current.Player == playerFaction) return;
+        long modVersion = mods?.Version ?? 0;
+        if (uniques.Version == _version && _current.Player == playerFaction && modVersion == _modVersion) return;
         _version = uniques.Version;
+        _modVersion = modVersion;
         var copy = new Dictionary<string, (UniqueState, bool)>(uniques.Count, StringComparer.Ordinal);
         foreach (var (id, e) in uniques.All) copy[id] = (e.State, e.Player);
-        _current = new Snapshot(copy, playerFaction);
+        _current = new Snapshot(copy, playerFaction, mods is { Count: > 0 } ? mods.Copy() : null);
     }
 
     /// <summary>
@@ -59,6 +68,8 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
     {
         if (Find(worldStateId) is not { } s) return false;
         var now = _current;
+        // A code mod's value, while it has set one, is the answer (docs/modding.md "World states").
+        if (now.Mods is { } mods && mods.TryGetValue(worldStateId, out bool set)) return set;
         (UniqueState State, bool Player) Of(string character) => now.Uniques.TryGetValue(character, out var e) ? e : (UniqueState.Alive, false);
         foreach (var (character, wanted) in s.NpcIs)
         {

@@ -362,6 +362,19 @@ holds refuses the second mod.
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
   for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
   computes "no" / does nothing, as an unknown vanilla code.
+- **World states:** `AddWorldState(record)` claims a WORLD_EVENT_STATE of the merged data (`ModWorldState`, `src/Meitou.Simulation/Factions`; a
+  record of another type, or one another mod claimed, refuses the mod). The mod's system sets its answer in a world with `state.Set(world,
+  bool)` in a serial phase (or `IWorldReady`), drops it with `Clear(world)` and reads it with `Value(world)` (null: none set). While a value is
+  set, every reader of the state gets it in place of the record's conditions: dialogue lines' world states, SQUAD_TEMPLATE and spawn-list `world
+  state` gates (`SpawnPlatoon` too), TOWN `override town` candidates, FACTION_CAMPAIGN triggers and nests ([world states](game/factions-squads-towns.md#relations-and-world-states)),
+  from the population's next refresh of the states (its slow-world step of that tick at the latest). Without a value, and wherever the mod does
+  not run (refused, removed, or the original game reading the same data), the record answers by its conditions as the original does: a record
+  without conditions holds, and one with a contradiction (`NPC is` and `NPC is NOT` the same CHARACTER at the same state) never does, which is
+  how a data author makes a state that stays off without the code. Several states combine as the readers' lists already AND their entries.
+  Values live in `World.ModStates` (made at the first), enter the state hash while any is set, and are saved in the mod's sidecar under the entry
+  `meitou world states` ([save](formats/save.md#mod-data)), which no mod system may be named, and restored before `IWorldReady`; a value of a
+  state the mod no longer claims is dropped at the load. Without claimed states nothing is made, hashed or saved. Engine API, not in the
+  original. A dialogue line can also test a mod's own value directly through a condition code (`AddDialogueCondition`).
 - **Record types:** `AddRecordType(type, name)` claims a number (not a vanilla `itemType`); `Records(type)` lists the merged records.
 - **Equipment slots:** `AddEquipmentSlot(new ModSlot(section, fcsSlot, width, height, x, y))` (`ModSlots`, `src/Meitou.Simulation/Items`) adds
   an inventory section that takes the ARMOUR and ITEM records whose FCS `slot` is `fcsSlot`, so the items stay a data mod. `fcsSlot` is 4, 10

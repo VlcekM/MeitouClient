@@ -185,7 +185,9 @@ is on. Every such key is read back and saved again, so a save keeps the effects 
 Meitou only ([modding](../modding.md)): each code mod with saveable systems gets `meitou-mods/<manifest id>.dat`, written with the
 save's other files into the working folder and moved with them. Layout, little-endian: magic `MTMD` (uint32 `0x444D544D`), format
 version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
-length (int32) and the mod's bytes. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
+length (int32) and the mod's bytes. A mod that claimed world states ([modding](../modding.md), "World states") also gets the file, with a last
+entry `meitou world states`: format (int32 1), count (int32), then per value the WORLD_EVENT_STATE string id (as `BinaryWriter`) and the value
+(byte 0 or 1), in string id order. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
 An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
 `meitou-mods/environment.json` (not a sidecar: only `.dat` names are) records the code mods the save was made with: UTF-8 JSON
 `{ "format": 1, "gameVersion": "<Meitou tag>", "mods": [{ "id", "version"?, "name" }] }`, mods in load order

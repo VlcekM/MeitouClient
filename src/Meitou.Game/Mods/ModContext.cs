@@ -203,6 +203,7 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(factory);
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A system needs a name.", nameof(name));
         if (Pending.Systems.Any(s => s.Name == name)) throw new ArgumentException($"The mod already has a system named '{name}'.", nameof(name));
+        if (name == ModWorldStateSave.EntryName) throw new ArgumentException($"'{name}' is the game's name in the mod's save data.", nameof(name));
         Pending.Systems.Add(new SystemFactory(Id, name, anchor, factory));
     }
 
@@ -421,6 +422,25 @@ public sealed class ModContext
         if (string.IsNullOrWhiteSpace(label))
             throw new ArgumentException("A debug command needs a label.", nameof(label));
         Pending.DebugCommands.Add(new ModDebugCommand(Id, label, hasField, run));
+    }
+
+    /// <summary>
+    /// Claims the WORLD_EVENT_STATE <paramref name="record"/> (docs/modding.md "World states"): while the mod has set a value on it in a world
+    /// (<see cref="Simulation.Factions.ModWorldState.Set"/>, in a serial phase), every data record that tests the state reads that value; until then,
+    /// and without the mod, its own conditions answer. The values are saved in the mod's save data. A record that is no WORLD_EVENT_STATE, or one
+    /// another mod claimed, refuses the mod.
+    /// </summary>
+    public Simulation.Factions.ModWorldState AddWorldState(string record)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(record);
+        if (Data.Find(record) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.WorldEventState })
+            throw new ArgumentException($"'{record}' is not a WORLD_EVENT_STATE of the loaded data.", nameof(record));
+        _registry.CheckWorldStateFree(record, Pending, Id);
+
+        var state = new Simulation.Factions.ModWorldState(Id, record);
+        Pending.WorldStates.Add(state);
+        return state;
     }
 
     /// <summary>
