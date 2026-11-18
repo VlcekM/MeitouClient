@@ -169,15 +169,17 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Whether the lift of the carrier in <paramref name="carrier"/> may still take the body in <paramref name="body"/>:
-    /// <see cref="CanBeLifted(World, CharacterCold)"/> (a standing squad mate only for one of the player's own carriers, carry-loot.md), or a snatch
-    /// from another carrier.
+    /// <see cref="CanBeLifted(World, CharacterCold)"/> or <see cref="AwakeFriend"/> (a standing squad mate or friend only for one of the player's own
+    /// carriers, carry-loot.md), or a snatch from another carrier.
     /// </summary>
     static bool Liftable(World world, int carrier, int body)
     {
         var table = world.Characters;
         var b = table.Cold(body)!;
         var c = table.Cold(carrier)!;
-        bool liftable = c.IsPlayer ? CanBeLifted(world, b) : CanBeLifted(b) || InOpenCage(world, b) is not null;
+        bool liftable = c.IsPlayer
+            ? CanBeLifted(world, b) || AwakeFriend(world, carrier, body)
+            : CanBeLifted(b) || InOpenCage(world, b) is not null;
         return liftable || c.Snatching && Snatchable(b) && b.CarriedBy != table.IdOf(carrier);
     }
 
@@ -187,6 +189,21 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     static bool AwakeMate(CharacterCold cold) =>
         cold is { IsPlayer: true, Medical.Incapacitated: false, Race.Carriable: true, IsImprisoned: false }
             && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
+
+    /// <summary>
+    /// Another faction's standing character the player's <paramref name="carrier"/> may lift with order 225: awake, of a <c>carriable</c> race,
+    /// free, carrying no one and not carried, no Diplomat, and regarding the carrier as friendly (slot 126, a freed prisoner's TEMP_ALLY too): the
+    /// menu's Pick Up on a peaceful character (<c>FUN_1407a6bc0</c>, ui-input.md "Context menu verbs"); row 225 has no need on its target and the
+    /// attach none on consciousness (carry-loot.md), so the order carries it awake (#1012: a freed Espher was offered Pick Up and not lifted).
+    /// </summary>
+    static bool AwakeFriend(World world, int carrier, int body)
+    {
+        var table = world.Characters;
+        if (table.Cold(body) is not { IsPlayer: false, Medical.Incapacitated: false, Race.Carriable: true, IsImprisoned: false } b) return false;
+        if (!b.Carrying.IsNone || !b.CarriedBy.IsNone || b.NpcClass == FundamentalType.Diplomat) return false;
+
+        return world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue && CharacterFacts.RegardsFriendly(dialogue, world, body, carrier);
+    }
 
     /// <summary>
     /// The cage a prisoner that may be lifted out sits in (null: not caged, or locked in, or not liftable).
@@ -260,6 +277,15 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     public bool Friendly(CharacterCold a, CharacterCold b) =>
         a.Faction == b.Faction || Relations is { } r && r.Contains(a.Faction) && r.Contains(b.Faction) && r.IsAlly(a.Faction, b.Faction);
+
+    /// <summary>
+    /// Whether the carrier in slot <paramref name="carrier"/> regards its body in <paramref name="body"/> as friendly, as the put-down's release
+    /// and end handler ask it (vfunc <c>0x3f0</c>, slot 126, carrier on body: <c>FUN_1403504f0</c>, <c>FUN_1403509f0</c>, <b>Verified</b>): the
+    /// dialogue's reading with the squad memory (a freed prisoner's TEMP_ALLY on its liberator too, #1012), else <see cref="Friendly"/>.
+    /// </summary>
+    bool RegardsBody(World world, int carrier, int body) => world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue
+        ? CharacterFacts.RegardsFriendly(dialogue, world, carrier, body)
+        : Friendly(world.Characters.Cold(carrier)!, world.Characters.Cold(body)!);
 
     /// <summary>
     /// The distance between two characters on the X/Z plane.
@@ -366,11 +392,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             return;
         }
 
-        if (LiftOf(world, lift, body)
-            && Nearest(table, Who(world, order.Carriers), body, s => PlayerOrders.CanRun(world, s, lift).CanRun) is int carrier)
-        {
+        // The order's checks test the body against each carrier (a standing friend regards one carrier, not another).
+        if (Nearest(table, Who(world, order.Carriers), body, s => PlayerOrders.CanRun(world, s, lift).CanRun) is int carrier)
             PlayerOrders.Give(world, carrier, lift, order.Queued);
-        }
     }
 
     /// <summary>
@@ -445,13 +469,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) => kind == 1 ? OpenInventory : null;
 
     /// <summary>
-    /// Whether <paramref name="body"/> can be taken by the lift order (a kidnap's sleeper too; a snatch from another carrier only by the order 225).
+    /// Whether <paramref name="body"/> can be taken by <paramref name="carrier"/>'s lift order (a kidnap's sleeper too; a snatch from another
+    /// carrier and a standing friend, <see cref="AwakeFriend"/>, only by the order 225).
     /// </summary>
-    static bool LiftOf(World world, OrderEntry lift, int body)
+    static bool LiftOf(World world, OrderEntry lift, int carrier, int body)
     {
         var bc = world.Characters.Cold(body)!;
         bool kidnap = lift.Row == TaskType.KidnapOrder;
-        return CanBeLifted(world, bc) || kidnap && CanBeKidnapped(world.Characters, body) || !kidnap && Snatchable(bc);
+        if (CanBeLifted(world, bc) || kidnap && CanBeKidnapped(world.Characters, body)) return true;
+
+        return !kidnap && (Snatchable(bc) || world.Characters.Cold(carrier) is { IsPlayer: true } && AwakeFriend(world, carrier, body));
     }
 
     /// <summary>
@@ -484,7 +511,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         switch (order.Row)
         {
             case TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder:
-                if (!LiftOf(world, order, target)) return OrderCheck.Gone;
+                if (!LiftOf(world, order, slot, target)) return OrderCheck.Gone;
                 return CanCarry(world, cold, order.Row, ordered: true) && cold.Carrying != order.Target ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.LootTarget:
                 if (order.Detail == OpenInventory ? !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
@@ -930,7 +957,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (!cold.Carrying.IsNone || !cold.CarriedBy.IsNone || !bc.CarriedBy.IsNone) return;
 
         world.Fixtures.ReleaseHeld(world, table.IdOf(body));
-        if (bc.Medical is { Incapacitated: false } && Friendly(cold, bc)) bc.CarriedAwake = true;
+        if (bc.Medical is { Incapacitated: false } && RegardsBody(world, carrier, body)) bc.CarriedAwake = true;
         Link(table, carrier, body);
     }
 
@@ -1005,9 +1032,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
             // A snatch: the body's carrier lets go of it first (FUN_14034fbe0's unlink, as a drop: no put-down knock-out).
             if (table.TryResolveNext(body.CarriedBy, out int holder)) Unlink(world, holder, b, drop: true);
-            if (body.Medical is { Incapacitated: false } && Friendly(cold, body))
+            if (body.Medical is { Incapacitated: false } && RegardsBody(world, i, b))
             {
-                // A squad mate lifted awake: it leaves its fight and task and rides until put down.
+                // A squad mate (or a friend) lifted awake: it leaves its fight and task and rides until put down.
                 TaskStart.End(world, b, TaskEnd.Stopped);
                 body.CarriedAwake = true;
             }
@@ -1087,7 +1114,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             float x = cn.Position.X + side.X, z = cn.Position.Z + side.Y;
             if (world.Walkability.IsWalkable(x, z, cn.Position.Y))
                 bn.Position = new Vector3(x, world.Walkability.GroundHeight(x, z, cn.Position.Y), z);
-            if (!Friendly(c, b) && !(released && FirstAid.FirstAidSystem.OwnedChained(c, b))) KnockOutHeld(c, b);
+            if (!RegardsBody(world, carrier, body) && !(released && FirstAid.FirstAidSystem.OwnedChained(c, b))) KnockOutHeld(c, b);
         }
     }
 
@@ -1170,7 +1197,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 // regard as friendly out again on the ground. Any other awake body rides on (no goal puts it down).
                 if (PlayerSide(world, cold))
                 {
-                    if (Friendly(cold, body))
+                    if (RegardsBody(world, i, b))
                     {
                         Unlink(world, i, b, drop: false);
                         continue;

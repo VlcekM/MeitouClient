@@ -12,7 +12,7 @@ Bip01 L UpperArm attachment. A collapsed, missing or crushed left arm prevents c
 when the carrier is someone else) unless the task's snatch byte `+0x79` is set: the task factory `FUN_14032ebd0` sets it for task types 213 Lifting/Snatching,
 225 Lifting/Snatching Order and 240 Capture Target, not for 68 and 170; the link `FUN_14034fbe0` then unlinks the old carrier (`FUN_1405ce1e0`) before attaching
 (**Verified** decompile). Meitou `CharacterCold.Snatching`: the player's pick-up order (not a kidnap) and a lift started with row 213 or 240 (`CarrySystem.BeginPickUp`; a dialogue capture, DA 29 in its own town, passes 240 and so takes a target another carries, `ArrestSystem` `Arrest.Capture`); the old carrier lets go as a drop (no put-down knock-out). AI down-state gate and player context-menu eligibility
-are different: the menu offers Pick Up on a standing own character ([ui-input](ui-input.md#context-menu-verbs), **Observed**), never on a carried body (**Verified**, `FUN_1407a6bc0`): so a player snatch can only follow a body picked up by another after the order was given (**Observed**, inferred). Meitou's Ctrl + right click also snatches (engine choice). Race carry-bone affects attachment; secondary character type unknown.
+are different: the menu offers Pick Up on a standing own character ([ui-input](ui-input.md#context-menu-verbs), **Observed**) and on a standing friend of another faction, never on a carried body (**Verified**, `FUN_1407a6bc0`): so a player snatch can only follow a body picked up by another after the order was given (**Observed**, inferred). Meitou's Ctrl + right click also snatches (engine choice). Race carry-bone affects attachment; secondary character type unknown.
 
 **Observed** placement each frame (`CharacterAnimal::vfunc_77` `FUN_1405cda20`, `FUN_1405b5980`, `FUN_1405b1a30`): the body's
 *node* (not its root bone) gets position `carrierPos + carrierRot·boneModelPos + boneWorldRot·O` and rotation
@@ -52,8 +52,11 @@ body, **awake or not** (no consciousness test): it sets `+0x3d4`, clears the bed
 special action `AnimationClass +0x228`). The per-frame update `FUN_140520500` with that action set plays it alone (`FUN_1405203b0` by name each frame) and skips the movement, idle and combat picks, so
 a conscious carried character holds the same `carry me` pose as a knocked-out one; category 3 (CARRIED) is only the record's own tag (the only record with `being carried`). Meitou: `AnimationSystem.Update` plays
 `carry me` for any carried body (it did so only for a downed one before, so an awake carried mate fell through to the standing picks, none of which fits `being carried`, and showed the binding pose), and
-a carried body plays no technique, stumble, lift or knock-out clip. Awake carrying exists for the player's standing squad mates (`CarrySystem.AwakeMate`), lifted
-only by one of the player's own characters: an NPC still walking up to lift a player character gives the lift up once that character is up again
+a carried body plays no technique, stumble, lift or knock-out clip. Awake carrying exists for the player's standing squad mates (`CarrySystem.AwakeMate`) and for another faction's standing character that regards
+the carrier as friendly (a freed prisoner's TEMP_ALLY too; `CarrySystem.AwakeFriend`, #1012), lifted only by one of the player's own characters:
+the lift task's start (`FUN_14034f990`, **Verified**) tests only that the target is not the carrier, a flag of its race and, unless snatching, that
+it is not carried, and row 225 has no need on its target. Whether an awake body rides on and whether the put-down knocks it out read the carrier's
+full regard (slot 126 with the squad memory, as `FUN_1403504f0` and `FUN_1403509f0` call vfunc `0x3f0`; `CarrySystem.RegardsBody`). An NPC still walking up to lift a player character gives the lift up once that character is up again
 (`CarrySystem.Liftable`).
 
 **Observed** (other carrier / body pairs; a Shek body on the human leader, the squad's carried mates): the placement formula above takes only the body's `Height` slider
