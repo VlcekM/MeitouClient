@@ -48,6 +48,13 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
   type` (13), `_robot spider type` (12), `_skimmer` (13). None can block. Lengths 18 (duck, small spider) to 120
   (elephant). Swamp Turtle and "Pack Beast Dead" name no weapon (**Verified**, dump).
 - `weapon level` is a WEAPON_MANUFACTURER: "Ancient" on all but the Skimmer ("Unknown") (**Verified**).
+- **Natural weapon** (**Verified**, decompile: `CharacterAnimal` slot 133 `FUN_14062aa60`, called by setup slot 111 and by the weapon equip
+  slot 123 when handed none, through the item factory `FUN_140580750`): the factory is handed the `weapon level` manufacturer and the
+  `weapon`. No manufacturer: no weapon (no attack). No `weapon`: one drawn from the manufacturer's `weapon types` (v0, 0 counting as 100), so
+  a Swamp Turtle fights with a random Ancient weapon (a sword, cleaver, club or polearm). The model and level
+  are drawn as for a shop weapon ([economy.md](economy.md) "Weapon level"). Ancient's three models are 15, 20 and 25 at chance 100 each, so
+  every animal's weapon level is one of those. It is not an inventory item and is made again on load. Meitou
+  `CharacterAssembly.NaturalWeapon`, kept when the kit changes; the turtle's techniques are those of its weapon's category.
 - `attack type` (an int in the creature category range) does **not** always match the weapon's category: Wild
   Bull 11 with a category-20 weapon, Cage Beast 14 and Landbat 19 with the dog weapon (10). The string "attack
   type" does not occur in `kenshi_x64.exe` (**Observed**: absent from the binary's string table), so the game does
@@ -247,5 +254,5 @@ were not traced. So the original has no egg laying, and Meitou builds none.
 
 ## Not found
 
-The default level of the natural weapon (`14062aa60` makes it without a level argument), the consumers of `animal strength`, the smells and
+The consumers of `animal strength`, the smells and
 slot 0x3a8; the movement rule of a Follow order.

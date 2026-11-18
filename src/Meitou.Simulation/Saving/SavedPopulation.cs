@@ -480,7 +480,8 @@ internal static class SavedCharacters
         {
             assembly.AttachSaved(cold, race, stats, medical, p.Record,
                 p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record, race.StringId) : null),
-                sc.GameState is { } aged && aged.Floats.TryGetValue("age", out float age) ? age : 1);
+                sc.GameState is { } aged && aged.Floats.TryGetValue("age", out float age) ? age : 1,
+                CharacterAssembly.NaturalWeaponRoll(world.Seed, (ulong)(uint)sc.Handle.S << 32 | (uint)sc.Handle.I));
         }
         else if (race is not null)
             notes?.Add($"{platoonName}: {cold.Name} has no stats or medical state that could be read; it has no body in the world.");

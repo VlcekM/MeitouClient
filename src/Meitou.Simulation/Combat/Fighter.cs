@@ -113,7 +113,8 @@ public sealed class Fighter
     public int TechniqueCategory => Weapon?.Data.SkillCategory ?? (int)WeaponCategory.Unarmed;
 
     /// <summary>
-    /// Whether it has an attack: an animal without a natural weapon (a swamp turtle) has none; it can still be hit.
+    /// Whether it has an attack: an animal without a natural weapon (no <c>weapon level</c>, or nothing its manufacturer makes) has none; it can
+    /// still be hit.
     /// </summary>
     public bool CanAttack => !IsAnimal || Weapon is not null;
 

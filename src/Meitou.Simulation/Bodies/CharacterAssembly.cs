@@ -8,6 +8,7 @@ using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Population;
+using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Bodies;
 
@@ -118,26 +119,56 @@ sealed class CharacterAssembly(PopulationData data)
     }
 
     /// <summary>
-    /// An animal's fighter (docs/game/animals.md): its natural weapon, the ANIMAL_CHARACTER's <c>weapon</c> (a WEAPON of a creature category) made by
-    /// its <c>weapon level</c> manufacturer; no armour. The weapon's level is the manufacturer's first model's level, with that model (an <b>engine
-    /// choice</b>: the original makes the item without a level argument, and its default was not traced, <b>Unknown</b>). No weapon (or one not in
-    /// the data) gives a fighter without an attack. A worn backpack counts as on a person (<see cref="PackOf"/>: the Garru Backpack's
-    /// <c>combat skill bonus</c> -4 shows on a Pack Beast's Attack in the original, <b>Observed</b>, docs/game/animals.md).
+    /// The <see cref="Rng.Hash"/> counter of the natural weapon's draw (a constant apart from the item draws').
     /// </summary>
-    Fighter MakeAnimalFighter(AnimalData animal, Inventory inventory)
-    {
-        var combat = data.Combat;
-        WeaponInstance? weapon = null;
-        if (animal.WeaponId is { } wid && combat.Weapon(wid) is { } w)
-        {
-            var maker = animal.WeaponLevelId is { } mid ? combat.Manufacturer(mid) : null;
-            var model = maker is { Models.Count: > 0 } ? maker.Models[0] : (WeaponModelEntry?)null;
-            weapon = WeaponInstance.Create((model?.Level ?? 0) * 0.01f, w, maker,
-                model is { } m ? combat.WeaponMaterial(m.ModelStringId) : null, combat.Constants);
-        }
+    const ulong NaturalWeaponCounter = 0x6e61747572616cUL;
 
+    /// <summary>
+    /// The roll of the natural weapon's draw for a new character (<see cref="Attach"/>) or a loaded one (keyed by its save handle).
+    /// </summary>
+    public static ulong NaturalWeaponRoll(ulong seed, ulong key) => Rng.Hash(seed, key, RngPurpose.Spawn, NaturalWeaponCounter);
+
+    /// <summary>
+    /// An animal's fighter (docs/game/animals.md "Natural weapon"): the <paramref name="weapon"/> it fights with, no armour. A worn backpack counts
+    /// as on a person (<see cref="PackOf"/>: the Garru Backpack's <c>combat skill bonus</c> -4 shows on a Pack Beast's Attack in the original,
+    /// <b>Observed</b>, docs/game/animals.md).
+    /// </summary>
+    Fighter MakeAnimalFighter(WeaponInstance? weapon, Inventory inventory)
+    {
         var pack = PackOf(inventory);
         return new Fighter(weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true };
+    }
+
+    /// <summary>
+    /// An animal's natural weapon (docs/game/animals.md "Natural weapon", <c>CharacterAnimal</c> slot 133 <c>FUN_14062aa60</c> through the item
+    /// factory <c>FUN_140580750</c>, <b>Verified</b>): made by its <c>weapon level</c> manufacturer, of its <c>weapon</c> or, naming none (the Swamp
+    /// Turtle), of one drawn from the manufacturer's <c>weapon types</c> (v0, 0 counting as 100); the model and level as a shop weapon's
+    /// (<see cref="ShopFiller.MakerModel"/>). No manufacturer, or no weapon to make, gives none (a fighter without an attack).
+    /// </summary>
+    WeaponInstance? NaturalWeapon(AnimalData animal, ulong roll)
+    {
+        var db = data.Db;
+        var combat = data.Combat;
+        if (animal.WeaponLevelId is not { } mid || db.Find(mid) is not { Type: FcsRecordType.WeaponManufacturer } maker) return null;
+
+        var rng = new RandomStream(roll, 0, RngPurpose.Spawn);
+        var weapon = animal.WeaponId is { } wid ? combat.Weapon(wid) : WeaponType(maker, ref rng);
+        if (weapon is null) return null;
+
+        var (madeBy, model, level) = ShopFiller.MakerModel(maker, db, ref rng);
+        var material = model is not null ? combat.WeaponMaterial(model) : null;
+        return WeaponInstance.Create(level * 0.01f, weapon, combat.Manufacturer(madeBy.StringId), material, combat.Constants);
+    }
+
+    /// <summary>
+    /// A weapon drawn from the manufacturer's <c>weapon types</c> (v0, 0 counting as 100; only those in the data); null when none can be.
+    /// </summary>
+    WeaponData? WeaponType(GameRecord maker, ref RandomStream rng)
+    {
+        var types = maker.GetReferences("weapon types").Where(r => data.Combat.Weapon(r.TargetStringId) is not null).ToList();
+        var pick = ShopFiller.PickWeighted(types, r => r.Values.Value0 == 0 ? 100 : r.Values.Value0, ref rng);
+
+        return pick.TargetStringId is { } id ? data.Combat.Weapon(id) : null;   // none drawn: the default reference, no target
     }
 
     /// <summary>
@@ -157,8 +188,10 @@ sealed class CharacterAssembly(PopulationData data)
     /// <summary>
     /// The fighter of a character: an animal's from its ANIMAL_CHARACTER record, anyone else's from its gear, limbs and race.
     /// </summary>
-    Fighter FighterOf(GameRecord? record, Inventory inventory, MedicalState? medical, string? raceId) =>
-        AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal, inventory) : MakeFighter(inventory, medical, raceId);
+    Fighter FighterOf(GameRecord? record, Inventory inventory, MedicalState? medical, string? raceId, ulong weaponRoll) =>
+        AnimalData.From(record) is { } animal
+            ? MakeAnimalFighter(NaturalWeapon(animal, weaponRoll), inventory)
+            : MakeFighter(inventory, medical, raceId);
 
     /// <summary>
     /// The FACTION record of the character's faction (null: none or not in the data).
@@ -210,7 +243,9 @@ sealed class CharacterAssembly(PopulationData data)
     public void RefreshEquipment(CharacterCold cold)
     {
         if (cold.Inventory is not { } inventory) return;
-        var fighter = FighterOf(data.Db.Find(cold.RecordId), inventory, cold.Medical, cold.Race?.StringId);
+        var fighter = cold.Fighter is { IsAnimal: true } animal
+            ? MakeAnimalFighter(animal.HipWeapon, inventory)
+            : FighterOf(data.Db.Find(cold.RecordId), inventory, cold.Medical, cold.Race?.StringId, 0);
         fighter.Guarding = cold.Fighter?.Guarding ?? false;
         fighter.EncumbranceFactor = cold.Fighter?.EncumbranceFactor ?? 1;
         cold.Fighter = fighter;
@@ -270,10 +305,11 @@ sealed class CharacterAssembly(PopulationData data)
     /// <see cref="Attach"/> for a character loaded from a save: the race, stats and medical state are the saved ones (not rolled), the inventory and
     /// the fighter are the saved <paramref name="inventory"/> when there is one, else built from the character's record and look like a new
     /// character's; the fighter from the inventory. The top speed is the loader's. An animal takes its saved GAMESTATE_CHARACTER <c>age</c>
-    /// (<paramref name="age"/>; 1 when the save has none) as its stats multiplier and size (docs/game/animals.md "Ageing").
+    /// (<paramref name="age"/>; 1 when the save has none) as its stats multiplier and size (docs/game/animals.md "Ageing"), and its natural weapon
+    /// drawn with <paramref name="weaponRoll"/> (<see cref="NaturalWeaponRoll"/>).
     /// </summary>
     public void AttachSaved(CharacterCold cold, RaceData race, CharacterStats stats, MedicalState medical, GameRecord? record,
-        Inventory? inventory = null, float age = 1)
+        Inventory? inventory = null, float age = 1, ulong weaponRoll = 0)
     {
         cold.NpcClass = NpcClassFor(cold, record);
         cold.FactionImportance = FactionImportanceOf(record);
@@ -296,7 +332,7 @@ sealed class CharacterAssembly(PopulationData data)
                 (fitted.Section, fitted.X, fitted.Y) = (LimbReplacement.SlotOf(k), 0, 0);
                 carried.Items.Add(fitted);
             }
-        cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);
+        cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId, weaponRoll);
         cold.WaterFactor = race.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);
     }
@@ -357,7 +393,7 @@ sealed class CharacterAssembly(PopulationData data)
         FitRolledLimbs(cold.Appearance?.Loadout, cold.Inventory, medical);
         Dye(cold, cold.Inventory);
         MatchAnimalBag(cold);
-        cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);
+        cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId, NaturalWeaponRoll(seed, Rng.Key(id)));
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);
         hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);

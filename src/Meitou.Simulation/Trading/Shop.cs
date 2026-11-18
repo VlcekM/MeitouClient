@@ -580,6 +580,15 @@ public static class ShopFiller
         if (makers.Count == 0) return null;
 
         var maker = PickWeighted(makers, m => m.Weight, ref rng).Record!;   // the list is not empty and every weight is above 0
+        return MakerModel(maker, db, ref rng);
+    }
+
+    /// <summary>
+    /// The model a weapon of <paramref name="maker"/> is made of: one from its <c>weapon models</c> (v1, 0 counting as 100) whose v0 is the level;
+    /// none or level 0: the fixed fallback manufacturer and model (<c>FUN_140580750</c>, <b>Verified</b>).
+    /// </summary>
+    internal static (GameRecord Maker, string? Model, int Level) MakerModel(GameRecord maker, GameDatabase db, ref RandomStream rng)
+    {
         var models = maker.GetReferences("weapon models").Where(r => db.Find(r.TargetStringId) is not null).ToList();
 
         // No model or a model of level 0: the factory substitutes manufacturer 1057 and model 1058 (FUN_140580750, Verified).
@@ -600,9 +609,9 @@ public static class ShopFiller
 
     /// <summary>
     /// The factory's weighted choice (<c>FUN_14057fd40</c>, <b>Verified</b>): candidates of weight above 0 (a weight of 0 counts 100); none gives
-    /// none, one is taken with no draw, else one float(0, total) draw against the running sums. Used for the manufacturer (v0) and the model (v1).
+    /// none, one is taken with no draw, else one float(0, total) draw against the running sums. Used for the manufacturer (v0), the model (v1) and an animal's weapon type (v0).
     /// </summary>
-    static T? PickWeighted<T>(List<T> candidates, Func<T, int> weight, ref RandomStream rng)
+    internal static T? PickWeighted<T>(List<T> candidates, Func<T, int> weight, ref RandomStream rng)
     {
         var live = candidates.Where(c => weight(c) > 0).ToList();
         if (live.Count == 0) return default;
