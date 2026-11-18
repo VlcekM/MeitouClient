@@ -68,6 +68,10 @@ public sealed class ActionLog
     /// </summary>
     DecisionTrace?[] _decision = [];
     /// <summary>
+    /// Goal 148's note last written for each slot (<see cref="AiMind.BedRescueNote"/>).
+    /// </summary>
+    BedRescueNote[] _rescue = [];
+    /// <summary>
     /// The line being built.
     /// </summary>
     readonly StringBuilder _line = new();
@@ -113,6 +117,7 @@ public sealed class ActionLog
                 continue;
             }
 
+            if (scope == ActionLogScope.Everyone) wrote |= WriteRescue(writer, world, slot, cold);
             if (Remember(slot, state[slot], cold.Running) is not { } change) continue;
             var now = (CharacterTask)state[slot].Task;
             WriteChange(writer, world, slot, cold, change with { Ended = cold.EndedTick > _boundary }, now);
@@ -132,6 +137,7 @@ public sealed class ActionLog
         {
             _world = world;
             Array.Fill(_generation, -1);
+            Array.Fill(_rescue, BedRescueNote.None);
         }
 
         int high = world.Characters.HighWater;
@@ -142,6 +148,7 @@ public sealed class ActionLog
         Array.Resize(ref _task, size);
         Array.Resize(ref _running, size);
         Array.Resize(ref _decision, size);
+        Array.Resize(ref _rescue, size);
         Array.Fill(_generation, -1, old, size - old);
     }
 
@@ -164,6 +171,43 @@ public sealed class ActionLog
         (_generation[slot], _task[slot], _running[slot]) = (hot.Generation, hot.Task, running);
         return known ? change : null;
     }
+
+    /// <summary>
+    /// A line when goal 148's note of an NPC whose lists hold it changed since the last one written (<see cref="AiMind.BedRescueNote"/>): whether it
+    /// is eligible, wanted but not chosen (with the goal chosen instead), chosen but not started, or lifting. True when it wrote.
+    /// </summary>
+    bool WriteRescue(TextWriter writer, World world, int slot, CharacterCold cold)
+    {
+        var note = cold.Ai?.BedRescueNote ?? BedRescueNote.None;
+        if (note == _rescue[slot]) return false;
+
+        _rescue[slot] = note;
+        if (note == BedRescueNote.None) return false;
+
+        var line = _line.Clear();
+        line.Append(EventLog.Stamp(world)).Append(EventLog.Who(world, slot)).Append(": rescue 148, ").Append(RescueText(note));
+        if (note == BedRescueNote.NotChosen && cold.Ai?.Goal is { } goal) line.Append(": its goal is ").Append(RowText(goal.Task.Type));
+        if (note == BedRescueNote.NotFree)
+            line.Append(": task ").Append((CharacterTask)world.Characters.Previous[slot].Task).Append(cold.Engaged ? ", engaged" : "");
+        writer.WriteLine(line.ToString());
+        return true;
+    }
+
+    /// <summary>
+    /// What a goal 148 note means.
+    /// </summary>
+    static string RescueText(BedRescueNote note) => note switch
+    {
+        BedRescueNote.CannotLift => "not eligible: on Hold, carrying, or cannot lift",
+        BedRescueNote.NobodyDown => "not eligible: nobody is down",
+        BedRescueNote.NoBody => "not eligible: no downed ally its finder takes",
+        BedRescueNote.NoBed => "not eligible: no bed for it",
+        BedRescueNote.NotChosen => "wanted, not chosen",
+        BedRescueNote.NotFree => "chosen, not free to lift",
+        BedRescueNote.Refused => "chosen, the lift would not start",
+        BedRescueNote.Lifting => "chosen, lifting",
+        _ => note.ToString(),
+    };
 
     /// <summary>
     /// The line of one change: when, who, the task left and why, the task taken up and its provenance; then the decision behind it.

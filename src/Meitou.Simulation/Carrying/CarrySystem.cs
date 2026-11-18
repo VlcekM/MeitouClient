@@ -1891,19 +1891,51 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind } cold) continue;
             if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.FindAndRescueIfTheresBeds) != true)
             {
-                mind.BedRescueWant = 0;
+                (mind.BedRescueWant, mind.BedRescueNote) = (0, BedRescueNote.None);
                 continue;
             }
 
-            int body = Rescuing(cold) && CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds) && (down ??= AnyDown(table))
-                ? FindRescue(world, i, Skipping(world, table.IdOf(i), taken))
-                : -1;
-            if (body >= 0 && RescueBed(world, i) is null) body = -1;
+            int body = RescueTarget(world, i, cold, taken, ref down, out var note);
             mind.BedRescueWant = body >= 0 ? 1 : 0;   // the think's factor for goal 148 reads it
-
-            if (body < 0 || mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds } || !Starts(world, i, cold)) continue;
-            LiftRescued(world, i, body, taken, TaskSource.Goal);
+            mind.BedRescueNote = body < 0 ? note : StartRescue(world, i, cold, mind, body, taken);
         }
+    }
+
+    /// <summary>
+    /// Goal 148's body for the rescuer in <paramref name="i"/>: the finder's when the rescuer could lift, someone is down (<paramref name="down"/>,
+    /// asked once per beat) and the bed search finds it a bed; else -1, with why in <paramref name="note"/>.
+    /// </summary>
+    int RescueTarget(World world, int i, CharacterCold cold, HashSet<int> taken, ref bool? down, out BedRescueNote note)
+    {
+        note = BedRescueNote.NotChosen;
+        if (!Rescuing(cold) || !CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds))
+        {
+            note = BedRescueNote.CannotLift;
+            return -1;
+        }
+
+        if (!(down ??= AnyDown(world.Characters)))
+        {
+            note = BedRescueNote.NobodyDown;
+            return -1;
+        }
+
+        int body = FindRescue(world, i, Skipping(world, world.Characters.IdOf(i), taken));
+        if (body < 0) note = BedRescueNote.NoBody;
+        else if (RescueBed(world, i) is null) (body, note) = (-1, BedRescueNote.NoBed);
+        return body;
+    }
+
+    /// <summary>
+    /// Goal 148's lift of <paramref name="body"/>, once the AI chose the goal and holds the character and it is free (<see cref="Starts"/>), as the
+    /// player's rescue job lifts (row 148), as the goal's own task. Returns where the goal stands for the action log.
+    /// </summary>
+    BedRescueNote StartRescue(World world, int i, CharacterCold cold, AiMind mind, int body, HashSet<int> taken)
+    {
+        if (mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds }) return BedRescueNote.NotChosen;
+        if (!Starts(world, i, cold)) return BedRescueNote.NotFree;
+
+        return LiftRescued(world, i, body, taken, TaskSource.Goal) ? BedRescueNote.Lifting : BedRescueNote.Refused;
     }
 
     /// <summary>

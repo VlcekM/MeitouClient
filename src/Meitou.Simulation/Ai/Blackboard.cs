@@ -824,6 +824,50 @@ public enum FleeAsk : byte
 }
 
 /// <summary>
+/// Where goal 148 Find and rescue if there's beds stood for a character whose goal lists hold it, at the carry system's last rescue beat
+/// (<see cref="AiMind.BedRescueNote"/>): a debugging aid the action log writes (docs/simulation.md "Action log").
+/// </summary>
+public enum BedRescueNote : byte
+{
+    /// <summary>
+    /// Not looked at: its goal lists do not hold 148, or no beat ran yet.
+    /// </summary>
+    None = 0,
+    /// <summary>
+    /// Not eligible: on Hold, carrying, or it could not lift (an arm down, crouching or lying, in a fight).
+    /// </summary>
+    CannotLift = 1,
+    /// <summary>
+    /// Not eligible: nobody in the world is knocked out.
+    /// </summary>
+    NobodyDown = 2,
+    /// <summary>
+    /// Not eligible: no downed ally its finder takes (own or allied faction, sensed or in sight, not given up; none while its squad fights).
+    /// </summary>
+    NoBody = 3,
+    /// <summary>
+    /// Not eligible: a downed ally, but the bed search finds no bed for it.
+    /// </summary>
+    NoBed = 4,
+    /// <summary>
+    /// Wanted, not chosen: its think chose another goal.
+    /// </summary>
+    NotChosen = 5,
+    /// <summary>
+    /// Chosen, but not free to lift now (not idle, wandering or following, or the AI does not hold it: a talk, a trade, an arrest).
+    /// </summary>
+    NotFree = 6,
+    /// <summary>
+    /// Chosen and free, but the lift would not start.
+    /// </summary>
+    Refused = 7,
+    /// <summary>
+    /// The lift started (row 148).
+    /// </summary>
+    Lifting = 8,
+}
+
+/// <summary>
 /// What the AI decided for one character (<see cref="CharacterCold.Ai"/>): the goal it acts out, where its post and bed are, the fight it asks for.
 /// </summary>
 public sealed class AiMind
@@ -1196,6 +1240,12 @@ public sealed class AiMind
     /// whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
     /// </summary>
     public float BedRescueWant { get; set; }
+
+    /// <summary>
+    /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the carry system's serial sweep, read only by the
+    /// log, so it changes nothing in the world). Not saved, not hashed.
+    /// </summary>
+    public BedRescueNote BedRescueNote { get; set; }
 
     /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet):

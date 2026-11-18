@@ -2174,8 +2174,12 @@ beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`
 (`CharacterCold.Running`) changed gets a line: the task left, why (`TaskStart.End`'s reason,
 else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's
 characters and adds the decision step's trace of that tick (it turns `DecisionSystem.Tracing` on); everyone adds every NPC and animal (in a town,
-about 650 lines a minute). It only reads the world. Its lines, like log_dialogue.txt's, only join a queue that a thread of its own writes to
-the file (`QueuedLog`), so the tick never waits on the disk; as the game ends on an exception, the queue is written at once.
+about 650 lines a minute), and for each NPC whose goal lists hold 148 a line whenever where that goal stands changes at a rescue beat
+(`AiMind.BedRescueNote`, set by `CarrySystem.RescueToBeds`, neither saved nor hashed): "rescue 148, not eligible: ..." (cannot lift, nobody is
+down, no downed ally its finder takes, no bed for it), "wanted, not chosen: its goal is ...", "chosen, not free to lift: task ...", "chosen, the
+lift would not start" or "chosen, lifting". It only reads the world. Its lines, like
+log_dialogue.txt's, only join a queue that a thread of its own writes to the file (`QueuedLog`), so the tick never waits on the disk; as the
+game ends on an exception, the queue is written at once.
 
 ## Town house purchases
 
