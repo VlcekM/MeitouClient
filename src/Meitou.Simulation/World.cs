@@ -472,13 +472,14 @@ public sealed partial class World : IDisposable
     /// </summary>
     public LastingIds LastingIds { get; }
     /// <summary>
-    /// The values code mods set on their world states (docs/modding.md "World states"); null until the first, so a world without one is the game's.
+    /// The values code mods set on their world states (docs/modding.md "World states"), to read; null until the first, so a world without one is the
+    /// game's. Values are set only through the claimed <see cref="ModWorldState"/> handles.
     /// </summary>
     public ModWorldStates? ModStatesOrNull { get; private set; }
     /// <summary>
     /// The code mods' world state values, made on first use (<see cref="ModWorldState.Set"/>).
     /// </summary>
-    public ModWorldStates ModStates => ModStatesOrNull ??= new();
+    internal ModWorldStates ModStates => ModStatesOrNull ??= new();
     /// <summary>
     /// The player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
     /// </summary>

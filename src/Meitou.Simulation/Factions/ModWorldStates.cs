@@ -8,7 +8,13 @@ namespace Meitou.Simulation.Factions;
 public sealed class ModWorldState
 {
     /// <summary>
-    /// Made for the mod <paramref name="owner"/> (its id) claiming the WORLD_EVENT_STATE <paramref name="record"/>.
+    /// Set once a refused <see cref="Set"/> or <see cref="Clear"/> was logged, so the log gets one line per handle.
+    /// </summary>
+    bool _refusalLogged;
+
+    /// <summary>
+    /// Made for the mod <paramref name="owner"/> (its id) claiming the WORLD_EVENT_STATE <paramref name="record"/>; only the handle
+    /// <c>ModContext.AddWorldState</c> returns is the claim (<see cref="ModWorldStates.Claim"/>), and only it sets values.
     /// </summary>
     public ModWorldState(string owner, string record)
     {
@@ -34,19 +40,45 @@ public sealed class ModWorldState
     /// <summary>
     /// Sets the state's answer in <paramref name="world"/>; from the mod's system in a serial phase (or <see cref="IWorldReady"/>), never a parallel
     /// one. Readers see it from the population's next refresh of the world states: that tick's slow-world step when the setting system runs before
-    /// the population's, else the next tick's. A decision already made (a nest laid, a town replaced, a squad spawned) stays.
+    /// the population's, else the next tick's. A decision already made (a nest laid, a town replaced, a squad spawned) stays. A handle that is not
+    /// the record's claim (one made outside <c>ModContext.AddWorldState</c>) sets nothing, with one log line.
     /// </summary>
-    public void Set(World world, bool value) => world.ModStates.Set(Record, value);
+    public void Set(World world, bool value)
+    {
+        if (Refused()) return;
+        world.ModStates.Set(Record, value);
+    }
 
     /// <summary>
     /// Drops the mod's value in <paramref name="world"/>, so the record's conditions answer again; as <see cref="Set"/>.
     /// </summary>
-    public void Clear(World world) => world.ModStatesOrNull?.Clear(Record);
+    public void Clear(World world)
+    {
+        if (Refused()) return;
+        world.ModStatesOrNull?.Clear(Record);
+    }
+
+    /// <summary>
+    /// Whether this handle is not its record's claim; logs that once.
+    /// </summary>
+    bool Refused()
+    {
+        if (ModWorldStates.IsClaimedBy(this)) return false;
+
+        if (!_refusalLogged)
+        {
+            _refusalLogged = true;
+            string reason = $"world state '{Record}' was not claimed through ModContext.AddWorldState; its value is not set";
+            Console.Error.WriteLine($"mod       {Owner}: {reason}");
+        }
+        return true;
+    }
 }
 
 /// <summary>
 /// The values code mods set on their world states in one world (<see cref="ModWorldState"/>), by record id; made at the first value, so a world
-/// without one has none, hashes as before and answers every state from the data.
+/// without one has none, hashes as before and answers every state from the data. Read-only outside this assembly: values are set through the
+/// claimed handles.
 /// </summary>
 public sealed class ModWorldStates
 {
@@ -66,9 +98,9 @@ public sealed class ModWorldStates
     public static void Claim(ModWorldState state) => Claims[state.Record] = state;
 
     /// <summary>
-    /// Whether a mod claimed <paramref name="record"/>.
+    /// Whether <paramref name="state"/> is its record's claim (the same handle, so a handle made for another mod's record is not).
     /// </summary>
-    public static bool IsClaimed(string record) => Claims.ContainsKey(record);
+    internal static bool IsClaimedBy(ModWorldState state) => Claims.TryGetValue(state.Record, out var claim) && ReferenceEquals(claim, state);
 
     /// <summary>
     /// Forgets every claim (tests).
@@ -94,25 +126,19 @@ public sealed class ModWorldStates
     public bool? Get(string record) => _values.TryGetValue(record, out bool value) ? value : null;
 
     /// <summary>
-    /// Sets <paramref name="record"/>'s value; throws for a record no mod claimed (its value would be lost at the next save and load).
+    /// Sets <paramref name="record"/>'s value; only through its claimed handle (<see cref="ModWorldState.Set"/>), so every value is saved.
     /// </summary>
-    public void Set(string record, bool value)
+    internal void Set(string record, bool value)
     {
-        if (!IsClaimed(record))
-        {
-            throw new InvalidOperationException(
-                $"World state '{record}' is claimed by no mod (ModContext.AddWorldState), so its value would not be saved.");
-        }
-
         if (_values.TryGetValue(record, out bool old) && old == value) return;
         _values[record] = value;
         Version++;
     }
 
     /// <summary>
-    /// Drops <paramref name="record"/>'s value.
+    /// Drops <paramref name="record"/>'s value; only through its claimed handle.
     /// </summary>
-    public void Clear(string record)
+    internal void Clear(string record)
     {
         if (_values.Remove(record)) Version++;
     }

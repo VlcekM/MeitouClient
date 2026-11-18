@@ -39,10 +39,10 @@ static class ModWorldStateSave
     }
 
     /// <summary>
-    /// Sets the entry's values in <paramref name="world"/>'s table, for the records of <paramref name="owned"/> only (a state the mod no longer claims
-    /// is dropped); throws <see cref="InvalidDataException"/> for an entry that is not one.
+    /// Sets the entry's values in <paramref name="world"/> through the mod's claimed handles <paramref name="owned"/> (by record id; a state the mod
+    /// no longer claims is dropped); throws <see cref="InvalidDataException"/> for an entry that is not one.
     /// </summary>
-    public static void Read(byte[] entry, Simulation.World world, IReadOnlySet<string> owned)
+    public static void Read(byte[] entry, Simulation.World world, IReadOnlyDictionary<string, Simulation.Factions.ModWorldState> owned)
     {
         using var r = new BinaryReader(new MemoryStream(entry, writable: false), Encoding.UTF8);
         try
@@ -54,7 +54,7 @@ static class ModWorldStateSave
             {
                 string record = r.ReadString();
                 bool value = r.ReadBoolean();
-                if (owned.Contains(record)) world.ModStates.Set(record, value);
+                if (owned.TryGetValue(record, out var state)) state.Set(world, value);
             }
         }
         catch (EndOfStreamException e)
@@ -66,6 +66,7 @@ static class ModWorldStateSave
     /// <summary>
     /// The values <paramref name="world"/> holds for the records of <paramref name="owned"/>, in string id order.
     /// </summary>
-    public static IEnumerable<KeyValuePair<string, bool>> ValuesOf(Simulation.World world, IReadOnlySet<string> owned) =>
-        world.ModStatesOrNull?.All.Where(v => owned.Contains(v.Key)) ?? [];
+    public static IEnumerable<KeyValuePair<string, bool>> ValuesOf(Simulation.World world,
+        IReadOnlyDictionary<string, Simulation.Factions.ModWorldState> owned) =>
+        world.ModStatesOrNull?.All.Where(v => owned.ContainsKey(v.Key)) ?? [];
 }
