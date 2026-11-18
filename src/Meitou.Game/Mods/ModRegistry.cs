@@ -240,11 +240,13 @@ sealed class ModRegistry
         {
             _jobTypeOwners[type] = mod;
             Simulation.JobTypes[type] = name;
+            Simulation.TaskOwners[type] = mod;
         }
         foreach (var (type, name) in r.GoalTypes)
         {
             _goalTypeOwners[type] = mod;
             Simulation.GoalTypes[type] = new ModGoalType(mod, name);
+            Simulation.TaskOwners[type] = mod;
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);

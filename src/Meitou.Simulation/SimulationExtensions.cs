@@ -186,6 +186,11 @@ public sealed class SimulationExtensions
     /// The mods' own NPC goal types, each with the mod that claimed it and its name (docs/modding.md "NPC goals"; <see cref="Ai.NpcGoals"/>).
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, ModGoalType> GoalTypes { get; } = [];
+    /// <summary>
+    /// The mod that claimed each task type number, as a job or an NPC goal type: a task row from 1000 up is that mod's (<see cref="Ai.TaskHandlers"/>
+    /// refuses another mod's handler for it).
+    /// </summary>
+    public Dictionary<Data.Gameplay.Ai.TaskType, string> TaskOwners { get; } = [];
 
     /// <summary>
     /// Whether the mods add nothing.

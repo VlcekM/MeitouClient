@@ -478,6 +478,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
+    /// Whether <paramref name="who"/> is the trader the trade holds (walked up to or open; <see cref="Hold"/>), which nothing else may let go of.
+    /// </summary>
+    internal bool HoldsTrader(CharacterId who) => !_trader.IsNone && _trader == who;
+
+    /// <summary>
     /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from (the customer's
     /// own too), when within <see cref="TradeSettings.PassRange"/> of the trader; farther it posts "Out of trading range." (another who cannot
     /// trade, not the player's, dead or without an inventory, is refused silently), as the original refuses such a move beyond the item limit

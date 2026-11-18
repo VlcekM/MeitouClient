@@ -1,5 +1,6 @@
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Ai;
 
@@ -50,7 +51,7 @@ public interface INpcGoalOwner
 /// so the cut falls on a tick boundary whatever the threads did, and no start of it is asked from then (that tick's included); one whose
 /// <see cref="INpcGoal.Start"/> throws is not started or asked again. The first fault of each goal is logged with the mod's id and the player gets a
 /// notice; the faults are hashed. A goal whose registering system the world stopped after a fault (<see cref="ModSystemFaults"/>) is dropped the
-/// same way, and the characters on its act-out are let go.
+/// same way, and the characters it holds (a record per started character, kept until the mod lets it go) are let go by the AI.
 /// </summary>
 public sealed class NpcGoals
 {
@@ -86,6 +87,70 @@ public sealed class NpcGoals
         /// Its system was found stopped and its characters let go (serial only).
         /// </summary>
         public bool OwnerStopped;
+        /// <summary>
+        /// The starts the mod refused in this world (serial only; for the one-time log line, not hashed).
+        /// </summary>
+        public int Refusals;
+        /// <summary>
+        /// The mod's start-contract warnings already logged (<see cref="Warning"/> bits; serial only, not hashed).
+        /// </summary>
+        public Warning Warned;
+    }
+
+    /// <summary>
+    /// A start that broke <see cref="INpcGoal.Start"/>'s contract, logged once per goal.
+    /// </summary>
+    [Flags]
+    enum Warning : byte
+    {
+        /// <summary>
+        /// None.
+        /// </summary>
+        None = 0,
+        /// <summary>
+        /// It answered true without engaging the character.
+        /// </summary>
+        NotEngaged = 1,
+        /// <summary>
+        /// It answered true without starting a task of a row from 1000 up with <see cref="TaskSource.Goal"/>.
+        /// </summary>
+        NoTask = 2,
+        /// <summary>
+        /// It engaged the character and answered false.
+        /// </summary>
+        EngagedRefusal = 4,
+        /// <summary>
+        /// Its starts keep answering false (<see cref="RefusalsLogged"/>).
+        /// </summary>
+        Refusing = 8,
+    }
+
+    /// <summary>
+    /// A character a mod's goal holds (started, not yet let go): who, the goal, the row and start tick of the task the start left running, and
+    /// whether its system stopped, so the AI lets the character go itself.
+    /// </summary>
+    sealed class Held(CharacterId id, Entry goal, TaskType row, long tick)
+    {
+        /// <summary>
+        /// The character.
+        /// </summary>
+        public CharacterId Id { get; } = id;
+        /// <summary>
+        /// The goal.
+        /// </summary>
+        public Entry Goal { get; } = goal;
+        /// <summary>
+        /// The row of the task the start left running (<see cref="TaskType.None"/>: none).
+        /// </summary>
+        public TaskType Row { get; } = row;
+        /// <summary>
+        /// The start tick of that task.
+        /// </summary>
+        public long Tick { get; } = tick;
+        /// <summary>
+        /// The goal's system stopped: the AI releases the character once nothing else holds it (<see cref="TryRelease"/>).
+        /// </summary>
+        public bool Orphaned { get; set; }
     }
 
     /// <summary>
@@ -215,6 +280,11 @@ public sealed class NpcGoals
     #region Asking
 
     /// <summary>
+    /// The refusals of one goal after which the log says its starts keep answering false (once per goal).
+    /// </summary>
+    const int RefusalsLogged = 10;
+
+    /// <summary>
     /// Set by a think that chose a mod's goal (<see cref="AiMind.ModGoalAsk"/>); the serial step looks for them only then.
     /// </summary>
     int _asking;
@@ -228,6 +298,16 @@ public sealed class NpcGoals
     /// The goals whose system was found stopped (<see cref="Entry.OwnerStopped"/>).
     /// </summary>
     int _stopped;
+
+    /// <summary>
+    /// The characters the goals hold, by slot (hashed while any).
+    /// </summary>
+    readonly SortedDictionary<int, Held> _held = [];
+
+    /// <summary>
+    /// Scratch: the slots whose record ended in a sweep.
+    /// </summary>
+    readonly List<int> _ended = [];
 
     /// <summary>
     /// The mod goal's desire (<see cref="INpcGoal.Desire"/>) for the asker; 0 for a type no mod registered, a goal faulted before this tick or whose
@@ -267,20 +347,22 @@ public sealed class NpcGoals
     }
 
     /// <summary>
-    /// The AI's serial step: the goals of systems stopped since the last step are dropped and their characters let go (<see cref="LetGoStopped"/>),
-    /// then the goals the thinks chose this tick start (<see cref="SendStarts"/>); a refused start keeps the goal at 0 for that character for
+    /// The AI's serial step: the goals of systems stopped since the last step are dropped (<see cref="LetGoStopped"/>), the records of the held
+    /// characters are swept (<see cref="Sweep"/>: let go by their mod, taken by another mod's act-out, released for a stopped system), then the goals
+    /// the thinks chose this tick start (<see cref="SendStarts"/>); a refused start keeps the goal at 0 for that character for
     /// <paramref name="backoffTicks"/>.
     /// </summary>
     internal void Step(World world, int backoffTicks)
     {
         if (_stopped < _entries.Count) LetGoStopped(world);
+        if (_held.Count > 0) Sweep(world);
         if (Interlocked.Exchange(ref _asking, 0) != 0) SendStarts(world, backoffTicks);
     }
 
     /// <summary>
     /// Starts the mod goals the thinks chose this tick (serial, slot order), for each character the AI still holds whose goal has not faulted
-    /// (<see cref="INpcGoal.Start"/>); a start marks the mind (<see cref="AiMind.ModGoalStarted"/>), a refusal backs the goal off for the character
-    /// and asks it to choose again at once.
+    /// (<see cref="INpcGoal.Start"/>); a start is recorded (<see cref="Take"/>), a refusal backs the goal off for the character
+    /// (<see cref="Refuse"/>), and a character skipped chooses again at the next tick.
     /// </summary>
     void SendStarts(World world, int backoffTicks)
     {
@@ -290,13 +372,18 @@ public sealed class NpcGoals
             if (table.Cold(s) is not { Ai: { ModGoalAsk: true } mind } cold) continue;
 
             mind.ModGoalAsk = false;
-            if (!table.Next[s].Alive || mind.Goal is not { } goal || !AiSystem.Holds(table.Next[s], cold)) continue;
-            if (!_byType.TryGetValue(goal.Task.Type, out var entry) || entry.Fault != long.MaxValue || entry.OwnerStopped) continue;
+            if (!table.Next[s].Alive) continue;
+            if (mind.Goal is not { } goal || !AiSystem.Holds(table.Next[s], cold) || !_byType.TryGetValue(goal.Task.Type, out var entry)
+                || entry.Fault != long.MaxValue || entry.OwnerStopped)
+            {
+                mind.Replan = true;
+                continue;
+            }
 
             if (StartOne(world, entry, new NpcGoalAsk(s, table.IdOf(s), mind.Squad, goal.Task.Type, goal.Task.Target)))
-                Take(world, mind, goal);
+                Take(world, s, cold, mind, goal, entry);
             else
-                Refuse(world, mind, goal.Task.Type, backoffTicks);
+                Refuse(world, cold, mind, entry, backoffTicks);
         }
     }
 
@@ -317,35 +404,59 @@ public sealed class NpcGoals
     }
 
     /// <summary>
-    /// A started mod goal is the mind's current goal, its own one-step plan, with no commitment, until the AI holds the character again; the tick of
-    /// the start tells the mod's tasks from older ones (<see cref="AiSystem.OnModTask"/>).
+    /// A started mod goal is the mind's current goal, its own one-step plan, with no commitment, and the character is recorded as the goal's with the
+    /// row and start tick of the task the start left running, which tell the act-out from any later hold (<see cref="AiSystem.OnModTask"/>). A start
+    /// that did not engage the character or start a task of a row from 1000 up with <see cref="TaskSource.Goal"/> is logged once per goal.
     /// </summary>
-    static void Take(World world, AiMind mind, AiGoal goal)
+    void Take(World world, int slot, CharacterCold cold, AiMind mind, AiGoal goal, Entry entry)
     {
+        var run = cold.Running;
+        var row = run?.Row ?? TaskType.None;
+        long tick = run?.Tick ?? world.Tick;
+        if (!cold.Engaged) Warn(entry, Warning.NotEngaged, "answered true without engaging the character (CharacterCold.Engaged)");
+        if (run is not { Source: TaskSource.Goal } || run.Tick != world.Tick || (int)row < SimulationExtensions.FirstModCode)
+            Warn(entry, Warning.NoTask, "answered true without starting a task of its own row from 1000 up with TaskSource.Goal");
+
         mind.Goal = goal;
         mind.Behaviour = AiBehaviour.Mod;
         mind.CommitUntil = 0;
         mind.ModGoalStarted = true;
-        mind.ModGoalTick = world.Tick;
+        mind.ModGoalRow = row;
+        mind.ModGoalTick = tick;
         mind.Plan.Clear();
         mind.Plan.Add(new PlanStep(goal.Task.Type, default));
+        _held[slot] = new Held(world.Characters.IdOf(slot), entry, row, tick);
     }
 
     /// <summary>
     /// A refused start: the character weighs the goal at 0 for <paramref name="backoffTicks"/> and thinks again at the next tick, so it takes another
-    /// goal rather than standing for the one the mod will not start.
+    /// goal rather than standing for the one the mod will not start. A goal whose starts keep answering false, and a refusal that left the character
+    /// engaged, are logged once per goal.
     /// </summary>
-    static void Refuse(World world, AiMind mind, TaskType type, int backoffTicks)
+    static void Refuse(World world, CharacterCold cold, AiMind mind, Entry entry, int backoffTicks)
     {
-        mind.ModGoalRefused = type;
-        mind.ModGoalRefusedUntil = world.Tick + backoffTicks;
+        mind.BackOff(entry.Type, world.Tick + backoffTicks);
         mind.Replan = true;
+        if (cold.Engaged) Warn(entry, Warning.EngagedRefusal, "engaged the character (CharacterCold.Engaged) and answered false");
+        if (++entry.Refusals == RefusalsLogged)
+            Warn(entry, Warning.Refusing, $"has refused {RefusalsLogged} starts; each keeps the goal off that character for four think periods");
+    }
+
+    /// <summary>
+    /// Logs a broken start contract once per goal (not a fault: the goal keeps running).
+    /// </summary>
+    static void Warn(Entry entry, Warning warning, string text)
+    {
+        if ((entry.Warned & warning) != 0) return;
+
+        entry.Warned |= warning;
+        Console.Error.WriteLine($"mod       {entry.Claim.Owner}: NPC goal {(int)entry.Type} '{entry.Claim.Name}': its start {text}");
     }
 
     /// <summary>
     /// The goals whose registering system the world has stopped (a fault in one of its tick phases): each is dropped as a fault would drop it (no
-    /// player notice: the system's own stop gave one), and every character on its act-out is let go (<see cref="LetGo"/>), since the stopped system
-    /// will never do it.
+    /// player notice: the system's own stop gave one), and every character it holds is marked for the AI to let go (<see cref="TryRelease"/>), since
+    /// the stopped system will never do it.
     /// </summary>
     void LetGoStopped(World world)
     {
@@ -356,33 +467,83 @@ public sealed class NpcGoals
             entry.OwnerStopped = true;
             _stopped++;
             Fault(world, entry, "system", new InvalidOperationException("the mod's system that registered it stopped"), notice: false);
-            LetGo(world, entry.Type);
+            foreach (var held in _held.Values)
+            {
+                if (held.Goal == entry) held.Orphaned = true;
+            }
         }
     }
 
     /// <summary>
-    /// Lets go of every character the AI started on goal <paramref name="type"/>: one still on the mod's task is no longer engaged and stands (no
-    /// handler runs: the mod's system is stopped); every such mind ends the goal and chooses again at the next tick. An engagement whose task is not
-    /// the mod's is left alone (it may be another system's).
+    /// The records of the held characters, in slot order: one whose character is gone, dead or no longer engaged (the mod let it go), or whose
+    /// running task is another mod's act-out started since, ends; an orphaned one ends once the AI let its character go (<see cref="TryRelease"/>).
+    /// A record that ends also ends the goal on the character's mind when the mind is still the one it was started on.
     /// </summary>
-    static void LetGo(World world, TaskType type)
+    void Sweep(World world)
     {
         var table = world.Characters;
-        for (int s = 0; s < table.HighWater; s++)
+        _ended.Clear();
+        foreach (var (slot, held) in _held)
         {
-            if (table.Cold(s) is not { Ai: { ModGoalStarted: true, Goal: { } goal } mind } cold || goal.Task.Type != type) continue;
-
-            if (table.Next[s].Alive && AiSystem.OnModTask(table.Next[s], cold, mind))
+            if (!table.TryResolveNext(held.Id, out int at) || at != slot || !table.Next[slot].Alive || table.Cold(slot) is not { } cold)
+                _ended.Add(slot);
+            else if (held.Orphaned ? TryRelease(world, slot, cold, held) : Ended(cold, held))
             {
-                cold.Engaged = false;
-                TaskStart.Stand(table, s);
+                EndOnMind(cold, held);
+                _ended.Add(slot);
             }
-
-            mind.ModGoalStarted = false;
-            mind.Goal = null;
-            mind.Plan.Clear();
-            mind.Replan = true;
         }
+
+        foreach (int slot in _ended) _held.Remove(slot);
+    }
+
+    /// <summary>
+    /// Whether a live record ended: its character is no longer engaged, or runs a task of another row from 1000 up with <see cref="TaskSource.Goal"/>
+    /// started since the record's (another mod's act-out, or the mod's own duty route on another row).
+    /// </summary>
+    static bool Ended(CharacterCold cold, Held held) =>
+        !cold.Engaged || cold.Running is { Source: TaskSource.Goal } run && (int)run.Row >= SimulationExtensions.FirstModCode && run.Row != held.Row
+            && run.Tick > held.Tick;
+
+    /// <summary>
+    /// An orphaned record (its goal's system stopped): true when it is done. One no longer engaged is done. One in a fight, an open conversation or
+    /// a trade waits for it to end. Otherwise, when the character's provenance is still the act-out's (the start's row from its tick, walking,
+    /// arrived or woken), a fight's started since, or none, the AI lets it go: no longer engaged, a walk on that row stood still (no handler runs:
+    /// the mod's system is stopped); a task another system started since is left to it.
+    /// </summary>
+    static bool TryRelease(World world, int slot, CharacterCold cold, Held held)
+    {
+        if (!cold.Engaged) return true;
+        if (cold.InCombat || HeldElsewhere(world, held.Id)) return false;
+
+        var run = cold.Running;
+        bool own = run is null || run.Tick >= held.Tick && (run.Row == held.Row || run.Task == CharacterTask.Attack);
+        if (!own) return true;
+
+        cold.Engaged = false;
+        if (run is not null && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo && run.Runs(CharacterTask.GoTo))
+            TaskStart.Stand(world.Characters, slot);
+
+        if (cold.Ai is { } mind) mind.Replan = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether an open conversation (a bubble or the player's) or a trade holds the character, which a release must not break.
+    /// </summary>
+    static bool HeldElsewhere(World world, CharacterId id) =>
+        world.SystemOf<Dialogue.DialogueSystem>()?.Talking(id) == true || world.SystemOf<Trading.TradeSystem>()?.HoldsTrader(id) == true;
+
+    /// <summary>
+    /// Ends the goal on the character's mind when that mind still carries this record's start (<see cref="AiSystem.EndModGoal"/>), and asks it to
+    /// choose again.
+    /// </summary>
+    static void EndOnMind(CharacterCold cold, Held held)
+    {
+        if (cold.Ai is not { ModGoalStarted: true } mind || mind.ModGoalRow != held.Row || mind.ModGoalTick != held.Tick) return;
+
+        AiSystem.EndModGoal(mind);
+        mind.Replan = true;
     }
 
     /// <summary>
@@ -425,10 +586,24 @@ public sealed class NpcGoals
     }
 
     /// <summary>
-    /// Adds the faulted goals and their ticks to the state hash; nothing while none has faulted.
+    /// Adds the held characters' records, the faulted goals and their ticks to the state hash; nothing while none is held and none has faulted.
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
+        if (_held.Count > 0)
+        {
+            hasher.Add(0x4E50484C);   // "NPHL"
+            foreach (var (slot, held) in _held)
+            {
+                hasher.Add(slot);
+                hasher.Add(held.Id);
+                hasher.Add((int)held.Goal.Type);
+                hasher.Add((int)held.Row);
+                hasher.Add(held.Tick);
+                hasher.Add(held.Orphaned);
+            }
+        }
+
         if (Volatile.Read(ref _faults) == 0) return;
 
         hasher.Add(0x4E50474C);   // "NPGL"
