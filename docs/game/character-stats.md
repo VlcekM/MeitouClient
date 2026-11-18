@@ -646,7 +646,8 @@ A race's body is its `combat anatomy` list, read whole (`RaceData.From`), so a d
 
 - Any number of parts, of the nine base records or its own LOCATIONAL_DAMAGE records, each with its hit weight and base HP; the parts are hit,
   armoured (by `part coverage`, which names parts by record), healed and saved one by one (`sid<k>`, [save](../formats/save.md)). The medical panel
-  shows every part, scrolling when they outnumber its bars ([ui-screens](ui-screens.md)); blood shows on the body for the first eight parts only ([blood-decals](blood-decals.md)).
+  shows every part, scrolling when they outnumber its bars ([ui-screens](ui-screens.md)); blood shows on the body for the first eight parts only
+  ([blood-decals](blood-decals.md)).
 - Fewer parts work as the No-Head MkII skeleton's six do: with no arm part the stat multipliers' arm term is 1, with no torso part the torso term,
   with no head the head term (`MedicalState.ComputeAggregates`).
 - Animals list their own anatomy: 15 of the 53 base races, all animals, list Left and Right Foreleg (ARM parts) in place of arms; other animals
@@ -654,20 +655,19 @@ A race's body is its `combat anatomy` list, read whole (`RaceData.From`), so a d
   RACE's `combat anatomy` of the base load order read through `GameDatabase.Load`).
 - Extra parts of the four types count where their type counts: speed follows the worst leg, the arm term the best arm, the stealth term the torso and
   legs, dialogue conditions 27 to 29 any leg, arm or head. Any part whose `collapse part` names a leg being down makes the character crawl, and any
-  part with an arm's bit (4 left, 2 right) that is cut off or crushed, or collapses and is down, stops that arm working (`ArmWorks`). An arm or leg part with a side shares
-  that side's limb slot ([limb replacements](#limb-replacements-and-robots)). Extra arms never hold a weapon or strike: a technique's blow names
-  limbs 0 to 4 (`RobotLimb` in `fcs_enums.def`).
+  part with an arm's bit (4 left, 2 right) that is cut off or crushed, or collapses and is down, stops that arm working (`ArmWorks`). An arm or leg
+  part with a side shares that side's limb slot ([limb replacements](#limb-replacements-and-robots)). Extra arms never hold a weapon or strike: a
+  technique's blow names limbs 0 to 4 (`RobotLimb` in `fcs_enums.def`).
 
 A `body part type` other than 0 to 3 (a tail or a wing) is Meitou-only: the original's part-order table (`0x1416fc42c`, [part order](#part-order)) has
-entries for the four types only, and what it does with another number is not known.
-It is written as the record's int (the construction set's `BodyPartType` list names only 0 to 3; Meitou's `FcsWriter` writes any value). Meitou
-gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes too), covered by armour
-that lists it in `part coverage`, bleeds and heals, knocks out or kills when `death` is set, sorts after the legs and is saved with its health like any
-part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off, and the rack cuts off
-any part with a side whatever its `severance` (`MedicalState.StretchLimbs`): it becomes a stump, is no
-longer hit, stays a stump through a save ([save](../formats/save.md#limbs-medical_state-limbs)) and the character cries no lost-limb line
-(`DialogueEvents.LostLimb`); no item drops and the part stays drawn. **Observed** (2026-11-17, scratch run of a Greenlander body with a type 4 tail of
-hit weight 60: picked by 168 of 2,000 hit rolls whole, 0 after a 400 cut severed it; the stump loaded back).
+entries for the four types only. It is written as the record's int (the construction set's `BodyPartType` list names only 0 to 3; Meitou's `FcsWriter`
+writes any value). Meitou gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes
+too), covered by armour that lists it in `part coverage`, bleeds and heals, knocks out or kills when `death` is set, sorts after the legs and is saved
+with its health like any part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off,
+and the rack cuts off any part with a side whatever its `severance` (`MedicalState.StretchLimbs`): it becomes a stump, is no longer hit, stays a stump
+through a save ([save](../formats/save.md#limbs-medical_state-limbs)) and the character cries no lost-limb line (`DialogueEvents.LostLimb`); no item
+drops and the part stays drawn. **Observed** (2026-11-17, scratch run of a Greenlander body with a type 4 tail of hit weight 60: picked by 168 of
+2,000 hit rolls whole, 0 after a 400 cut severed it; the stump loaded back).
 
 ### Per-part state (`MedicalSystem::HealthPartStatus`)
 

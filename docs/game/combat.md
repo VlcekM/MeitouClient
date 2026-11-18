@@ -1019,8 +1019,8 @@ crossbow, while its current weapon type is its `skill category`. Meitou marks a 
 `CombatSystem.HandCategory` answers the weapon's `skill category` (no Current Skill label for 6 or 7). No base weapon a person can hold animates as
 no skill class: of the 48 WEAPON records of the base data and its three bundled mods only the 12 creature weapons (categories 9 to 20) do, and
 nothing but ANIMAL_CHARACTER `weapon` and one unreferenced manufacturer names them (**Observed**, a scan of the four files). An animal's natural
-weapon of a creature category keeps the plain kind, so those tests read it as a crossbow as before; the Swamp Turtle's, drawn from a manufacturer,
-is a person's weapon of a skill class and was never read as one.
+weapon of a creature category keeps the plain kind, so those tests read it as a crossbow; the Swamp Turtle's, drawn from a manufacturer,
+is a person's weapon of a skill class, whose kind is not the crossbow's.
 
 ### Unknowns of the ranged path
 
