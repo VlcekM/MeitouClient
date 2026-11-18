@@ -91,7 +91,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
 
 | Class (signal) | Can start | Finished | Activate |
 | --- | --- | --- | --- |
-| `CannibalRetreatFromRaid` (1) | the platoon has a squad, the leader is not in a town of its faction (status `+0x88` town's faction), and a member carries someone (`+0x348`) | the leader is in a town of its faction | mission town = the base package's (the platoon's home town), else the nearest town of its faction (`FUN_140927bb0`) |
+| `CannibalRetreatFromRaid` (1) | the platoon has a squad, the leader is not in a town of its faction (status `+0x88` town's faction), and a member carries someone (`+0x348`) | the squad leader exists and its current town's faction (Town vfunc 0x58) is the platoon's: any town of its faction, no distance, home or time test; false with no leader or no town (its scan of the members for a carrier jumps back to the leader's own town and cannot change the answer); **Verified** by disassembly, `FUN_140288740` | mission town = the base package's (the platoon's home town), else the nearest town of its faction (`FUN_140927bb0`) |
 | `..._nearestNest` (25) | as 1 | as 1 | always the nearest town of its faction |
 | `GoOutOnPatrol_Cannibal` (4) | not while the cages its first able member knows are all full (`FUN_1405a1ab0`); else as `GoOutOnPatrol` | as `GoOutOnPatrol` | as `GoOutOnPatrol` |
 | `Package_CannibalsAtHome` (27, a `Package_HangAroundBar` subclass) | the platoon's current town is its home town; or a town of a faction not hostile to it whose town vfunc `0x2d0(3, leader)` list (its BD_BAR buildings) is not empty (**Observed**) | a player-owned town with town vfunc `0x298` false, else not can-start | the bar package's table pick |

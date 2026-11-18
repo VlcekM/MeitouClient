@@ -3140,8 +3140,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly HashSet<int> _looked = [];
 
     /// <summary>
-    /// How long the war manager's phase package runs as the platoon's override before it is installed afresh (<c>FUN_140272240</c> called with 24
-    /// game hours, <b>Verified</b>).
+    /// The contract time the war manager's phase package is installed with (<c>FUN_140272240</c> called with 24 game hours, <b>Verified</b>); only
+    /// the classes whose finished test reads it end there (<see cref="Blackboard.PhaseContract"/>).
     /// </summary>
     const double PhaseHours = 24;
 
@@ -3342,15 +3342,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             is { } id ? data.Ai.Package(id) : null;
 
     /// <summary>
-    /// Installs the phase package as the blackboard's 24 h timed override when it holds none or another (the war manager's check on every visit,
-    /// <c>FUN_140272570</c>, <b>Verified</b>); the override running out ends it (<see cref="Blackboard.Update"/>), the slots choose that visit and
-    /// the same record installs it afresh on the next.
+    /// Installs the phase package as the blackboard's override when it holds none or another (the war manager's check on every visit,
+    /// <c>FUN_140272570</c>, <b>Verified</b>), with the 24 h contract time the original sets (+0x218). It ends by its class's finished test
+    /// (<see cref="Blackboard.PhaseContract"/>), never by the campaign: one that ends is installed afresh on the next visit while the campaign
+    /// still gives it (Retreat and refresh on an intact platoon is installed and ended on every visit, its template's packages running between,
+    /// as in the original), and one the campaign no longer gives (removed, or the platoon released) stays until its test passes. An override that
+    /// is already the package (a saved one) is marked as the phase's.
     /// </summary>
-    void InstallPhasePackage(World world, Blackboard board, AiPackage package)
-    {
-        if (board.Contract?.Id == package.Id) return;
-        board.StartContract(package, world.GameHours, PhaseHours, _rules);
-    }
+    void InstallPhasePackage(World world, Blackboard board, AiPackage package) =>
+        board.StartContract(package, world.GameHours, PhaseHours, _rules, phase: true);
 
     /// <summary>
     /// The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it,

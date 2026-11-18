@@ -125,7 +125,9 @@ public sealed partial class AiSystem
     /// </summary>
     internal bool CaptiveFinished(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind) => kind switch
     {
-        // Slot 13 (FUN_140288740): the leader is in a town of its faction.
+        // Slot 13 (FUN_140288740, Verified by disassembly): the squad leader's current town is of the platoon's faction; no distance, home or time
+        // test, and false without a town (its scan of the members for a carrier cannot change that). Engine choice: a squad whose members are all
+        // dead (the only one Meitou leaves led by a corpse, SquadRegistry.Refresh) finishes it.
         PackageClass.CannibalRetreat => LeaderTown(world, squad).Faction == squad.Faction || !world.Characters.IsAlive(squad.Leader),
         PackageClass.CannibalsAtHome => !CaptiveCanStart(world, squad, board, package, kind),
 

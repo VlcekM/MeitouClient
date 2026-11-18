@@ -92,6 +92,18 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     public bool AnyRange { get; init; }
 
     /// <summary>
+    /// The PLATOON bool of a contract that is a campaign's phase package (<see cref="Blackboard.PhaseContract"/>: it ends by its class's finished
+    /// test, not its <c>jobhr</c>; engine key, written only when set, which the original ignores). A save without it (the original's own) loads
+    /// the contract as a timed one until its campaign gives it again (<c>AiSystem.InstallPhasePackage</c>).
+    /// </summary>
+    public const string PhaseKey = "meitou phase package";
+
+    /// <summary>
+    /// The contract is a campaign's phase package (<see cref="Blackboard.PhaseContract"/>).
+    /// </summary>
+    public bool Phase { get; init; }
+
+    /// <summary>
     /// What <paramref name="board"/> holds of it; null when it runs neither.
     /// </summary>
     public static AiSave? Of(Blackboard? board)
@@ -107,6 +119,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
             TargetTown = contract ? b.Destination : CampaignTown.None,
             TargetIsTown = b.Contract?.Signal == AiSystem.DefendBaseSignal,
             AnyRange = b.MissionAnyRange,
+            Phase = b.PhaseContract,
         };
     }
 
@@ -123,6 +136,8 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         if (ai?.Contract is not null) platoon.Floats[EndKey] = (float)ai.ContractEnd;
         if (ai is { Contract: not null, AnyRange: true }) platoon.Bools[AnyRangeKey] = true;
         else platoon.Bools.Remove(AnyRangeKey);
+        if (ai is { Contract: not null, Phase: true }) platoon.Bools[PhaseKey] = true;
+        else platoon.Bools.Remove(PhaseKey);
 
         // A record without a contract keeps a null handle as it was read (its other parts are stale values).
         var target = ai?.Contract is null
@@ -176,6 +191,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
 
         Hand HandOf(string key) => contract is null ? Hand.Null : Hand.Read(platoon, key);
         bool anyRange = contract is not null && platoon.Bools.GetValueOrDefault(AnyRangeKey);
+        bool phase = contract is not null && platoon.Bools.GetValueOrDefault(PhaseKey);
         return new AiSave(contract, platoon.Floats.GetValueOrDefault(EndKey), replacement)
         {
             TargetHand = HandOf(TargetKey),
@@ -183,6 +199,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
             MissionTownHand = HandOf(MissionTownKey),
             TargetTownHand = HandOf(TargetTownKey),
             AnyRange = anyRange,
+            Phase = phase,
         };
     }
 
@@ -201,6 +218,6 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         var employer = Employer.IsNone ? characterOf?.Invoke(EmployerHand) ?? CharacterId.None : Employer;
         var town = MissionTown.IsNone ? townOf?.Invoke(MissionTownHand) ?? CampaignTown.None : MissionTown;
         var targetTown = TargetTown.IsNone ? townOf?.Invoke(TargetTownHand) ?? CampaignTown.None : TargetTown;
-        board.ResumeContract(contract, ContractEnd, rules, target, AnyRange, employer, town, targetTown);
+        board.ResumeContract(contract, ContractEnd, rules, target, AnyRange, employer, town, targetTown, Phase);
     }
 }

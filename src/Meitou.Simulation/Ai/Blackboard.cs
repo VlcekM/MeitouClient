@@ -112,6 +112,13 @@ public static class PackageClasses
         22 => PackageClass.Refugee,
         _ => PackageClass.Unbuilt,
     };
+
+    /// <summary>
+    /// The class package signal <paramref name="signal"/> is built as when it runs as the blackboard's override (a contract, a campaign's phase
+    /// package): signal 0 becomes 33, <c>Contract_Timed</c> (<c>FUN_140272240</c>, <b>Verified</b>), so a plain package given that way runs for its
+    /// hours; every other signal keeps its class.
+    /// </summary>
+    public static PackageClass OfOverride(int signal) => signal == 0 ? PackageClass.Contract : Of(signal);
 }
 
 /// <summary>
@@ -260,6 +267,15 @@ public sealed class Blackboard
     /// The game hours (<see cref="World.GameHours"/>) the contract ends at.
     /// </summary>
     public double ContractEnd { get; private set; }
+
+    /// <summary>
+    /// The contract is a campaign's phase package (<c>AiSystem.InstallPhasePackage</c>): it ends by its class's finished test, as the original ends
+    /// every override (<c>FUN_140272570</c> asks the override's +0x68 on each visit, <b>Verified</b>), so a retreat outlives its campaign until its
+    /// own test passes; <see cref="ContractEnd"/> is read only by the contract classes and <c>Contract_Timed</c> (<see cref="PackageClasses.OfOverride"/>).
+    /// A contract dialogue or a code mod started ends at its hours whatever its class (engine choice). Saved as
+    /// <see cref="Saving.AiSave.PhaseKey"/>; hashed only while set.
+    /// </summary>
+    public bool PhaseContract { get; private set; }
 
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
@@ -473,21 +489,35 @@ public sealed class Blackboard
     public int RefugeeTarget { get; set; } = -1;
 
     /// <summary>
-    /// One pass of the original's package choice (docs/game/ai.md "Blackboard update", Verified): a running contract first; then slots from the
-    /// highest down until one reports success. In a slot the list is scanned in order: the current package stays while it is not finished, or hands
-    /// over to its <c>Leads to</c> package when it is; an entry before it that can start pre-empts it; a lone slot-0 package starts even when it
-    /// cannot. Without <paramref name="rules"/> every package keeps the base class's rules except that only plain packages can start.
+    /// One pass of the original's package choice (docs/game/ai.md "Blackboard update", Verified): a running contract first, until it has ended
+    /// (<see cref="ContractEnded"/>); then slots from the highest down until one reports success. In a slot the list is scanned in order: the
+    /// current package stays while it is not finished, or hands over to its <c>Leads to</c> package when it is; an entry before it that can start
+    /// pre-empts it; a lone slot-0 package starts even when it cannot. Without <paramref name="rules"/> every package keeps the base class's rules
+    /// except that only plain packages can start.
     /// </summary>
     public void Update(IPackageRules? rules = null, double hours = 0)
     {
         if (Contract is { } contract)
         {
-            if (hours < ContractEnd) return;
+            if (!ContractEnded(contract, rules, hours)) return;
             EndRunning(contract);
         }
 
         foreach (var (slot, list) in _slots.Reverse())
             if (TrySlot(slot, list, rules)) return;
+    }
+
+    /// <summary>
+    /// Whether the running contract has ended at <paramref name="hours"/>: at its <see cref="ContractEnd"/>; a campaign's phase package
+    /// (<see cref="PhaseContract"/>) by the finished test of the class it is built as (<see cref="PackageClasses.OfOverride"/>: the contract classes
+    /// read the hours, a plain one never finishes). An unbuilt class keeps the hours (engine stand-in), as does a board with no rules.
+    /// </summary>
+    bool ContractEnded(AiPackage contract, IPackageRules? rules, double hours)
+    {
+        var kind = PackageClasses.OfOverride(contract.Signal);
+        if (!PhaseContract || rules is null || kind is PackageClass.Contract or PackageClass.Unbuilt) return hours >= ContractEnd;
+
+        return kind != PackageClass.Plain && rules.Finished(this, contract, kind);
     }
 
     /// <summary>
@@ -604,18 +634,25 @@ public sealed class Blackboard
     /// it). It takes precedence over the slots until it ends; then the slots choose again. Starting the contract already running does nothing (end
     /// time and target kept); a different one replaces it and the old one ends first, its end talk to the old target (<c>FUN_140272240</c>,
     /// <c>FUN_14026a110</c>, <b>Verified</b>); to start it again, end it first (<see cref="EndContract"/>). <paramref name="anyRange"/>: see
-    /// <see cref="MissionAnyRange"/>.
+    /// <see cref="MissionAnyRange"/>. <paramref name="phase"/>: a campaign's phase package, which ends by its class's test
+    /// (<see cref="PhaseContract"/>); given for the contract already running, it marks that one so.
     /// </summary>
     public void StartContract(AiPackage package, double now, double hours, IPackageRules? rules = null, CharacterId? target = null,
-        bool anyRange = false)
+        bool anyRange = false, bool phase = false)
     {
         if (Contract is { } running)
         {
-            if (running.Id == package.Id) return;
+            if (running.Id == package.Id)
+            {
+                PhaseContract |= phase;
+                return;
+            }
+
             _ended = (running, MissionEmployer);
         }
 
         Contract = package;
+        PhaseContract = phase;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         ContractTown = Population.CampaignTown.None;
         MissionTarget = MissionEmployer = target ?? CharacterId.None;
@@ -643,6 +680,7 @@ public sealed class Blackboard
     {
         _ended = (contract, MissionEmployer);
         Contract = null;
+        PhaseContract = false;
         ContractTown = Population.CampaignTown.None;
         MissionTarget = MissionEmployer = CharacterId.None;
         MissionAnyRange = false;
@@ -672,12 +710,13 @@ public sealed class Blackboard
     /// save named none, or a character that is not in the world) for <paramref name="employer"/> (none: the target). As the original's load
     /// (<c>FUN_140272c20</c>), the package starts first, then the saved state replaces what the start set: the blackboard's target town
     /// <paramref name="targetTown"/> (<see cref="Destination"/>) when the save names one, and the package's mission town <paramref name="town"/>
-    /// (<see cref="ContractTown"/>; none when the save names none).
+    /// (<see cref="ContractTown"/>; none when the save names none). <paramref name="phase"/>: see <see cref="PhaseContract"/>.
     /// </summary>
     public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false,
-        CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null)
+        CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null, bool phase = false)
     {
         Contract = package;
+        PhaseContract = phase;
         ContractEnd = end;
         MissionTarget = target ?? CharacterId.None;
         MissionEmployer = employer is { IsNone: false } hirer ? hirer : MissionTarget;
@@ -769,6 +808,7 @@ public sealed class Blackboard
         if (!MissionTarget.IsNone) hasher.Add(MissionTarget);
         if (!MissionEmployer.IsNone && MissionEmployer != MissionTarget) hasher.Add(MissionEmployer);   // differs only for a town mission
         if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
+        if (PhaseContract) hasher.Add(0x50686173);   // only a campaign sets it, so worlds without one hash as before
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
         hasher.Add(Route.Length);
