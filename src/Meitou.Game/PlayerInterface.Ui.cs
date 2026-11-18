@@ -271,17 +271,22 @@ sealed partial class PlayerInterface
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
 
     /// <summary>
+    /// Registers a code mod's extension with its mod's folder, under which its map marker images lie (docs/modding.md "Map markers").
+    /// </summary>
+    public IDisposable RegisterUiExtension(IUiExtension extension, string? folder) => _uiHost.Register(extension, folder);
+
+    /// <summary>
     /// Whether any UI extension adds markers to the world map.
     /// </summary>
     internal bool HasModMapMarkers => _uiHost.HasMapMarkers;
 
     /// <summary>
-    /// The markers the UI extensions add to the world map (<see cref="UiHost.MapMarkers"/>), each group checked by <paramref name="knownGroup"/> and
-    /// each image file by <paramref name="knownImage"/>.
+    /// The markers the UI extensions add to the world map (<see cref="UiHost.MapMarkers(UiMapContext, Func{string, bool}, Func{string, string})"/>),
+    /// each group checked by <paramref name="knownGroup"/> and each image file judged by <paramref name="imageProblem"/>.
     /// </summary>
     internal IReadOnlyList<(string Owner, UiMapMarker Marker)> ModMapMarkers(UiMapContext context, Func<string, bool> knownGroup,
-        Func<string, bool> knownImage) =>
-        _uiHost.MapMarkers(context, knownGroup, knownImage);
+        Func<string, string?> imageProblem) =>
+        _uiHost.MapMarkers(context, knownGroup, imageProblem);
 
     /// <summary>
     /// The rows the interface extensions add to <paramref name="target"/>'s right-click menu (<see cref="UiHost.CharacterMenuVerbs"/>); none

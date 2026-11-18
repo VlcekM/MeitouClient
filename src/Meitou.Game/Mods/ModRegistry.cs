@@ -84,6 +84,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
     /// <summary>
+    /// The folder of the mod each interface extension belongs to (its map marker images are files under it).
+    /// </summary>
+    public Dictionary<IUiExtension, string> UiFolders { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
     /// The debug menu's commands.
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
@@ -175,6 +179,10 @@ sealed class ModRegistry
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
     /// <summary>
+    /// The folder of the mod each interface extension belongs to.
+    /// </summary>
+    public Dictionary<IUiExtension, string> UiFolders { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
     /// Every mod's debug menu commands, in load order.
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
@@ -243,6 +251,7 @@ sealed class ModRegistry
         foreach (var skill in r.Skills) ModSkills.Add(skill);
         foreach (var (effect, modifiers) in r.StatusEffects) StatusEffects.Add(effect, modifiers);
         Ui.AddRange(r.Ui);
+        foreach (var (extension, folder) in r.UiFolders) UiFolders[extension] = folder;
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);
         FactionLists.AddRange(r.FactionLists);

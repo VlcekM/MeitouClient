@@ -618,8 +618,11 @@ public sealed partial class UiPainter : IDisposable
     public void Draw(IReadOnlyList<UiControl> controls, int width, int height, Vector2 mouse, string? active, float minimumTextPixels = 0,
         DebugOverlay.OverlayPass? pass = null)
     {
+        // An icon forgotten while it decoded (ForgetIcon) is not uploaded.
         for (int uploads = 0; uploads < IconUploadsPerFrame && _decodedIcons.TryDequeue(out var icon); uploads++)
-            Upload(icon.Name, icon.Image);
+        {
+            if (_requestedIcons.Contains(icon.Name)) Upload(icon.Name, icon.Image);
+        }
         if (_skinsReleased) LoadSkinTextures();
 
         bool owns = pass is null;
@@ -1486,8 +1489,8 @@ public sealed partial class UiPainter : IDisposable
 
     /// <summary>
     /// Whether the image file <paramref name="path"/> (an item icon) is on the GPU and can be shown as an ImageBox's <c>ImageTexture</c> of <see
-    /// cref="IconTexture"/>. The first ask starts decoding it on a worker, <see cref="Draw"/> uploads it when done; a file that cannot be read stays
-    /// false.
+    /// cref="IconTexture"/>. The first ask starts decoding it on a worker, <see cref="Draw"/> uploads it when done; a file that cannot be read or
+    /// decoded, for whatever reason, stays false and counts as failed (<see cref="IconFailed"/>).
     /// </summary>
     public bool IconReady(string path)
     {
@@ -1501,14 +1504,33 @@ public sealed partial class UiPainter : IDisposable
                 {
                     _decodedIcons.Enqueue((name, TextureLoader.LoadFile(path, allMips: false).Levels[0]));
                 }
-                catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
+                catch (Exception)
                 {
+                    // Any failure (a file the decoder rejects throws other types too, a locked file UnauthorizedAccessException): never left
+                    // unobserved, and the icon stops counting as pending.
                     _failedIcons.TryAdd(name, true);
                 }
             });
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether the image file <paramref name="path"/>, asked for with <see cref="IconReady"/>, could not be read or decoded.
+    /// </summary>
+    public bool IconFailed(string path) => _failedIcons.ContainsKey(IconTexture(path));
+
+    /// <summary>
+    /// Frees the image file <paramref name="path"/>'s texture (a code mod's map marker image no marker shows any more); a later
+    /// <see cref="IconReady"/> reads it again.
+    /// </summary>
+    public void ForgetIcon(string path)
+    {
+        string name = IconTexture(path);
+        _requestedIcons.Remove(name);
+        _failedIcons.TryRemove(name, out _);
+        Forget(name);
     }
 
     /// <summary>

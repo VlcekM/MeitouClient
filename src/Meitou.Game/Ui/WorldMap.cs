@@ -329,9 +329,9 @@ sealed class WorldMap(PlayerInterface player)
     readonly Dictionary<string, bool> _knownGroups = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// A code mod marker's image file to whether it exists (<see cref="KnownImage"/>'s cache; made on the first image marker).
+    /// The code mods' marker image files: their checks and texture lifetime (made on the first frame with code mod markers).
     /// </summary>
-    Dictionary<string, bool>? _knownImages;
+    ModMarkerImages? _modImages;
 
     /// <summary>
     /// Mod to how many of its map markers this frame has named so far (<see cref="AddModMarkers"/>).
@@ -486,17 +486,6 @@ sealed class WorldMap(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether a code mod marker's image file exists, checked once per path (a file added while the game runs is not seen).
-    /// </summary>
-    bool KnownImage(string path)
-    {
-        _knownImages ??= new(StringComparer.Ordinal);
-        if (_knownImages.TryGetValue(path, out bool known)) return known;
-
-        return _knownImages[path] = Path.IsPathFullyQualified(path) && File.Exists(path);
-    }
-
-    /// <summary>
     /// A map marker of <paramref name="group"/> (or the image file <paramref name="image"/>, a code mod's), tinted and turned, with a place's
     /// tooltip; skipped when it lies outside the viewport.
     /// </summary>
@@ -642,7 +631,9 @@ sealed class WorldMap(PlayerInterface player)
     {
         if (!player.HasModMapMarkers) return;
 
-        var markers = player.ModMapMarkers(new UiMapContext(snapshot, frame.Level), KnownGroup, KnownImage);
+        _modImages ??= new(player);
+        var markers = player.ModMapMarkers(new UiMapContext(snapshot, frame.Level), KnownGroup, _modImages.Problem);
+        _modImages.EndFrame();
 
         // Counted per mod, not per run of a mod's markers: a mod's sources need not sit together in registration order.
         _modMarkerCounts.Clear();

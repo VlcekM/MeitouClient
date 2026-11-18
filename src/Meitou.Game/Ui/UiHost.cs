@@ -17,9 +17,9 @@ public sealed record UiMapMarker(System.Numerics.Vector2 At, string Group, Syste
     string? Tooltip = null, int FromLevel = 0, float Scale = 1)
 {
     /// <summary>
-    /// An image file drawn in place of the group's picture (the full path of a file the game can read, a PNG or DDS from the mod's folder:
-    /// <c>Path.Combine(context.Folder, "camp.png")</c>), tinted by <see cref="Colour"/>; null draws the group. It takes the group's size when
-    /// <see cref="Group"/> names one of the set (empty: none), else 32 by 32 pixels, times <see cref="Scale"/>.
+    /// An image file drawn in place of the group's picture: a path relative to the mod's folder (<c>"camp.png"</c>, <c>"icons/camp.png"</c>), a PNG or
+    /// DDS file of at most 8 MB and 1024 pixels a side, tinted by <see cref="Colour"/>; null draws the group. It is stretched to the group's size
+    /// when <see cref="Group"/> names one of the set (empty: none), else to 32 by 32 pixels, times <see cref="Scale"/>.
     /// </summary>
     public string? Image { get; init; }
 }
@@ -287,6 +287,11 @@ public sealed class UiHost
     readonly HashSet<string> _extensions = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Where the extensions' map marker images may come from, and the image problems already reported.
+    /// </summary>
+    readonly MarkerImagePaths _markerImages = new();
+
+    /// <summary>
     /// The world map marker sources, with their owners, in registration order.
     /// </summary>
     readonly List<(string Owner, Func<UiMapContext, IEnumerable<UiMapMarker>> Markers)> _mapMarkers = [];
@@ -310,7 +315,13 @@ public sealed class UiHost
     /// Registers <paramref name="extension"/> (a valid id, the host's API version, not registered yet); its scope's disposal removes everything it
     /// added.
     /// </summary>
-    public IDisposable Register(IUiExtension extension)
+    public IDisposable Register(IUiExtension extension) => Register(extension, null);
+
+    /// <summary>
+    /// Registers <paramref name="extension"/> as <see cref="Register(IUiExtension)"/> does, with the folder of the code mod it belongs to (null:
+    /// none), under which its map marker images lie.
+    /// </summary>
+    public IDisposable Register(IUiExtension extension, string? folder)
     {
         ArgumentNullException.ThrowIfNull(extension);
 
@@ -319,6 +330,7 @@ public sealed class UiHost
         if (extension.ApiVersion != ApiVersion)
             throw new NotSupportedException($"UI extension {id} requires API {extension.ApiVersion}; host provides {ApiVersion}.");
         if (!_extensions.Add(id)) throw new InvalidOperationException($"UI extension already registered: {id}");
+        if (folder is not null) _markerImages.SetFolder(id, folder);
 
         var scope = new UiRegistration(this, id);
         try
@@ -425,6 +437,7 @@ public sealed class UiHost
         _controlOverrides.RemoveAll(o => o.Owner == owner);
         _contributions.RemoveAll(c => c.Owner == owner);
         _mapMarkers.RemoveAll(m => m.Owner == owner);
+        _markerImages.Remove(owner);
         _menuVerbs.RemoveAll(v => v.Owner == owner);
         _extensions.Remove(owner);
     }
@@ -513,13 +526,21 @@ public sealed class UiHost
 
     /// <summary>
     /// The markers the extensions add to the world map, with their owners, in registration order (a copy of the sources is walked, so a source may
-    /// register or dispose). A source that throws, or gives a marker whose group <paramref name="knownGroup"/> does not know (with an image: whose
-    /// image file <paramref name="knownImage"/> does not know, or whose group is neither empty nor known; without <paramref name="knownImage"/> no
-    /// image is known), with a point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2, is reported once as a
-    /// <see cref="Diagnostic"/> and dropped (it is asked every frame the map is shown).
+    /// register or dispose). A source that throws, or gives a marker whose group <paramref name="knownGroup"/> does not know, with a point, tint or
+    /// size not finite, a size not above 0 or a zoom level outside 0 to 2, is reported once as a <see cref="Diagnostic"/> and dropped (it is asked
+    /// every frame the map is shown). Markers with an image are left out here.
+    /// </summary>
+    public IReadOnlyList<(string Owner, UiMapMarker Marker)> MapMarkers(UiMapContext context, Func<string, bool> knownGroup) =>
+        MapMarkers(context, knownGroup, null);
+
+    /// <summary>
+    /// The markers as the two-argument overload gives them, and those with an image file: the image is resolved under the owner's mod folder
+    /// (<see cref="MarkerImagePaths"/>) and judged by <paramref name="imageProblem"/> (null: fine, else why not), and the marker comes back with the
+    /// full path. A marker whose image cannot be shown is left out alone, its source kept, and each such problem is reported once as a
+    /// <see cref="Diagnostic"/>; an image marker's group must be empty or known.
     /// </summary>
     public IReadOnlyList<(string Owner, UiMapMarker Marker)> MapMarkers(UiMapContext context, Func<string, bool> knownGroup,
-        Func<string, bool>? knownImage = null)
+        Func<string, string?>? imageProblem)
     {
         var markers = new List<(string Owner, UiMapMarker Marker)>();
         foreach (var entry in _mapMarkers.ToArray())
@@ -527,14 +548,15 @@ public sealed class UiHost
             try
             {
                 var added = entry.Markers(context).ToList();
-                int bad = added.FindIndex(m => !ValidMarker(m, knownGroup, knownImage));
+                int bad = added.FindIndex(m => !ValidMarker(m, knownGroup));
                 if (bad >= 0)
                 {
                     throw new InvalidOperationException(
-                        $"A map marker needs a known group or image file, a finite point and tint, and a size: {added[bad]}.");
+                        $"A map marker needs a known group or an image, a finite point and tint, and a size: {added[bad]}.");
                 }
 
-                markers.AddRange(added.Select(m => (entry.Owner, m)));
+                foreach (var m in added)
+                    if (Shown(entry.Owner, m, imageProblem) is { } shown) markers.Add((entry.Owner, shown));
             }
             catch (Exception e)
             {
@@ -547,24 +569,31 @@ public sealed class UiHost
     }
 
     /// <summary>
-    /// Whether a map marker names a picture that is known (<see cref="KnownPicture"/>) and has a finite point and tint, a finite size above 0 and
-    /// a zoom level from 0 to 2.
+    /// Whether a map marker's group is known (with an image: empty or known; without, not blank and known) and it has a finite point and tint, a
+    /// finite size above 0 and a zoom level from 0 to 2.
     /// </summary>
-    static bool ValidMarker(UiMapMarker? m, Func<string, bool> knownGroup, Func<string, bool>? knownImage) =>
-        m is not null && KnownPicture(m, knownGroup, knownImage) && float.IsFinite(m.At.X) && float.IsFinite(m.At.Y)
+    static bool ValidMarker(UiMapMarker? m, Func<string, bool> knownGroup) =>
+        m is not null && KnownGroup(m, knownGroup) && float.IsFinite(m.At.X) && float.IsFinite(m.At.Y)
         && float.IsFinite(m.Colour.X + m.Colour.Y + m.Colour.Z + m.Colour.W)
         && float.IsFinite(m.Scale) && m.Scale > 0 && m.FromLevel is >= 0 and <= 2;
 
     /// <summary>
-    /// Whether a marker's picture is known: without an image its group (not blank) is known to <paramref name="knownGroup"/>; with one, the file is
-    /// known to <paramref name="knownImage"/> and the group, which then only sizes it, is empty or known.
+    /// Whether a marker's group is known: without an image it must name one of the set; with one it only sizes the image, so it may be empty.
     /// </summary>
-    static bool KnownPicture(UiMapMarker m, Func<string, bool> knownGroup, Func<string, bool>? knownImage)
-    {
-        if (m.Image is null) return !string.IsNullOrWhiteSpace(m.Group) && knownGroup(m.Group);
+    static bool KnownGroup(UiMapMarker m, Func<string, bool> knownGroup) =>
+        m.Image is null ? !string.IsNullOrWhiteSpace(m.Group) && knownGroup(m.Group) : string.IsNullOrEmpty(m.Group) || knownGroup(m.Group);
 
-        bool groupFits = string.IsNullOrEmpty(m.Group) || knownGroup(m.Group);
-        return groupFits && knownImage is not null && !string.IsNullOrWhiteSpace(m.Image) && knownImage(m.Image);
+    /// <summary>
+    /// <paramref name="m"/> as shown: as it is without an image, with its image's full path, or null (reported once) when the image cannot be shown.
+    /// </summary>
+    UiMapMarker? Shown(string owner, UiMapMarker m, Func<string, string?>? imageProblem)
+    {
+        if (m.Image is null) return m;
+        if (_markerImages.Resolve(owner, m.Image, imageProblem, out string full) is not { } problem) return m with { Image = full };
+
+        if (_markerImages.FirstReport(owner, m.Image, problem))
+            Diagnostic?.Invoke(new UiDiagnostic(owner, "map marker image (left out)", new InvalidOperationException($"{m.Image}: {problem}")));
+        return null;
     }
 
     /// <summary>

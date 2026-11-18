@@ -364,6 +364,7 @@ public sealed class ModContext
         CheckOpen();
         ArgumentNullException.ThrowIfNull(extension);
         Pending.Ui.Add(extension);
+        Pending.UiFolders[extension] = Folder;
     }
 
     /// <summary>
