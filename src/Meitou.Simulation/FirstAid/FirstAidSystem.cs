@@ -356,6 +356,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// Whether the character kneels at a treatment (task <see cref="CharacterTask.Treat"/>, <see cref="CharacterCold.TreatKneels"/>): its leg coming
+    /// back up does not stand it up (no get-up hold, <c>CombatSystem</c>, no <c>standing up 3</c>, <see cref="AnimationSystem"/>); it stands when the
+    /// treatment ends. <b>Observed</b> in the original for a character treating its own leg (docs/game/ai-tasks.md "Medic jobs", Fixing Legs).
+    /// </summary>
+    public static bool AtTreatment(CharacterCold cold, CharacterTask task) => task == CharacterTask.Treat && cold.TreatKneels;
+
+    /// <summary>
     /// Ends a treatment by itself (serial phases; <see cref="TaskEnd.Done"/>): back to the task before it, path dropped.
     /// </summary>
     static void End(World world, int slot)
