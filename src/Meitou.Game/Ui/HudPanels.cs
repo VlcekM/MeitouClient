@@ -720,10 +720,11 @@ sealed class HudPanels(PlayerInterface player)
     }
 
     /// <summary>
-    /// The panel's rows to bind: the layout's nine, one more for each code mod's meter, and as many as <paramref name="characterRows"/> (a character
-    /// whose race has eight or more body parts), added to the HUD layout when it lacks them (the mods register after the interface is loaded; the
-    /// body is known only when it is shown); at least the rows the layout was given earlier, so those hide when empty. A human, an animal and every
-    /// base-game race fit nine rows with their meters, so the count is the layout's nine plus the meters, as without bodies of more parts.
+    /// The panel's rows to bind: the layout's nine, one more for each code mod's meter, and as many as <paramref name="characterRows"/> (Blood or
+    /// Oil, each body part, Hunger and the meter readings of the shown character, past nine for a race of more parts), added to the HUD layout when it
+    /// lacks them (the mods register after the interface is loaded; the body is known only when it is shown); at least the rows the layout was given
+    /// earlier, so those hide when empty. A human, an animal and every base-game race fit nine rows with their meters, so the count is the layout's
+    /// nine plus the meters, as without bodies of more parts.
     /// </summary>
     int MedicalBars(int characterRows)
     {

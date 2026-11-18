@@ -59,26 +59,48 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Writes <c>meitou limb&lt;k&gt;</c> (Meitou-only, docs/formats/save.md "Limbs") for each extra limb that is not original, and removes it for
-    /// one that is again (the F10 heal), so a record read from a save keeps no stale state. The original reads its keys by name, so it ignores
-    /// these; the <c>limbs</c> value keeps the first part of each slot, as the original's one part per slot.
+    /// Writes <c>meitou limb&lt;k&gt;</c> (Meitou-only, docs/formats/save.md "Limbs") for each extra limb that is not original, after removing every
+    /// such key the record already has: a record read from a save is written again, and its keys may name positions that hold other parts now (an
+    /// extra limb healed, or a mod's part dropped). The original reads its keys by name, so it ignores these; the <c>limbs</c> value keeps the first
+    /// part of each slot, as the original's one part per slot.
     /// </summary>
     void WriteExtraLimbs(IDictionary<string, int> ints)
     {
+        RemoveExtraLimbKeys(ints);
         for (int k = 0; k < _parts.Length; k++)
-        {
-            if (!IsExtraLimb(k)) continue;
+            if (IsExtraLimb(k) && _parts[k].Limb != LimbState.Original) ints[ExtraLimbKey + k] = (int)_parts[k].Limb;
+    }
 
-            string key = ExtraLimbKey + k;
-            if (_parts[k].Limb == LimbState.Original) ints.Remove(key);
-            else ints[key] = (int)_parts[k].Limb;
-        }
+    /// <summary>
+    /// Removes every <c>meitou limb&lt;k&gt;</c> key (the prefix and digits only) from <paramref name="ints"/>; a record without one, as every
+    /// base-game character's, is left as it is.
+    /// </summary>
+    static void RemoveExtraLimbKeys(IDictionary<string, int> ints)
+    {
+        List<string>? stale = null;
+        foreach (string key in ints.Keys)
+            if (IsExtraLimbKey(key)) (stale ??= []).Add(key);
+
+        if (stale is null) return;
+        foreach (string key in stale) ints.Remove(key);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is <c>meitou limb</c> followed by one or more digits.
+    /// </summary>
+    static bool IsExtraLimbKey(string key)
+    {
+        if (key.Length <= ExtraLimbKey.Length || !key.StartsWith(ExtraLimbKey, StringComparison.Ordinal)) return false;
+
+        foreach (char c in key.AsSpan(ExtraLimbKey.Length))
+            if (c is < '0' or > '9') return false;
+        return true;
     }
 
     /// <summary>
     /// Whether part <paramref name="index"/> is an extra limb, one the <c>limbs</c> value has no bits for: a part of limb slot 0 to 3 after the first
-    /// of that slot (a second left arm), or a part whose <c>body part type</c> is none of the four (a tail, Meitou-only: the original reads past its
-    /// four-entry table for one). No base-game race has either.
+    /// of that slot (a second left arm), or a part whose <c>body part type</c> is none of the four (a tail, Meitou-only,
+    /// <see cref="BodyPartTemplate.HasBaseType"/>). No base-game race has either.
     /// </summary>
     public bool IsExtraLimb(int index)
     {
@@ -220,19 +242,36 @@ public sealed partial class MedicalState
             Bleeding = floats.GetValueOrDefault("bleeding"),
             Decapitated = bools.GetValueOrDefault(DecapitatedKey),
         };
+        state.DropMisplacedLimbKeys();
         foreach (var p in state.Parts) p.WasDown = p.IsDown;
         return state;
     }
 
     /// <summary>
-    /// The state saved for part <paramref name="k"/> as an extra limb (<see cref="WriteExtraLimbs"/>): a stump or crushed as saved; replaced loads as
-    /// a stump, as the <c>limbs</c> value's replaced slot without its item does (an extra limb takes no prosthetic); original without the key.
+    /// The state saved for part <paramref name="k"/> as an extra limb (<see cref="WriteExtraLimbs"/>): 1 a stump, 3 crushed; original without the
+    /// key or with any other value (the writer writes no other: an extra limb takes no prosthetic, so it is never 2). Whether part k is an extra
+    /// limb is known only once the parts are sorted (<see cref="DropMisplacedLimbKeys"/>).
     /// </summary>
     static LimbState ExtraLimbState(IReadOnlyDictionary<string, int>? ints, int k)
     {
         if (ints is null || !ints.TryGetValue(ExtraLimbKey + k, out int saved)) return LimbState.Original;
 
-        var state = (LimbState)(saved & 3);
-        return state == LimbState.Replaced ? LimbState.Stump : state;
+        return saved switch
+        {
+            (int)LimbState.Stump => LimbState.Stump,
+            (int)LimbState.Crushed => LimbState.Crushed,
+            _ => LimbState.Original,
+        };
+    }
+
+    /// <summary>
+    /// Keeps a just-read <c>meitou limb&lt;k&gt;</c> state only on a part that is an extra limb in the loaded order and not vital: one that lands on
+    /// a slot's first part, the head or a torso part (a mod's part dropped or changed, a hand-edited key) is undone. Runs before
+    /// <see cref="ApplySavedLimbs"/>, so every part is still original unless a key set it.
+    /// </summary>
+    void DropMisplacedLimbKeys()
+    {
+        for (int i = 0; i < _parts.Length; i++)
+            if (_parts[i].Limb != LimbState.Original && (!IsExtraLimb(i) || _parts[i].Template.Vital)) _parts[i].Limb = LimbState.Original;
     }
 }

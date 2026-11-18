@@ -234,8 +234,8 @@ holds refuses the second mod.
   `meter.Set(cold, reading)` (the character's own partition in a parallel phase) and hides it with `Clear`; layers are width fractions clamped to
   0..1, drawn as a part's green, yellow and red. A selected or inspected character's readings are published with the snapshot; not saved, not
   hashed, read by no system, so the mod keeps its value (`IModSaveData`) and sets the reading again after a load. The layout has nine rows,
-  which a human fills; each meter adds a copy of the ninth, as does each row past nine that a shown character's body needs (a race of eight or more
-  parts), and more than nine rows share the nine rows' height. A label another meter has
+  which a human fills; each meter adds a copy of the ninth, as does each row past nine that a shown character needs (Blood or Oil, each body part,
+  Hunger and its meter readings), and more than nine rows share the nine rows' height. A label another meter has
   (case-insensitive), one over 32 characters or a fifth meter of all mods together refuses the mod. A building's rows never show meters.
 - **Task bars:** `cold.ModTaskBar = new TaskBar(caption, progress)` shows the floating bar the game draws over a character picking a lock, with
   the mod's caption (a message of the game's catalog shows translated, as the game's own; any other as given) and its fill (0..1, clamped; not a

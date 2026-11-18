@@ -368,11 +368,15 @@ Meitou-only bool `meitou decapitated` on MEDICAL_STATE, written only when true (
 A race may list more than one part in a limb slot (a second left arm: an ARM part whose `collapse part` is 4 again; none in the base game). Meitou's `limbs`
 bits then hold the slot's first part (in [part order](../game/character-stats.md#part-order)), the one a load applies them to. Each later part of the
 slot, and each part whose `body part type` is not 0 to 3 (a tail, [other shapes](../game/character-stats.md#bodies-of-other-shapes-meitou)), that is
-not original gets a Meitou-only int `meitou limb<k>` on MEDICAL_STATE (k the part's index, as in `sid<k>`; value the state, 1 stump or 3 crushed; a 2
-loads as a stump), removed when the part is original again. A body with one part per slot and no other type, as every base-game race (probe of the 53
-races, 2026-11-17), writes no such key and the same `limbs` value as before. **Observed** (2026-11-17, scratch `WriteSave` / `ReadSave` /
-`ApplySavedLimbs` round trips: a four-armed body's replaced upper and stumped lower left arm, and a cut-off tail, load as they were; the 256 limb-state
-combinations of a human body give the same `limbs` value as OR-ing the parts and no key).
+not original gets a Meitou-only int `meitou limb<k>` on MEDICAL_STATE (k the part's index, as in `sid<k>`; value the state, 1 stump or 3 crushed).
+A save first removes every `meitou limb<digits>` key of the record (a loaded record is written again, and an old key may name a position that holds
+another part now) and then writes the current ones. A load keeps a key only when it is 1 or 3 and the part it names is, in the loaded order, an extra
+part of a slot or of another type and not vital; any other key is ignored. A body with one part per slot and no other type, as every base-game race
+(probe of the 53 races, 2026-11-17), writes no such key and the same `limbs` value as before. **Observed** (2026-11-17 and 2026-11-18, scratch
+`WriteSave` / `ReadSave` / `ApplySavedLimbs` round trips on one reused set of record keys: a four-armed body's replaced upper and stumped lower left arm,
+and a cut-off tail, load as they were; with the lower arms' records then gone, three save and load rounds leave the remaining arms whole and the
+record with no `meitou limb` key; keys on the head and a malformed value load as nothing; the 256 limb-state combinations of a human body give the
+same `limbs` value as OR-ing the parts and no key).
 A removed prosthetic in an inventory keeps its `dam`, `wear`, `stun` floats (`SaveItem.Damage`/`Wear`/`Stun`).
 
 ### Player platoons (Meitou mapping)

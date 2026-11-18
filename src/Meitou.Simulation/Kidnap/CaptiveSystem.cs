@@ -1836,7 +1836,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb is announced to the renderer
-    /// and the character cries event 70 (leg) or 71 (arm). The limb's item drops when <paramref name="limbDrops"/>: the rack's does
+    /// and the character cries event 70 (leg) or 71 (arm; none for a part of a type outside the four,
+    /// <see cref="Data.Gameplay.Dialogue.DialogueEvents.LostLimb"/>). The limb's item drops when <paramref name="limbDrops"/>: the rack's does
     /// (<c>FUN_14029af90</c> severs with the item flag 1), an eaten one's does not (<c>FUN_140650370</c>: 0), <b>Verified</b> by decompile.
     /// </summary>
     static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events, bool limbDrops)

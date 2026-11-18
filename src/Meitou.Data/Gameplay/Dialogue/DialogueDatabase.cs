@@ -60,9 +60,14 @@ public static class DialogueEvents
     public static readonly int[] Sight = [3, 4, 17, 27, 34, 36, 40, 66, 67];
 
     /// <summary>
-    /// 70 LOST_LEG and 71 LOST_ARM: what a character cries when a limb is cut off.
+    /// 70 LOST_LEG: what a character cries when a leg is cut off.
     /// </summary>
-    public const int LostLeg = 70, LostArm = 71;
+    public const int LostLeg = 70;
+
+    /// <summary>
+    /// 71 LOST_ARM: what a character cries when any other limb of the four types is cut off.
+    /// </summary>
+    public const int LostArm = 71;
 
     /// <summary>
     /// The event a character cries when <paramref name="part"/> is cut off: <see cref="LostLeg"/> for the leg slots 2 and 3, else
