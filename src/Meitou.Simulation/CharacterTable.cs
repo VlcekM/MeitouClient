@@ -1370,9 +1370,15 @@ public sealed class CharacterCold
     public string? OperateFunctionality { get; set; }
 
     /// <summary>
-    /// The ITEM the operator holds while its operate task runs (the functionality's <c>special tool</c>); derived, not hashed.
+    /// The ITEM the operator holds at its machine (the functionality's <c>special tool</c>, while <see cref="OperateToolHeld"/>); derived, not hashed.
     /// </summary>
     public string? OperateTool { get; set; }
+
+    /// <summary>
+    /// The operator has reached its machine and holds <see cref="OperateTool"/>: not on the walk there or a haul trip (the original's walk is
+    /// task 1 Moving, before <c>Task_OperateMachine</c> attaches the tool); derived, not hashed.
+    /// </summary>
+    public bool OperateToolHeld { get; set; }
 
     /// <summary>
     /// The machine's <see cref="Meitou.Data.Gameplay.Construction.MachineData.HungerRate"/> while its operate task runs; derived, not hashed.

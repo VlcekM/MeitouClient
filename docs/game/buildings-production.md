@@ -592,8 +592,9 @@ not a natural site, has a functionality and passes the owner test of [resources]
 **Held tool** (**Observed**, `Task_OperateMachine` set-up `FUN_14035b430`): when the task starts, a functionality with a
 `special tool` reference gets that item made and attached to the operator's `hands` point (`Bip01 Prop2`); the
 `special tool` records are ITEMs with a `mesh` in Newwworld.mod: Pickaxe (mines, rocks) and Hoe (farms). The attach is
-skipped when a virtual test on the character (`+0x30`) fails (Meitou skips animals). Meitou
-shows it for the whole operate task, the walk there included, and drops it when the task ends; AI workers and obedient slaves (189 / 190, whose
+skipped when a virtual test on the character (`+0x30`) fails (Meitou skips animals); the task's end (slot 3 `FUN_140347350`) takes it off.
+The walk to the machine is no part of it (**Verified**, TaskData: row 87 needs `isAtLocation`, which task 1 Moving provides), so the tool appears on
+arrival (#969). Meitou holds it from arrival, not on the walk or a haul trip, and drops it when the task ends; AI workers and obedient slaves (189 / 190, whose
 act-outs are `Task_OperateMachine` too, [slave work](ai-tasks.md#slave-work-shout-and-capture)) hold it while they stand at the work clip (#920).
 Operator animation: the functionality's `animation` reference (**Verified**, probe of vanilla BUILDING_FUNCTIONALITY); its `animation events` (the pick hitting ore, stone, a plate)
 sound on that clip ([audio](../audio.md#characters-footsteps-combat-voices) "Machine work"). No

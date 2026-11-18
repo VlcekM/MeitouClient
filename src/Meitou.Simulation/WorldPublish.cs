@@ -761,13 +761,13 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The ITEM held in the <c>hands</c> point (docs/game/buildings-production.md "Held tool"; none for an animal): the operate task's tool for the
-    /// whole task, or the standing work's (<paramref name="work"/>, an AI worker or obedient slave) while it works.
+    /// The ITEM held in the <c>hands</c> point (docs/game/buildings-production.md "Held tool"; none for an animal): the operate task's tool once at
+    /// the machine, or the standing work's (<paramref name="work"/>, an AI worker or obedient slave) while it works.
     /// </summary>
     static string? HeldToolOf(byte task, CharacterCold? cold, WorkEvents? work)
     {
         if (cold is not { Appearance.Animal: null }) return null;
-        if (task == (byte)CharacterTask.Operate) return cold.OperateSite is not null ? cold.OperateTool : null;
+        if (task == (byte)CharacterTask.Operate) return cold is { OperateSite: not null, OperateToolHeld: true } ? cold.OperateTool : null;
 
         return work?.Tool;
     }

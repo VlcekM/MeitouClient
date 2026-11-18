@@ -773,6 +773,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         // A gunner holds "combatstance" (Verified, Task_UseTurret FUN_1403474f0), not its functionality's clip.
         cold.OperateClip = m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction ? TurretClip : m.Data.Animation;
         cold.OperateTool = m.Data.Tool;
+        cold.OperateToolHeld = false;
         cold.OperateFunctionality = m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction ? null : m.Data.Functionality;
         cold.OperateHungerRate = m.Data.HungerRate;
         cold.OperateStat = m.Data.Stat;
@@ -1076,11 +1077,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.Operating = false;
         if (Hauling(world, cold) is { } haul)
         {
+            cold.OperateToolHeld = false;
             if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, m, haul.Machine);
             return;
         }
 
         if (!AtSite(world, n, site, m)) return;
+
+        // Task_OperateMachine's start (slot 1, FUN_14035b430) attaches the special tool, its end (slot 3, FUN_140347350) takes it off.
+        cold.OperateToolHeld = true;
 
         // A rock (an "is foliage" building) becomes the operator's faction's once a player character works it, and joins a player town whose area
         // holds it (Task_OperateMachine slot 1, FUN_14035b430; the town by its radius here).
