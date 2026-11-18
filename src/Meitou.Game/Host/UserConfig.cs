@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Meitou.Game.Effects;
 using Meitou.Game.Settings;
 using Meitou.Game.Ui;
+using Meitou.Modding;
 
 namespace Meitou.Game.Host;
 
@@ -983,6 +984,19 @@ sealed class UserConfig
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Keeps the setting's value in <see cref="ModSettings"/>, or drops it when it is the default (and the mod's entry when it holds none); written
+    /// with the rest of the config.
+    /// </summary>
+    public void KeepModSetting(ModSetting setting)
+    {
+        string mod = setting.Group.ModId;
+        if (!ModSettings.TryGetValue(mod, out var saved)) ModSettings[mod] = saved = [];
+        if (setting.IsDefault) saved.Remove(setting.Key);
+        else saved[setting.Key] = setting.Text;
+        if (saved.Count == 0) ModSettings.Remove(mod);
     }
 
     /// <summary>
