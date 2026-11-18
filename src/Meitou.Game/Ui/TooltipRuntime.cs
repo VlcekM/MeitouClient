@@ -1465,11 +1465,13 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// destroyed (h + d - s at or below -m) says so; below 0 a robotic limb "does not degenerate", a vital part above the KO point is "dangerous"
     /// (death at -m; unconscious: regain consciousness before the KO point) and at it "critical", any other part "getting worse"; from 0 a part more
     /// than 20 short of m needs bandaging (robotic: plainly), less than 5 % short (healing and stun within 5) is okay or healing, else bandaging is
-    /// not urgent; okay or healing, wear above 5 adds a wear line. Under 60 left a line on what the damage affects follows. The original's kick line
-    /// and lost-limb line are not modelled.
+    /// not urgent; okay or healing, wear above 5 adds a wear line. Under 60 left a line on what the damage affects follows. A lost limb (a stump)
+    /// says only that it is gone forever. The original's kick line is not modelled.
     /// </summary>
     internal static string PartTip(HealthPartView part, float? koPoint, bool unconscious)
     {
+        if (part.Limb == Simulation.Bodies.LimbState.Stump) return Loc.Tr("This limb is gone forever.");
+
         float h = part.Flesh, d = part.Bandage, s = part.Stun, m = part.Maximum;
         string text;
 

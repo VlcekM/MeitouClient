@@ -1760,7 +1760,7 @@ Code: `UiTooltips` (data, layout), `TooltipRuntime` (hover runtime, item rows, H
     Recovery coma, Limb trauma, Bleeding, Wounded, Slightly Injured and Normal; Bad for the rest. Alive, in a bed (state 1) whose object is of class 6 (not a repair bed) and whose
     rate (its slot `0x3c0`) is above 1, "\nRecovery rate: {1}x" (plain number) follows any tooltip.
   - Meitou (`TooltipRuntime`, `HudPanels`): the Blood row; the part texts and arrows (the tests above, with the KO
-    point of every shown character, `HudView.KoPoint`) without wear, kick and lost-limb lines (d is the bandage's pending healing); the hunger texts
+    point of every shown character, `HudView.KoPoint`) with the wear lines and a stump's lost-limb text, without the kick line (d is the bandage's pending healing); the hunger texts
     without the stomach store (malnourished takes the Hungry word's sentence, starving the Starving word's: the stat penalty and the pass-out threshold
     are not modelled); the health word by the choice above (`HudPanels.HealthWord`; the fraction is `BodyStatus.WorstPart`, every part with stun and
     rig in, **Observed** from `WorldPublish.cs`) and the bed's recovery rate (the bed's healing factor, `BodySystem.BedRecoveryRate`) and the disguise words ([disguise](perception.md#disguise)), without the `+0xf0` status.
