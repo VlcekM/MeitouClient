@@ -1363,10 +1363,10 @@ public sealed class AnimationSystem(
         if (cold.StandingUp) FinishStandUp(a, cold, moving: a.HeldIndex < 0);
         else if (CrouchGoal(cold) != 0) FinishCrouch(a, cold, CrouchGoal(cold));
 
-        if (cold.LeavingBed && !cold.BedExitDone) FinishBedExit(a, cold);
-
         // The end of the task that crouched calls the stance setter with (0, 0).
         else if (cold.Crouched && cold.Ai is not null) cold.Crouched = false;
+
+        if (cold.LeavingBed && !cold.BedExitDone) FinishBedExit(a, cold);
     }
 
     /// <summary>
