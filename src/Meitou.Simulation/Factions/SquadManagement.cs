@@ -224,7 +224,10 @@ public static class SquadManagement
                     world.Post("You must have at least one squad.");
                     return;
                 }
-                EndPurse(world, doomed);   // a purse a code mod gave it goes back to the player's money
+                // A shop a code mod gave it leaves its goods on the ground where it was made (it has no members); a purse goes to the player's money.
+                if (Trading.TradeSystem.GiveBack(world, doomed) is > 0 and var dropped)
+                    world.Post(Loc.Tr("{1} item stack(s) of a closed shop were left on the ground.", dropped));
+                EndPurse(world, doomed);
                 world.Squads.Remove(doomed.Id);
                 world.SystemOf<PopulationSystem>()?.ForgetSquad(doomed.Id);
                 Renumber(PlayerSquads(world));

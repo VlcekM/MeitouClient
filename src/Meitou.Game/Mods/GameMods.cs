@@ -202,8 +202,8 @@ sealed class GameMods(GameHost host)
         int counted = Simulation.Factions.SquadManagement.DropUnownedUncounted(world, running.Contains);
         if (counted > 0) Notice($"{counted} squad(s) a mod that is not loaded kept out of your faction size count are counted again.");
 
-        int shops = Simulation.Trading.TradeSystem.DropUnownedShops(world, running.Contains);
-        if (shops > 0) Notice($"{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members.");
+        int shops = Simulation.Trading.TradeSystem.DropUnownedShops(world, running.Contains, out int grounded);
+        if (shops > 0) Notice(ShopsClosed(shops, grounded));
 
         int purses = Simulation.Factions.SquadManagement.DropUnownedPurses(world, running.Contains);
         if (purses > 0) Notice($"{purses} squad purse(s) of a mod that is not loaded went into your money.");
@@ -211,6 +211,14 @@ sealed class GameMods(GameHost host)
         int woken = Simulation.Factions.SquadManagement.DropUnownedDormant(world, running.Contains);
         if (woken > 0) Notice($"{woken} squad(s) a mod that is not loaded put to sleep are awake again.");
     }
+
+    /// <summary>
+    /// The notice for the shops closed at a load: their goods went to the squads' members, and what did not fit onto the ground.
+    /// </summary>
+    static string ShopsClosed(int shops, int dropped) => dropped == 0
+        ? $"{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members."
+        : $"{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members where they fit, "
+            + $"and {dropped} stack(s) lie on the ground by the squads.";
 
     /// <summary>
     /// Shows a line about the mods to the player and in the console.

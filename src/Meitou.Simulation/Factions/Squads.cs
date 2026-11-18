@@ -228,7 +228,8 @@ public sealed class Squad
     public string? DormantOwner { get; set; }
     /// <summary>
     /// The code mod that gave this player squad its shop (<see cref="Trading.SetSquadShop"/>, its manifest id); null: none named, or no shop. A load
-    /// without that mod running ends the shop (<see cref="Trading.TradeSystem.DropUnownedShops"/>). Meitou only; saved, hashed while set.
+    /// without that mod running ends the shop (<see cref="Trading.TradeSystem.DropUnownedShops"/>), and so does removing the squad. Meitou only;
+    /// saved, hashed while set.
     /// </summary>
     public string? ShopOwner { get; set; }
     /// <summary>

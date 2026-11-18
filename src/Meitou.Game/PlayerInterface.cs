@@ -959,8 +959,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>
     /// The quick right click on <paramref name="c"/> (<c>FUN_1407fb410</c>, docs/game/ui-input.md "Quick right click"). The lead is the selected
     /// character nearest to it (with nothing selected the nearest of the player's characters, which gives the pointer only). Own characters: dead,
-    /// loot; needing first aid (organic need above 0.01) 25, else robot repair 60 (all the selection); a standing player shopkeeper (an independent
-    /// member, <see cref="CharacterSnapshot.IsTrader"/>, Meitou only), trade; down and not carried, pick up (the nearest);
+    /// loot; needing first aid (organic need above 0.01) 25, else robot repair 60 (all the selection); a standing shopkeeper of the player's faction
+    /// (an independent member, <see cref="CharacterSnapshot.IsTrader"/>, Meitou only), trade; down and not carried, pick up (the nearest);
     /// carried by the lead, put down; carried by another, nothing. Others carried by a non-player: nothing. Hostile ones
     /// (<see cref="PointerView.Hostile(CharacterSnapshot)"/>): down, loot; standing and the lead sneaking, stealth KO (or loot of a slave); fighting
     /// or without a talk, attack (with a gunner on a turret, Shoot At); a prisoner, loot. Neutral ones: down, loot (<c>search</c> pointer for a

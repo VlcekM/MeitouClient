@@ -102,7 +102,8 @@ internal static class ShopSave
     /// </summary>
     public static void WritePlayer(FcsRecord platoon, Squad squad, World world)
     {
-        if (squad.Shop is not { } shop)
+        // Only the player's own squads: another squad written through a player platoon file (a prisoner's) keeps its shop out of these keys.
+        if (squad.Shop is not { } shop || squad.Faction != world.Player.Faction)
         {
             platoon.Strings.Remove(StockKey);
             platoon.Ints.Remove(FillsKey);

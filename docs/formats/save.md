@@ -397,7 +397,7 @@ assigned; `meitou autonomy owner` (string: the manifest id of the code mod that 
 A squad a code mod keeps out of the faction size count (`Saving/ModSquadSave`, [modding](../modding.md#registration-surface)): `meitou uncounted` (bool) and
 `meitou uncounted owner` (string: the mod's manifest id), each only while set; a squad a mod gave its own purse: `meitou purse` (string: its money
 in cats) and `meitou purse owner` (string: the mod's manifest id), each only while set; a squad a mod put to sleep: `meitou dormant` (bool) and `meitou dormant owner`
-(string: the mod's manifest id), each only while set. A squad a mod gave a shop ([player shops](../simulation.md#player-shops-meitou-only),
+(string: the mod's manifest id), each only while set. A squad a mod gave a shop ([shopkeepers of the player's faction](../simulation.md#shopkeepers-of-the-players-faction-meitou-only),
 `Saving/ShopSave.WritePlayer`): `meitou shop` (string: its stock, as an NPC squad shop's), `meitou shop fills` (int), `meitou shop restock`
 (float: the next restock in absolute game hours), `meitou shop owner` and `meitou shop template` (string, each while named), all only while it
 has one; its purse is `meitou purse`. Each code mod's tag on the squad (`Squad.ModTags`, `Saving/ModTagSave`):
