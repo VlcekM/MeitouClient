@@ -1,13 +1,20 @@
+using System.Text.RegularExpressions;
 using Meitou.Content;
 using Meitou.Data;
 
 /// <summary>
 /// The load order a probe runs: the install's (<c>mods.cfg</c>), or a feedback report's given with <c>--load-order &lt;file&gt;</c> (one mod name
-/// per line, as the report lists them: <c>1. `Name.mod`</c> or a bare name). Its mods are found among the install's mods and workshop items and in
+/// per line, as the report lists them: <c>1. `Name.mod`</c>, that as a link, or a bare name). Its mods are found among the install's mods and workshop items and in
 /// each <c>--mod-dir &lt;folder&gt;</c> (a folder of mod folders or of workshop item folders, as a steamcmd download leaves them).
 /// </summary>
 static class ProbeLoadOrder
 {
+    /// <summary>
+    /// A list marker at the start of a line: a bullet, or a number with its dot, and the space after. A number without the dot is the start of a
+    /// mod's name (<c>30 Hivers</c>, <c>2x faster dodge animation speed</c>).
+    /// </summary>
+    static readonly Regex ListMarker = new(@"^(?:[-*]|\d+\.)\s+", RegexOptions.Compiled);
+
     /// <summary>
     /// Takes <c>--load-order</c> and every <c>--mod-dir</c> out of <paramref name="args"/> and returns the load order they name, or the install's
     /// without <c>--load-order</c>. A mod found nowhere is left out and said on standard error.
@@ -45,17 +52,30 @@ static class ProbeLoadOrder
     }
 
     /// <summary>
-    /// The mod names a load order file lists, without list numbers, backticks or the <c>.mod</c> extension.
+    /// The mod names a load order file lists, without list markers, backticks, links or the <c>.mod</c> extension.
     /// </summary>
     static IEnumerable<string> Names(string file)
     {
         foreach (var line in File.ReadLines(file))
         {
-            string name = line.Trim().TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ' ', '-').Trim().Trim('`');
+            string name = Listed(line);
             if (name.EndsWith(".mod", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".base", StringComparison.OrdinalIgnoreCase))
                 name = name[..name.LastIndexOf('.')];
             if (name.Length > 0) yield return name;
         }
+    }
+
+    /// <summary>
+    /// The file name a load order line gives: what its first pair of backticks holds (a report's <c>1. `Name.mod`</c>, or that inside a link to
+    /// the workshop item), else the line without its list marker.
+    /// </summary>
+    static string Listed(string line)
+    {
+        int open = line.IndexOf('`');
+        int close = open < 0 ? -1 : line.IndexOf('`', open + 1);
+        if (close > open) return line[(open + 1)..close].Trim();
+
+        return ListMarker.Replace(line.Trim(), "").Trim();
     }
 
     /// <summary>
