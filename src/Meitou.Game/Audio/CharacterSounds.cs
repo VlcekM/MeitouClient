@@ -861,6 +861,21 @@ public sealed class CharacterSounds
     }
 
     /// <summary>
+    /// A code mod's event at <paramref name="at"/> (docs/modding.md "Sounds"): posted on a pooled object placed there, after the optional switch,
+    /// within the same distance as the game's own point sounds (<see cref="EventLimit"/>, squared). The pool is shared and reused round robin, so a
+    /// long or looping event may be moved by a later point sound.
+    /// </summary>
+    public void PostAt(Vector3 at, string eventName, string? group = null, string? value = null)
+    {
+        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
+        ulong id = _pool[_poolAt++ % _pool.Length];
+        _player.SetPosition(id, at);
+        if (group is not null && value is not null) _player.SetSwitch(group, value, id);
+        _player.Post(eventName, id);
+        Jobs++;
+    }
+
+    /// <summary>
     /// luckyren Mode's burst at <paramref name="at"/> (docs/game/luckyren.md; the game has no such sound): <c>Impact</c> as a <c>Heavy_Hit</c> on a
     /// pooled object there and, within <see cref="SquelchLimit"/>, the wet meat drop (<c>Item_Drop</c>, <c>Inventory_Items</c> = <c>Meat</c>), an
     /// interface sound on the GUI object.

@@ -144,6 +144,27 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Plays a named sound event on a character, from any thread (docs/modding.md "Sounds"): <see cref="World.PostSound(string, CharacterId,
+    /// string?, string?)"/> on the running world; nothing before the first world or without audio.
+    /// </summary>
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+        _world()?.PostSound(eventName, on, switchGroup, switchValue);
+
+    /// <summary>
+    /// Plays a named sound event at a world point, from any thread: <see cref="World.PostSound(string, System.Numerics.Vector3, string?,
+    /// string?)"/> on the running world; nothing before the first world or without audio.
+    /// </summary>
+    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null) =>
+        _world()?.PostSound(eventName, at, switchGroup, switchValue);
+
+    /// <summary>
+    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound"/> on the running world; nothing before the
+    /// first world or without audio.
+    /// </summary>
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
+        _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
+
+    /// <summary>
     /// A line in the game's log (log.txt), prefixed with the mod id.
     /// </summary>
     public void Log(string message) => Console.WriteLine($"mod       {Id}: {message}");

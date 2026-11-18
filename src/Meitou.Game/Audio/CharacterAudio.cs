@@ -552,7 +552,22 @@ sealed class CharacterAudio(GameHost host)
             case SoundKind.FedToMachine:
                 _fedBodies!.Post(e.Position, e.Armour, eye);
                 break;
+            case SoundKind.Posted or SoundKind.PostedInterface when e.Posted is { } posted:
+                PlayModSound(sounds, in e, posted, subject);
+                break;
         }
+    }
+
+    /// <summary>
+    /// A code mod's event (docs/modding.md "Sounds"): on the interface's object, on the subject's object (when it is near enough to have one), or
+    /// on a pooled object at the point.
+    /// </summary>
+    void PlayModSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject)
+    {
+        var (name, group, value) = (posted.Event, posted.SwitchGroup, posted.SwitchValue);
+        if (e.Kind == SoundKind.PostedInterface) host.Sound.Ui.Sounds?.Play(new UiSoundEvent(name, group, value));
+        else if (!e.Subject.IsNone) sounds.Job(subject, name, CharacterSounds.EventLimit, group, value);
+        else sounds.PostAt(e.Position, name, group, value);
     }
 
 
