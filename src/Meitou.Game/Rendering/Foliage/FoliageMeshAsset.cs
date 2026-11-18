@@ -95,6 +95,12 @@ sealed class FoliageMeshAsset
     public bool LargeBillboard;
 
     /// <summary>
+    /// A mesh from the game's vegetation folders (<see cref="FoliageSizes.IsVegetation"/>): its large instances take the near fade
+    /// (<see cref="FoliageNearFade"/>).
+    /// </summary>
+    public bool Vegetation;
+
+    /// <summary>
     /// The triangles of the mesh and its leaves mesh (known with <see cref="HasBounds"/>): the small impostor class is for meshes with many.
     /// </summary>
     public int Triangles;

@@ -1191,8 +1191,10 @@ static partial class WorldFrame
             foliage.Occlusion = f.Post.OcclusionFor(f.Eye);
             foliage.InteriorCut = gpu.InteriorMask;
             foliage.PrepassView = true;
+            foliage.NearFade.BeginView(f.Camera);
             foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain,
                 relative: f.RelativeRotation * s.Jittered);
+            foliage.NearFade.EndView();
             foliage.PrepassView = false;
             foliage.FogCull = null;
             foliage.Occlusion = default;

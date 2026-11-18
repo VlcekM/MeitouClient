@@ -80,6 +80,17 @@ alpha-tested cards to a conservative opaque outline, including mip/filter wideni
 apply mesh-card assumptions to grass/impostor frames. Reflections obey water-reflection level,
 range, mirrored frustum and water visibility; shadows use caster-specific LOD/range.
 
+**Near fade** (`FoliageNearFade`, the `Near tree fade` row, on by default; engine choice: the original draws every tree whole). In the
+gameplay camera (not the free camera, a cinema shot, photo mode, the title or the viewer) large trees between the eye and the camera's pivot
+are dithered out round the middle of the view. The main colour view's GPU cull marks an instance of a vegetation group
+(`FoliageSizes.IsVegetation`, chunk flag 32) whose placed sphere has a radius of at least `FoliageSizes.LargeFrom` and reaches nearer the eye
+than the reach (the boom less 100): packed fade 1.25, drawn whole and laid out with the fading ones, so a trunk gets the program with the
+`discard`, as the interior cut's 1.5 does. The full mesh fragment stages (prepass and colour) then keep a marked fragment where the static
+fade pattern is under the larger of its depth share (whole from the reach on, gone 200 units before it) and its angle share off the view's
+axis (`uFoliageNear`, a frame uniform: gone inside 0.14 rad, whole outside 0.3). Shadows, reflections and the GI's rays keep the tree.
+Vulkan's GPU cull only: the CPU cull (Metal's default) never marks. **Observed** in the game with on/off screenshots (strategy camera at
+-37700, -83560, FineTree pines): the middle tree is cut, its shadow and the trees round it stay.
+
 ## Validation and limitations
 
 **Verified** split tests: CPU/GPU mesh/billboard selection complementary; screenshots checked

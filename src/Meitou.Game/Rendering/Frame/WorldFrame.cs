@@ -334,6 +334,11 @@ static partial class WorldFrame
     public const string GrassCoverSwitch = "Far grass cover";
 
     /// <summary>
+    /// Large trees near the gameplay camera fade round the middle of the view (<c>FoliageNearFade.Enabled</c>), a plain on / off row.
+    /// </summary>
+    public const string NearTreeFadeSwitch = "Near tree fade";
+
+    /// <summary>
     /// The world's surfaces show their wetness (<c>WeatherSurfaces.WetWorld</c>), a plain on / off row.
     /// </summary>
     public const string WetWorldSwitch = "Rain drops and puddles";
@@ -1081,7 +1086,11 @@ static partial class WorldFrame
 
         if (g.Post is { } post) AddPostToggles(toggles, post);
         if (g.Foliage is { } farGrass)
+        {
             toggles.Add(new Toggle(GrassCoverSwitch, () => farGrass.GrassFarCover, v => farGrass.GrassFarCover = v, Remaster: true, OnOff: true));
+            toggles.Add(new Toggle(NearTreeFadeSwitch, () => farGrass.NearFade.Enabled, v => farGrass.NearFade.Enabled = v, Remaster: true,
+                OnOff: true));
+        }
         if (g.Surfaces is { } wetWorld)
         {
             toggles.Add(new Toggle(WetWorldSwitch, () => wetWorld.WetWorld, v => wetWorld.WetWorld = v, Remaster: true, OnOff: true,

@@ -187,13 +187,17 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// <summary>
     /// The kernels' View buffer (<c>ViewData</c>): 8 planes, their normals' lengths, the resident biome bits, the mode, the fog cull
     /// (<see cref="FogVolumes.CullVectors"/> vec4s), the occlusion cull (<see cref="HizPyramid.ViewVectors"/> vec4s), the LOD view, the interior
-    /// masks' boxes.
+    /// masks' boxes, the near fade's vector.
     /// </summary>
-    const ulong ViewBytes = InteriorOffset + MaxInteriorBoxes * 16;
+    const ulong ViewBytes = NearOffset + 16;
     /// <summary>
     /// Where the interior boxes start in the View buffer, in bytes.
     /// </summary>
     const ulong InteriorOffset = 208 + FogVolumes.CullVectors * 16 + HizPyramid.ViewVectors * 16 + 16;
+    /// <summary>
+    /// Where the near fade's vector (<c>ViewData.near</c>, <see cref="FoliageNearFade.CullVector"/>) sits in the View buffer, in bytes.
+    /// </summary>
+    const ulong NearOffset = InteriorOffset + MaxInteriorBoxes * 16;
     /// <summary>
     /// The interior masks' boxes the cull takes (<c>ViewData.interior</c>); more are merged into the last.
     /// </summary>
@@ -446,7 +450,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// </summary>
     public FoliageCullResult Dispatch(in FoliageCullWork work, FoliageCullView view, Vector2 eye, in FoliageRockView rock,
         float fullThreshold = 0.999f, ReadOnlySpan<Vector4> fogCull = default, in OcclusionView occlusion = default, FoliageLodView lod = default,
-        bool split = false, IReadOnlyList<(Vector2 Min, Vector2 Max)>? interior = null)
+        bool split = false, IReadOnlyList<(Vector2 Min, Vector2 Max)>? interior = null, Vector4 near = default)
     {
         if (work.ChunkCount == 0) return default;
         if (view.Planes.Length > 8) throw new ArgumentException("at most 8 planes", nameof(view));
@@ -469,6 +473,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var args = (Buffer: argsBuffer, Offset: argsOffset);
         var rows = (Buffer: rowsBuffer, Offset: rowsOffset);
         var viewData = WriteViewData(view, rock, fogCull, occlusion, lod, interior);
+        *(Vector4*)(viewData.Pointer + NearOffset) = near;
 
         Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[10];
         b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, ViewBytes);

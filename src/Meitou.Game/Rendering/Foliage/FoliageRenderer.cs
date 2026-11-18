@@ -336,6 +336,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             "foliage grass motion");
         _textures = new WorldTextureCache(gpu, assets, "foliage textures") { Share = TextureShare.For(gpu) };
         _rays = new FoliageRayScene(gpu, _textures, _zones);
+        NearFade = new FoliageNearFade(gpu);
         _lodJobs = new FoliageLodJobs(assets, Messages, Decode);
 
         // Metal's GPU cull and its separate pre-frame command buffer are opt-in after the 2026-10-23 progress
@@ -356,6 +357,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// reflection and the shadow cascades never are.
     /// </summary>
     public bool PrepassView { get; set; }
+
+    /// <summary>
+    /// The near fade of large vegetation round the middle of the gameplay view (Meitou; the world frame opens it around the main view's draw).
+    /// </summary>
+    public FoliageNearFade NearFade { get; }
 
     /// <summary>
     /// Foliage drawn at all (the F key).
@@ -1806,6 +1812,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.Size = FoliageSizes.Size(a.Radius, a.Mesh);
             a.SizeClass = FoliageSizes.Classify(a.Size);
             a.LargeBillboard = FoliageSizes.LargeBillboard(a.Radius, a.Mesh);
+            a.Vegetation = FoliageSizes.IsVegetation(a.Mesh.MeshPath);
             a.Triangles = main.Parts.Sum(p => p.Indices.Length / 3) + (leaves?.Parts.Sum(p => p.Indices.Length / 3) ?? 0);
             a.HasBounds = true;
             a.TriExtent = FoliageScreenLod.TriangleExtent(Triangles(main).Concat(leaves is null ? [] : Triangles(leaves)));
@@ -2332,7 +2339,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
         if (gpu)
         {
-            _gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain, coverage);
+            _gpuResult = DispatchGpuCull(eye, terrain, coverage);
             if (_gpuResult.IsEmpty)   // the scratch memory is over its cap: this view has no foliage this frame
             {
                 _meshDraws.Clear();
@@ -2960,6 +2967,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     : b >= impostorFirst ? FoliageCullChunk.Impostor
                     : FoliageCullChunk.Rock | (_gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0)
                         | (e.ImpostorMesh ? FoliageCullChunk.ImpostorMesh : 0);
+                if (b < meshBatches && g.Asset.Vegetation) flags |= FoliageNearFade.ChunkFlag;
                 float lodError = 0, lodNext = float.PositiveInfinity;
                 if (b >= meshBatches && b < impostorFirst && _gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
                 {
@@ -3075,8 +3083,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// Records this view's cull ahead of the frame: the chunks (once a frame per work list), one draw per mesh draw (its batch's chunks), then one
     /// per rock draw.
     /// </summary>
-    FoliageCullResult DispatchGpuCull(Vector2 eye, TerrainRenderer terrain, bool coverage)
+    FoliageCullResult DispatchGpuCull(Vector3 eye3, TerrainRenderer terrain, bool coverage)
     {
+        var eye = new Vector2(eye3.X, eye3.Z);
         var cull = _gpuCull!;
         var frame = Gpu.Frame;
         if (_gpuChunkFrame != frame.Number)
@@ -3124,8 +3133,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // The interior cut (main colour view): with the split, the fully visible instances over a mask go with the fading ones, to the program with
         // the cut.
         var interior = split && InteriorCut is { Active: true } mask ? mask.Boxes : null;
+
+        // The near fade (FoliageNearFade): open only around the main colour view's draw.
+        var near = _depthPass ? default : NearFade.CullVector(eye3.Y);
         var result = cull.Dispatch(new FoliageCullWork(_gpuChunkData, _gpuChunkCount, draws, count) { Instances = _gpuInstances }, _cullView, eye,
-            in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, _lodView, split, interior);
+            in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, _lodView, split, interior, near);
         if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0)

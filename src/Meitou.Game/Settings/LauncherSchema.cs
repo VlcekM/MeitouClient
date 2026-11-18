@@ -260,6 +260,7 @@ static class LauncherSchema
         yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with { ShownWhen = SunTraced() };
         yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "Meitou: on", true);
+        yield return Switch(WorldFrame.NearTreeFadeSwitch, "Off", "Meitou: on", true);
         yield return Switch(WorldFrame.WetWorldSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);

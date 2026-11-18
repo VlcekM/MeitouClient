@@ -1502,6 +1502,10 @@ sealed class GameLoop(GameHost host)
         // The camera effects (docs/render-post.md "Camera effects order"): for these cameras, never over the title.
         host.WorldOptions.Post.CinematicView = !host.TitleScreen.TitleVisible
             && (host.Session.Camera.IsFree || _cinemaHolds || _cinema.Playing || _cinema.Recording || _cinema.EditorVisible);
+
+        // The near tree fade (FoliageNearFade): the gameplay camera only, not the cameras above, photo mode or the title.
+        if (host.Gpu.Foliage is { } foliage)
+            foliage.NearFade.Gameplay = !host.WorldOptions.Post.CinematicView && !host.TitleScreen.TitleVisible && !_photo.Active;
         _photo.Apply();
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition) ?? host.LoadAhead;   // the streaming loads the landing view during the flight or the load

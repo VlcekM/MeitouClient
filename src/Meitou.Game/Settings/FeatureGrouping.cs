@@ -70,6 +70,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new("Far impostors", "Far impostors", ["Impostor distance (F7 Meitou)", "Large impostor distance (F7 Meitou)",
             WorldFrame.ImpostorBudgetSlider]),
         new(WorldFrame.GrassCoverSwitch, WorldFrame.GrassCoverSwitch, []),
+        new(WorldFrame.NearTreeFadeSwitch, WorldFrame.NearTreeFadeSwitch, []),
 
         // Objects
         new("Draw distances", "Draw distances", [WorldFrame.ObjectDistanceSlider, "Landmark distance (Meitou)", "Distant towns (zones)",
