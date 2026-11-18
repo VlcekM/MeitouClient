@@ -759,6 +759,35 @@ holds refuses the second mod.
 Some shapes need no code: a race's anatomy of any length, extra or missing parts, and parts of a new type such as a tail are plain records
 ([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)).
 
+## Fixed record ids
+
+The engine finds these records by string id. A data mod that changes the game (a conversion) edits them in place rather than removing them,
+as in the original; "original" marks an id the original game also hard-codes (the linked doc gives the evidence). Without one, Meitou
+behaves as the last column says.
+
+| Id | Record | Used for | Source | Without it |
+| --- | --- | --- | --- | --- |
+| `204-gamedata.base` | FACTION Nameless | the player's faction | original ([factions](game/factions-squads-towns.md)) | a new game throws |
+| `45550-gamedata.base` | SQUAD_TEMPLATE "startoff- Wanderer squad" | a start that makes nobody | original ([ui-screens](game/ui-screens.md)) | |
+| `5359-gamedata.base` | RESEARCH `_Default Start` | a start that lists no research | original ([buildings-production](game/buildings-production.md)) | |
+| `5369-gamedata.base` | DIALOGUE_PACKAGE | a player character's dialogue without its own or a faction's | original ([dialogue](game/dialogue.md)) | |
+| `1233-gamedata.base`, `5006-squad.mod` | FACTION Tech Hunters, SQUAD_TEMPLATE "Wandering Squad" | a dismissed character's faction (else `nofac`) and squad | original ([ui-screens](game/ui-screens.md)) | |
+| `3943-gamedata.base` | FACTION Wildlife | a spawned squad's faction when nothing names one | original ([factions](game/factions-squads-towns.md)) | no faction |
+| `518-gamedata.base` | FACTION Cannibals | their cages' tutorial | original ([ui-screens](game/ui-screens.md)) | |
+| `5344-gamedata.base` | AI_PACKAGE "Slave only squad" | a slave split off a squad | original ([factions](game/factions-squads-towns.md)) | |
+| `1866-gamedata.base` | ITEM Raw Iron | the furnace's iron measure | original ([buildings-production](game/buildings-production.md)) | |
+| `580-gamedata.base` | ITEM Building Materials | a BUILDING's `build materials` cost | original ([buildings-production](game/buildings-production.md)) | |
+| `584-gamedata.base` | ITEM Fabrics | armour's `fabrics amount` | original ([buildings-production](game/buildings-production.md)) | |
+| `1057-gamedata.base`, `1058-gamedata.base`, `913-gamedata.base` | WEAPON_MANUFACTURER and models | the weapon factory's fallback; a weaponsmith's model name | original ([factions](game/factions-squads-towns.md), [ui-screens](game/ui-screens.md)) | the picked manufacturer; no name |
+| `5460-weather.mod`, `18003-gamedata.base` | WEATHER Default, BIOME_GROUP NONE | a season without weather; the region never named | original ([weather](formats/weather.md), [ui-screens](game/ui-screens.md)) | |
+| `360-gamedata.base`, `742-gamedata.base` | MATERIAL_SPEC | a building part's and a town's material fallback | original ([runtime-materials](formats/runtime-materials.md)) | |
+| `5370-platform_otto.mod` | BUILDING_PART | the character editor's platform | original ([characters](characters.md)) | no platform |
+| `55393-Newwworld.mod`, `95425-sfx.mod` | EFFECT, AMBIENT_SOUND | corpse flies | original ([character-stats](game/character-stats.md)) | no flies |
+| `917-gamedata.base` | WEAPON_MANUFACTURER Ancient | Meitou's character generator: a CHARACTER without `weapon level` | Meitou | no weapon (a loadout note) |
+| `4442-Newwworld.mod` | BIOMES ForestLand | its ground relief at a third of the depth | Meitou (render choice) | nothing scaled |
+| `44428-rebirth.mod` | ITEM Empty Rum Bottle | its bottle drawn empty | Meitou (render choice) | drawn as other bottles |
+| `3384-TwoStorey.mod`, `44856-rebirth.mod`, `18919-Newwworld.mod` | BUILDING Storm House, its residents, TOWN The Hub | the bar behind the character editor | Meitou | no bar (a log line) |
+
 ## Harmony
 
 - With code mods enabled the JIT warm-up (`JitWarmup`) starts only after `Initialize` returns. Tiered compilation is off, so a caller
