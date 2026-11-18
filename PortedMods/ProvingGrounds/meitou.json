@@ -1,0 +1,7 @@
+{
+  "id": "ProvingGroundsMeitou",
+  "version": "0.2.0",
+  "apiVersion": 2,
+  "assemblies": ["ProvingGroundsMeitou.dll"],
+  "entry": "ProvingGrounds.ProvingGroundsMod"
+}

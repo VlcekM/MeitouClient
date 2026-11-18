@@ -294,8 +294,9 @@ interpolated string, which no translation could match.
   they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became, instead of the plugin or code-mod note; a covered code mod adds that it is not run.
-- An RE_Kenshi plugin (no `meitou.json`) with an official port ([ports](formats/rekenshi.md#ports)) says Meitou runs its port in its place,
-  instead of the ignored-DLLs note.
+- A mod (no `meitou.json`) with an official port ([ports](formats/rekenshi.md#ports)) says it has no official MeitouClient version, the
+  MeitouClient team provides a port that runs on its own and nothing more is to be installed, instead of the ignored-DLLs note. A code
+  mod with a shipped port's id (a workshop copy of the port) says the game ships it and the copy is not run while the original is enabled.
 - An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or
   workshop item) names it as one mod that does the same, not a requirement (other ports may exist), and, while the list does not hold it
   (a workshop mod by its item, a local copy by its `.mod` name), has a View button opening its workshop page. The first listing in which

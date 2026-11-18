@@ -34,7 +34,7 @@ public static class CoveredMods
     /// <summary>
     /// The folder beside the game's executable that holds the official ports, one folder per port id with its <c>meitou.json</c> and assemblies.
     /// </summary>
-    public const string PortsFolder = "ports";
+    public const string PortsFolder = "PortedMods";
 
     /// <summary>
     /// xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (workshop 3679678086, matched against its 2026-11-07 update).
@@ -62,9 +62,13 @@ public static class CoveredMods
     ];
 
     /// <summary>
-    /// The RE_Kenshi mods whose plugin has an official port (source in the repo's <c>ports</c> folder, shipped with the game).
+    /// The RE_Kenshi mods whose plugin has an official port (source in the repo's <c>PortedMods</c> folder, shipped with the game): Shutori's
+    /// "Proving Grounds" (workshop 3774745195, matched against its 2026-09-26 update) with roscatoday's "Proving Grounds for Meitou".
     /// </summary>
-    public static IReadOnlyList<PortedMod> Ported { get; } = [];
+    public static IReadOnlyList<PortedMod> Ported { get; } =
+    [
+        new("Proving Grounds", [new(3774745195, 1790470536)], "ProvingGroundsMeitou"),
+    ];
 
     /// <summary>
     /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
@@ -96,15 +100,20 @@ public static class CoveredMods
     }
 
     /// <summary>
-    /// The entry porting the plugin of <paramref name="mod"/>, an RE_Kenshi plugin without code of its own that Meitou has not built in, by its
-    /// <c>.mod</c> name or its workshop item; null when none does.
+    /// The entry porting the plugin of <paramref name="mod"/>, a mod without code of its own that Meitou has not built in, by its <c>.mod</c> name or
+    /// its workshop item; null when none does. The table names each mod, so its <c>RE_Kenshi.json</c> is not checked.
     /// </summary>
-    public static PortedMod? PortOf(ModInfo mod)
+    public static PortedMod? PortOf(ModInfo mod) => PortOf(mod, Ported);
+
+    /// <summary>
+    /// The entry of <paramref name="ported"/> porting <paramref name="mod"/>'s plugin, as <see cref="PortOf(ModInfo)"/>.
+    /// </summary>
+    public static PortedMod? PortOf(ModInfo mod, IReadOnlyList<PortedMod> ported)
     {
-        if (!mod.HasNativePlugin || mod.HasCode || BuiltInOf(mod) is not null) return null;
+        if (mod.HasCode || BuiltInOf(mod) is not null) return null;
 
         ulong? item = WorkshopId(mod);
-        return Ported.FirstOrDefault(p => p.ModName == mod.Name || (item is { } id && p.Items.Any(i => i.Id == id)));
+        return ported.FirstOrDefault(p => p.ModName == mod.Name || (item is { } id && p.Items.Any(i => i.Id == id)));
     }
 
     /// <summary>

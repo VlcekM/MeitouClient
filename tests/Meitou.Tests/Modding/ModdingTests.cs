@@ -343,4 +343,53 @@ public class ModdingTests
         context.AddSettings(new OreSettings());
         Assert.Throws<InvalidOperationException>(() => context.AddSettings(new OreSettings()));
     }
+
+    /// <summary>
+    /// An official port (docs/formats/rekenshi.md "Ports"): the enabled ported mod runs the port from beside the game in its place, keeping its
+    /// own name and folder, and a code mod with the port's id is not run.
+    /// </summary>
+    [Fact]
+    public void A_ported_mod_runs_its_port_in_its_place()
+    {
+        string root = Directory.CreateTempSubdirectory("meitou-port-").FullName;
+        try
+        {
+            string data = Directory.CreateDirectory(Path.Combine(root, "data")).FullName;
+            File.WriteAllBytes(Path.Combine(data, "gamedata.base"), []);
+            File.WriteAllText(Path.Combine(data, "mods.cfg"), "Plugin.mod\nShadow.mod\n");
+            string plugin = AddMod(root, "Plugin", null);
+            AddMod(root, "Shadow", "port-x");
+            string game = Path.Combine(root, "game");
+            string port = Directory.CreateDirectory(Path.Combine(game, CoveredMods.PortsFolder, "port-x")).FullName;
+            File.WriteAllText(Path.Combine(port, ModList.CodeManifestFile), PortManifest("port-x"));
+
+            var (enabled, disabled) = ModHost.CodeMods(GameInstall.Open(root), [new("Plugin", [], "port-x")], game);
+
+            var ran = Assert.Single(enabled);
+            Assert.True(ran.IsPort);
+            Assert.Equal(("Plugin", plugin, port), (ran.Name, ran.Folder, ran.CodeFolder));
+            Assert.Equal("Shadow", Assert.Single(disabled).Name);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A mod folder under the install's <c>mods</c> with an empty <c>.mod</c> file and, for a code mod id, its manifest; returns the folder.
+    /// </summary>
+    static string AddMod(string root, string name, string? codeId)
+    {
+        string folder = Directory.CreateDirectory(Path.Combine(root, "mods", name)).FullName;
+        File.WriteAllBytes(Path.Combine(folder, name + ".mod"), []);
+        if (codeId is not null) File.WriteAllText(Path.Combine(folder, ModList.CodeManifestFile), PortManifest(codeId));
+
+        return folder;
+    }
+
+    /// <summary>
+    /// A code mod manifest with id <paramref name="id"/>.
+    /// </summary>
+    static string PortManifest(string id) => $$"""{ "id": "{{id}}", "apiVersion": 2, "assemblies": ["{{id}}.dll"], "entry": "X.Y" }""";
 }

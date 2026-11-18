@@ -206,8 +206,11 @@ msgstr "Steam 创意工坊"
 msgid "Local mod"
 msgstr "本地模组"
 
-msgid "RE_Kenshi plugin: Meitou runs its own port of it in its place"
-msgstr "RE_Kenshi 插件：Meitou 以自己的移植版代替它运行"
+msgid "MeitouClient ships this port itself: this copy is not run while the original mod is enabled"
+msgstr "MeitouClient 自带此移植版：启用原模组时不会运行这个副本"
+
+msgid "This mod has no official MeitouClient version, so the MeitouClient team provides a port: it runs on its own, nothing more to install"
+msgstr "此模组没有官方的 MeitouClient 版本，因此由 MeitouClient 团队提供移植版：它会自动运行，无需再安装任何东西"
 
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"

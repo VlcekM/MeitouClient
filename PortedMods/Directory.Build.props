@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- Ported mods keep their authors' code style (CLAUDE.md "Code style"), so syncing a new version stays a copy: the repository's settings
+       apply, but not its naming and style checks. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

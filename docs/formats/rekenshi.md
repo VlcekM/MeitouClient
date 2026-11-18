@@ -37,21 +37,29 @@ for a newer installed copy, and for other plugins, is in [launcher](../launcher.
 
 ## Ports
 
-`CoveredMods.Ported` (Meitou.Core) names each ported RE_Kenshi mod by `.mod` name or workshop item and its port's code-mod id; it is
-empty so far. A mod matches one kind, first of built in, ported, suggested; a mod with its own `meitou.json` runs that, never a port.
+`CoveredMods.Ported` (Meitou.Core) names each ported mod by `.mod` name or workshop item (its `RE_Kenshi.json` is not checked) and its
+port's code-mod id. A mod matches one kind, first of built in, ported, suggested; a mod with its own `meitou.json` runs that, never a port,
+so an RE_Kenshi mod's author ships a Meitou version by putting a code mod's `meitou.json` and DLL in the mod's folder.
 
-- **Source:** `ports/<Name>/`, a class library setting `PortId` (its `meitou.json` id) with `meitou.json` beside it, listed in
-  `MeitouClient.slnx`. `ports/Directory.Build.targets` references the game (`Private="false"`) and after each build copies the DLL and
-  manifest to `ports/<PortId>/` beside the game's Debug or Release build; `package-release.ps1` builds each port into the zip's `ports/`
+| Mod | Port | Matched against |
+| --- | --- | --- |
+| Proving Grounds (Shutori, `Proving Grounds`, workshop 3774745195) | Proving Grounds for Meitou (roscatoday, `ProvingGroundsMeitou`, `PortedMods/ProvingGrounds`) | 2026-09-26 update |
+
+- **Source:** `PortedMods/<Name>/`, one class library per mod setting `PortId` (its `meitou.json` id) with `meitou.json` beside it, listed
+  in `MeitouClient.slnx`; the authors' code keeps their style (`PortedMods/Directory.Build.props` turns the style checks off).
+  `PortedMods/Directory.Build.targets` references the game (`Private="false"`) and after each build copies the DLL and manifest to
+  `PortedMods/<PortId>/` beside the game's Debug or Release build; `package-release.ps1` builds each port into the zip's `PortedMods/`
   with the game's version (**Observed**, scratch run: a port built against an unversioned game is refused by a 0.1.0 one).
   A port's code is one DLL: no libraries of its own.
 - **Running:** `ModHost.CodeMods` puts an enabled ported mod in its `mods.cfg` place as the port (`ModInfo.WithPort`): manifest and
-  assemblies from `ports/<PortId>/` beside the executable (`ModInfo.CodeFolder`, `ModContext.CodeFolder`), name, folder and data the
+  assemblies from `PortedMods/<PortId>/` beside the executable (`ModInfo.CodeFolder`, `ModContext.CodeFolder`), name, folder and data the
   mod's, so `ModContext.Folder` holds the plugin's settings files. It then loads as any code mod; the JIT warm-up and `mod-check` see it.
   Another enabled code mod with the port's id (a workshop port) is not run, so the feature applies once. A port missing from the game's
-  folder is logged and the plugin does not run.
+  folder is logged and the plugin does not run. **Verified** by `ModdingTests.A_ported_mod_runs_its_port_in_its_place` (temporary install).
+  **Observed** (2026-11-18, harness, no game data): Proving Grounds' DLL loads from `PortedMods/ProvingGroundsMeitou` in the mod's
+  place and its `Initialize` runs.
 - **Observed** (2026-11-18, scratch install, scratch port and harness outside the repo, Release): the port built through the targets
-  file landed in the game's `bin/Release/net11.0/ports/`; enabled, it ran in the plugin mod's place with that mod's name and folder and a
+  file landed in the game's `bin/Release/net11.0/` port folder; enabled, it ran in the plugin mod's place with that mod's name and folder and a
   workshop-style mod of the same id was skipped; with the port's folder gone the plugin ran nothing and the log said so.
 
 ## Data entries

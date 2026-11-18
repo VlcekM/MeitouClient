@@ -55,10 +55,10 @@ foreach ($project in $projects) {
         -p:MeitouLegacyMac=$legacy -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
-# The official ports of RE_Kenshi plugins (docs/formats/rekenshi.md "Ports"), built against this game, each into ports/<id> beside it. The
+# The official ports of RE_Kenshi plugins (docs/formats/rekenshi.md "Ports"), built against this game, each into PortedMods/<id> beside it. The
 # game's version too: a port referencing a higher MeitouClient version than the zip's is refused at load.
-$portsDir = Join-Path (Resolve-Path $stage) "ports/"
-foreach ($port in Get-ChildItem (Join-Path $root "ports") -Filter *.csproj -Recurse) {
+$portsDir = Join-Path (Resolve-Path $stage) "PortedMods/"
+foreach ($port in Get-ChildItem (Join-Path $root "PortedMods") -Filter *.csproj -Recurse) {
     dotnet build $port.FullName -c Release -p:MeitouLegacyMac=$legacy -p:Version=$numeric "-p:MeitouPortsDir=$portsDir"
     if ($LASTEXITCODE -ne 0) { throw "dotnet build $($port.Name) failed" }
 }

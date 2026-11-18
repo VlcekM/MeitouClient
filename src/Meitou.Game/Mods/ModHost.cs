@@ -196,7 +196,14 @@ public sealed class ModHost
     /// among the others (docs/formats/rekenshi.md "Ports").
     /// </summary>
     /// <remarks>A folder that cannot be read gives none (logged): a failing scan must not stop a game that may have no code mods at all.</remarks>
-    public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install)
+    public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install) =>
+        CodeMods(install, CoveredMods.Ported, AppContext.BaseDirectory);
+
+    /// <summary>
+    /// <see cref="CodeMods(GameInstall)"/> with the ports of <paramref name="ported"/> found beside the game in <paramref name="gameFolder"/>.
+    /// </summary>
+    internal static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(
+        GameInstall install, IReadOnlyList<PortedMod> ported, string gameFolder)
     {
         try
         {
@@ -207,7 +214,7 @@ public sealed class ModHost
                 .. ModList.ReadEnabled(install)
                     .Select(onDisk.GetValueOrDefault)
                     .OfType<ModInfo>()
-                    .Select(CodeOf)
+                    .Select(m => CodeOf(m, ported, gameFolder))
                     .OfType<ModInfo>(),
             ];
             List<ModInfo> disabled = [.. discovered.Where(m => m.HasCode).Except(enabled)];
@@ -222,18 +229,18 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// The code an enabled mod runs: its own, else its official port from beside the game's executable; null for none (a port missing from the
-    /// game's folder is logged).
+    /// The code an enabled mod runs: its own, else its official port of <paramref name="ported"/> from beside the game in <paramref name="gameFolder"/>;
+    /// null for none (a port missing from the game's folder is logged).
     /// </summary>
-    static ModInfo? CodeOf(ModInfo mod)
+    static ModInfo? CodeOf(ModInfo mod, IReadOnlyList<PortedMod> ported, string gameFolder)
     {
         if (mod.HasCode) return mod;
-        if (CoveredMods.PortOf(mod) is not { } ported) return null;
+        if (CoveredMods.PortOf(mod, ported) is not { } entry) return null;
 
-        var port = mod.WithPort(CoveredMods.PortFolder(AppContext.BaseDirectory, ported));
+        var port = mod.WithPort(CoveredMods.PortFolder(gameFolder, entry));
         if (port.HasCode) return port;
 
-        Console.Error.WriteLine($"mods      {mod.Name}: its port {ported.PortId} is missing from {port.CodeFolder}; the plugin does not run");
+        Console.Error.WriteLine($"mods      {mod.Name}: its port {entry.PortId} is missing from {port.CodeFolder}; the plugin does not run");
         return null;
     }
 

@@ -301,6 +301,12 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
+## Proving Grounds
+
+`PortedMods/ProvingGrounds/` is roscatoday's Proving Grounds for Meitou (https://github.com/roscatoday/ProvingGroundsMeitou), a port of
+Shutori's Proving Grounds (https://github.com/shutori/Shutori_Re_Kenshi_Source), both GPLv3, shipped with the author's permission. Its
+licence and notice are `PortedMods/ProvingGrounds/LICENSE` and `NOTICE.md`.
+
 ## Kenshi logo
 
 `assets/branding/kenshi-logo.png` (shown on the Meitou title screen) is the Kenshi logo, artwork

@@ -201,8 +201,11 @@ msgstr "Oficina Steam"
 msgid "Local mod"
 msgstr "Mod local"
 
-msgid "RE_Kenshi plugin: Meitou runs its own port of it in its place"
-msgstr "Plugin RE_Kenshi: o Meitou roda a sua própria versão portada no lugar dele"
+msgid "MeitouClient ships this port itself: this copy is not run while the original mod is enabled"
+msgstr "O MeitouClient já inclui esta versão portada: esta cópia não roda enquanto o mod original estiver ativado"
+
+msgid "This mod has no official MeitouClient version, so the MeitouClient team provides a port: it runs on its own, nothing more to install"
+msgstr "Este mod não tem versão oficial para o MeitouClient, então a equipe do MeitouClient fornece uma versão portada: ela roda sozinha, não há mais nada a instalar"
 
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "Plugin RE_Kenshi: as DLLs são ignoradas pelo Meitou"
