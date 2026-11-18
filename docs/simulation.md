@@ -1683,7 +1683,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   registry site, so it is neither drawn, saved nor built: the production system makes a complete site of it once its town has registered, and its machine is kept in
   memory, not saved. A right click with characters selected is an `OperateOrder` (Training, 97), with Shift the Training job, whoever owns the dummy
   ([UseableStuff verbs](game/ui-input.md#context-menu-verbs)); a saved order or job keeps the id. Picked as a bed is (its collision, else its middle within
-  30 px); pointer `use`. Selected, its panel shows `Training:`, Workers and Max Skill Level ([Selected building](game/ui-screens.md#selected-building)). Not handled: an NPC idling at a dummy (town goals, `HomeSpotKind.Training`) does not count as its operator, so a player character can share it.
+  30 px); pointer `use`. Selected, its panel shows `Training:`, Workers and Max Skill Level ([Selected building](game/ui-screens.md#selected-building)). One user at a time across both sides: a resident pretend-operating it (221, town goals) counts as an operator, so an order or job finds it in use, and a dummy a character operates (walking there included) is skipped by the residents' staying-home and sitting-around claims, a held claim dropped (`ProductionSystem.OperatorsOf`, `TownPlaceClaims`).
 - **Items.** `PutInMachine` and `TakeFromMachine` move items between a character within 40 of the building's footprint and the machine:
   inputs, output, or storage cells.
 - **Research** (`Construction/ResearchState`). A queue paid at queue time from the benches' storage; a paid id is never

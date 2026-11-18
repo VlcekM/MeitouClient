@@ -126,6 +126,12 @@ sealed class TownPlaceClaims(PopulationData data)
     readonly Dictionary<TownBuilding, HashSet<int>> _postTaken = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
+    /// The positions of the town training dummies a character trains on by an order or job (<see cref="CharacterTask.Operate"/>) in the current
+    /// cadence pass: no member claims them (#996); derived, not hashed.
+    /// </summary>
+    readonly HashSet<Vector3> _usedDummies = [];
+
+    /// <summary>
     /// The seats the members held before this pass (<see cref="ClaimSeats"/>), by slot; scratch.
     /// </summary>
     readonly Dictionary<int, HomeSpot> _kept = [];
@@ -219,7 +225,7 @@ sealed class TownPlaceClaims(PopulationData data)
         var seats = SeatsOf(world, building);
         var taken = TakenOf(building);
         int had = kept ? seats.IndexOf(old) : -1;
-        if (had >= 0 && Operated(world, seats.At(had).Position)) had = -1;
+        if (had >= 0 && (Operated(world, seats.At(had).Position) || DummyUsed(seats.At(had)))) had = -1;
         bool staying = StaysAt(old.Kind) && mind.Goal?.Task.Type == TaskType.StayInHome;
         if (had >= 0 && (relaxes || staying))
         {
@@ -346,6 +352,37 @@ sealed class TownPlaceClaims(PopulationData data)
     }
 
     /// <summary>
+    /// Gathers <see cref="_usedDummies"/>: the training dummies characters operate as of the last tick, walking there included.
+    /// </summary>
+    void CollectUsedDummies(World world)
+    {
+        _usedDummies.Clear();
+        var table = world.Characters;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Next[i].Task != (byte)CharacterTask.Operate || table.Cold(i)?.OperateSite is not { } site) continue;
+            if (world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } dummy) _usedDummies.Add(dummy.Position);
+        }
+    }
+
+    /// <summary>
+    /// Marks taken the training dummies of <paramref name="home"/> (its nest's included) a character operates, so no member stays home at them.
+    /// </summary>
+    void TakeUsedDummies(World world, TownBuilding home, HashSet<int> taken)
+    {
+        if (_usedDummies.Count == 0) return;
+
+        var seats = SeatsOf(world, home);
+        for (int i = 0; i < seats.Count; i++)
+            if (DummyUsed(seats.At(i))) taken.Add(i);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="spot"/> is a training dummy a character operates (<see cref="_usedDummies"/>).
+    /// </summary>
+    bool DummyUsed(HomeSpot spot) => spot.Kind == HomeSpotKind.Training && _usedDummies.Contains(spot.Position);
+
+    /// <summary>
     /// The seats of <paramref name="building"/> taken in this cadence pass (indices of <see cref="TownBuilding.SeatAt"/>).
     /// </summary>
     HashSet<int> TakenOf(TownBuilding building) => _seatTaken.TryGetValue(building, out var taken) ? taken : _seatTaken[building] = [];
@@ -396,7 +433,7 @@ sealed class TownPlaceClaims(PopulationData data)
             // Only reigning open: the throne furniture alone (BF_THRONE, mask 0x1000000 of FUN_1408cbd50); sitting around also takes chairs and
             // dummies.
             bool Takes(HomeSpotKind kind) => around ? Sittable(kind, !playerSide) : kind == HomeSpotKind.ThroneSeat;
-            if (had && Mine(old.Building) && Takes(old.Spot.Kind))
+            if (had && Mine(old.Building) && Takes(old.Spot.Kind) && !DummyUsed(old.Spot))
             {
                 TakenOf(old.Building).Add(old.Index);
                 board.SitClaims[s] = old;
@@ -409,7 +446,7 @@ sealed class TownPlaceClaims(PopulationData data)
             for (int i = 0; i < seats.Seats.Count; i++)
             {
                 var seat = seats.Seats[i];
-                if (!Takes(seat.Spot.Kind) || !Mine(seat.Building)
+                if (!Takes(seat.Spot.Kind) || !Mine(seat.Building) || DummyUsed(seat.Spot)
                     || _seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index))
                     continue;
 
@@ -528,10 +565,16 @@ sealed class TownPlaceClaims(PopulationData data)
     /// </summary>
     void ReserveSeats(World world)
     {
+        CollectUsedDummies(world);
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is not { } board) continue;
-            foreach (var building in Buildings(board)) TakeOperatedSeats(world, building, TakenOf(building));
+            foreach (var building in Buildings(board))
+            {
+                TakeOperatedSeats(world, building, TakenOf(building));
+                TakeUsedDummies(world, building, TakenOf(building));
+            }
+
             foreach (var spot in board.SeatClaims.Values) Reserve(world, board, spot);
 
             foreach (var claim in board.SitClaims.Values) TakenOf(claim.Building).Add(claim.Index);

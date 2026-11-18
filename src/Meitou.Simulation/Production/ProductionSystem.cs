@@ -604,22 +604,32 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             && type != TaskType.ManATurretPlayerJob);
 
     /// <summary>
-    /// The characters operating the site.
+    /// The characters operating the site; at a town training dummy also the residents pretend-operating it (row 221, <see cref="PretendsAt"/>),
+    /// users of the same machine as its trainees are (<c>Task_OperateMachine</c> treats a dummy as any machine, #996).
     /// </summary>
     static int OperatorsOf(World world, string site)
     {
         var table = world.Characters;
+        var dummy = world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } f ? f : null;
         int n = 0;
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { } cold) continue;
 
             bool job = table.Next[i].Task == (byte)CharacterTask.Operate && cold.OperateSite == site;
-            if (job || cold.Ai?.WorkPost?.RuntimeKey == site) n++;
+            if (job || cold.Ai?.WorkPost?.RuntimeKey == site || dummy is not null && PretendsAt(in table.Next[i], cold, dummy)) n++;
         }
 
         return n;
     }
+
+    /// <summary>
+    /// Whether a resident stands at training dummy <paramref name="dummy"/> pretend-operating it (<see cref="Ai.AiMind.PretendAt"/>, there as
+    /// <see cref="HomePretenders"/> has it).
+    /// </summary>
+    static bool PretendsAt(in CharacterHot n, CharacterCold cold, Locks.Fixture dummy) =>
+        cold.Ai is { PretendAt: { Kind: Meitou.Data.World.HomeSpotKind.Training } spot, Behaviour: Ai.AiBehaviour.Sit }
+        && (CharacterTask)n.Task == CharacterTask.Idle && spot.Position == dummy.Position;
 
     /// <summary>
     /// The characters operating machine <paramref name="site"/> on a job (task Operate).
