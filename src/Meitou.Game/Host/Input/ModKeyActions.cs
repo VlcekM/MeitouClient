@@ -57,7 +57,7 @@ public sealed class ModKeyAction
     /// </summary>
     public InputAction Action { get; internal set; }
     /// <summary>
-    /// Whether one of its keys was down at the last control tick (the host's thread).
+    /// Whether one of its keys was down at the last control tick; written and read on the host's thread (interface code), never the tick's.
     /// </summary>
     public bool Held { get; internal set; }
     /// <summary>
@@ -90,13 +90,14 @@ public sealed class ModKeyAction
     /// <summary>
     /// Why an action of <paramref name="name"/>, <paramref name="label"/> and <paramref name="defaults"/> cannot be added after the mod's
     /// <paramref name="pending"/> ones: a bad name or label, a name the mod has already, or a default key the settings keep for themselves; null when
-    /// it can.
+    /// it can. A default the game takes before the bindings (<see cref="InputBindings.HostKey"/>) is only left out, with a log line.
     /// </summary>
     internal static string? Refusal(string name, string label, IReadOnlyList<Binding> defaults, IEnumerable<ModKeyAction> pending)
     {
         if (name.Length is 0 or > MaxName || !name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-'))
             return $"Key action name '{name}' must be 1 to {MaxName} letters, digits, '_', '.' or '-'.";
-        if (string.IsNullOrWhiteSpace(label) || label.Length > MaxLabel) return $"A key action's label is 1 to {MaxLabel} characters.";
+        if (string.IsNullOrWhiteSpace(label) || label.Length > MaxLabel || label.Any(char.IsControl))
+            return $"A key action's label is 1 to {MaxLabel} characters on one line.";
         if (pending.Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))) return $"The mod already has a key action '{name}'.";
         foreach (var binding in defaults)
             if (InputBindings.Reserved(binding)) return $"{binding} is kept by the settings; a key action cannot take it.";
@@ -111,14 +112,19 @@ public sealed class ModKeyAction
 public sealed record ModKeyContext(WorldSnapshot Snapshot, IReadOnlyList<CharacterId> Selected, long Tick, Action<SimCommand> Enqueue);
 
 /// <summary>
-/// The code mods' key actions in one set of bindings (<see cref="InputBindings"/>): their numbers, the defaults each got, and their saved form.
+/// The code mods' key actions in one set of bindings (<see cref="InputBindings"/>): their numbers, the keys each started with, and their saved form.
+/// The player's saved keys come before any mod's defaults, as the game's own saved bindings do, so a default never takes a key the player chose.
 /// </summary>
 sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
 {
     /// <summary>
-    /// Each action's defaults as last laid (the keys no other action held then), in the saved form: what a save leaves out.
+    /// Each action's keys as laid at the start or by Restore defaults, in the saved form: an action still at them is not rewritten in the save.
     /// </summary>
-    readonly Dictionary<InputAction, string> _defaults = [];
+    readonly Dictionary<InputAction, string> _start = [];
+    /// <summary>
+    /// Each action's saved entry as read at the start (none after Restore defaults): what an action still at its start's keys is saved as.
+    /// </summary>
+    readonly Dictionary<InputAction, string> _entries = [];
 
     /// <summary>
     /// The actions, in load order.
@@ -141,43 +147,69 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
     }
 
     /// <summary>
-    /// Gives each action, in load order, the default keys no other action holds (the game's, then the earlier mods'): a key belongs to one action,
-    /// as on the Controls page. Returns a line for each default left out.
+    /// The start, after the game's bindings are set: every action with a saved entry (<paramref name="saved"/>) takes its saved keys, in load order,
+    /// then every other action its defaults, in load order; a key another action holds by then is left out. Returns a line for each key left out.
     /// </summary>
-    public List<string> LayDefaults(InputBindings bindings)
+    public List<string> Start(InputBindings bindings, IReadOnlyDictionary<string, Dictionary<string, string>>? saved)
     {
         var problems = new List<string>();
-        foreach (var action in actions)
-        {
-            var kept = new List<Binding>();
-            foreach (var binding in action.Defaults)
-            {
-                if (bindings.Holder(binding, action.Action) is { } other)
-                    problems.Add($"{action.Owner}: {action.Name} default {binding} is {Name(other)}'s; left out");
-                else if (!kept.Contains(binding)) kept.Add(binding);
-            }
-            bindings.Set(action.Action, [.. kept]);
-            _defaults[action.Action] = InputBindings.Text(kept);
-        }
+        var texts = actions.Select(a => saved is null ? null : Saved(saved, a)).ToList();
+
+        // Every action lets go of what it held (a second start), then the saved ones take their keys before any default is laid.
+        foreach (var action in actions) bindings.Set(action.Action);
+        for (int i = 0; i < actions.Count; i++)
+            if (texts[i] is { } text) Lay(bindings, actions[i], Parse(actions[i], text, problems), "saved", problems);
+        for (int i = 0; i < actions.Count; i++)
+            if (texts[i] is null) Lay(bindings, actions[i], actions[i].Defaults, "default", problems);
+
+        Remember(bindings, texts);
         return problems;
     }
 
     /// <summary>
-    /// The player's saved keys of the running mods' actions over their defaults: a key another action holds is left out, as a default is; an
-    /// unknown key is skipped. Entries of actions or mods not running are left alone.
+    /// Restore defaults, after the game's defaults are laid: each action its defaults, in load order, a key another action holds left out.
     /// </summary>
-    public List<string> ApplySaved(InputBindings bindings, IReadOnlyDictionary<string, Dictionary<string, string>> saved)
+    public List<string> Reset(InputBindings bindings)
     {
         var problems = new List<string>();
-        var entries = actions
-            .Select(a => (Action: a, Text: Saved(saved, a)))
-            .Where(e => e.Text is not null)
-            .ToList();
+        foreach (var action in actions) bindings.Set(action.Action);
+        foreach (var action in actions) Lay(bindings, action, action.Defaults, "default", problems);
 
-        // Every saved action lets go of its defaults first, so a key the player moved from one mod's action to a later one's is free for it.
-        foreach (var (action, _) in entries) bindings.Set(action.Action);
-        foreach (var (action, text) in entries) ApplyOne(bindings, action, text!, problems);
+        Remember(bindings, null);
         return problems;
+    }
+
+    /// <summary>
+    /// Gives <paramref name="action"/> those of <paramref name="keys"/> that no other action holds and the game view can receive; the others are
+    /// left out with a line naming <paramref name="kind"/> ("saved" or "default").
+    /// </summary>
+    void Lay(InputBindings bindings, ModKeyAction action, IEnumerable<Binding> keys, string kind, List<string> problems)
+    {
+        var kept = new List<Binding>();
+        foreach (var binding in keys)
+        {
+            if (InputBindings.Reserved(binding) || InputBindings.HostKey(binding))
+                problems.Add($"{action.Owner}: {action.Name} {kind} {binding} is kept by the game; left out");
+            else if (bindings.Holder(binding, action.Action) is { } other)
+                problems.Add($"{action.Owner}: {action.Name} {kind} {binding} is {Name(other)}'s; left out");
+            else if (!kept.Contains(binding)) kept.Add(binding);
+        }
+        bindings.Set(action.Action, [.. kept]);
+    }
+
+    /// <summary>
+    /// Keeps each action's keys now as its start's (<see cref="_start"/>) and its saved entry, from <paramref name="texts"/> in action order (null:
+    /// none).
+    /// </summary>
+    void Remember(InputBindings bindings, List<string?>? texts)
+    {
+        _start.Clear();
+        _entries.Clear();
+        for (int i = 0; i < actions.Count; i++)
+        {
+            _start[actions[i].Action] = InputBindings.Text(bindings.Get(actions[i].Action));
+            if (texts?[i] is { } text) _entries[actions[i].Action] = text;
+        }
     }
 
     /// <summary>
@@ -187,40 +219,57 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
         saved.TryGetValue(action.Owner, out var mine) && mine is not null && mine.TryGetValue(action.Name, out var text) ? text ?? "" : null;
 
     /// <summary>
-    /// Gives <paramref name="action"/> the keys of its saved <paramref name="text"/> that no other action holds.
+    /// The keys of a saved <paramref name="text"/>; an unknown one is skipped with a line.
     /// </summary>
-    void ApplyOne(InputBindings bindings, ModKeyAction action, string text, List<string> problems)
+    static List<Binding> Parse(ModKeyAction action, string text, List<string> problems)
     {
-        var kept = new List<Binding>();
+        var keys = new List<Binding>();
         foreach (var token in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (!Binding.TryParse(token, out var binding)) problems.Add($"{action.Owner}: {action.Name}: unknown binding '{token}'");
-            else if (bindings.Holder(binding, action.Action) is { } other)
-                problems.Add($"{action.Owner}: {action.Name}: {binding} is {Name(other)}'s; left out");
-            else if (!InputBindings.Reserved(binding) && !kept.Contains(binding)) kept.Add(binding);
+            if (Binding.TryParse(token, out var binding)) keys.Add(binding);
+            else problems.Add($"{action.Owner}: {action.Name}: unknown binding '{token}'");
         }
-        bindings.Set(action.Action, [.. kept]);
+        return keys;
     }
 
     /// <summary>
-    /// <paramref name="saved"/> (copied) with each running action's keys: left out at its defaults, else kept as text (empty: unbound); mods with
-    /// nothing left are dropped, and null when no mod has anything.
+    /// <paramref name="saved"/> (copied) with the running mods' actions as they are now. An action at its start's keys gets back the entry it had
+    /// at the start (none stays none; Restore defaults leaves none); another is saved as text (empty: unbound), or dropped when it equals the mod's
+    /// defaults. A running mod's entries for actions it no longer has are dropped; other mods' are kept. Null when nothing is left.
     /// </summary>
     public Dictionary<string, Dictionary<string, string>>? Changes(InputBindings bindings, Dictionary<string, Dictionary<string, string>>? saved)
     {
         var result = saved?.ToDictionary(p => p.Key, p => new Dictionary<string, string>(p.Value ?? [])) ?? [];
+        DropRemoved(result);
         foreach (var action in actions)
         {
             string now = InputBindings.Text(bindings.Get(action.Action));
-            bool atDefault = _defaults.TryGetValue(action.Action, out var laid) && laid == now;
             if (!result.TryGetValue(action.Owner, out var mine)) result[action.Owner] = mine = [];
 
-            if (atDefault) mine.Remove(action.Name);
+            if (now == _start.GetValueOrDefault(action.Action, ""))
+            {
+                if (_entries.TryGetValue(action.Action, out var entry)) mine[action.Name] = entry;
+                else mine.Remove(action.Name);
+            }
+            else if (now == InputBindings.Text(action.Defaults.Distinct())) mine.Remove(action.Name);
             else mine[action.Name] = now;
         }
         foreach (var (mod, mine) in result.ToList())
             if (mine.Count == 0) result.Remove(mod);
         return result.Count == 0 ? null : result;
+    }
+
+    /// <summary>
+    /// Drops the running mods' entries for actions they no longer have (an action renamed or removed by a mod update).
+    /// </summary>
+    void DropRemoved(Dictionary<string, Dictionary<string, string>> result)
+    {
+        foreach (var owner in actions.Select(a => a.Owner).Distinct())
+        {
+            if (!result.TryGetValue(owner, out var mine)) continue;
+            foreach (var name in mine.Keys.ToList())
+                if (!actions.Any(a => a.Owner == owner && a.Name == name)) mine.Remove(name);
+        }
     }
 
     /// <summary>

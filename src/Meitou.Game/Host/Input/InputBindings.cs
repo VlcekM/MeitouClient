@@ -492,6 +492,13 @@ public sealed class InputBindings
                 or Key.RightShift;
 
     /// <summary>
+    /// Whether the game takes <paramref name="binding"/> before the bindings see it, or the Controls page keeps it: Insert opens the console, Delete
+    /// and Backspace unbind a row there (Backspace also restarts a duel or battle). A code mod's action never gets one by default or from a saved
+    /// entry. (The numpad divide key, the squad tour's, has no <see cref="Key"/>, so no binding can name it.)
+    /// </summary>
+    public static bool HostKey(Binding binding) => !binding.IsMouse && binding.Key is Key.Insert or Key.Delete or Key.Backspace;
+
+    /// <summary>
     /// The action that holds <paramref name="binding"/>, other than <paramref name="except"/>; null when none.
     /// </summary>
     internal InputAction? Holder(Binding binding, InputAction except)
@@ -502,23 +509,22 @@ public sealed class InputBindings
     }
 
     /// <summary>
-    /// Adds the code mods' key actions after the game's bindings are set (the install's and the player's): each gets the default keys no other action
-    /// holds, then the player's saved keys (<paramref name="saved"/>: mod id to action name to bindings, as <see cref="Apply"/> reads them).
-    /// Nothing happens without actions. Returns the skipped entries and the defaults left out.
+    /// Adds the code mods' key actions after the game's bindings are set (the install's and the player's): first the player's saved keys
+    /// (<paramref name="saved"/>: mod id to action name to bindings, as <see cref="Apply"/> reads them), then, for the actions without a saved
+    /// entry, the default keys no other action holds. Nothing happens without actions. Returns the skipped entries and the keys left out.
     /// </summary>
     public IReadOnlyList<string> UseModActions(IReadOnlyList<ModKeyAction> actions, IReadOnlyDictionary<string, Dictionary<string, string>>? saved)
     {
         if (actions.Count == 0) return [];
 
         _mod = new ModKeyBindings(actions);
-        var problems = _mod.LayDefaults(this);
-        if (saved is not null) problems.AddRange(_mod.ApplySaved(this, saved));
-        return problems;
+        return _mod.Start(this, saved);
     }
 
     /// <summary>
-    /// <paramref name="saved"/> with the running mods' key actions as they are now: an action at its defaults is dropped, any other kept; the
-    /// entries of mods not running stay. Returns <paramref name="saved"/> itself without mod actions, and null when nothing is left to keep.
+    /// <paramref name="saved"/> with the running mods' key actions as they are now (<see cref="ModKeyBindings.Changes"/>: an action the player did
+    /// not change keeps its entry as it was); the entries of mods not running stay. Returns <paramref name="saved"/> itself without mod actions, and
+    /// null when nothing is left to keep.
     /// </summary>
     public Dictionary<string, Dictionary<string, string>>? ModChanges(Dictionary<string, Dictionary<string, string>>? saved) =>
         _mod is null ? saved : _mod.Changes(this, saved);
@@ -544,7 +550,7 @@ public sealed class InputBindings
     {
         SetEngineDefaults();
         OverlayGameControls();
-        if (_mod is not null) _mod.LayDefaults(this);
+        _mod?.Reset(this);
     }
 
     /// <summary>

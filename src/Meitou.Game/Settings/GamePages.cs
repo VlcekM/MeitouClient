@@ -434,7 +434,7 @@ sealed class GamePages(SettingsMenu menu)
 
         // The code mods' key actions follow the game's, in load order (docs/modding.md "Key actions").
         foreach (var mod in menu.Bindings.ModActions)
-            result.Add(new(mod.Caption, $"A key of the mod {mod.OwnerName}: {mod.Label}.", Binding: mod.Action));
+            result.Add(new(mod.Caption, Loc.Tr("A key of the mod {1}: {2}.", mod.OwnerName, mod.Label), Binding: mod.Action));
     }
 
     /// <summary>
