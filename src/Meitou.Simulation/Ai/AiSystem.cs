@@ -3544,6 +3544,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var home = HouseForSale(world, squad);
         squad.HomeBuilding = home;
+        squad.MovedOut = home is null;
         if (squad.Ai is not { } board) return;
         var old = board.OwnHome;
         board.OwnHome = home;

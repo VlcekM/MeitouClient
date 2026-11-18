@@ -478,6 +478,14 @@ PLATOON keys (**Verified**):
 - `homebuilding` (handle) is bound through the game's per-frame system-message queue (`FUN_1407b65b0`): only if the building resolves that frame, else the message is
   dropped. Meitou writes the handle of the building's state in the save's zone file (a Meitou save writes a file for
   every visited zone, [Zone files](#zone-files)), else its level-data handle ([handles](#object-handles-and-slot-lists)).
+- A platoon moved out of a house the player bought: `homebuilding` its new home, else the null handle (C 0, TYPE 11); `owned stuff count` and
+  `owned<k>` with that house's entry replaced by the new home, else dropped; `persistent` false when it got no home; `is resident`, `sqt` and
+  `hometown` as they were (**Observed**: Squin's `Shek Kingdom_15`, the Longhouse's residents, has the Longhouse as `homebuilding` and `owned0`,
+  `owned stuff count` 1 and `persistent` true in ShopCounterStart, and in ShopCounterSold, bought there, a null `homebuilding`, `owned stuff count`
+  0 and no `owned0`, `persistent` false, `is resident` true, `sqt` 1 and the same `hometown`). Meitou writes a save's platoon so when its saved home
+  is a house bought since (`SaveCapture.WriteMovedOut`; it moves out again at each load, `AiSystem.Evict`), and a platoon it made itself with the
+  home `Evict` gave it and not persistent when it got none (`Squad.MovedOut`). That an old `homebuilding` kept in the save made the original's
+  former residents shoo the player out of a house bought in MeitouClient is an inference from the saves and the shoo goal's rules, not tested.
 - `inventory refresh time` (float) is a trader platoon's next restock in absolute game hours (day x 24 + hour) (**Observed**: METARU's 107 and its quicksave's 117
   trader platoons; the largest is 200.3 at clock 177.4 and 207.7 at 186.6, about the clock + a 24 h `vendors refresh time`; three or four are 0). Meitou writes it for every
   shop with Meitou's own `meitou shop` (string: a squad shop's stock as JSON, `[]` when empty and for a building shop, whose goods its containers keep; the container format of [locks](../game/locks.md)) and `meitou shop fills` (int, the next

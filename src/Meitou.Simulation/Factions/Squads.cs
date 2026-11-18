@@ -146,6 +146,11 @@ public sealed class Squad
     /// </summary>
     public long NextHomeFillTick { get; set; }
     /// <summary>
+    /// The squad moved out of a house the player bought and was given no other (<see cref="Ai.AiSystem.Evict"/>): a save writes its platoon not
+    /// persistent, as the original's purchase leaves one (docs/formats/save.md "NPC platoons"). Not saved or hashed: only the save writer reads it.
+    /// </summary>
+    public bool MovedOut { get; set; }
+    /// <summary>
     /// Whether one of the player's characters has stood in or on the squad's home building since the squad was made (its town loaded): the
     /// original builds that building's interior parts (BuildingInterior <c>+0x10</c>) then and keeps them until the building unloads, and no restock
     /// fills the home meanwhile (<see cref="Trading.TradeSystem"/>, docs/game/economy.md "Building shops"). Not saved, as the original's parts are

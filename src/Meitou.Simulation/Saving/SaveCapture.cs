@@ -1128,12 +1128,58 @@ public static partial class SaveCapture
                 platoon.Record.Bools["persistent"] = Ai.AiSystem.Occupies(data.Ai, package);
             }
 
+            if (p is not null) WriteMovedOut(builder.Game, world, data, platoon.Record, sp, p, squad);
             if (squad is not null) NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
             else if (sp.MemorySet) NoteMemory(platoon.Record, sp.Memory);
             WriteSavedMembers(builder, world, data, options, clock, buildings, races, platoon, sp, squad);
             SetCharCount(platoon);
         }
     }
+
+    /// <summary>
+    /// A save's platoon whose saved home is a house the player has bought since: the purchase moved it out (<see cref="Ai.AiSystem.Evict"/>, again at
+    /// each load), so it is written as the original's purchase leaves it (<b>Observed</b>, ShopCounterSold, docs/formats/save.md "NPC platoons"):
+    /// <c>homebuilding</c> its new home, else the null handle; that entry of its owned list (<c>owned stuff count</c>, <c>owned&lt;k&gt;</c>) replaced
+    /// by the new home, else dropped; <c>persistent</c> false when it has no home. <c>is resident</c>, <c>sqt</c> and <c>hometown</c> stay.
+    /// </summary>
+    static void WriteMovedOut(SaveGame game, World world, PopulationData data, FcsRecord record, SavedPlatoon sp, Platoon p, Squad? squad)
+    {
+        if ((uint)p.Origin >= (uint)data.Sites.Count || SavedCharacters.SavedHome(world, sp, data.Sites[p.Origin]) is not { } old) return;
+        if (!world.Fixtures.IsEmptied(old.Key)) return;
+
+        var oldHand = Hand.Read(record, "homebuilding");
+        var home = squad is not null ? squad.HomeBuilding : p.Stored?.HomeBuilding;
+        var hand = home is not null && home.Key != old.Key ? HomeHandle(game, home) : null;
+        (hand ?? Hand.Null).Write(record, "homebuilding");
+        WriteOwned(record, oldHand, hand);
+        if (hand is null) record.Bools["persistent"] = false;
+    }
+
+    /// <summary>
+    /// A platoon's owned list (<c>owned stuff count</c>, <c>owned&lt;k&gt;</c>) with the entry naming <paramref name="old"/> replaced by
+    /// <paramref name="now"/>, or dropped when it is null; the others kept in order.
+    /// </summary>
+    static void WriteOwned(FcsRecord record, Hand old, Hand? now)
+    {
+        int count = record.Ints.GetValueOrDefault("owned stuff count");
+        var kept = new List<Hand>();
+        for (int k = 0; k < count; k++)
+        {
+            var h = Hand.Read(record, Owned(k));
+            if (h.C != old.C || h.I != old.I) kept.Add(h);
+        }
+
+        if (now is { } added) kept.Add(added);
+        for (int k = 0; k < count; k++)
+            foreach (string part in (string[])["C", "CS", "I", "S", "TYPE"]) record.Ints.Remove(Owned(k) + part);
+        for (int k = 0; k < kept.Count; k++) kept[k].Write(record, Owned(k));
+        record.Ints["owned stuff count"] = kept.Count;
+    }
+
+    /// <summary>
+    /// The key of a platoon's <paramref name="k"/>-th owned handle.
+    /// </summary>
+    static string Owned(int k) => "owned" + k.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Whether a save's platoon is dropped as the original's saver (<c>FUN_140372ef0</c>) drops a declared-dead one: declared dead
@@ -1528,7 +1574,7 @@ public static partial class SaveCapture
         /// </summary>
         SavePlatoon WriteWorldSquad(Squad squad, Platoon? roamer, List<FreshMember> members, SavePlatoon? into, bool declared)
         {
-            return WritePlatoon(
+            var written = WritePlatoon(
                 squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding,
                 squad.Ai?.Current?.Id ?? roamer?.Package,
                 members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(_world)?.Snapshot(squad.Id),
@@ -1537,6 +1583,10 @@ public static partial class SaveCapture
                 missionTown: squad.Ai is { } board && Ai.AiSystem.BoardMoves(board) && PopulationSystem.MissionSite(board) is >= 0 and var mission
                     ? mission
                     : roamer?.Target ?? -1);
+
+            // Moved out of a house the player bought with no other home: not persistent, as the original's purchase leaves it (WriteMovedOut).
+            if (squad.MovedOut && squad.HomeBuilding is null) written.Record.Bools["persistent"] = false;
+            return written;
         }
 
         /// <summary>
