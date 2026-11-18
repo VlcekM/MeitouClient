@@ -256,27 +256,36 @@ public sealed partial class PopulationSystem
         bool diagonal = Rng.Float(Roll()) < 0.5f;
         int count = 0;
         float sum = 0;
-        for (int k = 0; k < 4; k++)
-        {
-            (int X, int Z) cell = diagonal
-                ? (cx + ((k & 1) == 0 ? 1 : -1), cz + (k < 2 ? 1 : -1))
-                : k switch { 0 => (cx + 1, cz), 1 => (cx, cz + 1), 2 => (cx - 1, cz), _ => (cx, cz - 1) };
-            if (biomes.GroupOf(cell.X, cell.Z) != group) continue;
 
-            // The tether: a homed squad's sectors are within one of its home's (FUN_1408f5ad0's range factor, near 0 and far 1 from
-            // Task_Patrol's start).
-            if (home is { } h && Math.Max(Math.Abs(cell.X - h.X), Math.Abs(cell.Z - h.Z)) > 1) continue;
-            weight[count] = SectorWeight(new ZoneCoordinate(cell.X, cell.Z));
-            sum += weight[count];
-            near[count++] = cell;
+        // A squad with a town of its own that no neighbour ties to (it came into the world far from home: a released raid, a save's traveller, a
+        // mod's spawn) draws among the neighbours with no tether (second pass; engine choice: the original's fallback, FUN_1408fc1a0, takes the
+        // first active sector of the group, also ignoring the tether, so both stay round the loaded sectors), where a point of the home's
+        // sector would walk it home across the map.
+        for (int pass = 0; pass < (squad.Town >= 0 ? 2 : 1) && count == 0; pass++)
+        {
+            for (int k = 0; k < 4; k++)
+            {
+                (int X, int Z) cell = diagonal
+                    ? (cx + ((k & 1) == 0 ? 1 : -1), cz + (k < 2 ? 1 : -1))
+                    : k switch { 0 => (cx + 1, cz), 1 => (cx, cz + 1), 2 => (cx - 1, cz), _ => (cx, cz - 1) };
+                if (biomes.GroupOf(cell.X, cell.Z) != group) continue;
+
+                // The tether: a homed squad's sectors are within one of its home's (FUN_1408f5ad0's range factor, near 0 and far 1 from
+                // Task_Patrol's start).
+                if (pass == 0 && home is { } h && Math.Max(Math.Abs(cell.X - h.X), Math.Abs(cell.Z - h.Z)) > 1) continue;
+                weight[count] = SectorWeight(new ZoneCoordinate(cell.X, cell.Z));
+                sum += weight[count];
+                near[count++] = cell;
+            }
         }
 
         int drawn = 0;
         for (float r = Rng.Float(Roll()) * sum; drawn < count - 1 && r >= weight[drawn]; drawn++) r -= weight[drawn];
 
-        // No neighbour: a point of the home's sector, else of its own (engine choice; the original's fallback, FUN_1408fc1a0, takes the first active
-        // sector of the group with no town and fewer than 2 excluded platoons where a spot is found, else any sector of the group).
-        var (tx, tz) = count > 0 ? near[drawn] : home is { } back ? back : (cx, cz);
+        // No neighbour: for a homeless squad a point of its home's sector, else of its own (engine choice; the original's fallback, FUN_1408fc1a0,
+        // takes the first active sector of the group with no town and fewer than 2 excluded platoons where a spot is found, else any sector of the
+        // group).
+        var (tx, tz) = count > 0 ? near[drawn] : squad.Town < 0 && home is { } back ? back : (cx, cz);
         if (ApproachesTowns(squad.TemplateId))
         {
             var target = new ZoneCoordinate(tx, tz);
@@ -348,13 +357,22 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The sector of a homeless squad's home town (<c>FUN_1408f8060</c>, then <c>Ownerships::setHomeTown</c>), measured from <paramref name="at"/>:
+    /// The sector of the home town a patrol is tethered to. A squad with a town of its own (a town's squad, a platoon out of one) has that town's
+    /// (<c>Task_Patrol</c> reads the platoon's home town, docs/game/factions-squads-towns.md "Patrol task", <b>Verified</b>; that this is the
+    /// town the platoon was made out of is Meitou's reading). Else the sector
+    /// of a homeless squad's home town (<c>FUN_1408f8060</c>, then <c>Ownerships::setHomeTown</c>), measured from <paramref name="at"/>:
     /// the town nearest its sector's centre when it is of the squad's faction; else the faction's nearest town, or its nearest nest when that is 9216
     /// nearer, none beyond 50000; null when none (no faction, or no town of it). Engine choice: decided at its first patrol rather than as it is
     /// made, so saved and kept squads get one too.
     /// </summary>
     (int X, int Z)? HomeCell(Squad squad, ZoneCoordinate zone, Vector2 at)
     {
+        if (squad.Town >= 0 && squad.Town < _data.Sites.Count)
+        {
+            var own = _data.Sites[squad.Town].Position;
+            return WeatherAreas.CellOf(own.X, own.Z);
+        }
+
         if (squad.Faction < 0) return null;
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(zone.X, zone.Y);
         Vector2? home = null;

@@ -314,10 +314,15 @@ public sealed class Fixture
     /// </summary>
     public LockState? Lock { get; init; }
     /// <summary>
-    /// A container's own inventory (<c>has inventory</c>; docs/game/locks.md "Containers"): null for the rest. Starts empty (what the original puts
-    /// in is <b>Unknown</b>).
+    /// A container's own inventory (<c>has inventory</c>; docs/game/locks.md "Containers"): null for the rest. Starts empty, or with what a loaded
+    /// save holds for it.
     /// </summary>
     public Items.Inventory? Contents { get; init; }
+    /// <summary>
+    /// The items a town container held as saved once the original's entry of it was read (<c>Saving/FurnitureInventorySave</c>; null: none
+    /// read); a save that finds them unchanged leaves that entry's inventory as it was. Not hashed: it only mirrors the save.
+    /// </summary>
+    public IReadOnlyList<Meitou.Data.Save.SaveItem>? LoadedContents { get; set; }
 
     /// <summary>
     /// Doors: the index in the building's <c>doors</c> list (the save's suffix), the motion state, the open amount 0..1, the door's own broken flag,

@@ -920,11 +920,11 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c>), a roaming one too; no town building is claimed, and the
-    /// population still moves a package that does not travel.
+    /// Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c>), a roaming one too; no town building is claimed, and its
+    /// members act out the package's goals with full minds, also one that does not travel.
     /// </summary>
     [Fact]
-    public void A_loaded_roaming_platoons_squad_runs_a_blackboard_without_claiming_a_home_and_keeps_its_engine_routine()
+    public void A_loaded_roaming_platoons_squad_runs_a_blackboard_without_claiming_a_home_and_its_members_act_out_its_package()
     {
         var near = Rec("116-t", FcsRecordType.AiPackage, "Patrol near home");
         near.Ints["unloaded func"] = 2;
@@ -944,7 +944,7 @@ public class AiTests(ITestOutputHelper output)
             Assert.Equal("116-t", squad.Ai?.Current?.Id);
             Assert.Null(squad.Ai!.OwnHome);
             Assert.False(AiSystem.BoardMoves(squad.Ai));
-            Assert.All(squad.Members, m => Assert.True(world.Characters.Cold(world.Characters.TryResolveNext(m, out int s) ? s : -1)!.Ai!.Engine));
+            Assert.All(squad.Members, m => Assert.False(world.Characters.Cold(world.Characters.TryResolveNext(m, out int s) ? s : -1)!.Ai!.Engine));
         }
     }
 

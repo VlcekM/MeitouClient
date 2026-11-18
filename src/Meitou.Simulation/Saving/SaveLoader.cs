@@ -730,10 +730,14 @@ public static class SaveLoader
     /// are marked <c>is resident</c> and counted in the town's <c>sqt</c> 1 pool, and the bar squads, slaves and farm animals of a town have a
     /// package whose unloaded func keeps them home, 4, or 0): not a resident, and an off-screen job that moves it (unloaded func 2, 5 or 6) and not a
     /// bar squad of the town or its faction (which the population makes with the town), or a template of its base town's <c>roaming squads</c>.
+    /// A platoon Meitou saved as a roaming one carries its own mark and roams whatever its package (<see cref="SaveCapture.RoamsKey"/>).
     /// </summary>
     internal static bool Travels(SavePlatoon platoon, Ai.PlatoonJob job, TownData baseTown, FactionData? townFaction)
     {
         string template = platoon.SquadTemplate;
+
+        // One Meitou saved as roaming roams (SaveCapture.RoamsKey): the package it ran when saved may be the bar's of a town it had stopped in.
+        if (platoon.Record.Bools.GetValueOrDefault(SaveCapture.RoamsKey)) return true;
         if (platoon.Record.Bools.GetValueOrDefault("is resident")) return false;
 
         // `sqt` 1 is the town's resident pool (residents and bar squads, docs/formats/save.md "PLATOON keys"): the platoon belongs to its town,

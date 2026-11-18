@@ -265,7 +265,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     public const double RollEveryHours = 6;
     /// <summary>
-    /// Spawn radius of a campaign squad round its town or leader (<b>Verified</b>, 700).
+    /// Spawn radius of a campaign squad round its town's centre or its leader (engine stand-in: the original's 700, <c>FUN_1409c4150</c>,
+    /// <b>Verified</b>, is the distance outward through the drafting town's first gate, and a squad drafted once there is a leader is made at the
+    /// leader platoon's position; docs/game/factions-squads-towns.md "Campaigns").
     /// </summary>
     public const float CampaignSpawnRadius = 700;
     /// <summary>
@@ -1483,10 +1485,10 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>; it first marks every member
-    /// of the loaded squad "ordered", <c>FUN_14028a4e0</c>): each platoon counts its own carriers and keeps its own stamp of the first one, cleared
-    /// while nobody (or no loaded squad) carries; any platoon with three carriers, or more than <see cref="CannibalCarryHours"/> since its first,
-    /// ends the campaign's assault.
+    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>; it first runs the war
+    /// assault's update, the "ordered" marks, which the AI's package step gives, <c>AiSystem.StepWar</c>): each platoon counts its own carriers
+    /// and keeps its own stamp of the first one, cleared while nobody (or no loaded squad) carries; any platoon with three carriers, or more than
+    /// <see cref="CannibalCarryHours"/> since its first, ends the campaign's assault.
     /// </summary>
     bool CannibalsLoaded(World world, CampaignInstance inst, double now)
     {
@@ -1498,16 +1500,7 @@ public sealed partial class PopulationSystem : IStateHashed
             if (world.Platoons.Find(id) is { State: PlatoonState.Loaded } p && world.Squads.Find(p.SquadId) is { } squad)
             {
                 foreach (var member in squad.Members)
-                {
-                    if (table.TryResolveNext(member, out int slot))
-                    {
-                        var cold = table.Cold(slot)!;
-
-                        // FUN_14028a4e0, first thing the package's update does: the victim-side mark that stops an Assault booking
-                        cold.Ordered = true;
-                        if (!cold.Carrying.IsNone) carriers++;
-                    }
-                }
+                    if (table.TryResolveNext(member, out int slot) && !table.Cold(slot)!.Carrying.IsNone) carriers++;
             }
 
             if (carriers == 0)
@@ -1822,12 +1815,15 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Some faction runs a hostile campaign against the player (a defence ends only when none does).
+    /// Some faction runs a hostile campaign against the player (a defence ends only when none does; <c>FUN_1407f2e80</c> asks every faction's war
+    /// manager).
     /// </summary>
-    bool HostileAgainstPlayer(World world)
+    internal bool HostileAgainstPlayer(World world)
     {
+        if (_wars is null) return false;   // no war manager made yet (the AI can ask before the population's first check)
+
         int player = PlayerFactionOf(world);
-        foreach (var m in _wars!)
+        foreach (var m in _wars)
         {
             foreach (var a in m.Actives)
                 if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true }) return true;

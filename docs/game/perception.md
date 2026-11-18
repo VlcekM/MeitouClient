@@ -174,7 +174,7 @@ Hearing does not imply ordinary visual cone/line-of-sight eligibility.
   and the nearest's squared distance at `+0x0`; else tagged NEUTRAL and not down, dead or carried: `numNeutrals` `+0x98`. At a refresh an ALLY standing (posture 0), not out and not dead
   counts at `+0x4c` (conscious allies), any other ALLY at `+0x48`.
 - **Threats** (`addToThreatsAndFlockingList` `FUN_140854370`, at a refresh only): see [combat](combat.md#fight-lifecycle-and-orders). The list `+0x50` is the characters whose intended
-  target is the looker; `+0x88` sums their positive aggression, `+0x8c` the aggression of those whose target is of the looker's faction, `+0x90` all sensed others' intended aggression.
+  target is the looker; `+0x88` sums their positive aggression, `+0x8c` the aggression of those whose target is of the looker's faction other than the looker itself (`FUN_140854370`, **Verified**: a target equal to the looker adds to `+0x88` only), `+0x90` all sensed others' intended aggression.
 - **Decay** (`FUN_140859010`): seen and heard cleared; age = (now − time) in sense units (hours × 3600 / 33 × 0.5, 2 s at 1x); while under 8 (25 when the character is in no building,
   vfunc 0x78 null, that reading **Observed**) the place follows the character's real one; dropped past 30 units, 60 when it is in combat mode, the looker's squad holds a long tag of mask 0x232 on it or it is the
   looker's slave, 120 for a player-faction character inside the looker's home building (the looker's faction not "not real", `+0x1d0`). A character whose vfunc 0x240 holds is dropped at once.

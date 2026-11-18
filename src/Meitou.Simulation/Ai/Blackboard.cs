@@ -45,8 +45,7 @@ public enum PackageClass : byte
     /// </summary>
     Contract = 6,
     /// <summary>
-    /// Wars and campaigns (19, 20, 32, 31: the campaign drives its squads, <see cref="PopulationSystem"/>) and the rest of the unread classes: not
-    /// built; never start (except as a lone slot-0 package), never finish.
+    /// The unread classes: not built; never start (except as a lone slot-0 package), never finish.
     /// </summary>
     Unbuilt = 7,
     /// <summary>
@@ -83,6 +82,27 @@ public enum PackageClass : byte
     /// (docs/game/ai.md "Package classes", Verified by code).
     /// </summary>
     Refugee = 15,
+    /// <summary>
+    /// <c>Package_WarBase</c> (19, a campaign's assembly): finished once its platoon is out of its campaign; no update and an empty sensing hook
+    /// (docs/game/ai.md "Package classes", Verified by code). Started only as a campaign's override (engine choice; the original's can always start).
+    /// The campaign march moves its squad.
+    /// </summary>
+    WarBase = 16,
+    /// <summary>
+    /// <c>Package_WarAssault</c> (20, a campaign's assault): as <see cref="WarBase"/>, and its update marks every member of its squad "ordered"
+    /// (<c>CharacterCold.Ordered</c>, Verified by code).
+    /// </summary>
+    WarAssault = 17,
+    /// <summary>
+    /// <c>Package_WarAssault_Cannibal</c> (32): as <see cref="WarAssault"/>, and its update then runs the cannibals' carrier rule (Verified by code;
+    /// Meitou keeps that rule in the campaign, <c>PopulationCampaigns.CannibalsLoaded</c>).
+    /// </summary>
+    WarAssaultCannibal = 18,
+    /// <summary>
+    /// <c>Campaign_DefendPlayerBase</c> (31, an ally's defence of the player's town): <c>Contract_DefendPlayerBase</c> (15) but for its finished
+    /// test, which after the contract hours waits while a hostile campaign runs (docs/game/ai.md "Package classes", Verified by code).
+    /// </summary>
+    CampaignDefend = 19,
 }
 
 /// <summary>
@@ -110,8 +130,19 @@ public static class PackageClasses
         29 => PackageClass.PassingAssault,
         30 => PackageClass.OccupyTown,
         22 => PackageClass.Refugee,
+        19 => PackageClass.WarBase,
+        20 => PackageClass.WarAssault,
+        32 => PackageClass.WarAssaultCannibal,
+        31 => PackageClass.CampaignDefend,
         _ => PackageClass.Unbuilt,
     };
+
+    /// <summary>
+    /// The class package signal <paramref name="signal"/> is built as when it runs as the blackboard's override (a contract, a campaign's phase
+    /// package): signal 0 becomes 33, <c>Contract_Timed</c> (<c>FUN_140272240</c>, <b>Verified</b>), so a plain package given that way runs for its
+    /// hours; every other signal keeps its class.
+    /// </summary>
+    public static PackageClass OfOverride(int signal) => signal == 0 ? PackageClass.Contract : Of(signal);
 }
 
 /// <summary>
@@ -260,6 +291,16 @@ public sealed class Blackboard
     /// The game hours (<see cref="World.GameHours"/>) the contract ends at.
     /// </summary>
     public double ContractEnd { get; private set; }
+
+    /// <summary>
+    /// The contract is a campaign's phase package (<c>AiSystem.InstallPhasePackage</c>): it ends by its class's finished test, as the original ends
+    /// every override (<c>FUN_140272570</c> asks the override's +0x68 on each visit, <b>Verified</b>), so a retreat outlives its campaign until its
+    /// own test passes. No war or retreat class's finished test reads <see cref="ContractEnd"/>; of the finished tests checked, the contract classes'
+    /// do (<c>Contract_Timed</c> among them, <see cref="PackageClasses.OfOverride"/>) and the campaign's defence's. A contract dialogue or a code mod
+    /// started ends at its hours whatever its class (engine choice). Saved as
+    /// <see cref="Saving.AiSave.PhaseKey"/>; hashed only while set.
+    /// </summary>
+    public bool PhaseContract { get; private set; }
 
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
@@ -415,6 +456,22 @@ public sealed class Blackboard
     /// spent before the command, or in another town, does not count toward the stay (engine API, not in the original).
     /// </summary>
     public bool VisitArrivalPending { get; set; }
+    /// <summary>
+    /// The town the trader last left (+0xb0, set when it drops its town): any other town it is in counts as arriving, so a town it only passes
+    /// through on the way is a stop too. Not saved, like the trader's other state.
+    /// </summary>
+    public CampaignTown TraderLeft { get; set; } = CampaignTown.None;
+    /// <summary>
+    /// A war assault package (20, 32) marked the members "ordered" on a package step (<c>AiSystem.StepWar</c>); the first step after it stops
+    /// running clears the marks. Not saved (nor are the marks); hashed only while set.
+    /// </summary>
+    public bool MarksOrdered { get; set; }
+    /// <summary>
+    /// A bar package started while its town was not loaded, so it holds no table yet and takes one once the town is loaded (the original's start
+    /// needs the town's zone loaded and is run again by the target query until then, docs/game/ai-tasks.md "Hang-around-bar package"). Not saved:
+    /// the package starts again at a load and works the wait out afresh.
+    /// </summary>
+    public bool BarWaits { get; set; }
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
@@ -462,21 +519,35 @@ public sealed class Blackboard
     public int RefugeeTarget { get; set; } = -1;
 
     /// <summary>
-    /// One pass of the original's package choice (docs/game/ai.md "Blackboard update", Verified): a running contract first; then slots from the
-    /// highest down until one reports success. In a slot the list is scanned in order: the current package stays while it is not finished, or hands
-    /// over to its <c>Leads to</c> package when it is; an entry before it that can start pre-empts it; a lone slot-0 package starts even when it
-    /// cannot. Without <paramref name="rules"/> every package keeps the base class's rules except that only plain packages can start.
+    /// One pass of the original's package choice (docs/game/ai.md "Blackboard update", Verified): a running contract first, until it has ended
+    /// (<see cref="ContractEnded"/>); then slots from the highest down until one reports success. In a slot the list is scanned in order: the
+    /// current package stays while it is not finished, or hands over to its <c>Leads to</c> package when it is; an entry before it that can start
+    /// pre-empts it; a lone slot-0 package starts even when it cannot. Without <paramref name="rules"/> every package keeps the base class's rules
+    /// except that only plain packages can start.
     /// </summary>
     public void Update(IPackageRules? rules = null, double hours = 0)
     {
         if (Contract is { } contract)
         {
-            if (hours < ContractEnd) return;
+            if (!ContractEnded(contract, rules, hours)) return;
             EndRunning(contract);
         }
 
         foreach (var (slot, list) in _slots.Reverse())
             if (TrySlot(slot, list, rules)) return;
+    }
+
+    /// <summary>
+    /// Whether the running contract has ended at <paramref name="hours"/>: at its <see cref="ContractEnd"/>; a campaign's phase package
+    /// (<see cref="PhaseContract"/>) by the finished test of the class it is built as (<see cref="PackageClasses.OfOverride"/>: the contract classes
+    /// read the hours, a plain one never finishes). An unbuilt class keeps the hours (engine stand-in), as does a board with no rules.
+    /// </summary>
+    bool ContractEnded(AiPackage contract, IPackageRules? rules, double hours)
+    {
+        var kind = PackageClasses.OfOverride(contract.Signal);
+        if (!PhaseContract || rules is null || kind is PackageClass.Contract or PackageClass.Unbuilt) return hours >= ContractEnd;
+
+        return kind != PackageClass.Plain && rules.Finished(this, contract, kind);
     }
 
     /// <summary>
@@ -574,6 +645,7 @@ public sealed class Blackboard
         RouteIndex = 0;
         Home = OwnHome;
         BarTable = -1;
+        BarWaits = false;
         MissionTown = -1;
         Destination = CampaignTown.None;
         RefugeeBroken = false;
@@ -592,18 +664,25 @@ public sealed class Blackboard
     /// it). It takes precedence over the slots until it ends; then the slots choose again. Starting the contract already running does nothing (end
     /// time and target kept); a different one replaces it and the old one ends first, its end talk to the old target (<c>FUN_140272240</c>,
     /// <c>FUN_14026a110</c>, <b>Verified</b>); to start it again, end it first (<see cref="EndContract"/>). <paramref name="anyRange"/>: see
-    /// <see cref="MissionAnyRange"/>.
+    /// <see cref="MissionAnyRange"/>. <paramref name="phase"/>: a campaign's phase package, which ends by its class's test
+    /// (<see cref="PhaseContract"/>); given for the contract already running, it marks that one so.
     /// </summary>
     public void StartContract(AiPackage package, double now, double hours, IPackageRules? rules = null, CharacterId? target = null,
-        bool anyRange = false)
+        bool anyRange = false, bool phase = false)
     {
         if (Contract is { } running)
         {
-            if (running.Id == package.Id) return;
+            if (running.Id == package.Id)
+            {
+                PhaseContract |= phase;
+                return;
+            }
+
             _ended = (running, MissionEmployer);
         }
 
         Contract = package;
+        PhaseContract = phase;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         ContractTown = Population.CampaignTown.None;
         MissionTarget = MissionEmployer = target ?? CharacterId.None;
@@ -631,6 +710,7 @@ public sealed class Blackboard
     {
         _ended = (contract, MissionEmployer);
         Contract = null;
+        PhaseContract = false;
         ContractTown = Population.CampaignTown.None;
         MissionTarget = MissionEmployer = CharacterId.None;
         MissionAnyRange = false;
@@ -660,19 +740,25 @@ public sealed class Blackboard
     /// save named none, or a character that is not in the world) for <paramref name="employer"/> (none: the target). As the original's load
     /// (<c>FUN_140272c20</c>), the package starts first, then the saved state replaces what the start set: the blackboard's target town
     /// <paramref name="targetTown"/> (<see cref="Destination"/>) when the save names one, and the package's mission town <paramref name="town"/>
-    /// (<see cref="ContractTown"/>; none when the save names none).
+    /// (<see cref="ContractTown"/>; none when the save names none; for a class whose start set its own <see cref="MissionTown"/>, a retreat or a
+    /// shipping, the saved town replaces that when it names a placed town, and an unnamed one keeps what the start chose).
+    /// <paramref name="phase"/>: see <see cref="PhaseContract"/>.
     /// </summary>
     public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false,
-        CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null)
+        CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null, bool phase = false)
     {
         Contract = package;
+        PhaseContract = phase;
         ContractEnd = end;
         MissionTarget = target ?? CharacterId.None;
         MissionEmployer = employer is { IsNone: false } hirer ? hirer : MissionTarget;
         MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
         if (targetTown is { IsNone: false } saved) Destination = saved;
-        if (town is { } mission) ContractTown = mission;
+        if (town is not { } mission) return;
+
+        if (MissionTown < 0) ContractTown = mission;
+        else if (mission.Site >= 0) (MissionTown, Destination) = (mission.Site, targetTown is { IsNone: false } kept ? kept : mission);
     }
 
     /// <summary>
@@ -693,6 +779,13 @@ public sealed class Blackboard
     /// squad's town for its town goals (<c>FUN_140269cd0</c>). None without one. Saved with the contract (<see cref="Saving.AiSave"/>); not hashed.
     /// </summary>
     public Population.CampaignTown ContractTown { get; set; } = Population.CampaignTown.None;
+
+    /// <summary>
+    /// The running contract's mission town (the override's own +0x8 hand, which the original saves as <c>mission town</c>): a retreat's or a
+    /// shipping's (<see cref="MissionTown"/>, set by its start), else the contract classes' (<see cref="ContractTown"/>, none without one).
+    /// </summary>
+    public Population.CampaignTown ContractMissionTown =>
+        MissionTown >= 0 ? Population.CampaignTown.OfSite(MissionTown) : ContractTown;
 
     /// <summary>
     /// Whom the running contract works for (the package's <c>mission employer</c>, <c>FUN_140285ba0</c> writes the dialogue target into it and the
@@ -757,6 +850,7 @@ public sealed class Blackboard
         if (!MissionTarget.IsNone) hasher.Add(MissionTarget);
         if (!MissionEmployer.IsNone && MissionEmployer != MissionTarget) hasher.Add(MissionEmployer);   // differs only for a town mission
         if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
+        if (PhaseContract) hasher.Add(0x50686173);   // only a campaign sets it, so worlds without one hash as before
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
         hasher.Add(Route.Length);
@@ -769,6 +863,8 @@ public sealed class Blackboard
         if (MissionTown >= 0) hasher.Add(MissionTown + 0x4D69);
 
         // The package classes' own state, only once one has run (worlds without them hash as before).
+        if (BarWaits) hasher.Add(0x62617277);
+        if (MarksOrdered) hasher.Add(0x4F726472);
         if (!Destination.IsNone)
         {
             hasher.Add(Destination.Site);
@@ -782,6 +878,11 @@ public sealed class Blackboard
             hasher.Add(InTown.Site);
             hasher.Add(InTown.PlayerTown);
             hasher.Add(InTownSince);
+            if (!TraderLeft.IsNone)
+            {
+                hasher.Add(TraderLeft.Site);
+                hasher.Add(TraderLeft.PlayerTown);
+            }
         }
 
         // Only a code mod's visit sets it, so a world without one hashes as before.
@@ -1180,6 +1281,12 @@ public sealed class AiMind
     public bool MedicAsk { get; set; }
 
     /// <summary>
+    /// The think reached Fixing Legs' own step (<see cref="AiBehaviour.HealLegs"/>): the serial step of the same tick starts the treatment of the
+    /// character itself (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).
+    /// </summary>
+    public bool HealLegsAsk { get; set; }
+
+    /// <summary>
     /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last
     /// captive sweep turn or at the end of its job (<see cref="Kidnap.CaptiveSystem"/>). Kept for a character awake that the sweep does not take
     /// (seated, in a job, on a duty), so its think weighs them. Not saved; hashed while set.
@@ -1259,7 +1366,8 @@ public sealed class AiMind
     public long FightFrom { get; set; }
 
     /// <summary>
-    /// The think of a fighter chose a goal that is no fight: the serial step of the same tick ends the fight, and it thinks again at the next tick.
+    /// The think of a fighter chose a goal that is no fight, or an urgent goal outscored the character's own Fixing Legs treatment: the serial step
+    /// of the same tick ends the fight or the treatment, and it thinks again at the next tick.
     /// Never set between ticks (not hashed).
     /// </summary>
     public bool LeaveFight { get; set; }

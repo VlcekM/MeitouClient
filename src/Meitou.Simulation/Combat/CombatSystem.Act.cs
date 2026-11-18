@@ -274,8 +274,14 @@ public sealed partial class CombatSystem
 
         // The leg back up (posture 2 to 0, not a waking): the posture setter queues the get-up task 65 (FUN_1405c7e20), which stands the character
         // through the `standing up 3` clip with no bone blend (no ragdoll to leave: FUN_140334a20), holding it like a waker.
+        // One kneeling at a treatment stays at it instead (AtTreatment): in the original a crippled character treating itself went on kneeling until
+        // the leg was fully bandaged and stood only then (Observed, original 1.0.68, docs/game/ai-tasks.md "Medic jobs", Fixing Legs). The get-up's
+        // hold would stop the treatment (FirstAidSystem.Act) while the untreated damage pulls the leg back under the knock-out point, which knocks
+        // it out again.
         bool crawling = cold.Medical.Crawling;
-        if (s.Crawl && !crawling && !s.Down && !cold.Medical.Incapacitated && !cold.Medical.Prone && GetUpClipSeconds > 0 && cold.CarriedBy.IsNone)
+        bool atTreatment = FirstAid.FirstAidSystem.AtTreatment(cold, (CharacterTask)next[i].Task);
+        if (s.Crawl && !crawling && !atTreatment && !s.Down && !cold.Medical.Incapacitated && !cold.Medical.Prone && GetUpClipSeconds > 0
+            && cold.CarriedBy.IsNone)
         {
             cold.GettingUpUntil = now + (int)MathF.Ceiling(GetUpClipSeconds / dt);
             cold.StaggeredUntil = Math.Max(cold.StaggeredUntil, cold.GettingUpUntil);

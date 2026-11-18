@@ -275,7 +275,7 @@ public static class MachineSave
     /// <summary>
     /// A storage grid's saved items with Meitou's <c>main</c> named as the original's grid section (<see cref="SavedKit.FromInventory"/>).
     /// </summary>
-    static IEnumerable<SaveItem> StorageItems(Inventory s) =>
+    internal static IEnumerable<SaveItem> StorageItems(Inventory s) =>
         s.Items
             .Where(i => !InventoryCommands.IsLimbSection(i.Section))
             .Select(StorageItem);
@@ -356,21 +356,28 @@ public static class MachineSave
             }
         }
 
-        if (m.Storage is { } grid && storage.Count > 0)
-        {
-            foreach (var item in SavedKit.ToGrid(storage, factory, grid.Width, grid.Height).Items)
-            {
-                // A furnace's in1 and any other building's backpack_content are Meitou's storage grid main.
-                if (m.Data.IsFurnace || item.Section == StorageSection) item.Section = "main";
+        if (m.Storage is { } grid) PutInGrid(grid, storage, factory, m.Data.IsFurnace);
+    }
 
-                // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cells, and
-                // loses what finds no room, as the original's loader (FUN_14074c0e0, docs/game/ui-screens.md "Loading a saved inventory"). Kept
-                // overlapping, it moved and split again at every load.
-                bool fits = item.X >= 0 && item.Y >= 0 && item.X + item.Width <= grid.Width && item.Y + item.Height <= grid.Height
-                    && grid.IsFree(item.Section, item.X, item.Y, item.Width, item.Height);
-                if (fits) grid.Items.Add(item);
-                else grid.Add(item);
-            }
+    /// <summary>
+    /// Puts a storage grid's saved items into it at their saved cells: a furnace's <c>in1</c> and any other grid's <c>backpack_content</c> are
+    /// Meitou's <c>main</c>.
+    /// </summary>
+    internal static void PutInGrid(Inventory grid, List<SaveItem> storage, ItemFactory factory, bool furnace)
+    {
+        if (storage.Count == 0) return;
+
+        foreach (var item in SavedKit.ToGrid(storage, factory, grid.Width, grid.Height).Items)
+        {
+            if (furnace || item.Section == StorageSection) item.Section = "main";
+
+            // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cells, and
+            // loses what finds no room, as the original's loader (FUN_14074c0e0, docs/game/ui-screens.md "Loading a saved inventory"). Kept
+            // overlapping, it moved and split again at every load.
+            bool fits = item.X >= 0 && item.Y >= 0 && item.X + item.Width <= grid.Width && item.Y + item.Height <= grid.Height
+                && grid.IsFree(item.Section, item.X, item.Y, item.Width, item.Height);
+            if (fits) grid.Items.Add(item);
+            else grid.Add(item);
         }
     }
 

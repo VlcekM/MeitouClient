@@ -147,6 +147,13 @@ public enum AiBehaviour : byte
     /// <see cref="Kidnap.TownDutySystem"/>).
     /// </summary>
     RescueToBed = 26,
+    /// <summary>
+    /// HEAL_MY_LEGS (269 Fixing Legs, a race goal; <c>Task_FirstAid</c> on the character itself, docs/game/ai-tasks.md "Medic jobs"): wanted while its
+    /// legs are messed up (<see cref="AiSystem.HealLegsDesire"/>); planned by the planner from its list B (an arm, a first aid kit, not swimming, no
+    /// immediate threat, the weapon sheathed first), then the think asks for the treatment (<see cref="AiMind.HealLegsAsk"/>) and the serial step
+    /// starts it on the character itself.
+    /// </summary>
+    HealLegs = 27,
 }
 
 /// <summary>
@@ -226,6 +233,7 @@ public static class TaskBehaviours
         [TaskType.ProtectAllies] = (AiBehaviour.Fight, "Protect allies"),
         [TaskType.ProtectAlliesStayInTown] = (AiBehaviour.Fight, "Protect allies"),
         [TaskType.JobMedic] = (AiBehaviour.Medic, "Medic"),
+        [TaskType.HealMyLegs] = (AiBehaviour.HealLegs, "Fixing Legs"),
     };
 
     /// <summary>

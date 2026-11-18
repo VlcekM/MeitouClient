@@ -1028,16 +1028,17 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// The faction <paramref name="cold"/>'s squad is contracted to (<see cref="Scan.Employer"/>): the mission employer's (the hirer) for signal 12,
-    /// the mission town's owner for 15; -1 otherwise.
+    /// the mission town's owner for 15 and 31; -1 otherwise.
     /// </summary>
     static int EmployerOf(World world, CharacterCold cold, out bool allies, out bool defending)
     {
         allies = defending = false;
         var table = world.Characters;
 
-        // Contract_DefendPlayerBase (15): the exempt faction is the owner of its mission town, the player town nearest the platoon leader when it
-        // started (FUN_14028a290 against the town FUN_14028a170 set), not a stored hirer; none without a player town.
-        if (cold.Ai?.Squad.Ai is { Contract.Signal: 15 } defence)
+        // Contract_DefendPlayerBase (15) and Campaign_DefendPlayerBase (31, the same hook and start): the exempt faction is the owner of its mission
+        // town, the player town nearest the platoon leader when it started (FUN_14028a290 against the town FUN_14028a170 set), not a stored hirer;
+        // none without a player town.
+        if (cold.Ai?.Squad.Ai is { Contract.Signal: 15 or 31 } defence)
         {
             defending = true;
             return world.Buildings.FindTown(defence.ContractTown.PlayerTown)?.Owner ?? -1;

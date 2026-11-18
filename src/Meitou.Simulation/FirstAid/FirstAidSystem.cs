@@ -356,6 +356,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// Whether the character kneels at a treatment (task <see cref="CharacterTask.Treat"/>, <see cref="CharacterCold.TreatKneels"/>): its leg coming
+    /// back up does not stand it up (no get-up hold, <c>CombatSystem</c>, no <c>standing up 3</c>, <see cref="AnimationSystem"/>); it stands when the
+    /// treatment ends. <b>Observed</b> in the original for a character treating its own leg (docs/game/ai-tasks.md "Medic jobs", Fixing Legs).
+    /// </summary>
+    public static bool AtTreatment(CharacterCold cold, CharacterTask task) => task == CharacterTask.Treat && cold.TreatKneels;
+
+    /// <summary>
     /// Ends a treatment by itself (serial phases; <see cref="TaskEnd.Done"/>): back to the task before it, path dropped.
     /// </summary>
     static void End(World world, int slot)
@@ -467,6 +474,11 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             }
 
             if (ArmsOut(world, i, cold)) continue;
+            if (OwnLegsStepEnds(world, cold, i, t))
+            {
+                End(world, i);
+                continue;
+            }
 
             const ushort path = (ushort)MoveFlags.AnyPath;
             var spot = TreatSpot(world, table.Cold(t)!, next[t]);
@@ -988,25 +1000,36 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Starts the treatment of each NPC whose think chose its Medic goal (<see cref="AiMind.MedicAsk"/>; serial, after the think): the finder runs
-    /// again on the state of now, so a patient treated meanwhile is not walked to; one that finds none drops its kept pick, and the next think
-    /// chooses again.
+    /// Starts the treatment of each NPC whose think chose its Medic goal (<see cref="AiMind.MedicAsk"/>) or reached Fixing Legs' own step
+    /// (<see cref="AiMind.HealLegsAsk"/>; serial, after the think, in slot order). The Medic finder runs again on the state of now, so a patient
+    /// treated meanwhile is not walked to; one that finds none drops its kept pick, and the next think chooses again.
     /// </summary>
     internal void SendGoalTreatments(World world)
     {
         var table = world.Characters;
         SquadGoals? taken = null;
+        bool swept = false;
         try
         {
             for (int s = 0; s < table.HighWater; s++)
             {
-                if (table.Cold(s)?.Ai is not { MedicAsk: true } mind) continue;
+                if (table.Cold(s)?.Ai is not { } mind || !mind.MedicAsk && !mind.HealLegsAsk) continue;
+                bool legs = mind.HealLegsAsk;
                 mind.MedicAsk = false;
+                mind.HealLegsAsk = false;
                 if (!table.Next[s].Alive) continue;
-                if (taken is null)
+                taken ??= SquadGoals.Of(world);
+                if (legs)
                 {
-                    taken = SquadGoals.Of(world);
+                    TreatOwnLegs(world, s, taken);
+                    continue;
+                }
+
+                // the patient sweep only for a Medic ask (a self-treatment reads no other character's need)
+                if (!swept)
+                {
                     BeginSweep(world);
+                    swept = true;
                 }
 
                 if (HealSomeone(world, s, taken, robotics: false, TaskSource.Npc)) continue;
@@ -1018,6 +1041,38 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         {
             EndSweep();
         }
+    }
+
+    /// <summary>
+    /// Fixing Legs (269) acted out: <c>Task_FirstAid</c> on the character itself (a goal with no target hand treats its own character,
+    /// <c>FUN_14034ecf0</c>, <b>Verified</b>), the same treatment as First aid (skill x0.8 on oneself, <see cref="SkillOf"/>). Started only while the
+    /// planner's tests still hold now: the legs messed up (state 103), a first aid kit held (23), a working arm (38), awake, not carried and not
+    /// fighting; otherwise the next think chooses again.
+    /// </summary>
+    static void TreatOwnLegs(World world, int s, SquadGoals taken)
+    {
+        var cold = world.Characters.Cold(s)!;
+        if (!CanAct(cold) || !Awake(cold.Medical) || cold.InCombat || cold.Medical is not { LegsMessedUp: true }) return;
+        if (!HasWorkingArm(cold) || !HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return;
+
+        StartJob(world, s, s, taken, new TaskRequest(CharacterTask.Treat, TaskType.HealMyLegs, TaskSource.Npc));
+    }
+
+    /// <summary>
+    /// Whether a Fixing Legs treatment (<see cref="TreatOwnLegs"/>) ends before the treatment's own end (nothing left to close or bandage,
+    /// <see cref="Apply"/>): row 269's list B no longer holds, as the plan step ends a running step whose list B fails (<c>FUN_14050d970</c>, row 269
+    /// has no <c>+0x16</c>, <b>Verified</b> upstream): no first aid kit of its own (23; a squad mate's kit in reach does not count), an immediate
+    /// threat on itself (39), deep water (139) or a weapon drawn (157); the arms (38) are <see cref="ArmsOut"/>'s. The leg holding again does not
+    /// end it: in the original the character keeps bandaging until the leg is fully bandaged and stands only then (<b>Observed</b>, original 1.0.68,
+    /// docs/game/ai-tasks.md "Medic jobs", Fixing Legs). The next think chooses again.
+    /// </summary>
+    static bool OwnLegsStepEnds(World world, CharacterCold cold, int i, int t)
+    {
+        if (t != i || cold.Running is not { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs }) return false;
+        if (!HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return true;
+        if (cold is { WaterState: 3, InSomething: HeldState.None } || cold.DrawnWeapon != WeaponKinds.None) return true;
+
+        return RowStates.Holds(world, i, StateType.IsAggressionTowardsMe, default) == true;
     }
 
     /// <summary>

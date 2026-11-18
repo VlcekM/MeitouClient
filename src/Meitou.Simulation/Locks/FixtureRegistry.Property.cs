@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
@@ -405,11 +406,12 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Takes the saved state of a rebuilt home's old layout objects (Meitou's container and lock keys) off its record, which a save patches: the
-    /// live objects write their own.
+    /// live objects write their own. A bought house's go too: its layout objects are gone (<see cref="EmptyInterior"/>), so a key left behind
+    /// would put its items back at every load, where <see cref="EmptyPurchased"/> drops them on the ground again.
     /// </summary>
     void DropObjectState(string building, FcsRecord state)
     {
-        if (!_rebuilt.Contains(building)) return;
+        if (!_rebuilt.Contains(building) && !IsEmptied(building)) return;
 
         var contents = state.Strings.Keys
             .Where(k => k.StartsWith(ContainerSave.KeyPrefix, StringComparison.Ordinal))
@@ -493,7 +495,8 @@ public sealed partial class FixtureRegistry
         && saved.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) == b.ResidentsTemplate;
 
     /// <summary>
-    /// Writes a property's Meitou keys into its building state: its rebuild site's state when it has one.
+    /// Writes a property's Meitou keys into its building state: its rebuild site's state when it has one; a bought house's owner, its doors'
+    /// owners (<c>owner faction ID&lt;i&gt;</c>) and its empty <c>residents</c> link (docs/formats/save.md "Zone files").
     /// </summary>
     void WriteProperty(string building, FcsRecord state)
     {
@@ -512,6 +515,14 @@ public sealed partial class FixtureRegistry
         state.Strings["owner faction ID"] = p.Data.Factions[p.Owner].Id;
         state.Bools["sell home"] = false;
         state.Bools["is public night"] = false;
+
+        // Nobody lives in a bought house: the original's save of one has no residents link (Observed, ShopCounterSold; no player-owned building
+        // of three original saves has one), where the record kept the evicted squad's.
+        if (p.Purchased) Hand.Null.Write(state, "residents");
+
+        // Each door's owner is the house's (Observed: all 466 doors of five original saves, ShopCounterSold's bought Longhouse among them).
+        foreach (var door in OfBuilding(building).Where(f => p.Purchased && f.Kind == FixtureKind.Door))
+            state.Strings["owner faction ID" + door.DoorIndex.ToString(CultureInfo.InvariantCulture)] = p.Data.Factions[p.Owner].Id;
     }
 
     /// <summary>

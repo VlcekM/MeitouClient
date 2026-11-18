@@ -289,7 +289,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
             {
                 // Self preservation's run; or a fight (its own defence, a combat goal's), which a character already fighting does not start again.
+                // On its Fixing Legs treatment: the goal itself goes on; any other urgent goal that won ends the treatment in the serial step and
+                // is acted out at the next think.
                 if (ReferenceEquals(urgent, SelfPreservationGoal) && mind.Step == TaskType.RunAway) mind.FleeRequest = FleeAsk.Threat;
+                else if (only == Restrict.Urgent && urgent.Task.Type == TaskType.HealMyLegs) continue;
+                else if (only == Restrict.Urgent && TaskBehaviours.Of(urgent.Task.Type) is not (AiBehaviour.Fight or AiBehaviour.SelfPreserve))
+                    LeaveTreatment(mind);
                 else if (!cold.InCombat) AskFight(world, i, urgent.Task.Type, mind);
             }
         }
@@ -352,7 +357,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// </summary>
         Combat,
         /// <summary>
-        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>).
+        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>), and an NPC on its own
+        /// Fixing Legs treatment (<see cref="TreatsOwnLegs"/>).
         /// </summary>
         Urgent,
     }
@@ -378,7 +384,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (cold.Engaged) return InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
 
+        // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
+        // goal can outscore it; once the legs work the treatment still runs until the leg is fully bandaged (Observed in the original), and only
+        // an urgent goal that plans takes over.
+        if (TreatsOwnLegs(n, cold)) return Restrict.Urgent;
+
         return n.Task == (byte)CharacterTask.Treat || InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
+    }
+
+    /// <summary>
+    /// Whether the character is on the treatment of itself that its Fixing Legs goal started (row 269, <see cref="AiBehaviour.HealLegs"/>).
+    /// </summary>
+    internal static bool TreatsOwnLegs(in CharacterHot n, CharacterCold cold) =>
+        n.Task == (byte)CharacterTask.Treat && cold.Running is { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs };
+
+    /// <summary>
+    /// An urgent goal outscored Fixing Legs while the character treats itself: the serial step of the same tick ends the treatment
+    /// (<see cref="LeaveFights"/>), and the character thinks again at the next tick, which acts the goal out. Writes only its own mind.
+    /// </summary>
+    void LeaveTreatment(AiMind mind)
+    {
+        mind.LeaveFight = true;
+        Interlocked.Exchange(ref _leaving, 1);
     }
 
     /// <summary>
@@ -418,12 +445,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee
     /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" (147) for a stagger
     /// outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); the captive goal's name on its job (<see cref="TakeCaptiveGoal"/>: "Eat
-    /// body"); null for the rest (the HUD then names the movement task).
+    /// body"); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>); null for the rest (the HUD then names the movement
+    /// task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
         cold.StumbleTaskUntil > tick ? TaskBehaviours.Text(TaskType.StumbleTaskForced)
         : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
         : cold is { Engaged: true, InCombat: false, Ai: { Behaviour: AiBehaviour.Captive, Goal: { } job } } ? TaskBehaviours.Text(job.Task.Type)
+        : cold.Ai is not null && TreatsOwnLegs(n, cold) ? TaskBehaviours.Text(TaskType.HealMyLegs)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? TaskBehaviours.Text(goal.Task.Type) : null;
 
     /// <summary>
@@ -757,9 +786,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.PatrolTown => 1,
             // Shopping is wanted while its list has something left to buy today (FUN_140999620), and there is a shop to go to.
             // The finder's factor follows its pick: 1 for a shop, 0.4 for any other public building, 0 when it finds none (FUN_1409997f0).
-            AiBehaviour.Shop => !mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, board.Town) ? 0
-                : ShopFor(Places(board.Town), mind, TargetRoll(world, self, behaviour), RandomShopping(world, board.Town)) is { } picked
-                    ? ShopFactor(Places(board.Town), picked) : 0,
+            AiBehaviour.Shop => ShopDesire(world, self, mind, board.Town),
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
             AiBehaviour.Work => WorkAllowed(world, self.Slot, board.HomeTown)
                 && (HoldsWork(mind, board.HomeTown, type) || PickWork(world, self, board.HomeTown, mind.WorkEpoch, type) is not null) ? 1 : 0,
@@ -791,6 +818,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 : 0,
             // The Medic goal: its desire times the finder's score from the serial sweep (the desire's carrying case is a gate of the finder).
             AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore * MedicDesire(world, self.Slot) : 0,
+            // Fixing Legs (269) has no finder: its own desire (FUN_1409983b0); the planner tests its list B (kit, arm, water, threat, weapon).
+            AiBehaviour.HealLegs => HealLegsDesire(world, self.Slot),
             // A captive goal: the desire its job start kept on the sweep turn of a seated character (0 for the rest, whose jobs the sweep starts
             // itself; Kidnap/CaptiveSystem.Offers.cs).
             AiBehaviour.Captive => mind.CaptiveDesire(type),
@@ -937,38 +966,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     Vector3? TargetFor(World world, CharacterId self, AiBehaviour behaviour, int town, AiMind mind)
     {
         ulong roll = TargetRoll(world, self, behaviour);
-        var places = Places(town);
         switch (behaviour)
         {
             case AiBehaviour.TownNode:
-            case AiBehaviour.Shop:
                 {
-                    var b = behaviour == AiBehaviour.TownNode
-                        ? PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll)
-                        : ShopFor(places, mind, roll, RandomShopping(world, town));
-                    if (b is null) return null;
-
-                    // A building without a counter is the target itself, its origin on any floor (FUN_1409997f0); the walk ends within WorkReach of
-                    // it.
-                    if (behaviour == AiBehaviour.Shop && ShopFactor(places, b) < 1) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
-
                     // Wandering: a random general node of the drawn building, none: no target and no redraw (FUN_140999a60, FUN_14038c2f0).
-                    if (behaviour == AiBehaviour.TownNode) return RandomNode(b, IsGeneralNode, roll);
-
-                    // A general node; in a shop without one a guard post, else any other node (engine choice: where the original's Task_Shopping
-                    // stands is not decoded).
-                    foreach (var accept in (ReadOnlySpan<Func<HomeSpot, bool>>)[IsGeneralNode, s => s.Kind == HomeSpotKind.Guard, s => s.IsNode])
-                    {
-                        int nodes = 0;
-                        foreach (var s in b.Spots) if (accept(s)) nodes++;
-                        if (nodes == 0) continue;
-                        int pick = Rng.Int(Rng.Mix(roll), nodes);
-                        foreach (var s in b.Spots)
-                            if (accept(s) && pick-- == 0) return s.Position;
-                    }
-
-                    return b.Position;
+                    var b = PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll);
+                    return b is null ? null : RandomNode(b, IsGeneralNode, roll);
                 }
+            case AiBehaviour.Shop:
+                return ShopTarget(world, self, town, mind, roll);
             case AiBehaviour.ToTown:
                 {
                     var at = Flat(world.Characters.Previous[self.Slot].Position);
@@ -988,6 +995,34 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Where goal 118 goes: the shop it picks (<see cref="ShopFor"/>) in the shopper's town (<see cref="ShopTown"/>), at a general node in it; null
+    /// when it picks none.
+    /// </summary>
+    Vector3? ShopTarget(World world, CharacterId self, int town, AiMind mind, ulong roll)
+    {
+        var (places, _, random) = ShopTown(world, self.Slot, town);
+        if (ShopFor(places, mind, roll, random) is not { } b) return null;
+
+        // A building without a counter is the target itself, its origin on any floor (FUN_1409997f0); the walk ends within WorkReach of it. So is
+        // a building the player built (an outpost's shop), which has no nodes.
+        if (ShopFactor(places, b) < 1 || b.RuntimeKey is not null) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
+
+        // A general node; in a shop without one a guard post, else any other node (engine choice: where the original's Task_Shopping stands is not
+        // decoded).
+        foreach (var accept in (ReadOnlySpan<Func<HomeSpot, bool>>)[IsGeneralNode, s => s.Kind == HomeSpotKind.Guard, s => s.IsNode])
+        {
+            int nodes = 0;
+            foreach (var s in b.Spots) if (accept(s)) nodes++;
+            if (nodes == 0) continue;
+            int pick = Rng.Int(Rng.Mix(roll), nodes);
+            foreach (var s in b.Spots)
+                if (accept(s) && pick-- == 0) return s.Position;
+        }
+
+        return b.Position;
     }
 
     /// <summary>
@@ -1045,6 +1080,47 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// Goal 118's desire (<c>FUN_140999620</c>): 0 once nothing is left on the list today in the shopper's town (<see cref="ShopTown"/>), else the
+    /// factor of the shop it would go to (<see cref="ShopFactor"/>; 0 with none).
+    /// </summary>
+    float ShopDesire(World world, CharacterId self, AiMind mind, int town)
+    {
+        var (places, key, random) = ShopTown(world, self.Slot, town);
+        if (!mind.Shopping.Pending(ShoppingList.DayOf(world.GameHours), world.Hour, key)) return 0;
+
+        return ShopFor(places, mind, TargetRoll(world, self, AiBehaviour.Shop), random) is { } picked ? ShopFactor(places, picked) : 0;
+    }
+
+    /// <summary>
+    /// The town goal 118 shops in, with its places, its key in the shopping list (<see cref="ShoppingList.KeyOf"/>) and whether its random pick
+    /// runs (<see cref="RandomShopping"/>). The original's goal takes the shopper's status town and finds nothing without one
+    /// (<c>FUN_1409997f0</c> reads status <c>+0x88</c> and returns 0 when it is empty, <b>Verified</b>, disassembly;
+    /// <see cref="CharacterCold.StatusTown"/>; a character that holds none has it worked out from where it stands, as the status pass does on
+    /// entering a town, so one the pass has not reached yet shops too). So a shopper shops where it
+    /// stands, never in a town it is away from: at an outpost's shops (<see cref="TownPlaceIndex.OutpostShops"/>) with no random pick (a town of
+    /// the player's faction), in a placed town at that town's. A shopper of the player's faction (an autonomous squad) is left out: the original
+    /// plans no goals for the player's squads, and its buying in an outpost would only move the player's goods between the player's own counter
+    /// and character; Meitou keeps the squad's town <paramref name="town"/> for it.
+    /// </summary>
+    (TownPlaces Places, int Key, bool Random) ShopTown(World world, int slot, int town)
+    {
+        var cold = world.Characters.Cold(slot);
+        if (cold is null || cold.Faction == PlayerFactionOf(world)) return (Places(town), town, RandomShopping(world, town));
+
+        var status = cold.StatusTown.IsNone
+            ? StatusTownAt(data, world, world.Characters.Previous[slot].Position, CampaignTown.None) : cold.StatusTown;
+        if (status.PlayerTown > 0) return (_townPlaces.OutpostShops(status.PlayerTown), ShoppingList.KeyOf(status), false);
+        if (status.Site >= 0) return (Places(status.Site), status.Site, RandomShopping(world, status.Site));
+
+        return (TownPlaceIndex.None, -1, false);
+    }
+
+    /// <summary>
+    /// The player's faction: the world's, else the data's (-1: none).
+    /// </summary>
+    int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+
+    /// <summary>
     /// Whether the random pick of goal 118 runs in <paramref name="town"/>: its finder <c>FUN_1409fc1b0</c> is called only when the faction of the
     /// shopper's town has no player flag (<c>+0x250</c> clear, <c>FUN_1409997f0</c>, <b>Verified</b>), i.e. the town is not the player's faction's.
     /// </summary>
@@ -1098,8 +1174,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
-    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: a running contract's mission town, <see cref="Blackboard.ContractTown"/>, even
-    /// none; else its mission town, else its home town) at a scatter of half the town's radius,
+    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: a running contract's mission town, even none: the contract classes'
+    /// <see cref="Blackboard.ContractTown"/>, a retreat's or a shipping's <see cref="Blackboard.MissionTown"/> when a campaign gives it as its phase
+    /// package, so a retreating raider patrols its home town and walks there; else its mission town, else its home town) at a scatter of half the
+    /// town's radius,
     /// at least 500; a nest squad's town is its nest (the original's <c>Nest</c> is a town: #771, Meitou had its members random-walk kilometres
     /// away); with none, the character's own position at 1250. The centre's height is the town's (a nest's, which Meitou keeps flat, the
     /// character's).
@@ -1107,7 +1185,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     (Vector3 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
         var town = board.Contract is not null
-            ? board.ContractTown
+            ? board.ContractMissionTown
             : board.Destination.IsNone
                 ? board.HomeTown
                 : board.Destination;
@@ -1807,6 +1885,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.Medic:
                 ActMedic(world, slot, mind);
                 break;
+            case AiBehaviour.HealLegs:
+                ActHealLegs(world, slot, mind);
+                break;
             case AiBehaviour.Captive:
                 AskCaptiveJob(world, slot, mind);
                 break;
@@ -2012,8 +2093,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // A shop picked is remembered, so the arrival knows what it sells (the same pick as the target's: the roll is this tick's).
         if (mind.Target is null && behaviour == AiBehaviour.Shop)
         {
-            mind.ShopAt = ShopFor(Places(board.Town), mind, TargetRoll(world, table.IdOf(slot), behaviour),
-                RandomShopping(world, board.Town));
+            var (places, _, random) = ShopTown(world, slot, board.Town);
+            mind.ShopAt = ShopFor(places, mind, TargetRoll(world, table.IdOf(slot), behaviour), random);
         }
 
         mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.Town, mind)
@@ -2748,7 +2829,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A <see cref="VisitTown"/>: the trader's next town is the player town and its stay the given hours, from state 0 (on the way), the stay's clock
-    /// waiting for its arrival.
+    /// waiting for its arrival. The town it last left is forgotten, so a visit back to it is a stop too.
     /// </summary>
     static void Visit(World world, VisitTown visit)
     {
@@ -2758,6 +2839,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.Destination = CampaignTown.OfPlayer(visit.PlayerTown);
         board.TraderWait = Math.Max(0, visit.Hours);
         board.TraderState = 0;
+        board.TraderLeft = CampaignTown.None;
         board.VisitArrivalPending = true;
     }
 
@@ -2860,7 +2942,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (platoon?.Campaign is { } campaign && PhasePackage(world, platoon, campaign) is { } phase) InstallPhasePackage(world, board, phase);
 
         board.Update(_rules, world.GameHours);
+        StepWar(world, squad, board);
         if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
+        if (board.BarWaits) _rules.RetryTable(board);
 
         // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
         if (board.TakeEnded() is { Package.ContractEndTalk: { } talk, Target: var employer } && !squad.Leader.IsNone)
@@ -2873,7 +2957,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.Crowd.Clear();
         board.CrowdEntries.Clear();
 
-        bool populationMoves = platoon is not null && !BoardMoves(board);
+        // Every loaded platoon acts out its package's goals in the original, so its members get full minds. Two kinds stay on the engine's
+        // routine while their package does not travel: a campaign's squad (its march stands for the war packages that are not built) and one a
+        // code mod holds (the mod moves it).
+        bool populationMoves = platoon is not null && PopulationRuns(platoon) && !BoardMoves(board);
         if (populationMoves) EngineMinds(world, squad, board);
 
         for (int k = 0; k < squad.Members.Count; k++) MindAndCrowd(world, squad, board, k, populationMoves);
@@ -2904,7 +2991,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
 
         // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
-        // captive of a roaming squad the population moves would otherwise stand where it was enslaved, its engine mind on that squad's trip (#904).
+        // captive of a squad the population moves (a campaign's, a held one) would otherwise stand where it was enslaved, on an engine mind (#904).
         bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
         if ((!populationMoves || obeys) && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
 
@@ -2917,14 +3004,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package. A leader the population had walking its trip
-    /// (an engine mind's routine, <see cref="EngineRoutine"/>) is stopped first: the trip is the engine's stand-in for the package that moved it,
-    /// and in the original the package that takes over (a contract started on the way) gives the leader its own goals at once.
+    /// (an engine mind's routine, <see cref="EngineRoutine"/>, or the walk a platoon is given as it comes into the world, before it has a mind) is
+    /// stopped first: the trip is the engine's stand-in for the package that moved it, and in the original the package that takes over (a
+    /// contract started on the way, or simply the package of a platoon that loaded) gives the leader its own goals at once.
     /// </summary>
     void GiveMind(World world, Squad squad, Blackboard board, int k, int s, bool own)
     {
         var table = world.Characters;
         var cold = table.Cold(s)!;
-        if (cold.Ai is { Engine: true } && OnTrip(table.Next[s], cold)) TaskStart.End(world, s, TaskEnd.Stopped);
+        if ((cold.Ai is { Engine: true } || cold.Ai is null && squad.PlatoonId >= 0) && OnTrip(table.Next[s], cold))
+            TaskStart.End(world, s, TaskEnd.Stopped);
 
         var p = table.Next[s].Position;
         cold.Ai = new AiMind
@@ -3089,8 +3178,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly HashSet<int> _looked = [];
 
     /// <summary>
-    /// How long the war manager's phase package runs as the platoon's override before it is installed afresh (<c>FUN_140272240</c> called with 24
-    /// game hours, <b>Verified</b>).
+    /// The contract time the war manager's phase package is installed with (<c>FUN_140272240</c> called with 24 game hours, <b>Verified</b>); only
+    /// the classes whose finished test reads it end there (<see cref="Blackboard.PhaseContract"/>).
     /// </summary>
     const double PhaseHours = 24;
 
@@ -3208,7 +3297,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
             if (board is not null && ObeyedRoles(world, squad, cold) is not null) continue;
 
-            if (cold.Ai is { Engine: false }) cold.Ai = null;
+            if (cold.Ai is { Engine: false })
+            {
+                ToRoutine(world, squad, s, cold);
+                cold.Ai = null;
+            }
+
             if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
             {
                 var p = table.Next[s].Position;
@@ -3225,7 +3319,46 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
             if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
+
+            // A follower of a squad the population moves that stands idle (it came round, its fight ended, the swap found it held by something
+            // else: ToRoutine) follows its leader again, as the original's followers walk to their leader (goal 215).
+            if (board is not null && Rejoins(world, squad, s, cold))
+                TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
         }
+    }
+
+    /// <summary>
+    /// A member's full mind gives way to an engine one (a campaign drafted its loaded platoon, a code mod holds it): what the full mind had it
+    /// doing ends, so a sleeper gets up, one sitting at a table stands and a walk to a shop stops, and a member other than the leader follows
+    /// its leader again, as one made under the population does; the leader stands for the population to move. Else each would stay where its
+    /// package left it while the population marches the leader off (engine choice: the original has one kind of mind, and the campaign's
+    /// package gives every member its goals at once). One the mind does not hold now (in a fight, a flight, a carry, a treatment, a talk, a
+    /// knock-out) is left alone and rejoins on a later package step, once it stands idle (<see cref="Rejoins"/>).
+    /// </summary>
+    static void ToRoutine(World world, Squad squad, int s, CharacterCold cold)
+    {
+        var table = world.Characters;
+        var id = table.IdOf(s);
+        if (!Holds(table.Next[s], cold) || cold.InCombat) return;
+
+        if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);
+        if (id != squad.Leader && table.TryResolveNext(squad.Leader, out _))
+            TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+        else TaskStart.End(world, s, TaskEnd.Stopped);   // also one standing: its task record named the goal it stood for
+    }
+
+    /// <summary>
+    /// Whether a member of a squad the population moves should take up following its leader again: not the leader, whose own task the
+    /// population gives; standing idle, alive and awake, and held by nothing (no fight, duty, flight, carry, bed or cage).
+    /// </summary>
+    static bool Rejoins(World world, Squad squad, int s, CharacterCold cold)
+    {
+        var table = world.Characters;
+        ref readonly var n = ref table.Next[s];
+        return n.Alive && n.Task == (byte)CharacterTask.Idle && table.IdOf(s) != squad.Leader
+            && table.TryResolveNext(squad.Leader, out int led) && table.Next[led].Alive
+            && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
+            && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None;
     }
 
     /// <summary>
@@ -3247,15 +3380,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             is { } id ? data.Ai.Package(id) : null;
 
     /// <summary>
-    /// Installs the phase package as the blackboard's 24 h timed override when it holds none or another (the war manager's check on every visit,
-    /// <c>FUN_140272570</c>, <b>Verified</b>); the override running out ends it (<see cref="Blackboard.Update"/>), the slots choose that visit and
-    /// the same record installs it afresh on the next.
+    /// Installs the phase package as the blackboard's override when it holds none or another (the war manager's check on every visit,
+    /// <c>FUN_140272570</c>, <b>Verified</b>), with the 24 h contract time the original sets (+0x218). It ends by its class's finished test
+    /// (<see cref="Blackboard.PhaseContract"/>), never by the campaign: one that ends is installed afresh on the next visit while the campaign
+    /// still gives it (Retreat and refresh on an intact platoon is installed and ended on every visit, its template's packages running between,
+    /// as in the original), and one the campaign no longer gives (removed, or the platoon released) stays until its test passes. An override that
+    /// is already the package (a saved one) is marked as the phase's.
     /// </summary>
-    void InstallPhasePackage(World world, Blackboard board, AiPackage package)
-    {
-        if (board.Contract?.Id == package.Id) return;
-        board.StartContract(package, world.GameHours, PhaseHours, _rules);
-    }
+    void InstallPhasePackage(World world, Blackboard board, AiPackage package) =>
+        board.StartContract(package, world.GameHours, PhaseHours, _rules, phase: true);
 
     /// <summary>
     /// The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it,
@@ -3315,17 +3448,29 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The platoon whose squad this is when the population moves it (a loaded roaming or campaign platoon: not a town's own saved squad, nor a wild
-    /// one); null for any other squad. Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
+    /// The platoon whose squad this is when it is a loaded roaming or campaign platoon's (not a town's own saved squad, nor a wild one); null for
+    /// any other squad. Such a squad claims no building of its own, and the population moves it only when <see cref="PopulationRuns"/>. Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
     /// docs/game/ai.md "Blackboard update"), whatever its kind.
     /// </summary>
     Platoon? PlatoonOf(World world, Squad squad) =>
         squad.PlatoonId >= 0 && !squad.Pinned && !squad.Wild ? world.Platoons.Find(squad.PlatoonId) : null;
 
     /// <summary>
+    /// Whether the population, not the squad's blackboard, moves a loaded platoon's squad: a campaign's (<see cref="Platoon.Campaign"/>: the
+    /// campaign march stands for the war package classes, which are not built) and one a code mod holds (<see cref="Platoon.Held"/>). Every other
+    /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test does not depend on
+    /// where the squad stands, so a free platoon walking into or out of a town never changes its kind of mind; a campaign drafting or releasing
+    /// a loaded platoon and a mod's hold or release do, and the minds are made again then (<see cref="EngineMinds"/>, <see cref="ToRoutine"/>,
+    /// <see cref="GiveMind"/>). A campaign's or a held squad whose own package travels still takes full minds while it does
+    /// (<see cref="BoardMoves"/>).
+    /// </summary>
+    internal static bool PopulationRuns(Platoon platoon) => platoon.Campaign is not null || platoon.Held;
+
+    /// <summary>
     /// Whether the running package moves the squad itself (the trader, the refugee, the shipping and retreat classes): one of its goals travels and a
-    /// mission town is set. Else the population's trip or campaign march moves a platoon's squad and its members keep the engine's routine
-    /// (<see cref="AiMind.Engine"/>), as before the platoons ran a blackboard.
+    /// mission town is set. For a squad the population runs (<see cref="PopulationRuns"/>) the campaign march or the mod moves it otherwise, and
+    /// its members keep the engine's routine (<see cref="AiMind.Engine"/>). It also names the squads whose mission town is the stand-in's target
+    /// at unload and is saved.
     /// </summary>
     internal static bool BoardMoves(Blackboard board)
     {
@@ -3434,6 +3579,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         var home = HouseForSale(world, squad);
         squad.HomeBuilding = home;
+        squad.MovedOut = home is null;
         if (squad.Ai is not { } board) return;
         var old = board.OwnHome;
         board.OwnHome = home;
@@ -3544,6 +3690,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PackageClass.WanderingTrader => _system.TraderCanStart(_world, _squad, board),
             PackageClass.PassingAssault => _system.AssaultCanStart(_world, _squad, board),
             PackageClass.Refugee => RefugeeCanStart(_world, _squad),
+
+            // The war classes and the campaign's defence start only as a campaign's override (engine choice, Meitou's rule before they were built;
+            // the original's can-start is always true, FUN_140287690 and FUN_140286e00, which matters only to a template slot listing one: none in
+            // the data).
             _ => false,
         };
 
@@ -3589,6 +3739,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PackageClass.PassingAssault => _system.AssaultFinished(_world, _squad, board, package),
             PackageClass.OccupyTown => _system.OccupyFinished(_world, _squad, board),
             PackageClass.Refugee => _system.RefugeeFinished(_world, _squad, board),
+            PackageClass.WarBase or PackageClass.WarAssault or PackageClass.WarAssaultCannibal => _system.OutOfCampaign(_world, _squad),
+            PackageClass.CampaignDefend => _system.CampaignDefendFinished(_world, board),
             _ => false,
         };
 
@@ -3629,10 +3781,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 case PackageClass.Bar:
                 case PackageClass.BarOutdoors:
                     if (!AsksForTable(package)) break;
-                    if (BarTown(board) is >= 0 and var town
-                        && _system.PickTable(_world, town, _squad, outdoors: kind == PackageClass.BarOutdoors) is var (bar, table))
-                        (board.Home, board.BarTable) = (bar, table);
-                    else if (kind == PackageClass.BarOutdoors) board.Home = null;
+
+                    // A squad away from its town whose bar town is not loaded takes no table yet: the original's start needs the town's zone
+                    // loaded and is run again by the target query until it is (docs/game/ai-tasks.md "Hang-around-bar package", Verified).
+                    if (!_squad.TownOwn && BarTown(board) is >= 0 and var far && !_system.SiteLoaded(_world, far)) board.BarWaits = true;
+                    else TakeTable(board, kind);
                     break;
                 case PackageClass.CannibalRetreat:
                 case PackageClass.SlaverShipping:
@@ -3653,7 +3806,39 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 case PackageClass.Contract when package.Signal is HiredAllySignal or DefendBaseSignal:
                     _system.ContractStart(_world, _squad, board, package);
                     break;
+                case PackageClass.CampaignDefend:
+                    _system.CampaignDefendStart(_world, _squad, board);
+                    break;
             }
+        }
+
+        /// <summary>
+        /// The table of a bar package that starts: one of the bar town's (<see cref="BarTown"/>, <see cref="PickTable"/>); the outdoor kind
+        /// without one has no bar.
+        /// </summary>
+        void TakeTable(Blackboard board, PackageClass kind)
+        {
+            if (BarTown(board) is >= 0 and var town
+                && _system.PickTable(_world, town, _squad, outdoors: kind == PackageClass.BarOutdoors) is var (bar, table))
+                (board.Home, board.BarTable) = (bar, table);
+            else if (kind == PackageClass.BarOutdoors) board.Home = null;
+        }
+
+        /// <summary>
+        /// A bar package that started while its town was not loaded (<see cref="Blackboard.BarWaits"/>) takes its table once the town is, on the
+        /// package cadence.
+        /// </summary>
+        public void RetryTable(Blackboard board)
+        {
+            if (board.Current is not { } package || PackageClasses.Of(package.Signal) is not (PackageClass.Bar or PackageClass.BarOutdoors))
+            {
+                board.BarWaits = false;
+                return;
+            }
+
+            if (BarTown(board) is >= 0 and var town && !_system.SiteLoaded(_world, town)) return;
+            board.BarWaits = false;
+            TakeTable(board, PackageClasses.Of(package.Signal));
         }
 
         /// <summary>
@@ -3671,6 +3856,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return false;
         }
     }
+
+    /// <summary>
+    /// Whether the zone of placed town <paramref name="site"/> is loaded (true where the world tracks no zones, as in a synthetic world).
+    /// </summary>
+    bool SiteLoaded(World world, int site) => world.ActiveZones is not { } active || active.Contains(data.Sites[site].Zone);
 
     /// <summary>
     /// The table a squad starting a bar package reserves (the original's <c>Package_HangAroundBar</c> start, docs/game/ai-tasks.md "Town goals"): the

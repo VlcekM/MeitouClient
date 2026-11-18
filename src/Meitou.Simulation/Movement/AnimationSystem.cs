@@ -1044,7 +1044,7 @@ public sealed class AnimationSystem(
         // beds"; #733: a body put in a bed lay on the floor by it).
         if (!inCage && !inBed && HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
 
-        UpdateFallAndGetUp(a, cold, down, carried, crawling, inBed, inCage, ragdoll);
+        UpdateFallAndGetUp(a, cold, down, carried, crawling, inBed, inCage, ragdoll, FirstAid.FirstAidSystem.AtTreatment(cold, task));
         int technique = TechniqueAndAction(a, cold, speed, dt, down, carried, fight);
         bool fullTechnique = technique >= 0 && Library.Definitions[technique].Area == AnimationArea.All;
 
@@ -1399,9 +1399,11 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// Starts or ends the character's fall and getting-up action, from its posture and ragdoll this tick, and records the posture for the next one.
+    /// <paramref name="atTreatment"/>: kneeling at a treatment, which a leg coming back up does not interrupt
+    /// (<see cref="FirstAid.FirstAidSystem.AtTreatment"/>).
     /// </summary>
     void UpdateFallAndGetUp(CharacterAnimation a, CharacterCold cold, bool down, bool carried, bool crawling, bool inBed,
-        bool inCage, RagdollView ragdoll)
+        bool inCage, RagdollView ragdoll, bool atTreatment)
     {
         // Held in a cage or on a pole, it plays the fixture's own pose whatever it was doing: a fall left over from before it was put in, or a
         // get-up, would show over it (docs/game/locks.md "Cages and beds": a captive lies in a cage or stands on a pole, and an awake one stands at
@@ -1426,7 +1428,7 @@ public sealed class AnimationSystem(
 
         // The leg back up or Stand Up from staying low: posture 2 or 1 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20),
         // which plays `standing up 3`.
-        else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false })
+        else if (a.WasCrawling && !down && !carried && !inBed && !inCage && !atTreatment && cold.Medical is { Crawling: false, Prone: false })
             StartAction(a, _getUp, false);
 
         a.WasDown = down;

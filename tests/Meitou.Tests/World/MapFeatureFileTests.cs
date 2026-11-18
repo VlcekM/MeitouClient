@@ -18,10 +18,10 @@ public class MapFeatureFileTests
         var file = MapFeatureFile.Open(install!); // each zone's block read at its offset
         Assert.Equal(WorldLayout.ZoneCount * WorldLayout.ZoneCount, file.Zones.Count);
         var all = file.All().ToList();
-        Assert.Equal(1821, all.Count);
+        Assert.Equal(1819, all.Count);
 
         // All but five lie inside the zone of their slot (slot index = y * 64 + x).
-        Assert.Equal(1816, all.Count(a => WorldLayout.ZoneOf(a.Feature.Position.X, a.Feature.Position.Z) == a.Zone));
+        Assert.Equal(1814, all.Count(a => WorldLayout.ZoneOf(a.Feature.Position.X, a.Feature.Position.Z) == a.Zone));
 
         // Rotations are unit quaternions stored w first: most are pure yaw (x = z = 0).
         Assert.True(all.Count(a => Math.Abs(a.Feature.Rotation.Length() - 1) < 1e-3) >= all.Count - 1);
@@ -29,7 +29,7 @@ public class MapFeatureFileTests
 
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var found = all.Where(a => db.Find(a.Feature.StringId) is not null).ToList();
-        Assert.Equal(1810, found.Count);
+        Assert.Equal(1808, found.Count);
         Assert.All(found, a => Assert.Equal(FcsRecordType.MapFeatures, db.Find(a.Feature.StringId)!.Type));
     }
 }

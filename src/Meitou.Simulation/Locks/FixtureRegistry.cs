@@ -99,6 +99,12 @@ public sealed partial class FixtureRegistry
     readonly Dictionary<string, GameRecord?> _functions = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Set while <see cref="RegisterAdded"/> registers a building the level editor placed: its containers take no original contents
+    /// (<see cref="ReadOriginalContents"/>).
+    /// </summary>
+    bool _editing;
+
+    /// <summary>
     /// (cage id, faction) -> the game hour until which a walk there is known to fail (engine: the "no path" memo of FindCage). Sorted, so it
     /// hashes in a fixed order.
     /// </summary>
@@ -490,7 +496,18 @@ public sealed partial class FixtureRegistry
     internal void RegisterAdded(World world, PopulationData data, int site, TownBuilding b)
     {
         if (!_sites.Contains(site)) return;
-        RegisterWithSight(world, data, site, b, site < data.SiteFactions.Count ? data.SiteFactions[site] : -1);
+
+        // A building the editor places has no furniture entries of the original's (one placed again would take its save's items a second time).
+        _editing = true;
+        try
+        {
+            RegisterWithSight(world, data, site, b, site < data.SiteFactions.Count ? data.SiteFactions[site] : -1);
+        }
+        finally
+        {
+            _editing = false;
+        }
+
         Bind(world);
     }
 
@@ -2278,7 +2295,8 @@ public sealed partial class FixtureRegistry
     /// Takes a building's lock and door state from its saved GAMESTATE_BUILDING (docs/game/locks.md "Save keys"): <c>hardness</c> and <c>broken</c>
     /// always, level and <c>locked</c> only when the saved <c>lock lvl</c> is above 0; doors by suffix i: <c>state</c>, <c>doa</c>, <c>broken</c>,
     /// <c>wants lock</c>, <c>lock lvl</c>, <c>locked</c>, <c>hardness</c>, and the gate code set to -1 (<c>gatecode</c> is written, not read). Interior fixtures (whose save ids are not mapped) keep
-    /// their rolls but count as restored, apart from Meitou's own <c>meitou lock</c> key (see <see cref="InteriorKey"/>). A <paramref name="level"/>
+    /// their rolls but count as restored, apart from Meitou's own <c>meitou lock</c> key (see <see cref="InteriorKey"/>); a container's contents come
+    /// from Meitou's <c>meitou container</c> key, else from the original's entry of it (<see cref="ReadOriginalContents"/>). A <paramref name="level"/>
     /// state (the level data's, for a building no save has) marks restored only the doors it has a <c>state</c> for, so the squad's <c>initial door
     /// state</c> still applies to the rest.
     /// </summary>
@@ -2294,9 +2312,11 @@ public sealed partial class FixtureRegistry
             }
 
             f.Restored = !level || f.Kind == FixtureKind.Door && state.Ints.ContainsKey("state" + f.DoorIndex.ToString(CultureInfo.InvariantCulture));
-            if (f.Contents is { } grid && Items is { } factory && ContainerSave.KeyOf(f, building) is { } contentsKey
-                    && state.Strings.TryGetValue(contentsKey, out var saved))
-                ContainerSave.Read(saved, grid, factory);
+            if (f.Contents is { } grid && Items is { } factory && ContainerSave.KeyOf(f, building) is { } contentsKey)
+            {
+                if (state.Strings.TryGetValue(contentsKey, out var saved)) ContainerSave.Read(saved, grid, factory);
+                else if (!level) ReadOriginalContents(f, building, grid, factory, state);
+            }
 
             if (f.Kind == FixtureKind.Door)
             {
@@ -2318,6 +2338,20 @@ public sealed partial class FixtureRegistry
                 il.Level = Math.Clamp(packed >> 2, 0, 100);
             }
         }
+    }
+
+    /// <summary>
+    /// A town container with no Meitou contents key takes the items of the original's own entry of it, when its house keeps its saved interior and
+    /// was not bought (the purchase destroyed its furniture: <see cref="EmptyPurchased"/> takes the fixture out), it is no machine's object (whose
+    /// machine owns the entry's inventory) and the level editor is not placing it (<see cref="Saving.FurnitureInventorySave"/>).
+    /// </summary>
+    void ReadOriginalContents(Fixture f, string building, Items.Inventory grid, Items.ItemFactory factory, StateKeys house)
+    {
+        if (_editing || IsEmptied(building) || !Saving.FurnitureInventorySave.Keeps(house.Ints)) return;
+        if (_usableData is { } data && Saving.FurnitureInventorySave.MachineOwns(data.Db, f.RecordId)) return;
+        if (SavedPieces?.Of(f.Id, f.RecordId, f.Position) is not { } entry) return;
+
+        f.LoadedContents = Saving.FurnitureInventorySave.Read(entry, grid, factory);
     }
 
     /// <summary>

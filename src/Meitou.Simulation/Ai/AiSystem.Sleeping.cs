@@ -46,13 +46,16 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The danger score the sleeping desire reads (AI slot 28, <c>FUN_1405a0b50</c>, <b>Verified</b>): 2 with an enemy sensed (<c>numEnemies</c>; AI
-    /// <c>+0x80</c>, meaning <b>Unknown</b>, is not read), 1.5 with an alarm of the character's town near it (<see cref="AlarmOf"/>, stand-in for the
-    /// alarm finder <c>FUN_14092a810</c>, <b>Observed</b>), 1 with a stranger it knows in its home building, else 0.
+    /// The danger score the sleeping desire reads (AI slot 28, <c>FUN_1405a0b50</c>, <b>Verified</b>): 2 with an enemy sensed (<c>numEnemies</c>) or a
+    /// threat on its threats list (AI <c>+0x80</c>, the list's count: someone of another faction whose fight targets it), 1.5 with an alarm of the
+    /// character's town near it (<see cref="AlarmOf"/>, stand-in for the alarm finder <c>FUN_14092a810</c>, <b>Observed</b>), 1 with a stranger it
+    /// knows in its home building (the original's: one it hears now, <c>FUN_1408557f0</c>; engine choice), else 0. The original's last branch for a
+    /// player-faction character (the protect allies desire, <c>FUN_140599b90</c>) is not modelled: a player character the AI plans for takes the
+    /// non-player branch (engine choice, as <see cref="SleepingDesire"/>).
     /// </summary>
     float SleepDanger(World world, Blackboard board, int slot, CharacterCold me)
     {
-        if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return 2;
+        if (_aggro?.SensesOf(slot) is { } senses && (senses.Enemies > 0 || senses.Threats.Count > 0)) return 2;
         if (AlarmOf(world, slot, TaskType.InvestigateAlarms, board) is not null) return 1.5f;
         return board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot) ? 1 : 0;
     }
