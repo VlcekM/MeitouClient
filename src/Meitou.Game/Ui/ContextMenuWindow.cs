@@ -350,7 +350,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// One of the player's own characters: another one than the selection is followed (31) or, unless down, guarded (45,
     /// <see cref="FollowOrder.Guard"/>), its inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225),
     /// standing too when it carries no one (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the
-    /// selection's order). A member of a squad the player does not lead (<see cref="PlayerInterface.Independent"/>, Meitou only) keeps its own
+    /// selection's order), then Put Down (69) when a selected character carries someone, so the carrier's portrait drops the body. A member of a squad the player does not lead (<see cref="PlayerInterface.Independent"/>, Meitou only) keeps its own
     /// inventory and carries on standing: it is picked up only while down and gets no free Trade (26); a standing one keeping a shop a code mod
     /// gave its squad (<see cref="CharacterSnapshot.IsTrader"/>) gets the paid Trade first.
     /// </summary>
@@ -363,6 +363,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
         {
             if (target.StayingLow)
                 verbs.Add(("Stand Up", () => player.Say(new StandUpCommand(selection) { Tick = player.Session.World.Tick })));
+
+            var carriers = player.Selected().Where(c => !c.Carrying.IsNone).Select(c => c.Id).ToArray();
+            if (carriers.Length > 0 && target.CarriedBy.IsNone) verbs.Add(PutDownVerb(carriers));
 
             return;
         }

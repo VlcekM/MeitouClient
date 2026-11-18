@@ -352,7 +352,7 @@ Rendering details: [objects](../render-objects.md#building-sign-highlight).
 - Right release over the same portrait with the hand still set (a press shorter than 0.25 s) calls `FUN_140413cd0` with the focus flag set: the same select-and-focus as the double click.
   After the menu opened, the release does not focus. No right-click menu on any other path of the bar.
 - Meitou (`PlayerInterface.PortraitRightDown` / `MouseUp`): a press held `PortraitHoldSeconds` (0.25) opens the member's context menu; a quicker right release on the pressed portrait selects it
-  (Shift toggles) and centres / flies the camera as the double click. With no verbs (nothing selected) no menu opens and the release focuses.
+  (Shift toggles) and centres / flies the camera as the double click. The carrier's own portrait, selected, offers Put Down (69, the selected own character's row in [the verb table](#context-menu-verbs)). With no verbs (nothing selected) no menu opens and the release focuses.
 
 ### Ground item labels
 
