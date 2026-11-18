@@ -486,7 +486,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
         else if (entry.Run is { } run)
         {
-            Button("Clear cache", R(944, buttonY, 156, 26), run, clip: menu.Viewport);
+            Button(entry.RunLabel ?? entry.Label, R(944, buttonY, 156, 26), run, clip: menu.Viewport);
         }
     }
 

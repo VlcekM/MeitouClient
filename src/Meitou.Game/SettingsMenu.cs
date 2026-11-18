@@ -217,12 +217,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal sealed record Choice(Func<IReadOnlyList<string>> Options, Func<int> Current, Action<int> Choose);
 
     /// <summary>
-    /// A row of a page: its label and hint, and the slider, switch, drop-down, binding or action it edits, with how it is drawn.
+    /// A row of a page: its label and hint, and the slider, switch, drop-down, binding or action it edits (an action's button reads
+    /// <paramref name="RunLabel"/>, the row's label without one), with how it is drawn.
     /// </summary>
     internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
         InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
         string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
-        bool Locked = false, string? Tag = null, bool TagHot = false);
+        bool Locked = false, string? Tag = null, bool TagHot = false, string? RunLabel = null);
 
     /// <summary>
     /// A clickable widget as the last frame drew it: its bounds, what a click does, and a slider's track.
