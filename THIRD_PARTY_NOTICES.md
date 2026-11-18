@@ -136,6 +136,7 @@ Used as packages (not copied into this repository); each is distributed under it
 | Lib.Harmony 2.4.3 (ships `0Harmony.dll` with MonoMod, Mono.Cecil and Iced merged in; notices under [Harmony](#harmony)) | `src/Meitou.Game` (Mods/; code mods patch the game through it) | MIT |
 | BepuPhysics, BepuUtilities 2.4.0 | `src/Meitou.Simulation` (ragdoll physics); also in the code-mod reference pack, with the licence text in its `licenses/Apache-2.0.txt` | Apache-2.0 |
 | Microsoft.Extensions.DependencyModel 9.0.9, Microsoft.DotNet.PlatformAbstractions 3.1.6 | `src/Meitou.Game`, via Silk.NET.Core | MIT |
+| BepInEx.AssemblyPublicizer 0.4.3 (with AsmResolver, AsmResolver.DotNet, .PE, .PE.File 5.5.1) | `tools/Meitou.ReferencePack` (makes the publicized set of the code-mod reference pack for each release and nightly; not shipped) | MIT |
 
 The DDS reader and decoder (`src/Meitou.Data/Textures/`) are written from Microsoft's public DDS and
 block-compression documentation; no code is taken from other implementations.

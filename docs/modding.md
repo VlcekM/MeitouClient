@@ -59,10 +59,21 @@ types (macOS builds only) are not in the pack.
 - `Meitou.Mod.targets`, imported anywhere in a mod's project (`<Import Project="<pack>/Meitou.Mod.targets" />`), references every assembly
   of the set for the mod's `TargetFramework`, with `Private="false"`. A project with its own references to a game folder can point them at
   `net11.0/ref/` instead; it then also needs a reference to each library whose types it uses.
+- `publicized/` beside `ref/` holds the four Meitou assemblies with every type and member public (compiler-generated members and explicit
+  interface implementations left as they are), method bodies replaced by a throw and resources dropped, made by `tools/Meitou.ReferencePack` with
+  BepInEx.AssemblyPublicizer (MIT, on AsmResolver, MIT); the targets take its libraries from `ref/`. `<MeitouPublicized>true</MeitouPublicized>`,
+  set anywhere in the project, makes the targets reference this set and compile in `Meitou.IgnoresAccessChecksTo.cs`, which declares
+  `IgnoresAccessChecksTo` for the four Meitou assemblies in the mod's own assembly: .NET then lets the mod reach their non-public members.
+  Without it, a call into one throws `MethodAccessException` or `FieldAccessException`, and a type overriding one fails to load
+  (`TypeLoadException`). A mod that already declares the attribute itself (a publicizer package does) leaves `MeitouPublicized` unset.
+- Internals change between releases without notice: a mod using them should name its `gameVersion` in `meitou.json`.
 - `THIRD_PARTY_NOTICES.md` and `licenses/` carry the libraries' licences.
 - **Observed** (2026-11-17, win-x64): three existing code mods compile unchanged against `net11.0/ref/`; a `net11.0` and a `net10.0` mod
   reading `VulkanDevice.Vk` (a Silk.NET type) compile through the targets with the Import placed before `TargetFramework`, and no pack
-  file is copied to their output; loading a Meitou file of the pack throws `BadImageFormatException`.
+  file is copied to their output; loading a Meitou file of the pack throws `BadImageFormatException`. A mod calling an internal static of
+  `Meitou.Simulation`, an internal and a private static of `Meitou.Data` and an internal type, compiled against `publicized/`, runs in its
+  own load context against the real assemblies, and its Harmony patch lands on an internal method; without the attribute the same call
+  throws `MethodAccessException`.
 
 ## Discovery
 
@@ -494,9 +505,9 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against.
-- Harmony patches non-public members, which the [reference pack](#reference-pack)'s `ref/` set does not hold; a mod compiles against them
-  through a publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility
-  is per game version ([Why this shape](#why-this-shape)): public names change too, as after v0.17.1, and internals change without notice.
+- Harmony patches non-public members; compiling against them takes the [reference pack](#reference-pack)'s publicized set, or a
+  publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility is per game
+  version ([Why this shape](#why-this-shape)): public names change too, as after v0.17.1, and internals change without notice.
 
 ## Platforms
 

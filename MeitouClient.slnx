@@ -17,6 +17,7 @@
   <Folder Name="/tools/">
     <Project Path="tools/Meitou.MetalHost/Meitou.MetalHost.csproj" />
     <Project Path="tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj" />
+    <Project Path="tools/Meitou.ReferencePack/Meitou.ReferencePack.csproj" />
     <Project Path="tools/Meitou.Tools/Meitou.Tools.csproj" />
   </Folder>
 </Solution>

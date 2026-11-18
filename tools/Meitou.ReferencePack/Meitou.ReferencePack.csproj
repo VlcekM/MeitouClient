@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- meitou-reference-pack: the publicized half of the reference pack code mods compile against (docs/modding.md "Reference pack").
+       tools/scripts/package-references.ps1 runs it on each release's Meitou assemblies; it is a build tool and never ships with the game. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>meitou-reference-pack</AssemblyName>
+    <RootNamespace>Meitou.ReferencePack</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BepInEx's publicizer (MIT), on AsmResolver (MIT): every type and member made public, method bodies stripped. -->
+    <PackageReference Include="BepInEx.AssemblyPublicizer" Version="0.4.3" />
+  </ItemGroup>
+
+</Project>

@@ -1,8 +1,10 @@
 # Builds the reference pack code mods compile against (docs/modding.md "Reference pack"): Meitou-<version>-refs.zip, one top folder holding, for
 # net11.0 (standard builds) and net10.0 (legacy macOS builds), ref/: the compiler's reference assemblies of MeitouClient, Meitou.Simulation,
 # Meitou.Core and Meitou.Data beside the game's own builds of its other managed libraries (0Harmony, Bepu, DotRecast, Silk.NET and the rest,
-# which the compiler needs for any member typed in them); plus Meitou.Mod.targets, which a mod imports, and the licences. The Meitou
-# assemblies carry the release's version, as package-release.ps1 stamps the game's, so a mod built against the pack binds to that release.
+# which the compiler needs for any member typed in them), and publicized/: the same four with every type and member public and bodies
+# stripped (tools/Meitou.ReferencePack), whose libraries the targets take from ref/; plus Meitou.Mod.targets, which a mod imports, the access
+# attribute file a publicized mod compiles in, and the licences. The Meitou assemblies carry the release's version, as package-release.ps1
+# stamps the game's, so a mod built against the pack binds to that release.
 # Nothing here touches the game's own build or zips: the four projects build separately under -Work.
 #   pwsh -File tools/scripts/package-references.ps1 -Version 0.21.0 [-Output out] [-Work <scratch folder>] [-Frameworks net11.0,net10.0]
 # (Runs on PowerShell 7 and Windows PowerShell 5.1: the zip is written entry by entry with forward slashes.)
@@ -71,6 +73,13 @@ function Copy-Libraries([string] $bin, [string] $dir) {
     }
 }
 
+# publicized/: the built Meitou assemblies run through the publicizer; Meitou.Mod.targets takes the libraries for this set from ref/.
+function Write-PublicizedSet([string] $bin, [string] $dir) {
+    $built = $assemblies | ForEach-Object { Join-Path $bin "$_.dll" }
+    dotnet run --project (Join-Path $root "tools/Meitou.ReferencePack/Meitou.ReferencePack.csproj") -c Release -- $dir @built | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "meitou-reference-pack failed for $dir" }
+}
+
 # Every Meitou assembly in a set must carry the release's version, or a mod built against it would not bind to the release.
 function Test-Versions([string] $dir) {
     foreach ($assembly in $assemblies) {
@@ -85,10 +94,13 @@ foreach ($framework in $Frameworks) {
     $refDir = Join-Path $stage "$framework/ref"
     Write-ReferenceSet $artifacts $bin $refDir
     Test-Versions $refDir
+    $pubDir = Join-Path $stage "$framework/publicized"
+    Write-PublicizedSet $bin $pubDir
+    Test-Versions $pubDir
 }
 
 # The targets file, Meitou's licence, the notices covering every library in the pack, and the Apache-2.0 text Bepu's licence asks to accompany it.
-Copy-Item (Join-Path $packFiles "Meitou.Mod.targets") $stage
+Copy-Item (Join-Path $packFiles "Meitou.Mod.targets"), (Join-Path $packFiles "Meitou.IgnoresAccessChecksTo.cs") $stage
 Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "THIRD_PARTY_NOTICES.md") $stage
 Copy-Item (Join-Path $packFiles "licenses") $stage -Recurse
 $title = "Meitou $Version reference pack"
@@ -101,15 +113,18 @@ these copies: the four Meitou assemblies here are compile-only reference assembl
 game's own builds of its libraries, which the game always takes from its own folder. The guide: docs/modding.md "Reference pack" in
 https://github.com/VlcekM/MeitouClient.
 
-net11.0/ref/   standard builds (Windows, Linux, macOS)
-net10.0/ref/   legacy macOS builds
-               MeitouClient.dll, Meitou.Simulation.dll, Meitou.Core.dll, Meitou.Data.dll (the public API), 0Harmony.dll and the game's other
-               libraries (Bepu, DotRecast, Silk.NET, ...), needed for any member typed in them
+net11.0/   standard builds (Windows, Linux, macOS)
+net10.0/   legacy macOS builds
+  ref/          MeitouClient.dll, Meitou.Simulation.dll, Meitou.Core.dll, Meitou.Data.dll (the public API), 0Harmony.dll and the game's other
+                libraries (Bepu, DotRecast, Silk.NET, ...), needed for any member typed in them
+  publicized/   the four Meitou assemblies with every type and member public, for mods that reach internals (the libraries come from ref/)
 
 Use
 ---
 In the mod's .csproj:
     <Import Project="path/to/$name/Meitou.Mod.targets" />
+For the publicized set, also set <MeitouPublicized>true</MeitouPublicized> anywhere in the project: the mod then compiles in
+Meitou.IgnoresAccessChecksTo.cs, which lets it reach those members at run time. Internals change between releases without notice.
 A mod built against a nightly's pack carries the nightly's version and may not load on the previous full release.
 
 Licences
