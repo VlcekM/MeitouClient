@@ -221,7 +221,7 @@ places the Adventurers Guild, its sign and banners. A file the reader refuses is
 Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174
 mods enabled): 54 473 placed buildings in 1222 zones against 11 714 in 913 without the mod layers.
 
-### `data/newland/land/features.dat` (`MapFeatureFile`) — layout/example
+### `data/newland/land/features.dat` (`MapFeatureFile`) - layout/example
 
 ```
 char[4] magic        "MF01"
@@ -236,7 +236,12 @@ block:  int32 count, count ×
 
 **Verified** (decompiled, `FUN_14039a4d0` and `FUN_14039a820`): the game reads the magic, the count and the table once (another magic or a count
 other than 4096: no map features at all), then each zone's block when the zone loads, by seeking to its offset (0: none). The size is never
-read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored.
+read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored. Each placement read is compared with the last entry of
+the zone's feature list before its record is looked up: one at exactly the same position (`Vector3 ==`) is skipped. A record the data lacks is logged
+("not found") and a placement whose position lies in another zone is logged ("Map feature in wrong zone"); neither enters the list. **Verified**
+(decompiled, `FUN_14039a820`); the base `features.dat` holds 2 such repeats (a First Civ_WreckBit06 in zone 52.31 and a Barge WreckPiece02 in 46.33,
+each the same record, scale and rotation as the placement before it), so 1819 of its 1821 placements are kept. Meitou (`MapFeatureFile.Read`) skips
+a placement at the position of the last one it read in the zone that lies in its zone.
 
 ## Town membership
 

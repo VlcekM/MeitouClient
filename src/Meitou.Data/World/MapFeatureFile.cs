@@ -64,7 +64,7 @@ public sealed class MapFeatureFile
             uint offset = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(8 + 8 * i));
             var list = new List<MapFeature>();
             file.Zones.Add(list);
-            if (offset != 0 && offset < data.Length) ReadBlock(data.AsSpan((int)offset), list);
+            if (offset != 0 && offset < data.Length) ReadBlock(data.AsSpan((int)offset), ZoneOf(i), list);
         }
 
         return file;
@@ -72,14 +72,16 @@ public sealed class MapFeatureFile
 
     /// <summary>
     /// Reads one zone's block into <paramref name="list"/>: a count, then per placement its id (a length byte and UTF-8), position, scale and
-    /// rotation (w, x, y, z). A block cut short by the end of the file ends there (Meitou's choice for a broken file).
+    /// rotation (w, x, y, z). A placement standing exactly where the last one kept in the zone stands is skipped (<see cref="Repeats"/>). A block
+    /// cut short by the end of the file ends there (Meitou's choice for a broken file).
     /// </summary>
-    static void ReadBlock(ReadOnlySpan<byte> block, List<MapFeature> list)
+    static void ReadBlock(ReadOnlySpan<byte> block, ZoneCoordinate zone, List<MapFeature> list)
     {
         const int floats = 40;
         if (block.Length < 4) return;
         int n = BinaryPrimitives.ReadInt32LittleEndian(block), p = 4;
         static float F(ReadOnlySpan<byte> b, ref int at) { float v = BinaryPrimitives.ReadSingleLittleEndian(b[at..]); at += 4; return v; }
+        MapFeature? last = null;
         for (int k = 0; k < n && p < block.Length; k++)
         {
             int len = block[p++];
@@ -90,9 +92,21 @@ public sealed class MapFeatureFile
             var position = new Vector3(F(block, ref p), F(block, ref p), F(block, ref p));
             var scale = new Vector3(F(block, ref p), F(block, ref p), F(block, ref p));
             float w = F(block, ref p), x = F(block, ref p), y = F(block, ref p), z = F(block, ref p);
-            list.Add(new MapFeature(id, position, scale, new Quaternion(x, y, z, w)));
+            if (Repeats(last, position)) continue;
+
+            var feature = new MapFeature(id, position, scale, new Quaternion(x, y, z, w));
+            list.Add(feature);
+            if (WorldLayout.ZoneOf(position.X, position.Z) == zone) last = feature;
         }
     }
+
+    /// <summary>
+    /// Whether a placement repeats the last one the game kept in the zone: it skips one whose position equals exactly (<c>Vector3 ==</c>) that of
+    /// the last entry of the zone's feature list, before it looks the record up (<c>FUN_14039a820</c>, <b>Verified</b> by decompile). The game's
+    /// list holds only the placements lying in their zone (one in another zone is logged as in the wrong zone and left out), so the last placement
+    /// read in the zone stands in for it here; the reader cannot tell a record the data lacks, which the game also leaves out.
+    /// </summary>
+    static bool Repeats(MapFeature? last, Vector3 position) => last is not null && last.Position == position;
 }
 
 /// <param name="StringId">The placed FCS record (MAP_FEATURES).</param>
