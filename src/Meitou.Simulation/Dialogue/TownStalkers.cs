@@ -68,8 +68,8 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     /// <see cref="StalkPastGate"/> outside that town's first gate (on the line from the town centre through it), facing its victim, while the victim
     /// has a status town and is no farther from that town's centre than the waypoint; in a town with no gate it follows the victim without
     /// harassing it. Otherwise it follows the victim and, once, when it is not talking, sends it event 26. It is done when, after that, neither is
-    /// talking. Engine choices: re-aimed every 15 ticks; the first gate is the town's first gate door in fixture order (a player town's: the first
-    /// within its radius); the gate-code test on the gate's outside is not made.
+    /// talking. Engine choices: re-aimed every 15 ticks; the first gate is the town's first outer gate door in fixture order (a player town's: the
+    /// first within its radius).
     /// </summary>
     public void StepStalkers(World world)
     {
@@ -143,17 +143,24 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// Where the first gate door of <paramref name="town"/> stands (X/Z): a town site's registered gate, a player town's first within its radius.
+    /// Where the first gate door of <paramref name="town"/> stands (X/Z): a town site's registered gate, a player town's first within its radius,
+    /// skipping an inner gate (<c>FUN_140340360</c>: the gate code outside it above 0, so its outside is still within walls). That code is the gate
+    /// building's own from the last labelling (<see cref="Locks.LockSystem.GateCodes"/>: read at the outer door marker); before one it is -1 and no
+    /// gate is skipped.
     /// </summary>
     static Vector2? FirstGate(World world, CampaignTown town, (Vector2 Centre, float Radius) circle)
     {
+        var locks = world.SystemOf<Locks.LockSystem>();
         foreach (var f in world.Fixtures.All)
         {
             if (f.Kind != Locks.FixtureKind.Door || !f.IsGate) continue;
 
             var at = new Vector2(f.Position.X, f.Position.Z);
             bool ofTown = town.Site >= 0 ? f.Site == town.Site : Vector2.Distance(at, circle.Centre) <= circle.Radius;
-            if (ofTown) return at;
+            if (!ofTown) continue;
+            if (locks is not null && locks.GateCodes(f.Building, f).Building > 0) continue;   // an inner gate
+
+            return at;
         }
 
         return null;
