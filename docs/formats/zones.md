@@ -239,12 +239,12 @@ other than 4096: no map features at all), then each zone's block when the zone l
 read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored. Each placement read is compared with the last entry of
 the zone's feature list before its record is looked up: one at exactly the same position (`Vector3 ==`) is skipped. A record the data lacks is logged
 ("not found") and a placement whose position lies in another zone is logged ("Map feature in wrong zone") after its object is made; neither enters the
-zone's list. **Observed** (a count over the install's base `features.dat` with Meitou's reader, the base data's records): 2 placements repeat the one
+zone's list. **Observed** (a count over the install's base `features.dat` with Meitou's reader, the base data's records; the 11 below include the
+2 of the 5 that also lie outside their zone, so 1819 less 14 is 1805): 2 placements repeat the one
 before them exactly (a First Civ_WreckBit06 in zone 52.31 and a Barge WreckPiece02 in 46.33, each the same record, scale and rotation); of the
 other 1819, 5 lie outside their zone (FloodedForest_Processor04, BlockyCubeCliff01, First Civ_Full-Wreck and 2 naming records the data lacks) and
 11 name records the data lacks, so the game's zone lists hold 1805. Meitou (`MapFeatureFile.Read`) skips a placement at the position of the last
-one it read in the zone that lies in its zone, keeps the 1819, and draws a placement lying outside its zone (engine choice; whether the game shows
-one is not traced: the object it makes has no scene node yet, `FUN_140399cd0`).
+one it read in the zone that lies in its zone, keeps the 1819, and draws a placement lying outside its zone (engine choice).
 
 ## Town membership
 
@@ -281,7 +281,7 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
     2026-11-17): the Stationhouse ruin's campfire and its squatters stand on its floor-0 base at 1627, under the upper storey's collision at 1705,
     which the ray does not meet. Repairing a ruin removes none of them: its first build step restores it through `FUN_140557280` with 0, which
     empties the interior only when ruining, and the completion (`FUN_140562340`) destroys nothing. Buying the home destroys them with its interior
-    (`FUN_14054f4d0` with 1 keeps only buildings whose slot 135 handle is set, `LightBuilding`'s) and drops the town's nest spots naming the home
+    (`FUN_14054f4d0` with 1 keeps only buildings whose slot 135 handle is set, `LightBuilding`'s; the original's save of a house bought there holds no lamps of its old interior, [save](save.md#zone-files)) and drops the town's nest spots naming the home
     (a handle compare) and its debris meshes round it ([purchase](../game/ui-screens.md#selected-building)); the home's pieces on the ground
     beside it stay. **Observed** (1.0.65 through KenshiHarness, the same save, 2026-11-17, bought paused with Re_Dev's money): the Stationhouse's
     campfire, stools and camp bed and the debris round it vanish at the purchase, its squatters stay. The building's bounding box there is the

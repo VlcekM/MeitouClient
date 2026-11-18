@@ -75,9 +75,10 @@ public sealed partial class ProductionSystem
     readonly List<(TownBuilding Building, TownLayoutBuilding? Piece, int Owner)> _townWaiting = [];
 
     /// <summary>
-    /// The ruins and towns' building lists the layout objects' machines were last checked against (<see cref="DropGonePieces"/>).
+    /// The ruins, the towns' building lists and the bought houses the layout objects' machines were last checked against
+    /// (<see cref="DropGonePieces"/>).
     /// </summary>
-    (long Ruins, int Buildings) _piecesChecked = (-1, -1);
+    (long Ruins, int Buildings, long Bought) _piecesChecked = (-1, -1, -1);
 
     /// <summary>
     /// The layout objects whose machine went with a ruin or a new layout: one made again is new, not the save's (<see cref="RestorePiece"/>).
@@ -325,14 +326,15 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The machines of layout objects that are gone, checked when the ruins or the towns' lists change: setting a house destroyed destroys its
-    /// interior's objects (<c>Building::setDestroyed</c> <c>FUN_140557280</c> -> <c>FUN_14054f4d0</c>, docs/game/buildings-production.md "A ruin
-    /// holds no furniture"), and a house laid out again has other objects. Each such machine goes with its items; an object of a house that is a
-    /// ruin waits for it to stand again (<see cref="MadeTownMachine"/>) and is made new then.
+    /// The machines of layout objects that are gone, checked when the ruins, the towns' lists or the bought houses change: setting a house
+    /// destroyed destroys its interior's objects (<c>Building::setDestroyed</c> <c>FUN_140557280</c> -> <c>FUN_14054f4d0</c>,
+    /// docs/game/buildings-production.md "A ruin holds no furniture"), buying it does too (<see cref="Locks.FixtureRegistry.IsEmptied"/>,
+    /// docs/simulation.md "Town house purchases"), and a house laid out again has other objects. Each such machine goes with its items; an object of
+    /// a house that is a ruin waits for it to stand again (<see cref="MadeTownMachine"/>) and is made new then; a bought house's never comes back.
     /// </summary>
     void DropGonePieces(World world, PopulationData data)
     {
-        var seen = (world.Fixtures.RuinsRevision, data.BuildingsRevision);
+        var seen = (world.Fixtures.RuinsRevision, data.BuildingsRevision, world.Fixtures.EmptiedRevision);
         if (seen == _piecesChecked) return;
         _piecesChecked = seen;
 
@@ -384,7 +386,8 @@ public sealed partial class ProductionSystem
         if (!key.Contains('/')) return false;
         if (TownPieceOf(key) is not { } found) return true;
 
-        return found.Piece.RecordId != site.Record || found.Piece.Position != site.Position || world.Fixtures.IsDestroyed(found.House);
+        return found.Piece.RecordId != site.Record || found.Piece.Position != site.Position || world.Fixtures.IsDestroyed(found.House)
+            || world.Fixtures.IsEmptied(found.House.Key);
     }
 
     /// <summary>
@@ -413,12 +416,13 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// Whether a waiting town building or layout object has its machine now: it had one, or its building stands and it gets it (a ruin keeps
-    /// waiting).
+    /// waiting); an object of a bought house gets none and waits no more (the purchase destroyed it).
     /// </summary>
     bool MadeTownMachine(World world, TownBuilding building, TownLayoutBuilding? piece, int owner)
     {
         string id = piece is null ? TownWorkId(building) : TownWorkPrefix + piece.Id;
         if (world.Machines.Find(id) is not null) return true;
+        if (piece is not null && world.Fixtures.IsEmptied(building.Key)) return true;
         if (world.Fixtures.IsDestroyed(building)) return false;
 
         if (piece is null) TownWork(world, building, owner);

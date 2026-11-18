@@ -482,7 +482,7 @@ PLATOON keys (**Verified**):
   trader platoons; the largest is 200.3 at clock 177.4 and 207.7 at 186.6, about the clock + a 24 h `vendors refresh time`; three or four are 0). Meitou writes it for every
   shop with Meitou's own `meitou shop` (string: a squad shop's stock as JSON, `[]` when empty and for a building shop, whose goods its containers keep; the container format of [locks](../game/locks.md)) and `meitou shop fills` (int, the next
   fill's roll key), and restores the shop from them when it makes the platoon (the next restock against the current clock, which is the save's from the start of the load, and at most one
-  `vendors refresh time` away, an engine choice that repairs older Meitou saves); without `meitou shop` the shop is filled anew. Items' stolen marks are not kept. **Observed**
+  `vendors refresh time` away, an engine choice that repairs older Meitou saves); without `meitou shop` (a save of the original) a building shop is loaded as filled with its containers' goods until that time, a squad shop is filled anew ([economy](../game/economy.md#building-shops-observed-decompile)). Items' stolen marks are not kept. **Observed**
   (headless, real data): two squad shops (one with an item taken out) come back with the same items, cells, purse, fill count and restock tick (±1); a building shop
   (merged grid of its home's containers, wider than 18 when they are) is restored by code only, and loses the cells past 18 if its home does not resolve.
 
@@ -586,10 +586,14 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   farm, a producer such as the Rain Collector, a battery bank: its machine reads that inventory), and not for a building the level editor places
   (one placed again would take the save's items twice). A save writes the container's items into that entry's inventory (a new
   `<n>-zone<X>.<Y>-INGAME` listed first when it had none, the record removed when it holds nothing) and drops the key, leaving an inventory whose
-  items are as they were read as it is. A bought house's entries go with their inventories and states, the player's own buildings inside it staying,
-  and so do its Meitou container and interior lock keys: the original's purchase destroys the interior's furniture with its items
-  ([selected building](../game/ui-screens.md#selected-building)), and a stale entry or key would be read back at every load and dropped on the
-  ground by the bought-house emptying. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
+  items are as they were read as it is. A bought house's generated entries (`<n>-zone<X>.<Y>-INGAME`) go with their inventories and states,
+  the player's own buildings and level buildings inside it staying, and so do its Meitou container and interior lock keys, and its layout objects'
+  town machines go at the purchase: the original's purchase destroys the interior's furniture with its items
+  ([selected building](../game/ui-screens.md#selected-building)), and its save of a house bought there holds none of the old interior's objects
+  (**Observed**: Squin's Longhouse `21-rebirth-INGAME` holds 55 objects of its `Residential` layout in ShopCounterStart (a new game of the same start), among them 2 Ceiling Lamps,
+  3 Electrical Torch Posts, a Bread Oven and a Water Tank; in ShopCounterSold, bought there, it holds only the player's own Shop Counter, its
+  `interior layout name` is empty and one `internalbuildings` handle is left); a stale entry or key would be read back at every load and dropped
+  on the ground by the bought-house emptying. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
   with nothing changed writes the entry's inventory with the same records, one Damaged Book taken writes that stack's record with quantity 1, and
   the reloaded save shows it.
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a

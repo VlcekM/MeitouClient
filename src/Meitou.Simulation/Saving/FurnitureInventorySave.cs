@@ -96,10 +96,12 @@ public static class FurnitureInventorySave
     }
 
     /// <summary>
-    /// Removes the entries standing inside a bought house (<c>is inside building</c>, its <c>isInsideBuilding</c> handle), with their inventories and
-    /// states, as <see cref="RuinSave"/> removes a ruin's: the original's purchase destroys the interior's furniture and its items
-    /// (docs/game/ui-screens.md "Selected building"), so its own save holds none there, and Meitou takes those objects out at the purchase. The
-    /// player's own buildings inside it (<see cref="World.Buildings"/>) stay.
+    /// Removes the generated entries (ids <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>) standing inside a bought house (<c>is inside building</c>, its
+    /// <c>isInsideBuilding</c> handle), with their inventories and states, as <see cref="RuinSave"/> removes a ruin's: the original's purchase destroys
+    /// the interior's furniture and its items (docs/game/ui-screens.md "Selected building"), and its own save of a house bought there holds none of
+    /// the old interior's objects, lamps and machines included (<b>Observed</b>, docs/formats/save.md "Zone files"); Meitou takes those objects and
+    /// their machines out at the purchase. The player's own buildings inside it (<see cref="World.Buildings"/>) and level buildings placed inside it
+    /// (level ids, rebuilt from the level data with their saved state) stay.
     /// </summary>
     static void DropBought(SaveGame game, World world, HashSet<(int C, int I)> bought)
     {
@@ -113,7 +115,7 @@ public static class FurnitureInventorySave
             foreach (var instance in list.Instances.ToList())
             {
                 var state = instance.States.Select(id => states.GetValueOrDefault(id)).FirstOrDefault(r => r is not null);
-                if (state is null || world.Buildings.Find(instance.Id) is not null || !Inside(state, bought)) continue;
+                if (state is null || !Generated(instance.Id) || world.Buildings.Find(instance.Id) is not null || !Inside(state, bought)) continue;
 
                 MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, []);
                 zone.File.Records.Remove(state);
@@ -121,6 +123,12 @@ public static class FurnitureInventorySave
             }
         }
     }
+
+    /// <summary>
+    /// Whether an entry was made in play (<c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>), as the generated furniture's entries are; a level building's id is
+    /// its level id.
+    /// </summary>
+    static bool Generated(string id) => Construction.BuildingRegistry.TryParseId(id, out _, out _);
 
     /// <summary>
     /// Whether a building state stands inside one of <paramref name="houses"/>.
