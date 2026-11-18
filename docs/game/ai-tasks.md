@@ -1554,7 +1554,9 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   (**Verified**, `FUN_14050e5b0`). A job is skipped when: it has no TaskData; the switch is off and its
   type is not 16, 31, 45, 57, 58 or 250 (`FUN_14050c1c0`, tested in both the urgent and the full pass, **Verified**: these run regardless, so the medic job ignores the switch and rescue does not); the
   planner finds an unmet list-B state and the row has no effect (row +0x14 clear; `FUN_14060f940`); its list A holds (done; `FUN_14060f570`,
-  `FUN_14050c8e0`); or desire × target finder is 0. Type 187 (Obedient Slave) has a slave-state branch of its own.
+  `FUN_14050c8e0`); or desire × target finder is 0. Type 187 (Obedient Slave) has a slave-state branch of its own: in slave state 1 and not sneaking it
+  is scored by its master's Slave list before the list-B and list-A skips, which it never meets (row 187 has no lists, no effect and no +0x14, so the
+  list-B skip would drop it). Meitou: `ListTests.JobSkipped`.
 - **Range** (**Verified** by decompile of `FUN_1405a3370`, `FUN_140599f30`, `FUN_140597790`, `AI::AI` `FUN_1406236d0`; names KenshiLib 1ce4a16,
   **Observed**): a job's walk is planned through rows 1 Moving / 67 Running, whose list B needs 27 `isMovementAllowed`, so a job whose target fails
   it cannot be planned and is skipped (so is every walking job while the character gets up). One-shot orders walk through 29 Move order, which lacks

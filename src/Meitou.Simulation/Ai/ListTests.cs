@@ -1,4 +1,5 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Kidnap;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 
@@ -87,12 +88,14 @@ public static class ListTests
     /// <c>FUN_14050e5b0</c>'s skips of job <paramref name="job"/>, after the jobs switch: a row without +0x14 (<see cref="TaskDataFlags.KeepsJob"/>)
     /// that can run (its list B holds, <c>FUN_14060f940</c>) but neither acts nor has an effect has nothing to do; a row whose fresh class says it
     /// is finished, whose list A holds and whose effect test holds is done. A row with an effect and a finder holds its effect test only when the
-    /// finder scores 0 or less, when its desire x finder drops it anyway (its contributor finds nothing), so it is never skipped here. True with the
-    /// reason in <paramref name="why"/>.
+    /// finder scores 0 or less, when its desire x finder drops it anyway (its contributor finds nothing), so it is never skipped here. Job 187 of a
+    /// slave that obeys (state 1, not sneaking) takes its own branch before these tests, so they never skip it (#961). True with the reason in
+    /// <paramref name="why"/>.
     /// </summary>
     public static bool JobSkipped(World world, int slot, PermaJob job, out string? why)
     {
         why = null;
+        if (job.Type == TaskType.SlaveObedience && ObedientSlave.Obeys(world.Characters.Cold(slot)!)) return false;
         if (TaskDataTable.Of(job.Type) is not { } row) return false;
 
         var target = new RowTarget(job.Character, job.Site);
