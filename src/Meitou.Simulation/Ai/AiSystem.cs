@@ -3259,9 +3259,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
             if (board is not null && ObeyedRoles(world, squad, cold) is not null) continue;
 
-            if (cold.Ai is { Engine: false } full)
+            if (cold.Ai is { Engine: false })
             {
-                ToRoutine(world, squad, s, cold, full);
+                ToRoutine(world, squad, s, cold);
                 cold.Ai = null;
             }
 
@@ -3281,6 +3281,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
             if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
+
+            // A follower of a squad the population moves that stands idle (it came round, its fight ended, the swap found it held by something
+            // else: ToRoutine) follows its leader again, as the original's followers walk to their leader (goal 215).
+            if (board is not null && Rejoins(world, squad, s, cold))
+                TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
         }
     }
 
@@ -3289,25 +3294,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// doing ends, so a sleeper gets up, one sitting at a table stands and a walk to a shop stops, and a member other than the leader follows
     /// its leader again, as one made under the population does; the leader stands for the population to move. Else each would stay where its
     /// package left it while the population marches the leader off (engine choice: the original has one kind of mind, and the campaign's
-    /// package gives every member its goals at once). One in the fight its own goal started fights on and follows after it; a fight, a
-    /// flight, a carry or a knock-out the mind does not hold is left alone.
+    /// package gives every member its goals at once). One the mind does not hold now (in a fight, a flight, a carry, a treatment, a talk, a
+    /// knock-out) is left alone and rejoins on a later package step, once it stands idle (<see cref="Rejoins"/>).
     /// </summary>
-    static void ToRoutine(World world, Squad squad, int s, CharacterCold cold, AiMind mind)
+    static void ToRoutine(World world, Squad squad, int s, CharacterCold cold)
     {
         var table = world.Characters;
         var id = table.IdOf(s);
-        bool follows = id != squad.Leader && table.TryResolveNext(squad.Leader, out _);
-        if (!Holds(table.Next[s], cold)) return;
-
-        if (cold.InCombat)
-        {
-            if (follows && cold.Running is { } fight) cold.Running = fight with { Resume = CharacterTask.Follow };
-            return;
-        }
+        if (!Holds(table.Next[s], cold) || cold.InCombat) return;
 
         if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);
-        if (follows) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+        if (id != squad.Leader && table.TryResolveNext(squad.Leader, out _))
+            TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
         else TaskStart.End(world, s, TaskEnd.Stopped);   // also one standing: its task record named the goal it stood for
+    }
+
+    /// <summary>
+    /// Whether a member of a squad the population moves should take up following its leader again: not the leader, whose own task the
+    /// population gives; standing idle, alive and awake, and held by nothing (no fight, duty, flight, carry, bed or cage).
+    /// </summary>
+    static bool Rejoins(World world, Squad squad, int s, CharacterCold cold)
+    {
+        var table = world.Characters;
+        ref readonly var n = ref table.Next[s];
+        return n.Alive && n.Task == (byte)CharacterTask.Idle && table.IdOf(s) != squad.Leader
+            && table.TryResolveNext(squad.Leader, out int led) && table.Next[led].Alive
+            && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
+            && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None;
     }
 
     /// <summary>
