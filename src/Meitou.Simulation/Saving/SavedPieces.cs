@@ -49,20 +49,26 @@ public sealed class SavedPieces
     /// <summary>
     /// The entry of the layout object <paramref name="piece"/>: the first of its record within <see cref="Reach"/>; null for none.
     /// </summary>
-    public SavedPiece? Of(TownLayoutBuilding piece)
+    public SavedPiece? Of(TownLayoutBuilding piece) => Of(piece.Id, piece.RecordId, piece.Position);
+
+    /// <summary>
+    /// The entry of the layout object <paramref name="id"/> (record <paramref name="recordId"/>, standing at <paramref name="position"/>): the first of
+    /// its record within <see cref="Reach"/>; null for none.
+    /// </summary>
+    public SavedPiece? Of(string id, string recordId, Vector3 position)
     {
-        if (_matched.TryGetValue(piece.Id, out var known)) return known;
+        if (_matched.TryGetValue(id, out var known)) return known;
 
         SavedPiece? found = null;
-        foreach (var entry in _byRecord.GetValueOrDefault(piece.RecordId) ?? [])
+        foreach (var entry in _byRecord.GetValueOrDefault(recordId) ?? [])
         {
-            if (Vector3.DistanceSquared(entry.Instance.Position, piece.Position) > Reach * Reach) continue;
+            if (Vector3.DistanceSquared(entry.Instance.Position, position) > Reach * Reach) continue;
 
             found = entry;
             break;
         }
 
-        _matched[piece.Id] = found;
+        _matched[id] = found;
         return found;
     }
 

@@ -574,8 +574,19 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   its `hand` at +0x198: written as `persist` unless it is the item's own (`persistant` true) or null (`FUN_1407609e0`, read by `FUN_140761550`; **Verified** by code).
   **Observed** (headless, two Beak Thing nests loaded, 1074 drops past the limit, then a capture): their 22 eggs and loot kept, 12 and 10 with their own nest's state handle.
 - Shop stock (**Observed**, METARU): 9025 of its 9038 `backpack_content` INVENTORY_ITEM_STATEs are in zone files (the shop buildings' containers), 13 in platoon
-  files; no trader character carries its stock. Meitou cannot address those containers (unmapped interior ids) and saves a shop on its PLATOON instead
-  ([NPC platoons](#npc-platoons-meitou-mapping)).
+  files; no trader character carries its stock. A shop's purse, fill count and restock time are on its PLATOON ([NPC platoons](#npc-platoons-meitou-mapping));
+  its goods are its containers'.
+- Furniture inventories: a generated piece of furniture with an inventory keeps its items in the INVENTORY_STATE its entry lists first, each
+  INVENTORY_ITEM_STATE with `section` `backpack_content` (**Observed**, TESTSKELETON from the original: The Hub's Residential Small `24-Newwworld-INGAME`
+  has its Secure Wooden Chest as entry `111301-zone20.32-INGAME`, states `[111303-zone20.32-INGAME, 111301-zone20.32-INGAME-S23]`, the
+  inventory holding 10 stacks, the house's `internalbuildings` naming the entry's slot). Meitou (`Saving/FurnitureInventorySave`): a town
+  container takes the items of the entry of its record within 1 unit of it (`Saving/SavedPieces`, as a layout object's machine) when its house state
+  has `serialised interior` 1 and its zone does not load fresh, unless the house state holds Meitou's `meitou container <i>` key
+  ([containers](../game/locks.md#containers-meitou)); a save writes the container's items into that entry's inventory (a new
+  `<n>-zone<X>.<Y>-INGAME` listed first when it had none, the record removed when it holds nothing) and drops the key, leaving an inventory whose
+  items are as they were read as it is. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
+  with nothing changed writes the entry's inventory with the same records, one Damaged Book taken writes that stack's record with quantity 1, and
+  the reloaded save shows it.
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a
   full (physics-settled) quaternion, target an ITEM record (type 4, name "0", flags 0) of the same file, id `<n>-zone<X>.<Y>-INGAME` of the zone it was made in (an item
   moved to another zone keeps it). A container's ITEM has one instance ("1") naming an INVENTORY_STATE (type 41, name "0") whose instances name an INVENTORY_ITEM_STATE per item in it (`section` `backpack_content`, `in inventory` true), all with ids of the same form, as a carried container's contents (**Observed**: a Small Backpack holding two first aid kits that the original 1.0.68 saved on the ground). Its keys are INVENTORY_ITEM_STATE's with `in inventory` false and `section` "": `base data sid`, `material sid`, `company sid`,
@@ -589,7 +600,7 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 **Meitou** (`Saving/ZoneSave`, `Data/Save/SaveZoneBuilder`): every zone the population had active, and every zone of a town it made but another town's centre zone (engine choice:
 a town is made and saved whole; three such zones, e.g. Black Desert City's buildings in Scraphouse's 34.28), is visited (`World.VisitedZones`, not hashed). A save keeps the loaded save's zone files (locks, doors and player buildings are written into them) and makes
 the missing ones from the level data as above, with `town` set to the save's town state `hand` and a new save's town states taking their level `hand`; it writes no
-`serialised interior` but on a ruin's state ([above](#zone-files)), no furniture and no inventories but its town machines' (Town machines, above), so the original makes each interior as for a fresh zone from its `interior layout name` (only the residents differ: the
+`serialised interior` but on a ruin's state ([above](#zone-files)), no furniture and no inventories but its town machines' (Town machines, above) and the furniture inventories of a loaded save's entries (above), so the original makes each interior as for a fresh zone from its `interior layout name` (only the residents differ: the
 saved platoons). A load lays each town building whose saved state names an interior layout out with the saved interior and exterior names (the original generated
 the saved furniture from them; **Observed** headless, METARU: 972 such buildings, 117 named otherwise than Meitou's housing, all laid out with the saved names), and a
 save writes them back. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles

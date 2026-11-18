@@ -861,10 +861,18 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (usable.Count == 0) return;
 
         merged.Fills = (int)world.Tick;
-        var fill = ShopFiller.Roll(merged, template, Market(world), _data, world.VendorTables, world.Seed, key, specials: first);
+        bool specials = first && !FilledInSave(boxes);
+        var fill = ShopFiller.Roll(merged, template, Market(world), _data, world.VendorTables, world.Seed, key, specials);
         PlaceFill(world, usable, fill, terms, key, merged.Fills);
         LockFilled(usable);
     }
+
+    /// <summary>
+    /// Whether some stock container holds goods the original's own save gave it (<see cref="Locks.Fixture.LoadedContents"/>,
+    /// <c>Saving/FurnitureInventorySave</c>): the original made its first fill, and placed the specials with it, before that save, so a first fill
+    /// here places no specials again (the unique ones the containers hold stay through a fill).
+    /// </summary>
+    static bool FilledInSave(List<StockBox> boxes) => boxes.Any(b => b.Fixture?.LoadedContents is { Count: > 0 });
 
     /// <summary>
     /// The building filler unlocks every stock container, then keeps those that can hold what the lists make (<c>FUN_14095b210</c>,
@@ -997,7 +1005,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return true;
         }
 
-        var fill = ShopFiller.Roll(shop, template, Market(world), _data, world.VendorTables, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
+        bool specials = shop.Fills == 0 && !FilledInSave(boxes);
+        var fill = ShopFiller.Roll(shop, template, Market(world), _data, world.VendorTables, world.Seed, (ulong)squad.Id, specials);
         if (PlaceFill(world, usable, fill, shop.Terms, (ulong)squad.Id, shop.Fills) is { } value) squad.Money = ShopFiller.Purse(fill, value);
 
         LockFilled(usable);
