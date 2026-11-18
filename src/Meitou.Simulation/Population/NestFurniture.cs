@@ -24,10 +24,16 @@ public sealed record NestPiece(string Id, string Record, Vector3 Position, Quate
 }
 
 /// <summary>
-/// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over a piece's spot, mask <c>0x204</c>) meets of a resident
-/// nest's home over <paramref name="spot"/> (X, Z), given the pieces laid before it: the hit when the home is what it meets first, else null.
+/// The building surface the original's placement ray meets first over a resident nest's piece, and whether it is the nest's home.
 /// </summary>
-public delegate GroundHit? HomeRay(Vector2 spot, IReadOnlyList<NestPiece> earlier);
+public readonly record struct PlacementHit(GroundHit Hit, bool OnHome);
+
+/// <summary>
+/// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over a piece's spot, mask <c>0x204</c>) meets first over
+/// <paramref name="spot"/> (X, Z) round a resident nest's home, given the pieces laid before it: a building's surface (the home's or another's),
+/// else null for the terrain.
+/// </summary>
+public delegate PlacementHit? PlacementRay(Vector2 spot, IReadOnlyList<NestPiece> earlier);
 
 /// <summary>
 /// What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c>
@@ -87,17 +93,17 @@ public static partial class NestFurniture
 
     /// <summary>
     /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are
-    /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>. <paramref name="homeRay"/>: a resident nest's home, on which a piece stands
-    /// where the placement ray meets it first (null: a nest of no home).
+    /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>. <paramref name="ray"/>: a resident nest's placement ray, whose first hit a
+    /// piece stands on (null: a nest of no home, whose pieces stand on the navmesh).
     /// </summary>
     public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix,
-        HomeRay? homeRay = null)
+        PlacementRay? ray = null)
     {
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)at.X ^ (ulong)(uint)(int)at.Y << 32);
         var rolls = new RandomStream(seed, key, RngPurpose.Spawn);
         var layout = new NestLayout([], [], []);
         Debris(db, nest, at, walk, ref rolls, layout);
-        Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces, homeRay);
+        Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces, ray);
         Loot(nest, at, walk, ref rolls, layout.Drops);
         return layout;
     }
@@ -106,7 +112,7 @@ public static partial class NestFurniture
     /// Lays out the <c>debris building</c> pieces: <c>num centrepoints</c> centres, and each entry's buildings round each centre.
     /// </summary>
     static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix,
-        List<NestPiece> pieces, HomeRay? homeRay)
+        List<NestPiece> pieces, PlacementRay? ray)
     {
         if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return;
 
@@ -123,7 +129,7 @@ public static partial class NestFurniture
                 if (db.Find(entry.Id) is { } record)
                 {
                     var start = new Vector3(centre.X, centreY, centre.Y);
-                    Place(record, start, entry, Count(ref rolls, entry.V0), walk, ref rolls, idPrefix, pieces, homeRay);
+                    Place(record, start, entry, Count(ref rolls, entry.V0), walk, ref rolls, idPrefix, pieces, ray);
                 }
             }
         }
@@ -141,7 +147,7 @@ public static partial class NestFurniture
         ref RandomStream rolls,
         string idPrefix,
         List<NestPiece> pieces,
-        HomeRay? homeRay)
+        PlacementRay? ray)
     {
         var batch = new List<Vector2>();
         float maxSlope = record.GetFloat("max slope");
@@ -155,22 +161,29 @@ public static partial class NestFurniture
             if (batch.Exists(b => Vector2.DistanceSquared(b, p) < PieceGap * PieceGap)) continue;
 
             batch.Add(p);
-            pieces.Add(Piece($"{idPrefix}{pieces.Count}", record, new Vector3(p.X, y, p.Y), yaw, maxSlope, walk, pieces, homeRay));
+            pieces.Add(Piece($"{idPrefix}{pieces.Count}", record, new Vector3(p.X, y, p.Y), yaw, maxSlope, walk, pieces, ray));
         }
     }
 
     /// <summary>
-    /// A piece at <paramref name="position"/>: on the home at the height and tilted to the slope of the surface the placement ray meets there when
-    /// that is the home (<paramref name="homeRay"/>, given the <paramref name="earlier"/> pieces), else on the ground tilted to it.
+    /// A piece at <paramref name="position"/>. With a placement <paramref name="ray"/> (given the <paramref name="earlier"/> pieces) it stands where
+    /// the ray meets first, tilted to that surface: a building (on the home when it is the home) or the terrain. The navmesh only keeps or drops
+    /// it (<see cref="Place"/>): its stand height may be a surface beside the spot (#1005: a Hub ruin's plinth 16 over the ground at its foot).
+    /// With none it stands on the navmesh, tilted to it.
     /// </summary>
     static NestPiece Piece(string id, GameRecord record, Vector3 position, float yaw, float maxSlope, IWalkability walk,
-        IReadOnlyList<NestPiece> earlier, HomeRay? homeRay)
+        IReadOnlyList<NestPiece> earlier, PlacementRay? ray)
     {
-        if (homeRay?.Invoke(new Vector2(position.X, position.Z), earlier) is not { } hit)
-            return new NestPiece(id, record.StringId, position, Tilt(GroundNormal(walk, position), yaw, maxSlope));
+        if (ray is null) return new NestPiece(id, record.StringId, position, Tilt(GroundNormal(walk, position), yaw, maxSlope));
 
-        var onHome = position with { Y = hit.Y };
-        return new NestPiece(id, record.StringId, onHome, Tilt(hit.Normal, yaw, maxSlope)) { OnHome = true };
+        if (ray(new Vector2(position.X, position.Z), earlier) is not { } first)
+        {
+            var onTerrain = position with { Y = walk.TerrainHeight(position.X, position.Z) };
+            return new NestPiece(id, record.StringId, onTerrain, Tilt(TerrainNormal(walk, onTerrain), yaw, maxSlope));
+        }
+
+        var onBuilding = position with { Y = first.Hit.Y };
+        return new NestPiece(id, record.StringId, onBuilding, Tilt(first.Hit.Normal, yaw, maxSlope)) { OnHome = first.OnHome };
     }
 
     /// <summary>
@@ -242,10 +255,20 @@ public static partial class NestFurniture
     /// <summary>
     /// The ground's normal at <paramref name="p"/>, from samples <see cref="NormalStep"/> either side on X and Z.
     /// </summary>
-    static Vector3 GroundNormal(IWalkability walk, Vector3 p)
+    static Vector3 GroundNormal(IWalkability walk, Vector3 p) => Normal((x, z) => walk.GroundHeight(x, z, p.Y), p);
+
+    /// <summary>
+    /// The terrain's normal at <paramref name="p"/>, sampled as <see cref="GroundNormal"/>.
+    /// </summary>
+    static Vector3 TerrainNormal(IWalkability walk, Vector3 p) => Normal(walk.TerrainHeight, p);
+
+    /// <summary>
+    /// The normal of the surface <paramref name="height"/> gives at <paramref name="p"/>, from samples <see cref="NormalStep"/> either side on X and Z.
+    /// </summary>
+    static Vector3 Normal(Func<float, float, float> height, Vector3 p)
     {
-        float dx = walk.GroundHeight(p.X + NormalStep, p.Z, p.Y) - walk.GroundHeight(p.X - NormalStep, p.Z, p.Y);
-        float dz = walk.GroundHeight(p.X, p.Z + NormalStep, p.Y) - walk.GroundHeight(p.X, p.Z - NormalStep, p.Y);
+        float dx = height(p.X + NormalStep, p.Z) - height(p.X - NormalStep, p.Z);
+        float dz = height(p.X, p.Z + NormalStep) - height(p.X, p.Z - NormalStep);
         return Vector3.Normalize(new Vector3(-dx, 2 * NormalStep, -dz));
     }
 }

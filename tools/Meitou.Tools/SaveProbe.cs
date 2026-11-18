@@ -1829,8 +1829,8 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The camp pieces whose home is <paramref name="b"/> (their ids name it), with the ground height under each and its tilt in degrees, and the
-    /// debris meshes within 100 of it.
+    /// The camp pieces whose home is <paramref name="b"/> (their ids name it), with the ground and terrain heights under each and its tilt in
+    /// degrees, and the debris meshes within 100 of it.
     /// </summary>
     static void CampRound(ProbeWorld probe, TownBuilding b)
     {
@@ -1844,7 +1844,9 @@ static class SaveProbe
             float ground = probe.World.Walkability.GroundHeight(p.Position.X, p.Position.Z);
             string on = camp.TryGetValue(p.Id, out var piece) && piece.OnHome ? "on the house" : "on the ground";
             float tilt = piece is null ? 0 : MathF.Acos(Math.Clamp(Vector3.Transform(Vector3.UnitY, piece.Rotation).Y, -1, 1)) * 180 / MathF.PI;
-            Console.WriteLine($"    {p.Id} '{probe.Data.Db.Find(p.Record)?.Name}' at {p.Position:F0} ground {ground:F0}, {on}, tilt {tilt:F1}");
+            float terrain = probe.World.Walkability.TerrainHeight(p.Position.X, p.Position.Z);
+            Console.WriteLine($"    {p.Id} '{probe.Data.Db.Find(p.Record)?.Name}' at {p.Position:F0} ground {ground:F0} terrain {terrain:F0}, {on}, "
+                + $"tilt {tilt:F1}");
         }
 
         var at = new Vector2(b.Position.X, b.Position.Z);

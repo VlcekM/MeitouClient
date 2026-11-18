@@ -84,7 +84,7 @@ public sealed partial class PopulationSystem
 
             var at = new Vector2(home.Position.X, home.Position.Z);
             bool fresh = !world.SavedZones.Contains(home.Zone);
-            var ray = HomeRayOf(world, site, home, layout);
+            var ray = PlacementRayOf(world, site, home, layout);
             foreach (var link in template.GetReferences("nest"))
             {
                 var nest = NestAt(world, at, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:", ray);
@@ -131,65 +131,74 @@ public sealed partial class PopulationSystem
     const float RayReach = 2100;
 
     /// <summary>
-    /// The placement ray of the pieces of <paramref name="home"/>'s nest (<see cref="HomeRay"/>): besides the home it may meet the town's other
-    /// buildings, the player's, the pieces laid before (this town's camp so far, <paramref name="town"/>, and the other camps standing).
+    /// The placement ray of the pieces of <paramref name="home"/>'s nest (<see cref="PlacementRay"/>): besides the home it may meet the town's other
+    /// buildings, the player's, the pieces laid before (this town's camp so far, <paramref name="town"/>, and the other camps standing). Null with
+    /// no building shapes to cast it against.
     /// </summary>
-    HomeRay HomeRayOf(World world, TownSite site, TownBuilding home, NestLayout town)
-    {
-        var others = world.NestBuildings.PiecesBesides(NestBuildings.TownCamp(site.Index)).ToList();
-        return (spot, earlier) => HomeHit(world, home, spot, town.Pieces.Concat(others).Concat(earlier));
-    }
-
-    /// <summary>
-    /// Where the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over the spot, mask <c>0x204</c>, the terrain and group 9)
-    /// meets <paramref name="home"/>, as a ruin or standing as it is now, when the home is what it meets first; null when it meets the terrain or
-    /// another building or piece first, or misses the home.
-    /// </summary>
-    GroundHit? HomeHit(World world, TownBuilding home, Vector2 spot, IEnumerable<NestPiece> pieces)
+    PlacementRay? PlacementRayOf(World world, TownSite site, TownBuilding home, NestLayout town)
     {
         if (_data.Sight is not { } sight) return null;
-        if (sight.TopAt(home, world.Fixtures.IsDestroyed(home), spot) is not { } hit) return null;
-        if (hit.Y < world.Walkability.TerrainHeight(spot.X, spot.Y)) return null;
 
-        bool covered = TownAbove(world, sight, home, spot, hit.Y)
-            || SitesAbove(world, sight, spot, hit.Y)
-            || PiecesAbove(sight, spot, hit.Y, pieces);
-        return covered ? null : hit;
+        var others = world.NestBuildings.PiecesBesides(NestBuildings.TownCamp(site.Index)).ToList();
+        return (spot, earlier) => FirstHit(world, sight, home, spot, town.Pieces.Concat(others).Concat(earlier));
     }
 
     /// <summary>
-    /// Whether a town building other than <paramref name="home"/> (any town's) has a group-9 surface over <paramref name="spot"/> above
-    /// <paramref name="y"/>.
+    /// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over the spot, mask <c>0x204</c>, the terrain and group 9)
+    /// meets first: the highest group-9 surface over <paramref name="spot"/> of <paramref name="home"/> (as a ruin or standing as it is now), the
+    /// town's other buildings, the player's and the <paramref name="pieces"/>, marked when it is the home's (the home's wins a tie); null when the
+    /// terrain is higher than all of them.
     /// </summary>
-    bool TownAbove(World world, ISightSource sight, TownBuilding home, Vector2 spot, float y)
+    PlacementHit? FirstHit(World world, ISightSource sight, TownBuilding home, Vector2 spot, IEnumerable<NestPiece> pieces)
     {
+        var own = sight.TopAt(home, world.Fixtures.IsDestroyed(home), spot);
+        var other = Higher(Higher(TownTop(world, sight, home, spot), SitesTop(world, sight, spot)), PiecesTop(sight, spot, pieces));
+        var first = Higher(own, other);
+        if (first is not { } hit || hit.Y < world.Walkability.TerrainHeight(spot.X, spot.Y)) return null;
+
+        return new PlacementHit(hit, OnHome: hit == own);
+    }
+
+    /// <summary>
+    /// The higher of two surfaces; <paramref name="a"/> on a tie.
+    /// </summary>
+    static GroundHit? Higher(GroundHit? a, GroundHit? b) => b is { } hb && (a is not { } ha || hb.Y > ha.Y) ? b : a;
+
+    /// <summary>
+    /// The highest group-9 surface over <paramref name="spot"/> of a town building other than <paramref name="home"/> (any town's).
+    /// </summary>
+    GroundHit? TownTop(World world, ISightSource sight, TownBuilding home, Vector2 spot)
+    {
+        GroundHit? top = null;
         foreach (var site in _data.Sites)
         {
             foreach (var b in site.Buildings)
             {
                 if (b.Key == home.Key || !Near(b.Position, spot)) continue;
-                if (sight.TopAt(b, world.Fixtures.IsDestroyed(b), spot) is { } other && other.Y > y) return true;
+
+                top = Higher(top, sight.TopAt(b, world.Fixtures.IsDestroyed(b), spot));
             }
         }
 
-        return false;
+        return top;
     }
 
     /// <summary>
-    /// Whether a player building of its own (not a town house's rebuild) has a group-9 surface over <paramref name="spot"/> above
-    /// <paramref name="y"/>: one under construction joins group 9 once its progress reaches its target times its visual threshold
-    /// (<c>FUN_14055f6e0</c> adds 14 to the group below it; clamp(<c>build threshold</c> / 100, 0, 0.95), docs/game/buildings-production.md).
+    /// The highest group-9 surface over <paramref name="spot"/> of a player building of its own (not a town house's rebuild): one under
+    /// construction joins group 9 once its progress reaches its target times its visual threshold (<c>FUN_14055f6e0</c> adds 14 to the group below
+    /// it; clamp(<c>build threshold</c> / 100, 0, 0.95), docs/game/buildings-production.md).
     /// </summary>
-    bool SitesAbove(World world, ISightSource sight, Vector2 spot, float y)
+    GroundHit? SitesTop(World world, ISightSource sight, Vector2 spot)
     {
+        GroundHit? top = null;
         foreach (var s in world.Buildings.All)
         {
             if (s.LevelPlacement is not null || !Near(s.Position, spot) || !Solid(s)) continue;
-            var other = sight.TopAt(s.Record, s.Id, s.Position, s.Rotation, s.Destroyed, spot);
-            if (other?.Y > y) return true;
+
+            top = Higher(top, sight.TopAt(s.Record, s.Id, s.Position, s.Rotation, s.Destroyed, spot));
         }
 
-        return false;
+        return top;
     }
 
     /// <summary>
@@ -205,18 +214,19 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Whether one of <paramref name="pieces"/> has a group-9 surface over <paramref name="spot"/> above <paramref name="y"/>.
+    /// The highest group-9 surface over <paramref name="spot"/> of one of <paramref name="pieces"/>.
     /// </summary>
-    static bool PiecesAbove(ISightSource sight, Vector2 spot, float y, IEnumerable<NestPiece> pieces)
+    static GroundHit? PiecesTop(ISightSource sight, Vector2 spot, IEnumerable<NestPiece> pieces)
     {
+        GroundHit? top = null;
         foreach (var p in pieces)
         {
             if (!Near(p.Position, spot)) continue;
-            var other = sight.TopAt(p.Record, p.Id, p.Position, p.Rotation, false, spot);
-            if (other?.Y > y) return true;
+
+            top = Higher(top, sight.TopAt(p.Record, p.Id, p.Position, p.Rotation, false, spot));
         }
 
-        return false;
+        return top;
     }
 
     /// <summary>
@@ -249,15 +259,15 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>, its pieces placed by <paramref name="homeRay"/> when it is a
+    /// What the nest <paramref name="nestId"/> scatters round <paramref name="at"/>, its pieces placed by <paramref name="ray"/> when it is a
     /// home's; null when it is no TOWN.
     /// </summary>
-    NestLayout? NestAt(World world, Vector2 at, string nestId, string idPrefix, HomeRay? homeRay = null)
+    NestLayout? NestAt(World world, Vector2 at, string nestId, string idPrefix, PlacementRay? ray = null)
     {
         if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) return null;
 
         ulong seed = world.Seed ^ Rng.StableHash(nestId);
-        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix, homeRay);
+        return NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, idPrefix, ray);
     }
 
     /// <summary>

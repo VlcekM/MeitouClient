@@ -300,10 +300,12 @@ Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream,
 items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town stands its residents' nests round each home whose template
 names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
 no file of. A building of the player's gets none (housing passes it over, [town residents](../game/factions-squads-towns.md#town-residents), so nothing hands its nest to the town). The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
-the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre. A home's piece stands on the home when the
-placement ray meets the home first (`PopulationSystem.HomeHit`): the home's highest group-9 surface over the spot (as a ruin or standing, `GroundShapes`) is not below the
-terrain, and no other town building, finished player building (or one built past its visual threshold) or camp piece laid before has a group-9 surface above it there. It then
-stands at that height, tilted to that surface's slope up to its `max slope` (`NestPiece.OnHome`). Buying a home whose nest stands takes the pieces on it, its furniture and
+the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre. A home's piece stands where the
+placement ray meets first (`PopulationSystem.FirstHit`): the highest group-9 surface over the spot (`GroundShapes`) of the home (as a ruin or standing), another town building,
+a finished player building (or one built past its visual threshold) or a camp piece laid before, else the terrain when that is higher; at that height, tilted to that
+surface's slope up to its `max slope`, on the home when the surface is the home's (`NestPiece.OnHome`; the home's wins a tie). The navmesh only keeps or drops the piece: its
+stand height can be a surface beside the spot (**Verified** headless on issue #1005, probe `layout 20.32:28-Newwworld-INGAME`, a Hub Old Storm House ruin: its campfire and
+sitting spot stood 16 and 20 over the terrain on the ruin's plinth beside them; by the ray they stand on the terrain, the other Hub squatter camps as before). Buying a home whose nest stands takes the pieces on it, its furniture and
 its camp's debris meshes within its bounding box's radius (`BuildingShape.BoundsRadius`: its drawn parts' render-mesh bounds, as it was when bought) of its position away
 (`FixtureRegistry.ClearCamp`, `NestBuildings.ClearHome`); the pieces and meshes its nest laid beside it go when the town unloads (`PopulationSystem.FoldBoughtCamp`,
 `NestBuildings.DropHomes`): the original's pieces are not saved, its purchase drops the home's nest spots and its housing passes a player's
