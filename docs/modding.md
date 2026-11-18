@@ -276,6 +276,19 @@ holds refuses the second mod.
   read the world, change their own hashed state and change relations (a change made through `PlayerRelations` during a callback is not
   reported again), and must not change characters or other world state. A throwing callback is logged and disabled for that world, as for
   combat; faulted registrations enter the state hash.
+- **Deaths:** a registered system implementing `ICharacterDeathObserver` (`Meitou.Simulation.Bodies`) receives `Died(World, in CharacterDeath)`
+  once per death: every loaded character's, whatever killed it (a blow, bleeding out, hunger, a wound worsening, a death item taken, being
+  eaten, the rack, the debug kill, another system's kill), and each member of an unloaded platoon an off-screen fight kills (the winner's
+  losses and the whole losing platoon). The payload names the tick, the dead character (none off screen, where the member is no character),
+  its record ("" for an off-screen member never made), faction and platoon (-1 none), the medical `DeathCause` (`None` off screen), whether it
+  was off screen, whether a blow killed it, and the killer with its faction: the attacker of a killing melee blow, bolt or execution, the
+  butcher of a body that died of a death item taken, the eater of a captive eaten alive; none (and -1) for bleeding, hunger, a wound worsening,
+  the rack or the debug kill, whoever hit the character before (no credit rule). An off-screen death names no killer but the winning platoon's
+  faction. Observers run serially in system order: at once where a blow, a butchering, a meal, the rack or an off-screen fight killed, else in
+  a sweep in slot order after the parallel phases (the body's tick) and again after the slow world, so the order never depends on the thread count. The
+  dead character is still in the world during the call; a body loaded dead is never reported. Callbacks may read the world and change their
+  own hashed state, and must not change characters or other world state (gameplay changes go through commands). One that throws is logged and
+  disabled for that world; faulted registrations enter the state hash. Without an observer no payload is made. Engine API, not in the original.
 - **Faction list:** `ArrangeFactionList(arrange)` arranges the Overview's Faction tab: `arrange` gets the rows the tab would show
   (`FactionListRow`: faction, name, the player's relation), sorted by name, and returns the rows to show, in order. It can reorder, rename
   (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),

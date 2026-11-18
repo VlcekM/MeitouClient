@@ -94,9 +94,10 @@ public sealed partial class PopulationSystem
             bool aWins = u < ta * ta / (ta * ta + tb * tb);
             var (winner, loser, ws, wt, lt) = aWins ? (a, foe, sa, ta, tb) : (foe, a, sb, tb, ta);
             int losses = (int)MathF.Round(ws.Count * MathF.Min(1, lt * lt / MathF.Max(wt * wt, 1e-3f)) * 0.5f);
-            foreach (var (member, _) in ws.OrderBy(s => s.Strength).Take(losses)) Kill(world, winner, member);
+            foreach (var (member, _) in ws.OrderBy(s => s.Strength).Take(losses)) Kill(world, winner, member, loser.Faction);
 
             gone.Add(loser.Id);
+            ReportWipedOut(world, loser, winner.Faction);
             Despawn(world, loser, killed: true);
             if (_townLog.Count >= 256) _townLog.RemoveAt(0);
             _townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), "
@@ -145,9 +146,10 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A member killed off screen: out of its stored squad, or gone from its saved platoon's file. One with no stored state cannot be singled out.
+    /// A member killed off screen by a platoon of <paramref name="foeFaction"/>: out of its stored squad, or gone from its saved platoon's file,
+    /// and reported to the death observers. One with no stored state cannot be singled out.
     /// </summary>
-    void Kill(World world, Platoon p, object? member)
+    void Kill(World world, Platoon p, object? member, int foeFaction)
     {
         string? recordId = null;
         if (member is StoredMember sm)
@@ -161,7 +163,50 @@ public sealed partial class PopulationSystem
             recordId = saved.Source.RecordId;
         }
 
-        if (recordId is not null && UniqueCharacters.IsUnique(_data.Db.Find(recordId))) world.Uniques.Died(recordId, false, p.Faction);
+        if (recordId is null) return;
+
+        if (UniqueCharacters.IsUnique(_data.Db.Find(recordId))) world.Uniques.Died(recordId, false, p.Faction);
+        DeathObservers.ReportOffScreen(world, CharacterId.None, recordId, p.Faction, p.Id, foeFaction);
+    }
+
+    /// <summary>
+    /// Reports each living member of a platoon wiped out off screen by a platoon of <paramref name="winnerFaction"/> to the death observers, in
+    /// member order: the characters of its squad in the world, else its stored or saved members, else <see cref="Platoon.Size"/> members never
+    /// made. Nothing without an observer.
+    /// </summary>
+    void ReportWipedOut(World world, Platoon loser, int winnerFaction)
+    {
+        if (!world.DeathObservers.Active) return;
+
+        var table = world.Characters;
+        if (world.Squads.Find(loser.SquadId) is { } squad)
+        {
+            foreach (var m in squad.Members)
+            {
+                if (table.TryResolveNext(m, out int slot) && table.Cold(slot) is { Medical: not { Dead: true } } cold)
+                    DeathObservers.ReportOffScreen(world, m, cold.RecordId, cold.Faction, loser.Id, winnerFaction);
+            }
+        }
+        else if (loser.Stored is { } stored)
+        {
+            foreach (var m in stored.Members)
+            {
+                if (m.Cold.Medical is not { Dead: true })
+                    DeathObservers.ReportOffScreen(world, CharacterId.None, m.Cold.RecordId, loser.Faction, loser.Id, winnerFaction);
+            }
+        }
+        else if (loser.Saved is { } saved)
+        {
+            foreach (var m in saved.Members)
+            {
+                if (!m.Gone && !m.Dead && m.Medical is not { Dead: true })
+                    DeathObservers.ReportOffScreen(world, CharacterId.None, m.Source.RecordId, loser.Faction, loser.Id, winnerFaction);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < loser.Size; i++) DeathObservers.ReportOffScreen(world, CharacterId.None, "", loser.Faction, loser.Id, winnerFaction);
+        }
     }
 
     /// <summary>

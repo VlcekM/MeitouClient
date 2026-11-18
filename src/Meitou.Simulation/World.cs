@@ -248,6 +248,7 @@ public sealed partial class World : IDisposable
             ItemUseObservers.Register(this._systems[k], k);
             GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
+            DeathObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
@@ -433,6 +434,10 @@ public sealed partial class World : IDisposable
     /// The systems observing changed faction relations (<see cref="IRelationChangeObserver"/>).
     /// </summary>
     internal RelationObservers RelationObservers { get; } = new();
+    /// <summary>
+    /// The systems told of deaths (<see cref="Bodies.ICharacterDeathObserver"/>).
+    /// </summary>
+    internal Bodies.DeathObservers DeathObservers { get; } = new();
     /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
@@ -649,6 +654,7 @@ public sealed partial class World : IDisposable
         ItemUseObservers.Register(system, _systems.Count - 1);
         GoodsTakenObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
+        DeathObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
     }
@@ -737,8 +743,10 @@ public sealed partial class World : IDisposable
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
         Commit(table, prof);
 
-        // 7. Slow world (serial), then the code mods' status effects lose a tick (nothing without registered effects).
+        // 7. Slow world (serial), then the deaths of the commit and the slow world that no site reported, then the code mods' status effects
+        // lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
+        DeathObservers.Sweep(this);
         Bodies.StatusEffects.Step(this);
 
         // 8. Publish.
@@ -836,6 +844,7 @@ public sealed partial class World : IDisposable
     {
         table.Phase = TablePhase.Commit;
         ModFaults.Settle();   // a mod system that threw in a parallel phase stops here, before its effects of the tick are applied
+        DeathObservers.Sweep(this);   // the deaths of the parallel phases (and of the inputs), before the blows of the commit
 
         _effects.Clear();
         for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
@@ -1174,6 +1183,7 @@ public sealed partial class World : IDisposable
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
+        DeathObservers.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
         return h.Value;
     }

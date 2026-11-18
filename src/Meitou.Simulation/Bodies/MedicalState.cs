@@ -91,6 +91,12 @@ public sealed partial class MedicalState
     public DeathCause Cause { get; private set; }
 
     /// <summary>
+    /// Set when the character dies and cleared when its death is reported to the code mods' death observers (<see cref="DeathObservers"/>); never
+    /// saved or hashed, so a body loaded dead is never reported.
+    /// </summary>
+    internal bool DeathUnreported { get; set; }
+
+    /// <summary>
     /// Set when blood reached 0 or while a limb is freshly cut off (<c>+0x163 bloodlossTrauma</c>, <see cref="HasFreshStump"/>); clears only on a
     /// tick that finds blood below capacity and then above 25 (docs/game/character-stats.md "Blood and KO"). While set, a conscious character goes
     /// down only under -25, and the HUD's Toughness XP shows "Blood loss trauma: +2x".
