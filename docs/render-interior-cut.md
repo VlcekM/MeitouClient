@@ -14,7 +14,8 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   `foliage.material` `Grass` (`grass_fs`, always; the `Foliage` material there is commented out); `objects.hlsl` and
   `triplanar.hlsl` under `CLIP_INTERIOR` (0x200); `mapfeature.material` `Feature_Terrain_DX11` (`interiorClip` unit);
   `forward/basic.hlsl` under `CLIP_INTERIOR` (`Basic_Texture_Clipped_FP_HLSL` in `basic.program`, the same rule), the fragment program of 41
-  of the installed particle materials (every rain, `Kenshi_rain_basic` etc., and dust, ash and drifting-foliage sprites; counted, merged data).
+  of the installed particle materials (the rain streaks `Kenshi_rain_basic`, `kenshi_rain1`, `Kenshi_black_rain` and the red ones, and dust,
+  ash, drifting-foliage and wisp sprites; listed by `ParticleMaterial.ClipInterior` over the vanilla install). Not the rain splash.
 - **Verified (decompiled)**: map features always get CLIP_INTERIOR ([runtime-materials](formats/runtime-materials.md)),
   and so do foliage leaves (FUN_1406d1380 copies the `leaves *` fields and calls FUN_140843920 with mode 4, FOLIAGE).
   Building parts and items do not. **Observed**: the foliage meshes' own materials also come from FUN_140843920
