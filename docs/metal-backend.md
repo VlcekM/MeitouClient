@@ -530,7 +530,11 @@ lower), with vsync a whole number of refreshes nearest 30 (60 Hz: 30, 120 Hz: 30
 Stills and `--play-bench` keep their normal pacing. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
 start chooser, save/load slots and confirmations, the in-game Esc menu, the loading screen and sky transitions, and the
 audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
-Still missing: the pointer sprite, the free camera and the cinema camera, photo mode (P), the control channel's `mouse` and `click`, and
+Photo mode (P, [viewer](viewer.md#photo-mode)) runs on the shared `PhotoMode`, wired in `MetalGameLoop`'s `Photo mode` region and its
+key, pointer, wheel, frame, overlay-pass and picture hooks; its panel and guides draw into the overlay's one pass. Not drawn on Metal: the
+depth of field (the Metal chain has none), so the Focus tab's rows change nothing; the ambient animation (water, clouds) keeps the real
+clock, so it does not stop with the paused simulation.
+Still missing: the pointer sprite, the free camera and the cinema camera, the control channel's `mouse` and `click`, and
 the tiled screenshot of `screens.cfg`'s `multiplier`.
 
 **Current Metal mode (2026-10-22).** Terrain textures, water, foliage, terrain shadows and cloud shadows are on.

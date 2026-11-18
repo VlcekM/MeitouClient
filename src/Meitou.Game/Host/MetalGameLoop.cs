@@ -12,6 +12,7 @@ using Meitou.Game.DevTools;
 using Meitou.Game.Editor;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Host.Photo;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Foliage;
@@ -36,6 +37,7 @@ using Meitou.Simulation.Saving;
 using Meitou.Simulation.Session;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using SilkKey = Silk.NET.Input.Key;
 
@@ -519,6 +521,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // work with the session the loop has. Only the panels' pointer/keyboard controls are wired here so far.
         host.LoadingStep("finishing");
         if (_overlay is not null) CreateInterface(_overlay);
+        CreatePhotoMode();
         PlaceStartCamera();
         ApplyUserConfig();
 
@@ -1004,6 +1007,81 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.Camera.TakeOver(new CameraState(host.Camera.Eye, host.Camera.Forward, Vector3.UnitY, host.Camera.Target, host.Camera.Yaw,
             host.Camera.Pitch, host.Camera.Distance, true), strategy: true);
         if (_tourFollows && _tour.Current is { } id) host.Player.Follow = id;
+    }
+
+    #endregion
+
+    #region Photo mode
+
+    /// <summary>
+    /// Photo mode (docs/viewer.md "Photo mode"): while it is on it owns the camera, the interface's visibility and the pause (null without the
+    /// interface).
+    /// </summary>
+    PhotoMode? _photo;
+
+    /// <summary>
+    /// Makes the mode the keys, the control channel and the frame reach through <see cref="GameHost.Photo"/>.
+    /// </summary>
+    void CreatePhotoMode()
+    {
+        if (_hud is null) return;
+
+        _photo = host.Photo = new PhotoMode(host) { Allowed = PhotoAllowed };
+    }
+
+    /// <summary>
+    /// Photo mode starts only over a running game scene: not the title, a loading cover, a duel or a squad tour.
+    /// </summary>
+    bool PhotoAllowed() => !host.Covered && !host.TitleScreen.TitleVisible && !host.Duel.IsDuel && host.SkyArrival is null
+        && !host.GameOptions.NoPopulation && !_tour.Active && !_tourHolds;
+
+    /// <summary>
+    /// A key while photo mode is on or starts it (see <see cref="PhotoMode.KeyDown"/>); not while a text field has the keyboard, not in the terrain
+    /// sandbox (P is its patrol key) or with a window open over the game (true: taken).
+    /// </summary>
+    bool PhotoKey(SilkKey key)
+    {
+        if (_photo is null || _hud is null || _hud.UiEditing || host.GameOptions.NoPopulation) return false;
+        if (ModalKeyOf(key) is not { } mapped) return _photo.Active;
+        if (!_photo.Active && (host.Sandbox.IsSandbox || _hud.ModalOpen)) return false;
+
+        return _photo.KeyDown(mapped, key == SilkKey.Escape);
+    }
+
+    /// <summary>
+    /// Photo mode's press: the panel takes the left button (the right one steps a choice back), a left click on the picture sets the focus point; no
+    /// click reaches the world (no selecting, no orders), the camera sees the other buttons.
+    /// </summary>
+    void PhotoPointerDown(PhotoMode photo, EngineButton button, Vector2 at)
+    {
+        if (button == EngineButton.Left && photo.Panel.MouseDown(at)) return;
+        if (photo.Panel.Contains(at))
+        {
+            if (button == EngineButton.Right) photo.Panel.MouseDown(at, back: true);   // a choice steps back
+            return;
+        }
+
+        if (button != EngineButton.Left)
+        {
+            host.Session.Input.SetMouseButton(button, true);
+            return;
+        }
+
+        // A click on the picture is where the lens focuses.
+        var pixels = _window.FramebufferSize;
+        var (width, height) = _upscaling.UiSize(pixels.X, pixels.Y);
+        photo.FocusAt(new Vector2(at.X / Math.Max(width, 1), at.Y / Math.Max(height, 1)));
+    }
+
+    /// <summary>
+    /// The mode's frame bars, grid, panel and message over the finished picture; a saved picture keeps the bars alone (true: something was written).
+    /// </summary>
+    bool DrawPhotoMode(DebugOverlay overlay, DebugOverlay.OverlayPass overlayPass, Vector2D<int> size, bool feedbackShot)
+    {
+        if (_photo is not { Active: true } || host.Covered) return false;
+
+        _photo.Panel.Draw(overlay, size.X, size.Y, _shotFrame || feedbackShot, overlayPass);
+        return true;
     }
 
     #endregion
@@ -1753,6 +1831,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             else if (_settings?.Visible == true) _settings.TextInput(value);
             else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
             else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
+            else if (_photo?.TextInput(value) == true) { }   // a preset's name being typed
             else _hud?.UiText(value);
         };
     }
@@ -1808,7 +1887,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _gpuCaptureRequested = true;
             return;
         }
-        if (ConsoleKey(keyboard, key, ctrl) || MenuKey(key, ctrl)) return;
+        if (ConsoleKey(keyboard, key, ctrl) || MenuKey(key, ctrl) || PhotoKey(key)) return;
         // With the interface hidden (F7) Esc brings it back with the game menu open, as the Vulkan host does.
         if (key == SilkKey.Escape && _hud is { UiVisible: false })
         {
@@ -1891,6 +1970,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             return true;
         }
         if (ToolMenuKey(key)) return true;
+        // Photo mode takes the settings keys as it takes every other (they open the window again once it is left).
+        if (_photo is { Active: true }) return false;
         if (key == SilkKey.F10 && _settings is not null)
         {
             _settings.Visible = !_settings.Visible;
@@ -2019,6 +2100,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _settings.MouseDown(at, mapped);
                 return;
             }
+            if (_photo is { Active: true } photo)
+            {
+                PhotoPointerDown(photo, mapped, at);
+                return;
+            }
             // The debug menu takes the left clicks on its panel while it is open; a click elsewhere is the interface's and the world's.
             if (_hud is not null && host.DebugMenu.DebugMenuOpen && host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left
                 && host.DebugMenu.DebugMenuContains(at))
@@ -2046,6 +2132,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             }
             if (KeyMap.Map(button) is not { } mapped) return;
+            if (_photo is { Active: true } photo)
+            {
+                photo.Panel.MouseUp();
+                host.Session.Input.SetMouseButton(mapped, false);
+                return;
+            }
             if (!menuClick) _hud?.MouseUp(host.PlayerButton(mapped), Pixels(mouse.Position), _shiftDown);
             host.Session.Input.SetMouseButton(mapped, false);
         };
@@ -2055,6 +2147,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (_settings?.Visible == true)
             {
                 _settings.Scroll(wheel.Y);
+                return;
+            }
+            if (_photo is { Active: true } photo)
+            {
+                // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
+                if (!photo.Panel.Wheel(Pixels(mouse.Position), wheel.Y)) photo.Wheel(wheel.Y, Ctrl());
                 return;
             }
             var at = Pixels(mouse.Position);
@@ -2084,6 +2182,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_settings?.Visible == true)
         {
             _settings.MouseMove(Pixels(p));
+            _lastMouse = p;
+            return;
+        }
+        if (_photo is { Active: true } photo && !host.OrbitHeld() && photo.Panel.MouseMove(Pixels(p)))
+        {
             _lastMouse = p;
             return;
         }
@@ -2734,10 +2837,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void FollowWithCamera(double dt)
     {
         // The squad tour and character flights hold the camera while they fly; otherwise the rig owns the view.
+        if (_photo is { Active: true } && (host.Covered || host.TitleScreen.TitleVisible)) _photo.Abandon();   // its world is gone
         if (!_tourHolds) host.ApplyCamera(host.Session.CameraAt());
 
         // The near tree fade (FoliageNearFade): the gameplay camera only, not the free camera, a flight or the title.
         if (_foliage is not null) _foliage.NearFade.Gameplay = !host.Session.Camera.IsFree && !_tourHolds && !host.TitleScreen.TitleVisible;
+        _photo?.Apply();   // the roll, lens, exposure and hour for this frame's draw, over the camera the rig just placed
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition) ?? host.LoadAhead;
         if (_hud is not null)
@@ -2932,7 +3037,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (host.TickAhead) host.Session.BeginTickAhead();
         try
         {
-            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, size.X, size.Y, hour, (float)now / 600f, host.WorldOptions.FogDistance);
+            // Photo mode draws its own hour; the weather schedule keeps the game's.
+            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, size.X, size.Y, host.PhotoHour ?? hour, (float)now / 600f,
+                host.WorldOptions.FogDistance, weatherHour: hour);
         }
         finally
         {
@@ -3055,8 +3162,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _hud.Draw(overlay, size.X, size.Y, overlayPass);
                 if (host.Sandbox.IsSandbox && !host.GameOptions.UiShowcase) host.Sandbox.DrawSandbox(overlay, size.X, size.Y);
             }
+            else if (host.AgentChannel.InterfaceHidden && !host.Covered && !host.GameOptions.NoPopulation)
+                _hud.DrawSpeechOnly(overlay, size.X, size.Y, overlayPass);   // a clean picture keeps the speech (photo mode's Dialogue row)
         }
         bool wrote = DrawDebugText(overlay, overlayPass, size, dt, feedbackShot);
+        if (DrawPhotoMode(overlay, overlayPass, size, feedbackShot)) wrote = true;
         // The mouse pointer over everything, as Vulkan draws it: the system cursor when Hardware mouse is on (enhanced, with the action's
         // pointer beside it and the hand over what a click acts on), else the game's own pointer. The free camera hides it, and saved
         // pictures never contain it.
@@ -3182,10 +3292,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (!_still && !_shotFrame && !feedbackShot && pointerMouse is not null && _hud is not null)
         {
             bool pointerWorld = !host.Covered && !host.GameOptions.NoPopulation && _settings?.Visible != true && !host.TitleScreen.TitleVisible;
-            bool freeLook = pointerWorld && host.Session.Camera.IsFree;
+            // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
+            bool freeLook = pointerWorld && host.Session.Camera.IsFree
+                && (_photo is not { Active: true } || !_photo.PanelShown || host.OrbitHeld());
             var cursorMode = host.Config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
             if (cursorMode != _windowCursor) pointerMouse.Cursor.CursorMode = _windowCursor = cursorMode;
-            string pointerName = pointerWorld ? _hud.PointerPanel.PointerName : "arrow";
+            string pointerName = pointerWorld && _photo is not { Active: true } ? _hud.PointerPanel.PointerName : "arrow";
             bool enhanced = host.Config.HardwareMouse && host.Config.EnhancedHardwareMouse && !freeLook;
             bool hand = enhanced
                 && (pointerWorld ? _hud.PointerPanel.PointsAtClickable(pointerName) : _settings?.OverClickable(pointerAt) == true);
@@ -3283,9 +3395,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void SaveShot(GpuTexture picture)
     {
         _shotFrame = false;
-        if (host.AgentChannel.ShotPath is not null)
+        if (host.AgentChannel.ShotPath is { } shotPath)
         {
             host.AgentChannel.SaveControlShot(file => WritePicture(_ctx, picture, file), picture.Desc.Width, picture.Desc.Height);
+            host.Photo?.PictureSaved(shotPath);
         }
         else
         {

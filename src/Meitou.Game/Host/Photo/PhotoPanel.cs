@@ -246,9 +246,10 @@ sealed class PhotoPanel(PhotoMode mode)
     #region Drawing
 
     /// <summary>
-    /// The frame's frame bars, grid, panel and message over the finished picture; <paramref name="saving"/> leaves out all but the bars.
+    /// The frame's frame bars, grid, panel and message over the finished picture; <paramref name="saving"/> leaves out all but the bars. With a
+    /// <paramref name="pass"/> (Metal's one render encoder for the overlays) everything goes into it, in order.
     /// </summary>
-    public void Draw(DebugOverlay o, int width, int height, bool saving)
+    public void Draw(DebugOverlay o, int width, int height, bool saving, DebugOverlay.OverlayPass? pass = null)
     {
         PhotoGuides.DrawFrame(o, mode.Frame, width, height);
         _hits.Clear();
@@ -262,15 +263,15 @@ sealed class PhotoPanel(PhotoMode mode)
         if (mode.Host.Player.SettingsPainter is not { } painter) return;
 
         // The bars and the grid go under the panel: the painter draws at once, the overlay when it is flushed.
-        o.Flush(width, height);
+        o.Flush(width, height, null, pass);
         _meitou = mode.Host.Player.UiMode == UiMode.Meitou;
         _art.Ensure(painter, _meitou, mode.Host.Player.UiAtlas);
-        _scale = Math.Max(0.6f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
+        _scale = Math.Max(0.6f, Math.Min(height / 900f, width / 1280f));
 
         _controls.Clear();
         if (mode.PanelShown) DrawPanel(width, height);
         DrawMessage(width);
-        if (_controls.Count > 0) painter.Draw(_controls, width, height, _pointer, null);
+        if (_controls.Count > 0) painter.Draw(_controls, width, height, _pointer, null, pass: pass);
     }
 
     /// <summary>
