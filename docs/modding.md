@@ -910,6 +910,47 @@ holds refuses the second mod.
   sets `Replan`) and lets the chooser start the goal again; an act-out it resumes itself has no record (no HUD name, no take-over by a fight, no
   release if its system stops). Without the code mod the goal is inert again. With no goal type claimed nothing is built. Engine API, not in the
   original.
+- **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
+  `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
+  act-out (the original's sitting is its operate task, [chairs](game/ai-tasks.md#town-goals)): it starts `CharacterTask.Operate` through
+  `TaskStart.Start` with `row` (the mod's own, 1000 up; a lower one throws) and `source` (`TaskSource.Goal` for a goal or decision source), so
+  the character walks there, sits on the seat's origin facing its way (the Bench facing switch applies), plays its sitting clip, gets hungry at
+  the seat's `hunger rate` and trains its `stat used`. `seat` is a town seat's id (`world.Fixtures.SeatSpots`: the chairs and thrones of the
+  loaded towns' buildings, with record, position and owning faction) or a complete building's in `world.Buildings.All` whose functionality is a
+  chair or throne, of any faction. `CanSit(world, slot, seat)` gives the same answer without starting anything; it changes nothing in the world
+  and logs nothing, so a mod picks a free seat with it. `SeatAnswer`: `Seated`; `NotASeat` (also a destroyed seat, a null or empty id);
+  `Taken` (someone rests on it, the AI's sitters included, or another character is on an operate task for it, walking there included: one sitter
+  per seat, whatever its `max operators`); `Unable` (dead, down, carried, carrying someone, fleeing, in a bed or cage, or not of the human
+  repertoire: animals, crawlers, one staying low); `ShutOut` (at the call, its building is shut to the character as to a player character's walk:
+  no lock is picked or cut for it, though one whose faction bashes doors may bash its way in; or the character stands in a shut building with no
+  way out; a door locked during the walk is the walk's business). Any answer but `Seated` changes nothing and logs a line naming the row, once
+  per row, seat and answer; a character already on that seat on that row is left as it is. Both run in the serial phases only and throw in a
+  parallel one: a mod's serial step or `Inputs`, a decision source's or an NPC goal's `Start`, `IWorldReady`; never an NPC goal's `Desire`, so
+  work free seats out in the mod's serial step and keep them in its state. A character in a fight leaves it, as for any start (it may be drawn
+  back in at once).
+  Who may be seated: a player character, an NPC the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`) or one the mod engaged itself (an
+  NPC goal's `Start`). A character another system holds (a conversation, a trade, an arrest, a duty, another mod's goal) is taken from it and
+  may be left engaged with no owner, so do not seat one. The AI holds no character on the operate task, so a seated NPC stays seated without
+  `Engaged`, only Self preservation takes it over, and the AI takes it back once the seat ends. A squad the population moves walks its leader
+  on (its seat ends `Replaced`) while its other members stay seated, so hold the platoon first (`HoldPlatoon`). A player character is decided
+  again at its next decision (an order, a job) unless a decision source of the mod answers `Runs` for its row.
+  How it ends: the walk reserves nothing from the AI's own sitters, and they always win: whenever one rests on the seat's origin (one that got
+  there first, or one arriving later on a sitting-around or throne claim it already held) the task ends `Done` and the mod's character stands
+  where it sat. Once it sits, a relaxing or staying-home member passes over that chair of its bar or home; another claim may still send a
+  townsperson there, with that result. The task also ends `Done` when the seat
+  or its building is gone (destroyed, dismantled, its town unloaded); `Replaced` by any start (an order, a fight, a job, another mod's seat; do
+  not seat again a character another start took); `Stopped` by `TaskStart.End(world, slot, TaskEnd.Stopped)`, which is how the mod stands it
+  up. Seating a character already on that row's operate task again (another seat) starts it anew with no `End`: the handler sees a second
+  `Start`. A knock-out, a death or a lift stands it with no handler, and an unreachable seat is tried again and again as the Use order's, so the mod
+  also checks its sitters in its own serial step (alive, not down or carried, `Running` still its row, running `Operate`) and gives up by its
+  own clock. With a handler of its row (`Register(row, handler)`) that handler takes the operate act-out's place: call
+  `tasks.Of(CharacterTask.Operate)`'s `Start` and `End` from it, or the character never walks or sits (its task is left as the one the start
+  ended). Tasks are not saved: after a load the character stands where it sat and the townspeople may take the chair. At `IWorldReady` a
+  town's seats and an NPC are often not in the world yet (a town's seats come as it loads, NPCs a few hundred ticks later), so a mod that
+  keeps its sitters (by `LastingId`) seats them again from its serial step once `LastingIds.Find` finds the character and `CanSit` no longer
+  answers `NotASeat` (one still at its seat sits at once). Without a call nothing changes; a seat that had no machine gets the one the Use order
+  makes (`World.Machines`, hashed; a town seat's is not saved, a built chair's is saved with its building, as the Use order's). Engine API, not
+  in the original.
 
 ## Data mods
 
