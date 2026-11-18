@@ -1532,8 +1532,11 @@ public sealed partial class CombatSystem
             dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, _combat, 0, 95);
         }
         int direction = BlowSide(world, i, in swing);
+
+        // A weapon of a data-named class without a stumble dodge of its own breaks out with its own category's (Meitou; -1: no fallback).
+        int stumbleFallback = fighter.Weapon?.Data is { ClassCategory: not null } classed ? classed.SkillCategory : -1;
         return TechniqueChooser.ChooseReaction(_techniques, MovesCategory(fighter, fighter.TechniqueCategory), cold.Medical!.Prone, fighter.CanBlock, direction,
-            block, dodge, chanceRoll, pickRoll, stumbling);
+            block, dodge, chanceRoll, pickRoll, stumbling, stumbleFallback);
     }
 
     #endregion

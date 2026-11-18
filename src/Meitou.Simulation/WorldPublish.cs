@@ -1057,7 +1057,7 @@ public sealed partial class World
             cold.LastWeaponCategory = Combat.CombatSystem.HandCategory(cold);
             // A weapon naming a code mod's skill is labelled by that skill (Meitou; the original has none).
             var (label, skill) = Combat.CombatSystem.HandModSkill(cold) is { } mod
-                ? (mod.Label + ":", mod.Stat)
+                ? (mod.Label + ":", cold.Fighter!.Weapon!.Skill)
                 : cold.LastWeaponCategory switch
                 {
                     3 => ("Heavy:", StatsEnumerated.HeavyWeapons),

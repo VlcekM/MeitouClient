@@ -15,8 +15,9 @@ public static class WeaponClassNames
 
     /// <summary>
     /// Gives every weapon and technique of <paramref name="weapons"/> and <paramref name="techniques"/> that names a class its class's number (a
-    /// weapon's <see cref="WeaponData.ClassCategory"/>, a technique's <see cref="CombatTechnique.Animal"/>), in place. Names match ignoring case.
-    /// Nothing is made when no record names one.
+    /// weapon's <see cref="WeaponData.ClassCategory"/>, a technique's <see cref="CombatTechnique.Animal"/>), in place, and logs each class that
+    /// cannot work as meant (<see cref="WarnIncomplete"/>). Names are trimmed when read and match ignoring case. Nothing is made when no record
+    /// names one.
     /// </summary>
     public static void Apply(List<WeaponData> weapons, List<CombatTechnique> techniques)
     {
@@ -25,6 +26,27 @@ public static class WeaponClassNames
             if (weapons[i].ModClass is { } name) weapons[i] = weapons[i] with { ClassCategory = NumberOf(ref numbers, name) };
         for (int i = 0; i < techniques.Count; i++)
             if (techniques[i].ModClass is { } name) techniques[i] = techniques[i] with { Animal = NumberOf(ref numbers, name) };
+
+        if (numbers is not null) WarnIncomplete(numbers, weapons, techniques);
+    }
+
+    /// <summary>
+    /// One log line per class, at load, for a class named only by techniques (never used), only by weapons (their wielders kick and punch and
+    /// never block or dodge) or with no attack technique (its weapons kick and punch): usually a misspelled name.
+    /// </summary>
+    static void WarnIncomplete(Dictionary<string, int> numbers, List<WeaponData> weapons, List<CombatTechnique> techniques)
+    {
+        foreach (var (name, number) in numbers)
+        {
+            bool armed = weapons.Exists(w => w.ClassCategory == number);
+            bool moves = techniques.Exists(t => t.Animal == number);
+            bool attacks = techniques.Exists(t => t.Animal == number && !t.Disabled && !t.IsBlock && !t.IsDodge);
+            string? problem = !armed ? "only techniques name it, so they are never used"
+                : !moves ? "no technique names it, so its weapons only kick and punch and never block or dodge (but out of a stumble)"
+                : !attacks ? "it has no attack technique, so its weapons only kick and punch"
+                : null;
+            if (problem is not null) Console.WriteLine($"warning   weapon class '{name}' (meitou class): {problem}");
+        }
     }
 
     /// <summary>

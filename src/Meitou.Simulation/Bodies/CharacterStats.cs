@@ -87,7 +87,8 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage; a mod skill's level for its number).
+    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage; a mod skill's level for its
+    /// number).
     /// </summary>
     public float Stored(StatsEnumerated stat) => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : ModLevel(stat);
 

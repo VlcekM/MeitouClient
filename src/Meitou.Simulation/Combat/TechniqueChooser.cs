@@ -168,7 +168,9 @@ public static class TechniqueChooser
     /// success the candidates are the block techniques that are not dodges (<b>Verified</b>, the block pool needs <c>is dodge</c> 0, so the "Dodge
     /// back" rows flagged as blocks too are out) whose direction equals the blow's, on failure those of a different direction in the same class, so
     /// the blow passes. A fighter without one is dodge-capable only when the roll against <paramref name="dodgeChancePercent"/> succeeds, and then
-    /// picks among the dodge techniques. The pick is weighted on <c>chance</c>. -1 when there is no reaction.
+    /// picks among the dodge techniques. The pick is weighted on <c>chance</c>. -1 when there is no reaction. A stumble break-out with no stumble
+    /// dodge of <paramref name="category"/> takes those of <paramref name="stumbleFallback"/> when it is 0 or more: the weapon's own category for
+    /// a weapon of a data-named class (<see cref="WeaponClassNames"/>), so a class without one still breaks out (Meitou).
     /// </summary>
     public static int ChooseReaction(
         IReadOnlyList<CombatTechnique> all,
@@ -180,13 +182,19 @@ public static class TechniqueChooser
         float dodgeChancePercent,
         float chanceRoll,
         float pickRoll,
-        bool stumbling = false)
+        bool stumbling = false,
+        int stumbleFallback = -1)
     {
         var pool = ReactionPoolOf(canBlock, blockChancePercent, dodgeChancePercent, chanceRoll, stumbling);
         if (pool is null) return -1;
 
-        float total = 0;
-        for (int i = 0; i < all.Count; i++) total += ReactionWeight(all[i], category, prone, pool.Value, blowDirection);
+        float total = ReactionTotal(all, category, prone, pool.Value, blowDirection);
+        if (total <= 0 && pool == ReactionPool.StumbleDodges && stumbleFallback >= 0)
+        {
+            category = stumbleFallback;
+            total = ReactionTotal(all, category, prone, pool.Value, blowDirection);
+        }
+
         if (total <= 0) return -1;
 
         float target = pickRoll * total;
@@ -203,6 +211,16 @@ public static class TechniqueChooser
         }
 
         return last;
+    }
+
+    /// <summary>
+    /// The sum of the reaction weights of <paramref name="category"/> for <paramref name="pool"/>.
+    /// </summary>
+    static float ReactionTotal(IReadOnlyList<CombatTechnique> all, int category, bool prone, ReactionPool pool, int blowDirection)
+    {
+        float total = 0;
+        for (int i = 0; i < all.Count; i++) total += ReactionWeight(all[i], category, prone, pool, blowDirection);
+        return total;
     }
 
     /// <summary>

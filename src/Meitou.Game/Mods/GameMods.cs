@@ -77,12 +77,18 @@ sealed class GameMods(GameHost host)
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
 
-        if (host.DataPhase?.Mods is { } prepared)
-        {
-            StartPrepared(prepared, host.DataPhase.Enabled, db, data);
-            return;
-        }
+        if (host.DataPhase?.Mods is { } prepared) StartPrepared(prepared, host.DataPhase.Enabled, db, data);
+        else LoadMods(db, data);
 
+        // Every skill is added now: a weapon naming one that is not uses its category's, which the log says once (docs/modding.md "Weapon types").
+        Simulation.Bodies.ModSkills.WarnUnknown(db);
+    }
+
+    /// <summary>
+    /// Loads and initializes the enabled code mods when no data phase loaded their code (<see cref="StartPrepared"/> starts those).
+    /// </summary>
+    void LoadMods(Data.GameDatabase db, PopulationData data)
+    {
         var (enabled, disabled) = CodeMods();
         BuiltInMods.SkipCovered(enabled, disabled);
         if (enabled.Count == 0) return;

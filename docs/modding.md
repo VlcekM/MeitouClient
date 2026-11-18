@@ -435,28 +435,43 @@ holds refuses the second mod.
   ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
   mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
   full column refuses the mod. Not shown in the HUD's stat lines.
-- **Weapon types:** data alone already makes a new weapon that borrows a class's behaviour: WEAPON `skill category` picks the skill it trains and uses and its attacks, blocks and dodges, and `skill category animation
-  override` the class whose stance, guard and idle clips it plays (a rapier training Sabres and standing like a katana; nine base weapons do this);
-  `length` sets its reach (a technique strikes from `attack distance` + half the length), `cut`, `blunt` and `pierce damage multiplier` its
-  damage split, beside its bleed, armour penetration, indoors, weight and kind and race multipliers; new COMBAT_TECHNIQUE records with a class's
-  flags give that class new attacks, their clips found by name in the ANIMATION_FILEs races link ([animation](animation.md#animation-files));
-  a RACE's `fists lv1` names the WEAPON its fists are (still Martial Arts); and a firearm is a CROSSBOW record with its own meshes, `ammo`
-  item, `reload anim`, `num shots` and pierce damage (it trains Crossbows and is named a crossbow). A weapon of its own skill takes a code mod:
-  WEAPON `meitou skill` (Meitou only) names a skill added with `AddSkill` by its id, and the weapon then uses and trains that skill wherever a
-  weapon uses its category's: the blow's damage, the techniques' `min skill` and `max skill`, executions and door bashing, the HUD's Current
-  Skill line (the skill's label) and damage figure, and the experience of hits, glancing hits and blocks (the race's weapons entry as for any
-  weapon skill), with no injury multiplier, as the game's weapon skills in those reads; the item tooltip's class line is the label and
-  "class". Its attacks, stance and two-arm rule still follow its `skill category` and override, and attack and defence are Melee Attack and
-  Melee Defence as for any weapon. A character's level starts at the skill's `Start` until the mod sets it, NPCs' too. A name no running mod
-  added (the mod removed) leaves the category's skill, as the original game, which loads the field as any other, does. To enter the field in
-  the construction set, add the line `meitou skill: "" "A code mod's skill this weapon uses"` under `[WEAPON]` in the install's `fcs.def`.
-  A class with attacks of its own needs no code: WEAPON and COMBAT_TECHNIQUE `meitou class` (Meitou only, any text, case ignored) put the
-  weapons and techniques of one name in a class, whose weapons pick their attacks, blocks and dodges from its techniques alone, as a creature's
-  weapon does from its own (`WeaponClassNames`; the class's number is internal, from 1000000 up). With none fitting, a person falls back to the
-  unarmed techniques, as with any weapon, for attacks only: a class with no blocks or dodges of its own neither blocks nor dodges. The technique's clip is found by name as any person's
-  technique's. Everything else (skill, stance, two-arm rule, the Current Skill line) follows the weapon's `skill category`, its override and
-  `meitou skill`. Leave the techniques' weapon flags off: the original game, and Meitou without the class, read the weapon as its `skill
-  category` and the techniques fit no weapon then. Editor lines: `meitou class: "" "Weapon class"` under `[WEAPON]` and `[COMBAT_TECHNIQUE]`.
+- **Weapon types:** data alone already makes a new weapon that borrows a class's behaviour: WEAPON `skill category` picks the skill it trains and
+  uses and its attacks, blocks and dodges, and `skill category animation override` the class whose stance, guard and idle clips it plays (a rapier
+  training Sabres and standing like a katana; nine base weapons do this); `length` sets its reach (a technique strikes from `attack distance` + half
+  the length), `cut`, `blunt` and `pierce damage multiplier` its damage split, beside its bleed, armour penetration, indoors, weight and kind and
+  race multipliers; new COMBAT_TECHNIQUE records with a class's flags give that class new attacks, their clips found by name in the ANIMATION_FILEs
+  races link ([animation](animation.md#animation-files)); a RACE's `fists lv1` names the WEAPON its fists are (still Martial Arts); and a firearm is
+  a CROSSBOW record with its own meshes, `ammo` item, `reload anim`, `num shots` and pierce damage (it trains Crossbows and is named a crossbow).
+  A weapon of its own skill takes a code mod: WEAPON `meitou skill` (Meitou only, trimmed) names a skill added with `AddSkill` by its id, whichever
+  mod added it, and the weapon then uses and trains that skill wherever a weapon uses its category's: the blow's damage, the techniques' `min skill`
+  and `max skill`, executions and door bashing, the HUD's Current Skill line (the skill's label) and damage figure, and the weapon skill's share of
+  combat experience (hits, glancing hits, blocks; the race's weapons entry as for any weapon skill), with no injury multiplier, as the game's weapon
+  skills in those reads; the item tooltip's class line is the label and "class". Its attacks, stance and two-arm rule still follow its `skill
+  category` and override, and attack and defence are Melee Attack and Melee Defence as for any weapon. A weapon of `skill category` 5 ignores the
+  field: it fights as fists, whose rating, blow and experience are Martial Arts' with no weapon skill to replace, and its tooltip names no class. A
+  character's level starts at the skill's `Start` until the mod sets it, NPCs' and animals' too (an animal's natural weapon naming a skill fights at
+  that level, so set it). A name no running mod added (the mod removed, or a misspelled id) leaves the category's skill, as the original game, which
+  loads the field as any other, does, and the load log says so once per id (`warning   weapon skill '<id>'`).
+  A class with attacks of its own needs no code: WEAPON and COMBAT_TECHNIQUE `meitou class` (Meitou only, trimmed, case ignored) put the weapons and
+  techniques of one name in a class, whose weapons pick their attacks, blocks and dodges from its techniques alone, as a creature's weapon does from
+  its own (`WeaponClassNames`; the class's number is internal, from 1000000 up). Every mod naming a class shares it, so prefix the name with the
+  mod's id (`mymod.whip`), as skill ids. Defence works as for any weapon: one that can block never dodges, so a class's dodges serve only its
+  weapons with `can block` off (and fist-category ones), and a block stops only blows of its own direction, so a class that blocks needs one per
+  direction (the stock sets have six: up, left, right, thrust, up rear, right rear). With no class attack fitting, a person falls back to the
+  unarmed techniques, as with any weapon; blocks and dodges have no fallback, so a class with none of its own neither blocks nor dodges, but a
+  stumble break-out with no stumble dodge of the class takes those of the weapon's own `skill category` (base data: "Dodge back fly" and "Dodge back
+  (copy for stumble)", flagged for the six skill classes and Unarmed; a base category of 6, 7 or 9 and up has none). The load log warns (`warning
+  weapon class '<name>'`) of a class named only by techniques, only by weapons, or with no attack technique, which is usually a misspelled name. The
+  technique's clip is found by name as any person's technique's; keep its `animal` at 0 (9 and up files its clip among the animals'). Classes are
+  made for people's weapons: an animal whose natural weapon names one picks from it too, and plays a clip only if its skeleton has one of that name;
+  a race's `fists lv1` naming one is not used (fists are not a weapon in hand). Everything else (skill, stance, two-arm rule, the Current Skill
+  line) follows the weapon's `skill category`, its override and `meitou skill`. Leave the techniques' weapon flags off: the original game, and
+  Meitou without the class, read the weapon as its `skill category` and the techniques fit no weapon then.
+  To enter the fields in the construction set, add `meitou skill: "" "A code mod's skill this weapon uses"` and `meitou class: "" "Weapon class"`
+  under `[WEAPON]` and `meitou class: "" "Weapon class"` under `[COMBAT_TECHNIQUE]` in the install's `fcs.def`. Steam's file check and game updates
+  put back the stock `fcs.def` and so remove the lines (add them again). The editor keeps a field `fcs.def` does not declare through a load and a
+  save, so a record keeps its fields when someone without the lines saves it, unless its Cleanup window's "Remove deprecated fields" is run ([FCS
+  data](formats/fcs-mod.md#editor-and-undeclared-fields)). Without the editor, write the records with `FcsWriter` (`src/Meitou.Data/Fcs`).
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own

@@ -84,7 +84,7 @@ public sealed record CombatTechnique
 
     /// <summary>
     /// <c>meitou class</c> (Meitou only, not a field of the game's editor): the weapon class the technique belongs to alone
-    /// (<see cref="WeaponClassNames"/>); null when absent or empty.
+    /// (<see cref="WeaponClassNames"/>), trimmed; null when absent or blank.
     /// </summary>
     public string? ModClass { get; init; }
 
@@ -290,7 +290,7 @@ public sealed record CombatTechnique
             UseRightArm = r.GetBool("use R arm"),
             Kinds = kinds,
             Animal = RecordReading.Int(r, "animal", 0),
-            ModClass = r.Strings.GetValueOrDefault("meitou class") is { Length: > 0 } weaponClass ? weaponClass : null,
+            ModClass = WeaponData.Text(r, "meitou class"),
             Blows = Math.Max(blowCount, 0),
             MoreBlows = [.. Enumerable.Range(3, Math.Max(blowCount - 2, 0)).Select(n => ReadBlow(r, n))],
             AttackDirection1 = RecordReading.Int(r, "attack direction 1", 0),

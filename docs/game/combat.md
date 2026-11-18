@@ -17,8 +17,8 @@ hit code (whole-.text scan of reads at +0x248: only the armour and UI users): th
 (cut, blunt, pierce, stun 0) is then x the weapon's `human`/`animal`/`robot damage mult` (target robot race flag first, then the animal slot, then the human slot; 1 for a non-character
 target), x its `race damage` percent x 0.01 for the target's race, and, last, x the wearer's gear `damage output mult` (the whole packet, only when it is above 0 and not 1;
 the weapon skill itself is not scaled by it). Bleed multiplier (item `bleed mult`) and `armour penetration` ride along unscaled.
-Quality q = item level x 0.01 (`FUN_1400d3090`). Meitou: a WEAPON's `meitou skill` (not an editor field) names a code mod's skill that takes the category's
-skill's place in all of the above and in the weapon's experience ([modding](../modding.md), "Weapon types").
+Quality q = item level x 0.01 (`FUN_1400d3090`). Meitou: a WEAPON's `meitou skill` (not an editor field) names a code mod's skill that
+takes the category's skill's place in all of the above and in the weapon's experience ([modding](../modding.md), "Weapon types").
 
 Unarmed (stat-set category 5, the FISTS item for a person): rating R = lerp(e,0.2,1) x (martial arts raw + (int)(`unarmed bonus` with the [indoors](#indoors) modifier - dust penalty)) x slot 0x398
 (`FUN_140884e00` with its flag set, e the encumbrance factor; slot 0x398 is 1 for a person, `FUN_1405e5990`). Every combat caller sets the flag (the packet, the attack rating
