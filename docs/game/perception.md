@@ -35,8 +35,11 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
   when requested by a sight test (`+0xdc`) and the character is the player's or daylight < 0.75, it is resampled: 1 above
   daylight 0.5, else 2 x daylight + per light within 500 of the zone search: 1.5 x power scale x (1 - d^2 / r^2) (x the spot
   cone (cos - cos(outer/2)) / (cos(inner/2) - cos(outer/2)), clamped) while d <= r; a light counts only when its indoor flag
-  equals the character's and, both inside, its floor (custom parameter w) equals the character's (slot 0x60). Building
-  lights and characters' carried lights both count.
+  equals the character's and, both inside, its floor (custom parameter 0's y) equals the character's (slot 0x60). Building
+  lights and characters' carried lights both count. A light's floor is set when its building's parts are lit (`FUN_140553dc0`,
+  **Verified**): a building with an interior object (`+0x1f0`, made by `FUN_140551b20` when the BUILDING lists an `interior`) gives
+  each light its part's `building floor`; one without (furniture, lamps) gives every light its own floor (`getFloor`, `+0xa4`).
+  Meitou: an interior layout's furniture without `interior` takes the floor of the spot it stands on (`WorldLight.FloorAnchor`).
 The request byte `+0xdc` is raised by the sight test `FUN_140852f70`:104-112 on looker and target (the target's value is read before the flag is set, so the first test after a quiet period sees bare daylight) and by the stat multiplier `FUN_1406457e0`:190 (**Verified**). Meitou (`SightMap.SampleLight`, `Light` / `PeekLight`): the same rule with a per-slot request flag that the workers only ever set (`Range` and the stat multiplier read through `Light`, the HUD and the query bound through `PeekLight`) and the serial update consumes, so the outcome does not depend on the order of the parallel tests.
 
 Meitou (`SightMap`): every sight test (aggro, dialogue sightings, crime witnesses, bounty spotting, slave catching, loot witnesses) uses these

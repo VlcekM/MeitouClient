@@ -75,10 +75,14 @@ public enum WorldLightRule
 /// <param name="OuterAngle">Spot outer cone, full angle in radians (LIGHT <c>outer</c>); may be below <see cref="InnerAngle"/> in the data.</param>
 /// <param name="Falloff">Spot falloff exponent between the cones (LIGHT <c>falloff</c>).</param>
 /// <param name="Interior">Placed by a building's interior layout (furniture inside); the rest are on the building or its exterior layout.</param>
-/// <param name="Floor">The holder part's <c>building floor</c> (the game hands it to the light pass with the light; use Unknown).</param>
+/// <param name="Floor">The holder part's <c>building floor</c> (the light's custom parameter y, <c>FUN_140815420</c>); 0 for a light of no
+/// part.</param>
 /// <param name="LightId">The LIGHT record's string id.</param>
 /// <param name="BuildingId">The BUILDING record that owns the light.</param>
 /// <param name="PlacementId">The placement (its <see cref="BuildingKey"/>, plus "/layout item id" for layout objects).</param>
+/// <param name="FloorAnchor">Where the interior layout's furniture holding the light stands, when its BUILDING lists no <c>interior</c> (no interior
+/// object, Building <c>+0x1f0</c>, <c>FUN_140551b20</c>): every light of it, its parts' too, takes the furniture's own floor (<c>getFloor</c>,
+/// <c>+0xa4</c>) instead of <see cref="Floor"/> (the parts recursion <c>FUN_140553dc0</c>, <b>Verified</b>); null otherwise.</param>
 /// <param name="PowerOn">The placed building's GAMESTATE_BUILDING <c>power on</c> when its state has one (null for layout objects and states without
 /// it); what it does to the lights is Unknown.</param>
 public sealed record WorldLight(
@@ -98,7 +102,8 @@ public sealed record WorldLight(
     string LightId,
     string BuildingId,
     string PlacementId,
-    bool? PowerOn = null);
+    bool? PowerOn = null,
+    Vector3? FloorAnchor = null);
 
 /// <summary>
 /// The world's light list (docs/formats/lights.md): the LIGHT instances of every placed building, of the buildings' doors and of their exterior (and
@@ -207,7 +212,12 @@ public static class WorldLights
             var state = new BuildingState { Identity = $"{building.Placement.Key}/{item.InstanceId}" };
             WorldObjectLayout.Building(db, item.Building, instanceId, at, rotation, state, placed);
             bool indoors = !exterior && IsIndoors(item.Building, true);
-            foreach (var p in placed) result.Add(FromPlaced(p, interior: !exterior, powerOn: null, indoors: indoors));
+            foreach (var p in placed)
+            {
+                var light = FromPlaced(p, interior: !exterior, powerOn: null, indoors: indoors);
+                bool ownFloor = !exterior && item.Building.GetReferences("interior").Count == 0;
+                result.Add(ownFloor ? light with { FloorAnchor = at } : light);
+            }
         }
     }
 

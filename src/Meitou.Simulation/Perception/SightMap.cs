@@ -95,9 +95,9 @@ public sealed class SightMap
     /// </summary>
     readonly record struct Room(string Key, InteriorVolume Volume, bool EnforcesCeiling);
     /// <summary>
-    /// A lamp and the room it lights (-1: outdoors or not an interior lamp).
+    /// A lamp, the room it lights (-1: outdoors or not an interior lamp) and its floor there.
     /// </summary>
-    readonly record struct Lamp(WorldLight Light, int Room);
+    readonly record struct Lamp(WorldLight Light, int Room, int Floor);
 
     /// <summary>
     /// The keys of the buildings added.
@@ -196,7 +196,7 @@ public sealed class SightMap
         {
             if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
             own.Add(_lamps.Count);
-            _lamps.Add(new Lamp(l, l.Interior ? room : -1));
+            _lamps.Add(new Lamp(l, l.Interior ? room : -1, LampFloor(l, l.Interior ? room : -1)));
             LampCells(_lamps.Count - 1, add: true);
         }
         _entries[building.Key] = (room, own);
@@ -230,6 +230,12 @@ public sealed class SightMap
         _entries.Remove(building.Key);
         Add(source, building);
     }
+
+    /// <summary>
+    /// The floor a lamp lights in <paramref name="room"/>: a furniture light's that of the spot its furniture stands on, as an object's
+    /// <c>getFloor</c> (<see cref="FloorAt"/>), else its part's (<see cref="WorldLight.Floor"/>).
+    /// </summary>
+    int LampFloor(WorldLight l, int room) => l.FloorAnchor is { } at && room >= 0 ? _rooms[room].Volume.FloorAt(at) : l.Floor;
 
     /// <summary>
     /// A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.
@@ -554,14 +560,28 @@ public sealed class SightMap
     }
 
     /// <summary>
+    /// The town and player-building lamps of the cell <paramref name="at"/> lies in, each with the room and floor it lights and its share of
+    /// <paramref name="slot"/>'s light there (the probe's <c>light</c> mode).
+    /// </summary>
+    internal IEnumerable<(WorldLight Light, int Room, int Floor, float Gain)> LampsAt(int slot, Vector3 at)
+    {
+        var cell = (CellOf(at.X), CellOf(at.Z));
+        bool inside = Inside(slot);
+        int floor = FloorOf(slot, at);
+        var lamps = (_lampCells.GetValueOrDefault(cell) ?? []).Select(k => _lamps[k]);
+        var sites = (_siteCells.GetValueOrDefault(cell) ?? []).Select(k => _siteLamps[k]);
+        foreach (var lamp in lamps.Concat(sites)) yield return (lamp.Light, lamp.Room, lamp.Floor, Gain(lamp, slot, at, inside, floor));
+    }
+
+    /// <summary>
     /// One lamp's share of a character's light (0 when it is off, of the other indoor state or floor, or out of reach).
     /// </summary>
     float Gain(Lamp lamp, int slot, Vector3 at, bool inside, int floor)
     {
-        var (l, room) = lamp;
+        var (l, room, lampFloor) = lamp;
         if (!WorldLights.IsLit(l, l.Interior && InteriorLampsAllDay ? 0 : Daylight) || l.Interior != inside) return 0;
         // The original also matches the light's floor when both are inside; a lamp of another building's interior is taken as on another floor.
-        if (inside && (room != _place[slot] || l.Floor != floor)) return 0;
+        if (inside && (room != _place[slot] || lampFloor != floor)) return 0;
         float d2 = Vector3.DistanceSquared(l.Position, at), r2 = l.Radius * l.Radius;
         if (d2 > r2) return 0;
         float f = 1 - d2 / r2;
@@ -593,7 +613,7 @@ public sealed class SightMap
             {
                 if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
                 int lamp = _siteLamps.Count;
-                _siteLamps.Add(new Lamp(l, -1));
+                _siteLamps.Add(new Lamp(l, -1, l.Floor));
                 for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
                     for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
                         Into(_siteCells, (x, z), lamp);

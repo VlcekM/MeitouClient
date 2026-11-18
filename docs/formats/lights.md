@@ -61,7 +61,7 @@ power  = powerScale · global (1.0) · effect
   Probe of the merged data (Observed, 2026-10-20): every lamp building with a LIGHT is BF_LIGHT 15 (Light Post I-III,
   City Lamp Post, Torch Posts, wall lights, Spotlight, Searchlight, Ceiling Lamp) except Campfire (4), Cooking Pit (11),
   turrets (12) and the hydroponic farms (1). Draws: Light Post I/II/III 4/3/2, Spotlight 4, Searchlight 8, Ceiling Lamp 2.
-- **Night flag, per light** (parts recursion `140553dc0`, builder `FUN_140815420`): `custom.x` = 1 when Building slot 59
+- **Night flag, per light** (parts recursion `140553dc0`, builder `FUN_140815420`): `custom.y` is the light's floor ([perception](../game/perception.md) "Light level"), `custom.z` its `effect`; `custom.x` = 1 when Building slot 59
   returns the null handle (type 0xb) or byte +0x240 is set. The light pass (`FUN_1402d8540`) draws a flagged light only
   while the daylight factor (`FUN_14066cb50`) is at most 0.1. +0x240 is `isOutsideFurniture` (KenshiLib 1ce4a16, **Observed**;
   the factory `FUN_14057cc70` stores its last argument there). So every building's outdoor lights (campfires, turret lamps, houses) are night-only.

@@ -145,6 +145,7 @@ static class SaveProbe
             case ("walk", >= 1) when probe.Nav is not null: Walk(probe, a); return true;
             case ("ray", >= 6) when probe.Nav is not null: Ray(probe, Point(a, 0), Point(a, 3)); return true;
             case ("sees", >= 1) when probe.Nav is not null: SeesLeader(probe, float.Parse(a[0])); return true;
+            case ("light", _): LeaderLight(probe); return true;
             case ("sightlines", >= 4) when probe.Nav is not null:
                 Sightlines(probe, Point(a, 0), float.Parse(a[3]), a.Count > 4 ? float.Parse(a[4]) : 4, a.Count > 5 ? float.Parse(a[5]) : 0);
                 return true;
@@ -1703,6 +1704,26 @@ static class SaveProbe
     /// <summary>
     /// A place's building key, or "outdoors / on top".
     /// </summary>
+    /// <summary>
+    /// The leader's light level after a tick, with its place, floor and the daylight factor, and each lamp of its cell with the room it lights and
+    /// its share (docs/game/perception.md "Sight").
+    /// </summary>
+    static void LeaderLight(ProbeWorld probe)
+    {
+        probe.Tick(1);
+        var table = probe.Characters;
+        var sight = probe.World.Sight;
+        int leader = probe.Near(probe.LeaderPosition, 0.5f).First(i => table.Cold(i)!.IsPlayer);
+        var at = table.Previous[leader].Position;
+        Console.WriteLine($"leader {at:F1} place {Place(sight, sight.LocationOf(leader))} inside {sight.Inside(leader)} "
+            + $"floor {sight.FloorOf(leader, at)} daylight {sight.Daylight:F3} light {sight.PeekLight(leader):F3}");
+        foreach (var (l, room, floor, gain) in sight.LampsAt(leader, at))
+        {
+            Console.WriteLine($"  {l.LightId} of {l.BuildingId} at {l.Position:F1} d {Vector3.Distance(l.Position, at):F0} r {l.Radius:F0} "
+                + $"power {l.Intensity:F2} {l.Type} rule {l.Rule} interior {l.Interior} floor {floor} room {Place(sight, room)} gain {gain:F3}");
+        }
+    }
+
     static string Place(SightMap sight, int place) => place >= 0 ? sight.PlaceKey(place) : "outdoors/on top";
 
     /// <summary>
@@ -1956,6 +1977,7 @@ static class SaveProbe
               ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
               sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places
               sees <radius>            NPCs near the leader: place, sight range, the plain sight test and with the sight ray (needs --nav)
+              light                    the leader's light level, place, floor and daylight, and each lamp of its cell with its share
               talk <name> [event]      whether a character can be talked to, and its roots for the talk event; with an event, their lines' effects
               converse <name> [choice...]  the nearest player character talks to a character: each line said and its choices, clicking the given ones
               storage <name> <radius>  storages near a character: type limit, grid, items and whether each is accepted
