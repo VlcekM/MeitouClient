@@ -774,6 +774,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Investigate => AlarmOf(world, self.Slot, type, board) is null ? 0 : 1,
             // The assault's finder factor: 1 while a member of the mission target's squad passes its tests, else 0 (FUN_140793eb0).
             AiBehaviour.RescueLeader => mind.RescueWant,
+            // Find and rescue if there's beds: its desire and its finder's factor, both kept by the carry system's serial sweep.
+            AiBehaviour.RescueToBed => mind.BedRescueWant,
             // Crouching is wanted always (it holds the pose while it runs); standing up (its effects !24 !25 !26) only while crouched.
             AiBehaviour.Crouch => type == TaskType.Crouch || world.Characters.Cold(self.Slot) is { Crouched: true } ? 1 : 0,
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
@@ -1828,9 +1830,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 ActSeated(world, slot, mind, board, type);
                 break;
             case AiBehaviour.RescueLeader:
+            case AiBehaviour.RescueToBed:
             case AiBehaviour.Crouch:
-                // RescueLeader: the carry system's sweep lifts the leader (CarrySystem.Rescue); until then it stands. Crouch: it stands where it is;
-                // the animation system plays the clip and sets the stance.
+                // RescueLeader and RescueToBed: the carry system's sweep lifts the leader or the body (CarrySystem.Rescue); until then it stands.
+                // Crouch: it stands where it is; the animation system plays the clip and sets the stance.
                 Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Turret:

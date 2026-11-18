@@ -1636,10 +1636,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     #region Rescue
 
     /// <summary>
+    /// Resolved on the first rescue beat: whose goal lists hold goal 148 (<see cref="RescueToBeds"/>).
+    /// </summary>
+    AiSystem? _ai;
+
+    /// <summary>
     /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or
     /// following (or on a list job below it), able to carry and with no fight in their squad, pick up the nearest knocked-out member of their faction
     /// within their sight (<see cref="FindRescue"/>); then the NPCs whose AI chose the leader rescue goal (142) lift their knocked-out squad leader
-    /// (<see cref="RescueLeaders"/>). A player character's rescue job is the decision step's (<see cref="RegisterSources"/>).
+    /// (<see cref="RescueLeaders"/>), and those whose AI chose goal 148 the body its finder gives (<see cref="RescueToBeds"/>). A player character's
+    /// rescue job is the decision step's (<see cref="RegisterSources"/>).
     /// </summary>
     void Rescue(World world, CharacterTable table)
     {
@@ -1659,6 +1665,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             RescueSomeone(world, i, taken, TaskSource.Job, rescue);
         }
         RescueLeaders(world, table, taken);
+        RescueToBeds(world, table, taken);
     }
 
     /// <summary>
@@ -1750,13 +1757,19 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// One look for a body (an NPC's rescue job, and the Rescue button without Shift once): the character picks up the body <see cref="FindRescue"/>
     /// finds; true when it started.
     /// </summary>
-    bool RescueSomeone(World world, int i, HashSet<int> taken, TaskSource source, int job = -1)
+    bool RescueSomeone(World world, int i, HashSet<int> taken, TaskSource source, int job = -1) =>
+        LiftRescued(world, i, FindRescue(world, i, taken), taken, source, job);
+
+    /// <summary>
+    /// The rescue's lift (row 148) of the body in slot <paramref name="body"/> (-1: none) by the character in <paramref name="i"/>, which goes back
+    /// to standing (or its wander or follow) afterwards; true when it started, and the body is then taken.
+    /// </summary>
+    static bool LiftRescued(World world, int i, int body, HashSet<int> taken, TaskSource source, int job = -1)
     {
         var table = world.Characters;
-        int best = FindRescue(world, i, taken);
-        if (best < 0 || !Start(world, i, CharacterTask.PickUp, TaskType.FindAndRescueIfTheresBeds, source, table.IdOf(best),
+        if (body < 0 || !Start(world, i, CharacterTask.PickUp, TaskType.FindAndRescueIfTheresBeds, source, table.IdOf(body),
             TaskStart.Standing(table.Cold(i)!, (CharacterTask)table.Next[i].Task), job)) return false;
-        taken.Add(best);
+        taken.Add(body);
         return true;
     }
 
@@ -1837,6 +1850,35 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (BeginPickUp(world, i, table.IdOf(leader), (CharacterTask)table.Next[i].Task, source: TaskSource.Npc,
                 row: TaskType.LiftPersonSnatchingAllowed))
                 taken.Add(leader);
+        }
+    }
+
+    /// <summary>
+    /// Goal 148 Find and rescue if there's beds of an NPC the AI runs (not an engine mind), whose goal lists hold it
+    /// (<see cref="AiSystem.ListsGoal"/>): on each beat its factor for the think (<see cref="AiMind.BedRescueWant"/>) is 1 when its desire
+    /// (<c>FUN_1405994c0</c>, <b>Verified</b>: not on Hold, carrying nothing, the bed search finds a bed for it, <see cref="MayRescue"/>) and its
+    /// finder (<c>FUN_1408cd550</c>, the rescue finder <see cref="FindRescue"/>) both hold, else 0; the finder runs first, so the bed search runs only
+    /// with a body found. Once the AI chose the goal, a character that is free lifts that body as the player's rescue job does (row 148), as the
+    /// goal's own task; a body a squad mate lifts already is not taken (<paramref name="taken"/>). The carried body's goals then take it on (106
+    /// lays it in a bed, <see cref="Kidnap.TownDutySystem"/>).
+    /// </summary>
+    void RescueToBeds(World world, CharacterTable table, HashSet<int> taken)
+    {
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind } cold) continue;
+            if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.FindAndRescueIfTheresBeds) != true)
+            {
+                mind.BedRescueWant = 0;
+                continue;
+            }
+
+            int body = Rescuing(cold) ? FindRescue(world, i, taken) : -1;
+            if (body >= 0 && world.Fixtures.FindBed(world, i, Relations) is null) body = -1;
+            mind.BedRescueWant = body >= 0 ? 1 : 0;   // the think's factor for goal 148 reads it
+
+            if (body < 0 || mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds } || !Free(world, i)) continue;
+            LiftRescued(world, i, body, taken, TaskSource.Goal);
         }
     }
 

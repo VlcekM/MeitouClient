@@ -848,6 +848,13 @@ main grid, grid size from its `inventory w` / `inventory h`; **Observed** in the
 a Pack Beast, an Iron Spider and a Bonedog of the player's squad). The player's own animal's window ends above the grid
 ([animals](game/animals.md#death-items)). It also runs the stealth knock-out
 (`StealthKo` task, reusing `CarryTarget`/`LiftTime`): [combat](game/combat.md#stealth-knock-out).
+- **NPC rescue to a bed** (goal 148 Find and rescue if there's beds, facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)): on the `AutoEveryTicks` beat, after the
+  rescue jobs and the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose goal lists hold 148 keeps the goal's factor for its think
+  (`CarrySystem.RescueToBeds`, `AiMind.BedRescueWant`, hashed while set): 1 while it is not on Hold, carries nothing, the rescue finder (`FindRescue`) finds a downed ally and the
+  bed search a bed for it, else 0. The think weighs 148 at that factor times its package weight as any goal (`AiBehaviour.RescueToBed`, its own plan) and stands while it is
+  chosen; the sweep then lifts the body as row 148 (`TaskSource.Goal`), unless a squad mate lifts it already. The carrier's goals then take the body on ([town duties](#town-duties)):
+  with 106 listed it lays it in a bed. Engine choices: the factor and the lift wait for the beat (up to 15 ticks); the finder runs before the bed search (the same result, the
+  search only with a body found).
 - **NPC looting** (`CarrySystem.Scavenge.cs`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC the AI runs whose package lists goal 177 for its role
   in the hour (`PopulationSystem.GoalDuty`) loots the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
   `PlayerState.BanditsLoot` (CAMERA `bl`, default on), only whom `shouldIScrewThisGuyOver` allows (classes, love/hate tags), not one its squad tagged short-term 6

@@ -1191,6 +1191,13 @@ public sealed class AiMind
     public float RescueWant { get; set; }
 
     /// <summary>
+    /// The factor of goal 148 Find and rescue if there's beds (<see cref="AiBehaviour.RescueToBed"/>): 1 while its desire holds (not on Hold,
+    /// carrying nothing, a bed found) and the rescue finder finds a downed ally, else 0. Kept by the carry system's serial sweep for a character
+    /// whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
+    /// </summary>
+    public float BedRescueWant { get; set; }
+
+    /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet):
     /// while it runs, the fight is the AI's own, a plan step of its combat goal, and the character thinks in it (<see cref="AiSystem.Holds"/>).
     /// </summary>
@@ -1301,6 +1308,12 @@ public sealed class AiMind
         {
             hasher.Add(MedicPatient);
             hasher.Add(MedicScore);
+        }
+
+        if (BedRescueWant != 0)
+        {
+            hasher.Add(0x42526573);   // "BRes"
+            hasher.Add(BedRescueWant);
         }
 
         if (CaptiveOffers.Count > 0)
