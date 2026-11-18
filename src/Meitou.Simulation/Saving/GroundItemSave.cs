@@ -74,10 +74,10 @@ public static class GroundItemSave
     }
 
     /// <summary>
-    /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does and gains no item is
-    /// left as it is (so an unchanged save keeps its zone files); a zone with items and no file gets one; a file left with no record goes (as the
-    /// original deletes it). Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for <see cref="WritePersist"/> once the nests have
-    /// their handles.
+    /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does, each where it
+    /// lies, and gains no item is left as it is (so an unchanged save keeps its zone files); a zone with items and no file gets one; a file left
+    /// with no record goes (as the original deletes it). Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for
+    /// <see cref="WritePersist"/> once the nests have their handles.
     /// </summary>
     public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory)
     {
@@ -89,9 +89,11 @@ public static class GroundItemSave
             game.Zones.TryGetValue(z, out var zone);
             var old = zone is null ? [] : SaveGroundItems.Read(zone);
             var kept = old.Where(o => factory.Create(o.Item.BaseId) is null).ToList();
-            var named = old.Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
+            var placed = new Dictionary<string, FcsInstance>(StringComparer.Ordinal);
+            foreach (var o in old) placed.TryAdd(o.Record.StringId, o.Instance);
+
             var held = old.Where(o => o.Item.Contents is { Count: > 0 }).Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
-            bool unchanged = zone is not null && items.All(i => AsSaved(i, named, held)) && items.Count + kept.Count == old.Count;
+            bool unchanged = zone is not null && items.All(i => AsSaved(i, placed, held)) && items.Count + kept.Count == old.Count;
             if (unchanged) continue;
 
             if (zone is null) game.Zones[z] = zone = new SaveZone(z, new SaveFile());
@@ -107,13 +109,15 @@ public static class GroundItemSave
     }
 
     /// <summary>
-    /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="named"/>) and with that record's
-    /// mod tag, so a code mod's retag in place rewrites the zone; a container that holds items, or was read holding some (<paramref name="held"/>),
+    /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="placed"/>, each with its list
+    /// entry), lying where that entry puts it (an item picked up and dropped again keeps its record, not its place) and with that record's mod
+    /// tag, so a code mod's retag in place rewrites the zone; a container that holds items, or was read holding some (<paramref name="held"/>),
     /// always counts as changed.
     /// </summary>
-    static bool AsSaved(GroundItem item, HashSet<string> named, HashSet<string> held)
+    static bool AsSaved(GroundItem item, Dictionary<string, FcsInstance> placed, HashSet<string> held)
     {
-        if (item.Item.Saved is not { } saved || !named.Contains(saved.StringId)) return false;
+        if (item.Item.Saved is not { } saved || !placed.TryGetValue(saved.StringId, out var entry)) return false;
+        if (item.Position != entry.Position || item.Rotation != entry.Rotation) return false;
         if (item.Item.Contents is { Items.Count: > 0 } || held.Contains(saved.StringId)) return false;
 
         return saved.Strings.GetValueOrDefault(SaveItem.ModTagKey, "") == item.Item.ModTag;
