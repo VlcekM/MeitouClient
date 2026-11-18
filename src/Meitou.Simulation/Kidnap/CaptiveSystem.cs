@@ -364,9 +364,9 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// (<see cref="MedicalState.BeingEaten"/>) until it dies.</item>
 /// <item><b>Process</b> (260 "Watching for new slaves": an awake occupant of a cage of the town, not a slave, <c>FUN_1408cc110</c>; 183 "Watching
 /// slaves": an occupant within 180 that needs processing, <c>FUN_1408cd630</c>; both only in cages of non-player factions): the worker kneels 3 s
-/// (<c>medic</c>), then strips the captive's weapons and armour into its own inventory (locked shackles stay), dresses it in its faction's <c>slave
-/// clothing</c> where the slot is free, says event 35 INTRODUCING_NEW_SLAVE (37 RECAPTURED_A_SLAVE for one whose head is shaven already), makes it
-/// its faction's slave and shaves its head (<c>Task_ProcessNewSlave</c>, <b>Observed</b>; the head
+/// (<c>medic</c>), then strips the captive's weapons and armour into its own backpack or inventory, marked stolen from the captive (locked shackles
+/// stay), dresses it in its faction's <c>slave clothing</c> where the slot is free, says event 35 INTRODUCING_NEW_SLAVE (37 RECAPTURED_A_SLAVE for
+/// one whose head is shaven already), makes it its faction's slave and shaves its head (<c>Task_ProcessNewSlave</c>, <b>Observed</b>; the head
 /// <b>Verified</b>).</item>
 /// <item><b>Capture / Carry / Shout</b> (167, 168, 188): see <c>CaptiveSystem.Capture.cs</c>. The slaves' own work (189, 190) is not a job but the
 /// AI's <see cref="AiBehaviour.Work"/>.</item>
@@ -1914,7 +1914,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (cc.Inventory is { } inv)
         {
             string[] clothing = SlaveClothing(wc.Faction);
-            Strip(world, table.Next[c].Position, inv, wc, clothing);
+            Strip(world, table.Next[w].Position, inv, wc, StolenMark.Of(cc, table.IdOf(c)), clothing);
             if (!inv.Items.Any(i => i.Section == "legs")) Dress(inv, cc, clothing);
             _assembly.RefreshEquipment(cc);
         }
@@ -1967,11 +1967,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The strip of <see cref="Process"/> (<c>FUN_14035aa20</c>, <b>Verified</b>): every item of the whole inventory of record type WEAPON, then
-    /// ARMOUR, ITEM and CONTAINER goes to the worker (its inventory, else the ground; engine choice for the original's storage), except locked ones
-    /// and ARMOUR whose <c>stigma</c> is 6 (slave garments); a backpack goes with its content. The ARMOUR pass also leaves on the worker's faction's
-    /// <c>slave clothing</c> (<c>FUN_140343480</c>'s list argument), so a slave processed again keeps its kit and is not dressed anew (#356).
+    /// ARMOUR, ITEM and CONTAINER goes to the worker (<see cref="HandOver"/>), except locked ones and ARMOUR whose <c>stigma</c> is 6 (slave
+    /// garments); a backpack goes with its content. The ARMOUR pass also leaves on the worker's faction's <c>slave clothing</c>
+    /// (<c>FUN_140343480</c>'s list argument), so a slave processed again keeps its kit and is not dressed anew (#356). Each item taken that has no
+    /// owner yet becomes stolen from the captive, <paramref name="from"/> (<c>Item::notifyTheftFrom</c>, slot 106, <b>Verified</b>), so a worker
+    /// whose package lists 184 Ditching loot takes the kit to a storage (#977).
     /// </summary>
-    void Strip(World world, Vector3 at, Inventory inv, CharacterCold wc, string[] clothing)
+    void Strip(World world, Vector3 at, Inventory inv, CharacterCold wc, StolenMark from, string[] clothing)
     {
         foreach (var type in Stripped)
         {
@@ -1981,9 +1983,26 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
                 inv.Items.Remove(item);
                 item.Section = "main";
-                if (wc.Inventory is not { } into || !into.Add(item)) world.GroundItems.Drop(item, at, 0);
+                if (item.Mark == StolenMark.None) item.Mark = from;
+                HandOver(world, at, item, wc);
             }
         }
+    }
+
+    /// <summary>
+    /// Where one stripped item goes (<c>FUN_14035aa20</c>, <c>FUN_140343480</c>): the worker's worn backpack first (<b>Verified</b>), else its
+    /// inventory (Meitou's main grid and bag, <see cref="Inventory.Add"/>; the original's <c>Inventory::addItem</c> tries its other accepting
+    /// sections before the main grid, not modelled); what neither takes is dropped on the ground at the worker, <paramref name="at"/> (the add's
+    /// drop flag, the drop made by the inventory's owner, <b>Observed</b>).
+    /// </summary>
+    static void HandOver(World world, Vector3 at, ItemInstance item, CharacterCold wc)
+    {
+        var into = wc.Inventory;
+        if (InventoryCommands.FitsInBag(item) && into?.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", item))
+            return;
+        if (into is not null && into.Add(item)) return;
+
+        world.GroundItems.Drop(item, at, 0);
     }
 
     /// <summary>
