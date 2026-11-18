@@ -16,7 +16,8 @@ RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in, or ported
 - **Harmony is not an alternative to an API.** It works on the game's JIT publish whether blessed or not, so the decision is only what the
   engine promises beyond raw patching. **Observed** (2026-11-11, scratch app, win-x64, tiered compilation off): Lib.Harmony 2.4.3
   throws `PlatformNotSupportedException` ("CoreCLR version 11.0.0 is not supported") on .NET 11; 3.0.0-rc.5 patches (prefix, postfix,
-  unpatch), and code compiled against 2.4.3 runs unchanged on the 3.0.0-rc.5 `0Harmony.dll`.
+  unpatch), and code compiled against 2.4.3 runs unchanged on the 3.0.0-rc.5 `0Harmony.dll`. 3.0.0-rc.7 patches the same way on the .NET 11.0.0
+  release (2026-11-18, same setup).
 - **No accessor mirrors.** Mods reference `Meitou.*` assemblies directly, as a patch needs the types anyway. Compatibility is per game
   version (RimWorld's model).
 
@@ -72,7 +73,7 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   ([dependencies](modding-dependencies.md#assembly-resolution)).
 - **One Harmony, loaded by the game.** **Observed** ([pardeike/Harmony #741](https://github.com/pardeike/Harmony/issues/741), open since
   2025-10): outside Unity, Harmony loaded in several load contexts duplicates `HarmonySharedState`, and two mods can no longer patch the
-  same method. The game references Lib.Harmony 3.0.0-rc.5 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
+  same method. The game references Lib.Harmony 3.0.0-rc.7 (`0Harmony.dll` with MonoMod merged in) and the resolution rule hands every mod
   that copy.
 - Refusals, each a log line and a notice, the game going on: not allowed, unreadable manifest, other `apiVersion`, an id another mod
   took, a missing DLL, an entry type that is absent, not an `IMod` or without a public parameterless constructor, a throwing
@@ -501,6 +502,8 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - Managed DLLs run unchanged on the Windows, Linux and macOS builds.
 - **Observed** (Harmony 3.0 RC notes): native async methods cannot be patched. The game runs on .NET 11, so this applies to any
   method compiled as runtime-async.
+- **Observed** (2026-11-18, scratch app, win-x64, .NET 11.0.0, Lib.Harmony 3.0.0-rc.7): patching a generic method instantiation
+  (`Method<int>`) throws `NotSupportedException`.
 
 ## Evidence
 
