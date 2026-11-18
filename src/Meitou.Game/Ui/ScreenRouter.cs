@@ -308,9 +308,10 @@ sealed class ScreenRouter(PlayerInterface player)
             return true;
         }
 
-        if (id is "load" or "import" or "save" && player.UiMode == UiMode.Faithful)
+        // The slot details are Faithful's datapanel (Meitou writes a paragraph in the bindings); the import's advanced options show in both.
+        if (id is "load" or "import" or "save")
         {
-            player.Frontend.AddSlotInfo(controls);
+            if (player.UiMode == UiMode.Faithful) player.Frontend.AddSlotInfo(controls);
             if (id == "import") player.AdvancedOptions.AddAdvancedContent(controls, "import");
             return true;
         }
