@@ -282,15 +282,21 @@ holds refuses the second mod.
   `RegisterTasks(TaskHandlers)` once when the world is made, in system order, and registers an `ITaskHandler` (`Start`, `End`, `Done`) per
   `CharacterTask`, per row (`Register(TaskType, handler)`, a mod's row from 1000 up) or per row on a site (`RegisterOnSite`). One handler per
   key: a later registration replaces an earlier one, so a mod system replaces a standard handler only when it sits after that handler's system.
-  Handlers run in the serial phases only (`TaskStart.Start` throws in a parallel one).
-- **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker,
-  target) pairs it acts out now in `Publish(World, SquadGoals)` with `goals.Add(squad, worker, GoalTarget.Of(body) or GoalTarget.At(site id))`.
-  It is asked each time a finder takes a snapshot (`SquadGoals.Of`, serial) and once at the end of every tick; a pair stays claimed 3 s after
-  it was last published (`World.Claims`). The finders that skip what a squad mate already works on (NPC looting, the medic and splint finders,
-  captive gathering, production errands) then skip the mod's targets too. `Publish` only reads the world, in a fixed order: the claims steer
-  later starts, so they must be the same on every run.
-  Neither hook is caught as a mod fault outside the mod system's own phases: a throw from a handler or `Publish` called by another system's
-  step escapes that step.
+  `Register(row, handler)` with a `TaskType` row of the mod's own (1000 up) sends every start of that row, whatever its `CharacterTask`, to the
+  mod's `ITaskHandler`: `Start` (the row is eligible, the fight and the task before have ended, the provenance `CharacterCold.Running` is
+  recorded), `End(task, TaskEnd)` when another start replaces it (a fight's too) or a system stops it (`Replaced`, `Stopped`, `Done`), and `Done`
+  (by default: the character's task is no longer that task; the player's order queue reads it). A row's handler takes the place of the task's, so
+  the engine's walk does not start by itself: call the task's own (`tasks.Of(task)`) from it to keep it. `Register(CharacterTask, handler)`
+  replaces the engine's handler of that task for every row; a mod registers rows only. Handlers run in the serial phases only (`TaskStart.Start`
+  throws in a parallel one). A throw from `RegisterTasks` is not caught (the world is not made); one from a handler is caught as a fault of the
+  mod's own system only when that system's phase started or ended the task (the system stops), and is not caught when an engine system did.
+- **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker, target)
+  pairs it acts out now in `Publish(World, SquadGoals)` with `goals.Add(squad, worker, GoalTarget.Of(body) or GoalTarget.At(site id))`. It is
+  asked serially, in system order, each time a finder takes a snapshot (`SquadGoals.Of`) and once at the end of every tick; a pair stays claimed
+  3 s after it was last published (`World.Claims`, `GoalClaims.Seconds`). The finders that skip what a squad mate already works on
+  (`SquadGoals.Working`, `IsMine`: NPC looting, the medic and splint finders, captive exports, production errands) then skip the mod's targets
+  too. It chooses nothing and starts nothing. `Publish` only reads the world, in a fixed order: the claims steer later starts, so they must be
+  the same on every run. A throw is not caught as a mod fault (it reaches the tick or the finder's system).
 - **Mod jobs:** `AddJobType(type, name)` claims a task type number from 1000 up (`SimulationExtensions.FirstModCode`; the game's tasks stay
   below it; one mod per type). The mod puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` of its system); like the
   game's jobs, they are worked only while the character's jobs switch is on. Taking a mod job off the list does not stop a task the mod already
@@ -445,6 +451,19 @@ holds refuses the second mod.
   a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
   takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
   that comes before the game's rule (not saved), for a captive the mod's squad carries.
+  `Engaged` is one shared switch with no owner: dialogue, trading, arrests, kidnapping, captive jobs, town duties and lock rounds set and clear
+  it too. So engage only a character the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`, public), clear only an `Engaged` your mod set
+  (then set `cold.Ai.Replan` so it chooses at once), and take characters back after a load: `Engaged` is hashed but not saved, and neither are
+  the AI's minds.
+- **NPC behaviors without the chooser** (what upstream's town duties, kidnappers and lock rounds do; the duty route): a data mod lists an
+  AI_TASK whose `enum` is a number of the mod's own (1000 up) in its AI_PACKAGE records. Without the code mod such a goal loads (`AiTask.From`
+  keeps any number) and is never chosen: it has no behaviour, so its desire is 0. The code mod's system, in a serial step, finds who has the
+  goal now: `PopulationSystem.GoalDuty(world, squad, role, type)` (public, from `world.Systems`; the running package's role list in the hour's
+  window, a campaign squad's phase package included) or `GoalsOf`, the role being the leader's for `squad.Leader`, else by `cold.Role`
+  (`SquadRole`). It takes members the AI holds as above, walks them with its own row (`TaskStart.Walk(world, slot, point, mode, row,
+  TaskSource.Goal)`, `TaskStart.Become` to stand), optionally with a task handler of that row, publishes its targets as goal claims, releases
+  them when done, and keeps its state in `IModSaveData`. Such a duty does not weigh against the package's other goals (weight, tier, hours):
+  the mod decides when to take a member.
 
 ## Data mods
 
