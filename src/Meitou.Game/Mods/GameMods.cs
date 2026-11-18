@@ -76,6 +76,9 @@ sealed class GameMods(GameHost host)
         Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
         Mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => host.Session?.World,
             id => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
+
+        // A value the mod sets itself (ModSetting.Set, Reset) is kept as the page's are; the page's own change is kept twice, the same value.
+        foreach (var group in Mods.Settings) group.Changed += host.Config.KeepModSetting;
     }
 
     /// <summary>

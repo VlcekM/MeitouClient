@@ -212,18 +212,6 @@ sealed class ModSettingsRows(SettingsMenu menu)
             menu.Notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
         }
 
-        KeepModSetting(setting);
-    }
-
-    /// <summary>
-    /// Keeps the setting's value in UserConfig.ModSettings, or drops it when it is the default (and the mod's entry when it holds none).
-    /// </summary>
-    void KeepModSetting(ModSetting setting)
-    {
-        string mod = setting.Group.ModId;
-        if (!menu.Config.ModSettings.TryGetValue(mod, out var saved)) menu.Config.ModSettings[mod] = saved = [];
-        if (setting.IsDefault) saved.Remove(setting.Key);
-        else saved[setting.Key] = setting.Text;
-        if (saved.Count == 0) menu.Config.ModSettings.Remove(mod);
+        menu.Config.KeepModSetting(setting);
     }
 }
