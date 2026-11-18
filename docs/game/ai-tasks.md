@@ -1276,8 +1276,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     or 32 once the shooter is within 181.7. An NPC with none of them stands under fire (**Observed**, decompile reading). Meitou: the same (a shooter's target counts it as an attacker for 143).
 - So a squad with PROTECT goals and no ATTACK goal starts no fight with an idle enemy (**Observed**): e.g. the base `Fog prince squad`
   (`42029-rebirth.mod`, package `fog prince`); its dialogue package `fogman` answers only events 52 and 53 and has no effects. **Verified**
-  in the original with the Kenshi harness (#935 save): a standing player 40-75 from its patrolling squads, and from one freshly spawned (Re_Dev), was
-  never attacked over 13 game minutes while that save's Fogman of a `fog squad wandering` squad (21, attack enemies and neutrals) attacked it.
+  in the original with the Kenshi harness: in the #935 save a standing player 40-75 from its patrolling squads, and from one spawned with Re_Dev, was
+  never attacked over 13 game minutes, while a Fogman of a `fog squad wandering` squad (21, attack enemies and neutrals) attacked it; in a fresh
+  Wanderer game a naturally spawned squad's Prince and Heavies 0-150 from the player walked on, by day and by night.
 - **Meitou, NPCs** (`AiSystem.Fights.cs`, [AI](../simulation.md#ai)): 16, 21, 144, 34, 143, 15 and 288 are priority-3 goals of `AiSystem.Choose`, scored like every goal (desire x finder
   factor x weight x crowding, x1.25 for the current one; in their hours). Desires: 16 1 (0 Passive, sneaking outside a fight, prone), 21 / 34 / 143 1, 144 0.5, 15 / 288 as above; the factor is 1
   with a pick for the attack goals (`AggroSystem.FindFoe`: the looker's sensed entries and its squad mates' within 2 R, the shared sightings) and the capped fight threat for the protect
