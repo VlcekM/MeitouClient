@@ -1647,7 +1647,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   carries it to the nearest player storage (function 2 or 13) that accepts it and has room; or it fetches an empty input's item from the nearest storage holding it or machine whose output holds it (a well's water for a farm). A
   storage accepts an item when `itemtype limit` matches and `limit inventory` (a function 2 storage's only) is empty or lists it; `stackable bonus
   mult` scales its stacks. The player's drops into a storage follow the same rule ("does not take").
-  Excess fetched inputs stay with the operator. Engine choices: storage within `HaulRange` 3000 of the machine, ties
+  Excess fetched inputs stay with the operator. A fetch's source is within squared distance 4.246733e7 (3D) of the machine, the
+  original fill finder's bound (`FUN_14059d000`, [material delivery](game/buildings-production.md#material-delivery); it measures
+  from the character, who stands at the machine) (#963). Engine choices: a storage taking output within `HaulRange` 3000 of the machine, ties
   by site id, a fetch takes what the inputs have room for; the trip is not saved. A crafting bench's output is its finished items: an operator
   takes those a storage accepts once the first craft's store is full, and a full bench whose items no storage takes is no work (the job passes
   on); a "Hauling to" job fetches finished items as it does a producer's output, the instances themselves (quality and model kept) (#762). Carried output

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
 
@@ -250,13 +251,16 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// Where an input's item is fetched from: the player's nearest complete storage holding it in its main grid, or machine whose output holds it (a
-    /// well's water), within <see cref="ProductionSettings.HaulRange"/> of the machine (ties: the lower site id). A producer <paramref name="by"/>
-    /// operates counts once its output is full, so it fills the well before it leaves with the water.
+    /// well's water), within the original fill finder's <see cref="ConstructionSystem.SourceRangeSquared"/> (3D) of the machine (ties: the lower
+    /// site id). The finder measures from the character, who stands at the machine when it fetches (#963: a well 3000 or more away was missed).
+    /// A producer <paramref name="by"/> operates counts once its output is full, so it fills the well before it leaves with the water.
     /// </summary>
     string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null) =>
-        NearestSite(world, from.Position, Settings.HaulRange, (s, m) => s.Id != from.Id && (m.Data.IsStorage
-            ? m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main")
-            : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
+        NearestSite(world, from.Position, float.MaxValue, (s, m) => s.Id != from.Id
+            && Vector3.DistanceSquared(s.Position, from.Position) < ConstructionSystem.SourceRangeSquared
+            && (m.Data.IsStorage
+                ? m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main")
+                : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
 
     /// <summary>
     /// The player's nearest complete storage within <see cref="ProductionSettings.HaulRange"/> of a machine that passes <paramref name="ok"/> (ties:
