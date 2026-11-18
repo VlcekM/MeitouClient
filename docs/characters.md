@@ -259,7 +259,7 @@ from the look's sex's list (appearance `sex female`): `data/namesM.txt` (men) or
 both. Lines are trimmed, blank ones skipped; each file is optional. An empty list gives a fixed fallback string (Meitou: the record
 name). 135 of 639 merged CHARACTERs are `named`, among them most start-squad members (Wanderer, Nobody, start slave; not Citizen, Exile).
 Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.Name`) from the world seed, which a new game from the menu rolls afresh
-(`--seed` keeps one), so the start squad's names differ from game to game as the original's; files read from the install, not mods.
+(`--seed` keeps one), so the start squad's names differ from game to game as the original's; each file as the game opens it from resource group `General` (an enabled mod's copy, else the language's, else the install's `data/`).
 **Verified** (`FUN_14062b210` end): once the character is set up, a name holding a `/` goes through the dialogue text expansion and censorship
 (`FUN_14067e8b0`, [dialogue tokens](game/dialogue.md#tokens)) with the character's own dialogue and no target, so a word swap's line replaces the token
 (UWE names CHARACTERs "Trader /GENNAME/" with a GENNAME WORD_SWAPS of first names). Meitou: `DialogueSystem.ExpandName` at spawn.
