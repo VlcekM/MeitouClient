@@ -467,7 +467,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             }
 
             if (ArmsOut(world, i, cold)) continue;
-            if (LegsFixed(cold, i, t))
+            if (OwnLegsStepEnds(world, cold, i, t))
             {
                 End(world, i);
                 continue;
@@ -1001,6 +1001,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         var table = world.Characters;
         SquadGoals? taken = null;
+        bool swept = false;
         try
         {
             for (int s = 0; s < table.HighWater; s++)
@@ -1010,16 +1011,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 mind.MedicAsk = false;
                 mind.HealLegsAsk = false;
                 if (!table.Next[s].Alive) continue;
-                if (taken is null)
-                {
-                    taken = SquadGoals.Of(world);
-                    BeginSweep(world);
-                }
-
+                taken ??= SquadGoals.Of(world);
                 if (legs)
                 {
                     TreatOwnLegs(world, s, taken);
                     continue;
+                }
+
+                // the patient sweep only for a Medic ask (a self-treatment reads no other character's need)
+                if (!swept)
+                {
+                    BeginSweep(world);
+                    swept = true;
                 }
 
                 if (HealSomeone(world, s, taken, robotics: false, TaskSource.Npc)) continue;
@@ -1049,12 +1052,20 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// A Fixing Legs treatment (<see cref="TreatOwnLegs"/>) whose legs work again: the goal's desire is 0 (<see cref="AiSystem.HealLegsDesire"/>), so
-    /// the original's chooser, run on every AI update, takes another goal whose plan replaces the task (<b>Observed</b>, from the chooser and the
-    /// desire; not watched in the game). Here the treatment ends and the next think chooses.
+    /// Whether a Fixing Legs treatment (<see cref="TreatOwnLegs"/>) ends now. Its legs work again: the goal's desire is 0, so the original's chooser,
+    /// run on every AI update, takes another goal whose plan replaces the task (<b>Observed</b>, from the chooser and the desire). Or row 269's list B
+    /// no longer holds: the plan step ends a running step whose list B fails (<c>FUN_14050d970</c>, row 269 has no <c>+0x16</c>, <b>Verified</b>
+    /// upstream): no first aid kit of its own (23; a squad mate's kit in reach does not count), an immediate threat on itself (39), deep water (139)
+    /// or a weapon drawn (157); the arms (38) are <see cref="ArmsOut"/>'s. The next think chooses again.
     /// </summary>
-    static bool LegsFixed(CharacterCold cold, int i, int t) =>
-        t == i && cold.Running is { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs } && cold.Medical is { LegsMessedUp: false };
+    static bool OwnLegsStepEnds(World world, CharacterCold cold, int i, int t)
+    {
+        if (t != i || cold.Running is not { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs }) return false;
+        if (cold.Medical is { LegsMessedUp: false } || !HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return true;
+        if (cold is { WaterState: 3, InSomething: HeldState.None } || cold.DrawnWeapon != WeaponKinds.None) return true;
+
+        return RowStates.Holds(world, i, StateType.IsAggressionTowardsMe, default) == true;
+    }
 
     /// <summary>
     /// The first aid jobs as the decision step's contributor (step 5; docs/game/ai-tasks.md "Medic jobs"): Medic 58 and Robotics 57 run while the

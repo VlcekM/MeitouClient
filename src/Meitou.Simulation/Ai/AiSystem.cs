@@ -289,7 +289,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
             {
                 // Self preservation's run; or a fight (its own defence, a combat goal's), which a character already fighting does not start again.
+                // On its Fixing Legs treatment: the goal itself goes on; any other urgent goal that won ends the treatment in the serial step and
+                // is acted out at the next think.
                 if (ReferenceEquals(urgent, SelfPreservationGoal) && mind.Step == TaskType.RunAway) mind.FleeRequest = FleeAsk.Threat;
+                else if (only == Restrict.Urgent && urgent.Task.Type == TaskType.HealMyLegs) continue;
+                else if (only == Restrict.Urgent && TaskBehaviours.Of(urgent.Task.Type) is not (AiBehaviour.Fight or AiBehaviour.SelfPreserve))
+                    LeaveTreatment(mind);
                 else if (!cold.InCombat) AskFight(world, i, urgent.Task.Type, mind);
             }
         }
@@ -352,7 +357,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// </summary>
         Combat,
         /// <summary>
-        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>).
+        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>), and an NPC on its own
+        /// Fixing Legs treatment (<see cref="TreatsOwnLegs"/>).
         /// </summary>
         Urgent,
     }
@@ -378,7 +384,27 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (cold.Engaged) return InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
 
+        // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
+        // goal can outscore it; once the legs work its desire is 0 and the treatment ends (FirstAidSystem.OwnLegsStepEnds).
+        if (TreatsOwnLegs(n, cold)) return Restrict.Urgent;
+
         return n.Task == (byte)CharacterTask.Treat || InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
+    }
+
+    /// <summary>
+    /// Whether the character is on the treatment of itself that its Fixing Legs goal started (row 269, <see cref="AiBehaviour.HealLegs"/>).
+    /// </summary>
+    internal static bool TreatsOwnLegs(in CharacterHot n, CharacterCold cold) =>
+        n.Task == (byte)CharacterTask.Treat && cold.Running is { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs };
+
+    /// <summary>
+    /// An urgent goal outscored Fixing Legs while the character treats itself: the serial step of the same tick ends the treatment
+    /// (<see cref="LeaveFights"/>), and the character thinks again at the next tick, which acts the goal out. Writes only its own mind.
+    /// </summary>
+    void LeaveTreatment(AiMind mind)
+    {
+        mind.LeaveFight = true;
+        Interlocked.Exchange(ref _leaving, 1);
     }
 
     /// <summary>
@@ -418,12 +444,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee
     /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" (147) for a stagger
     /// outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); the captive goal's name on its job (<see cref="TakeCaptiveGoal"/>: "Eat
-    /// body"); null for the rest (the HUD then names the movement task).
+    /// body"); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>); null for the rest (the HUD then names the movement task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
         cold.StumbleTaskUntil > tick ? TaskBehaviours.Text(TaskType.StumbleTaskForced)
         : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
         : cold is { Engaged: true, InCombat: false, Ai: { Behaviour: AiBehaviour.Captive, Goal: { } job } } ? TaskBehaviours.Text(job.Task.Type)
+        : cold.Ai is not null && TreatsOwnLegs(n, cold) ? TaskBehaviours.Text(TaskType.HealMyLegs)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? TaskBehaviours.Text(goal.Task.Type) : null;
 
     /// <summary>

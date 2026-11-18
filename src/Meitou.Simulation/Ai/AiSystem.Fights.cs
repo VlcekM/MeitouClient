@@ -481,9 +481,9 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Ends the fights whose fighter's think chose a goal that is no fight (<see cref="InFight"/>; serial, slot order): the fight task ends as any
-    /// task's start ends it (<see cref="TaskStart.Become"/>, the character idle), and the character thinks at the next tick, which acts the chosen
-    /// goal out.
+    /// Ends the fights whose fighter's think chose a goal that is no fight (<see cref="InFight"/>), and the Fixing Legs treatments an urgent goal
+    /// outscored (<see cref="LeaveTreatment"/>; serial, slot order): the task ends as any task's start ends it (<see cref="TaskStart.Become"/>, the
+    /// character idle), and the character thinks at the next tick, which acts the chosen goal out.
     /// </summary>
     void LeaveFights(World world)
     {
@@ -492,7 +492,8 @@ public sealed partial class AiSystem
         {
             if (table.Cold(s) is not { Ai: { LeaveFight: true } mind } cold) continue;
             mind.LeaveFight = false;
-            if (table.Next[s].Alive && cold.InCombat) TaskStart.Become(world, s, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
+            bool leaves = cold.InCombat || TreatsOwnLegs(table.Next[s], cold);
+            if (table.Next[s].Alive && leaves) TaskStart.Become(world, s, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
             mind.Replan = true;
         }
     }

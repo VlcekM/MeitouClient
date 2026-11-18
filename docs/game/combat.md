@@ -472,7 +472,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
 - **Threats.** The perception pass (`SensoryData::addToThreatsAndFlockingList`) looks at each sensed live character of another faction: its
   state broadcast's intended aggression adds to +0x90; when its intended target (+0x68) passes `AITaskSytem::intendsToAttackTarget` (prone
   state < 3 and its fight on; on Hold with the fight off, only within 40), a target that is the looker puts it on the threats list
-  (SensoryData +0x50) and adds its aggression towards the target to +0x88; a target of the looker's faction adds that to +0x8c.
+  (SensoryData +0x50) and adds its aggression towards the target to +0x88; another target of the looker's faction adds that to +0x8c.
   `iAmBeingMeleeAttacked general` (state 159) is "threats list not empty"; `immediate` (158) is Character +0x2b0, set in the periodic update
   (`FUN_1404378f0`, **Verified**) while a threat within 40 (Ogre `squaredDistance`, full 3D, strictly under 1600, `DAT_1416d4a28`) stands (prone state < 3: staying low and crawling count),
   is not in a bed or cage, not getting up (+0x278), not carried and fails `AI::isTargetOutsideTheGates` (`FUN_140598450`: both places' gate codes

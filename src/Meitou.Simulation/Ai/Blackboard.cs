@@ -1366,7 +1366,8 @@ public sealed class AiMind
     public long FightFrom { get; set; }
 
     /// <summary>
-    /// The think of a fighter chose a goal that is no fight: the serial step of the same tick ends the fight, and it thinks again at the next tick.
+    /// The think of a fighter chose a goal that is no fight, or an urgent goal outscored the character's own Fixing Legs treatment: the serial step
+    /// of the same tick ends the fight or the treatment, and it thinks again at the next tick.
     /// Never set between ticks (not hashed).
     /// </summary>
     public bool LeaveFight { get; set; }
