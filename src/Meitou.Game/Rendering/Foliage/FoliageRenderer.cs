@@ -2543,6 +2543,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         LastCullGroups = _cullWork.Count;
         var eyeXz = new Vector2(eye.X, eye.Z);
         var view = _cullView;
+        var near = _depthPass ? default : NearFade.CullVector(eye.Y);   // the near fade (FoliageNearFade): the main colour view's vegetation
 
         // The Hub has well over a thousand groups; one work item per group spends more time in the job queue than in the
         // short cull. Each chunk writes its groups' own outputs, so the order and results are unchanged.
@@ -2560,7 +2561,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         g.Asset.Radius);   // the mesh's bounds are known once it is resident, and never change
                     g.SpheresReady = true;
                 }
-                FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, _cullOutputs[k], parts, record ? null : FogCull);
+                FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, _cullOutputs[k], parts, record ? null : FogCull,
+                    g.Asset.Vegetation ? near : default);
             }
         });
         for (int k = 0; k < _cullWork.Count; k++)

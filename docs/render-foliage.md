@@ -88,7 +88,8 @@ than the reach (the boom less 100): packed fade 1.25, drawn whole and laid out w
 `discard`, as the interior cut's 1.5 does. The full mesh fragment stages (prepass and colour) then keep a marked fragment where the static
 fade pattern is under the larger of its depth share (whole from the reach on, gone 200 units before it) and its angle share off the view's
 axis (`uFoliageNear`, a frame uniform: gone inside 0.14 rad, whole outside 0.3). Shadows, reflections and the GI's rays keep the tree.
-Vulkan's GPU cull only: the CPU cull (Metal's default) never marks. **Observed** in the game with on/off screenshots (strategy camera at
+The CPU cull (Metal's default) marks the same instances (`FoliageCull.CullGroup`); Metal's own panel has the row and its loop the camera gate.
+**Observed** in the game with on/off screenshots, GPU and CPU cull alike (Vulkan; strategy camera at
 -37700, -83560, FineTree pines): the middle tree is cut, its shadow and the trees round it stay.
 
 ## Validation and limitations

@@ -208,10 +208,12 @@ public static class FoliageCull
     /// Culls one group's instances for one view. With <paramref name="record"/>, every instance in range is also listed (index and fade) for later
     /// views that share the range (the shadow cascades). <paramref name="parts"/>: <see cref="MeshPart"/> and / or <see cref="ImpostorPart"/>; with a
     /// transition (<see cref="FoliageGroupRange.HasImpostor"/>) the meshes keep only the instances before it (<see cref="PackMesh"/>) and the
-    /// impostors only those from its band on (<see cref="PackImpostor"/>).
+    /// impostors only those from its band on (<see cref="PackImpostor"/>). <paramref name="near"/>: the near fade's vector for a vegetation group in
+    /// the main colour view (<see cref="FoliageNearFade.CullVector"/>; zero: none), with which a whole mesh instance near the eye gets
+    /// <see cref="FoliageNearFade.Mark"/>.
     /// </summary>
     internal static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view,
-        bool record, FoliageCullOutput output, int parts = MeshPart, FogVolumes? fog = null)
+        bool record, FoliageCullOutput output, int parts = MeshPart, FogVolumes? fog = null, Vector4 near = default)
     {
         output.Count = output.InRangeCount = output.ImpostorCount = output.FogCulled = 0;
         bool split = range.HasImpostor;
@@ -260,7 +262,7 @@ public static class FoliageCull
             {
                 if (output.Count == output.Visible.Length) Array.Resize(ref output.Visible, output.Count * 2);
                 var t = r.Transform;
-                t.M14 = mesh;
+                t.M14 = NearMarked(mesh, r.Sphere, eye, near);
                 output.Visible[output.Count++] = t;
             }
             if (impostor > Hidden)
@@ -272,5 +274,17 @@ public static class FoliageCull
                 output.ImpostorVisible[output.ImpostorCount++] = t;
             }
         }
+    }
+
+    /// <summary>
+    /// The near fade's mark (<see cref="FoliageNearFade.Mark"/>) for a whole mesh instance whose sphere is at least <paramref name="near"/>'s
+    /// radius and reaches nearer the eye than its reach (the GPU cull's test), else <paramref name="packed"/>.
+    /// </summary>
+    static float NearMarked(float packed, Vector4 sphere, Vector2 eye, Vector4 near)
+    {
+        if (near.Y <= 0 || packed < 1 || sphere.W < near.Z) return packed;
+
+        float distance = Vector3.Distance(new Vector3(sphere.X, sphere.Y, sphere.Z), new Vector3(eye.X, near.X, eye.Y));
+        return distance - sphere.W < near.Y ? FoliageNearFade.Mark : packed;
     }
 }

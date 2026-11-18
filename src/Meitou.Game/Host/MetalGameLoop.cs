@@ -1443,6 +1443,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 () => FoliageRenderer.DefaultLodTolerance / _foliage.LodTolerance,
                 v => _foliage.LodTolerance = FoliageRenderer.DefaultLodTolerance / v, "0.00", Logarithmic: true));
             toggles.Add(new Toggle("Foliage ranges", () => _foliage.MeitouRange, v => _foliage.MeitouRange = v));
+            toggles.Add(new Toggle(WorldFrame.NearTreeFadeSwitch, () => _foliage.NearFade.Enabled, v => _foliage.NearFade.Enabled = v));
             toggles.Add(new Toggle("Far impostors", () => _foliage.Impostors, v => _foliage.Impostors = v));
             sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => _foliage.ImpostorDistance,
                 v => _foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
@@ -2647,6 +2648,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         // The squad tour and character flights hold the camera while they fly; otherwise the rig owns the view.
         if (!_tourHolds) host.ApplyCamera(host.Session.CameraAt());
+
+        // The near tree fade (FoliageNearFade): the gameplay camera only, not the free camera, a flight or the title.
+        if (_foliage is not null) _foliage.NearFade.Gameplay = !host.Session.Camera.IsFree && !_tourHolds && !host.TitleScreen.TitleVisible;
         if (_tour.Active && !_tour.Advance(dt, host.Camera, TourPosition)) EndTour();
         host.Gpu.Ahead = _tour.ArrivalEye(TourPosition) ?? host.LoadAhead;
         if (_hud is not null)
