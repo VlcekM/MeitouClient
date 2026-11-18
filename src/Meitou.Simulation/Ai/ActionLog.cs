@@ -203,6 +203,7 @@ public sealed class ActionLog
         BedRescueNote.NobodyDown => "not eligible: nobody is down",
         BedRescueNote.NoBody => "not eligible: no downed ally its finder takes",
         BedRescueNote.NoBed => "not eligible: no bed for it",
+        BedRescueNote.NoPutIn => "not eligible: the ally found is one it would not lay in a bed",
         BedRescueNote.NotChosen => "wanted, not chosen",
         BedRescueNote.NotFree => "chosen, not free to lift",
         BedRescueNote.Refused => "chosen, the lift would not start",

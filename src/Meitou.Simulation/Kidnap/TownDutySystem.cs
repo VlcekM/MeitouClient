@@ -1089,6 +1089,43 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
+    /// A corpse lift (138 / 137) whose disposal was busy at the lift's end tries it again only on the member's look turn (<see cref="Look"/>'s
+    /// cadence); true while it waits for that turn.
+    /// </summary>
+    bool WaitingTurn(World world, TownDuty d, int g) => d.Tries > 0 && !world.Turn(g, world.Every(Settings.LookEveryTicks));
+
+    /// <summary>
+    /// 137's corpse lift whose disposal is only busy (each one in reach has its operator places held by other errands): the member keeps the body
+    /// under this errand and tries again on its look turn, as on master its carrier kept the body until a place freed; the original's 137 plan
+    /// holds its machine from the choice on, so a second carrier is not handed to another goal. False, and the errand ends, when the role lists no
+    /// 137 in the hour, or no disposal it can get to is there at all.
+    /// </summary>
+    bool WaitsForDisposal(World world, TownDuty d, int g)
+    {
+        if (!ListsInHour(world, g, d.Member, TaskType.DeadGuysGoInThePot)) return false;
+        var cold = world.Characters.Cold(g)!;
+        var at = world.Characters.Next[g].Position;
+        if (CorpseDisposal.Find(world, data, Disposals(world), g, at, m => cold.IsUnreachable(m.Id, world.Tick)) is null) return false;
+
+        d.Tries = 1;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the member's role list holds goal <paramref name="type"/> in this hour.
+    /// </summary>
+    bool ListsInHour(World world, int g, CharacterId member, TaskType type)
+    {
+        var gc = world.Characters.Cold(g)!;
+        if (world.Squads.Find(gc.SquadId) is not { } squad || population.GoalsOf(world, squad, AiSystem.RoleOf(squad, member, gc)) is not { } goals)
+            return false;
+
+        foreach (var goal in goals)
+            if (goal.Task.Type == type && goal.InWindow(world.Hour)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// The bed system, resolved on first use (null in a world without one).
     /// </summary>
     BedSystem? Beds(World world) => _beds ??= world.SystemOf<BedSystem>();
@@ -1618,8 +1655,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return d.Kind switch
             {
                 TownDutyKind.HomeLift => CarryOut(world, d, g, b),
-                // 138's lift needs no disposal: with no goal to take the body on, the carrier keeps it (docs/game/ai-tasks.md "Perma-jobs").
-                TownDutyKind.CorpseLift => DisposeCarried(world, d, g, b) || End(world, d),
+                // 138's lift needs no disposal: with no goal to take the body on, the carrier keeps it (docs/game/ai-tasks.md "Perma-jobs"); 137's waits
+                // for a busy disposal.
+                TownDutyKind.CorpseLift => WaitingTurn(world, d, g) || DisposeCarried(world, d, g, b) || WaitsForDisposal(world, d, g)
+                    || End(world, d),
                 _ => Dispose(world, d, g, b),
             };
         }

@@ -1651,11 +1651,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     readonly List<(CharacterId Rescuer, CharacterId Body, double Until)> _refusedRescues = [];
 
-    /// <summary>
-    /// The lifts goal 148 started and the carries they became (<see cref="RescuedBy148"/>), dropped once the rescuer no longer lifts or carries that
-    /// body. Not saved; hashed while set.
-    /// </summary>
-    readonly List<(CharacterId Rescuer, CharacterId Body)> _rescueCarries = [];
 
     /// <summary>
     /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or
@@ -1669,7 +1664,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var next = table.Next;
         var taken = Lifting(table);
         if (_refusedRescues.Count > 0) _refusedRescues.RemoveAll(r => r.Until <= world.GameHours);
-        if (_rescueCarries.Count > 0) _rescueCarries.RemoveAll(r => !Holds148(table, r.Rescuer, r.Body));
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { IsPlayer: false, RescueJob: true } cold) continue;
@@ -1911,7 +1905,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Goal 148's body for the rescuer in <paramref name="i"/>: the finder's when the rescuer could lift, someone is down (<paramref name="down"/>,
-    /// asked once per beat) and the bed search finds it a bed; else -1, with why in <paramref name="note"/>.
+    /// asked once per beat), goal 106 would lay that body in a bed (<see cref="Locks.BedSystem.WouldPutIn"/>; engine choice, so no body is lifted
+    /// only to be put down again) and the bed search finds it a bed; else -1, with why in <paramref name="note"/>.
     /// </summary>
     int RescueTarget(World world, int i, CharacterCold cold, HashSet<int> taken, ref bool? down, out BedRescueNote note)
     {
@@ -1930,6 +1925,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
         int body = FindRescue(world, i, Skipping(world, world.Characters.IdOf(i), taken));
         if (body < 0) note = BedRescueNote.NoBody;
+        else if ((_beds ??= world.SystemOf<Locks.BedSystem>())?.WouldPutIn(world, i, body) == false) (body, note) = (-1, BedRescueNote.NoPutIn);
         else if (RescueBed(world, i) is null) (body, note) = (-1, BedRescueNote.NoBed);
         return body;
     }
@@ -1943,10 +1939,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds }) return BedRescueNote.NotChosen;
         if (!Starts(world, i, cold)) return BedRescueNote.NotFree;
 
-        if (!LiftRescued(world, i, body, taken, TaskSource.Goal)) return BedRescueNote.Refused;
-
-        _rescueCarries.Add((world.Characters.IdOf(i), world.Characters.IdOf(body)));
-        return BedRescueNote.Lifting;
+        return LiftRescued(world, i, body, taken, TaskSource.Goal) ? BedRescueNote.Lifting : BedRescueNote.Refused;
     }
 
     /// <summary>
@@ -2013,23 +2006,20 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         _refusedRescues.Add((rescuer, body, world.GameHours + Settings.RescueRefuseHours));
 
     /// <summary>
-    /// Whether the character in <paramref name="slot"/> carries the body its goal 148 lifted.
+    /// Whether the character in <paramref name="slot"/> carries a body goal 148 would rescue: an NPC the AI runs whose goal lists hold 148,
+    /// carrying a body of its own or an allied faction (the rescue finder's test, <see cref="Rescues"/>) that is not its squad leader (142's carry
+    /// stays). Read from what the world holds, so it is the same after a load as before it.
     /// </summary>
     public bool RescuedBy148(World world, int slot)
     {
-        var id = world.Characters.IdOf(slot);
-        var carrying = world.Characters.Cold(slot)?.Carrying ?? CharacterId.None;
-        foreach (var (rescuer, body) in _rescueCarries)
-            if (rescuer == id && body == carrying && !body.IsNone) return true;
-        return false;
-    }
+        var table = world.Characters;
+        if (table.Cold(slot) is not { IsPlayer: false, Ai.Engine: false, Carrying.IsNone: false } cold
+            || !table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b) is not { } body)
+            return false;
+        if (world.Squads.Find(cold.SquadId)?.Leader == cold.Carrying || !Rescues(world, cold, body)) return false;
 
-    /// <summary>
-    /// Whether <paramref name="rescuer"/> still lifts (walks to, or lifts) or carries <paramref name="body"/>.
-    /// </summary>
-    static bool Holds148(CharacterTable table, CharacterId rescuer, CharacterId body) =>
-        table.TryResolveNext(rescuer, out int s) && table.Cold(s) is { } c
-        && (c.Carrying == body || table.Next[s].Task == (byte)CharacterTask.PickUp && c.CarryTarget == body);
+        return (_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, slot, TaskType.FindAndRescueIfTheresBeds) == true;
+    }
 
     /// <summary>
     /// A rescue goal's walk to its body (148's, or 142's to the squad leader; not a job's or an order's) is given up when the body has died (a
@@ -2069,7 +2059,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Adds the given-up rescues and the rescue carries to the world's state hash, while there are any.
+    /// Adds the given-up rescues to the world's state hash, while there are any.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
@@ -2085,14 +2075,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             }
         }
 
-        if (_rescueCarries.Count == 0) return;
-        hasher.Add(0x52657343);   // "ResC"
-        hasher.Add(_rescueCarries.Count);
-        foreach (var (rescuer, body) in _rescueCarries)
-        {
-            hasher.Add(rescuer);
-            hasher.Add(body);
-        }
     }
 
     /// <summary>

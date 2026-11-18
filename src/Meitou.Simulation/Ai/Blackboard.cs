@@ -865,6 +865,11 @@ public enum BedRescueNote : byte
     /// The lift started (row 148).
     /// </summary>
     Lifting = 8,
+    /// <summary>
+    /// Not eligible: the downed ally found is one goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded
+    /// as friendly).
+    /// </summary>
+    NoPutIn = 9,
 }
 
 /// <summary>

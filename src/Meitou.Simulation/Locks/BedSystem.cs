@@ -815,9 +815,22 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                 || _trips.Exists(t => t.Character == table.IdOf(slot)))
             return false;
 
-        if (!table.TryResolveNext(c.Carrying, out int b) || table.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true })
-            return false;
+        return table.TryResolveNext(c.Carrying, out int b) && PutsIn(world, slot, c, b);
+    }
 
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> would lay the body in slot <paramref name="body"/> in a bed (goal 106's desire tests on the
+    /// body, a pure read; <see cref="CarriesForBed"/> adds the carrier's own): goal 148 asks it before it lifts.
+    /// </summary>
+    public bool WouldPutIn(World world, int slot, int body) => world.Characters.Cold(slot) is { } c && PutsIn(world, slot, c, body);
+
+    /// <summary>
+    /// Goal 106's desire tests on the body: no animal, not of a faction hostile to the carrier's, and one the carrier would put in a bed
+    /// (<see cref="WantsToPutIn"/>).
+    /// </summary>
+    bool PutsIn(World world, int slot, CharacterCold c, int b)
+    {
+        if (world.Characters.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true }) return false;
         if (data.Relations.Contains(bc.Faction) && data.Relations.Contains(c.Faction) && data.Relations.IsHostile(bc.Faction, c.Faction))
             return false;
 
