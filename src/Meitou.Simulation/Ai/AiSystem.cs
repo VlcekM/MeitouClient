@@ -2901,7 +2901,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         bool own = squad.Autonomous && cold.IsPlayer;
         bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
-        if (!populationMoves && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
+
+        // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
+        // captive of a roaming squad the population moves would otherwise stand where it was enslaved, its engine mind on that squad's trip (#904).
+        bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
+        if ((!populationMoves || obeys) && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
 
         if (cold.Ai?.Goal is { } g)
         {
@@ -3199,6 +3203,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold
                 || cold.Ai is { Engine: false } && board is null)
                 continue;
+
+            // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
+            if (board is not null && ObeyedRoles(world, squad, cold) is not null) continue;
 
             if (cold.Ai is { Engine: false }) cold.Ai = null;
             if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))

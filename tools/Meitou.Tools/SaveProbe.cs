@@ -88,6 +88,10 @@ static class SaveProbe
                 TurretProbe.Run(probe, a[0], int.Parse(a[1]), new Vector2(float.Parse(a[2]), float.Parse(a[3])),
                     a.Count > 4 ? int.Parse(a[4]) : 10, a.Count > 5 ? int.Parse(a[5]) : 40);
                 return true;
+            case ("stage", >= 4):
+                StageProbe.Run(probe, new Vector2(float.Parse(a[0]), float.Parse(a[1])), a[2], a[3], a.Count > 4 ? int.Parse(a[4]) : 30,
+                    a.Count > 5 ? int.Parse(a[5]) : 1000);
+                return true;
             case ("anim", >= 1): AnimationProbe.Run(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 30, a.Count > 2 ? a[2] : null); return true;
             case ("assault", >= 1): Assault(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("pace", >= 3): Pace(probe, a[0], float.Parse(a[1]), float.Parse(a[2]), a.Count > 3 ? int.Parse(a[3]) : 10); return true;
@@ -1891,6 +1895,7 @@ static class SaveProbe
               watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
               medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
               turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
+              stage <x> <z> <faction:template> <faction:template> [rounds] [interval]  two squads spawned there; each: size, KO, slaves, carried, centre
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
