@@ -62,13 +62,20 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
-    /// Loads the enabled code mods and runs their initialization; on the boot worker.
+    /// Loads the enabled code mods and runs their initialization; on the boot worker. Mods whose code the data phase loaded already
+    /// (<see cref="ModDataPhase"/>) are initialized from there.
     /// </summary>
     internal void StartMods(Data.GameDatabase db, PopulationData data)
     {
         // The world's body options were made from the config before this, so settings taken in from a mod reach them here.
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
+
+        if (host.DataPhase?.Mods is { } prepared)
+        {
+            StartPrepared(prepared, host.DataPhase.Enabled, db, data);
+            return;
+        }
 
         var (enabled, disabled) = ModHost.CodeMods(host.Install);
         BuiltInMods.SkipCovered(enabled, disabled);
@@ -77,8 +84,28 @@ sealed class GameMods(GameHost host)
         Mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => host.Session?.World,
             id => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
 
-        // A value the mod sets itself (ModSetting.Set, Reset) is kept as the page's are; the page's own change is kept twice, the same value.
-        foreach (var group in Mods.Settings) group.Changed += host.Config.KeepModSetting;
+        KeepModSettings(Mods);
+    }
+
+    /// <summary>
+    /// Initializes the mods the data phase loaded (<see cref="ModHost.Start"/>).
+    /// </summary>
+    void StartPrepared(ModHost prepared, IReadOnlyList<Content.ModInfo> enabled, Data.GameDatabase db, PopulationData data)
+    {
+        Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
+        prepared.Start(new ModHostOptions(enabled, db, data, () => host.Session?.World,
+            id => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion()));
+        Mods = prepared;
+        KeepModSettings(prepared);
+    }
+
+    /// <summary>
+    /// Keeps a value a mod sets itself (ModSetting.Set, Reset) as the page's are, on either start path; the page's own change is kept twice, the
+    /// same value.
+    /// </summary>
+    void KeepModSettings(ModHost mods)
+    {
+        foreach (var group in mods.Settings) group.Changed += host.Config.KeepModSetting;
     }
 
     /// <summary>
@@ -127,7 +154,7 @@ sealed class GameMods(GameHost host)
     /// This build's nearest game tag (<c>v*</c>, Meitou.Game.csproj) as a version for <c>gameVersion</c> ranges; null for a build without one (no git
     /// history), which passes every range.
     /// </summary>
-    static Content.CodeModVersion? RunningVersion() =>
+    internal static Content.CodeModVersion? RunningVersion() =>
         Content.CodeModVersion.TryParse(BuildVersion.Tag.TrimStart('v'), out var version) ? version : null;
 
     /// <summary>

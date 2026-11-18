@@ -44,16 +44,17 @@ static partial class WorldFrame
 
     /// <summary>
     /// The region round the options' place (<c>--at</c>, <c>--zone</c> or <c>--town</c>; the origin without one): its heights, the game data and its
-    /// objects. Null when no town matches.
+    /// objects. The game data is <paramref name="preloaded"/>, else read by <paramref name="loadData"/> (the game's, with the code mods' data phase),
+    /// else read here. Null when no town matches.
     /// </summary>
-    public static WorldScene? Load(GameInstall install, WorldOptions o, GameDatabase? preloaded = null)
+    public static WorldScene? Load(GameInstall install, WorldOptions o, GameDatabase? preloaded = null, Func<GameDatabase>? loadData = null)
     {
         var watch = Stopwatch.StartNew();
         var map = TerrainHeightmap.Open(install);
         GameDatabase? db = null;
         if (o.Town is not null || !o.NoTextures || !o.NoObjects)
         {
-            db = preloaded ?? GameDatabase.Load(LoadOrder.FromInstall(install));
+            db = preloaded ?? loadData?.Invoke() ?? GameDatabase.Load(LoadOrder.FromInstall(install));
             Console.WriteLine($"game data {db.Records.Count} records ({watch.ElapsedMilliseconds} ms)");
             LogIssues("game data", db.Issues);
             Title.DataLoadErrors.Log(db, install);
