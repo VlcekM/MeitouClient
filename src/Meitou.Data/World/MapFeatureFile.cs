@@ -103,8 +103,9 @@ public sealed class MapFeatureFile
     /// <summary>
     /// Whether a placement repeats the last one the game kept in the zone: it skips one whose position equals exactly (<c>Vector3 ==</c>) that of
     /// the last entry of the zone's feature list, before it looks the record up (<c>FUN_14039a820</c>, <b>Verified</b> by decompile). The game's
-    /// list holds only the placements lying in their zone (one in another zone is logged as in the wrong zone and left out), so the last placement
-    /// read in the zone stands in for it here; the reader cannot tell a record the data lacks, which the game also leaves out.
+    /// list holds only the placements lying in their zone (one in another zone is logged as in the wrong zone and left out; Meitou keeps it, an
+    /// engine choice, docs/formats/zones.md), so the last placement read in the zone that lies in it stands in for it here; the reader cannot tell a
+    /// record the data lacks, which the game also leaves out.
     /// </summary>
     static bool Repeats(MapFeature? last, Vector3 position) => last is not null && last.Position == position;
 }

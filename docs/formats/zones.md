@@ -221,7 +221,7 @@ places the Adventurers Guild, its sign and banners. A file the reader refuses is
 Overhaul's `interiors.level` has every zero byte turned to a space; the game plays with it enabled). **Observed** (that install, 1174
 mods enabled): 54 473 placed buildings in 1222 zones against 11 714 in 913 without the mod layers.
 
-### `data/newland/land/features.dat` (`MapFeatureFile`) - layout/example
+### `data/newland/land/features.dat` (`MapFeatureFile`) — layout/example
 
 ```
 char[4] magic        "MF01"
@@ -238,10 +238,13 @@ block:  int32 count, count ×
 other than 4096: no map features at all), then each zone's block when the zone loads, by seeking to its offset (0: none). The size is never
 read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored. Each placement read is compared with the last entry of
 the zone's feature list before its record is looked up: one at exactly the same position (`Vector3 ==`) is skipped. A record the data lacks is logged
-("not found") and a placement whose position lies in another zone is logged ("Map feature in wrong zone"); neither enters the list. **Verified**
-(decompiled, `FUN_14039a820`); the base `features.dat` holds 2 such repeats (a First Civ_WreckBit06 in zone 52.31 and a Barge WreckPiece02 in 46.33,
-each the same record, scale and rotation as the placement before it), so 1819 of its 1821 placements are kept. Meitou (`MapFeatureFile.Read`) skips
-a placement at the position of the last one it read in the zone that lies in its zone.
+("not found") and a placement whose position lies in another zone is logged ("Map feature in wrong zone") after its object is made; neither enters the
+zone's list. **Observed** (a count over the install's base `features.dat` with Meitou's reader, the base data's records): 2 placements repeat the one
+before them exactly (a First Civ_WreckBit06 in zone 52.31 and a Barge WreckPiece02 in 46.33, each the same record, scale and rotation); of the
+other 1819, 5 lie outside their zone (FloodedForest_Processor04, BlockyCubeCliff01, First Civ_Full-Wreck and 2 naming records the data lacks) and
+11 name records the data lacks, so the game's zone lists hold 1805. Meitou (`MapFeatureFile.Read`) skips a placement at the position of the last
+one it read in the zone that lies in its zone, keeps the 1819, and draws a placement lying outside its zone (engine choice; whether the game shows
+one is not traced: the object it makes has no scene node yet, `FUN_140399cd0`).
 
 ## Town membership
 
