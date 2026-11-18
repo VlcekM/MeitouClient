@@ -610,6 +610,7 @@ Meitou (`Saving/SlaveSave`) reads and writes `slavestate`, `ssct` and the `shave
 in the world, its faction is the owner when the save has no owner key, and its squad is the master (`CharacterCold.SlaveMaster`, `CaptiveSystem.RestoreSlavers`, every 20 ticks);
 a squad handle is not mapped. The original writes the owner handle (character `+0x328`) under `slaver` for every character (**Verified**, `FUN_1406280a0`). Meitou writes the
 leader of the squad the slave obeys there (`SaveCapture`); a slave with no known master keeps the read keys until it is freed or handed to another master, then the null handle.
+A state-1 NPC slave a DA 28 split took job 187 from (`CharacterCold.ObedienceLost`, [Obedient Slave](../game/ai-tasks.md#slave-work-shout-and-capture)) is saved with Meitou's `meitou slave disobeys` bool, written only while set.
 A state-1 slave with Meitou's owner key and a null `slaver` (a Meitou save that wrote no owner) takes as its master the nearest squad of its owner faction whose
 template lists the slave's squad template under `slaves` (engine choice, `CaptiveSystem.RestoreLostSlaver`), and is not made escaped for want of an owner meanwhile. `CrimeSave` reads and writes `tn` (`CharacterCold.Freed`, written always).
 

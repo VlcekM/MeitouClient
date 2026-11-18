@@ -688,7 +688,9 @@ Meitou: [simulation, captives](../simulation.md#captives).
   - **Added and removed** (**Verified**, `FUN_1405a4940` slave state setter -> `FUN_14032e0d0`): when the slave state *changes* (the setter does nothing for the same state), a change **to 1**
     destroys the one-shot orders and the perma-jobs (`FUN_140507530`, `FUN_140507280`) and adds job 187 toward the character's owner handle (character `+0x328`, `FUN_1405086d0` with the
     permanent flag, which turns the jobs switch on); a change **to any other state** (0, 2 or 3: the setter passes "new state is 1") removes the first job of type 187 and stops, or, when the list holds none, destroys the orders and perma-jobs.
-    So freeing, an escape (state 2) or bail ends the obedience at once. `Character::setChainedMode` (`FUN_14032e590`, which sets state 1 first, writes the owner handle from its target and the owner's
+    So freeing, an escape (state 2) or bail ends the obedience at once. DA 28's split also destroys the perma-jobs (`FUN_1405ce4e0` -> `FUN_140507280`, **Verified**): the slave keeps state 1
+    and its owner but no longer holds the job, so it plans with its own lists ([dialogue](dialogue.md) DA 28; Meitou: `CharacterCold.ObedienceLost`, which `AiSystem.ObeyedRoles` and the
+    protect desire read, cleared by every state change and reset). `Character::setChainedMode` (`FUN_14032e590`, which sets state 1 first, writes the owner handle from its target and the owner's
     faction, resets the orders object, adds the job and then puts the shackles on, **Verified**) and processing (182, `FUN_14035aa20`) do the same reset themselves, whatever the old state. The job is
     saved with the list (`pjob<i>` 187, `pjobT<i>` the owner handle).
   - **Scored** (**Verified**, `FUN_14050e5b0`, both job passes, the urgent one at step 3 and the full one at step 5; the jobs switch gates it like any job, the list of ignoring types does not hold 187):

@@ -35,10 +35,12 @@ public static class ObedientSlave
     /// <summary>
     /// The slave state changed to <paramref name="state"/> (<c>FUN_1405a4940</c>, only when it differs): becoming a slave destroys the orders and the
     /// perma-jobs and adds the job toward the owner; leaving slavery removes the job only, or, with none in the list, destroys the orders and the
-    /// perma-jobs (<c>FUN_14032e0d0</c>, <b>Verified</b>). A player character's list only.
+    /// perma-jobs (<c>FUN_14032e0d0</c>, <b>Verified</b>). A player character's list only; an NPC slave obeys again
+    /// (<see cref="CharacterCold.ObedienceLost"/>).
     /// </summary>
     internal static void StateChanged(World world, CharacterCold cold, byte state)
     {
+        cold.ObedienceLost = false;
         if (!cold.IsPlayer) return;
         if (state == 1)
         {
@@ -60,10 +62,11 @@ public static class ObedientSlave
     /// <summary>
     /// The owner's orders object reset that processing (<c>FUN_14035aa20</c>), chaining (<c>FUN_14032e590</c>) and the state setter share: the
     /// one-shot orders and the perma-jobs are destroyed and the job is added toward the owner (a character the master squad's leader stands in for).
-    /// A player character's only.
+    /// A player character's only; an NPC slave obeys again (<see cref="CharacterCold.ObedienceLost"/>).
     /// </summary>
     internal static void Reset(World world, CharacterCold cold)
     {
+        cold.ObedienceLost = false;
         if (!cold.IsPlayer) return;
         Destroy(world, cold);
         var owner = OwnerOf(world, cold);
@@ -72,20 +75,37 @@ public static class ObedientSlave
     }
 
     /// <summary>
+    /// DA 28's split (<c>FUN_1405ce4e0</c>, <b>Verified</b>): the perma-jobs alone are destroyed (<c>FUN_140507280</c>), job 187 with them, so a
+    /// slave keeps its state and owner but no longer obeys (an NPC's <see cref="CharacterCold.ObedienceLost"/>).
+    /// </summary>
+    internal static void Disobey(World world, CharacterCold cold)
+    {
+        DestroyJobs(world, cold, SlotOf(world, cold));
+        if (cold.SlaveState == 1) cold.ObedienceLost = true;
+    }
+
+    /// <summary>
     /// Destroys the character's perma-jobs and order queue (<c>FUN_140507280</c>, <c>FUN_140507530</c>).
     /// </summary>
     static void Destroy(World world, CharacterCold cold)
     {
         int slot = SlotOf(world, cold);
+        DestroyJobs(world, cold, slot);
+        cold.OrderQueue.Clear();
+        if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo)
+            TaskStart.Stand(world.Characters, slot);
+    }
+
+    /// <summary>
+    /// Destroys the character's perma-jobs (<c>FUN_140507280</c>); <paramref name="slot"/> -1: it is not in the table.
+    /// </summary>
+    static void DestroyJobs(World world, CharacterCold cold, int slot)
+    {
         for (int i = cold.Jobs.Count - 1; i >= 0; i--)
         {
             if (slot >= 0) ProductionSystem.RemoveJob(world, slot, i);
             else cold.Jobs.RemoveAt(i);
         }
-
-        cold.OrderQueue.Clear();
-        if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo)
-            TaskStart.Stand(world.Characters, slot);
     }
 
     /// <summary>

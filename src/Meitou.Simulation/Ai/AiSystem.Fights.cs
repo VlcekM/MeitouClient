@@ -68,12 +68,12 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The protect goals' desire: 0 for an idle character (passive or sneaking, or a slave holding a master's squad), else the finder's first ally
-    /// value x0.5 while carrying (<see cref="FightDesire"/>).
+    /// The protect goals' desire: 0 for an idle character (passive or sneaking, or a slave holding job 187: a master's squad, its job not split
+    /// off), else the finder's first ally value x0.5 while carrying (<see cref="FightDesire"/>).
     /// </summary>
     float ProtectGoalDesire(World world, int slot, TaskType type, Squad squad, CharacterCold cold, bool idle)
     {
-        if (idle || cold.SlaveState == 1 && cold.SlaveMaster >= 0) return 0;
+        if (idle || cold is { SlaveState: 1, SlaveMaster: >= 0, ObedienceLost: false }) return 0;
 
         return ProtectScan(world, slot, type, squad).First * (cold.Carrying.IsNone ? 1 : 0.5f);
     }

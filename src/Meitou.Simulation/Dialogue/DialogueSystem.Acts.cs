@@ -286,8 +286,10 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// DA_SEPARATE_TO_MY_OWN_SQUAD (28, <c>FUN_1405ce4e0</c>): the speaker (the target when the speaker is of the player's faction) leaves for a new
-    /// squad of its faction made where it stands, which takes a copy of the old squad's memory; nothing when it is alone already. Engine: the new NPC
-    /// squad keeps the old one's template and home radius, no town, and the AI makes it a fresh mind.
+    /// squad of its faction made where it stands, which takes a copy of the old squad's memory; nothing when it is alone already. The split first
+    /// destroys its perma-jobs, so a slave stops obeying its master (job 187, <see cref="Kidnap.ObedientSlave.Disobey"/>): a freed prisoner's "I'm
+    /// free..." line leaves it to its own lists. The new squad is made from the old one's template (<c>FUN_1407f4420</c>, <b>Verified</b>). Engine: the
+    /// new NPC squad keeps the old one's home radius, no town, and the AI makes it a fresh mind.
     /// </summary>
     void Separate(World world, CharacterId who)
     {
@@ -297,6 +299,7 @@ public sealed partial class DialogueSystem
         {
             return;
         }
+        Kidnap.ObedientSlave.Disobey(world, c);
         var at = table.Next[s].Position;
         Squad squad;
         if (c.IsPlayer)

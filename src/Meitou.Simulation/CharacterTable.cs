@@ -1161,6 +1161,13 @@ public sealed class CharacterCold
     public int SlaveMaster { get; set; } = -1;
 
     /// <summary>
+    /// An NPC slave's job 187 is gone though it stays a slave of its master: DA 28 split it into a squad of its own, whose perma-job wipe takes the
+    /// job (<c>FUN_1405ce4e0</c> -> <c>FUN_140507280</c>), so it plans with its own lists, not the master's Slave list (<see cref="Ai.AiSystem.ObeyedRoles"/>).
+    /// Cleared by every slave state change and reset, which add the job again. Saved as <c>meitou slave disobeys</c> (<see cref="Saving.SlaveSave"/>); not hashed.
+    /// </summary>
+    public bool ObedienceLost { get; set; }
+
+    /// <summary>
     /// Its head is shaven (<c>CharacterHuman::isHeadShaven</c>, Character vslot 124 <c>0x3e0</c>: the appearance's <c>shaved</c>, <b>Verified</b>;
     /// false in every other class). Processing a slave shaves it and an ex-slave's hair grows back once it is free
     /// (<see cref="Kidnap.CaptiveSystem"/>, <see cref="Locks.FixtureRegistry.LayLow"/>) or the in-play editor opens on it

@@ -9,7 +9,8 @@ namespace Meitou.Simulation.Saving;
 /// (0 free, 1 slave, 2 escaped, 3 ex-slave; <c>FUN_140626580</c> writes it with <c>personality</c>, docs/formats/save.md),
 /// the original's <c>ssct</c> float (<see cref="CharacterCold.SlaveSince"/>, written always), the original's <c>slaver</c> handle
 /// (the owner character) and Meitou's <c>meitou slave owner</c> (the owner FACTION's string id), and the original's <c>shaved</c> bool
-/// (<see cref="CharacterCold.Shaved"/>, written always). The owner key is written only while set and removed otherwise.
+/// (<see cref="CharacterCold.Shaved"/>, written always), and Meitou's <c>meitou slave disobeys</c> bool (<see cref="CharacterCold.ObedienceLost"/>, the
+/// original's missing job 187). The owner and disobeys keys are written only while set and removed otherwise.
 /// The <c>slaver</c> keys name the leader of the squad the slave obeys once the capture has given every character a handle
 /// (<c>SaveCapture</c>); without a known master they are left as they were read until the slave is freed or handed to another master,
 /// then written as the null handle.
@@ -19,10 +20,11 @@ public static class SlaveSave
     /// <summary>
     /// The GAMESTATE_CHARACTER keys of the slave state (see the class remarks).
     /// </summary>
-    public const string StateKey = "slavestate", SinceKey = "ssct", OwnerKey = "meitou slave owner", SlaverKey = "slaver", ShavedKey = "shaved";
+    public const string StateKey = "slavestate", SinceKey = "ssct", OwnerKey = "meitou slave owner", SlaverKey = "slaver", ShavedKey = "shaved",
+        DisobeysKey = "meitou slave disobeys";
 
     /// <summary>
-    /// Reads the slave state, its start, the owner faction and character and the shaved flag (nothing when there is no record).
+    /// Reads the slave state, its start, the owner faction and character, the shaved flag and a lost obedience (nothing when there is no record).
     /// </summary>
     public static void Read(FcsRecord? state, CharacterCold cold, PopulationData data)
     {
@@ -36,6 +38,7 @@ public static class SlaveSave
             ? data.FactionIndex(owner)
             : -1;
         cold.Shaved = state.Bools.GetValueOrDefault(ShavedKey);
+        cold.ObedienceLost = cold.SlaveState == 1 && state.Bools.GetValueOrDefault(DisobeysKey);
 
         // The owner character, found once it is in the world; a handle of another class (a squad) is not mapped.
         if (cold.SlaveState == 0 || cold.Save is not { } link) return;
@@ -47,7 +50,8 @@ public static class SlaveSave
     }
 
     /// <summary>
-    /// Writes the slave state, its start and the shaved flag; the owner faction only while set, the <c>slaver</c> handle as null once stale.
+    /// Writes the slave state, its start and the shaved flag; the owner faction and a lost obedience only while set, the <c>slaver</c> handle as null
+    /// once stale.
     /// </summary>
     public static void Write(FcsRecord state, CharacterCold cold, PopulationData data)
     {
@@ -58,6 +62,9 @@ public static class SlaveSave
             state.Strings[OwnerKey] = data.Factions[cold.SlaveOwner].Id;
         else
             state.Strings.Remove(OwnerKey);
+
+        if (cold.ObedienceLost) state.Bools[DisobeysKey] = true;
+        else state.Bools.Remove(DisobeysKey);
 
         if (cold.Save is { SlaverStale: true }) Hand.Null.Write(state, SlaverKey);
     }
