@@ -840,13 +840,14 @@ public sealed class CharacterAppearance
 
     /// <summary>
     /// Places the weapons and crossbows. A fight draws the first WEAPON of the hip or of the back, by the arms (CharacterAssembly.MakeFighter,
-    /// Fighter.Weapon): each gets its sheathed and drawn meshes, the renderer shows one set.
+    /// Fighter.Weapon): each gets its sheathed and drawn meshes, the renderer shows one set. The back one may hang at <c>back2</c> (row 1 of the
+    /// section) with no weapon above it (#967: drawn invisible).
     /// </summary>
     static void AddWeapons(
         CharacterAppearance result, bool female, List<(GameRecord Weapon, string Point, GameRecord? Model)> weapons, CharacterOptions options)
     {
         int hipInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Weapon && w.Point == "hip");
-        int backInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Weapon && w.Point == "back");
+        int backInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Weapon && w.Point is "back" or "back2");
         int bowInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Crossbow);
         for (int i = 0; i < weapons.Count; i++)
             if (weapons[i].Weapon.Type == FcsRecordType.Crossbow)
