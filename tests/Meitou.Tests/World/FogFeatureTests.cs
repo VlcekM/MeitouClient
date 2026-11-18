@@ -73,7 +73,10 @@ public class FogFeatureTests
     {
         var install = InstallData.Install;
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
-        var list = FogFeatures.Load(install!);
+        // The install's own file, not the one FogFeatures.Load resolves: an enabled mod may replace it (its volumes are not the base game's).
+        string own = Path.Combine(install!.DataDirectory, FogFeatures.RelativePath);
+        var list = FogFeatures.Read(File.ReadAllBytes(own));
+
         // The whole file parses (the reader throws on a short file or an unknown type): 28 volumes, 25 blocks, 2 beams, 1 sphere.
         Assert.Equal(28, list.Count);
         Assert.Equal(25, list.Count(f => f.Type == FogFeatureType.Block));
