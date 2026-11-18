@@ -3,6 +3,38 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.22.0
+
+- Graphics: lighting checked against a path-traced reference; traced lamps and character light at a fraction of the cost, faster loads, quality tiers and measured impact labels; more Metal improvements
+- Near tree fade (Meitou, on): large trees between the camera and its pivot dither out, keeping 20 % of the tree
+- Official ports of RE_Kenshi plugins: an enabled ported mod runs Meitou's port in its place; Proving Grounds is the first
+- Fixes: Swamp turtle attacks (on): animals with a drawn weapon butt and bite, and swamp turtles fight back (#942); Swamp Turtle FIX counts as built in
+- Fixes: Rain in open buildings (on): rain, dust and ash are cut inside buildings and in front of one with its roof hidden (#945)
+- Fixes: holes and needles in the ground are filled and lowered; prisoners hold still in the pole or cage pose (#917)
+- Characters: the original's head turning toward what a task looks at, a Fixes option to turn the head back, optional gear sway for hanging weapons and backpacks
+- Build mode keys (rotate, height, tilt, undo, apply) are rebindable in controls.cfg (#970)
+- Slavery: enslaved player characters obey again (#961); freed prisoners flee or follow instead of caging themselves, and re-chained slaves obey (#957); slaver caravans deliver as a squad (#904); roaming squads' captives follow their slaver; Garret's slave follows its master (#938)
+- Cannibal raiders take a captive to their home town (#890); raids survive a reload of an imported save (#952)
+- A friend's crime no longer starts runaway wars with allies (#948); a knocked-out culprit's crime runs out (#900)
+- Town patrollers stop at locked gates: Mourn's guards no longer open the lab gate (#885); guards reach the Reaver on its cliff (#923)
+- Barmen and guards turn to watch who they sense, so a barman greets a player behind him (#930); characters in a hidden interior say no event lines (#930)
+- Benches: Output full once a finished item can't stack, unused sections show '-' and take no items (#951); Repeat Queue works (#950)
+- Operators fetch inputs, haul and output from the original's range (#963, #965), take their tool on arrival (#969); a switched-off machine draws no power (#962)
+- Town workers and slaves hold their mine's or farm's tool (#920); far NPC farms grow as if watered (#918)
+- A medic playing dead treats itself (#870); a character carrying someone keeps working machines (#915)
+- Animals of a bar squad no longer sit on stools (#968)
+- Town buildings nobody moves into stand empty, as Black Scratch's Y-House (#922)
+- Inventory: a turned Large Backpack goes on the bag slot (#877); a back weapon in the lower back row shows when drawn (#967); limb slots refuse a wrong-side prosthetic (#954)
+- Item pick-ups reach items on furniture only from their own floor (#901)
+- Blood splashes on raised or sloped floors are no longer cut off (#972)
+- Fixed broken save loading and two simulation crashes; a failing code mod no longer blocks new games (#937)
+- Title menu stays clickable (#924); Import's advanced options show in the Meitou UI (#960); AnimeRace Face+ subraces get their sliders (#966)
+- Camera: leaving the free camera resets the lens to 50 degrees; cinema Space plays only in the free camera
+- Name tags clear taller characters' heads; brighter character editor lighting
+- Action and dialogue logs are written off the tick and off by default
+- Fixed background fps on macOS
+- Code mods: floating task bar over a character
+
 ## v0.21.0
 
 - AI plans run step by step as in the original: a running step ends by its own finished test and conditions, walks re-plan when they end, and orders and jobs leave by the original's rules (a move order ends within 12, a failed walk drops only that order)
