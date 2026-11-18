@@ -5,7 +5,8 @@ namespace Meitou.Data.Ogre;
 /// <summary>
 /// Finds art files the way the viewer needs them: an existing absolute path; else the bare file name through the <c>resources.cfg</c> and enabled mod
 /// folders (Ogre's lookup, not recursive; the game cuts FCS's <c>.\data\...</c> paths to it), then the path relative to the install, then the bare
-/// name anywhere under data/ (for files outside those folders).
+/// name anywhere under data/ (for files outside those folders). The file found is then an enabled mod's rebind of it when one names it
+/// (<see cref="ReKenshiRebinds"/>, docs/formats/rekenshi.md "Data entries"); a hidden one is not found.
 /// </summary>
 public sealed class AssetLocator
 {
@@ -21,6 +22,10 @@ public sealed class AssetLocator
     /// The material library of <see cref="Configured"/>, parsed on first use.
     /// </summary>
     readonly Lazy<OgreMaterialLibrary> _materials;
+    /// <summary>
+    /// The enabled mods' file rebinds, read on first use.
+    /// </summary>
+    readonly Lazy<ReKenshiRebinds> _rebinds;
 
     /// <summary>
     /// The names found so far: a bare name's lookup tries two paths on disk before the resource folders, and a town's characters asked for the same
@@ -37,6 +42,7 @@ public sealed class AssetLocator
         Configured = GameResources.For(install);
         _everything = new(() => OgreScriptResources.FromDirectory(install.DataDirectory));
         _materials = new(() => OgreMaterialLibrary.Load(Configured));
+        _rebinds = new(() => ReKenshiRebinds.For(install));
     }
 
     /// <summary>
@@ -61,9 +67,20 @@ public sealed class AssetLocator
             return known.Path;
         }
 
-        var path = Search(name, out how);
+        var path = Rebound(Search(name, out how));
         if (path is not null) _found.TryAdd(name, (path, how));
         return path;
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> (a file found), or the file an enabled mod rebinds it to; null for none found or a rebind to no file (<c>HIDE</c>).
+    /// </summary>
+    string? Rebound(string? path)
+    {
+        if (path is null) return null;
+
+        string target = _rebinds.Value.Redirect(path);
+        return ReferenceEquals(target, path) || File.Exists(target) ? target : null;
     }
 
     /// <summary>
@@ -135,7 +152,7 @@ public sealed class AssetLocator
     public string? FindInGroup(string name, string group)
     {
         string bare = Path.GetFileName(name.Trim().Replace('\\', '/'));
-        return Configured.Contains(bare, group) ? Configured.Find(bare, group) : null;
+        return Configured.Contains(bare, group) ? Rebound(Configured.Find(bare, group)) : null;
     }
 
     /// <summary>
@@ -144,7 +161,10 @@ public sealed class AssetLocator
     public string Relative(string path) => Path.GetRelativePath(_install.Root, path);
 
     /// <summary>
-    /// A character mesh the way Kenshi finds it: the bare file name through resources.cfg first, else <see cref="Find(string)"/> on the FCS path.
+    /// A character mesh the way Kenshi finds it: the bare file name through resources.cfg first, else <see cref="Find(string)"/> on the FCS path;
+    /// either the file an enabled mod rebinds it to, if any.
     /// </summary>
-    public string? FindMesh(string fcsPath) => Configured.Find(Path.GetFileName(fcsPath.Replace('\\', '/'))) ?? Find(fcsPath);
+    public string? FindMesh(string fcsPath) => Configured.Find(Path.GetFileName(fcsPath.Replace('\\', '/'))) is { } configured
+        ? Rebound(configured)
+        : Find(fcsPath);
 }

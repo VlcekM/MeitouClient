@@ -84,9 +84,9 @@ public static class CollisionPaths
 
     /// <summary>
     /// The collision file a record's path names, as docs/formats/collision.md "File lookup" describes the game opening a building part's
-    /// (<c>xml collision</c>, <c>destroyed collision</c>): by its bare name, the XML beside a cooked <c>.bin</c> of that name first, else the XML of
-    /// that name (the last enabled mod holding it wins); a file outside the resource folders by <see cref="Resolve"/>. Every file the collision
-    /// cache reads goes this way. Null when none is found.
+    /// (<c>xml collision</c>, <c>destroyed collision</c>): by its bare name, the XML beside a cooked <c>.bin</c> of that name first, else the XML
+    /// of that name (the last enabled mod holding it wins, or an enabled mod's rebind of it); a file outside the resource folders by
+    /// <see cref="Resolve"/>. Every file the collision cache reads goes this way. Null when none is found.
     /// </summary>
     public static string? ResolveCollision(GameInstall install, string recordPath)
     {
@@ -95,9 +95,19 @@ public static class CollisionPaths
 
         string name = Path.GetFileName(recordPath.Replace('\\', '/'));
         if (CookedSource(resources, name) is { } cooked) return cooked;
-        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return byName;
+        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return Rebound(install, byName);
 
         return Resolve(install, recordPath);
+    }
+
+    /// <summary>
+    /// The XML the game opens through Ogre when no cooked file of its name exists, or the file an enabled mod rebinds it to
+    /// (<see cref="ReKenshiRebinds"/>); null for a rebind to no file (<c>HIDE</c>).
+    /// </summary>
+    static string? Rebound(GameInstall install, string xml)
+    {
+        string target = ReKenshiRebinds.For(install).Redirect(xml);
+        return ReferenceEquals(target, xml) || File.Exists(target) ? target : null;
     }
 
     /// <summary>

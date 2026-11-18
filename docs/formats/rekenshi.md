@@ -62,8 +62,12 @@ file it names: relative to the install root, `\` and `/` alike, a leading `./` a
 of two mods' keys that spell one file differently the later wins, where RE_Kenshi honours only the spelling the game opens. A target's
 `\` is a separator on every system. A file that is not UTF-8 is read in the game's code page (RE_Kenshi hands its bytes to the game's
 file calls), and a target that is no path loses only that rebind. A rebind applies to the map files: the heightmap, `blendinfo.dat` and
-`navtiles/seeds.def` (the files the game opens by a fixed path, [overview](overview.md)), the colour tiles and flow map, and every file
-found through a resource group (`GameResources.Find`); rebinds of other files are not applied. The navigation and foliage caches stamp
+`navtiles/seeds.def` (the files the game opens by a fixed path, [overview](overview.md)), the colour tiles and flow map, every file
+found through a resource group (`GameResources.Find`), and every art file found by name through the same resource folders (`AssetLocator`:
+meshes, skeletons, textures; a hidden one is not found), and a collision XML the game opens by name because no cooked `.bin` of its name
+exists ([collision](collision.md#file-lookup)). Rebinds of other files are not applied: the data and level files, sound banks (`SoundBanks`
+adds them), the script files parsed at start (materials, particle systems, interface layouts), and a cooked collision file, where Meitou
+reads the XML beside it, so a rebind of the cooked file has nothing to redirect. The navigation and foliage caches stamp
 the file read. **Observed:** Heightmap Fix (workshop 3426253797) rebinds `data\newland/land\fullmap.tif` to
 `$(modroot "Heightmap Fix")/fullmap.tif`; enabled, Meitou reads that file (the ground at x -97830, z 85590 stands at about 504 instead of
 2463). `SoundBanks` load before the game's banks ([audio](../audio.md#mod-sound-banks)); the launcher notes both entries.
