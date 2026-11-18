@@ -342,15 +342,15 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     /// An <b>engine choice</b>: a character whose loadout rolled a crossbow gets one item of the crossbow's <c>ammo</c> (one stack of bolts: 10 to 40
     /// shots by the record's <c>charges</c>) unless its record's list already gave it some. Only 3 of the 40 base-game CHARACTER records with
     /// crossbows list bolts; how the original equips NPC crossbowmen with ammunition is <b>Unknown</b> (docs/simulation.md "Combat", ranged).
-    /// Meitou: a crossbow whose <c>ammo</c> is empty gives the first of its <c>meitou ammo</c> list, and any kind of that list the character already
-    /// holds counts as some (docs/modding.md "Ammunition").
+    /// Meitou: a crossbow whose <c>ammo</c> is empty gives the first of its <c>meitou ammo</c> list when that is an ITEM, and any kind of that list
+    /// the character already holds counts as some (docs/modding.md "Ammunition").
     /// </summary>
     void AddAmmo(Inventory inventory, GameRecord crossbow)
     {
         var refs = crossbow.GetReferences("ammo");
         var extra = crossbow.GetReferences(Data.Gameplay.Combat.CrossbowData.ExtraAmmoList);
         string ammo = refs.Count > 0 ? refs[0].TargetStringId
-            : extra.Count > 0 ? extra[0].TargetStringId
+            : extra.Count > 0 && Db.Find(extra[0].TargetStringId) is { Type: FcsRecordType.Item } ? extra[0].TargetStringId
             : "";
         if (ammo.Length == 0) return;
 

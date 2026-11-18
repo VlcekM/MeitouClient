@@ -98,6 +98,22 @@ public sealed class CombatDatabase
     public CrossbowData? Crossbow(string stringId) => _crossbowsById.GetValueOrDefault(stringId);
 
     /// <summary>
+    /// Every CROSSBOW of <paramref name="db"/> with its ammunition list resolved (<see cref="CrossbowData.WithAmmo"/>); each ammunition ITEM's Meitou
+    /// fields are read once, so a warning about one is logged once.
+    /// </summary>
+    static List<CrossbowData> ReadCrossbows(GameDatabase db)
+    {
+        var kinds = new Dictionary<string, AmmoData?>(StringComparer.Ordinal);
+        AmmoData? Kind(GameRecord item)
+        {
+            if (!kinds.TryGetValue(item.StringId, out var kind)) kinds[item.StringId] = kind = AmmoData.From(item);
+            return kind;
+        }
+
+        return [.. db.OfType(FcsRecordType.Crossbow).Select(r => CrossbowData.From(r).WithAmmo(r, db.Find, Kind))];
+    }
+
+    /// <summary>
     /// Reads every combat record of <paramref name="db"/> once and indexes the item kinds by string id.
     /// </summary>
     public static CombatDatabase From(GameDatabase db)
@@ -117,7 +133,7 @@ public sealed class CombatDatabase
             Manufacturers = manufacturers,
             WeaponMaterials = materials,
             Armours = armours,
-            Crossbows = [.. db.OfType(FcsRecordType.Crossbow).Select(r => CrossbowData.From(r).WithAmmo(r, id => AmmoData.From(db.Find(id))))],
+            Crossbows = ReadCrossbows(db),
             Guns = [.. db.OfType(FcsRecordType.GunData).Select(GunData.From)],
         };
 

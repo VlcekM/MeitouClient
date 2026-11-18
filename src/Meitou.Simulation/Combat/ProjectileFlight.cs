@@ -58,8 +58,8 @@ struct Projectile
     public string Mesh;
 
     /// <summary>
-    /// Meitou: the Meitou fields of the ammunition it was loaded from (bleed and armour penetration at the hit); null for a bolt as the original
-    /// fires it (every base-game crossbow, every turret).
+    /// Meitou: the ammunition it was loaded from when its crossbow has an ammunition list (its bleed multiplier at the hit; an entry without Meitou
+    /// fields multiplies by 1); null for every base-game crossbow's bolt and every turret's harpoon.
     /// </summary>
     public Meitou.Data.Gameplay.Combat.AmmoData? Ammo;
 

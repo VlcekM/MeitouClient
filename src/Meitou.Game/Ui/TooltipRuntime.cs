@@ -1325,7 +1325,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     {
         string Name(string id) => id.Length > 0 && player.RecordName?.Invoke(id) is { Length: > 0 } name ? name : "???";
 
-        if (bow.AmmoCount <= 1) return Name(bow.AmmoAt(0));
+        if (bow.AmmoCount <= 1) return Name(bow.AmmoCount == 0 ? "" : bow.AmmoAt(0));
 
         var names = new string[bow.AmmoCount];
         for (int k = 0; k < names.Length; k++) names[k] = Name(bow.AmmoAt(k));
