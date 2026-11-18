@@ -7,7 +7,7 @@ namespace Meitou.Game.Host.Input;
 public static class GameControls
 {
     /// <summary>
-    /// The original's action names that have a Meitou action; the build, editor and developer actions have none (the build map is fixed).
+    /// The original's action names that have a Meitou action; the editor and developer actions have none.
     /// </summary>
     static readonly Dictionary<string, InputAction> Actions = new(StringComparer.Ordinal)
     {
@@ -56,6 +56,14 @@ public static class GameControls
         ["quicksave"] = InputAction.QuickSave,
         ["quickload"] = InputAction.QuickLoad,
         ["toggle_build"] = InputAction.ToggleBuild,
+        ["build_rotate_left"] = InputAction.BuildRotateLeft,
+        ["build_rotate_right"] = InputAction.BuildRotateRight,
+        ["build_move_up"] = InputAction.BuildMoveUp,
+        ["build_move_down"] = InputAction.BuildMoveDown,
+        ["build_tilt_increase"] = InputAction.BuildTiltIncrease,
+        ["build_tilt_decrease"] = InputAction.BuildTiltDecrease,
+        ["build_undo"] = InputAction.BuildUndo,
+        ["build_apply"] = InputAction.BuildApply,
         ["focus_char"] = InputAction.FocusCharacter,
         ["select_0"] = InputAction.SelectMember1,
         ["select_1"] = InputAction.SelectMember1 + 1,

@@ -239,6 +239,38 @@ public enum InputAction
     /// </summary>
     ToggleBuild,
     /// <summary>
+    /// Build map: the game's <c>build_rotate_left</c> (default <c>,</c>), turns the held building left.
+    /// </summary>
+    BuildRotateLeft,
+    /// <summary>
+    /// Build map: the game's <c>build_rotate_right</c> (default <c>.</c>), turns the held building right.
+    /// </summary>
+    BuildRotateRight,
+    /// <summary>
+    /// Build map: the game's <c>build_move_up</c> (default <c>=</c>), raises the held building.
+    /// </summary>
+    BuildMoveUp,
+    /// <summary>
+    /// Build map: the game's <c>build_move_down</c> (default <c>-</c>), lowers the held building.
+    /// </summary>
+    BuildMoveDown,
+    /// <summary>
+    /// Build map: the game's <c>build_tilt_increase</c> (default <c>]</c> and NUM+), tilts the held building more to the slope.
+    /// </summary>
+    BuildTiltIncrease,
+    /// <summary>
+    /// Build map: the game's <c>build_tilt_decrease</c> (default <c>[</c> and NUM-), tilts the held building less.
+    /// </summary>
+    BuildTiltDecrease,
+    /// <summary>
+    /// Build map: the game's <c>build_undo</c> (event 0xb, default Backspace), drops the wall line being laid, else the last queued building.
+    /// </summary>
+    BuildUndo,
+    /// <summary>
+    /// Build map: the game's <c>build_apply</c> (event 0xc, default Space), queues the held building where it stands.
+    /// </summary>
+    BuildApply,
+    /// <summary>
     /// Orders panel hotkey <c>toggle_block</c> (events 0x17..0x21 run the panel button's own handler; default numpad 0).
     /// </summary>
     ToggleBlock,
@@ -378,7 +410,7 @@ public sealed class ActionState
 /// Maps actions to keys and mouse buttons: each action has any number of bindings and counts as held while any is down. The defaults are an engine
 /// choice except the time controls and <c>;</c> for the free camera, which are the game's (docs/game/ui-input.md: pause Space, speed_1..3 F2..F4) and
 /// the camera keys (arrows and WASD move, Q / E rotate, , and . tilt), and the game view's hotkeys (the windows, squad keys and the orders on the
-/// numpad), which are the game's too. The install's <c>controls.cfg</c> replaces the defaults of the actions it names
+/// numpad) and the build map, which are the game's too. The install's <c>controls.cfg</c> replaces the defaults of the actions it names
 /// (<see cref="UseGameControls"/>), and a config file overrides them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or
 /// <c>"Mouse:Middle"</c>.
 /// </summary>
@@ -433,15 +465,27 @@ public sealed class InputBindings
 
     /// <summary>
     /// Each action <c>controls.cfg</c> names takes its bindings there, as in the original (its loader clears an action's defaults at the
-    /// action's first line, docs/game/ui-input.md), plus Meitou's alias of the action while no other action has that key.
+    /// action's first line, docs/game/ui-input.md), plus Meitou's alias of the action while no action of its map has that key.
     /// </summary>
     void OverlayGameControls()
     {
         foreach (var (action, bindings) in _game) _map[action] = bindings;
 
         foreach (var (action, alias) in MeitouAliases)
-            if (_game.ContainsKey(action) && !_map.Values.Any(b => b.Contains(alias))) _map[action] = [.. _map[action], alias];
+            if (_game.ContainsKey(action) && !SameMap(action).Any(a => Get(a).Contains(alias))) _map[action] = [.. _map[action], alias];
     }
+
+    /// <summary>
+    /// The actions of <paramref name="action"/>'s key map: the build map's while building, else the general map's. The two maps are separate in
+    /// the original (docs/game/ui-input.md section 4), so a key can be in both.
+    /// </summary>
+    public static IEnumerable<InputAction> SameMap(InputAction action) =>
+        Enum.GetValues<InputAction>().Where(a => IsBuildMap(a) == IsBuildMap(action));
+
+    /// <summary>
+    /// Whether <paramref name="action"/> is one of the build map's (the game's <c>build_</c> actions, checked first in build mode).
+    /// </summary>
+    public static bool IsBuildMap(InputAction action) => action is >= InputAction.BuildRotateLeft and <= InputAction.BuildApply;
 
     /// <summary>
     /// The engine's defaults (the game's keys where it has them, docs/game/ui-input.md, Meitou's otherwise).
@@ -482,6 +526,15 @@ public sealed class InputBindings
         for (int i = 0; i < 10; i++) Set(InputAction.SelectMember1 + i, i < 9 ? Key.D1 + i : Key.D0);   // select_0..8 on 1..9, select_9 on 0
         Set(InputAction.StopMovement, Key.R);
         Set(InputAction.ToggleBuild, Key.B);
+        // The build map (docs/game/ui-input.md section 4): its own key map, so its keys may also be the general map's (, . [ ] Space).
+        Set(InputAction.BuildRotateLeft, Key.Comma);
+        Set(InputAction.BuildRotateRight, Key.Period);
+        Set(InputAction.BuildMoveUp, Key.Equal);
+        Set(InputAction.BuildMoveDown, Key.Minus);
+        Set(InputAction.BuildTiltIncrease, Key.RightBracket, Key.KeypadAdd);
+        Set(InputAction.BuildTiltDecrease, Key.LeftBracket, Key.KeypadSubtract);
+        Set(InputAction.BuildUndo, Key.Backspace);
+        Set(InputAction.BuildApply, Key.Space);
         // The orders on the numpad as in the game; Medic and Rescue keep Meitou's H and J besides, Jobs and Prospect are unbound in the game too.
         Set(InputAction.ToggleBlock, Key.Keypad0);
         Set(InputAction.ToggleHold, Key.Keypad1);

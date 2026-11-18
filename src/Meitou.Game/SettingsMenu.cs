@@ -1444,22 +1444,21 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// Binds <paramref name="action"/> to <paramref name="binding"/>, taking it from the actions that have it; a reserved key is refused with a
-    /// notice.
+    /// Binds <paramref name="action"/> to <paramref name="binding"/>, taking it from the actions of its key map that have it; a reserved key is
+    /// refused with a notice.
     /// </summary>
     void SetBinding(InputAction action, Binding binding)
     {
-        if (!binding.IsMouse
-            && binding.Key is Key.Escape or Key.F6 or Key.LeftAlt or Key.RightAlt or Key.LeftControl or Key.RightControl or Key.LeftShift
-                or Key.RightShift)
+        if (RefusedBinding(action, binding) is { } refusal)
         {
-            Notice = "That key is reserved. Choose another key, or Esc to cancel.";
+            Notice = refusal;
             return;
         }
 
         // Rotate item acts only over an inventory item, so it shares its control with whatever acts elsewhere (the camera's orbit by default).
+        // The build map is a key map of its own (docs/game/ui-input.md section 4): its keys are taken only from its actions, and the reverse.
         bool shared = action == InputAction.RotateItem;
-        var conflicts = Enum.GetValues<InputAction>()
+        var conflicts = InputBindings.SameMap(action)
             .Where(a => a != action && a != InputAction.RotateItem && !shared && Bindings.Get(a).Contains(binding))
             .ToArray();
 
@@ -1483,6 +1482,21 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = conflicts.Length == 0
             ? $"{ActionLabel(action)} bound to {binding}."
             : $"{ActionLabel(action)} bound to {binding}, taken from {string.Join(", ", conflicts.Select(ActionLabel))}.";
+    }
+
+    /// <summary>
+    /// Why <paramref name="binding"/> cannot go to <paramref name="action"/>, or null: the reserved keys, and a mouse button for a build map action
+    /// (build mode takes only keys there; its buttons place and clear).
+    /// </summary>
+    static string? RefusedBinding(InputAction action, Binding binding)
+    {
+        if (binding.IsMouse && InputBindings.IsBuildMap(action)) return "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel.";
+        if (binding.IsMouse) return null;
+
+        return binding.Key is Key.Escape or Key.F6 or Key.LeftAlt or Key.RightAlt or Key.LeftControl or Key.RightControl or Key.LeftShift
+            or Key.RightShift
+            ? "That key is reserved. Choose another key, or Esc to cancel."
+            : null;
     }
 
     /// <summary>

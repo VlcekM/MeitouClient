@@ -90,6 +90,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     readonly HashSet<Key> _buildHeld = [];
     /// <summary>
+    /// The build map's actions, in the order a key bound to several is looked up.
+    /// </summary>
+    static readonly InputAction[] BuildActions = [.. Enum.GetValues<InputAction>().Where(InputBindings.IsBuildMap)];
+    /// <summary>
     /// The timestamp of the last ghost update (<see cref="System.Diagnostics.Stopwatch"/>); 0 to start the frame time afresh.
     /// </summary>
     long _buildClock;
@@ -280,36 +284,41 @@ sealed class BuildMode(PlayerInterface player)
     #region Keys
 
     /// <summary>
-    /// A key press while build mode is on: the build map (docs/game/ui-input.md section 4, checked first in build mode) takes <c>,</c> <c>.</c>
-    /// rotate, <c>-</c> <c>=</c> move down / up, <c>[</c> <c>]</c> tilt, Backspace undo and Space apply. Returns true when the key was taken, so the
-    /// host does not also pause or turn the camera. NUM+ / NUM- are the original's second keys of both the move and the tilt pairs, and the later
-    /// registration (tilt) wins in its key map, so they tilt (<c>FUN_1403636c0</c>, <c>FUN_140362260</c>).
+    /// A key press while build mode is on: the build map (docs/game/ui-input.md section 4, checked first in build mode) takes the keys bound to its
+    /// actions (<see cref="InputBindings.IsBuildMap"/>; default <c>,</c> <c>.</c> rotate, <c>-</c> <c>=</c> move down / up, <c>[</c> <c>]</c> and
+    /// NUM- / NUM+ tilt, Backspace undo and Space apply). Returns true when the key was taken, so the host does not also pause or turn the camera.
     /// </summary>
     public bool BuildKey(Key key, bool shift)
     {
         player.UiInput++;
-        if (!Active) return false;
-        switch (key)
-        {
-            case EngineKey.Comma or EngineKey.Period or EngineKey.Minus or EngineKey.Equal
-                or EngineKey.LeftBracket or EngineKey.RightBracket or EngineKey.KeypadAdd or EngineKey.KeypadSubtract:
-                _buildHeld.Add(key);
-                return true;
-            case EngineKey.Backspace:
-                BuildUndo();
-                return true;
-            case EngineKey.Space:
-                QueueGhost();
-                return true;
-            default:
-                return false;
-        }
+        if (!Active || BuildAction(key) is not { } action) return false;
+
+        if (action == InputAction.BuildUndo) BuildUndo();
+        else if (action == InputAction.BuildApply) QueueGhost();
+        else _buildHeld.Add(key);
+        return true;
     }
 
     /// <summary>
-    /// Whether <paramref name="key"/> is a build map key that the cinema's numpad must not take (NUM+ / NUM- while building).
+    /// Whether <paramref name="key"/> is a build map key that the cinema's numpad must not take (NUM+ / NUM- by default, while building).
     /// </summary>
-    public bool OwnsBuildNumpad(Key key) => Active && key is EngineKey.KeypadAdd or EngineKey.KeypadSubtract;
+    public bool OwnsBuildNumpad(Key key) => Active && BuildAction(key) is not null;
+
+    /// <summary>
+    /// The build map action <paramref name="key"/> is bound to, or null.
+    /// </summary>
+    InputAction? BuildAction(Key key)
+    {
+        var binding = Binding.Of(key);
+        foreach (var action in BuildActions)
+            if (player.Session.Bindings.Get(action).Contains(binding)) return action;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a key bound to <paramref name="action"/> is held.
+    /// </summary>
+    bool BuildHeld(InputAction action) => player.Session.Bindings.Get(action).Any(b => !b.IsMouse && _buildHeld.Contains(b.Key));
 
     /// <summary>
     /// A key went up: the build map's controls stop.
@@ -343,17 +352,17 @@ sealed class BuildMode(PlayerInterface player)
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         float dt = _buildClock == 0 ? 0 : (float)Math.Min(System.Diagnostics.Stopwatch.GetElapsedTime(_buildClock, now).TotalSeconds, 0.1);
         _buildClock = now;
-        float Held(Key plus, Key minus) => (_buildHeld.Contains(plus) ? 1f : 0f) - (_buildHeld.Contains(minus) ? 1f : 0f);
-        _ghostYaw += Held(EngineKey.Period, EngineKey.Comma) * RotateDegreesPerSecond * MathF.PI / 180 * dt;
+        float Held(InputAction plus, InputAction minus) => (BuildHeld(plus) ? 1f : 0f) - (BuildHeld(minus) ? 1f : 0f);
+        _ghostYaw += Held(InputAction.BuildRotateRight, InputAction.BuildRotateLeft) * RotateDegreesPerSecond * MathF.PI / 180 * dt;
 
         // The height keys (FUN_1404d5420): up goes by at most the up margin, and when it cannot (or is not held) down goes by at most the down
         // margin.
         float lift = (player.SlowModifier ? SlowMove : MoveUnitsPerSecond) * dt;
-        if (_buildHeld.Contains(EngineKey.Equal) && _ghostMargins.Up > 0) _ghostLift += MathF.Min(lift, _ghostMargins.Up);
-        else if (_buildHeld.Contains(EngineKey.Minus) && _ghostMargins.Down > 0) _ghostLift -= MathF.Min(lift, _ghostMargins.Down);
+        if (BuildHeld(InputAction.BuildMoveUp) && _ghostMargins.Up > 0) _ghostLift += MathF.Min(lift, _ghostMargins.Up);
+        else if (BuildHeld(InputAction.BuildMoveDown) && _ghostMargins.Down > 0) _ghostLift -= MathF.Min(lift, _ghostMargins.Down);
         if (MathF.Abs(_ghostLift) > MaxLift) _ghostLift = 0;
 
-        float tiltKeys = Math.Clamp(Held(EngineKey.RightBracket, EngineKey.LeftBracket) + Held(EngineKey.KeypadAdd, EngineKey.KeypadSubtract), -1, 1);
+        float tiltKeys = Held(InputAction.BuildTiltIncrease, InputAction.BuildTiltDecrease);
         _ghostTilt = Math.Clamp(_ghostTilt + tiltKeys * TiltPerSecond * dt, 0, 1);
 
         Ghost = null;
