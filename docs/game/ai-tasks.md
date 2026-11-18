@@ -1068,6 +1068,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     same goal again extends it. Row 153 registers 2, 8 and the commit flag (`FUN_140319a60`).
   - **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): 24 garrison sleepers on 153 (23 to 11) had no goal and no order from
     11:00 and lay on in bed to the hold's end at 11.6 h.
+  - Rebirth's `Guard town shifts -base` (55117) gives its Squad role nothing from 11:00 to 12:00: bed 153 runs 23 to 11, static guard, patrol
+    and turrets 12 to 22 (**Verified**, record dump). Its town guards still walking to bed at 11:00 (#959: back from a fight off town) stand
+    where they are until 12:00, then walk to their posts (**Observed**, headless probe of the #959 save).
 - **Sources**, in order; the first whose pick has a plan above 0 runs:
   1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A holds) or its desire x finder is 0 or less; then planned with the search flag
      ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on. The text is the
