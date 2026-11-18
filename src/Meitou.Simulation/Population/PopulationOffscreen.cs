@@ -171,8 +171,9 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Reports each living member of a platoon wiped out off screen by a platoon of <paramref name="winnerFaction"/> to the death observers, in
-    /// member order: the characters of its squad in the world, else its stored or saved members, else <see cref="Platoon.Size"/> members never
-    /// made. Nothing without an observer.
+    /// member order, with the platoon's faction: the characters of its squad in the world, else its stored or saved members, else
+    /// <see cref="Platoon.Size"/> members never made. A member already dead was reported when it died (or is as it leaves the world). Nothing
+    /// without an observer.
     /// </summary>
     void ReportWipedOut(World world, Platoon loser, int winnerFaction)
     {
@@ -184,7 +185,7 @@ public sealed partial class PopulationSystem
             foreach (var m in squad.Members)
             {
                 if (table.TryResolveNext(m, out int slot) && table.Cold(slot) is { Medical: not { Dead: true } } cold)
-                    DeathObservers.ReportOffScreen(world, m, cold.RecordId, cold.Faction, loser.Id, winnerFaction);
+                    DeathObservers.ReportOffScreen(world, m, cold.RecordId, loser.Faction, loser.Id, winnerFaction);
             }
         }
         else if (loser.Stored is { } stored)

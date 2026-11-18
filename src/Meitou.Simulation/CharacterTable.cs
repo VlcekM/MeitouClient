@@ -1520,6 +1520,12 @@ public sealed class CharacterTable
     public int HighWater => _highWater;
 
     /// <summary>
+    /// The world's watch on characters entering and leaving the table, set only while a code mod's hook needs it (<see cref="CharacterWatch"/>);
+    /// null otherwise.
+    /// </summary>
+    internal CharacterWatch? Watch { get; set; }
+
+    /// <summary>
     /// Characters alive.
     /// </summary>
     public int Count => _highWater - _free.Count;
@@ -1668,6 +1674,7 @@ public sealed class CharacterTable
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
 
         if (!TryResolveNext(id, out int slot)) return false;
+        Watch?.Removing(slot);
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
         _cold[slot] = null;

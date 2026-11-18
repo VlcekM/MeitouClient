@@ -809,7 +809,7 @@ public sealed partial class CombatSystem : IProjectileSource
                 -1, false, intended, wasAlive, wasIncapacitated));
         }
 
-        if (death) DeathObservers.Report(world, v, shooter, blow: true);
+        if (death) DeathObservers.Report(world, v, shooter, DeathSite.Bolt);
         return true;
     }
 

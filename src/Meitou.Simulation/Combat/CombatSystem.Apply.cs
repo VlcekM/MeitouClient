@@ -230,7 +230,7 @@ public sealed partial class CombatSystem
                 direction, tech.LowStrike, intended, wasAlive, wasIncapacitated));
         }
 
-        if (death) DeathObservers.Report(world, d, table.IdOf(a), blow: true);
+        if (death) DeathObservers.Report(world, d, table.IdOf(a), DeathSite.Melee);
     }
 
     /// <summary>

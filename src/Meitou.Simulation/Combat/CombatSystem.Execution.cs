@@ -114,7 +114,7 @@ public sealed partial class CombatSystem
         if (dc.Medical!.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
         if (death && world.Uniques.RecordOf(table.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
         if (part >= 0) ObserveExecution(world, a, d, blow, part, damage, absorbed, -toAttacker, wasIncapacitated);
-        if (death) DeathObservers.Report(world, d, table.IdOf(a), blow: true);
+        if (death) DeathObservers.Report(world, d, table.IdOf(a), DeathSite.Execution);
     }
 
     /// <summary>

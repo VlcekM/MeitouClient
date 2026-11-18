@@ -257,6 +257,7 @@ public sealed partial class World : IDisposable
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();
+        WatchCharacters();
         Grid = new SpatialGrid(settings.GridCellSize);
         _pool = new WorkerPool(settings.Threads);
         _buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
@@ -669,6 +670,15 @@ public sealed partial class World : IDisposable
         CrimeObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
+        WatchCharacters();
+    }
+
+    /// <summary>
+    /// Sets the table's watch on characters leaving it (<see cref="CharacterWatch"/>) once a death observer needs it; none otherwise.
+    /// </summary>
+    void WatchCharacters()
+    {
+        if (DeathObservers.Active && Characters.Watch?.Of(this) != true) Characters.Watch = new CharacterWatch(this);
     }
 
     /// <summary>

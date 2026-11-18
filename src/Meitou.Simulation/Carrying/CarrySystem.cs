@@ -1499,7 +1499,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (death && victim.Medical is { Dead: false } medical && CharacterFacts.Down(victim))
         {
             medical.Butcher();
-            DeathObservers.Report(world, t, world.Characters.IdOf(i), blow: false);
+            DeathObservers.Report(world, t, world.Characters.IdOf(i), DeathSite.Butchered);
             world.Post($"{victim.Name} has been butchered");
         }
         Seen(world, i, t, 0);
@@ -1526,7 +1526,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var victim = table.Cold(body)!;
         if (victim.Medical is not { Dead: false } medical || !CharacterFacts.Down(victim) || DeathUnits(victim.Inventory!) >= before) return;
         medical.Butcher();
-        DeathObservers.Report(world, body, table.IdOf(looter), blow: false);
+        DeathObservers.Report(world, body, table.IdOf(looter), DeathSite.Butchered);
         if (table.Cold(looter)!.IsPlayer || victim.IsPlayer) world.Post($"{victim.Name} has been butchered");
     }
 

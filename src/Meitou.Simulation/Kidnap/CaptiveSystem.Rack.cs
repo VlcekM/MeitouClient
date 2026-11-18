@@ -59,7 +59,7 @@ public sealed partial class CaptiveSystem
             bool wasDead = cc.Medical!.Dead;
             var stretch = cc.Medical.StretchLimbs(dt, ContextOf(world, c, cc), data.BodyOptions.Dismemberment != Dismemberment.Never, events);
             ApplyBodyEvents(world, rack.Occupant, c, cc.Medical, events, limbDrops: true);
-            if (!wasDead) DeathObservers.Report(world, c, CharacterId.None, blow: false);   // the rack names no killer
+            if (!wasDead) DeathObservers.Report(world, c, CharacterId.None, DeathSite.Rack);   // the rack names no killer
             busy = stretch.Busy;
             if (rack.RackBusy && !busy) Finish(machine);
             else

@@ -3,7 +3,8 @@ namespace Meitou.Simulation.Bodies;
 /// <summary>
 /// The world's systems told of deaths (<see cref="ICharacterDeathObserver"/>). A loaded character's death is marked on its medical state
 /// (<see cref="MedicalState.DeathUnreported"/>) wherever it happens; a site that knows what killed it reports it at once (<see cref="Report"/>),
-/// and the world sweeps up the rest (<see cref="Sweep"/>) in serial steps, so the reports come in the same order whatever the threads did.
+/// the world sweeps up the rest (<see cref="Sweep"/>) in serial steps, and a character leaving the world with its death unreported is reported
+/// first (<see cref="CharacterWatch"/>), so every death is told once and in the same order whatever the threads did.
 /// </summary>
 sealed class DeathObservers
 {
@@ -49,10 +50,10 @@ sealed class DeathObservers
 
     /// <summary>
     /// Reports the death of the character in <paramref name="slot"/> when it has not been reported yet, with the character whose act killed it
-    /// (<paramref name="killer"/>, none when the engine names nobody) and whether a blow did; nothing, not even the payload, without an observer.
-    /// Serial phases only.
+    /// (<paramref name="killer"/>, none when the engine names nobody) and the step that killed it; nothing, not even the payload, without an
+    /// observer. Serial phases, or the paused interface between ticks.
     /// </summary>
-    internal static void Report(World world, int slot, CharacterId killer, bool blow)
+    internal static void Report(World world, int slot, CharacterId killer, DeathSite site)
     {
         var observers = world.DeathObservers;
         var table = world.Characters;
@@ -63,7 +64,7 @@ sealed class DeathObservers
         int platoon = world.Squads.Find(cold.SquadId)?.PlatoonId ?? -1;
         int killerFaction = FactionOf(world, killer);
         observers.Observe(world,
-            new CharacterDeath(world.Tick, victim, cold.RecordId, cold.Faction, platoon, medical.Cause, false, blow, killer, killerFaction));
+            new CharacterDeath(world.Tick, victim, cold.RecordId, cold.Faction, platoon, medical.Cause, site, killer, killerFaction));
     }
 
     /// <summary>
@@ -77,7 +78,7 @@ sealed class DeathObservers
         var table = world.Characters;
         for (int slot = 0; slot < table.HighWater; slot++)
         {
-            if (table.Cold(slot) is { Medical.DeathUnreported: true }) Report(world, slot, CharacterId.None, blow: false);
+            if (table.Cold(slot) is { Medical.DeathUnreported: true }) Report(world, slot, CharacterId.None, DeathSite.Other);
         }
     }
 
@@ -92,7 +93,8 @@ sealed class DeathObservers
         if (!observers.Active) return;
 
         observers.Observe(world,
-            new CharacterDeath(world.Tick, victim, record, faction, platoon, DeathCause.None, true, false, CharacterId.None, winnerFaction));
+            new CharacterDeath(world.Tick, victim, record, faction, platoon, DeathCause.None, DeathSite.OffScreenFight, CharacterId.None,
+                winnerFaction));
     }
 
     /// <summary>

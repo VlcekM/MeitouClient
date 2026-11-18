@@ -291,16 +291,22 @@ holds refuses the second mod.
 - **Deaths:** a registered system implementing `ICharacterDeathObserver` (`Meitou.Simulation.Bodies`) receives `Died(World, in CharacterDeath)`
   once per death: every loaded character's, whatever killed it (a blow, bleeding out, hunger, a wound worsening, a death item taken, being
   eaten, the rack, the debug kill, another system's kill), and each member of an unloaded platoon an off-screen fight kills (the winner's
-  losses and the whole losing platoon). The payload names the tick, the dead character (none off screen, where the member is no character),
-  its record ("" for an off-screen member never made), faction and platoon (-1 none), the medical `DeathCause` (`None` off screen), whether it
-  was off screen, whether a blow killed it, and the killer with its faction: the attacker of a killing melee blow, bolt or execution, the
-  butcher of a body that died of a death item taken, the eater of a captive eaten alive; none (and -1) for bleeding, hunger, a wound worsening,
-  the rack or the debug kill, whoever hit the character before (no credit rule). An off-screen death names no killer but the winning platoon's
-  faction. Observers run serially in system order: at once where a blow, a butchering, a meal, the rack or an off-screen fight killed, else in
-  a sweep in slot order after the parallel phases (the body's tick) and again after the slow world, so the order never depends on the thread count. The
+  losses and the whole losing platoon; a winner whose members were never made loses no one, a loser never made counts its size). The payload
+  names the tick, the dead character (none off screen, where the member is no character), its record ("" for an off-screen member never made),
+  faction (the platoon's off screen) and platoon (-1 none), the medical `DeathCause` (`None` off screen), the `DeathSite` (melee, bolt,
+  execution, butchered, eaten, rack, off-screen fight, or other; `Blow` and `OffScreen` read it), and the killer with its faction: the attacker
+  of a killing melee blow, bolt or execution (it may have left the world since; its faction is then -1), the butcher of a body that died of a
+  death item taken, the eater of a captive eaten alive; none (and -1) for bleeding, hunger, a wound worsening, the rack or the debug kill,
+  whoever hit the character before (no credit rule). An off-screen death names no killer but the winning platoon's faction. Observers run
+  serially, never during a parallel phase, in system order: at once where a blow, a butchering, a meal, the rack or an off-screen fight killed;
+  else in a sweep in slot order after the parallel phases (the body's tick, and the inputs' debug kill) and again after the slow world, or as
+  the dead character leaves the world, whichever comes first. So the order never depends on the thread count, but it is not the order of death
+  within a tick (a debug kill in the inputs is told after the bolts of the schedule). During a tick the call runs on the thread running the
+  tick; a butchering by the paused interface's commands between ticks is told at once, on the host's thread, with the coming tick's number. The
   dead character is still in the world during the call; a body loaded dead is never reported. Callbacks may read the world and change their
   own hashed state, and must not change characters or other world state (gameplay changes go through commands). One that throws is logged and
-  disabled for that world; faulted registrations enter the state hash. Without an observer no payload is made. Engine API, not in the original.
+  disabled for that world; faulted registrations enter the state hash. Without an observer no payload is made and no watch is kept. Engine
+  API, not in the original.
 - **Experience:** a registered system implementing `IExperienceFilter` (`Meitou.Simulation.Bodies`) is asked `Gain(World, in ExperienceGain)` for
   every experience gain the game makes to a character in the world (every `XpService` entry: combat, injuries, ranged and turrets, moving,
   sneaking, assassination, thievery, lockpicking, building, machine work, training dummies, first aid, mass combat) and for a direct
