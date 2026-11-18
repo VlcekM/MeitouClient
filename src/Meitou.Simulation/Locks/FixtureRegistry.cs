@@ -2146,6 +2146,10 @@ public sealed partial class FixtureRegistry
         if (master >= 0) c.SlaveMaster = master;
         SetSlave(world, c, 1, owner);
 
+        // Chaining and processing add job 187 again whatever the old state (FUN_14032e590, FUN_14035aa20): a slave re-chained by its own master after
+        // a split obeys again.
+        if (master >= 0) c.ObedienceLost = false;
+
         // Handed to another master (engine choice: the original resets and re-adds job 187 where it chains or processes, FUN_14032e590,
         // FUN_14035aa20): its job names the new one.
         if (handed)
