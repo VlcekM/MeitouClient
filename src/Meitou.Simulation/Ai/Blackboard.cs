@@ -1281,6 +1281,12 @@ public sealed class AiMind
     public bool MedicAsk { get; set; }
 
     /// <summary>
+    /// The think reached Fixing Legs' own step (<see cref="AiBehaviour.HealLegs"/>): the serial step of the same tick starts the treatment of the
+    /// character itself (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).
+    /// </summary>
+    public bool HealLegsAsk { get; set; }
+
+    /// <summary>
     /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last
     /// captive sweep turn or at the end of its job (<see cref="Kidnap.CaptiveSystem"/>). Kept for a character awake that the sweep does not take
     /// (seated, in a job, on a duty), so its think weighs them. Not saved; hashed while set.

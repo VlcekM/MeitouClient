@@ -467,6 +467,11 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             }
 
             if (ArmsOut(world, i, cold)) continue;
+            if (LegsFixed(cold, i, t))
+            {
+                End(world, i);
+                continue;
+            }
 
             const ushort path = (ushort)MoveFlags.AnyPath;
             var spot = TreatSpot(world, table.Cold(t)!, next[t]);
@@ -988,9 +993,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Starts the treatment of each NPC whose think chose its Medic goal (<see cref="AiMind.MedicAsk"/>; serial, after the think): the finder runs
-    /// again on the state of now, so a patient treated meanwhile is not walked to; one that finds none drops its kept pick, and the next think
-    /// chooses again.
+    /// Starts the treatment of each NPC whose think chose its Medic goal (<see cref="AiMind.MedicAsk"/>) or reached Fixing Legs' own step
+    /// (<see cref="AiMind.HealLegsAsk"/>; serial, after the think, in slot order). The Medic finder runs again on the state of now, so a patient
+    /// treated meanwhile is not walked to; one that finds none drops its kept pick, and the next think chooses again.
     /// </summary>
     internal void SendGoalTreatments(World world)
     {
@@ -1000,13 +1005,21 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         {
             for (int s = 0; s < table.HighWater; s++)
             {
-                if (table.Cold(s)?.Ai is not { MedicAsk: true } mind) continue;
+                if (table.Cold(s)?.Ai is not { } mind || !mind.MedicAsk && !mind.HealLegsAsk) continue;
+                bool legs = mind.HealLegsAsk;
                 mind.MedicAsk = false;
+                mind.HealLegsAsk = false;
                 if (!table.Next[s].Alive) continue;
                 if (taken is null)
                 {
                     taken = SquadGoals.Of(world);
                     BeginSweep(world);
+                }
+
+                if (legs)
+                {
+                    TreatOwnLegs(world, s, taken);
+                    continue;
                 }
 
                 if (HealSomeone(world, s, taken, robotics: false, TaskSource.Npc)) continue;
@@ -1019,6 +1032,29 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             EndSweep();
         }
     }
+
+    /// <summary>
+    /// Fixing Legs (269) acted out: <c>Task_FirstAid</c> on the character itself (a goal with no target hand treats its own character,
+    /// <c>FUN_14034ecf0</c>, <b>Verified</b>), the same treatment as First aid (skill x0.8 on oneself, <see cref="SkillOf"/>). Started only while the
+    /// planner's tests still hold now: the legs messed up (state 103), a first aid kit held (23), a working arm (38), awake, not carried and not
+    /// fighting; otherwise the next think chooses again.
+    /// </summary>
+    static void TreatOwnLegs(World world, int s, SquadGoals taken)
+    {
+        var cold = world.Characters.Cold(s)!;
+        if (!CanAct(cold) || !Awake(cold.Medical) || cold.InCombat || cold.Medical is not { LegsMessedUp: true }) return;
+        if (!HasWorkingArm(cold) || !HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return;
+
+        StartJob(world, s, s, taken, new TaskRequest(CharacterTask.Treat, TaskType.HealMyLegs, TaskSource.Npc));
+    }
+
+    /// <summary>
+    /// A Fixing Legs treatment (<see cref="TreatOwnLegs"/>) whose legs work again: the goal's desire is 0 (<see cref="AiSystem.HealLegsDesire"/>), so
+    /// the original's chooser, run on every AI update, takes another goal whose plan replaces the task (<b>Observed</b>, from the chooser and the
+    /// desire; not watched in the game). Here the treatment ends and the next think chooses.
+    /// </summary>
+    static bool LegsFixed(CharacterCold cold, int i, int t) =>
+        t == i && cold.Running is { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs } && cold.Medical is { LegsMessedUp: false };
 
     /// <summary>
     /// The first aid jobs as the decision step's contributor (step 5; docs/game/ai-tasks.md "Medic jobs"): Medic 58 and Robotics 57 run while the

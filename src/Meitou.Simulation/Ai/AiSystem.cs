@@ -788,6 +788,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 : 0,
             // The Medic goal: its desire times the finder's score from the serial sweep (the desire's carrying case is a gate of the finder).
             AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore * MedicDesire(world, self.Slot) : 0,
+            // Fixing Legs (269) has no finder: its own desire (FUN_1409983b0); the planner tests its list B (kit, arm, water, threat, weapon).
+            AiBehaviour.HealLegs => HealLegsDesire(world, self.Slot),
             // A captive goal: the desire its job start kept on the sweep turn of a seated character (0 for the rest, whose jobs the sweep starts
             // itself; Kidnap/CaptiveSystem.Offers.cs).
             AiBehaviour.Captive => mind.CaptiveDesire(type),
@@ -1852,6 +1854,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 break;
             case AiBehaviour.Medic:
                 ActMedic(world, slot, mind);
+                break;
+            case AiBehaviour.HealLegs:
+                ActHealLegs(world, slot, mind);
                 break;
             case AiBehaviour.Captive:
                 AskCaptiveJob(world, slot, mind);
