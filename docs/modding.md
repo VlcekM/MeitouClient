@@ -560,15 +560,19 @@ holds refuses the second mod.
   Engine API, not in the original.
 - **Sounds:** `world.PostSound(eventName, characterId)` plays a named sound event on a character, `world.PostSound(eventName, point)` at a world
   point and `world.PostInterfaceSound(eventName)` on the interface (heard alike wherever the camera is), each with an optional switch
-  (`switchGroup`, `switchValue`) set on the object first; `ModContext` has the same three calls for code off the tick (an interface press),
-  sent to the running world. The event is any the loaded banks hold, by name: the game's ([audio](audio.md): `Impact`, `Character_Lock`,
-  `Notifications`...) or a mod bank's loaded through `RE_Kenshi.json` `SoundBanks` ([mod sound banks](audio.md#mod-sound-banks)). Display
-  only: the call queues the event for the host as the game's own sounds are queued (nothing without audio, as headless), the simulation never
-  reads it and it is not hashed, so a system may call it in any phase and from any thread. The host plays it in the frame: on a character only
-  while it is near enough to have a sound object (`CharacterSounds.TrackRadius`) and within 1000 units of the camera; at a point on one of the
-  game's eight pooled point objects, reused round robin with its impacts, within the same 1000 units; so post one-shot events (a looping one
-  can be moved by a later sound and is never stopped). An unknown name plays nothing. Several mods post freely. An empty name or a point that is
-  not finite throws. Engine API, not in the original.
+  (`switchGroup`, `switchValue`); `ModContext` has the same three calls for code off the tick (an interface press), sent to the running world.
+  The event is any the loaded banks hold, by name: the game's ([audio](audio.md): `Impact`, `Character_Lock`, `Notifications`...) or a mod
+  bank's loaded through `RE_Kenshi.json` `SoundBanks` ([mod sound banks](audio.md#mod-sound-banks)). Display only: the call queues the event
+  for the host as the game's own sounds are queued (nothing without audio, as headless), the simulation never reads it and it is not hashed,
+  so a system may call it in any phase and from any thread. The host plays it in the frame, never setting a switch on an object of the game's,
+  so the game's own voices, footsteps and impacts keep their switches: a character event without a switch goes on the character's own sound
+  object and follows it; one with a switch goes on one of eight pooled objects of the mods' own, placed where the character is; a point event
+  goes on one of those placed at the point; an interface event on an unplaced object of the mods' own. A character event plays only while the
+  character is near enough to have a sound object (`CharacterSounds.TrackRadius`) and within 1000 units of the camera, a point event within
+  the same 1000 units. The pooled objects are shared by every mod and reused round robin, and a switch stays on an object until changed, so
+  set the switch on every post that needs one. Post one-shot events: a looping one is never stopped, and on a pooled object it can be moved
+  by a later post. An unknown name plays nothing (the player gives up on it after ten seconds). Several mods post freely. An empty name or a
+  point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
   character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`

@@ -97,7 +97,7 @@ public enum SoundKind : byte
     FedToMachine,
     /// <summary>
     /// A code mod's named event (<see cref="World.PostSound(string, CharacterId, string?, string?)"/>, <see cref="SoundEvent.Posted"/>): on the
-    /// subject's sound object when there is a subject, else on an object at <see cref="SoundEvent.Position"/>.
+    /// subject when there is one (the host keeps a switch off the subject's own object), else at <see cref="SoundEvent.Position"/>.
     /// </summary>
     Posted,
     /// <summary>
@@ -178,13 +178,19 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// A code mod plays the named event <paramref name="eventName"/> on the character <paramref name="on"/> (docs/modding.md "Sounds"), after
-    /// setting the switch <paramref name="switchGroup"/> to <paramref name="switchValue"/> on its object when both are given. Display only: queued
-    /// for the host like the game's own sounds (nothing while <see cref="Sounds"/> is null, as without audio), never read by the simulation; the
-    /// host plays it while the character is near enough to have a sound object. Callable from any thread. Throws for an empty name.
+    /// A code mod plays the named event <paramref name="eventName"/> on the character <paramref name="on"/> (docs/modding.md "Sounds"), with the
+    /// switch <paramref name="switchGroup"/> at <paramref name="switchValue"/> when both are given (set on an object of the mods' own at the
+    /// character's place, never on the character's). Display only: queued for the host like the game's own sounds (nothing while
+    /// <see cref="Sounds"/> is null, as without audio), never read by the simulation; the host plays it while the character is near enough to have
+    /// a sound object. Callable from any thread. Throws for an empty name; an empty <paramref name="on"/> plays nothing.
     /// </summary>
-    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(eventName);
+        if (on.IsNone) return;
+
         PostModSound(SoundKind.Posted, eventName, on, Vector3.Zero, switchGroup, switchValue);
+    }
 
     /// <summary>
     /// A code mod plays the named event <paramref name="eventName"/> at the world point <paramref name="at"/>, on a pooled object placed there,

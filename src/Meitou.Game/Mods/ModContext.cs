@@ -147,22 +147,40 @@ public sealed class ModContext
     /// Plays a named sound event on a character, from any thread (docs/modding.md "Sounds"): <see cref="World.PostSound(string, CharacterId,
     /// string?, string?)"/> on the running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, default);
         _world()?.PostSound(eventName, on, switchGroup, switchValue);
+    }
 
     /// <summary>
     /// Plays a named sound event at a world point, from any thread: <see cref="World.PostSound(string, System.Numerics.Vector3, string?,
     /// string?)"/> on the running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null) =>
+    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, at);
         _world()?.PostSound(eventName, at, switchGroup, switchValue);
+    }
 
     /// <summary>
     /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound"/> on the running world; nothing before the
     /// first world or without audio.
     /// </summary>
-    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, default);
         _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
+    }
+
+    /// <summary>
+    /// Throws, as the world's calls do, for an empty event name or a point that is not finite, also before the first world.
+    /// </summary>
+    static void CheckSound(string eventName, System.Numerics.Vector3 at)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(eventName);
+        if (!float.IsFinite(at.X + at.Y + at.Z)) throw new ArgumentOutOfRangeException(nameof(at), at, "A sound's point must be finite.");
+    }
 
     /// <summary>
     /// A line in the game's log (log.txt), prefixed with the mod id.

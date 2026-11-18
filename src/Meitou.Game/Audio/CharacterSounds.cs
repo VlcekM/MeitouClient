@@ -330,9 +330,13 @@ public sealed class CharacterSounds
     /// </summary>
     Vector3 _camera;
     /// <summary>
-    /// The frame count (<see cref="BeginFrame"/>) and the next impact pool slot.
+    /// The frame count (<see cref="BeginFrame"/>).
     /// </summary>
-    int _frame, _poolAt;
+    int _frame;
+    /// <summary>
+    /// The next impact pool slot (unsigned, so it wraps instead of turning negative after 2^31 point sounds).
+    /// </summary>
+    uint _poolAt;
     /// <summary>
     /// The next character's game object id.
     /// </summary>
@@ -824,7 +828,7 @@ public sealed class CharacterSounds
     public void TurretShot(Vector3 at)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
+        ulong id = NextPooled();
         _player.SetPosition(id, at);
         _player.SetSwitch("Weapons", "Turret", id);
         _player.Post("Attack", id);
@@ -839,7 +843,7 @@ public sealed class CharacterSounds
     public void WallBreak(Vector3 at, bool fix)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
+        ulong id = NextPooled();
         _player.SetPosition(id, at);
         if (fix) _player.SetSwitch("Break", "Gate", id);
         _player.Post("Break", id);
@@ -853,7 +857,7 @@ public sealed class CharacterSounds
     public void BoltStuck(Vector3 at, int surface)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
+        ulong id = NextPooled();
         _player.SetPosition(id, at);
         _player.SetSwitch("Impacts", SurfaceName(surface, false) is { Length: > 0 } name ? name : "Stone", id);
         _player.Post("Impact", id);
@@ -861,18 +865,18 @@ public sealed class CharacterSounds
     }
 
     /// <summary>
-    /// A code mod's event at <paramref name="at"/> (docs/modding.md "Sounds"): posted on a pooled object placed there, after the optional switch,
-    /// within the same distance as the game's own point sounds (<see cref="EventLimit"/>, squared). The pool is shared and reused round robin, so a
-    /// long or looping event may be moved by a later point sound.
+    /// The next impact pool object, round robin.
     /// </summary>
-    public void PostAt(Vector3 at, string eventName, string? group = null, string? value = null)
+    ulong NextPooled() => _pool[_poolAt++ % (uint)_pool.Length];
+
+    /// <summary>
+    /// Where the tracked character <paramref name="key"/>'s object was last placed; false when it has no object (too far to be heard).
+    /// </summary>
+    public bool TryPlace(ulong key, out Vector3 at)
     {
-        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
-        _player.SetPosition(id, at);
-        if (group is not null && value is not null) _player.SetSwitch(group, value, id);
-        _player.Post(eventName, id);
-        Jobs++;
+        bool tracked = _entries.TryGetValue(key, out var e);
+        at = tracked ? e!.Position : default;
+        return tracked;
     }
 
     /// <summary>
@@ -901,7 +905,7 @@ public sealed class CharacterSounds
     void PointImpact(Vector3 at, string impacts)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
-        ulong id = _pool[_poolAt++ % _pool.Length];
+        ulong id = NextPooled();
         _player.SetPosition(id, at);
         _player.SetSwitch("Impacts", impacts, id);
         _player.Post("Impact", id);

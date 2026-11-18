@@ -30,6 +30,11 @@ sealed class CharacterAudio(GameHost host)
     AudioSystem? _characterAudioFor;
 
     /// <summary>
+    /// The code mods' own sound objects (made on the first posted mod sound, again for another audio).
+    /// </summary>
+    ModSoundPosts? _modPosts;
+
+    /// <summary>
     /// The characters' sound objects; null before the first frame with a database and the animations.
     /// </summary>
     internal CharacterSounds? Sounds;
@@ -171,6 +176,7 @@ sealed class CharacterAudio(GameHost host)
         if (!ReferenceEquals(_characterAudioFor, sound))
         {
             _characterAudioFor = sound;
+            _modPosts = null;
             Sounds = null;
             _soundsFor = null;
         }
@@ -553,21 +559,26 @@ sealed class CharacterAudio(GameHost host)
                 _fedBodies!.Post(e.Position, e.Armour, eye);
                 break;
             case SoundKind.Posted or SoundKind.PostedInterface when e.Posted is { } posted:
-                PlayModSound(sounds, in e, posted, subject);
+                PlayModSound(sounds, in e, posted, subject, eye);
                 break;
         }
     }
 
     /// <summary>
-    /// A code mod's event (docs/modding.md "Sounds"): on the interface's object, on the subject's object (when it is near enough to have one), or
-    /// on a pooled object at the point.
+    /// A code mod's event (docs/modding.md "Sounds"), never setting a switch on an object of the game's: on the mods' interface object; on a
+    /// character, its own object when there is no switch (the sound follows it), else a mods' pooled object at its place; or a mods' pooled object
+    /// at the point. A character too far to have an object hears nothing.
     /// </summary>
-    void PlayModSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject)
+    void PlayModSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject, Vector3 eye)
     {
         var (name, group, value) = (posted.Event, posted.SwitchGroup, posted.SwitchValue);
-        if (e.Kind == SoundKind.PostedInterface) host.Sound.Ui.Sounds?.Play(new UiSoundEvent(name, group, value));
-        else if (!e.Subject.IsNone) sounds.Job(subject, name, CharacterSounds.EventLimit, group, value);
-        else sounds.PostAt(e.Position, name, group, value);
+        if (_characterAudioFor is not { } audio) return;
+
+        var posts = _modPosts ??= new ModSoundPosts(audio.Player);
+        if (e.Kind == SoundKind.PostedInterface) posts.OnInterface(name, group, value);
+        else if (e.Subject.IsNone) posts.At(e.Position, eye, name, group, value);
+        else if (group is null) sounds.Job(subject, name, CharacterSounds.EventLimit);
+        else if (sounds.TryPlace(subject, out var at)) posts.At(at, eye, name, group, value);
     }
 
 
