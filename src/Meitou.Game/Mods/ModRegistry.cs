@@ -76,6 +76,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModSkill> Skills { get; } = [];
     /// <summary>
+    /// The status effects, in registration order.
+    /// </summary>
+    public List<StatusEffect> StatusEffects { get; } = [];
+    /// <summary>
     /// The player interface extensions.
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
@@ -237,6 +241,7 @@ sealed class ModRegistry
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
         foreach (var skill in r.Skills) ModSkills.Add(skill);
+        foreach (var effect in r.StatusEffects) StatusEffects.Add(effect);
         Ui.AddRange(r.Ui);
         DebugCommands.AddRange(r.DebugCommands);
         HitFeeds.AddRange(r.HitFeeds);

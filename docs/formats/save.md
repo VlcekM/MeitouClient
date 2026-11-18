@@ -139,6 +139,10 @@ A code mod's [skill](../modding.md#registration-surface) level is a float `meito
 once a level was set. Every such key is read back and saved again, so a save keeps the levels of mods not loaded now. **Observed**
 (2026-11-15, a scratch `WriteSave` / `ReadSave` round trip).
 
+A code mod's [status effect](../modding.md#registration-surface) on a character is a float `meitou effect <id>` in its STATS record, the ticks left
+(-1: until removed), and `meitou effect stacks <id>` when it has more than one stack, written only while the effect is on. Every such key is read
+back and saved again, so a save keeps the effects of mods not loaded now.
+
 ### Where saves live
 
 | Setting / path | Meaning |

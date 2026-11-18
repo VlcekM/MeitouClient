@@ -737,8 +737,9 @@ public sealed partial class World : IDisposable
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
         Commit(table, prof);
 
-        // 7. Slow world (serial).
+        // 7. Slow world (serial), then the code mods' status effects lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
+        Bodies.StatusEffects.Step(this);
 
         // 8. Publish.
         Squads.Refresh(table, Player.Faction);

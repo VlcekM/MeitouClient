@@ -356,6 +356,21 @@ holds refuses the second mod.
   saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
   a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
+- **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
+  `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
+  character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(stats)` reads it (ticks left, -1
+  forever, and stacks). Applying it again follows `Stacking`: `Refresh` starts the time again, `Extend` adds the hours, `Stack` adds stacks up to
+  `MaxStacks` and starts the time again. While it lasts its `Modifiers` (stat, amount per stack) are set through the character's [stat
+  modifiers](#registration-surface) under the key `effect:<id>`, so they work and display as any modifier (a mod's own modifier key must not start
+  with `effect:`). It ends by itself on the tick its time runs out, counted in ticks of game time after the slow world, only while its character is
+  in the world (an NPC whose platoon is off screen keeps its time). The HUD's State line shows a selected character's effects: where it would read
+  Normal, the first effect's name (in registration order) in its tone's colour, with "+N" for N more; its tooltip lists every effect with its
+  stacks, game time left and description. Saved with the character in its STATS record ([save](formats/save.md#compatibility-exceptions)), so it
+  follows the character through squad moves and recruiting, and set again with its amounts at a load; an effect of a mod not running now is kept and
+  saved again, not shown, adding nothing, its time standing still. Effects enter the state hash while one is on. Apply and Remove run from the mod's
+  system outside the parallel phases, as stat modifiers. A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another effect has
+  (case-insensitive), a name over 32 characters, stacks below 1 or a modifier on a stat without storage refuses the mod. With no effect registered
+  the tick step does nothing and nothing is made, saved or hashed. Engine API, not in the original.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
