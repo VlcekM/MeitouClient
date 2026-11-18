@@ -1522,7 +1522,7 @@ public static partial class SaveCapture
         {
             return WritePlatoon(
                 squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding,
-                roamer?.Package ?? squad.Ai?.Current?.Id,
+                squad.Ai?.Current?.Id ?? roamer?.Package,
                 members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(_world)?.Snapshot(squad.Id),
                 imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? declared, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true,
                 at: roamer is null ? default : Ground(_world, roamer.Position), into: into,
@@ -1808,8 +1808,17 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The roaming platoons' positions and AI packages (<c>currentPackage</c>, docs/formats/save.md PLATOON) into their PLATOON records. A
-    /// characterless one (a stand-in the game had not made) that has left the world loses its record, as a despawned save platoon does.
+    /// The package the blackboard of a loaded platoon's squad runs now; null for a platoon that is not loaded or has no package yet. The platoon's
+    /// own <see cref="Platoon.Package"/> is the one it unloaded with last, so while its squad is in the world the blackboard's is the current one
+    /// (the original writes the active platoon's, <c>FUN_140372ef0</c>).
+    /// </summary>
+    static string? LoadedPackage(World world, Platoon p) =>
+        p.State == PlatoonState.Loaded ? world.Squads.Find(p.SquadId)?.Ai?.Current?.Id : null;
+
+    /// <summary>
+    /// The roaming platoons' positions and AI packages (<c>currentPackage</c>, docs/formats/save.md PLATOON) into their PLATOON records: the
+    /// package its squad's blackboard runs while it is loaded (<see cref="LoadedPackage"/>), else the one it unloaded with. A characterless one (a
+    /// stand-in the game had not made) that has left the world loses its record, as a despawned save platoon does.
     /// </summary>
     static void WriteRoaming(SaveBuilder builder, World world, LoadedSave loaded)
     {
@@ -1828,7 +1837,7 @@ public static partial class SaveCapture
             platoon.Position = new Vector3(p.Position.X, at.Y, p.Position.Y);
             // One the game has not made yet has run no package (FUN_140372ef0 writes the active platoon's).
             bool unmade = platoon.Record.Bools.GetValueOrDefault("never been activated");
-            if (p.Package is { } package && !unmade) platoon.Record.Strings["currentPackage"] = package;
+            if (!unmade && (LoadedPackage(world, p) ?? p.Package) is { } package) platoon.Record.Strings["currentPackage"] = package;
         }
     }
 

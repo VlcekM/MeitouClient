@@ -1061,19 +1061,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The town goal 118 shops in, with its places, its key in the shopping list (<see cref="ShoppingList.KeyOf"/>) and whether its random pick
-    /// runs (<see cref="RandomShopping"/>). The original's goal takes the shopper's status town (<c>FUN_1409997f0</c> reads status <c>+0x88</c>,
-    /// <b>Observed</b>, disassembly; <see cref="CharacterCold.StatusTown"/>), so a shopper standing in an outpost shops at that outpost's shops
-    /// (<see cref="TownPlaceIndex.OutpostShops"/>), with no random pick (a town of the player's faction). A shopper of the player's faction (an
-    /// autonomous squad) is left out: the original plans no goals for the player's squads, and its buying would only move the player's goods
-    /// between the player's own counter and character. Elsewhere Meitou keeps the squad's town <paramref name="town"/>.
+    /// runs (<see cref="RandomShopping"/>). The original's goal takes the shopper's status town and finds nothing without one
+    /// (<c>FUN_1409997f0</c> reads status <c>+0x88</c> and returns 0 when it is empty, <b>Verified</b>, disassembly;
+    /// <see cref="CharacterCold.StatusTown"/>, worked out here for a character the status pass has not reached yet). So a shopper shops where it
+    /// stands, never in a town it is away from: at an outpost's shops (<see cref="TownPlaceIndex.OutpostShops"/>) with no random pick (a town of
+    /// the player's faction), in a placed town at that town's. A shopper of the player's faction (an autonomous squad) is left out: the original
+    /// plans no goals for the player's squads, and its buying in an outpost would only move the player's goods between the player's own counter
+    /// and character; Meitou keeps the squad's town <paramref name="town"/> for it.
     /// </summary>
     (TownPlaces Places, int Key, bool Random) ShopTown(World world, int slot, int town)
     {
         var cold = world.Characters.Cold(slot);
-        if (cold?.StatusTown is { PlayerTown: > 0 and var outpost } && cold.Faction != PlayerFactionOf(world))
-            return (_townPlaces.OutpostShops(outpost), ShoppingList.KeyOf(CampaignTown.OfPlayer(outpost)), false);
+        if (cold is null || cold.Faction == PlayerFactionOf(world)) return (Places(town), town, RandomShopping(world, town));
 
-        return (Places(town), town, RandomShopping(world, town));
+        var status = cold.StatusTown.IsNone
+            ? StatusTownAt(data, world, world.Characters.Previous[slot].Position, CampaignTown.None) : cold.StatusTown;
+        if (status.PlayerTown > 0) return (_townPlaces.OutpostShops(status.PlayerTown), ShoppingList.KeyOf(status), false);
+        if (status.Site >= 0) return (Places(status.Site), status.Site, RandomShopping(world, status.Site));
+
+        return (TownPlaceIndex.None, -1, false);
     }
 
     /// <summary>

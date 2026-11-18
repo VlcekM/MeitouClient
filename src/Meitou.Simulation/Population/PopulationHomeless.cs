@@ -348,13 +348,21 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The sector of a homeless squad's home town (<c>FUN_1408f8060</c>, then <c>Ownerships::setHomeTown</c>), measured from <paramref name="at"/>:
+    /// The sector of the home town a patrol is tethered to. A squad with a town of its own (a town's squad, a platoon out of one) has that town's
+    /// (<c>Task_Patrol</c> reads the platoon's own home town, docs/game/factions-squads-towns.md "Patrol task", <b>Verified</b>). Else the sector
+    /// of a homeless squad's home town (<c>FUN_1408f8060</c>, then <c>Ownerships::setHomeTown</c>), measured from <paramref name="at"/>:
     /// the town nearest its sector's centre when it is of the squad's faction; else the faction's nearest town, or its nearest nest when that is 9216
     /// nearer, none beyond 50000; null when none (no faction, or no town of it). Engine choice: decided at its first patrol rather than as it is
     /// made, so saved and kept squads get one too.
     /// </summary>
     (int X, int Z)? HomeCell(Squad squad, ZoneCoordinate zone, Vector2 at)
     {
+        if (squad.Town >= 0 && squad.Town < _data.Sites.Count)
+        {
+            var own = _data.Sites[squad.Town].Position;
+            return WeatherAreas.CellOf(own.X, own.Z);
+        }
+
         if (squad.Faction < 0) return null;
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(zone.X, zone.Y);
         Vector2? home = null;
