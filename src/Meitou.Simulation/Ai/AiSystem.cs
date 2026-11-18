@@ -3306,9 +3306,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);
-        var task = (CharacterTask)table.Next[s].Task;
         if (follows) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
-        else if (task != CharacterTask.Idle) TaskStart.End(world, s, TaskEnd.Stopped);
+        else TaskStart.End(world, s, TaskEnd.Stopped);   // also one standing: its task record named the goal it stood for
     }
 
     /// <summary>
