@@ -2053,7 +2053,8 @@ sealed class GameLoop(GameHost host)
         }
         else if (shot && host.AgentChannel.ShotPath is { } shotPath)
         {
-            host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
+            host.AgentChannel.SaveControlShot(
+                file => FramebufferCapture.SavePng(_display.Context, picture, file, size.X, size.Y, topDown: topDown), size.X, size.Y);
             host.Photo?.PictureSaved(shotPath);
         }
         else if (shot && GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)

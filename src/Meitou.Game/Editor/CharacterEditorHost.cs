@@ -183,13 +183,22 @@ sealed class CharacterEditorHost(GameHost host)
     internal string? StudioShot { get; set; }
 
     /// <summary>
+    /// The stage picture and the file <c>studio shot</c> asked for, to be saved at the end of the frame (the ask is taken); null when none is due.
+    /// </summary>
+    internal (GpuTexture Picture, string Path)? TakeStudioShot()
+    {
+        if (StudioShot is not { } path || host.ActiveCharacters?.StageTexture is not { } stage) return null;
+        StudioShot = null;
+        return (stage.Texture, path);
+    }
+
+    /// <summary>
     /// Saves the stage picture <c>studio shot</c> asked for, at the end of the frame.
     /// </summary>
     internal void SaveStudioShot(GpuContext context)
     {
-        if (StudioShot is not { } path || host.ActiveCharacters?.StageTexture is not { } stage) return;
-        StudioShot = null;
-        FramebufferCapture.SavePng(context, stage.Texture, path, stage.Texture.Desc.Width, stage.Texture.Desc.Height);
+        if (TakeStudioShot() is not { } shot) return;
+        FramebufferCapture.SavePng(context, shot.Picture, shot.Path, shot.Picture.Desc.Width, shot.Picture.Desc.Height);
     }
 
     internal void ClearEditorStage()

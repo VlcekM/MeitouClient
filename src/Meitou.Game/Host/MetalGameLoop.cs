@@ -200,12 +200,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         ConnectClipboard();
         _frameStatsVisible = _showFrameStats;
         HookInput();
+        // The agent control channel (--control-dir, --exec, --screenshot-after) and the dev console's commands that read the settings dialog.
+        host.AgentChannel.SettingsPanel = _settings;
+        host.AgentChannel.InitControl();
 
         PrepareStills();
         RunLoop();
 
         Shutdown();
-        return 0;
+        return host.AgentChannel.ControlExitCode;
     }
 
     /// <summary>
@@ -1132,6 +1135,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The shared frame draw owns the overlays after the post chain now.
         _worldGpu.Markers = _moveMarker;
         _worldGpu.NavmeshOverlay = _navOverlay;
+        _worldGpu.InspectorOverlay = new NavmeshOverlayRenderer(_ctx);   // the pick & collision inspector's hulls (F10 > Tools)
         _worldGpu.HoverOutline = _hoverOutline;
         Console.WriteLine($"metal     HUD ready ({hud.UiMode})");
     }
@@ -1661,25 +1665,20 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _debugMenuClick;
 
     /// <summary>
-    /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu repeats here, to scroll its lists: after 0.5 s,
-    /// then 30 times a second (the Windows defaults). No other key repeats.
+    /// Silk raises KeyDown once per press (no OS key repeat), so a held Up or Down in the debug menu, or an erase or caret key in the dev console,
+    /// repeats here, to scroll its lists and edit its line: after 0.5 s, then 30 times a second (the Windows defaults). No other key repeats.
     /// </summary>
     (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldMenuKey;
 
     /// <summary>
-    /// F11: the frame's stats panel.
-    /// </summary>
-    bool _statsVisible;
-
-    /// <summary>
-    /// F12: the frame-rate lines.
+    /// The CycleProfiler key (F12 by default): the frame-rate lines (the profiler chart waits for Metal timestamps).
     /// </summary>
     bool _frameStatsVisible;
 
     /// <summary>
-    /// F8 or Print Screen asked for a screenshot.
+    /// This frame's picture is saved (a screenshot key, the control channel's <c>screenshot</c>): the debug panels and the pointer stay out of it.
     /// </summary>
-    bool _screenshotNow;
+    bool _shotFrame;
 
     /// <summary>
     /// Ctrl+/ asked for a GPU capture of the next frame.
@@ -1730,8 +1729,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         keyboard.KeyDown += (keyboard, key, _) =>
         {
-            _heldMenuKey = key is SilkKey.Up or SilkKey.Down && host.DebugMenu.DebugMenuOpen
-                ? (keyboard, key, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
+            _heldMenuKey = Repeats(key) ? (keyboard, key, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
             OnKeyDown(keyboard, key);
         };
         keyboard.KeyUp += (_, key, _) =>
@@ -1751,7 +1749,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         keyboard.KeyChar += (_, value) =>
         {
             if (host.Covered) return;
-            if (_settings?.Visible == true) _settings.TextInput(value);
+            if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DevConsole.Type(value);
+            else if (_settings?.Visible == true) _settings.TextInput(value);
             else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
             else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
             else _hud?.UiText(value);
@@ -1759,13 +1758,20 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// Repeats a held Up or Down in the debug menu (<see cref="_heldMenuKey"/>): when its time has come, again 30 times a second; a release or
-    /// the menu closing stops it.
+    /// Whether a held key repeats: the debug menu's arrows (its list scrolls with them), or the dev console's erase, caret and history keys.
+    /// </summary>
+    bool Repeats(SilkKey key) => key is SilkKey.Up or SilkKey.Down && host.DebugMenu.DebugMenuOpen
+        || key is SilkKey.Backspace or SilkKey.Delete or SilkKey.Left or SilkKey.Right or SilkKey.Up or SilkKey.Down
+            && host.DevConsoleHost.ConsoleOpen;
+
+    /// <summary>
+    /// Repeats a held key (<see cref="_heldMenuKey"/>): when its time has come, again 30 times a second; a release or the menu or console
+    /// closing stops it.
     /// </summary>
     void RepeatMenuKey()
     {
         if (_heldMenuKey is not { } held || Stopwatch.GetTimestamp() < held.Next) return;
-        if (!held.Keyboard.IsKeyPressed(held.Key) || !host.DebugMenu.DebugMenuOpen)
+        if (!held.Keyboard.IsKeyPressed(held.Key) || !Repeats(held.Key))
         {
             _heldMenuKey = null;
             return;
@@ -1802,7 +1808,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _gpuCaptureRequested = true;
             return;
         }
-        if (MenuKey(key, ctrl)) return;
+        if (ConsoleKey(keyboard, key, ctrl) || MenuKey(key, ctrl)) return;
         // With the interface hidden (F7) Esc brings it back with the game menu open, as the Vulkan host does.
         if (key == SilkKey.Escape && _hud is { UiVisible: false })
         {
@@ -1826,16 +1832,40 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The settings dialog, the sandbox list and the debug menu take the key (true: taken).
+    /// Insert or Ctrl+` opens the dev console, which then takes every key (the settings dialog's, the animation list's and the debug menu's too)
+    /// until it closes (true: taken).
+    /// </summary>
+    bool ConsoleKey(Silk.NET.Input.IKeyboard keyboard, SilkKey key, bool ctrl)
+    {
+        if (_hud is null) return false;
+        if (DevConsoleHost.IsConsoleToggle(key, ctrl))
+        {
+            host.DevConsoleHost.ToggleConsole();
+            return true;
+        }
+
+        if (!host.DevConsoleHost.ConsoleOpen) return false;
+        host.DevConsoleHost.ConsoleKey(keyboard, key);
+        return true;
+    }
+
+    /// <summary>
+    /// The key a modal window takes: the keypad's Enter as Enter.
+    /// </summary>
+    static EngineKey? ModalKeyOf(SilkKey key) => key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key);
+
+    /// <summary>
+    /// The settings dialog, the sandbox list, the debug menu, the pick and collision inspector's menu and the interior editor take the key (true:
+    /// taken).
     /// </summary>
     bool MenuKey(SilkKey key, bool ctrl)
     {
         // The full settings dialog (Metal's F10 used to be a preset overlay; the preset now lives in Display).
         if (_settings?.Visible == true)
         {
-            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } settingsKey)
+            if (ModalKeyOf(key) is { } settingsKey)
             {
-                if (settingsKey is EngineKey.F8 or EngineKey.PrintScreen) _screenshotNow = true;
+                if (settingsKey is EngineKey.F8 or EngineKey.PrintScreen) host.ScreenshotRequested = true;
                 else _settings.KeyDown(settingsKey, _shiftDown, ctrl);
             }
             return true;
@@ -1843,7 +1873,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The sandbox animation list, while open, takes every key too.
         if (host.Sandbox.SandboxPicker is { Open: true })
         {
-            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) host.Sandbox.SandboxPicker.KeyDown(pickerKey);
+            if (ModalKeyOf(key) is { } pickerKey) host.Sandbox.SandboxPicker.KeyDown(pickerKey);
             return true;
         }
         if (_hud is not null && DebugToggle(key))
@@ -1855,11 +1885,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The debug menu takes every key while its selection takes typed text, else only the navigation and activation keys; the rest are the game's.
         if (host.DebugMenu.DebugMenuOpen)
         {
-            if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is not { } menuKey) return false;
+            if (ModalKeyOf(key) is not { } menuKey) return false;
             if (!host.DebugMenu.DebugMenuTakesText && !DebugMenu.DebugMenuTakesKey(menuKey)) return false;
             host.DebugMenu.DebugMenuKey(menuKey);
             return true;
         }
+        if (ToolMenuKey(key)) return true;
         if (key == SilkKey.F10 && _settings is not null)
         {
             _settings.Visible = !_settings.Visible;
@@ -1875,32 +1906,43 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The frame lists, the navmesh overlay, the screenshot and the HUD switch (true: taken).
+    /// The pick and collision inspector's menu and the interior editor (both opened from the debug menu's Tools rows) take every key while open,
+    /// before the game interface, whose Esc would open the game menu instead (true: taken).
+    /// </summary>
+    bool ToolMenuKey(SilkKey key)
+    {
+        if (host.DebugMenu.InspectorMenuOpen)
+        {
+            if (ModalKeyOf(key) is { } inspectorKey) host.DebugMenu.InspectorMenuKey(inspectorKey);
+            return true;
+        }
+
+        if (!host.InteriorEditorHost.InteriorEditorOpen) return false;
+        if (ModalKeyOf(key) is { } editorKey) host.InteriorEditorHost.InteriorEditorKey(editorKey);
+        return true;
+    }
+
+    /// <summary>
+    /// The keys that are the host's own and not the session's: Shift+F11 steps the navmesh overlay, Ctrl+F9 the fps counter (F9 is the game's
+    /// quickload), the interface's switch hides the interface (true: taken). The screenshot, statistics, fps and profiler bindings reach
+    /// <see cref="OnTicked"/> as actions, so they can be rebound.
     /// </summary>
     bool ViewKey(SilkKey key)
     {
-        // F11 lists the frame; F12 is the small frame-rate line (the profiler chart waits for Metal timestamps).
         if (key == SilkKey.F11 && _shiftDown)
         {
             host.DebugOverlays.ToggleNavOverlay();
             return true;
         }
-        if (key == SilkKey.F11)
+        if (key == SilkKey.F9 && Ctrl())
         {
-            _statsVisible = !_statsVisible;
+            host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
             return true;
         }
-        if (key == SilkKey.F12)
-        {
-            _frameStatsVisible = !_frameStatsVisible;
-            return true;
-        }
-        if (key is SilkKey.F8 or SilkKey.PrintScreen)
-        {
-            _screenshotNow = true;
-            return true;
-        }
-        if (key == SilkKey.F7 && _hud is not null)
+
+        // toggle_bar (F7, rebindable) hides the game's interface, except while a field of it is being edited.
+        if (_hud is { UiEditing: false } && KeyMap.Map(key) is { } hideKey
+            && host.Session.Bindings.Get(InputAction.ToggleInterface).Contains(Binding.Of(hideKey)))
         {
             host.AgentChannel.InterfaceHidden = !host.AgentChannel.InterfaceHidden;
             Console.WriteLine(host.AgentChannel.InterfaceHidden ? "interface hidden (F7 shows it)" : "interface shown");
@@ -2075,10 +2117,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The quick save and load and floor keys; panning or the free camera lets go of the followed character.
+    /// The screenshot, statistics, fps and profiler keys (as bound), the quick save and load and floor keys; panning or the free camera lets go
+    /// of the followed character.
     /// </summary>
     void OnTicked(ActionState actions)
     {
+        if (actions.Pressed(InputAction.Screenshot)) host.ScreenshotRequested = true;
+        if (actions.Pressed(InputAction.ToggleStats)) host.DebugMenu.StatsVisible = !host.DebugMenu.StatsVisible;
+        if (actions.Pressed(InputAction.ToggleFps)) host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
+        if (actions.Pressed(InputAction.CycleProfiler)) _frameStatsVisible = !_frameStatsVisible;
         if (actions.Pressed(InputAction.QuickSave)) host.Saves.QuickSaveRequested = true;
         if (actions.Pressed(InputAction.QuickLoad)) host.Saves.QuickLoadRequested = true;
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
@@ -2287,13 +2334,20 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     static void Capture(MetalContext ctx, GpuTexture backbuffer, string path)
     {
-        int w = backbuffer.Desc.Width, h = backbuffer.Desc.Height;
-        var pixels = ctx.Readback(backbuffer);
+        WritePicture(ctx, backbuffer, path);
+        Console.WriteLine($"shot      {path} ({backbuffer.Desc.Width}x{backbuffer.Desc.Height})");
+    }
+
+    /// <summary>
+    /// Writes the picture to <paramref name="path"/> as a PNG (its folder made, alpha opaque).
+    /// </summary>
+    static void WritePicture(MetalContext ctx, GpuTexture picture, string path)
+    {
+        var pixels = ctx.Readback(picture);
         for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
         var dir = Path.GetDirectoryName(Path.GetFullPath(path));
         if (dir is not null) Directory.CreateDirectory(dir);
-        PngWriter.Write(path, w, h, pixels);
-        Console.WriteLine($"shot      {path} ({w}x{h})");
+        PngWriter.Write(path, picture.Desc.Width, picture.Desc.Height, pixels);
     }
 
     #endregion
@@ -2443,6 +2497,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool Frame()
     {
         RepeatMenuKey();
+        if (host.DevConsoleHost.ControlQuit) return false;
         double now = _clock.Elapsed.TotalSeconds, frameStart = now, dt = now - _last;
         _last = now;
         TraceFrame(now, dt);
@@ -2453,12 +2508,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         var size = new Vector2D<int>(uiWidth, uiHeight);
         var pointerMouse = _input.Mice.FirstOrDefault();
         var pointerAt = pointerMouse is null ? Vector2.Zero : Pixels(pointerMouse.Position);
+        host.DevConsoleHost.ConsolePointer = pointerAt;
         ShowLoadBar();
         CountFps(dt);
         if (!_still && !_bench.BeginFrame(dt)) return false;
         bool highlighting = false;
         if (!_still) highlighting = AdvanceWorld(dt);
         else if (!ShowStillPanel(size)) return false;
+        PollControl();
         // Ctrl+/ records the next complete frame for Xcode. Start before BeginFrame makes the command buffer and stop
         // after EndFrame commits the present, so the trace holds exactly one frame rather than the three in flight.
         MetalGpuCapture? gpuCapture = StartGpuCapture();
@@ -2475,9 +2532,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 gpuCapture.Abort();
                 _gpuCaptureRequested = true;
             }
+            if (host.ScreenshotRequested && host.AgentChannel.ShotPath is not null && ++host.ShotNoFrame >= 30)
+                host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
             Thread.Sleep(1);
             return true;
         }
+        host.ShotNoFrame = 0;
+        (_shotFrame, host.ScreenshotRequested) = (host.ScreenshotRequested, false);
         _bench.FrameBegun();
         SettleBeforeDraw();
         long recordStart = Stopwatch.GetTimestamp();
@@ -2513,6 +2574,19 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (period > 0) GameHost.Limit(_clock, frameStart, period);
         if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter) return false;
         return true;
+    }
+
+    /// <summary>
+    /// Once per frame, after the world advanced: the dev console's pending <c>version --say</c> bubble, the control channel's poll (the console's
+    /// commands registered, the <c>--exec</c> list, the command file, the timed screenshot) and the screenshot request, which a shown camera
+    /// grid delays two frames. Not in a still, and not without the interface the console and the channel's commands work on.
+    /// </summary>
+    void PollControl()
+    {
+        if (_hud is null || _still) return;
+        host.DevConsoleHost.PumpPendingSay();
+        host.AgentChannel.PollControl();
+        host.ScreenshotRequested = _hud.GateScreenshot(host.ScreenshotRequested);
     }
 
     /// <summary>
@@ -2718,6 +2792,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _bench.Lap(4);
         host.UpdateNav();
         host.DebugOverlays.UpdateNavOverlay();
+        if (_hud is not null) host.DebugOverlays.UpdateInspectorOverlay();
         // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_NO_BUILDINGS") != "1") host.BuildingSync.UpdateBuildings();
         // The interior view (docs/formats/zones.md): the player's building opens, its upper floors and their characters are hidden.
@@ -2807,8 +2882,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 foreach (var (member, cell) in _hud.PortraitBar.SquadBarMembers().Select((member, cell) => (member, cell)))
                     _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
         }
+        // Saved pictures have neither the ground items' labels nor the hover and building outlines.
+        if (_shotFrame && _hud is not null) _hud.GroundItemPicks.HighlightFocus = null;
         var hoverKeys = new List<(long Key, Vector4 Colour)>();
-        bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Visible != true;
+        bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Visible != true
+            && !_shotFrame;
         bool outlining = host.Config.HoverOutline && outlines;
         if (outlining)
         {
@@ -2987,50 +3065,102 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The stats panel, the frame-rate lines, the debug menu and the settings dialog (true: something was written).
+    /// The debug panels (not in a saved picture) and the settings dialog (not in the feedback picture) (true: something was written).
     /// </summary>
     bool DrawDebugText(DebugOverlay overlay, DebugOverlay.OverlayPass overlayPass, Vector2D<int> size, double dt, bool feedbackShot)
     {
-        bool wrote = false;
         // The framebuffer is 2x the window's points on a Retina display: the fixed-pixel debug text would be half size.
         float textScale = MathF.Max(1, size.X / (float)Math.Max(_window.Size.X, 1));
-        if (_statsVisible && !feedbackShot)
-        {
-            _statsLines.Clear();
-            _statsLines.Add($"{_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}");
-            var session = host.Session;
-            var camera = host.Camera;
-            _statsLines.Add($"sim {session.Simulation.TotalTicks} ticks  {session.CurrentSnapshot.Characters.Count} characters  "
-                + $"x{session.TimeScale:0}  {session.Clock.TimeText}");
-            _statsLines.Add($"camera {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0}  yaw {camera.Yaw * 180 / MathF.PI:0}  "
-                + $"pitch {camera.Pitch * 180 / MathF.PI:0}  boom {camera.Distance:0}");
-            if (_characters is not null) _statsLines.Add(_characters.Statistics());
-            if (_foliage is not null)
-                _statsLines.Add($"foliage {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, {_foliage.DrawCalls} calls");
-            overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", _statsLines,
-                (_hud is { UiVisible: true } ? _hud.HudBottom : 0) + 8, textScale);
-            wrote = true;
-        }
-        if (_frameStatsVisible && !feedbackShot)
-        {
-            overlay.TextScaled("Meitou - Metal", 16 * textScale, 16 * textScale, DebugOverlay.TextColour, textScale);
-            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}", 16 * textScale,
-                (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
-            wrote = true;
-        }
-        if (host.DebugMenu.DebugMenuOpen && _hud is not null && !feedbackShot)
-        {
-            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, (_hud.UiVisible ? _hud.HudBottom : 0) + 8, "Ctrl+F10", scale: textScale,
-                pass: overlayPass);
-            wrote = true;
-        }
-
+        bool wrote = !feedbackShot && !_shotFrame && DrawDebugPanels(overlay, overlayPass, size, dt, textScale);
         if (_settings?.Visible == true && !feedbackShot)
         {
             _settings.Draw(size.X, size.Y, overlayPass);
             wrote = true;
         }
         return wrote;
+    }
+
+    /// <summary>
+    /// The fps counter, the stats panel, the frame-rate lines, the tools' hints and panels, the dev console and the debug menu, the menu over the
+    /// rest (true: something was written).
+    /// </summary>
+    bool DrawDebugPanels(DebugOverlay overlay, DebugOverlay.OverlayPass overlayPass, Vector2D<int> size, double dt, float textScale)
+    {
+        bool wrote = false;
+        float menuTop = (_hud is { UiVisible: true } ? _hud.HudBottom : 0) + 8, panelsBottom = menuTop;
+        if (host.DebugMenu.FpsVisible && _fpsText.Length > 0)
+        {
+            panelsBottom = DrawFpsLabel(overlay, panelsBottom, textScale);
+            wrote = true;
+        }
+        if (host.DebugMenu.StatsVisible)
+        {
+            panelsBottom = DrawStatsPanel(overlay, size, dt, panelsBottom, textScale);
+            wrote = true;
+        }
+        if (_frameStatsVisible)
+        {
+            overlay.TextScaled("Meitou - Metal", 16 * textScale, 16 * textScale, DebugOverlay.TextColour, textScale);
+            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}", 16 * textScale,
+                (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
+            wrote = true;
+        }
+        if (DrawToolPanels(overlay, overlayPass, size, panelsBottom, textScale)) wrote = true;
+
+        // The debug menu is drawn last, over every other debug panel.
+        if (host.DebugMenu.DebugMenuOpen && _hud is not null)
+        {
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, menuTop, "Ctrl+F10", scale: textScale, pass: overlayPass);
+            wrote = true;
+        }
+        return wrote;
+    }
+
+    /// <summary>
+    /// The fps counter in a small panel below <paramref name="top"/>; returns the new bottom (the panels add their own margin).
+    /// </summary>
+    float DrawFpsLabel(DebugOverlay overlay, float top, float scale)
+    {
+        float w = _fpsText.Length * overlay.CharWidth * scale + 12 * scale, h = overlay.LineHeight * scale + 8 * scale, y = top + 8 * scale;
+        overlay.Rect(8 * scale, y, 8 * scale + w, y + h, DebugOverlay.PanelColour);
+        overlay.TextScaled(_fpsText, 14 * scale, y + 4 * scale, DebugOverlay.TextColour, scale);
+        return y + h - 8 * scale;
+    }
+
+    /// <summary>
+    /// The stats panel below <paramref name="top"/>; returns its bottom.
+    /// </summary>
+    float DrawStatsPanel(DebugOverlay overlay, Vector2D<int> size, double dt, float top, float scale)
+    {
+        _statsLines.Clear();
+        _statsLines.Add($"{_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}");
+        var session = host.Session;
+        var camera = host.Camera;
+        _statsLines.Add($"sim {session.Simulation.TotalTicks} ticks  {session.CurrentSnapshot.Characters.Count} characters  "
+            + $"x{session.TimeScale:0}  {session.Clock.TimeText}");
+        _statsLines.Add($"camera {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0}  yaw {camera.Yaw * 180 / MathF.PI:0}  "
+            + $"pitch {camera.Pitch * 180 / MathF.PI:0}  boom {camera.Distance:0}");
+        if (_characters is not null) _statsLines.Add(_characters.Statistics());
+        if (_foliage is not null)
+            _statsLines.Add($"foliage {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, {_foliage.DrawCalls} calls");
+        return overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", _statsLines, top, scale);
+    }
+
+    /// <summary>
+    /// The hints of the teleport-on-map and explode-click modes, the pick and collision inspector's menu, the interior editor and the dev console,
+    /// as on the Vulkan host's debug panels: not with the interface hidden (true: something was written).
+    /// </summary>
+    bool DrawToolPanels(DebugOverlay overlay, DebugOverlay.OverlayPass overlayPass, Vector2D<int> size, float top, float scale)
+    {
+        if (_hud is null || host.AgentChannel.InterfaceHidden) return false;
+        var menu = host.DebugMenu;
+        var editor = host.InteriorEditorHost;
+        if (_hud.WorldMap.MapPick is not null && _hud.WorldMap.MapTabShown) menu.DrawMapPickHint(overlay, size.X, size.Y, scale, overlayPass);
+        if (menu.ExplodeClickOn) menu.DrawExplodeClickHint(overlay, size.X, size.Y, scale, overlayPass);
+        if (menu.InspectorMenuOpen) menu.DrawInspectorMenu(overlay, size.X, size.Y, top, scale, overlayPass);
+        if (editor.InteriorEditorOpen) editor.DrawInteriorEditor(overlay, size.X, size.Y, top, scale, overlayPass);
+        if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DrawConsole(overlay, size.X, size.Y, scale, overlayPass);
+        return true;
     }
 
     /// <summary>
@@ -3049,7 +3179,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         Vector2 pointerAt)
     {
         bool wrote = false;
-        if (!_still && !_screenshotNow && !feedbackShot && pointerMouse is not null && _hud is not null)
+        if (!_still && !_shotFrame && !feedbackShot && pointerMouse is not null && _hud is not null)
         {
             bool pointerWorld = !host.Covered && !host.GameOptions.NoPopulation && _settings?.Visible != true && !host.TitleScreen.TitleVisible;
             bool freeLook = pointerWorld && host.Session.Camera.IsFree;
@@ -3131,10 +3261,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The feedback screenshot and an F8 screenshot.
+    /// The pictures asked of this frame: the screenshot, the dev console's <c>studio shot</c> and the feedback shot.
     /// </summary>
     void SavePictures(GpuTexture backbuffer, bool feedbackShot)
     {
+        if (_shotFrame) SaveShot(backbuffer);
+        if (host.CharacterEditor.TakeStudioShot() is { } studio) Capture(_ctx, studio.Picture, studio.Path);
         if (feedbackShot)
         {
             _hud!.FeedbackPanel.ShotWithoutMenus = false;
@@ -3142,14 +3274,29 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             for (int i = 3; i < picture.Length; i += 4) picture[i] = 255;
             host.FeedbackCapture.FeedbackCaptured(picture, backbuffer.Desc.Width, backbuffer.Desc.Height);
         }
-        if (_screenshotNow)
+    }
+
+    /// <summary>
+    /// The screenshot of this frame: the file the control channel asked for, else the next <c>_screens/screenshot_n.png</c> of the install
+    /// (<see cref="GameScreenshots"/>, as on Vulkan). A camera grid hidden for the picture is shown again.
+    /// </summary>
+    void SaveShot(GpuTexture picture)
+    {
+        _shotFrame = false;
+        if (host.AgentChannel.ShotPath is not null)
         {
-            string pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-            if (pictures.Length == 0) pictures = Directory.GetCurrentDirectory();
-            string file = Path.Combine(Directory.CreateDirectory(pictures).FullName, $"meitou-metal-{DateTime.Now:yyyyMMdd-HHmmss}.png");
-            Capture(_ctx, backbuffer, file);
-            _screenshotNow = false;
+            host.AgentChannel.SaveControlShot(file => WritePicture(_ctx, picture, file), picture.Desc.Width, picture.Desc.Height);
         }
+        else
+        {
+            // The tiled shot of screens.cfg's multiplier (docs/game/ui-input.md "Screenshots") is not done on Metal.
+            if (GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)
+                Console.WriteLine($"shot      screens.cfg multiplier {multiplier} is not done on Metal: saving the window's picture");
+            string file = GameScreenshots.Next(host.Install.Root);
+            WritePicture(_ctx, picture, file);
+            Console.WriteLine($"saved     {file}");
+        }
+        _hud?.EndScreenshot();
     }
 
     /// <summary>

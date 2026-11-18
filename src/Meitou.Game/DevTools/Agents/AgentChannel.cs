@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Meitou.Game.Rendering.Frame;
-using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Ui;
 
 namespace Meitou.Game.DevTools.Agents;
@@ -518,16 +517,17 @@ sealed class AgentChannel(GameHost host)
     }
 
     /// <summary>
-    /// The frame asked for by <c>screenshot</c> is on screen: saves it to the requested file and reports.
+    /// The frame asked for by <c>screenshot</c> is on screen: <paramref name="savePng"/> (the host's readback of the picture, <paramref name="width"/>
+    /// x <paramref name="height"/> big) writes it to the requested file, and the client is told.
     /// </summary>
-    internal void SaveControlShot(GpuContext context, GpuTexture picture, int width, int height, bool topDown)
+    internal void SaveControlShot(Action<string> savePng, int width, int height)
     {
         string path = ShotPath!;
         string? id = ShotWaitId;
         ShotPath = ShotWaitId = null;
         try
         {
-            FramebufferCapture.SavePng(context, picture, path, width, height, topDown);
+            savePng(path);
             Console.WriteLine($"saved     {path}");
             if (id is not null) ControlWrite(id, true, $"saved {path} {width}x{height}");
             if (_autoShotAsked) host.DevConsoleHost.ControlQuit = true;

@@ -145,8 +145,10 @@ sealed class InteriorEditorHost(GameHost host)
 
     /// <summary>
     /// Draws the editor's panel: the selected building's layout list, or the open layout's parts with their markers on the screen.
+    /// <paramref name="scale"/> is the framebuffer's pixels per point (2 on a Retina display), <paramref name="pass"/> the overlay pass that
+    /// collects the draw (null: drawn at once).
     /// </summary>
-    internal void DrawInteriorEditor(DebugOverlay o, int width, int height, float top)
+    internal void DrawInteriorEditor(DebugOverlay o, int width, int height, float top, float scale = 1, DebugOverlay.OverlayPass? pass = null)
     {
         var shown = InteriorEditorBuilding();
         // Another building was selected: start over at its layout list.
@@ -180,10 +182,10 @@ sealed class InteriorEditorHost(GameHost host)
             {
                 var parts = ListParts(layout, inUse, lines);
                 hint = "Up/Down pick   C centre on part   Esc back";
-                DrawInteriorMarkers(o, width, height, s.Building, parts);
+                DrawInteriorMarkers(o, width, height, s.Building, parts, scale);
             }
         }
-        DrawEditorPanel(o, width, height, top, title, hint, lines);
+        DrawEditorPanel(o, width, height, top, title, hint, lines, scale, pass);
     }
 
     /// <summary>
@@ -231,24 +233,25 @@ sealed class InteriorEditorHost(GameHost host)
     /// <summary>
     /// The editor's panel at the top left: the title, the rows (the picked one highlighted) and the key hint.
     /// </summary>
-    static void DrawEditorPanel(DebugOverlay o, int width, int height, float top, string title, string hint, List<(string Text, bool Picked)> lines)
+    static void DrawEditorPanel(DebugOverlay o, int width, int height, float top, string title, string hint, List<(string Text, bool Picked)> lines,
+        float scale, DebugOverlay.OverlayPass? pass)
     {
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
-        float pad = 10, x0 = 16, y0 = top + 16;
+        float pad = 10 * scale, x0 = 16 * scale, y0 = top + 16 * scale, lineHeight = o.LineHeight * scale;
         int chars = Math.Max(Math.Max(title.Length, hint.Length), lines.Max(l => l.Text.Length) + 2);
-        float w = chars * o.CharWidth + 2 * pad, h = (lines.Count + 4) * o.LineHeight + 2 * pad;
+        float w = chars * o.CharWidth * scale + 2 * pad, h = (lines.Count + 4) * lineHeight + 2 * pad;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
-        o.Text(title, x0 + pad, y, DebugOverlay.TextColour);
-        y += 1.5f * o.LineHeight;
+        o.TextScaled(title, x0 + pad, y, DebugOverlay.TextColour, scale);
+        y += 1.5f * lineHeight;
         foreach (var (text, picked) in lines)
         {
-            if (picked) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
-            o.Text((picked ? "> " : "  ") + text, x0 + pad, y, DebugOverlay.TextColour);
-            y += o.LineHeight;
+            if (picked) o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            o.TextScaled((picked ? "> " : "  ") + text, x0 + pad, y, DebugOverlay.TextColour, scale);
+            y += lineHeight;
         }
-        o.Text(hint, x0 + pad, y + 0.5f * o.LineHeight, dim);
-        o.Flush(width, height);
+        o.TextScaled(hint, x0 + pad, y + 0.5f * lineHeight, dim, scale);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
@@ -278,7 +281,7 @@ sealed class InteriorEditorHost(GameHost host)
     /// <summary>
     /// Each part of the open layout as a dot where it stands on the screen, the picked one as a bigger square with its name.
     /// </summary>
-    void DrawInteriorMarkers(DebugOverlay o, int width, int height, ResolvedBuilding building, List<LayoutItem> parts)
+    void DrawInteriorMarkers(DebugOverlay o, int width, int height, ResolvedBuilding building, List<LayoutItem> parts, float scale)
     {
         var view = host.Camera.View * host.Camera.Projection(width / (float)Math.Max(height, 1), host.Camera.Near, host.Camera.ViewDistance);
         for (int i = 0; i < parts.Count; i++)
@@ -290,12 +293,12 @@ sealed class InteriorEditorHost(GameHost host)
             if (x < -10 || y < -10 || x > width + 10 || y > height + 10) continue;
             if (i != _interiorEditorPart)
             {
-                o.Rect(x - 3, y - 3, x + 3, y + 3, new Vector4(1f, 0.75f, 0.2f, 0.8f));
+                o.Rect(x - 3 * scale, y - 3 * scale, x + 3 * scale, y + 3 * scale, new Vector4(1f, 0.75f, 0.2f, 0.8f));
                 continue;
             }
-            o.Rect(x - 7, y - 7, x + 7, y + 7, new Vector4(1f, 0.15f, 0.1f, 0.95f));
-            o.Rect(x - 4, y - 4, x + 4, y + 4, new Vector4(1f, 1f, 1f, 1f));
-            o.Text(parts[i].Building.Name, x + 10, y - o.LineHeight / 2, new Vector4(1f, 0.9f, 0.4f, 1));
+            o.Rect(x - 7 * scale, y - 7 * scale, x + 7 * scale, y + 7 * scale, new Vector4(1f, 0.15f, 0.1f, 0.95f));
+            o.Rect(x - 4 * scale, y - 4 * scale, x + 4 * scale, y + 4 * scale, new Vector4(1f, 1f, 1f, 1f));
+            o.TextScaled(parts[i].Building.Name, x + 10 * scale, y - o.LineHeight * scale / 2, new Vector4(1f, 0.9f, 0.4f, 1), scale);
         }
     }
 }

@@ -612,33 +612,35 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// The hint while the switch is on.
+    /// The hint while the switch is on (<paramref name="scale"/> and <paramref name="pass"/> as for <see cref="DrawDebugMenu"/>).
     /// </summary>
-    internal void DrawExplodeClickHint(DebugOverlay o, int width, int height)
+    internal void DrawExplodeClickHint(DebugOverlay o, int width, int height, float scale = 1, DebugOverlay.OverlayPass? pass = null)
     {
         int level = ExplodeClickLevel();
         var v = ExplodeLevels.Values(level, true);
         string text = $"explode-click ON: left click = explode, {ExplodeLevels.Label(level)} (r={v.Radius:0.#}, force {v.Force:0.#}, "
             + $"dmg {v.Damage:0.#}{(_explodeClickArgs.Length > 0 ? ", then " + _explodeClickArgs : "")}). Switch off: explode-click off"
             + (host.Session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
-        float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
-        o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
-        o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
-        o.Flush(width, height);
+        float w = text.Length * o.CharWidth * scale + 20 * scale, x = (width - w) / 2;
+        o.Rect(x, 8 * scale, x + w, (8 + 12) * scale + o.LineHeight * scale, DebugOverlay.PanelColour);
+        o.TextScaled(text, x + 10 * scale, 12 * scale, new Vector4(1f, 0.9f, 0.4f, 1), scale);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
     /// The hint while the Map tab is open and "Teleport on map" is on: the state, how to switch it off and the last result.
     /// </summary>
-    internal void DrawMapPickHint(DebugOverlay o, int width, int height)
+    internal void DrawMapPickHint(DebugOverlay o, int width, int height, float scale = 1, DebugOverlay.OverlayPass? pass = null)
     {
         string text = "Teleport on map: ON, every click teleports (F10 > Teleport on map or 'tpmap off' ends it)";
         string note = _mapTeleportNote;
-        float w = Math.Max(text.Length, note.Length) * o.CharWidth + 20, x = (width - w) / 2, h = o.LineHeight * (note.Length > 0 ? 2 : 1) + 8;
-        o.Rect(x, 8, x + w, 8 + h + 8, DebugOverlay.PanelColour);
-        o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
-        if (note.Length > 0) o.Text(note, x + 10, 12 + o.LineHeight, new Vector4(0.8f, 0.95f, 0.8f, 1));
-        o.Flush(width, height);
+        float lineHeight = o.LineHeight * scale;
+        float w = Math.Max(text.Length, note.Length) * o.CharWidth * scale + 20 * scale, x = (width - w) / 2;
+        float h = lineHeight * (note.Length > 0 ? 2 : 1) + 8 * scale;
+        o.Rect(x, 8 * scale, x + w, 8 * scale + h + 8 * scale, DebugOverlay.PanelColour);
+        o.TextScaled(text, x + 10 * scale, 12 * scale, new Vector4(1f, 0.9f, 0.4f, 1), scale);
+        if (note.Length > 0) o.TextScaled(note, x + 10 * scale, 12 * scale + lineHeight, new Vector4(0.8f, 0.95f, 0.8f, 1), scale);
+        o.Flush(width, height, null, pass);
     }
 
     /// <summary>
@@ -1948,9 +1950,10 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// Draws the inspector's menu at <paramref name="top"/>: each row with its state, the highlighted one marked, and the key hint.
+    /// Draws the inspector's menu at <paramref name="top"/>: each row with its state, the highlighted one marked, and the key hint
+    /// (<paramref name="scale"/> and <paramref name="pass"/> as for <see cref="DrawDebugMenu"/>).
     /// </summary>
-    internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top)
+    internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top, float scale = 1, DebugOverlay.OverlayPass? pass = null)
     {
         var lines = new List<string>();
         for (int i = 0; i < InspectorLabels.Length; i++)
@@ -1962,20 +1965,20 @@ sealed class DebugMenu(GameHost host)
         }
         const string hint = "Up/Down pick   Enter/Space switch   Esc close (switches stay on)";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
-        float pad = 10, x0 = 16, y0 = top + 16;
+        float pad = 10 * scale, x0 = 16 * scale, y0 = top + 16 * scale, lineHeight = o.LineHeight * scale;
         int chars = Math.Max(lines.Max(l => l.Length), hint.Length);
-        float w = chars * o.CharWidth + 2 * pad, h = (lines.Count + 4) * o.LineHeight + 2 * pad;
+        float w = chars * o.CharWidth * scale + 2 * pad, h = (lines.Count + 4) * lineHeight + 2 * pad;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
-        o.Text("Pick & collision inspector", x0 + pad, y, DebugOverlay.TextColour);
-        y += 1.5f * o.LineHeight;
-        for (int i = 0; i < lines.Count; i++, y += o.LineHeight)
+        o.TextScaled("Pick & collision inspector", x0 + pad, y, DebugOverlay.TextColour, scale);
+        y += 1.5f * lineHeight;
+        for (int i = 0; i < lines.Count; i++, y += lineHeight)
         {
             if (i == _inspectorRow)
-                o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
-            o.Text(lines[i], x0 + pad, y, DebugOverlay.TextColour);
+                o.Rect(x0 + 4 * scale, y, x0 + w - 4 * scale, y + lineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            o.TextScaled(lines[i], x0 + pad, y, DebugOverlay.TextColour, scale);
         }
-        o.Text(hint, x0 + pad, y + 0.5f * o.LineHeight, dim);
-        o.Flush(width, height);
+        o.TextScaled(hint, x0 + pad, y + 0.5f * lineHeight, dim, scale);
+        o.Flush(width, height, null, pass);
     }
 }
