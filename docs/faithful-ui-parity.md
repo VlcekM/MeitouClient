@@ -68,10 +68,9 @@ The ones that limit these screens:
 
 | Screen | Backend gaps |
 | --- | --- |
-| Trade | Smuggling ([Trade](simulation.md#trade)) |
-| Dialogue | Conditions on state Meitou lacks answer "no" ([Dialogue](simulation.md#dialogue)) |
-| New game | The seven numeric options are Meitou-encoded ([New-game difficulty](simulation.md#new-game-difficulty)) |
-| Import | The salvage of a save without a squad, the "town too close" removal, the old-save tick disabling ([rules](formats/save.md#importing-a-game-savemanagerimportgame-fun_140378a30)) |
+| Trade | A smuggler's own answer ([Trade](simulation.md#trade)) |
+| Dialogue | The effects and events listed as not built ([Dialogue](simulation.md#dialogue), [dialogue](game/dialogue.md#meitou-design)) |
+| Import | The salvage of a save without a squad ([rules](formats/save.md#importing-a-game-savemanagerimportgame-fun_140378a30)) |
 
 ## Validation
 

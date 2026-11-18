@@ -277,6 +277,19 @@ holds refuses the second mod.
   Every player character is asked, so a source checks that the character is one of its own squads'. Several mods can each add sources.
   `RegisterJob(type, source)` is the other kind: one contributor per job type, for the types a mod claimed with `AddJobType`. NPCs do not
   go through this step; their AI packages run them.
+- **Task handlers** (`Meitou.Simulation.Ai`, [task starts](simulation.md#task-starts)): a registered system implementing `ITaskOwner` gets
+  `RegisterTasks(TaskHandlers)` once when the world is made, in system order, and registers an `ITaskHandler` (`Start`, `End`, `Done`) per
+  `CharacterTask`, per row (`Register(TaskType, handler)`, a mod's row from 1000 up) or per row on a site (`RegisterOnSite`). One handler per
+  key: a later registration replaces an earlier one, so a mod system replaces a standard handler only when it sits after that handler's system.
+  Handlers run in the serial phases only (`TaskStart.Start` throws in a parallel one).
+- **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker,
+  target) pairs it acts out now in `Publish(World, SquadGoals)` with `goals.Add(squad, worker, GoalTarget.Of(body) or GoalTarget.At(site id))`.
+  It is asked each time a finder takes a snapshot (`SquadGoals.Of`, serial) and once at the end of every tick; a pair stays claimed 3 s after
+  it was last published (`World.Claims`). The finders that skip what a squad mate already works on (NPC looting, the medic and splint finders,
+  captive gathering, production errands) then skip the mod's targets too. `Publish` only reads the world, in a fixed order: the claims steer
+  later starts, so they must be the same on every run.
+  Neither hook is caught as a mod fault outside the mod system's own phases: a throw from a handler or `Publish` called by another system's
+  step escapes that step.
 - **Mod jobs:** `AddJobType(type, name)` claims a task type number from 1000 up (`SimulationExtensions.FirstModCode`; the game's tasks stay
   below it; one mod per type). The mod puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` of its system); like the
   game's jobs, they are worked only while the character's jobs switch is on. Taking a mod job off the list does not stop a task the mod already
