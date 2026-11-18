@@ -202,12 +202,13 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The richness line of the building <paramref name="instance"/> names (<c>ProductionBuilding::getGUIFertility</c>, function 1 or 27 with a
-    /// resource): a machine's yield, or a rock's before it has been mined (no machine yet); null for anything else.
+    /// resource): a machine's yield (a site's, or a town building's <see cref="TownWorkId"/> machine: the slot tests no owner), or a rock's before
+    /// it has been mined (no machine yet); null for anything else.
     /// </summary>
     public RichnessView? RichnessOf(World world, string? instance)
     {
         if (instance is null) return null;
-        if (world.Machines.Find(instance) is { } m)
+        if ((world.Machines.Find(instance) ?? world.Machines.Find(TownWorkPrefix + instance)) is { } m)
         {
             return m.Data is { Function: MachineData.MineFunction or MachineData.NaturalMineFunction, Resource: not 0 and var r }
                 ? new(instance, r, m.Yield) { Owner = Natural(instance)?.Owner ?? -1, TownName = TownNameOf(world, Natural(instance)) }

@@ -754,7 +754,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (player.BuildingSelection.BuildingFocus() is { } focus)
         {
             var (_, _, _, status, _, _) = player.BuildingSelection.BuildingLines(focus);
-            if (BuildingStatusTip(status, player.Production.Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
+            if (BuildingStatusTip(status, player.BuildingSelection.PanelMachine(focus)) is { } tip) Add("HealthText", tip);
         }
         else if (player.Lead() is { Body: not null } lead) Add("HealthText", HudPanels.HealthWord(lead).Tip);
     }
