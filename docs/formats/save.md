@@ -742,7 +742,9 @@ resolves. Missing keys read as 0 / "" / false (**Observed**).
 every `fwc id` and all 77 `poss time` are 0 (no campaign ever started; no save has a player outpost, which rolls need). Each faction's
 `poss` list is its merged FACTION `campaigns` list in order (103 of 103). `updatetime` lies in (clock, clock + 6], spread over about
 0.6 h (all 40 in the two day-1 saves). Meitou's `SaveBuilder` writes `updatetime` 40 and zero counts, as a new game; a captured
-world writes its war managers over the loaded state (unknown keys kept, numbered keys past the new counts removed). Meitou also writes floats
+world writes its war managers over the loaded state (unknown keys kept, numbered keys past the new counts removed), adding the record for a
+faction the save has none for (an imported save has none: the import drops them). **Observed** (headless `probe wars`, #952's imported save):
+without that, a running Bandit Demands raid was gone after a save and load and its squad came back as a plain roaming one. Meitou also writes floats
 `meitou phase start c<i>`, `meitou fight start c<i>`, `meitou arrived c<i>`, `meitou announced c<i>` (absolute game hours; absent:
 not started) and, per campaign platoon, `meitou carry start p<i>` (beside `p<i>`; a cannibal assault's carrier stamp), and reads them back (a missing phase start is the load's hour, as the original; the
 older campaign-wide `meitou carry start c<i>` is read onto each platoon and dropped on the next write). **Observed** (headless, real data): the four campaign floats come back equal.
