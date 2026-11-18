@@ -284,19 +284,22 @@ holds refuses the second mod.
   key: a later registration replaces an earlier one, so a mod system replaces a standard handler only when it sits after that handler's system.
   `Register(row, handler)` with a `TaskType` row of the mod's own (1000 up) sends every start of that row, whatever its `CharacterTask`, to the
   mod's `ITaskHandler`: `Start` (the row is eligible, the fight and the task before have ended, the provenance `CharacterCold.Running` is
-  recorded), `End(task, TaskEnd)` when another start replaces it (a fight's too) or a system stops it (`Replaced`, `Stopped`, `Done`), and `Done`
-  (by default: the character's task is no longer that task; the player's order queue reads it). A row's handler takes the place of the task's, so
-  the engine's walk does not start by itself: call the task's own (`tasks.Of(task)`) from it to keep it. `Register(CharacterTask, handler)`
-  replaces the engine's handler of that task for every row; a mod registers rows only. Handlers run in the serial phases only (`TaskStart.Start`
-  throws in a parallel one). A throw from `RegisterTasks` is not caught (the world is not made); one from a handler is caught as a fault of the
-  mod's own system only when that system's phase started or ended the task (the system stops), and is not caught when an engine system did.
+  recorded), `End(task, TaskEnd)` when a serial start replaces it (a fight's too) or `TaskStart.End` ends it (`Replaced`, `Stopped`, `Done`), and
+  `Done` (by default: the character's task is no longer that task; the player's order queue reads it). No handler runs for `TaskStart.Stand` (a
+  knock-out, a trade or a conversation stopping an AI walk or stand), for the AI's own starts in its parallel think (`TaskStart.StartOwn`) or for
+  the act-out's own `Step` / `StepTo`, so a mod also checks its characters in its own serial step (alive, not down, `Running` still its row and
+  running the task). A row's handler takes the place of the task's, so the engine's walk does not start by itself: call the task's own
+  (`tasks.Of(task)`) from it to keep it. `Register(CharacterTask, handler)` replaces the engine's handler of that task for every row; a mod
+  registers rows only. Handlers run in the serial phases only (`TaskStart.Start` throws in a parallel one). A throw from `RegisterTasks` is not
+  caught (the world is not made); one from a handler is caught as a fault of the mod's own system only when that system's phase started or ended
+  the task (the system stops), and is not caught when an engine system did.
 - **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker, target)
   pairs it acts out now in `Publish(World, SquadGoals)` with `goals.Add(squad, worker, GoalTarget.Of(body) or GoalTarget.At(site id))`. It is
   asked serially, in system order, each time a finder takes a snapshot (`SquadGoals.Of`) and once at the end of every tick; a pair stays claimed
   3 s after it was last published (`World.Claims`, `GoalClaims.Seconds`). The finders that skip what a squad mate already works on
   (`SquadGoals.Working`, `IsMine`: NPC looting, the medic and splint finders, captive exports, production errands) then skip the mod's targets
   too. It chooses nothing and starts nothing. `Publish` only reads the world, in a fixed order: the claims steer later starts, so they must be
-  the same on every run. A throw is not caught as a mod fault (it reaches the tick or the finder's system).
+  the same on every run. A throw is not caught as a mod fault: the world's end of tick and the engine's finders call it.
 - **Mod jobs:** `AddJobType(type, name)` claims a task type number from 1000 up (`SimulationExtensions.FirstModCode`; the game's tasks stay
   below it; one mod per type). The mod puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` of its system); like the
   game's jobs, they are worked only while the character's jobs switch is on. Taking a mod job off the list does not stop a task the mod already
