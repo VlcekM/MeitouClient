@@ -39,6 +39,13 @@ static class BodyHash
                 h.Add(0x536B6C4D);
                 modSkills.AddTo(ref h);
             }
+
+            // Code mods' status effects, only while one is on, so hashes without them are unchanged.
+            if (stats.EffectsOrNull is { Count: > 0 } effects)
+            {
+                h.Add(0x45666654);
+                effects.AddTo(ref h);
+            }
         }
         if (medical is null)
         {

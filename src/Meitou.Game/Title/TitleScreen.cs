@@ -106,7 +106,7 @@ sealed class TitleScreen(GameHost host)
         // Its body from its saved stats and hunger, as the world publishes it (CharacterSnapshot.Build; FUN_140531820 skips robots).
         bool bodyFromStats = saved is { Race: var race } && stats is not null && race.GetBool("is robot") != true;
         var build = bodyFromStats
-            ? Data.Characters.CharacterShape.BuildFromStats(saved!.Female, stats!, static (stats, s) => stats[s], hunger)
+            ? Data.Characters.CharacterShape.BuildFromStats(saved!.Female, stats!, static (stats, s) => stats.Stored(s), hunger)
             : (Data.Characters.BodyBuild?)null;
         _titleComposition = new(host.Install, db, host.Scene.GroundAt, host.Sandbox.SandboxRecord(db), saved) { SavedBuild = build };
         if (host.PopData is { } data && host.AnimationLengths is { } lengths && host.AnimationLibrary is { } library)

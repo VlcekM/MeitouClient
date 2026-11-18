@@ -35,6 +35,11 @@ public sealed class CharacterStats
     ModSkillLevels? _modSkills;
 
     /// <summary>
+    /// The code mods' status effects on this character, made on first use (<see cref="Effects"/>).
+    /// </summary>
+    ActiveStatusEffects? _effects;
+
+    /// <summary>
     /// What this character's XP gains are multiplied by (Advanced settings "Squad XP" and "Others' XP", <see cref="BodyOptions.SquadXp"/>; Meitou
     /// only, the game has 1). <see cref="BodySystem"/> sets it on every body step from the character's side; not saved.
     /// </summary>
@@ -84,6 +89,17 @@ public sealed class CharacterStats
     /// The mod skill levels if any were ever made.
     /// </summary>
     internal ModSkillLevels? ModSkillsOrNull => _modSkills;
+
+    /// <summary>
+    /// The code mods' status effects on this character (docs/modding.md "Status effects"), null if none was ever put on; put them on and take them
+    /// off through <see cref="StatusEffect"/>.
+    /// </summary>
+    public ActiveStatusEffects? EffectsOrNull => _effects;
+
+    /// <summary>
+    /// The status effects, made on first use.
+    /// </summary>
+    internal ActiveStatusEffects Effects => _effects ??= new();
 
     /// <summary>
     /// A storage's value with its modifiers.
@@ -293,7 +309,8 @@ public sealed class CharacterStats
     /// Writes the saved STATS floats (docs/formats/save.md): the stat's field name (<c>strength</c>, <c>attack</c>, <c>toughness2</c>, <c>mass
     /// combat</c>...) to its value. The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not
     /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value. The code mods'
-    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, none without them.
+    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, none without them, and their status effects under
+    /// <see cref="ActiveStatusEffects.SaveKeyPrefix"/> (the record's earlier effect keys removed first) once this character had one.
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
@@ -301,12 +318,14 @@ public sealed class CharacterStats
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = written[i];
         _modSkills?.WriteSave(floats);
+        _effects?.WriteSave(floats);
     }
 
     /// <summary>
     /// Reads the saved STATS floats written by <see cref="WriteSave"/> (a missing key keeps the default), except that a save without
     /// <c>lockpicking</c> gets half the character's thievery and one without <c>toughness2</c> its defence as toughness (<c>FUN_14064b6a0</c>,
-    /// docs/game/character-stats.md). Every mod skill level is kept, registered or not.
+    /// docs/game/character-stats.md). Every mod skill level and status effect is kept, registered or not; a registered effect's stat amounts are set
+    /// again.
     /// </summary>
     public static CharacterStats ReadSave(IReadOnlyDictionary<string, float> floats)
     {
@@ -317,6 +336,7 @@ public sealed class CharacterStats
         // FUN_14064b6a0: toughness = defence
         if (!floats.ContainsKey("toughness2")) stats._values[(int)StatsEnumerated.Toughness] = stats._values[(int)StatsEnumerated.MeleeDefence];
         stats._modSkills = ModSkillLevels.ReadSave(floats);
+        stats._effects = ActiveStatusEffects.ReadSave(floats, stats);
         return stats;
     }
 }

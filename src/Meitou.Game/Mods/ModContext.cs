@@ -266,6 +266,26 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A named, timed status effect (docs/modding.md "Status effects"): the mod's systems put it on and take it off characters with
+    /// <see cref="Simulation.Bodies.StatusEffect.Apply"/> and <see cref="Simulation.Bodies.StatusEffect.Remove"/>; the game shows it on the HUD's
+    /// State line, adds its stat amounts while it lasts, ends it when its time runs out and saves it with the character. Its stat amounts are copied
+    /// here. An id another effect has refuses it.
+    /// </summary>
+    public Simulation.Bodies.StatusEffect AddStatusEffect(Simulation.Bodies.StatusEffect effect)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(effect);
+        // The stat amounts are copied now: a later change of the mod's list, even inside Initialize, does nothing.
+        Simulation.Bodies.StatusEffectModifier[]? modifiers = effect.Modifiers is null ? null : [.. effect.Modifiers];
+        var asked = modifiers is null ? effect : effect with { Modifiers = modifiers };
+        if (Simulation.Bodies.StatusEffects.Refusal(asked, Pending.StatusEffects.Select(p => p.Effect)) is { } refusal)
+            throw new ArgumentException(refusal, nameof(effect));
+
+        Pending.StatusEffects.Add((effect, modifiers!));
+        return effect;
+    }
+
+    /// <summary>
     /// A combat move for a character the game plays nothing for (docs/modding.md "Combat moves"): <paramref name="source"/> answers a
     /// <see cref="CombatMove"/> (technique and progress) or null; the first mod's answer wins. It runs in the animation's parallel step for every
     /// stepping character, and what it answers is part of the hashed world (the move's layers and root motion), so it must be cheap,

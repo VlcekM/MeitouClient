@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Numerics;
+using System.Text;
 using Meitou.Data.Ui;
 using Meitou.Game.Editor;
 using Meitou.Game.Host;
 using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Weather;
@@ -96,6 +98,7 @@ sealed class HudPanels(PlayerInterface player)
         var body = lead.Body;
         string? state, colour = null, tooltip = null;
         float? fill = null;
+        bool normal = false;
 
         if (body is { Dead: true })
             (state, colour, tooltip) = (Loc.Tr("Dead"), PlayerInterface.BadColour, Loc.Tr("This guy is dead and gone."));
@@ -128,12 +131,13 @@ sealed class HudPanels(PlayerInterface player)
             (state, tooltip) = (Loc.Tr("Defensive"),
                 Loc.Tr("In defensive combat mode the character will not even try to attack, focusing entirely on defense for a +20 skill bonus."));
         }
-        else state = Loc.Tr("Normal");
+        else (state, normal) = (Loc.Tr("Normal"), true);
 
         // The ranged line keeps its row over the weather notice (owner's call, #525: the original's precedence is Unknown).
         if (body is not { Dead: true } && lead.Prison is null && fill is null && lead.WeatherNotice != WeatherNotice.None)
         {
             (state, tooltip) = WeatherText(lead.WeatherNotice, lead.WeatherNoticeProtection);
+            normal = false;
             colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet)
                 ? PlayerInterface.GoodColour
                 : PlayerInterface.BadColour;
@@ -141,9 +145,54 @@ sealed class HudPanels(PlayerInterface player)
 
         PlayerInterface.HudLine[] rest =
             [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task), Tooltip: Loc.Tr("Current goal of this character.")), EncumbranceLine(lead)];
+        if (state is not null && lead.Effects.Count > 0) (state, colour, tooltip) = WithEffects(lead.Effects, state, colour, tooltip, normal);
+
         var stateLine = new PlayerInterface.HudLine(Loc.Tr("State:"), state ?? "", ValueColour: colour, Tooltip: tooltip) { Fill = fill };
         PlayerInterface.HudLine[] lines = state is null ? rest : [stateLine, .. rest];
         return body is { Dead: true } || lead.Hud?.Skill is not { } skill ? lines : [.. lines, SkillLine(skill, unit)];
+    }
+
+    /// <summary>
+    /// The State line with the code mods' status effects (docs/modding.md "Status effects"): where it would read Normal, the first effect's name in its
+    /// tone's colour (" +N" for N more); its tooltip lists every effect (name, stacks, time left, description) after the line's own.
+    /// </summary>
+    static (string State, string? Colour, string Tip) WithEffects(IReadOnlyList<StatusEffectView> effects, string state, string? colour,
+        string? tooltip, bool normal)
+    {
+        var tip = new StringBuilder(tooltip ?? "");
+        foreach (var e in effects)
+        {
+            if (tip.Length > 0) tip.Append('\n');
+            tip.Append(TipTitle).Append(EffectHeading(e));
+            if (e.Effect.Description.Length > 0) tip.Append('\n').Append(Loc.Tr(e.Effect.Description));
+        }
+
+        if (!normal) return (state, colour, tip.ToString());
+
+        var first = effects[0].Effect;
+        string name = effects.Count > 1 ? Loc.Tr("{1} +{2,num}", Loc.Tr(first.Name), effects.Count - 1) : Loc.Tr(first.Name);
+        string? tone = first.Tone switch
+        {
+            StatusEffectTone.Good => PlayerInterface.GoodColour,
+            StatusEffectTone.Bad => PlayerInterface.BadColour,
+            _ => null,
+        };
+        return (name, tone, tip.ToString());
+    }
+
+    /// <summary>
+    /// An effect's tooltip heading: its name, " xN" with stacks, and the game time left in hours and minutes, rounded up.
+    /// </summary>
+    static string EffectHeading(StatusEffectView e)
+    {
+        string name = e.Stacks > 1 ? Loc.Tr("{1} x{2,num}", Loc.Tr(e.Effect.Name), e.Stacks) : Loc.Tr(e.Effect.Name);
+        if (double.IsPositiveInfinity(e.HoursLeft)) return name;
+
+        long minutes = (long)Math.Ceiling(e.HoursLeft * 60);
+        string left = minutes >= 60
+            ? Loc.Tr("{1,num}h {2,num}m left", minutes / 60, minutes % 60)
+            : Loc.Tr("{1,num}m left", minutes);
+        return Loc.Tr("{1} ({2})", name, left);
     }
 
     /// <summary>

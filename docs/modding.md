@@ -456,7 +456,33 @@ holds refuses the second mod.
   saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
   a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
-- **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
+- **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
+  `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
+  character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`
+  reads it (ticks left, -1 forever, and stacks) and `stats.EffectsOrNull` lists every effect a character holds. Applying it again follows
+  `Stacking`: `Refresh` starts the time again, `Extend` adds the hours, `Stack` adds stacks up to `MaxStacks` and starts the time again (a stack
+  count read from a save is held to the same rule). While it lasts its `Modifiers` (stat, amount per stack; the list is copied at registration) are
+  set through the character's [stat modifiers](#registration-surface) under the key `effect:<id>`, so they work and display as any modifier (a mod's
+  own modifier key must not start with `effect:`). It ends by itself on the tick its time runs out, counted in ticks of game time after the slow
+  world, only while its character is in the world (an NPC whose platoon is off screen keeps its time; a corpse's counts on). The HUD's State line
+  shows the effects of a selected or inspected character: where it would read Normal, the first effect's name (in registration order) in its tone's
+  colour, with "+N" for N more; its tooltip lists every effect with its stacks, game time left and description, after the line's own text. Any other
+  state (dead, caged, unconscious, sleeping, aiming or reloading, defensive, a weather notice) keeps its word, so the effects are then in the
+  tooltip only, and in a cage without a lock, which has no State line, nowhere. Saved with the character in its STATS record
+  ([save](formats/save.md#compatibility-exceptions)), so it follows the character through squad moves and recruiting, and set again with its amounts
+  at a load. An effect of a mod not running now is kept and saved again, not shown, adding nothing, its time standing still;
+  `StatusEffects.Forget(stats, id)` drops any id, registered or not (an effect a mod renamed, or one of a mod that is gone). Effects enter the state
+  hash while a character holds one. Apply, Remove and Forget run from the mod's system outside the parallel phases, as stat modifiers. `Forget`
+  drops any mod's effect, by design (it is the cure for orphans), so a mod forgets only ids it knows to be its own or orphaned. Refused: a bad id (1
+  to 48 letters, digits, `_`, `.`, `-`), an id another effect has (case-insensitive), a blank name or one over 32 characters, `MaxStacks` below 1,
+  an unknown tone or stacking, a null list or description, or a modifier on a stat without storage, on a storage another of its modifiers names
+  (Medic, HiveMedic and Vet share one), or whose amount, or amount times `MaxStacks`, is not finite. With no effect registered the tick step does
+  nothing, and a save without effect keys makes, saves and hashes nothing. Engine API, not in the original.
+- **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`. Every system's `Inputs` gets every due
+  command (`World.RunInputs`), so a system picks its own by type. A type is its load context's: each mod loads its assemblies into its own context
+  ([loading](#loading)), so another mod's command type, even from a copy of the same DLL in another mod folder, is a different type and does not
+  match. A mod whose commands another mod's system should handle shares the type through a [dependency](modding-dependencies.md); otherwise each
+  mod handles its own commands in a system of its own.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and

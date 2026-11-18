@@ -483,6 +483,7 @@ public sealed partial class World
         s.ModSkills = detailed && Bodies.ModSkills.All.Count > 0 && cold!.Stats is { } modStats
             ? Array.AsReadOnly(Bodies.ModSkills.Levels(modStats))
             : [];
+        s.Effects = detailed && cold!.Stats is { EffectsOrNull.Count: > 0 } effectStats ? Bodies.StatusEffects.Shown(effectStats, TickSeconds) : [];
         s.LimbBits = cold?.Medical?.LimbBits ?? 0;
         s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
         s.Knockdown = cold?.Knockdown ?? default;
