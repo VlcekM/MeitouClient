@@ -286,12 +286,12 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         s.AppendLine(row.Body is { } body ? Unmention(body) : "_No description._").AppendLine();
 
         // One header row and one value row: GitHub has no header-less tables, and an empty header shows as a blank bar.
-        string? discord = row.Discord is { } name ? $"`{name.Replace('`', '\'').Replace('|', '/')}`" : null;
+        string? discord = row.Discord is { } name ? Code(name) : null;
         s.AppendLine($"| Meitou version | Platform |{(discord is null ? "" : " Discord |")} Data files |");
         s.AppendLine($"|---|---|{(discord is null ? "" : "---|")}---|");
-        string commitText = row.Commit is { } commit ? $" (`{commit}`)" : "";
+        string commitText = row.Commit is { } commit ? $" ({Code(commit)})" : "";
         string discordText = discord is null ? "" : $" {discord} |";
-        s.AppendLine($"| `{row.Version}`{commitText} | {row.Platform} |{discordText} {row.Mods.Length} |").AppendLine();
+        s.AppendLine($"| {Code(row.Version)}{commitText} | {row.Platform} |{discordText} {row.Mods.Length} |").AppendLine();
         AppendLoadOrder(s, row, linked, page);
         if (row.Location is { } location) s.AppendLine($"Camera: `{location.Replace('`', '\'')}`").AppendLine();
 
@@ -365,6 +365,12 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// A player's text cannot ping anyone: a zero-width space after each @.
     /// </summary>
     static string Unmention(string text) => text.Replace("@", "@​", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <paramref name="text"/> as a code span in a table cell: its backticks and pipes are replaced, so it can neither end the span (and mention
+    /// a user or draw a link after it) nor start a cell.
+    /// </summary>
+    static string Code(string text) => $"`{text.Replace('`', '\'').Replace('|', '/')}`";
 
     /// <summary>
     /// <paramref name="s"/> trimmed, without control characters (line breaks kept when <paramref name="lines"/>) and cut to <paramref name="max"/>;
