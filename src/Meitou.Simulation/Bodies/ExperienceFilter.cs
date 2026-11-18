@@ -74,13 +74,13 @@ public enum ExperienceSource
 public readonly record struct ExperienceGain(long Tick, CharacterId Character, StatsEnumerated Skill, float Amount, ExperienceSource Source);
 
 /// <summary>
-/// A system that scales or cancels experience gains (docs/modding.md "Experience"): asked for every gain the game makes to a character in the
-/// world, from whatever thread made it (a tick's parallel phases, its serial steps, or the paused interface's commands between ticks on the
-/// host's thread, with the coming tick's number), in system order, each filter seeing the amount as the earlier ones left it, until one answers
-/// 0. It must be thread-safe, quick and deterministic: a pure read of the gain and of world state the tick has settled; it must not grant
-/// experience itself (that would ask it again, without end). A filter that throws or answers an amount that is negative or not a finite number
-/// leaves that gain as it came; it is still asked for the rest of that tick and not from the next, and the fault enters the state hash. Engine
-/// API, not in the original.
+/// A system that scales or cancels experience gains (docs/modding.md "Experience"): asked for every gain the game makes to one of a character's own
+/// stats in the world (not for a code mod's skill, also when a weapon naming it trains it), from whatever thread made it (a tick's parallel phases,
+/// its serial steps, or the paused interface's commands between ticks on the host's thread, with the coming tick's number), in system order, each
+/// filter seeing the amount as the earlier ones left it, until one answers 0. It must be thread-safe, quick and deterministic: a pure read of the
+/// gain and of world state the tick has settled; it must not grant experience itself (that would ask it again, without end). A filter that throws
+/// or answers an amount that is negative or not a finite number leaves that gain as it came; it is still asked for the rest of that tick and not
+/// from the next, and the fault enters the state hash. Engine API, not in the original.
 /// </summary>
 public interface IExperienceFilter : ITickSystem
 {
