@@ -975,19 +975,16 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     internal (string Pointer, CharacterId Target, Action? Do)? QuickOrderFor(CharacterSnapshot c, IReadOnlyList<CharacterId> selection)
     {
         var characters = Session.CurrentSnapshot.Characters;
-        CharacterSnapshot? lead = null;
-        float nearest = float.MaxValue;
-        foreach (var o in characters)
-        {
-            if (selection.Count > 0 ? !selection.Contains(o.Id) : !o.IsPlayer) continue;
-            float d = Vector3.DistanceSquared(o.Position, c.Position);
-            if (d < nearest) (lead, nearest) = (o, d);
-        }
-        if (lead is null) return null;
+        if (NearestTo(c, characters, o => selection.Count > 0 ? selection.Contains(o.Id) : o.IsPlayer) is not { } lead) return null;
+
+        // One character's order goes to the nearest selected that stands and is no animal (FUN_1407fae70); with only animals selected the click
+        // gives nothing.
+        var doer = NearestTo(c, characters, o => selection.Contains(o.Id) && !o.Down && !o.Animal)?.Id ?? default;
         var world = Session.World;
         long tick = world.Tick;
-        bool give = selection.Count > 0;
+        bool give = selection.Count > 0 && characters.Any(o => selection.Contains(o.Id) && !o.Animal);
         Action? Do(Action a) => give ? a : null;
+        Action? One(Action a) => doer.IsNone ? null : Do(a);
         bool carried = !c.CarriedBy.IsNone;
         if (carried && characters.FirstOrDefault(o => o.Id == c.CarriedBy) is not { IsPlayer: true }) return null;
         bool dead = c.Body is { Dead: true }, down = c.Down;
@@ -1005,10 +1002,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             }
             // A standing member of an independent squad keeping a shop a code mod gave it trades, as a trader with no line to say (Meitou only).
             if (!down && c.IsTrader && Independent(id))
-                return ("talk", id, Do(() => Say(new Simulation.Trading.OpenTrade(lead.Id, id) { Tick = tick })));
+                return ("talk", id, One(() => Say(new Simulation.Trading.OpenTrade(doer, id) { Tick = tick })));
             if (!down) return null;
-            if (!carried) return lead.Id == id ? null : ("lift", id, Do(() => Say(new Simulation.Carrying.PickUpOrder([], id) { Tick = tick })));
-            return lead.Carrying == id ? ("lift", id, Do(() => Say(new Simulation.Carrying.PutDownOrder([lead.Id]) { Tick = tick }))) : null;
+            if (!carried) return lead.Id == id ? null : ("lift", id, One(() => Say(new Simulation.Carrying.PickUpOrder([], id) { Tick = tick })));
+            return lead.Carrying == id ? ("lift", id, One(() => Say(new Simulation.Carrying.PutDownOrder([doer]) { Tick = tick }))) : null;
         }
         bool sneaking = c.CanStealthKo;
         if (PointerPanel.Hostile(c))
@@ -1016,7 +1013,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (down) return ("search", id, loot);
             if (sneaking)
                 return c.Slave is { State: 1 } ? ("scavenge", id, loot)
-                    : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
+                    : ("knockout", id, One(() => Say(new Simulation.Carrying.StealthKoOrder([doer], id) { Tick = tick })));
             if (c.Prison is not null) return ("search", id, loot);
             if (c.InCombat || !(c.IsDiplomat || c.Slave is { State: 1 }) || !world.CanTalk(id, lead.Id))
             {
@@ -1029,28 +1026,34 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                         () => Say(new Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));
             }
-            return (TalkPointer(c), id, Do(() => Say(new Simulation.Dialogue.TalkOrder(lead.Id, id) { Tick = tick })));
+            return (TalkPointer(c), id, One(() => Say(new Simulation.Dialogue.TalkOrder(doer, id) { Tick = tick })));
         }
         if (down) return (c.NoLootGuilt ? "search" : "scavenge", id, loot);
         if (sneaking)
         {
             if (c.Prison is not null)
-                return ("lockpick", id, Do(() =>
+                return ("lockpick", id, One(() =>
                 {
-                    Say(new Simulation.Locks.PickLockOrder([lead.Id], id) { Tick = tick });
-                    Say(new Simulation.Locks.ShackleOrder([lead.Id], id, Simulation.Locks.ShackleWork.Pick) { Tick = tick });
+                    Say(new Simulation.Locks.PickLockOrder([doer], id) { Tick = tick });
+                    Say(new Simulation.Locks.ShackleOrder([doer], id, Simulation.Locks.ShackleWork.Pick) { Tick = tick });
                 }));
             return c.Slave is { State: 1 } ? ("scavenge", id, loot)
-                : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
+                : ("knockout", id, One(() => Say(new Simulation.Carrying.StealthKoOrder([doer], id) { Tick = tick })));
         }
 
         // Order 12 (Task_PlayerTalkto) walks over and starts the conversation, a trader's included: its trade window is a reply of that conversation
         // (DA_TRADE).
-        if (world.CanTalk(id, lead.Id)) return (TalkPointer(c), id, Do(() => Say(new Simulation.Dialogue.TalkOrder(lead.Id, id) { Tick = tick })));
+        if (world.CanTalk(id, lead.Id)) return (TalkPointer(c), id, One(() => Say(new Simulation.Dialogue.TalkOrder(doer, id) { Tick = tick })));
         // engine: a shop whose keeper has no line to say
-        if (c.IsTrader) return ("talk", id, Do(() => Say(new Simulation.Trading.OpenTrade(lead.Id, id) { Tick = tick })));
+        if (c.IsTrader) return ("talk", id, One(() => Say(new Simulation.Trading.OpenTrade(doer, id) { Tick = tick })));
         return world.RegardsFriendly(id, lead.Id) ? ("green", id, null) : null;   // slot 126: the target regards the lead as friendly
     }
+
+    /// <summary>
+    /// The one of <paramref name="characters"/> passing <paramref name="take"/> nearest <paramref name="target"/>; null when none does.
+    /// </summary>
+    static CharacterSnapshot? NearestTo(CharacterSnapshot target, IEnumerable<CharacterSnapshot> characters, Func<CharacterSnapshot, bool> take) =>
+        characters.Where(take).MinBy(o => Vector3.DistanceSquared(o.Position, target.Position));
 
     /// <summary>
     /// A pointer move: to the first that takes it (the character editor, a scroll thumb, the map, the screens), else a drag past the threshold starts

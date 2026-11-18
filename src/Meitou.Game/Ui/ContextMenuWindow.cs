@@ -151,6 +151,22 @@ sealed class ContextMenuWindow(PlayerInterface player)
         NearestSelected(at, player.Selected()) is { } lead ? Lockpicking.Chance(level, lead.LockpickSkill) : null;
 
     /// <summary>
+    /// A trader's customer: the selected character nearest it that stands and is no animal; null when none does.
+    /// </summary>
+    CharacterSnapshot? Customer(CharacterSnapshot trader) => NearestSelected(trader.Position, player.Selected().Where(c => !c.Down && !c.Animal));
+
+    /// <summary>
+    /// Talk To (12) when the target has something to say to the talker: the first selected character that is no animal (an animal never talks, as
+    /// the quick click's receiver <c>FUN_1407fae70</c> skips them).
+    /// </summary>
+    void AddTalkVerb(List<(string, Action)> verbs, CharacterId id)
+    {
+        if (player.Selected().FirstOrDefault(c => !c.Animal) is not { } talker || !player.Session.World.CanTalk(id, talker.Id)) return;
+
+        verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(talker.Id, id) { Tick = player.Session.World.Tick })));
+    }
+
+    /// <summary>
     /// The one of <paramref name="candidates"/> nearest <paramref name="at"/>; null when there is none.
     /// </summary>
     static CharacterSnapshot? NearestSelected(Vector3 at, IEnumerable<CharacterSnapshot> candidates) =>
@@ -280,8 +296,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
     {
         var id = target.Id;
-        if (!down && player.Session.World.CanTalk(id, selection[0]))
-            verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.Session.World.Tick })));
+        if (!down) AddTalkVerb(verbs, id);
 
         // 26 unless it is the player's and selected: Trade for the player's own, else Loot (a pickpocket while it is awake).
         if (target.CanOpenInventory && !(target.IsPlayer && selection.Contains(id))) verbs.Add(InventoryVerb(target));
@@ -372,7 +387,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         // A member of an independent squad keeping a shop a code mod gave it (Meitou only): the paid Trade, sent by the selected standing character
         // nearest it, as an NPC trader's.
-        if (independent && target.IsTrader && !down && NearestSelected(target.Position, player.Selected().Where(c => !c.Down)) is { } customer)
+        if (independent && target.IsTrader && !down && Customer(target) is { } customer)
             verbs.Add(("Trade", () => player.Say(new Simulation.Trading.OpenTrade(customer.Id, id) { Tick = player.Session.World.Tick })));
 
         // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel). Not for a down one, carried or not
@@ -488,8 +503,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         verbs.Add(("Attack Unprovoked",
             () => player.Say(new AttackOrder(selection, id) { Tick = player.Session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
-        if (player.Session.World.CanTalk(id, selection[0]))
-            verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.Session.World.Tick })));
+        AddTalkVerb(verbs, id);
     }
 
     /// <summary>
@@ -501,11 +515,10 @@ sealed class ContextMenuWindow(PlayerInterface player)
         var id = target.Id;
         bool onTurret = player.Selected().LastOrDefault() is { Turret: not null };
         bool hostile = player.PointerPanel.Hostile(target);
-        if (player.Session.World.CanTalk(id, selection[0]))
-            verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.Session.World.Tick })));
+        AddTalkVerb(verbs, id);
 
         // The customer is the selected character nearest the trader that stands (as the quick order's lead), not the first selected.
-        if (target.IsTrader && !hostile && NearestSelected(target.Position, player.Selected().Where(c => !c.Down)) is { } customer)
+        if (target.IsTrader && !hostile && Customer(target) is { } customer)
             verbs.Add(("Trade", () => player.Say(new Simulation.Trading.OpenTrade(customer.Id, id) { Tick = player.Session.World.Tick })));
 
         if (onTurret)

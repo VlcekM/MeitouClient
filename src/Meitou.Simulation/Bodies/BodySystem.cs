@@ -544,7 +544,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     ExtendedStats ExtendedOf(CharacterCold cold, CharacterStats stats, RaceData race, MedicalState medical, float speed, float encumbrance,
         in MedicalContext ctx, bool carrying)
     {
-        float runValue = Speed.RunValue(race, stats.Athletics);
+        float runValue = Speed.RunValue(race, stats);
         float toughness = XpService.ToughnessFactor(medical);
         bool rest = ctx.Resting || medical.Unconscious || medical.Dead;
         float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Still, ctx.Idle, encumbrance, ctx.UseHungerRate);
@@ -676,7 +676,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             _xp.SwimmingInWater(stats, race, carrying, dt);
             return;
         }
-        _xp.AthleticsFromRunning(stats, race, encumbrance, speed, Speed.RunValue(race, stats.Athletics), dt);
+        _xp.AthleticsFromRunning(stats, race, encumbrance, speed, Speed.RunValue(race, stats), dt);
         if (encumbrance < 1) _xp.StrengthFromCarrying(stats, race, encumbrance, dt, carrying);
     }
 

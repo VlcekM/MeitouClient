@@ -73,7 +73,7 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
 | 0x238 (`vfunc_71`) | 1 | `HP mult` (`+0x6dc`; read by `14062f000`, 1 when 0 or below) | part body scale (+0x5c), blood capacity |
 | 0x250 (`vfunc_74`) | the humanoid stats object | null | blood capacity uses s = 1; the hit path cannot sever limbs |
 | 0x390 (`vfunc_114`) | 1 | lerp(`+0x700`, `scale min`, `scale max`) | part HP multiplier (+0x58, rewritten each tick), blood capacity, hunger rate |
-| 0x398 (`vfunc_115`) | 1 | `+0x700`, the age ([Ageing](#ageing)) | the stats multiplier `+0x34`, the save's `age` |
+| 0x398 (`vfunc_115`) | 1 | `+0x700`, the age ([Ageing](#ageing)) | the stats multiplier `+0x34`, the save's `age`, the run value's (0.5 + 0.5 x age) (`FUN_140883db0`, **Verified** by decompile: a pup at 0.2 runs at 0.6 of an adult's value; Meitou `Speed.RunValue`) |
 
 ### 7. Animations
 

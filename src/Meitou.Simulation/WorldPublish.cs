@@ -488,9 +488,12 @@ public sealed partial class World
         s.LimbBits = cold?.Medical?.LimbBits ?? 0;
         s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
         s.Knockdown = cold?.Knockdown ?? default;
-        s.ClosedSlots = cold is null || !detailed ? [] : ClosedSlotsOf(cold);
+
+        // A character an inventory window shows (selected, the open loot, a pinned own one) gets its grid and closed sections.
+        bool windowed = selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id);
+        s.ClosedSlots = cold is null || !(detailed || windowed) ? [] : ClosedSlotsOf(cold);
         s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
-        s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id))
+        s.ItemGrid = windowed
             && cold!.Inventory is { } grid
             ? InventoryViewOf(cold, grid, population, bodyConstants, id == Player.OpenLoot ? LootStealChance(i) : null) : null;
         s.Bounties = detailed && cold!.Bounties is not null
@@ -577,6 +580,7 @@ public sealed partial class World
         s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
         s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
         s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
+        s.TagHeight = cold is null ? CharacterSnapshot.PersonTagHeight : Combat.CombatSystem.NameTagHeight(cold);
         s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? RaceData.GiganticDrawScale : 1;
         s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None;
         s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
@@ -1086,7 +1090,7 @@ public sealed partial class World
 
         return new(StatsEnumerated.Athletics, "Athletics:", (int)stats.Athletics)
         {
-            Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats.Athletics), (int)((1 - Speed.LegFactor(med)) * 100),
+            Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats), (int)((1 - Speed.LegFactor(med)) * 100),
                 (int)((1 - encumbrance) * 100), cold.Fighter?.AthleticsFactor ?? 1, (int)((med.LegItemFactor(StatsEnumerated.Athletics) - 1) * 100),
                 cold.StatsTopSpeed ?? hot.MaxSpeed)   // FUN_14088e780's "Total speed:", the stats' S
         };

@@ -27,8 +27,14 @@ public static class Speed
     public const float ShallowWaterCap = 45;
 
     /// <summary>
-    /// The run speed value V (<c>FUN_140883db0</c>): lerp(<c>speed min skill</c>, <c>speed max skill</c>, athletics x 0.01) times (0.5 + 0.5 x s), s
-    /// the value of character slot <c>+0x398</c> (a constant 1.0 for humans, so the factor is 1).
+    /// The run speed value V (<c>FUN_140883db0</c>, <b>Verified</b> by decompile): lerp(<c>speed min skill</c>, <c>speed max skill</c>, the raw
+    /// athletics x 0.01) times (0.5 + 0.5 x s), s the character's slot <c>+0x398</c>: 1 for people, an animal's age (<c>FUN_1405e2010</c>), which is
+    /// <see cref="CharacterStats.Scale"/>; so a pup at age 0.2 has 0.6 of an adult's V.
+    /// </summary>
+    public static float RunValue(RaceData race, CharacterStats stats) => RunValue(race, stats.Athletics, stats.Scale);
+
+    /// <summary>
+    /// <see cref="RunValue(RaceData, CharacterStats)"/> from the athletics and the slot <c>+0x398</c> value.
     /// </summary>
     public static float RunValue(RaceData race, float athletics, float slotFactor = 1) =>
         (race.SpeedMinSkill + (race.SpeedMaxSkill - race.SpeedMinSkill) * (athletics * 0.01f)) * (0.5f + 0.5f * slotFactor);
@@ -61,7 +67,7 @@ public static class Speed
     {
         if (medical.Crawling) return CrawlSpeed;
         if (medical.Prone) return StayingLowSpeed;
-        float v = RunValue(race, stats.Athletics);
+        float v = RunValue(race, stats);
         float s = (v - Minimum) * LegFactor(medical) * HungerFactor(medical.Hunger) * medical.LegItemFactor(StatsEnumerated.Athletics)
             * encumbranceFactor * statsFactor + Minimum;
         s = MathF.Max(s, Minimum);
