@@ -117,7 +117,7 @@ public sealed class CombatDatabase
             Manufacturers = manufacturers,
             WeaponMaterials = materials,
             Armours = armours,
-            Crossbows = [.. db.OfType(FcsRecordType.Crossbow).Select(CrossbowData.From)],
+            Crossbows = [.. db.OfType(FcsRecordType.Crossbow).Select(r => CrossbowData.From(r).WithAmmo(r, id => AmmoData.From(db.Find(id))))],
             Guns = [.. db.OfType(FcsRecordType.GunData).Select(GunData.From)],
         };
 

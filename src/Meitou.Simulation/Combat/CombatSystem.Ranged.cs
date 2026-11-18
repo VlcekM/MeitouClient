@@ -467,7 +467,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
     {
-        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
+        bool hasAmmo = x.InfiniteAmmo || Ammunition.FirstCarried(cold.Inventory, x.Data) >= 0;
         return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false }
             && cold.Medical is not { Prone: true } && cold.WaterState != 3;
     }
@@ -531,7 +531,7 @@ public sealed partial class CombatSystem : IProjectileSource
         s.RangedState = (byte)RangedStates.Reloading;
         if (s.ReloadLeft <= 0)
         {
-            if (!x.InfiniteAmmo && Ammunition.Find(cold.Inventory, x.Data.AmmoId) is null)
+            if (!x.InfiniteAmmo && Ammunition.FirstCarried(cold.Inventory, x.Data) < 0)
             {
                 s.Dry = true;
                 return;
@@ -550,11 +550,20 @@ public sealed partial class CombatSystem : IProjectileSource
 
         s.ReloadLeft = 0;
         s.Loaded = x.NumShots;
+        s.LoadedAmmo = LoadedKind(cold, x);
         cold.CrossbowShots = s.Loaded;
         s.Steady = RangedFormulas.SteadyAim;
         s.RangedState = (byte)RangedStates.Aiming;
-        if (!x.InfiniteAmmo) effects.Emit(i, i, ReloadEffect);
+        if (!x.InfiniteAmmo) effects.Emit(i, i, ReloadEffect, s.LoadedAmmo);
     }
+
+    /// <summary>
+    /// Meitou (docs/modding.md "Ammunition"): which of the crossbow's ammunition a finished reload loads, by its place in the list: the first kind
+    /// carried, in the crossbow's order; the first when none is left (the reload still loads, as before the list). A crossbow of one kind loads
+    /// it without a search.
+    /// </summary>
+    static int LoadedKind(CharacterCold cold, CrossbowInstance x) =>
+        x.Data.AmmoCount > 1 ? Math.Max(Ammunition.FirstCarried(cold.Inventory, x.Data), 0) : 0;
 
     /// <summary>
     /// The controller's state 1: walking towards the target, the closing timer from 0 (<c>FUN_140438c70</c> clears it only on entering the state).
@@ -635,7 +644,7 @@ public sealed partial class CombatSystem : IProjectileSource
                 return;
         }
 
-        effects.Emit(i, t, FireEffect, 0, default, s.Shots);
+        effects.Emit(i, t, FireEffect, s.LoadedAmmo, default, s.Shots);
         s.Shots++;
         s.Loaded--;
         cold.CrossbowShots = s.Loaded;
@@ -648,16 +657,19 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Shots and reloads
 
     /// <summary>
-    /// A finished reload: one bolt is taken from the shooter's inventory; observers hear it (<see cref="Items.ItemUseKind.Ammunition"/>).
+    /// A finished reload: one bolt of the kind loaded (the effect's amount, its place in the crossbow's ammunition list) is taken from the shooter's
+    /// inventory; observers hear it (<see cref="Items.ItemUseKind.Ammunition"/>).
     /// </summary>
     void ApplyReload(World world, in Effect e)
     {
         var cold = world.Characters.Cold(e.Source);
         if (cold?.Fighter?.Crossbow is not { } x) return;
-        if (!Ammunition.UseOne(cold.Inventory, x.Data.AmmoId, out bool unitGone)) return;
+
+        string ammo = x.Data.AmmoAt((int)e.Amount);
+        if (!Ammunition.UseOne(cold.Inventory, ammo, out bool unitGone)) return;
 
         var shooter = world.Characters.IdOf(e.Source);
-        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Ammunition, x.Data.AmmoId, shooter, null, 1, unitGone);
+        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Ammunition, ammo, shooter, null, 1, unitGone);
     }
 
     /// <summary>
@@ -688,6 +700,16 @@ public sealed partial class CombatSystem : IProjectileSource
         float w = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Ranged, counter + 2));
         var dir = RangedFormulas.Deviate(Vector3.Normalize(to), u * deviation, spin);
         var (damage, range, speed) = RangedFormulas.Bolt(x.Stats, h, w);
+
+        // Meitou: the loaded ammunition's own fields (the effect's amount is its place in the list); none for a base-game crossbow.
+        var ammo = x.Data.EffectsAt((int)e.Amount);
+        if (ammo is not null)
+        {
+            damage *= ammo.DamageMult;
+            range *= ammo.RangeMult;
+            speed *= ammo.SpeedMult;
+        }
+
         _projectiles.Add(new Projectile
         {
             Id = _projectiles.NextId(),
@@ -705,7 +727,8 @@ public sealed partial class CombatSystem : IProjectileSource
             Damage = damage,
             Avoidance = RangedFormulas.FriendlyAvoidance(Eff(ac, StatsEnumerated.FriendlyFire)),
             Passed = -1,
-            Mesh = x.Data.LiveAmmoMesh,
+            Mesh = ammo is { LiveAmmoMesh.Length: > 0 } ? ammo.LiveAmmoMesh : x.Data.LiveAmmoMesh,
+            Ammo = ammo,
         });
         ShotAt(world, t, ac.Faction);
         Sound(world, SoundKind.Shot, a, -1, prev[a].Position);
@@ -746,7 +769,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// direction 6 (the part by its <c>hit</c> weight alone), armour and toughness, the global damage multiplier applied once more there
     /// (<b>Observed</b>, so bolts scale with its square). No block, no dodge. The victim takes "hit taken" XP; the shooter gains none for a hit. A
     /// heavy hit staggers as a melee one does. False, nothing done, when a code mod's hit filter cancels it (<see cref="ICombatHitFilter"/>): the
-    /// bolt flies on past the victim.
+    /// bolt flies on past the victim. Meitou: a bolt of ammunition with Meitou fields (<see cref="Projectile.Ammo"/>) scales the bleed and carries
+    /// its armour penetration.
     /// </summary>
     internal bool BoltHit(World world, in Projectile p, int v, bool intended)
     {
@@ -755,7 +779,9 @@ public sealed partial class CombatSystem : IProjectileSource
         var dc = table.Cold(v);
         if (dc is null || dc.Medical is null || dc.Race is null) return true;
 
-        var packet = new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
+        var packet = p.Ammo is { } ammo
+            ? new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed * ammo.BleedMult, ammo.ArmourPenetration)
+            : new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
         var shooter = new CharacterId(p.Shooter, p.ShooterGeneration);
         if (!world.CombatHitFilters.Pass(world, CombatHitSource.Projectile, shooter, table.IdOf(v), p.Id, -1, intended, ref packet)) return false;
 

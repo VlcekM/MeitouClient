@@ -1301,8 +1301,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         lines.Add(Row("Blood loss:", Fixed2(bow.BleedMult) + "x", TooltipTone.Main));
         lines.Add(Row("Required skill:", bow.AccuracyPerfectSkill.ToString(CultureInfo.InvariantCulture), TooltipTone.Main));
         lines.Add(new("---------------", "", TooltipTone.Grey));
-        lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && player.RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???",
-            TooltipTone.Main));
+        lines.Add(Row("Ammunition type:", AmmoNames(bow), TooltipTone.Main));
         Signed(lines, "Damage vs robots", (bow.RobotDamageMult - 1) * 100);
         Signed(lines, "Damage vs humans", (bow.HumanDamageMult - 1) * 100);
         Signed(lines, "Damage vs animals", (bow.AnimalDamageMult - 1) * 100);
@@ -1317,6 +1316,21 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     static string? ModSkillClass(WeaponData weapon) =>
         weapon.ModSkill is { } id && Simulation.Bodies.ModSkills.Find(id) is { } skill ? skill.Label + " class" : null;
+
+    /// <summary>
+    /// The crossbow's "Ammunition type:" value: the ammo item's name, "???" without one or without a name; Meitou: a crossbow with a
+    /// <c>meitou ammo</c> list names every kind it loads, in its order, joined by ", " (docs/modding.md "Ammunition").
+    /// </summary>
+    string AmmoNames(CrossbowData bow)
+    {
+        string Name(string id) => id.Length > 0 && player.RecordName?.Invoke(id) is { Length: > 0 } name ? name : "???";
+
+        if (bow.AmmoCount <= 1) return Name(bow.AmmoAt(0));
+
+        var names = new string[bow.AmmoCount];
+        for (int k = 0; k < names.Length; k++) names[k] = Name(bow.AmmoAt(k));
+        return string.Join(", ", names);
+    }
 
     /// <summary>
     /// A weapon's class, damage, multipliers, bonuses and weight (<see cref="WeaponStats"/>).

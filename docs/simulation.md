@@ -772,7 +772,8 @@ Bolts and the line of fire hit each character's click hull, an axis-aligned box 
 ray follow the original's tests ([combat.md](game/combat.md#line-of-fire-and-the-hit-shape)). Engine bounds: the line of fire looks the crossbow's `range` on (at
 least to the aim point), the closing ray `RangedTuning.RayReach` (2000); the original's rays are unbounded. Not modelled: the aim clip's blend before the steady time
 counts, the near-camera gate on aiming, and the controller's own target choice (Meitou's crossbowmen choose as fighters do, every second).
-Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md).
+Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md). A data mod's ammunition lists and per-ammunition bolt
+fields (Meitou): [modding](modding.md#registration-surface), "Ammunition".
 
 Turrets (`CombatSystem.Turrets.cs`, the gunners and gun state in `TurretManning`, facts: [combat.md](game/combat.md#turrets)): one serial step after the bolts fly finds the gunners and runs each manned turret in key
 order: target choice, reload, aim point while loaded, turning the parts (`TurretRig`), and the fire decision (in range from the gunner, aimed within 1°, steady 0.4 s, line

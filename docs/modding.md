@@ -660,6 +660,21 @@ holds refuses the second mod.
   immunity<N>` naming it the same way, so a mod defines a hazard in data and acts on it from its own system
   ([weather](formats/weather.md#effects-on-characters), "Undefined kinds": what the vanilla systems still do with such a kind). Nothing
   claims a number; take one from 1000 up, as the other mod codes.
+- **Ammunition** (data; engine extension, not in the original): one kind per gun needs nothing new: a CROSSBOW loads the ITEM its `ammo` names
+  (only the first entry is read, as the original reads it), so a mod's gun naming its own cartridge loads only that and no base crossbow loads it.
+  CROSSBOW reference list `meitou ammo` adds more kinds, after `ammo`, in the order the gun prefers them (with `ammo` empty, the list alone; a
+  crossbow with neither has infinite ammunition). A reload loads the first kind the shooter carries (its sections, then its backpack) and takes
+  its bolt; the `num shots` it loads are of that kind until spent. ITEM floats `meitou damage mult`, `meitou range mult`, `meitou speed mult`,
+  `meitou bleed mult` (default 1; one not finite or below 0 reads 1), `meitou armour penetration` (default 0) and the file `meitou live ammo`
+  change a bolt of that item, with any crossbow loading it (its `ammo` included): its pierce damage, the range and speed of its flight (the
+  crossbow's own range still sets when the shooter is in range, its own shot speed the aim's lead), the bleed multiplier (the original's 2 times
+  it) and armour penetration of its hit, before code mods' hit filters, and its mesh in flight and stuck in a body. The tooltip's "Ammunition
+  type:" names every kind. An NPC made with such a crossbow gets one stack of `ammo` (else the list's first) unless it holds a kind of the list.
+  A crossbow swapped while loaded fires its own kind at the loaded place in the list (a plain bolt past its end). Loaded bolts are not saved, as
+  before. With no such field the ranged fight, its state hash and NPC kits are as before. In the construction set: `meitou ammo: ITEM "..."`
+  under `[CROSSBOW]` and `meitou damage mult: 1.0 "..."` (and the others; `meitou live ammo: ".mesh|*.mesh" "..."`) under `[ITEM]` in the
+  install's `fcs.def`, or write the records with `FcsWriter` (`src/Meitou.Data/Fcs`). They are Meitou's fields, so a gun should still name its
+  first kind in `ammo`, the field the original game reads.
 - **Stat modifiers:** `cold.Stats.Modifiers.Set(key, stat, amount)` / `Remove(key, stat)` / `RemoveAll(key)` (`StatModifiers`) add a temporary
   amount to a character's stat (a drug's +10 strength, a sickness's -5 dexterity) under the mod's own key. Every gameplay read of the stat
   (`CharacterStats` indexer, `Strength`...) adds it before the injury, hunger, gear and animal-age multipliers, and the stats window shows it;
