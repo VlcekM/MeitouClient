@@ -3052,3 +3052,9 @@ msgstr "{1}花{3}开币买下了{2}"
 
 msgid "{1} sold {2} for c.{3}"
 msgstr "{1}以{3}开币卖出了{2}"
+
+msgid "RE_Kenshi mod"
+msgstr "RE_Kenshi 模组"
+
+msgid "Meitou mod"
+msgstr "Meitou 模组"

@@ -300,7 +300,7 @@ interpolated string, which no translation could match.
 - An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or
   workshop item) names it as one mod that does the same, not a requirement (other ports may exist), and, while the list does not hold it
   (a workshop mod by its item, a local copy by its `.mod` name), has a View button opening its workshop page. The first listing in which
-  such a mod is enabled and its suggestion is not installed asks once for all of them whether to open those pages (the launcher has no Steam subscribe call, so the player subscribes there); each mod asked about is kept in
+  such a mod is enabled and its suggestion is not installed asks once for all of them, as a table of each RE_Kenshi mod beside its Meitou mod, whether to open those pages (the launcher has no Steam subscribe call, so the player subscribes there); each mod asked about is kept in
   `launcher.json` (`OfferedSuggestions`) and not asked again. Not asked while another question or the first-start dialog is open.
 - Each covered workshop item names the Steam update it was matched against. When the installed copy is newer (its `timeupdated` in
   `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new

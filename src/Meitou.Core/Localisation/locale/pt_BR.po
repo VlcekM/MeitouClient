@@ -1622,3 +1622,9 @@ msgstr "{1} é procurado por {2} por {3}: recompensa de c.{4}"
 
 msgid "{1} has been caught committing {2}!"
 msgstr "{1} foi pego cometendo {2}!"
+
+msgid "RE_Kenshi mod"
+msgstr "Mod RE_Kenshi"
+
+msgid "Meitou mod"
+msgstr "Mod Meitou"

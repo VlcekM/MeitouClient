@@ -976,19 +976,67 @@ public sealed partial class MainWindow : Window
         _config.OfferedSuggestions.AddRange(rows.Select(r => r.Name));
         _config.Save();
 
-        var lines = rows.Select(r => Tr("{1}: {2}", r.Name, r.Suggestion!.By));
-        string text = Tr("The plugins of these RE_Kenshi mods do not run in Meitou.") + " "
-            + Tr("One Meitou mod on the Steam workshop that does the same (others may too):") + "\n"
-            + string.Join("\n", lines) + "\n" + Tr("Want to look at them on Steam?");
+        string intro = Tr("The plugins of these RE_Kenshi mods do not run in Meitou.") + " "
+            + Tr("One Meitou mod on the Steam workshop that does the same (others may too):");
+        Control[] body = [Wrapped(intro), SuggestionTable(rows), Wrapped(Tr("Want to look at them on Steam?"))];
         var pages = rows
             .Select(r => r.SuggestionPage)
             .OfType<Uri>()
             .Distinct()
             .ToList();
         string open = pages.Count == 1 ? Tr("Open its page") : Tr("Open {1} pages", pages.Count);
-        if (!await AskAsync(Tr("Meitou mods you might like"), text, open, Tr("No thanks"))) return;
+        if (!await ChooseAsync(Tr("Meitou mods you might like"), body, [(Tr("No thanks"), false), (open, true)], cancel: false)) return;
 
         foreach (var page in pages) await this.Launcher.LaunchUriAsync(page);
+    }
+
+    /// <summary>
+    /// The suggestions of <see cref="OfferSuggestions"/> as a table: a header row, then each RE_Kenshi mod beside its suggested Meitou mod.
+    /// </summary>
+    Grid SuggestionTable(IReadOnlyList<ModRow> rows)
+    {
+        var table = new Grid
+        {
+            ColumnDefinitions = new("*,*"), ColumnSpacing = 16, Margin = new(0, 8),
+            RowDefinitions = new(string.Join(",", Enumerable.Repeat("Auto", rows.Count + 1))),
+        };
+        var line = (Avalonia.Media.IBrush)this.FindResource("PlateRim")!;
+        AddRowLine(table, 0, line);
+        AddCell(table, 0, 0, Tr("RE_Kenshi mod"), header: true);
+        AddCell(table, 0, 1, Tr("Meitou mod"), header: true);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (i < rows.Count - 1) AddRowLine(table, i + 1, line);
+            AddCell(table, i + 1, 0, rows[i].Name, header: false);
+            AddCell(table, i + 1, 1, rows[i].Suggestion!.By, header: false);
+        }
+
+        return table;
+    }
+
+    /// <summary>
+    /// A line under row <paramref name="row"/> of <paramref name="table"/>, across both columns.
+    /// </summary>
+    static void AddRowLine(Grid table, int row, Avalonia.Media.IBrush brush)
+    {
+        var line = new Border { BorderBrush = brush, BorderThickness = new(0, 0, 0, 1) };
+        Grid.SetRow(line, row);
+        Grid.SetColumnSpan(line, 2);
+        table.Children.Add(line);
+    }
+
+    /// <summary>
+    /// A wrapped cell of <paramref name="table"/> at <paramref name="row"/>, <paramref name="column"/>: a header muted, a value in medium weight.
+    /// </summary>
+    static void AddCell(Grid table, int row, int column, string text, bool header)
+    {
+        var cell = new TextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 5) };
+        if (header) cell.Classes.Add("desc");
+        else cell.FontWeight = Avalonia.Media.FontWeight.Medium;
+
+        Grid.SetRow(cell, row);
+        Grid.SetColumn(cell, column);
+        table.Children.Add(cell);
     }
 
     /// <summary>
