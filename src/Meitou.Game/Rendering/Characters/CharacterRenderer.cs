@@ -512,6 +512,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public float HeadPitch;
         /// <summary>
+        /// The clips' translations at scale 1 (<see cref="CharacterInstance.UnitMovement"/>).
+        /// </summary>
+        public bool UnitMovement;
+        /// <summary>
         /// The blood of its first 8 body parts, a byte each (<see cref="CharacterInstance.Blood"/>).
         /// </summary>
         public ulong Blood;
@@ -1348,7 +1352,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.World = WorldOf(in inst, asset, scale);
         (l.Anchor, l.Scale) = (inst.World is null ? inst.Anchor : null, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
-        (l.WeaponsHidden, l.HeadPitch) = (inst.WeaponsHidden, inst.HeadPitch);
+        (l.WeaponsHidden, l.HeadPitch, l.UnitMovement) = (inst.WeaponsHidden, inst.HeadPitch, inst.UnitMovement);
         (l.Mouth, l.BoneMeshes) = (inst.Mouth, inst.BoneMeshes);
         l.Centre = centre;
         l.Radius = asset.Radius * scale;
@@ -1623,7 +1627,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         state.Attach.CopyTo(state.PreviousAttach, 0);
 
         var scratch = rig.Rent();
-        scratch.Pose(asset.Shape, _layers.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones, (l.HeadPitch * 0.4f, l.HeadPitch * 0.6f));
+        scratch.Pose(asset.Shape, _layers.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones, (l.HeadPitch * 0.4f, l.HeadPitch * 0.6f),
+            l.UnitMovement);
         foreach (var part in asset.Parts)
             if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
         foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);

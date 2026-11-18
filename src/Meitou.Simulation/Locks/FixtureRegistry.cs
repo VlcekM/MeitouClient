@@ -924,33 +924,30 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order; null with none (a bed with fewer than 2 is lain in at its
-    /// position marker, <see cref="Fixture.Marker"/>, facing its lone node's way).
+    /// A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order, placed by the building's <c>scale</c> as its parts are; null with
+    /// none (a bed with none is lain in at its position marker, <see cref="Fixture.Marker"/>).
     /// </summary>
     static UseNode[]? UseNodes(GameDatabase db, GameRecord building)
     {
+        float scale = building.GetFloat("scale", 1) is > 0 and var s ? s : 1;
         UseNode[] nodes = [.. building.Instances.Values.Where(i => !i.IsCleared && db.Find(i.Target) is { } n && n.GetBool("is node")
                 && n.GetInt("node type") == UseNodeType)
-            .OrderBy(i => i.Id, StringComparer.Ordinal).Select(i => new UseNode(i.Position, TownBuildings.YawOf(i.Rotation) - MathF.PI / 2))];
+            .OrderBy(i => i.Id, StringComparer.Ordinal)
+            .Select(i => new UseNode(i.Position * scale, TownBuildings.YawOf(i.Rotation) - MathF.PI / 2))];
         return nodes.Length > 0 ? nodes : null;
     }
 
     /// <summary>
     /// Where a sleeper is put in a bed and the way it faces (<c>Building::getPositionMarker</c> / <c>getDirectionMarkerQuat</c>, docs/game/locks.md
-    /// "Beds"): with 2 or more use nodes the one nearest <paramref name="from"/>, else the bed's position marker (its origin without a flagged part)
-    /// facing its lone node's way, or the bed's own with none (Forgotten Buildings' one-node "Bed with Pillow", #718).
+    /// "Beds"): the use node nearest <paramref name="from"/>, facing its way (a lone node is the position marker the original reads with fewer than
+    /// 2: Forgotten Buildings' one-node "Bed with Pillow", #718), else the bed's position marker (its origin without a flagged part) facing the bed's way.
     /// </summary>
     public static (Vector3 At, float Yaw) LieSpot(Fixture bed, Vector3 from, double now = 0)
     {
-        if (bed.Bed.Nodes is { Length: >= 2 } nodes)
-        {
-            Func<int, bool>? skip = bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null;
-            return Nearest(bed, nodes, from, skip)!.Value;
-        }
+        if (bed.Bed.Nodes is not { Length: > 0 } nodes) return (bed.Marker ?? bed.Position, bed.Yaw);
 
-        // the direction marker reads any node, the position marker only 2 or more (FUN_140549720, FUN_14054b850)
-        float yaw = bed.Bed.Nodes is [var only] ? MathF.IEEERemainder(bed.Yaw + only.Yaw, MathF.Tau) : bed.Yaw;
-        return (bed.Marker ?? bed.Position, yaw);
+        Func<int, bool>? skip = bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null;
+        return Nearest(bed, nodes, from, skip)!.Value;
     }
 
     /// <summary>
@@ -994,15 +991,15 @@ public sealed partial class FixtureRegistry
     public static Vector3? ExitSpot(Fixture cage) => Nearest(cage, cage.UseNodes, cage.Position)?.At;
 
     /// <summary>
-    /// <c>Building::getPositionMarker(from)</c> (vtable slot 0x470, FUN_14054b850, <b>Verified</b>) of a bed or cage by fixture id: with two or more
-    /// use nodes the nearest one to <paramref name="from"/> (a bed skips its marked-bad nodes), else the building's position marker
+    /// <c>Building::getPositionMarker(from)</c> (vtable slot 0x470, FUN_14054b850, <b>Verified</b>) of a bed or cage by fixture id: the use node
+    /// nearest <paramref name="from"/> (a bed skips its marked-bad nodes; a lone node is the marker), else the building's position marker
     /// (<see cref="Fixture.Marker"/>, its position without one); null for an unknown id.
     /// </summary>
     public Vector3? PositionMarker(string fixtureId, Vector3 from, double now = 0)
     {
         if (Find(fixtureId) is not { } f) return null;
         if (f.Kind == FixtureKind.Bed) return LieSpot(f, from, now).At;
-        return Nearest(f, f.UseNodes is { Length: >= 2 } nodes ? nodes : null, from)?.At ?? f.Marker ?? f.Position;
+        return Nearest(f, f.UseNodes, from)?.At ?? f.Marker ?? f.Position;
     }
 
     /// <summary>
@@ -1014,7 +1011,7 @@ public sealed partial class FixtureRegistry
     public Vector3? FloorMarker(string fixtureId, Vector3 from, IWalkability walk, double now = 0)
     {
         if (Find(fixtureId) is not { } f) return null;
-        if (f.Kind == FixtureKind.Bed || f.UseNodes is not { Length: >= 2 } nodes) return PositionMarker(fixtureId, from, now);
+        if (f.Kind == FixtureKind.Bed || f.UseNodes is not { Length: > 0 } nodes) return PositionMarker(fixtureId, from, now);
 
         var turn = Matrix4x4.CreateRotationY(f.Yaw);
         Vector3? best = null;
@@ -1182,12 +1179,14 @@ public sealed partial class FixtureRegistry
 
             // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the
             // mattress), still sleeping: a task other than Sleep would get it up (BedSystem). It plays the bed's clip as one laid in does (EnterBed);
-            // the clip is not saved.
+            // the clip is not saved. It takes the clip at once, as a character's first clips are: until its bed registered it lay in the lying clip,
+            // and a fade from that one (held while a load stays paused) twisted the body across the mattress.
             if (c.InSomething == HeldState.Bed)
             {
                 var (at, yaw) = LieSpot(f, next[s].Position, world.GameHours);
                 table.Place(s, at, yaw, CharacterTask.Sleep);
                 c.OperateClip = f.Bed.Clip;
+                if (c.Animation is { } shown) shown.Count = 0;
             }
         }
     }
