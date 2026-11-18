@@ -485,6 +485,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixPartsInBuildings { get; set; } = true;
     /// <summary>
+    /// The rain (and the dust and ash the game cuts inside buildings) is also left out in front of a building in the interior view, over the open
+    /// room (Fixes settings; off: only inside it, as the game does; docs/render-interior-cut.md).
+    /// </summary>
+    public bool FixRainInBuildings { get; set; } = true;
+    /// <summary>
     /// A head a task turned toward something turns back to the front once nothing is looked at (Fixes settings; off by default: it stays turned
     /// until the next look, as the game does; docs/animation.md "Head turning").
     /// </summary>

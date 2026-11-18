@@ -164,7 +164,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform vec4 uSoft;                         // x: 0 hard (the game's), 1 fade the alpha, 2 the colour and alpha (additive), 3 towards white (modulate); y, z: the scene depth's near, far; w unused
         uniform float uCoverageMax, uCoverageGain;
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
-        uniform sampler2D uInteriorMask;            // the interior cut's depth range (InteriorMaskRenderer): r the nearest mask face's depth + 1, a the farthest's
+        uniform sampler2D uInteriorMask;            // the interior cut's depth range (InteriorMaskRenderer): r the nearest mask face's depth + 1, a the farthest's, b minus the farthest open building's
         uniform vec4 uInterior;                     // x 1: the material clips inside buildings (CLIP_INTERIOR); y, z: the mask's pixels per pixel of this target
         """ + DepthConvention.Glsl + """
         void main()
@@ -175,6 +175,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 vec4 interiorRange = texelFetch(uInteriorMask, ivec2(gl_FragCoord.xy * uInterior.yz), 0);
                 float interiorDepth = 1.0 / gl_FragCoord.w;
                 if (interiorDepth < interiorRange.a && interiorDepth > interiorRange.r) discard;
+                // Meitou: in front of a building whose roof is hidden too, so no streaks fall over the open room (b is 0 where there is none).
+                if (interiorDepth < -interiorRange.b) discard;
             }
             // basic.hlsl: texture * colour * vertex colour. A recoloured burst (negative vertex rgb, Burst's recolour) takes that colour instead of the texture's hue, keeping its brightness.
             vec4 t = texture(uTexture, vUv);

@@ -82,6 +82,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         in vec3 vRel;
         uniform int uInside;
         uniform float uFloor;
+        uniform int uOpen;    // the building is in the interior view (its roof hidden): b keeps its farthest face for the particles
         void main()
         {
             float w = 1.0 / gl_FragCoord.w + 1.0;
@@ -89,7 +90,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
             // reaches under (Cut).
             vec3 n = cross(dFdx(vRel), dFdy(vRel));
             bool flat_ = uFloor > 1.5 ? true : uFloor > 0.5 && abs(n.y) > 0.7 * length(n) && vRel.y < 0.0;
-            fragColour = vec4(uInside != 0 ? 0.0 : w, flat_ ? -w : 0.0, 0.0, w);
+            fragColour = vec4(uInside != 0 ? 0.0 : w, flat_ ? -w : 0.0, uOpen != 0 ? -w : 0.0, w);
         }
         """;
 
@@ -116,7 +117,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     /// <summary>
     /// The program's <c>uMvp</c> and <c>uInside</c> uniforms.
     /// </summary>
-    readonly UniformHandle _mvp, _inside, _node, _floor;
+    readonly UniformHandle _mvp, _inside, _node, _floor, _open;
 
     /// <summary>
     /// The mask meshes' vertex input: one position stream, 12 bytes a vertex.
@@ -171,6 +172,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         _inside = _program.Uniform("uInside");
         _node = _program.Uniform("uNode");
         _floor = _program.Uniform("uFloor");
+        _open = _program.Uniform("uOpen");
         _vertexSource = new VertexArrayBindings([new LegacyProgram.Attribute(default, InternalFormat.Rgb32F, 12, false)], default);
     }
 
@@ -320,7 +322,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
 
         // Min on the colour (the nearest face), max on the alpha (the farthest); every face drawn, no depth test (the game's target has no depth).
         var blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Min, BlendOperation.Max);
-        var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: blend, mask: ColorMask.R | ColorMask.G | ColorMask.A);
+        var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: blend, mask: ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A);
         state.Record(cmd, t);
         cmd.BindPipeline(_segment.Get(state, t.Formats, _vertexSource));
 
@@ -359,6 +361,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         node.Translation -= eye;
         var m = node * relative;
         bool any = false, eyeInside = v.Contains(eye);
+        bool open = _objects.CutRainOverViewed && _objects.InteriorView.ContainsKey(v.PlacementId);
         var min = new Vector2(float.MaxValue);
         var max = new Vector2(float.MinValue);
         foreach (var path in v.MaskMeshes)
@@ -368,6 +371,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
             _program.Set(_inside, eyeInside ? 1 : 0);
             _program.Set(_node, in node);
             _program.Set(_floor, CutUnderFloor ? 1f : 0f);
+            _program.Set(_open, open ? 1 : 0);
             _program.Flush(cmd);
             cmd.BindVertexBuffers(0, [new GpuBufferBinding(buffer.Handle, 0)]);
             cmd.Draw((uint)mesh.Count);

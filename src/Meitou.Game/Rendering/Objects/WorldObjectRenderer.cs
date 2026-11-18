@@ -2401,6 +2401,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public bool CutIntoViewed { get; set; } = true;
 
     /// <summary>
+    /// Meitou (Fixes settings, <c>Rain in open buildings</c>): the rain and the other <c>CLIP_INTERIOR</c> particles are also cut in front of a
+    /// building in the interior view, over its mask (docs/render-interior-cut.md); off, only inside it, as the game does.
+    /// </summary>
+    public bool CutRainOverViewed { get; set; } = true;
+
+    /// <summary>
     /// The interior masks last drawn (the main view's), whose owners a shadow pass leaves uncut as the colour pass does.
     /// </summary>
     internal InteriorMaskRenderer? Masks { get; set; }

@@ -578,6 +578,11 @@ sealed class GamePages(SettingsMenu menu)
             + "in the Shinobi Thieves tower. The game's world places them there and draws them inside the room.",
             Toggle: new("Walls inside buildings", () => menu.Config.FixPartsInBuildings, v => menu.Config.FixPartsInBuildings = v,
                 Remaster: true, OnOff: true)));
+        result.Add(new("Rain in open buildings",
+            "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. "
+            + "The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room.",
+            Toggle: new("Rain in open buildings", () => menu.Config.FixRainInBuildings, v => menu.Config.FixRainInBuildings = v,
+                Remaster: true, OnOff: true)));
         result.Add(new("Bags in the inventory",
             "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards "
             + "confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found.",
