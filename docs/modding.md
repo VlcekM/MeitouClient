@@ -503,9 +503,12 @@ holds refuses the second mod.
   option without a caption or press, is logged once and dropped for the session; a press that throws is logged.
 - **Building panel buttons:** in `Register`, `registration.AddBuildingActions(context => buttons)` adds button lines to the panel of a selected
   building, placed piece or piece of furniture, after the game's own stats lines (Open/Close, Security, Open to public), one line each, in
-  registration order (mods in load order), so several mods share the panel; lines past the panel's height are cut off, so keep to a few. The
+  registration order (mods in load order), so several mods share the panel. Each is drawn as the game's own neutral action lines are (the
+  button across the line, its caption in the panel's main colour). The panel holds about six lines at the stock layout and 1080 pixels, the
+  building's own included; lines past its lower edge are cut off, neither drawn nor clickable, so keep to one or two. The
   source runs on the host thread whenever the panel is arranged, which while a building is selected can be every frame (each tick, each mouse
-  move, at least 20 times a second), so it must be cheap and read only its context; a tick may be in flight, so it must not touch the world. It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
+  move, at least 20 times a second), so it must be cheap and read only its context; a tick may be in flight, so it must not touch the world.
+  It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
   knows it by and `world.Player.InspectedBuilding` holds; `Record`, its record's string id or null; `SiteId`, the player's building id or null;
   the panel's `Name`; `Owned`, whether the player's faction owns it, as the game's own buttons show), the `Snapshot` on screen, `Tick` read
   when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building.

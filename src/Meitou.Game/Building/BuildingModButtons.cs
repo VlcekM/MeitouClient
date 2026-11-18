@@ -31,8 +31,8 @@ sealed class BuildingModButtons(PlayerInterface player)
     string? _shownFor;
 
     /// <summary>
-    /// The button lines of the mods' buttons for <paramref name="focus"/> (none without a mod that adds any): the caption across the line, its
-    /// tooltip on the button.
+    /// The button lines of the mods' buttons for <paramref name="focus"/> (none without a mod that adds any): the caption across the line in the
+    /// panel's main colour, its tooltip on the button. Lines past the stats panel's lower edge are clipped by the panel (not drawn, not clickable).
     /// </summary>
     internal PlayerInterface.HudLine[] Lines(BuildingSelection.SelectedBuilding focus)
     {
@@ -51,7 +51,10 @@ sealed class BuildingModButtons(PlayerInterface player)
         {
             var button = _shown[k];
             string argument = k.ToString(CultureInfo.InvariantCulture);
-            lines[k] = new PlayerInterface.HudLine("", button.Caption, Tooltip: button.Tooltip, Action: LineAction) { Argument = argument };
+            // The caption in the panel's main colour, as the game's own neutral action lines (PAUSE CONSTRUCTION, the downgrade): a line without
+            // a colour falls back to the dark ink of parchment buttons, unreadable on this panel.
+            lines[k] = new PlayerInterface.HudLine("", button.Caption, ValueColour: PlayerInterface.MainColour, Tooltip: button.Tooltip,
+                Action: LineAction) { Argument = argument };
         }
 
         return lines;
