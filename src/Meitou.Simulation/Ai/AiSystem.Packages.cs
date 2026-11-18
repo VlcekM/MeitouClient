@@ -12,7 +12,7 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// The package classes with rules of their own beyond the patrol, bar and retreat (docs/game/ai.md "Package classes", decoded from their vtables;
 /// docs/simulation.md "AI", Package classes): the wandering trader (16), the passing-by assault on a player town (29) and the occupation of it that
-/// follows (30). All run in the serial step.
+/// follows (30), the refugee (22), and the campaign's war classes (19, 20, 32) and defence (31). All run in the serial step.
 /// </summary>
 public sealed partial class AiSystem
 {
@@ -252,6 +252,11 @@ public sealed partial class AiSystem
     /// The AI signals of <c>Contract_HiredAlly</c> (hired bodyguards) and <c>Contract_DefendPlayerBase</c> (the timed base defence).
     /// </summary>
     internal const int HiredAllySignal = 12, DefendBaseSignal = 15;
+
+    /// <summary>
+    /// The AI signal of <c>Campaign_DefendPlayerBase</c>, the campaign's base defence (its start and mission are the timed defence's).
+    /// </summary>
+    internal const int CampaignDefendSignal = 31;
 
     /// <summary>
     /// The running package's update (the original's vtable +0x48, after the choice): the trader's arrival; under an assault or occupation the squad
@@ -889,6 +894,69 @@ public sealed partial class AiSystem
         foreach (var (from, into) in _merges)
             if (world.Squads.Find(from.Id) == from && world.Squads.Find(into.Id) == into) SquadManagement.Merge(world, from, into);
         _merges.Clear();
+    }
+
+    #endregion
+
+    #region War packages
+
+    /// <summary>
+    /// The war classes' finished test (<c>Package_WarBase</c>, <c>Package_WarAssault</c> and its cannibal kind share <c>FUN_14028fdb0</c>,
+    /// <b>Verified</b>): the squad's platoon is in no campaign. Their start (the campaign's target as mission town, the leader platoon as a
+    /// follower's mission target, the unloaded job 5 or 6; <c>FUN_14028fc80</c>) is left to the campaign, whose march moves the squad and whose
+    /// stand-in takes those jobs (engine stand-in until goal 215 is acted out).
+    /// </summary>
+    internal bool OutOfCampaign(World world, Squad squad) =>
+        squad.PlatoonId < 0 || world.Platoons.Find(squad.PlatoonId)?.Campaign is null;
+
+    /// <summary>
+    /// <c>Campaign_DefendPlayerBase</c>'s finished test (<c>FUN_14028a760</c>, <b>Verified</b>): its employer turned on it (not modelled, as for
+    /// <c>Contract_DefendPlayerBase</c>), or its contract hours (+0x218) have passed and no hostile campaign runs (<c>FUN_1407f2e80</c>, the same
+    /// call as the defence's phase-1 victory; <see cref="PopulationSystem.HostileAgainstPlayer"/>).
+    /// </summary>
+    internal bool CampaignDefendFinished(World world, Blackboard board) =>
+        world.GameHours > board.ContractEnd && world.SystemOf<PopulationSystem>()?.HostileAgainstPlayer(world) != true;
+
+    /// <summary>
+    /// The start <c>Campaign_DefendPlayerBase</c> shares with <c>Contract_DefendPlayerBase</c> (<c>FUN_14028a170</c>, <b>Verified</b>): the player
+    /// town nearest the leader is its mission town and its mission (<see cref="Blackboard.AimMissionAtTown"/>), so its sensing hook exempts the
+    /// town's owner (<c>AggroSystem.EmployerOf</c>). Engine stand-in: the blackboard's target town (+0xf0) is left unset while the campaign march
+    /// moves the squad, as it would make the package travel on its own (<see cref="BoardMoves"/>).
+    /// </summary>
+    internal void CampaignDefendStart(World world, Squad squad, Blackboard board)
+    {
+        var at = LeaderPosition(world, squad) ?? squad.Position;
+        board.ContractTown = NearestPlayerTown(world, Flat(at))?.Town ?? CampaignTown.None;
+        board.AimMissionAtTown();
+    }
+
+    /// <summary>
+    /// The war classes' update on the package cadence, whoever moves the squad: a war assault (20, 32) marks every member "ordered"
+    /// (<see cref="CharacterCold.Ordered"/>; <c>FUN_14028a4e0</c>, <b>Verified</b>: each update, no other condition), so a blow at one books no
+    /// Assault; the campaign's defence without a mission town runs its start again (its update <c>FUN_140291410</c>, <b>Verified</b>).
+    /// </summary>
+    void StepWar(World world, Squad squad, Blackboard board)
+    {
+        switch (board.CurrentClass)
+        {
+            case PackageClass.WarAssault:
+            case PackageClass.WarAssaultCannibal:
+                MarkOrdered(world, squad);
+                break;
+            case PackageClass.CampaignDefend when board.ContractTown.IsNone:
+                CampaignDefendStart(world, squad, board);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Sets the "ordered" status of every member of <paramref name="squad"/>.
+    /// </summary>
+    static void MarkOrdered(World world, Squad squad)
+    {
+        var table = world.Characters;
+        foreach (var m in squad.Members)
+            if (table.TryResolveNext(m, out int s)) table.Cold(s)!.Ordered = true;
     }
 
     #endregion

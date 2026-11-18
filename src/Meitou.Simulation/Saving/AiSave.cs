@@ -117,7 +117,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
             Employer = b.MissionEmployer,
             MissionTown = contract ? b.ContractTown : CampaignTown.None,
             TargetTown = contract ? b.Destination : CampaignTown.None,
-            TargetIsTown = b.Contract?.Signal == AiSystem.DefendBaseSignal,
+            TargetIsTown = b.Contract?.Signal is AiSystem.DefendBaseSignal or AiSystem.CampaignDefendSignal,
             AnyRange = b.MissionAnyRange,
             Phase = b.PhaseContract,
         };

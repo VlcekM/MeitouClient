@@ -568,8 +568,9 @@ public sealed class CharacterCold
     /// <summary>
     /// The status byte <c>+0x114</c> ("ordered", docs/game/economy.md 11.6): set on an attacker by the assault booking of an ordered attack
     /// (<c>FUN_140334070</c>), cleared when its fight ends (<see cref="Combat.CombatSystem"/> <c>EndFight</c>, the stand-in for the attack task's
-    /// end, <c>FUN_1405c91c0</c>); a victim with it set is not assaulted again. The original also sets it at ordered task starts and for the cannibal
-    /// assault package's squad (not modelled). Not saved; hashed while set.
+    /// end, <c>FUN_1405c91c0</c>); a victim with it set is not assaulted again. Also set on every member of a squad running a war assault package
+    /// (20, 32) on each package step (<c>FUN_14028a4e0</c>, <c>AiSystem.StepWar</c>). The original also sets it at ordered task starts (not
+    /// modelled). Not saved; hashed while set.
     /// </summary>
     public bool Ordered { get; set; }
 

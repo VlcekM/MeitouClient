@@ -45,8 +45,7 @@ public enum PackageClass : byte
     /// </summary>
     Contract = 6,
     /// <summary>
-    /// Wars and campaigns (19, 20, 32, 31: the campaign drives its squads, <see cref="PopulationSystem"/>) and the rest of the unread classes: not
-    /// built; never start (except as a lone slot-0 package), never finish.
+    /// The unread classes: not built; never start (except as a lone slot-0 package), never finish.
     /// </summary>
     Unbuilt = 7,
     /// <summary>
@@ -83,6 +82,27 @@ public enum PackageClass : byte
     /// (docs/game/ai.md "Package classes", Verified by code).
     /// </summary>
     Refugee = 15,
+    /// <summary>
+    /// <c>Package_WarBase</c> (19, a campaign's assembly): finished once its platoon is out of its campaign; no update and an empty sensing hook
+    /// (docs/game/ai.md "Package classes", Verified by code). Started only as a campaign's override (engine choice; the original's can always start).
+    /// The campaign march moves its squad.
+    /// </summary>
+    WarBase = 16,
+    /// <summary>
+    /// <c>Package_WarAssault</c> (20, a campaign's assault): as <see cref="WarBase"/>, and its update marks every member of its squad "ordered"
+    /// (<c>CharacterCold.Ordered</c>, Verified by code).
+    /// </summary>
+    WarAssault = 17,
+    /// <summary>
+    /// <c>Package_WarAssault_Cannibal</c> (32): as <see cref="WarAssault"/>, and its update then runs the cannibals' carrier rule (Verified by code;
+    /// Meitou keeps that rule in the campaign, <c>PopulationCampaigns.CannibalsLoaded</c>).
+    /// </summary>
+    WarAssaultCannibal = 18,
+    /// <summary>
+    /// <c>Campaign_DefendPlayerBase</c> (31, an ally's defence of the player's town): <c>Contract_DefendPlayerBase</c> (15) but for its finished test,
+    /// which after the contract hours waits while a hostile campaign runs (docs/game/ai.md "Package classes", Verified by code).
+    /// </summary>
+    CampaignDefend = 19,
 }
 
 /// <summary>
@@ -110,6 +130,10 @@ public static class PackageClasses
         29 => PackageClass.PassingAssault,
         30 => PackageClass.OccupyTown,
         22 => PackageClass.Refugee,
+        19 => PackageClass.WarBase,
+        20 => PackageClass.WarAssault,
+        32 => PackageClass.WarAssaultCannibal,
+        31 => PackageClass.CampaignDefend,
         _ => PackageClass.Unbuilt,
     };
 

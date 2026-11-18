@@ -2905,6 +2905,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (platoon?.Campaign is { } campaign && PhasePackage(world, platoon, campaign) is { } phase) InstallPhasePackage(world, board, phase);
 
         board.Update(_rules, world.GameHours);
+        StepWar(world, squad, board);
         if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
         if (board.BarWaits) _rules.RetryTable(board);
 
@@ -3651,6 +3652,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PackageClass.WanderingTrader => _system.TraderCanStart(_world, _squad, board),
             PackageClass.PassingAssault => _system.AssaultCanStart(_world, _squad, board),
             PackageClass.Refugee => RefugeeCanStart(_world, _squad),
+
+            // The war classes and the campaign's defence start only as a campaign's override (engine choice, Meitou's rule before they were built; the
+            // original's can-start is always true, FUN_140287690 and FUN_140286e00, which matters only to a template slot listing one: none in the data).
             _ => false,
         };
 
@@ -3696,6 +3700,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PackageClass.PassingAssault => _system.AssaultFinished(_world, _squad, board, package),
             PackageClass.OccupyTown => _system.OccupyFinished(_world, _squad, board),
             PackageClass.Refugee => _system.RefugeeFinished(_world, _squad, board),
+            PackageClass.WarBase or PackageClass.WarAssault or PackageClass.WarAssaultCannibal => _system.OutOfCampaign(_world, _squad),
+            PackageClass.CampaignDefend => _system.CampaignDefendFinished(_world, board),
             _ => false,
         };
 
@@ -3760,6 +3766,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     break;
                 case PackageClass.Contract when package.Signal is HiredAllySignal or DefendBaseSignal:
                     _system.ContractStart(_world, _squad, board, package);
+                    break;
+                case PackageClass.CampaignDefend:
+                    _system.CampaignDefendStart(_world, _squad, board);
                     break;
             }
         }
