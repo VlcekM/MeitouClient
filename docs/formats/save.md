@@ -365,6 +365,12 @@ the same file (`section` `left_arm_replace` / `right_arm_replace` / `left_leg_re
 LIMB_REPLACEMENT, `level`, `quality`, `dam`, `wear`, `stun`). These items are in no INVENTORY_STATE. Reader: state 1, or 2 without a resolvable
 item, becomes a stump; 2 with an item fits it; 3 is kept. Meitou: `SaveLimbs` (data), `Saving/SavedLimbs` (medical state both ways).
 Meitou-only bool `meitou decapitated` on MEDICAL_STATE, written only when true ([decapitation](../game/character-stats.md#decapitation-meitou)); the original ignores it.
+A race may list more than one part in a limb slot (a second left arm: an ARM part whose `collapse part` is 4 again; none in the base game). Meitou's `limbs`
+bits then hold the slot's first part (in [part order](../game/character-stats.md#part-order)), the one a load applies them to, and each later part of the
+slot that is not original gets a Meitou-only int `meitou limb<k>` on MEDICAL_STATE (k the part's index, as in `sid<k>`; value the state, 1 stump or 3
+crushed; a 2 loads as a stump), removed when the part is original again. A body with one part per slot writes no such key and the same `limbs` value as
+before. **Observed** (2026-11-17, a scratch `WriteSave` / `ReadSave` / `ApplySavedLimbs` round trip of a four-armed body: a replaced upper and a stumped
+lower left arm load as they were; the 256 limb-state combinations of a human body give the same `limbs` value as OR-ing the parts and no key).
 A removed prosthetic in an inventory keeps its `dam`, `wear`, `stun` floats (`SaveItem.Damage`/`Wear`/`Stun`).
 
 ### Player platoons (Meitou mapping)

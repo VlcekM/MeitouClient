@@ -702,6 +702,10 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
   `CharacterGenerator.RollRobotLimbs`, fitted in `CharacterAssembly.Attach` after `starting health`, so the prosthetic wins.
 - A stump shows the RACE `limb replacement` record whose `slot` is 50 + k (`uses_limb_replacement`); a crushed
   limb attaches no mesh. Hidden body vertices: [characters.md](../characters.md#hidden-body-parts-verified--140075600--140071f90--140531cc0-hlsl-skinhlsl).
+- More than one part in a slot (Meitou, a mod's race; none in the base game): the slot's prosthetic, `severed limbs` item and
+  limbs-window state belong to its first part in [part order](#part-order); a later part of the slot can still be cut off (it drops
+  the slot's `severed limbs` item, posed on the first part's `bone name 2`) or crushed, and its state is saved apart
+  ([save](../formats/save.md#limbs-medical_state-limbs)).
 - Meitou in play: fitted items sit in the inventory's `*_replace` sections (the limbs window), weigh nothing, are not traded and
   are saved only through MEDICAL_STATE `limbs`. Dropping a LIMB_REPLACEMENT whose `slot` is 50 + k on slot k fits it when limb k is a
   stump; lifting it out removes it (a right click puts a carried one on its stump or takes a fitted one off). The original cannot fit over a crushed limb: its slot is disabled
