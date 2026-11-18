@@ -58,7 +58,7 @@ static class WorldCommandLine
           --day <n>                the game day the weather schedule starts at (default 0)
           --clouds <0..1>          cloud density c (test override)
           --no-audio               no sound (the biome ambience and weather beds from the game's Wwise banks)   --audio-gain <dB> raise or lower the whole mix (0 = the game's levels)
-          --action-log <who>       off, squad or everyone (default): each character's task changes, and why, to log_actions.txt (F10)
+          --action-log <who>       off (default), squad or everyone: each character's task changes, and why, to log_actions.txt (F10)
           --no-particles           no weather particles  --particle-prewarm <s> seconds simulated before the first picture (default: the longest particle life; 0 starts empty)   --particle-density <x> the effects' emission rate x (0.1-1, the Tab slider)   --anisotropy <n> the most anisotropic filtering any texture gets (1-16, the Tab slider; 16 default)
           --low-end                potato-PC settings: short draw distances, no shadows, reflections, AO, ground relief, light shafts or anti-aliasing, 0.83 render scale, sparse grass and particles (options after it override)
           --benchmark-baseline     the benchmarks' settings: a 1920x1080 window, the Medium tier with no GI, ground parallax or tessellation, no upscaler, SMAA (the viewer: options after it override; the game: fixed)
