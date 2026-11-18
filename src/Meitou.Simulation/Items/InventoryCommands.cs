@@ -463,12 +463,43 @@ public static class InventoryCommands
                 or FcsRecordType.LimbReplacement;
 
     /// <summary>
-    /// Whether a held item joins the stack it is dropped on (<c>FUN_140715560</c>): same record (so type), material and quality, of a type that
-    /// stacks; Meitou also keeps stolen, death, unique and differently mod-tagged items apart, as <see cref="Inventory.Add"/> does.
+    /// Whether a held item joins the item it is dropped on (<c>FUN_140715560</c>): same record (so type), company and material (Item vfunc 0x2a0,
+    /// <c>FUN_14075d510</c>, <b>Verified</b> by decompile; quality is not compared), of a type that stacks; Meitou also keeps stolen, death, unique
+    /// and differently mod-tagged items apart, as <see cref="Inventory.Add"/> does.
     /// </summary>
     public static bool Stackable(ItemInstance a, ItemInstance b) => !NeverStacks(a.Type) && a.Record == b.Record && a.MaterialId == b.MaterialId
-            && a.Quality == b.Quality
+            && a.CompanyId == b.CompanyId
         && a.ModTag == b.ModTag && a.Mark == b.Mark && a.Death == b.Death && a.Unique == b.Unique && a.Contents is null && b.Contents is null;
+
+    /// <summary>
+    /// The original's stack join (<c>FUN_14075e220</c>, <b>Verified</b> by decompile): <paramref name="from"/>'s units and charges go into
+    /// <paramref name="into"/>. The two partly used units pool their charges: one unit when they fit in one, else a full one and the rest.
+    /// <paramref name="into"/> keeps the units up to <paramref name="limit"/>, all full when it is cut there; <paramref name="from"/> keeps what is
+    /// left, the partly used unit with it (0 units: nothing is left). So two half-used first aid kits, which do not stack, make one full kit.
+    /// </summary>
+    public static void Join(ItemInstance into, ItemInstance from, int limit)
+    {
+        int units = into.Quantity + from.Quantity;
+        float part = into.Charges;
+
+        // An item of a single charge has no partly used unit (as JoinPart).
+        if (into.MaxCharges > 1)
+        {
+            float pooled = into.Charges + from.Charges;
+            bool oneUnit = pooled <= into.MaxCharges;
+            if (oneUnit) units--;
+            part = oneUnit ? pooled : pooled - into.MaxCharges;
+        }
+
+        int kept = Math.Min(units, limit);
+        bool cut = units > kept;
+        into.Quantity = kept;
+        from.Quantity = units - kept;
+        if (into.MaxCharges <= 1) return;
+
+        into.Charges = cut ? into.MaxCharges : part;
+        if (cut) from.Charges = part;
+    }
 
     /// <summary>
     /// Moves <paramref name="units"/> of <paramref name="from"/> onto the stack <paramref name="into"/>. Partial charges combine: a stack is full

@@ -1249,8 +1249,15 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     item."; `RaceLimiter`, built per item by `FUN_140763150`, **Verified** by decompile: a non-empty `races` list names the only races and `races exclude` is then not read, otherwise `races exclude`
     names the barred ones; `fcs.def` gives both lists to ARMOUR, CONTAINER, ITEM, LIMB_REPLACEMENT, NEST_ITEM, WEAPON and CROSSBOW `races` only. Vanilla shirts (Rag Shirt, Cloth Shirt, Leather Turtleneck...) exclude the 10 Hive and Deadhive races, read with `meitou-tools armour`); a section named `out` refuses everything; a non-empty CONTAINER into a CONTAINER's inventory: "Container cannot be placed here unless it is empty.". Under the footprint: two or
     more items refuse it; none, but the section's item-count cap reached, refuses it (`FUN_14071a6b0`: InventorySection `+0xa8` KenshiLib `itemsLimit`, when above 0, at most the
-    section's item count); one item locked (shackles) on either side: "Item is locked in place."; one of the same kind that stacks
-    (same type, material and quality): merged up to the stack limit (partial charges combined), the stack at the drop cell, the rest on the mouse; any other: swapped, the old item on the mouse.
+    section's item count); one item locked (shackles) on either side: "Item is locked in place."; one of the same kind (Item vfunc 0x2a0
+    `FUN_14075d510`: same record, company and material, quality not compared; if either is stolen, also the same owner hand, `FUN_14075d470`) is
+    joined with it by the stack join `FUN_14075e220`, whether its stack is full or the item does not stack at all (`stackable` 1) (**Verified** by
+    decompile): the two partly used units pool their charges (`+0x118`, max `+0x114`), one unit when the sum is at most one unit's, else a full
+    one and the rest; the held item takes the units up to its stack limit at the drop cell, all full when cut there, and the other, with the rest
+    and the partly used unit, goes onto the mouse (none left: it is destroyed). Held units past the limit are split off before
+    (`FUN_14070f240`): they go back to their origin when the other takes the mouse, else stay on it. So two half-used first aid kits dropped one on the other make one
+    full kit. Any other: swapped, the old item on the mouse. Meitou: `HeldItems.Combine`, `InventoryCommands.Join`; in a trade, or for an item
+    with a buy-back receipt, a stack of the kind takes what it has room for (a full one nothing) and a kind that does not stack is swapped.
   - Over no window (`FUN_1407136a0`): a character picked under the pointer other than the source owner is given the item (a live animal's grid takes nothing, [animals](animals.md#pack-animals); Meitou, engine choice as a pick-up: what no grid takes goes into a free slot that takes it, e.g. a 10x1 polearm into `back`; no trade;
     range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground only from the player's
     own windows or a window of a player-faction owner, else it goes back.
