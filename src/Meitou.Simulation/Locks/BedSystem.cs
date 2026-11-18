@@ -517,15 +517,26 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             return false;
         }
 
-        if (!HasPower(world, c, bed)) return false;
+        if (!HasPower(world, c, bed)) return Refused(world, c, bed);
 
         int cost = Cost(world, bed, c.Faction);
         if (cost != 0 && Cost(world, bed, bc.Faction) is var own and >= 0 && own < cost) cost = own;
-        if (!Pay(world, s, bed, cost)) return false;
+        if (!Pay(world, s, bed, cost)) return Refused(world, c, bed);
         Carry!.LetGo(world, s);
         if (world.Fixtures.EnterBed(world, body, bed)) SettleNpcRent(world, s, bed, cost);
         else if (c.IsPlayer) world.Post($"{c.Name} could not put {bc.Name} in the bed");
 
+        return false;
+    }
+
+    /// <summary>
+    /// A bed that refused a carrier at arrival (no power, or the rent not paid): for an NPC carrier the bed counts as one its faction cannot get to
+    /// (<see cref="FixtureRegistry.MarkUnreachable"/>, for its usual time), so its next bed search moves on instead of walking back to the same bed
+    /// (engine choice). A player character's carrier is told and chooses again itself. False: the trip is over.
+    /// </summary>
+    static bool Refused(World world, CharacterCold carrier, Fixture bed)
+    {
+        if (!carrier.IsPlayer) world.Fixtures.MarkUnreachable(world, bed, carrier.Faction);
         return false;
     }
 
@@ -778,14 +789,19 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
 
     /// <summary>
     /// The bed the put-in job takes the character's body to (a pure read): it carries a body it would lay in a bed (<see cref="CarriesForBed"/>), and
-    /// the bed search finds one.
+    /// the bed search finds one (<see cref="FindForCarrier"/>).
     /// </summary>
-    Fixture? BedFor(World world, int slot)
-    {
-        if (!CarriesForBed(world, slot)) return null;
+    Fixture? BedFor(World world, int slot) => CarriesForBed(world, slot) ? FindForCarrier(world, slot) : null;
 
+    /// <summary>
+    /// The bed search for a carrier, or a rescuer that will become one, in <paramref name="slot"/> (a pure read): beds others are on their way to
+    /// are left out, and an NPC whose squad has no town takes only its own or an ally's beds within the search range
+    /// (<see cref="FixtureRegistry.FindBedInReach"/>).
+    /// </summary>
+    public Fixture? FindForCarrier(World world, int slot)
+    {
         var id = world.Characters.IdOf(slot);
-        return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, id));
+        return world.Fixtures.FindBedInReach(world, slot, data.Relations, f => Reserved(f, id));
     }
 
     /// <summary>

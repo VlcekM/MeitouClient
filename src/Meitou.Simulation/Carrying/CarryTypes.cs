@@ -117,6 +117,17 @@ public sealed class CarrySettings
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
 
     /// <summary>
+    /// A rescue goal's walk to its body (148, 142) that has not reached it after this many game seconds is given up (engine choice, as the town
+    /// duties' lifts: a body the rescuer cannot reach would hold it forever).
+    /// </summary>
+    public float RescueWalkSeconds { get; init; } = 60;
+
+    /// <summary>
+    /// After a given-up rescue walk the rescuer leaves that body alone for this many game hours (engine choice, as the town duties' put-down).
+    /// </summary>
+    public double RescueRefuseHours { get; init; } = 2;
+
+    /// <summary>
     /// A body that is put down is placed this far beside its carrier (engine choice).
     /// </summary>
     public float PutDownSide { get; init; } = 3;

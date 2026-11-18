@@ -2354,13 +2354,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (world.Characters.Cold(slot) is not { } self) return null;
         if (mind.Squad.Town >= 0) return world.Fixtures.FindBed(world, slot, data.Relations);
         var at = Flat(world.Characters.Next[slot].Position);
-        float r2 = Locks.FixtureRegistry.BedSearchRange * Locks.FixtureRegistry.BedSearchRange;
         var relations = data.Relations;
-        return world.Fixtures.FindBed(world, slot, relations, f =>
-            Vector2.DistanceSquared(at, Flat(f.Position)) > r2
-            || f.Owner != self.Faction
-                && !(f.Owner >= 0 && relations.Contains(f.Owner) && relations.Contains(self.Faction)
-                    && relations.IsAlly(f.Owner, self.Faction)));
+        return world.Fixtures.FindBed(world, slot, relations, f => Locks.FixtureRegistry.OutOfTownlessReach(at, self.Faction, relations, f));
     }
 
     /// <summary>
