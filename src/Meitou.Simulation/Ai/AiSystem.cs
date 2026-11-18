@@ -451,8 +451,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 or AiBehaviour.ToTown or AiBehaviour.Travel or AiBehaviour.Work or AiBehaviour.Investigate
                 or AiBehaviour.PatrolTown,
             CharacterTask.Rest => mind.Behaviour is AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.Relax,
-            // In the bed it went to (or lying in one when loaded, before its first think).
-            CharacterTask.Sleep => cold.InSomething == Locks.HeldState.Bed && (mind.Behaviour == AiBehaviour.Sleep || mind.Goal is null),
+            // In the bed it went to (or lying in one when loaded, before its first think, or laid in by a carrier while it was down: no task of
+            // its own keeps it there, and its goal of before then is stale), its think lets it lie on or gets it out (Act).
+            CharacterTask.Sleep => cold.InSomething == Locks.HeldState.Bed
+                && (mind.Behaviour == AiBehaviour.Sleep || mind.Goal is null || cold.Running?.Runs(CharacterTask.Sleep) != true),
             _ => false,
         };
     }

@@ -1026,7 +1026,9 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   home they go to the bed `AiSystem.SpareBed` finds ([locks](game/locks.md)); with none the goal is not wanted (desire 0).
   One already in a bed keeps it: the goal's target is where it lies, so its plan is 98 alone and it stays in; the goal takes its
   sleep as its own (provenance 153/239, so the plan step 98 is its order, as the original's `Task_UseBed`), also for one loaded
-  in bed or laid in by the walk's end. A goal of any other behaviour gets them out (`LeaveBed`, in the think).
+  in bed or laid in by the walk's end. A goal of any other behaviour gets them out (`LeaveBed`, in the think). A character a carrier laid in a bed (a put-in, the player's
+  or an NPC's goal 106) is the AI's once it comes round, as no task of its own keeps it there and the goal it had before it went down is stale (`AiSystem.Holds`, engine
+  choice): its think lets it lie on or gets it out, as any sleeper's.
   `CharacterCold.InSomething`/`InWhat` name the fixture; an imprisoned character is skipped by AI, movement (held still),
   aggro, answering, `CombatSystem.Engage` as attacker (it can still be attacked) and carrying. Sentence: `SentenceStart`
   (`World.GameHours`) + `SentenceLength`; served when start + length <= now; no bounty with the cage owner: none (served).
